@@ -10,3 +10,9 @@
 * Isolated unit and subprocess integration coverage for path confinement,
   malformed model responses, test failure, atomic installation, and restart
   ordering.
+
+### Changed
+
+* Re-scored the remaining self-healing backlog after auto-patching shipped,
+  corrected the WebAssembly prototype's WAT scope, and restored the missing
+  Ephemeral Neural Circuits detail section.
