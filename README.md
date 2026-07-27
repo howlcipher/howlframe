@@ -463,13 +463,28 @@ Every generated Go program includes three layers of built-in observability with 
    python observer.py
    ```
    Run it alongside a Zero-generated binary to get live anomaly flags as the program executes.
+4. **Bounded auto-patching** — opt-in patch mode watches a configured
+   `crash.json`, asks the local model for one complete replacement of one
+   configured `.zero` source, and tests that candidate in an isolated project
+   copy. The live source is replaced atomically and the restart command runs
+   only after the test command succeeds:
+   ```bash
+   python observer.py patch \
+     --project-root /path/to/project \
+     --source app.zero \
+     --test-command 'go test ./...' \
+     --restart-command 'systemctl --user restart zero-app'
+   ```
+   Use `{source}` in the test command when it must receive the isolated
+   candidate path, for example
+   `--test-command './zero {source}'`. Add `--once` to process the current
+   crash dump and exit. Source and crash paths are constrained to the project
+   root, commands run without a shell, model responses cannot select paths or
+   commands, and failed candidates never modify the live source or trigger a
+   restart. Patch mode is deliberately disabled unless every required option
+   is supplied.
 
 You can also manually inject a trace point mid-function with `(trace var)`, which prints the variable's name, value, and source line — see [Automation and Advanced Control Flow](#automation-and-advanced-control-flow) above.
-
-The auto-patching extension is under test-first development. Its safety
-contract requires candidate source to pass validation in an isolated project
-copy before the observer may replace a configured `.zero` file or restart a
-service.
 
 ### Compiling to JavaScript
 
@@ -504,4 +519,3 @@ node --test app.test.js
 ```
 
 HTML and CSS are intentionally out of scope — Zero's constrained-grammar/hallucination-reduction pitch targets application *logic*, where LLMs reliably hallucinate; markup and styling don't share that failure mode and are better left native.
-

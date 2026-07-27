@@ -58,7 +58,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 53 | [Decouple AST from Go Codegen (IR Abstraction)](#53-decouple-ast-from-go-codegen-ir-abstraction) | Done (2026-07-24) — Phase 1 | 1.33 (8×1.0÷6) | Sonnet 5 | — | Requisite for pure binary generation. High effort refactor. |
 | 49 | [Direct Neural Bytecode Synthesis](#49-direct-neural-bytecode-synthesis) | Done (2026-07-24) — Phase 1 | 1.00 (8×1.0÷8) | Sonnet 5 | — | Monumental shift; massive effort but maximum value. |
 | 60 | [Add Collection Read Access (map_get/list_get)](#60-add-collection-read-access-map_getlist_get) | Done (2026-07-24) | 1.75 (7×0.5÷2) | Sonnet 5 | — | Found while building improvement #49 Phase 1's regression fixture: `dict`/`list` have `map_set`/`map_delete`/`append` (write) but no way to read a value back by key/index at all — same theme as #31 Mutable Collections, decay 0.5. |
-| 59 | [Auto-Patching Loop](#59-auto-patching-loop) | Pending | 0.66 (8×0.5÷6) | Sonnet 3.5 | Gemini 1.5 Pro | Closes the loop on #58. High effort integration. Decay 0.5 from 1 shipped self-healing item (#58). |
+| 59 | [Auto-Patching Loop](#59-auto-patching-loop) | Done (2026-07-27) | 0.66 (8×0.5÷6) | Sonnet 3.5 | Gemini 1.5 Pro | Closes the loop on #58. High effort integration. Decay 0.5 from 1 shipped self-healing item (#58). |
 | 54 | [WebAssembly (Wasm) Backend Prototype](#54-webassembly-wasm-backend-prototype) | Pending | 0.50 (7×0.5÷7) | Sonnet 3.5 | Gemini 1.5 Pro | First step after #53. Decay 0.5 from 1 shipped backend (#45). |
 | 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | Pending | 0.50 (8×0.5÷8) | Sonnet 3.5 | Gemini 1.5 Pro | The self-healing capstone. Decay 0.5 from 1 shipped self-healing item (#58). |
 | 41 | [Add Stochastic Control Flow](#41-add-stochastic-control-flow) | ⚠️ below floor | 0.29 (2×1.0÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Introduces fuzzy logic natively; deferred as non-essential for initial MVP. |
@@ -431,3 +431,19 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 ### 59. Auto-Patching Loop
 * **Description:** The holy grail of self-healing. When `observer.py` detects a crash dump from #58, it writes a patch to the `.zero` file, runs `go test`, and automatically restarts the service.
 * **Impact:** 9/10 (Closes the loop on automated counterfactual debugging).
+* **Done (2026-07-27):** Implemented as a bounded, opt-in mode in
+  `observer.py`. The operator configures one project root, one `.zero` source,
+  one test command, and one restart command. Each new crash dump is parsed as
+  JSON and sent with the current source to the local OpenAI-compatible model,
+  whose response must be strict JSON containing only a complete replacement
+  source. The project is copied without Git or transient runtime artifacts,
+  the candidate is tested in that isolated copy, and only a passing candidate
+  is atomically installed into the configured live source with its mode
+  preserved. Restart runs afterward and is reported separately if it fails.
+  All configured commands execute as argument vectors with `shell=False`;
+  source and crash paths must resolve inside the project root; the model
+  cannot choose commands, paths, or additional files. Eight isolated tests
+  cover traversal rejection, root-relative paths, malformed output, non-Zero
+  source rejection, failed-test rollback behavior, restart ordering, and a
+  real subprocess end-to-end flow. `pytest`, `flake8`, and Python bytecode
+  compilation pass.

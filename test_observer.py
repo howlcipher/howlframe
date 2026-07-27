@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -32,6 +33,15 @@ def test_resolve_project_path_rejects_escape(tmp_path):
 
     with pytest.raises(ValueError, match="inside project root"):
         observer.resolve_project_path(tmp_path, outside)
+
+
+def test_resolve_project_path_resolves_relative_to_root(tmp_path, monkeypatch):
+    source_path, _ = write_fixture(tmp_path)
+    monkeypatch.chdir(tmp_path.parent)
+
+    resolved = observer.resolve_project_path(tmp_path, Path("app.zero"))
+
+    assert resolved == source_path
 
 
 def test_malformed_model_output_does_not_change_source(tmp_path):
@@ -118,3 +128,76 @@ def test_passing_candidate_is_installed_then_restarted(tmp_path):
     assert all(
         call.kwargs["shell"] is False for call in runner.call_args_list
     )
+    prompt = client.chat.completions.create.call_args.kwargs["messages"][0][
+        "content"
+    ]
+    assert '"panic"' in prompt
+    assert '"boom"' in prompt
+    assert '(cli_app (print "old"))' in prompt
+
+
+def test_non_zero_source_is_rejected(tmp_path):
+    source_path, crash_path = write_fixture(tmp_path)
+    source_path = source_path.with_suffix(".txt")
+    source_path.write_text("not zero", encoding="utf-8")
+
+    result = observer.apply_crash_patch(
+        client=model_client("candidate"),
+        project_root=tmp_path,
+        source_path=source_path,
+        crash_path=crash_path,
+        test_command=("verify", "{source}"),
+        restart_command=("service", "restart"),
+        runner=Mock(),
+    )
+
+    assert result.status == "rejected"
+
+
+def test_model_failure_is_rejected_without_running_commands(tmp_path):
+    source_path, crash_path = write_fixture(tmp_path)
+    client = Mock()
+    client.chat.completions.create.side_effect = RuntimeError("offline")
+    runner = Mock()
+
+    result = observer.apply_crash_patch(
+        client=client,
+        project_root=tmp_path,
+        source_path=source_path,
+        crash_path=crash_path,
+        test_command=("verify", "{source}"),
+        restart_command=("service", "restart"),
+        runner=runner,
+    )
+
+    assert result.status == "rejected"
+    runner.assert_not_called()
+
+
+def test_real_commands_validate_copy_and_restart_live_project(tmp_path):
+    source_path, crash_path = write_fixture(tmp_path)
+    candidate = '(cli_app (print "fixed"))\n'
+    restart_marker = tmp_path / "restarted.txt"
+    verify_script = (
+        "from pathlib import Path; import sys; "
+        "source = Path(sys.argv[1]); "
+        "raise SystemExit(0 if 'fixed' in source.read_text() else 1)"
+    )
+    restart_script = (
+        "from pathlib import Path; "
+        "Path('restarted.txt').write_text('yes', encoding='utf-8')"
+    )
+
+    result = observer.apply_crash_patch(
+        client=model_client(candidate),
+        project_root=tmp_path,
+        source_path=source_path,
+        crash_path=crash_path,
+        test_command=(sys.executable, "-c", verify_script, "{source}"),
+        restart_command=(sys.executable, "-c", restart_script),
+        runner=subprocess.run,
+    )
+
+    assert result.status == "applied"
+    assert source_path.read_text(encoding="utf-8") == candidate
+    assert restart_marker.read_text(encoding="utf-8") == "yes"
