@@ -199,6 +199,17 @@ Zero can automatically inject context variables into function calls within a spe
    ```bash
    go run zero.go -run cli_hello.zero
    ```
+
+4. **Emit a portable WebAssembly prototype**:
+   A `wasm_app` emits `app.wat`, a standards-compliant WebAssembly Text module
+   with an exported `main(): i32`. The prototype intentionally supports only
+   integer literals, arithmetic/comparisons, `if` with both branches, `do`,
+   and `return`; I/O, strings, variables, functions, and collection primitives
+   are rejected rather than silently miscompiled. Compile `app.wat` with a
+   WAT toolchain when one is available.
+   ```bash
+   go run zero.go -o build examples/wasm_math.zero
+   ```
    This is Phase 1 of the "bypass text-based codegen entirely" end goal below — see [Project Roadmap](#project-roadmap--the-end-goal). `http_server`/`web_app` scripts and a handful of primitives that depend on `try_let` (`read_file`, `write_file`, `db_connect`, etc.) aren't supported under `-run` yet and produce a clear error naming the unsupported node.
 
 The server will spin up on `http://localhost:8080`.
