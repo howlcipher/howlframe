@@ -466,6 +466,11 @@ Every generated Go program includes three layers of built-in observability with 
 
 You can also manually inject a trace point mid-function with `(trace var)`, which prints the variable's name, value, and source line — see [Automation and Advanced Control Flow](#automation-and-advanced-control-flow) above.
 
+The auto-patching extension is under test-first development. Its safety
+contract requires candidate source to pass validation in an isolated project
+copy before the observer may replace a configured `.zero` file or restart a
+service.
+
 ### Compiling to JavaScript
 
 The same Zero grammar can target the browser instead of Go: use `(web_app ...)` as the root block instead of `(http_server ...)`/`(cli_app ...)`. This unlocks browser-only primitives — `(dom_query selector)`, `(on_event el "event" (lambda (e) body))`, `(set_text el val)`, `(set_attr el name val)` — while reusing every other primitive (`let`, `if`, `for`, `defun`, `fetch`, `try_let`, math/logic operators) unchanged. `(test ...)` blocks compile to a Node.js test file (`node --test`) instead of a Go `_test.go` file.
@@ -499,5 +504,4 @@ node --test app.test.js
 ```
 
 HTML and CSS are intentionally out of scope — Zero's constrained-grammar/hallucination-reduction pitch targets application *logic*, where LLMs reliably hallucinate; markup and styling don't share that failure mode and are better left native.
-
 
