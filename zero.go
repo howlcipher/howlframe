@@ -1383,7 +1383,11 @@ func generateStatementRaw(node *Node, reqVar string, depth int) string {
 				if bodyVar == "req.body" {
 					bodyVar = reqVar + ".Body"
 				}
-				letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.NewDecoder(%s).Decode(&%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
+				if bodyVar == reqVar+".Body" {
+					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.NewDecoder(%s).Decode(&%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
+				} else {
+					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.Unmarshal([]byte(%s), &%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
+				}
 				declaredVars[varName] = true
 			} else {
 				if declaredVars[varName] {
@@ -1423,8 +1427,7 @@ func generateStatementRaw(node *Node, reqVar string, depth int) string {
 			bodyVar := valNode.Children[2].Value
 			if bodyVar == "req.body" {
 				bodyVar = reqVar + ".Body"
-			}
-			return fmt.Sprintf(`		{
+				return fmt.Sprintf(`		{
 			var %s %s
 			if %s := json.NewDecoder(%s).Decode(&%s); %s != nil {
 %s
@@ -1433,6 +1436,17 @@ func generateStatementRaw(node *Node, reqVar string, depth int) string {
 %s
 			}
 		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
+			} else {
+				return fmt.Sprintf(`		{
+			var %s %s
+			if %s := json.Unmarshal([]byte(%s), &%s); %s != nil {
+%s
+			} else {
+				_ = %s
+%s
+			}
+		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
+			}
 		}
 
 		valStr := generateStatement(valNode, reqVar, depth+1)
