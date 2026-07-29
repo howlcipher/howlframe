@@ -23,7 +23,7 @@ Zero has evolved from a local script into a standalone transpiler toolchain, now
 Beyond simple language mechanics, the ultimate **End Goal** of Zero is to completely bypass human-readable code. If AI is writing the code, we no longer need text-based syntaxes (like Go or JS transpilers) designed for human eyes. 
 
 The roadmap to this future includes:
-- **Direct Neural Bytecode Synthesis:** Outputting raw machine instructions or Neural Intermediate Representation (NIR) directly. **Phase 1 shipped 2026-07-24**: a direct AST interpreter (`-run`, see [How to Run](#how-to-run)) proves the core premise — real Zero programs already execute with zero Go/JS text ever generated — for a bounded node subset. Full design, current coverage, and the Phase 2/3 plan (a real bytecode format, then an LLM emitting it directly) are in `docs/direct_execution_design.md`.
+- **Direct Neural Bytecode Synthesis:** Outputting raw machine instructions or Neural Intermediate Representation (NIR) directly. **Shipped 2026-07-29**: direct binary bytecode execution (`-compile-bc` and `-run-bc`) proves the core premise — real Zero programs are compiled to binary gob encoding and executed with zero Go/JS text ever generated. Full design and coverage are in `docs/direct_execution_design.md`.
 - **Latent Execution:** Processing inputs and outputs directly through the model's neural pathways, skipping compilation entirely.
 - **Ephemeral Neural Circuits:** Generating highly specialized micro-models for a single task that delete themselves after execution.
 - **Agentic Observability:** Replacing traditional debugging with observer AI models that monitor system behavior, analyze full context traces, and trigger self-healing workflows autonomously.
