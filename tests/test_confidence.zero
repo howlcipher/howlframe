@@ -1,0 +1,8 @@
+(cli_app
+  (let (score (confidence "Is the sky blue?"))
+    (if (> score 0.8)
+      (print "Very confident!")
+      (print "Not confident.")
+    )
+  )
+)

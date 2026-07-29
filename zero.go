@@ -1601,6 +1601,28 @@ func generateStatementRaw(node *Node, reqVar string, depth int) string {
 			defer resp.Body.Close()
 			return io.ReadAll(resp.Body)
 		}()`, methodStr, urlStr)
+	} else if head == "confidence" {
+		if len(node.Children) != 2 {
+			reportError("confidence expects (confidence prompt)", node.Line, node.Column)
+		}
+		promptStr := generateStatement(node.Children[1], reqVar, depth+1)
+
+		return fmt.Sprintf(`func() float64 {
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": fmt.Sprintf("Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: %%v", %s),
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `+"`json:\"response\"`"+`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+			return val
+		}()`, promptStr)
 	} else if head == "llm_generate" {
 		if len(node.Children) < 2 {
 			reportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)
@@ -2537,6 +2559,25 @@ func (interp *Interpreter) evalList(node *Node, env *interpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
+	case "confidence":
+		if len(node.Children) != 2 {
+			interpErr("confidence expects (confidence prompt)", node)
+		}
+		promptStr := fmt.Sprintf("%v", interp.eval(node.Children[1], env))
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil { panic(err) }
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+		return val
 	case "list":
 		var items []any
 		for _, kid := range node.Children[1:] {
@@ -3173,6 +3214,10 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 				}
 			}
 			insts = append(insts, BCInstruction{Op: "HTTP_SERVER_SERVE"})
+		case "confidence":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{Op: "CONFIDENCE"})
+
 		case "llm_generate":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			modelStr := "llama3"
@@ -3625,6 +3670,24 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			fmt.Println("Listening on " + port)
 			err := http.ListenAndServe(port, mux)
 			if err != nil { panic(err) }
+		case "CONFIDENCE":
+			promptStrAny := vm.pop(inst.Op)
+			promptStr := fmt.Sprintf("%v", promptStrAny)
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+			vm.push(val)
+
 		case "LLM_GENERATE":
 			modelStr := inst.Args[0].(string)
 			promptStr := vm.pop(inst.Op).(string)
