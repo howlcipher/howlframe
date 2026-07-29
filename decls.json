@@ -1,0 +1,608 @@
+[
+  {
+    "Name": "init",
+    "Type": "func",
+    "Start": 24,
+    "End": 27
+  },
+  {
+    "Name": "TokenType",
+    "Type": "type",
+    "Start": 29,
+    "End": 29
+  },
+  {
+    "Name": "TokenLParen",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "TokenRParen",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "TokenSymbol",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "TokenInt",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "TokenString",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "TokenEOF",
+    "Type": "var",
+    "Start": 31,
+    "End": 38
+  },
+  {
+    "Name": "Token",
+    "Type": "type",
+    "Start": 40,
+    "End": 45
+  },
+  {
+    "Name": "ErrorOutput",
+    "Type": "type",
+    "Start": 47,
+    "End": 51
+  },
+  {
+    "Name": "reportError",
+    "Type": "func",
+    "Start": 53,
+    "End": 58
+  },
+  {
+    "Name": "Lexer",
+    "Type": "type",
+    "Start": 61,
+    "End": 66
+  },
+  {
+    "Name": "NewLexer",
+    "Type": "func",
+    "Start": 68,
+    "End": 70
+  },
+  {
+    "Name": "Lexer.nextChar",
+    "Type": "func",
+    "Start": 72,
+    "End": 85
+  },
+  {
+    "Name": "Lexer.peekChar",
+    "Type": "func",
+    "Start": 87,
+    "End": 92
+  },
+  {
+    "Name": "Lexer.NextToken",
+    "Type": "func",
+    "Start": 94,
+    "End": 174
+  },
+  {
+    "Name": "Node",
+    "Type": "type",
+    "Start": 177,
+    "End": 184
+  },
+  {
+    "Name": "Parser",
+    "Type": "type",
+    "Start": 187,
+    "End": 191
+  },
+  {
+    "Name": "NewParser",
+    "Type": "func",
+    "Start": 193,
+    "End": 197
+  },
+  {
+    "Name": "Parser.parseExpression",
+    "Type": "func",
+    "Start": 199,
+    "End": 219
+  },
+  {
+    "Name": "copyNode",
+    "Type": "func",
+    "Start": 222,
+    "End": 231
+  },
+  {
+    "Name": "replaceNext",
+    "Type": "func",
+    "Start": 233,
+    "End": 244
+  },
+  {
+    "Name": "renameVar",
+    "Type": "func",
+    "Start": 246,
+    "End": 260
+  },
+  {
+    "Name": "currentSchemaDDLs",
+    "Type": "var",
+    "Start": 263,
+    "End": 263
+  },
+  {
+    "Name": "generateCode",
+    "Type": "func",
+    "Start": 265,
+    "End": 735
+  },
+  {
+    "Name": "generateStatement",
+    "Type": "func",
+    "Start": 737,
+    "End": 750
+  },
+  {
+    "Name": "generateExpression",
+    "Type": "func",
+    "Start": 752,
+    "End": 754
+  },
+  {
+    "Name": "IRNode",
+    "Type": "type",
+    "Start": 771,
+    "End": 776
+  },
+  {
+    "Name": "irCase",
+    "Type": "type",
+    "Start": 778,
+    "End": 782
+  },
+  {
+    "Name": "binOpKinds",
+    "Type": "var",
+    "Start": 784,
+    "End": 788
+  },
+  {
+    "Name": "lowerShared",
+    "Type": "func",
+    "Start": 798,
+    "End": 917
+  },
+  {
+    "Name": "binOpGoToken",
+    "Type": "func",
+    "Start": 919,
+    "End": 930
+  },
+  {
+    "Name": "binOpJSToken",
+    "Type": "func",
+    "Start": 932,
+    "End": 945
+  },
+  {
+    "Name": "emitGoIR",
+    "Type": "func",
+    "Start": 949,
+    "End": 1109
+  },
+  {
+    "Name": "emitJSIR",
+    "Type": "func",
+    "Start": 1113,
+    "End": 1242
+  },
+  {
+    "Name": "generateStatementRaw",
+    "Type": "func",
+    "Start": 1244,
+    "End": 1731
+  },
+  {
+    "Name": "expandIncludes",
+    "Type": "func",
+    "Start": 1733,
+    "End": 1777
+  },
+  {
+    "Name": "applyPatches",
+    "Type": "func",
+    "Start": 1779,
+    "End": 1822
+  },
+  {
+    "Name": "applyWithContext",
+    "Type": "func",
+    "Start": 1824,
+    "End": 1882
+  },
+  {
+    "Name": "generateJSCode",
+    "Type": "func",
+    "Start": 1885,
+    "End": 1959
+  },
+  {
+    "Name": "generateWasmCode",
+    "Type": "func",
+    "Start": 1966,
+    "End": 1976
+  },
+  {
+    "Name": "generateWasmExpression",
+    "Type": "func",
+    "Start": 1978,
+    "End": 2004
+  },
+  {
+    "Name": "emitWasmIR",
+    "Type": "func",
+    "Start": 2006,
+    "End": 2042
+  },
+  {
+    "Name": "generateJSStatement",
+    "Type": "func",
+    "Start": 2044,
+    "End": 2057
+  },
+  {
+    "Name": "generateJSExpression",
+    "Type": "func",
+    "Start": 2059,
+    "End": 2061
+  },
+  {
+    "Name": "generateJSStatementRaw",
+    "Type": "func",
+    "Start": 2063,
+    "End": 2263
+  },
+  {
+    "Name": "main",
+    "Type": "func",
+    "Start": 2265,
+    "End": 2372
+  },
+  {
+    "Name": "returnSignal",
+    "Type": "type",
+    "Start": 2383,
+    "End": 2383
+  },
+  {
+    "Name": "interpEnv",
+    "Type": "type",
+    "Start": 2385,
+    "End": 2388
+  },
+  {
+    "Name": "newInterpEnv",
+    "Type": "func",
+    "Start": 2390,
+    "End": 2392
+  },
+  {
+    "Name": "interpEnv.get",
+    "Type": "func",
+    "Start": 2394,
+    "End": 2401
+  },
+  {
+    "Name": "interpEnv.set",
+    "Type": "func",
+    "Start": 2403,
+    "End": 2411
+  },
+  {
+    "Name": "interpFunc",
+    "Type": "type",
+    "Start": 2413,
+    "End": 2416
+  },
+  {
+    "Name": "Interpreter",
+    "Type": "type",
+    "Start": 2421,
+    "End": 2424
+  },
+  {
+    "Name": "interpErr",
+    "Type": "func",
+    "Start": 2426,
+    "End": 2432
+  },
+  {
+    "Name": "Interpret",
+    "Type": "func",
+    "Start": 2437,
+    "End": 2472
+  },
+  {
+    "Name": "isDefun",
+    "Type": "func",
+    "Start": 2474,
+    "End": 2477
+  },
+  {
+    "Name": "Interpreter.registerDefun",
+    "Type": "func",
+    "Start": 2479,
+    "End": 2495
+  },
+  {
+    "Name": "Interpreter.eval",
+    "Type": "func",
+    "Start": 2497,
+    "End": 2517
+  },
+  {
+    "Name": "Interpreter.evalList",
+    "Type": "func",
+    "Start": 2519,
+    "End": 2706
+  },
+  {
+    "Name": "Interpreter.evalLet",
+    "Type": "func",
+    "Start": 2708,
+    "End": 2721
+  },
+  {
+    "Name": "Interpreter.evalSet",
+    "Type": "func",
+    "Start": 2723,
+    "End": 2733
+  },
+  {
+    "Name": "Interpreter.evalIf",
+    "Type": "func",
+    "Start": 2735,
+    "End": 2745
+  },
+  {
+    "Name": "Interpreter.evalWhile",
+    "Type": "func",
+    "Start": 2747,
+    "End": 2755
+  },
+  {
+    "Name": "Interpreter.evalFor",
+    "Type": "func",
+    "Start": 2757,
+    "End": 2773
+  },
+  {
+    "Name": "Interpreter.evalCall",
+    "Type": "func",
+    "Start": 2775,
+    "End": 2809
+  },
+  {
+    "Name": "Interpreter.evalAppend",
+    "Type": "func",
+    "Start": 2811,
+    "End": 2833
+  },
+  {
+    "Name": "Interpreter.evalMapSet",
+    "Type": "func",
+    "Start": 2835,
+    "End": 2855
+  },
+  {
+    "Name": "Interpreter.evalMapDelete",
+    "Type": "func",
+    "Start": 2857,
+    "End": 2876
+  },
+  {
+    "Name": "Interpreter.evalMapGet",
+    "Type": "func",
+    "Start": 2878,
+    "End": 2896
+  },
+  {
+    "Name": "Interpreter.evalListGet",
+    "Type": "func",
+    "Start": 2898,
+    "End": 2923
+  },
+  {
+    "Name": "Interpreter.evalBinop",
+    "Type": "func",
+    "Start": 2925,
+    "End": 2950
+  },
+  {
+    "Name": "numericBinop",
+    "Type": "func",
+    "Start": 2952,
+    "End": 3006
+  },
+  {
+    "Name": "toFloat",
+    "Type": "func",
+    "Start": 3008,
+    "End": 3016
+  },
+  {
+    "Name": "toInt",
+    "Type": "func",
+    "Start": 3018,
+    "End": 3028
+  },
+  {
+    "Name": "toBool",
+    "Type": "func",
+    "Start": 3030,
+    "End": 3036
+  },
+  {
+    "Name": "valuesEqual",
+    "Type": "func",
+    "Start": 3038,
+    "End": 3048
+  },
+  {
+    "Name": "sliceToAny",
+    "Type": "func",
+    "Start": 3050,
+    "End": 3056
+  },
+  {
+    "Name": "BCInstruction",
+    "Type": "type",
+    "Start": 3057,
+    "End": 3060
+  },
+  {
+    "Name": "BCProgram",
+    "Type": "type",
+    "Start": 3062,
+    "End": 3066
+  },
+  {
+    "Name": "BCFunction",
+    "Type": "type",
+    "Start": 3068,
+    "End": 3071
+  },
+  {
+    "Name": "BCCompiler",
+    "Type": "type",
+    "Start": 3074,
+    "End": 3077
+  },
+  {
+    "Name": "CompileToBytecode",
+    "Type": "func",
+    "Start": 3079,
+    "End": 3094
+  },
+  {
+    "Name": "BCCompiler.compileNode",
+    "Type": "func",
+    "Start": 3096,
+    "End": 3368
+  },
+  {
+    "Name": "BCVM",
+    "Type": "type",
+    "Start": 3371,
+    "End": 3378
+  },
+  {
+    "Name": "bcEnv",
+    "Type": "type",
+    "Start": 3380,
+    "End": 3383
+  },
+  {
+    "Name": "newBcEnv",
+    "Type": "func",
+    "Start": 3385,
+    "End": 3387
+  },
+  {
+    "Name": "bcEnv.get",
+    "Type": "func",
+    "Start": 3389,
+    "End": 3397
+  },
+  {
+    "Name": "bcEnv.set",
+    "Type": "func",
+    "Start": 3399,
+    "End": 3408
+  },
+  {
+    "Name": "vmReturn",
+    "Type": "type",
+    "Start": 3410,
+    "End": 3412
+  },
+  {
+    "Name": "RunBytecode",
+    "Type": "func",
+    "Start": 3414,
+    "End": 3431
+  },
+  {
+    "Name": "BCVM.push",
+    "Type": "func",
+    "Start": 3433,
+    "End": 3435
+  },
+  {
+    "Name": "BCVM.pop",
+    "Type": "func",
+    "Start": 3437,
+    "End": 3444
+  },
+  {
+    "Name": "BCVM.run",
+    "Type": "func",
+    "Start": 3446,
+    "End": 3939
+  },
+  {
+    "Name": "bcToBool",
+    "Type": "func",
+    "Start": 3941,
+    "End": 3946
+  },
+  {
+    "Name": "bcBinop",
+    "Type": "func",
+    "Start": 3948,
+    "End": 3968
+  },
+  {
+    "Name": "bcNumericBinop",
+    "Type": "func",
+    "Start": 3970,
+    "End": 3986
+  },
+  {
+    "Name": "toBCFloat",
+    "Type": "func",
+    "Start": 3988,
+    "End": 3998
+  },
+  {
+    "Name": "bcValuesEqual",
+    "Type": "func",
+    "Start": 4000,
+    "End": 4010
+  },
+  {
+    "Name": "bcConvert",
+    "Type": "func",
+    "Start": 4012,
+    "End": 4041
+  },
+  {
+    "Name": "bcSliceToAny",
+    "Type": "func",
+    "Start": 4043,
+    "End": 4049
+  }
+]

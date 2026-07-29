@@ -3,21 +3,7 @@ from outlines import models
 import subprocess
 import json
 import sys
-from pydantic import BaseModel, Field
-from typing import List, Dict, Union
-
-class Instruction(BaseModel):
-    op: str
-    args: List[Union[str, int, float, bool]] = Field(default_factory=list)
-
-class Function(BaseModel):
-    params: List[str]
-    instructions: List[Instruction]
-
-class BytecodeProgram(BaseModel):
-    version: int
-    functions: Dict[str, Function]
-    main: List[Instruction]
+from orchestrator_schema import BytecodeProgram
 
 def main():
     print("Initializing Outlines...")

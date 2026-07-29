@@ -1,0 +1,340 @@
+package bytecode
+
+import (
+	"encoding/json"
+
+	"strconv"
+	"zero/internal/ast"
+)
+
+type BCInstruction struct {
+	OpString string `json:"op"`
+	Op       Opcode `json:"-"`
+
+	StringOperand  string `json:"string_operand,omitempty"`
+	StringOperand2 string `json:"string_operand_2,omitempty"`
+	StringOperand3 string `json:"string_operand_3,omitempty"`
+	IntOperand     int64  `json:"int_operand,omitempty"`
+	IntOperand2    int64  `json:"int_operand_2,omitempty"`
+	IntOperand3    int64  `json:"int_operand_3,omitempty"`
+	ValueOperand   any    `json:"value_operand,omitempty"`
+}
+
+func (inst *BCInstruction) UnmarshalJSON(data []byte) error {
+	type Alias BCInstruction
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(inst),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	inst.Op, _ = NameToOpcode(inst.OpString)
+	return nil
+}
+
+type BCProgram struct {
+	Version   int                    `json:"version"`
+	Functions map[string]*BCFunction `json:"functions"`
+	Main      []BCInstruction        `json:"main"`
+}
+
+type BCFunction struct {
+	Params       []string        `json:"params"`
+	Instructions []BCInstruction `json:"instructions"`
+}
+
+// compiler state
+type BCCompiler struct {
+	prog  *BCProgram
+	funcs map[string]*BCFunction
+}
+
+func CompileToBytecode(ast *ast.Node) *BCProgram {
+	comp := &BCCompiler{
+		prog: &BCProgram{
+			Version:   1,
+			Functions: make(map[string]*BCFunction),
+		},
+		funcs: make(map[string]*BCFunction),
+	}
+
+	// Phase 1 interpreter expects ast to be a single block (cli_app) usually,
+	// but ast is just a ast.Node.
+	mainInsts := comp.compileNode(ast)
+	comp.prog.Main = mainInsts
+	comp.prog.Functions = comp.funcs
+	return comp.prog
+}
+
+func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
+	if node == nil {
+		return nil
+	}
+	var insts []BCInstruction
+	if node.Type == "INT" {
+		val, _ := strconv.ParseInt(node.Value, 10, 64)
+		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: float64(val)})
+		return insts
+	}
+	if node.Type == "STRING" {
+		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: node.Value})
+		return insts
+	}
+	if node.Type == "SYMBOL" {
+		insts = append(insts, BCInstruction{OpString: "LOAD_VAR", Op: OpLoadVar, StringOperand: node.Value})
+		return insts
+	}
+
+	if node.Type == "List" && len(node.Children) > 0 {
+		head := node.Children[0].Value
+		switch head {
+		case "cli_app":
+			for _, child := range node.Children[1:] {
+				insts = append(insts, c.compileNode(child)...)
+			}
+		case "defun":
+			funcName := node.Children[1].Value
+			var params []string
+			for _, p := range node.Children[2].Children {
+				params = append(params, p.Value)
+			}
+			var bodyInsts []BCInstruction
+			for _, child := range node.Children[3:] {
+				bodyInsts = append(bodyInsts, c.compileNode(child)...)
+			}
+			c.funcs[funcName] = &BCFunction{
+				Params:       params,
+				Instructions: bodyInsts,
+			}
+		case "type_hint":
+			// ignore type hints in execution
+
+		case "try_let":
+			binding := node.Children[1]
+			varName := binding.Children[0].Value
+			valInsts := c.compileNode(binding.Children[1])
+
+			catchNode := node.Children[2]
+			errVar := catchNode.Children[1].Value
+			catchBodyInsts := c.compileNode(catchNode.Children[2])
+			successBodyInsts := c.compileNode(node.Children[3])
+
+			insts = append(insts, BCInstruction{OpString: "TRY_LET", Op: OpTryLet, StringOperand: varName, StringOperand2: errVar, IntOperand: int64(len(valInsts)), IntOperand2: int64(len(catchBodyInsts)), IntOperand3: int64(len(successBodyInsts))})
+			insts = append(insts, valInsts...)
+			insts = append(insts, catchBodyInsts...)
+			insts = append(insts, successBodyInsts...)
+		case "db_connect":
+			varName := node.Children[1].Value
+			driverNode := node.Children[2]
+			dsnNode := node.Children[3]
+			insts = append(insts, BCInstruction{OpString: "DB_CONNECT", Op: OpDbConnect, StringOperand: varName, StringOperand2: driverNode.Value, StringOperand3: dsnNode.Value})
+		case "sql_query":
+			dbVar := node.Children[1].Value
+			queryStr := node.Children[2].Value
+			insts = append(insts, BCInstruction{OpString: "SQL_QUERY", Op: OpSqlQuery, StringOperand: dbVar, StringOperand2: queryStr})
+		case "fetch":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "FETCH", Op: OpFetch})
+		case "read_file":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "READ_FILE", Op: OpReadFile})
+		case "write_file":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "WRITE_FILE", Op: OpWriteFile})
+		case "mkdir":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "MKDIR", Op: OpMkdir})
+		case "exec":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			for _, arg := range node.Children[2:] {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "EXEC", Op: OpExec, IntOperand: int64(float64(len(node.Children) - 2))})
+		case "parse_json":
+			bodyVar := node.Children[2].Value
+			insts = append(insts, BCInstruction{OpString: "PARSE_JSON", Op: OpParseJson, StringOperand: bodyVar})
+		case "spawn":
+			lambdaNode := node.Children[1]
+			bodyInsts := c.compileNode(lambdaNode.Children[2])
+			insts = append(insts, BCInstruction{OpString: "SPAWN", Op: OpSpawn, IntOperand: int64(float64(len(bodyInsts)))})
+			insts = append(insts, bodyInsts...)
+		case "res":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, c.compileNode(node.Children[3])...)
+			insts = append(insts, BCInstruction{OpString: "RES", Op: OpRes})
+		case "res_json":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "RES_JSON", Op: OpResJson})
+		case "http_server":
+			portNode := node.Children[1]
+			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})
+			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "route" {
+					path := child.Children[1].Value
+					reqVar := child.Children[2].Children[1].Children[0].Value
+					bodyInsts := c.compileNode(child.Children[2].Children[2])
+					insts = append(insts, BCInstruction{OpString: "HTTP_ROUTE", Op: OpHttpRoute, StringOperand: path, StringOperand2: reqVar, IntOperand: int64(float64(len(bodyInsts)))})
+					insts = append(insts, bodyInsts...)
+				} else {
+					insts = append(insts, c.compileNode(child)...)
+				}
+			}
+			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_SERVE", Op: OpHttpServerServe})
+		case "confidence":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "CONFIDENCE", Op: OpConfidence})
+
+		case "llm_generate":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			modelStr := "llama3"
+			if len(node.Children) >= 3 {
+				modelStr = node.Children[2].Value
+			}
+			insts = append(insts, BCInstruction{OpString: "LLM_GENERATE", Op: OpLlmGenerate, StringOperand: modelStr})
+
+		case "let":
+			binding := node.Children[1]
+			varName := binding.Children[0].Value
+			valInsts := c.compileNode(binding.Children[1])
+
+			insts = append(insts, valInsts...)
+			insts = append(insts, BCInstruction{OpString: "STORE_VAR", Op: OpStoreVar, StringOperand: varName})
+			insts = append(insts, c.compileNode(node.Children[2])...)
+		case "set":
+			varName := node.Children[1].Value
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "SET_VAR", Op: OpSetVar, StringOperand: varName})
+		case "if":
+			condInsts := c.compileNode(node.Children[1])
+			thenInsts := c.compileNode(node.Children[2])
+			var elseInsts []BCInstruction
+			if len(node.Children) == 4 {
+				elseInsts = c.compileNode(node.Children[3])
+			}
+			insts = append(insts, condInsts...)
+
+			// JUMP_IF_FALSE to else (or end)
+			if len(elseInsts) == 0 {
+				insts = append(insts, BCInstruction{OpString: "JUMP_IF_FALSE", Op: OpJumpIfFalse, IntOperand: int64(float64(len(thenInsts) + 1))})
+				insts = append(insts, thenInsts...)
+			} else {
+				insts = append(insts, BCInstruction{OpString: "JUMP_IF_FALSE", Op: OpJumpIfFalse, IntOperand: int64(float64(len(thenInsts) + 2))})
+				insts = append(insts, thenInsts...)
+				insts = append(insts, BCInstruction{OpString: "JUMP", Op: OpJump, IntOperand: int64(float64(len(elseInsts) + 1))}) // jump past else
+				insts = append(insts, elseInsts...)
+			}
+		case "while":
+			condInsts := c.compileNode(node.Children[1])
+			bodyInsts := c.compileNode(node.Children[2])
+
+			insts = append(insts, condInsts...)
+			// jump to end if false
+			insts = append(insts, BCInstruction{OpString: "JUMP_IF_FALSE", Op: OpJumpIfFalse, IntOperand: int64(float64(len(bodyInsts) + 2))})
+			insts = append(insts, bodyInsts...)
+			// jump back to cond
+			insts = append(insts, BCInstruction{OpString: "JUMP", Op: OpJump, IntOperand: int64(float64(-(len(condInsts) + 1 + len(bodyInsts))))})
+		case "for":
+			// (for item list body)
+			itemName := node.Children[1].Value
+			listInsts := c.compileNode(node.Children[2])
+			bodyInsts := c.compileNode(node.Children[3])
+
+			insts = append(insts, listInsts...)
+			insts = append(insts, BCInstruction{OpString: "FOR_INIT", Op: OpForInit}) // pops list, pushes iterator
+
+			loopStart := len(insts)
+			insts = append(insts, BCInstruction{OpString: "FOR_NEXT", Op: OpForNext, StringOperand: itemName, IntOperand: int64(float64(len(bodyInsts) + 2))}) // if done, jump to end
+			insts = append(insts, bodyInsts...)
+			insts = append(insts, BCInstruction{OpString: "JUMP", Op: OpJump, IntOperand: int64(float64(-(len(insts) - loopStart)))})
+		case "return":
+			if len(node.Children) > 1 {
+				insts = append(insts, c.compileNode(node.Children[1])...)
+			} else {
+				insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: nil})
+			}
+			insts = append(insts, BCInstruction{OpString: "RETURN", Op: OpReturn})
+		case "print":
+			for _, arg := range node.Children[1:] {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "PRINT", Op: OpPrint, IntOperand: int64(float64(len(node.Children) - 1))})
+		case "call":
+			funcName := node.Children[1].Value
+			for _, arg := range node.Children[2:] {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "CALL", Op: OpCall, StringOperand: funcName, IntOperand: int64(float64(len(node.Children) - 2))})
+		case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=", "and", "or":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			op := head
+			if op == "=" {
+				op = "=="
+			}
+			insts = append(insts, BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: op})
+		case "to_int", "to_float", "to_string", "bytes_to_string":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: head})
+		case "str_split":
+			insts = append(insts, c.compileNode(node.Children[1])...) // string
+			insts = append(insts, c.compileNode(node.Children[2])...) // sep
+			insts = append(insts, BCInstruction{OpString: "STR_SPLIT", Op: OpStrSplit})
+		case "str_join":
+			insts = append(insts, c.compileNode(node.Children[1])...) // list
+			insts = append(insts, c.compileNode(node.Children[2])...) // sep
+			insts = append(insts, BCInstruction{OpString: "STR_JOIN", Op: OpStrJoin})
+		case "regex_match":
+			insts = append(insts, c.compileNode(node.Children[1])...) // regex
+			insts = append(insts, c.compileNode(node.Children[2])...) // string
+			insts = append(insts, BCInstruction{OpString: "REGEX_MATCH", Op: OpRegexMatch})
+		case "list":
+			for _, child := range node.Children[1:] {
+				insts = append(insts, c.compileNode(child)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "MAKE_LIST", Op: OpMakeList, IntOperand: int64(float64(len(node.Children) - 1))})
+		case "dict":
+			for _, child := range node.Children[1:] {
+				if len(child.Children) == 2 {
+					insts = append(insts, c.compileNode(child.Children[0])...) // key
+					insts = append(insts, c.compileNode(child.Children[1])...) // value
+				}
+			}
+			insts = append(insts, BCInstruction{OpString: "MAKE_DICT", Op: OpMakeDict, IntOperand: int64(float64(len(node.Children) - 1))})
+		case "append":
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "APPEND", Op: OpAppend, StringOperand: node.Children[1].Value})
+		case "map_set":
+			insts = append(insts, c.compileNode(node.Children[2])...) // key
+			insts = append(insts, c.compileNode(node.Children[3])...) // value
+			insts = append(insts, BCInstruction{OpString: "MAP_SET", Op: OpMapSet, StringOperand: node.Children[1].Value})
+		case "map_delete":
+			insts = append(insts, c.compileNode(node.Children[2])...) // key
+			insts = append(insts, BCInstruction{OpString: "MAP_DELETE", Op: OpMapDelete, StringOperand: node.Children[1].Value})
+		case "map_get":
+			insts = append(insts, c.compileNode(node.Children[2])...) // key
+			insts = append(insts, BCInstruction{OpString: "MAP_GET", Op: OpMapGet, StringOperand: node.Children[1].Value})
+		case "list_get":
+			insts = append(insts, c.compileNode(node.Children[2])...) // index
+			insts = append(insts, BCInstruction{OpString: "LIST_GET", Op: OpListGet, StringOperand: node.Children[1].Value})
+		case "cli_args":
+			insts = append(insts, BCInstruction{OpString: "CLI_ARGS", Op: OpCliArgs})
+		case "sleep":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "SLEEP", Op: OpSleep})
+		case "env":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "ENV", Op: OpEnv})
+		case "do":
+			for _, child := range node.Children[1:] {
+				insts = append(insts, c.compileNode(child)...)
+			}
+		}
+	}
+	return insts
+}
