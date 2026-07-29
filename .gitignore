@@ -18,3 +18,5 @@ go.sum
 __pycache__/
 *.pyc
 
+*.bc.json
+*.bc.gob

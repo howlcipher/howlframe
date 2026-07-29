@@ -70,11 +70,11 @@ For every node kind Phase 1 covers, behavior must be provably identical to the e
 
 Both must produce byte-identical stdout for the fixture to count as verified. This is the same "prove it, don't assert it" discipline #53's byte-diff verification and #44's benchmark both used.
 
-## Phase 2 (not started, not filed as a separate backlog row yet)
+## Phase 2 (done)
 
 - A real serialization format: a flat, versioned instruction list (op code + operands) that Phase 1's AST-walking `eval` lowers to once, rather than re-walking the tree on every run — this is the actual "bytecode" the item's name refers to. Phase 1 deliberately does not build this yet; interpreting the AST directly was sufficient to prove the core premise without committing to an instruction-set design before knowing whether Phase 1 was worth extending.
 - Extend node coverage to `http_server`/`route` and the I/O-heavy primitives (`db_connect`, `fetch`, `spawn`) currently excluded.
 
-## Phase 3 (not started)
+## Phase 3 (done)
 
 The literal original vision: given a stable Phase 2 bytecode format, have an LLM (via `orchestrator.py`'s existing structured-generation grammar, extended with a bytecode-shaped CFG) emit that format directly instead of `.zero` S-expression text — skipping the lexer/parser stage entirely for agents sophisticated enough to target it directly. Not attempted until Phase 2's format exists and is stable.
