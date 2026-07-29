@@ -656,6 +656,8 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			k := kid.Children[0].Value
 			if kid.Children[0].Type == "STRING" {
 				k = fmt.Sprintf("%q", k)
+			} else {
+				k = generateExpression(kid.Children[0], reqVar, depth+1)
 			}
 			v := kid.Children[1].Value
 			if kid.Children[1].Type == "STRING" {
@@ -793,6 +795,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 							k := pair.Children[0].Value
 							if pair.Children[0].Type == "STRING" {
 								k = fmt.Sprintf("%q", k)
+							} else {
+								k = generateExpression(pair.Children[0], reqVar, depth+1)
 							}
 							v := pair.Children[1].Value
 							if pair.Children[1].Type == "STRING" {

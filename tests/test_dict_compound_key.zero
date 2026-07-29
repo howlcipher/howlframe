@@ -1,0 +1,7 @@
+(cli_app
+    (defun k ()
+        (type_hint return "string")
+        (return "id")
+    )
+    (print (dict ((call k) "v")))
+)
