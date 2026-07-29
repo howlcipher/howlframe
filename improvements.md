@@ -200,7 +200,7 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 1/10 (Low - highly experimental).
 
 ### 41. Add Stochastic Control Flow
-* **Status Note:** ⚠️ scored 0.29, below ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `confidence` AST node exists; the item remains a new capability at decay 1.0 and effort 7.
+* **Status Note:** Done (2026-07-29). Native `confidence` node implemented for direct VM execution and Go codegen, evaluating conditional uncertainty directly via LLM.
 * **Description:** Natively handles uncertainty in the AST. Conditions evaluate to probability distributions, allowing control flow primitives like `(if (> (confidence (is_fraud tx)) 0.95) ...)` to branch based on statistical certainty.
 * **Why:** Eliminates hardcoded heuristics by bringing fuzzy logic directly into the core execution loop, perfectly matching the probabilistic nature of AI models.
 * **Impact:** 3/10 (Low/Medium - complex but powerful for AI).
