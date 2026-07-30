@@ -58,6 +58,13 @@
                 <li><strong>Go Generics:</strong> <code>(type_param T)</code> on a <code>defun</code> generates a real Go generic function instead of falling back to <code>any</code> and runtime type assertions.</li>
                 <li><strong>Direct AST Execution:</strong> <code>-run</code> interprets a <code>cli_app</code> script directly &mdash; no Go text ever generated, no <code>go build</code>/<code>go run</code> invoked &mdash; Phase 1 toward Zero's eventual goal of bypassing text-based codegen entirely (see the project's <a href="https://github.com/howlcipher/zero/blob/main/README.md#project-roadmap--the-end-goal" target="_blank">roadmap</a>).</li>
                 <li><strong>Direct Binary Bytecode:</strong> <code>-compile-bc</code> and <code>-run-bc</code> allow compiling Zero programs directly to binary bytecode and executing them natively.</li>
+                <li><strong>Auto-Mutating Runtime:</strong> The <code>optimize_block</code> primitive enables Zero to be self-rewriting. It monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime.</li>
+                <li><strong>Ephemeral Neural Circuits:</strong> Using <code>ephemeral_circuit</code>, Zero can provision a narrowly specialized micro-model dynamically on the fly, configured with a system prompt for a single task.</li>
+                <li><strong>Neural Circuits:</strong> The <code>neural_circuit</code> primitive lets developers write simple logic specifications as natural language instructions. At runtime, Zero fetches the logic from a local LLM and executes it seamlessly as part of the execution flow.</li>
+                <li><strong>Semantic Routing:</strong> With <code>semantic_match</code>, you can route execution based on semantic intent rather than brittle regexes or exact string matching.</li>
+                <li><strong>Automated Counterfactual Debugging:</strong> When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed, generating self-healing code that prevents the crash from recurring.</li>
+                <li><strong>Teleological Execution:</strong> Zero supports goal-driven execution where the runtime dynamically searches for a solution rather than relying on imperative steps using the <code>achieve</code> node.</li>
+                <li><strong>JIT Function Generation:</strong> With <code>lazy_synthesize</code>, you can define a function using only its signature and a natural language docstring. Zero dynamically synthesizes the implementation at runtime using a local LLM upon the first invocation.</li>
             </ul>
         </section>
 
