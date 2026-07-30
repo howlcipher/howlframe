@@ -60,6 +60,7 @@ func (a *Analysis) collectStructs(node *ast.Node) {
 		info := ast.Layout(ast.Struct)
 		info.Name = name
 		info.Fields = make(map[string]ast.TypeInfo)
+		var fieldOrder []string
 		for _, field := range node.Children[2:] {
 			if field.Type != "List" || len(field.Children) < 2 {
 				continue
@@ -71,12 +72,13 @@ func (a *Analysis) collectStructs(node *ast.Node) {
 			fieldName := field.Children[start].Value
 			fieldType := a.resolveType(field.Children[start+1].Value)
 			info.Fields[fieldName] = fieldType
+			fieldOrder = append(fieldOrder, fieldName)
 			if len(fieldName) > 0 {
 				capitalized := strings.ToUpper(fieldName[:1]) + fieldName[1:]
 				info.Fields[capitalized] = fieldType
 			}
 		}
-		info.Size, info.Align = structLayout(info.Fields)
+		info.Size, info.Align, info.FieldOffsets = structLayout(info.Fields, fieldOrder)
 		a.Structs[name] = info
 	}
 	if node.Type == "List" {
@@ -536,20 +538,21 @@ func (a *Analysis) resolveType(name string) ast.TypeInfo {
 	return ast.TypeInfo{Kind: ast.Unknown, Name: name}
 }
 
-func structLayout(fields map[string]ast.TypeInfo) (uint64, uint64) {
+func structLayout(fields map[string]ast.TypeInfo, order []string) (uint64, uint64, map[string]uint64) {
 	var size, alignment uint64 = 0, 1
-	for name, field := range fields {
-		if name != strings.ToLower(name) {
-			if _, hasLowercaseAlias := fields[strings.ToLower(name)]; hasLowercaseAlias {
-				continue
-			}
-		}
+	offsets := make(map[string]uint64)
+	for _, name := range order {
+		field := fields[name]
 		fieldAlign := field.Align
 		if fieldAlign == 0 {
 			fieldAlign = 1
 		}
 		if remainder := size % fieldAlign; remainder != 0 {
 			size += fieldAlign - remainder
+		}
+		offsets[name] = size
+		if len(name) > 0 {
+			offsets[strings.ToUpper(name[:1])+name[1:]] = size
 		}
 		size += field.Size
 		if fieldAlign > alignment {
@@ -559,7 +562,7 @@ func structLayout(fields map[string]ast.TypeInfo) (uint64, uint64) {
 	if remainder := size % alignment; remainder != 0 {
 		size += alignment - remainder
 	}
-	return size, alignment
+	return size, alignment, offsets
 }
 
 func isBinary(head string) bool {

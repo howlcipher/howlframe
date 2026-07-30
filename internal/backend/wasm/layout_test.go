@@ -10,6 +10,7 @@ func TestDescribeLayoutUsesTypedAggregateRepresentations(t *testing.T) {
 	structType.Name = "User"
 	structType.Size = 24
 	structType.Align = 8
+	structType.FieldOffsets = map[string]uint64{"name": 0, "Name": 0, "age": 16, "Age": 16}
 
 	tests := []struct {
 		name     string
@@ -31,5 +32,9 @@ func TestDescribeLayoutUsesTypedAggregateRepresentations(t *testing.T) {
 				t.Fatalf("unexpected layout: %+v", layout)
 			}
 		})
+	}
+	structLayout := describeLayout(structType)
+	if structLayout.FieldOffsets["name"] != 0 || structLayout.FieldOffsets["age"] != 16 {
+		t.Fatalf("aggregate field offsets were not preserved: %+v", structLayout)
 	}
 }

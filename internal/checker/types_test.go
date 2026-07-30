@@ -141,7 +141,7 @@ func TestAnalyzeBackendSpecificLayoutsAndFields(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", analysis.Diagnostics)
 	}
 	user := analysis.Structs["User"]
-	if user.Kind != ast.Struct || user.Size != 24 || user.Align != 8 || len(user.Fields) != 4 {
+	if user.Kind != ast.Struct || user.Size != 24 || user.Align != 8 || len(user.Fields) != 4 || user.FieldOffsets["name"] != 0 || user.FieldOffsets["age"] != 16 {
 		t.Fatalf("unexpected User layout: %+v", user)
 	}
 	if user.Fields["age"].Kind != ast.Int || user.Fields["name"].Kind != ast.String {

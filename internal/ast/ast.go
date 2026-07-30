@@ -53,13 +53,14 @@ const (
 // TypeInfo describes both the source-level type and its native layout. Size
 // and Align are zero for Unknown/Any because no backend-safe layout is known.
 type TypeInfo struct {
-	Kind    ValueKind
-	Name    string
-	Size    uint64
-	Align   uint64
-	Pointer bool
-	Element *TypeInfo
-	Fields  map[string]TypeInfo
+	Kind         ValueKind
+	Name         string
+	Size         uint64
+	Align        uint64
+	Pointer      bool
+	Element      *TypeInfo
+	Fields       map[string]TypeInfo
+	FieldOffsets map[string]uint64
 }
 
 func Layout(kind ValueKind) TypeInfo {
@@ -79,7 +80,7 @@ func Layout(kind ValueKind) TypeInfo {
 	case Dict:
 		return TypeInfo{Kind: Dict, Name: "dict", Size: 8, Align: 8, Pointer: true}
 	case Struct:
-		return TypeInfo{Kind: Struct, Name: "struct", Align: 1, Fields: map[string]TypeInfo{}}
+		return TypeInfo{Kind: Struct, Name: "struct", Align: 1, Fields: map[string]TypeInfo{}, FieldOffsets: map[string]uint64{}}
 	case Void:
 		return TypeInfo{Kind: Void, Name: "void", Align: 1}
 	case Any:
