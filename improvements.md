@@ -72,7 +72,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | Done (2026-07-30) | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 | 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Pending | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
-| 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Pending | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | Documentation gap identified; these features are in README but lack code examples. |
+| 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | Documentation gap identified; these features are in README but lack code examples. |
 ## Details
 
 ### 62. Phase 2 IR Abstraction
