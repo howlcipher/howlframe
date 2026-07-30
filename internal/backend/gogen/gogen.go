@@ -1093,7 +1093,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
 			return res.Response
-		}()`)
+		}()`, prompt)
 	} else if head == "llm_generate" {
 		if len(node.Children) < 2 {
 			ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)

@@ -203,8 +203,8 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			targetStr := ast.Stringify(node.Children[1])
 			constraintStr := ast.Stringify(node.Children[2])
-			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, Operands: []any{targetStr}})
-			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, Operands: []any{constraintStr}})
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: targetStr})
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: constraintStr})
 			insts = append(insts, BCInstruction{OpString: "ACHIEVE", Op: OpAchieve})
 
 		case "llm_generate":
