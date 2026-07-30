@@ -27,6 +27,62 @@ type Node struct {
 	Line     int
 	Column   int
 	Filename string
+	Inferred TypeInfo
+}
+
+// ValueKind is the language-level type category inferred by the semantic
+// checker. Unknown is intentional: Zero permits dynamic values at runtime,
+// while known values still carry enough layout information for native
+// backends to make safe decisions.
+type ValueKind string
+
+const (
+	Unknown ValueKind = "unknown"
+	Any     ValueKind = "any"
+	Void    ValueKind = "void"
+	Bool    ValueKind = "bool"
+	Int     ValueKind = "int"
+	Float   ValueKind = "float"
+	String  ValueKind = "string"
+	Bytes   ValueKind = "bytes"
+	List    ValueKind = "list"
+	Dict    ValueKind = "dict"
+)
+
+// TypeInfo describes both the source-level type and its native layout. Size
+// and Align are zero for Unknown/Any because no backend-safe layout is known.
+type TypeInfo struct {
+	Kind    ValueKind
+	Name    string
+	Size    uint64
+	Align   uint64
+	Pointer bool
+	Element *TypeInfo
+}
+
+func Layout(kind ValueKind) TypeInfo {
+	switch kind {
+	case Bool:
+		return TypeInfo{Kind: Bool, Name: "bool", Size: 1, Align: 1}
+	case Int:
+		return TypeInfo{Kind: Int, Name: "int", Size: 8, Align: 8}
+	case Float:
+		return TypeInfo{Kind: Float, Name: "float64", Size: 8, Align: 8}
+	case String:
+		return TypeInfo{Kind: String, Name: "string", Size: 16, Align: 8, Pointer: true}
+	case Bytes:
+		return TypeInfo{Kind: Bytes, Name: "[]byte", Size: 24, Align: 8, Pointer: true}
+	case List:
+		return TypeInfo{Kind: List, Name: "list", Size: 24, Align: 8, Pointer: true}
+	case Dict:
+		return TypeInfo{Kind: Dict, Name: "dict", Size: 8, Align: 8, Pointer: true}
+	case Void:
+		return TypeInfo{Kind: Void, Name: "void", Align: 1}
+	case Any:
+		return TypeInfo{Kind: Any, Name: "any"}
+	default:
+		return TypeInfo{Kind: Unknown, Name: "unknown"}
+	}
 }
 
 func CopyNode(n *Node) *Node {

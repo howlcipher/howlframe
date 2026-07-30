@@ -10,6 +10,11 @@ func Check(node *ast.Node) {
 	if node == nil {
 		return
 	}
+	analysis := Analyze(node)
+	if len(analysis.Diagnostics) > 0 {
+		diagnostic := analysis.Diagnostics[0]
+		ast.ReportError(diagnostic.Reason, diagnostic.Line, diagnostic.Column)
+	}
 	if node.Type != "List" || len(node.Children) == 0 {
 		ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
