@@ -17,7 +17,11 @@ func GenerateWasmCode(node *ast.Node) string {
 	}
 
 	resultType := wasmType(node.Children[1].Inferred)
-	return fmt.Sprintf("(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", resultType, generateWasmExpression(node.Children[1]))
+	code := fmt.Sprintf("(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", resultType, generateWasmExpression(node.Children[1]))
+	if err := ValidateWAT(code); err != nil {
+		ast.ReportError(fmt.Sprintf("invalid generated WAT: %v", err), node.Line, node.Column)
+	}
+	return code
 }
 
 func generateWasmExpression(node *ast.Node) string {

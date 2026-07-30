@@ -30,4 +30,6 @@ The first checkpoint was structural/backend-capability validation. Phase 1 now a
 
 ## Next step
 
-Next, install/use a WAT validator when available, add Wasm memory access primitives for aggregate expression emission, and verify the generated module end to end. Do not mark #64 done until those decisions are validated beyond string-fragment tests.
+The Wasm backend now runs a local, string-aware structural WAT gate before returning generated modules. It checks the module/function envelope, balanced parentheses, comments, and quoted strings. This is intentionally not an instruction/type validator; `wat2wasm`/`wasm-tools` remain required for that stronger check when available.
+
+Next, install/use a full WAT validator when available, add Wasm memory access primitives for aggregate expression emission, and verify the generated module end to end. Do not mark #64 done until those decisions are validated beyond structural checks and string fragments.
