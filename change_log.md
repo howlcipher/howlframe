@@ -4,6 +4,9 @@
 
 ### Added
 
+* Provider-neutral constrained-decoding mask plans in `internal/masking`,
+  derived from semantic checker `TypeInfo` and full `checker.Analysis` output
+  for downstream tokenizer/logit integrations.
 * A local parser and instruction/type validator for the folded WebAssembly Text
   subset emitted by the Wasm backend, including function results, operands,
   control flow, memory access, constants, and data bounds.

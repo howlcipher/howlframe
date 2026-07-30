@@ -76,7 +76,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Documentation gap identified; these features are in README but lack code examples. |
 | 71 | [Zero Native Store Bytecode](#71-zero-native-store-bytecode) | Proposed | 1.0 (8×0.5÷4) | Sonnet 5 | Gemini 1.5 Pro | gpt-5.6-sol | Add a compiler-visible persistence layer so agents can query structured records without emitting SQL strings. Decay 0.5 because SQL persistence already shipped, but this is a different AI-native abstraction. |
 | 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Done (2026-07-30) | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
-| 68 | [Native Logit Masking](#68-native-logit-masking) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
+| 68 | [Native Logit Masking](#68-native-logit-masking) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
 | 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
 | 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Emit LLVM IR or WebAssembly natively. |
@@ -527,6 +527,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Why:** Strongly inspired by LMQL to eliminate syntax hallucination at the token-generation level.
 * **Impact:** 5/10 (Medium - valuable for AI authoring reliability, but it depends on type/checker maturity and model-inference integration).
 * **Groomed (2026-07-30):** Still Pending and now ranked behind #64 because typed constraints need the checker foundation first. Score remains 2.5 (5×1÷2). Likely approaches: grammar/logit masks are direct and fast but syntax-focused; type-derived masks are stronger but more complex; external constrained decoding libraries reduce effort but add integration coupling.
+* **Done (2026-07-30):** Added a provider-neutral Go masking package that compiles individual semantic types and complete checker analyses into deterministic JSON plans. Plans cover primitive token classes, collection delimiters and member constraints, normalized struct fields, and function parameter and return constraints. Provider-specific tokenizer and live inference integration remain deliberately outside this item.
 
 ### 69. First-Class Optimization Signatures
 * **Description:** Built-in "Teleprompter" step that runs tests and automatically optimizes embedded logic/prompts during compilation.

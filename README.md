@@ -181,6 +181,12 @@ Zero supports the core control-flow and data primitives expected by the shipped 
 
 AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive; unsupported combinations should fail during checking or execution instead of being silently accepted.
 
+## Constrained Decoding Plans
+
+The `internal/masking` package compiles semantic `ast.TypeInfo` values and complete `checker.Analysis` results into deterministic, JSON-serializable mask plans. Plans describe provider-neutral token classes, literals, collection delimiters, struct fields, and function parameter and return constraints for use by downstream constrained decoders.
+
+This API does not call a model or map constraints to provider-specific token IDs. Live logit masking remains the responsibility of an inference integration that consumes the plan.
+
 ## Orchestrator
 
 `orchestrator.py` is an optional local-model experiment. It currently uses Outlines with an OpenAI-compatible Ollama endpoint to generate JSON bytecode that is executed by the Zero VM through `-run-bc`.
