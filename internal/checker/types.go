@@ -283,6 +283,51 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		a.inferChild(node, 2, env)
 		return ast.Layout(ast.Void)
+	case "try_let":
+		if len(node.Children) < 4 || node.Children[1].Type != "List" || len(node.Children[1].Children) < 2 {
+			return ast.Layout(ast.Unknown)
+		}
+		binding := node.Children[1]
+		value := a.infer(binding.Children[1], env)
+		catchEnv := cloneEnv(env)
+		if node.Children[2].Type == "List" && len(node.Children[2].Children) >= 3 {
+			catchEnv[node.Children[2].Children[1].Value] = ast.Layout(ast.Unknown)
+		}
+		catchType := a.inferChild(node.Children[2], 2, catchEnv)
+		successEnv := cloneEnv(env)
+		successEnv[binding.Children[0].Value] = value
+		successType := a.infer(node.Children[3], successEnv)
+		return join(catchType, successType)
+	case "for":
+		if len(node.Children) < 4 {
+			return ast.Layout(ast.Void)
+		}
+		listType := a.infer(node.Children[2], env)
+		loopEnv := cloneEnv(env)
+		if listType.Element != nil {
+			loopEnv[node.Children[1].Value] = *listType.Element
+		} else {
+			loopEnv[node.Children[1].Value] = ast.Layout(ast.Unknown)
+		}
+		a.infer(node.Children[1], loopEnv)
+		a.infer(node.Children[3], loopEnv)
+		return ast.Layout(ast.Void)
+	case "spawn":
+		if len(node.Children) >= 2 && node.Children[1].Type == "List" && len(node.Children[1].Children) >= 3 {
+			a.infer(node.Children[1].Children[2], cloneEnv(env))
+		}
+		return ast.Layout(ast.Void)
+	case "match":
+		a.inferChild(node, 1, env)
+		result := ast.Layout(ast.Unknown)
+		for _, caseNode := range node.Children[2:] {
+			if caseNode.Type != "List" || len(caseNode.Children) < 2 {
+				continue
+			}
+			a.infer(caseNode.Children[0], env)
+			result = join(result, a.infer(caseNode.Children[1], env))
+		}
+		return result
 	case "return":
 		return a.inferChild(node, 1, env)
 	case "set":
@@ -309,7 +354,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		for _, pair := range node.Children[1:] {
 			if pair.Type == "List" && len(pair.Children) == 2 {
 				a.infer(pair.Children[0], env)
-				a.infer(pair.Children[1], env)
+				value := a.infer(pair.Children[1], env)
+				if result.Element == nil && known(value) {
+					copy := value
+					result.Element = &copy
+				}
 			}
 		}
 		return result
@@ -321,8 +370,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Unknown)
 	case "map_get":
-		a.inferChild(node, 1, env)
+		dict := a.inferChild(node, 1, env)
 		a.inferChild(node, 2, env)
+		if dict.Element != nil {
+			return *dict.Element
+		}
 		return ast.Layout(ast.Unknown)
 	case "to_int":
 		a.inferChild(node, 1, env)
@@ -333,12 +385,15 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "to_string", "bytes_to_string":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
-	case "print", "append", "map_set", "map_delete", "sleep", "spawn", "test":
+	case "print", "append", "map_set", "map_delete", "sleep", "test":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
 		}
 		return ast.Layout(ast.Void)
 	case "call":
+		for _, child := range node.Children[2:] {
+			a.infer(child, env)
+		}
 		return ast.Layout(ast.Unknown)
 	default:
 		for _, child := range node.Children[1:] {

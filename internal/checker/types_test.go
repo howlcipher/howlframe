@@ -93,3 +93,36 @@ func TestAnalyzeReportsProvableTypeErrors(t *testing.T) {
 		t.Fatalf("diagnostics must retain source locations: %+v", analysis.Diagnostics)
 	}
 }
+
+func TestAnalyzePropagatesDeferredControlFlow(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (items (list "a" "b"))
+			(for item items (print item)))
+		(try_let (n (to_int "1"))
+			(catch err (print err))
+			(if (> n 0) (print n) (print "no")))
+		(spawn (lambda () (print "worker")))
+		(match 1 (1 (print "one")) (default (print "other"))))`)
+
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", analysis.Diagnostics)
+	}
+	var loopItem ast.TypeInfo
+	var visit func(*ast.Node)
+	visit = func(node *ast.Node) {
+		if node == nil {
+			return
+		}
+		if node.Type == "SYMBOL" && node.Value == "item" {
+			loopItem = node.Inferred
+		}
+		for _, child := range node.Children {
+			visit(child)
+		}
+	}
+	visit(root)
+	if loopItem.Kind != ast.String || loopItem.Size != 16 || !loopItem.Pointer {
+		t.Fatalf("for-loop element lost its inferred layout: %+v", loopItem)
+	}
+}
