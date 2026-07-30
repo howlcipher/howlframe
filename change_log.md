@@ -22,6 +22,8 @@
 
 ### Changed
 
+* Synchronized the Zero language write-cost benchmark fixtures with the
+  published 2026-07-30 token counts for Tasks B and C.
 * Integer and string list/dictionary expressions now initialize Wasm linear
   memory with typed stores, dynamic dictionary keys compare interned string
   pointers, integer dictionary reads use typed loads, multiple aggregate

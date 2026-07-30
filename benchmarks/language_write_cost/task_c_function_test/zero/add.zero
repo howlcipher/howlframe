@@ -1,11 +1,7 @@
 (cli_app
   (defun add (a b)
-    (type_hint a "int")
-    (type_hint b "int")
-    (type_hint return "int")
-    (let (sum (+ a b))
-      (return sum)
-    )
+    (type_hints (a "int") (b "int") (return "int"))
+    (return (+ a b))
   )
 
   (test "add function returns correct sum"
