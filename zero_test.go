@@ -707,3 +707,107 @@ func TestSchemaBridgeEmitsWrappedSourceExpression(t *testing.T) {
 		t.Fatalf("schema_bridge did not emit wrapped source expression:\n%s", generated)
 	}
 }
+
+func TestOptimizationPlanIncludesSignatureMetadata(t *testing.T) {
+	command := exec.Command("go", "run", "zero.go", "-optimization-plan", "tests/optimization_signature.zero")
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("run -optimization-plan: %v", err)
+	}
+
+	var plan struct {
+		Format     string `json:"format"`
+		Signatures []struct {
+			Name       string   `json:"name"`
+			Metric     string   `json:"metric"`
+			Tests      []string `json:"tests"`
+			Candidates []struct {
+				Label   string `json:"label"`
+				Payload string `json:"payload"`
+			} `json:"candidates"`
+			Line     int    `json:"line"`
+			Column   int    `json:"column"`
+			BodyType string `json:"body_type"`
+		} `json:"signatures"`
+	}
+	if err := json.Unmarshal(output, &plan); err != nil {
+		t.Fatalf("decode optimization plan: %v\n%s", err, output)
+	}
+	if plan.Format != "zero.optimization_plan/v1" || len(plan.Signatures) != 1 {
+		t.Fatalf("unexpected optimization plan: %+v", plan)
+	}
+	signature := plan.Signatures[0]
+	if signature.Name != "support_prompt" || signature.Metric != "accuracy" ||
+		len(signature.Tests) != 1 || signature.Tests[0] != "go test ./..." ||
+		len(signature.Candidates) != 2 || signature.Candidates[0].Label != "baseline" ||
+		signature.Candidates[1].Payload != "Answer only with verified facts." ||
+		signature.Line != 2 || signature.Column != 1 || signature.BodyType != "void" {
+		t.Fatalf("unexpected signature plan: %+v", signature)
+	}
+}
+
+func TestOptimizationSignatureReportsMalformedCandidateAsJSON(t *testing.T) {
+	input := filepath.Join(t.TempDir(), "invalid_optimization_signature.zero")
+	source := `(cli_app
+		(optimize_signature named
+			(metric "accuracy")
+			(test "go test ./...")
+			(candidate baseline "prompt")
+			(print "body")))`
+	if err := os.WriteFile(input, []byte(source), 0o600); err != nil {
+		t.Fatalf("write invalid signature: %v", err)
+	}
+
+	command := exec.Command("go", "run", "zero.go", "-optimization-plan", input)
+	output, err := command.Output()
+	if err == nil {
+		t.Fatalf("malformed optimization signature unexpectedly succeeded:\n%s", output)
+	}
+	var reported struct {
+		Reason string `json:"reason"`
+		Line   int    `json:"line"`
+		Column int    `json:"column"`
+	}
+	if decodeErr := json.Unmarshal(output, &reported); decodeErr != nil {
+		t.Fatalf("decode Zero JSON error: %v\n%s", decodeErr, output)
+	}
+	if reported.Reason != "optimize_signature candidate label must be a string" ||
+		reported.Line != 5 || reported.Column <= 0 {
+		t.Fatalf("unexpected Zero JSON error: %+v", reported)
+	}
+}
+
+func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
+	const expected = "optimization signature body\n"
+	fixture := "tests/optimization_signature.zero"
+
+	if output, err := exec.Command("go", "run", "zero.go", "-run", fixture).CombinedOutput(); err != nil {
+		t.Fatalf("direct execution failed: %v\n%s", err, output)
+	} else if string(output) != expected {
+		t.Fatalf("direct output = %q, want %q", output, expected)
+	}
+
+	outDir := t.TempDir()
+	if output, err := exec.Command("go", "run", "zero.go", "-o", outDir, fixture).CombinedOutput(); err != nil {
+		t.Fatalf("Go codegen failed: %v\n%s", err, output)
+	}
+	generatedBinary := filepath.Join(outDir, "optimization-signature")
+	if output, err := exec.Command("go", "build", "-o", generatedBinary, filepath.Join(outDir, "server.go")).CombinedOutput(); err != nil {
+		t.Fatalf("generated Go did not build: %v\n%s", err, output)
+	}
+	if output, err := exec.Command(generatedBinary).CombinedOutput(); err != nil {
+		t.Fatalf("generated program failed: %v\n%s", err, output)
+	} else if string(output) != expected {
+		t.Fatalf("generated output = %q, want %q", output, expected)
+	}
+
+	bytecodeFile := filepath.Join(outDir, "optimization-signature.zbc")
+	if output, err := exec.Command("go", "run", "zero.go", "-compile-bc", fixture, "-o", bytecodeFile).CombinedOutput(); err != nil {
+		t.Fatalf("bytecode compilation failed: %v\n%s", err, output)
+	}
+	if output, err := exec.Command("go", "run", "zero.go", "-run-bc", bytecodeFile).CombinedOutput(); err != nil {
+		t.Fatalf("bytecode execution failed: %v\n%s", err, output)
+	} else if string(output) != expected {
+		t.Fatalf("bytecode output = %q, want %q", output, expected)
+	}
+}

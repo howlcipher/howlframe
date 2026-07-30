@@ -196,7 +196,7 @@ Zero supports the core control-flow and data primitives expected by the shipped 
 - `test` blocks that generate Go or Node tests depending on the target.
 - Bytecode-native record stores through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
-AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive; unsupported combinations should fail during checking or execution instead of being silently accepted.
+AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `optimize_signature`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive; unsupported combinations should fail during checking or execution instead of being silently accepted.
 
 ## Constrained Decoding Plans
 
@@ -205,6 +205,21 @@ The `internal/masking` package compiles semantic `ast.TypeInfo` values and compl
 Use `(schema_bridge User output)` to bind an output source to a declared `User` struct. The checker rejects unknown targets and the plan records the exact struct constraint; `go run zero.go -mask-plan program.zero` prints the complete plan.
 
 This API does not call a model or map constraints to provider-specific token IDs. Live logit masking remains the responsibility of an inference integration that consumes the plan.
+
+## Compile-Time Optimization Plans
+
+Use `optimize_signature` to record optimization intent around an otherwise normal body expression:
+
+```lisp
+(optimize_signature support_prompt
+  (metric "accuracy")
+  (test "go test ./...")
+  (candidate "baseline" "Answer clearly.")
+  (candidate "strict" "Answer only with verified facts.")
+  (print "body"))
+```
+
+The form requires a symbol name, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run zero.go -optimization-plan program.zero` prints deterministic `zero.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
 
 ## Orchestrator
 

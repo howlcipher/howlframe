@@ -80,7 +80,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
 | 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Done (2026-07-30) | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
 | 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Added a bounded typed SSA/CFG to WAT serializer and independent CLI artifact path. |
-| 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
+| 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
 | 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
 ## Details
 
@@ -537,6 +537,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Why:** Inspired by DSPy to automate prompt engineering within the compilation loop.
 * **Impact:** 6/10 (Medium - advanced agentic feature).
 * **Groomed (2026-07-30):** Still Pending. The shipped `optimize_block` runtime primitive (#40) handles runtime hot-swapping, not compile-time prompt/program optimization signatures, so it does not close this item. Score remains 1.5 (6×1÷4).
+* **Done (2026-07-30):** Added `(optimize_signature name (metric "...") (test "...")... (candidate "label" "payload")... body)` as a checked, transparent source wrapper. The checker validates signature arity, symbol names, ordered metric/test/candidate metadata, and candidate string fields, infers the wrapped body type, and records source coordinates plus normalized metadata in `checker.Analysis`. Added deterministic `zero.optimization_plan/v1` JSON through `-optimization-plan`, including name, metric, test commands, candidate labels/payloads, line, column, and body type. Plan generation is intentionally metadata-only: it does not execute tests or shell commands, call an LLM or network service, select candidates, or rewrite source. Go codegen, JavaScript codegen, direct interpretation, and bytecode compilation transparently evaluate the body. Added checker and plan unit tests, structured CLI error coverage, `tests/optimization_signature.zero`, and direct/Go/bytecode transparency tests. Verified with `go test ./internal/checker ./internal/optimization`, `go test . -run 'TestOptimization(Plan|Signature)' -count=1`, `go test ./...`, `go vet ./...`, and `git diff --check`.
 
 ### 70. Type-Safe Schema Bridges
 * **Description:** Force LLM outputs into strongly typed interfaces via semantic type checking rather than loose JSON mapping.

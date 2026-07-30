@@ -33,6 +33,9 @@
 * Compiler and VM regression coverage for store lowering, named store
   attachment, idempotent deletion, missing-record behavior, record-copy
   isolation, and bytecode fixture execution.
+* Compile-time optimization signatures through `optimize_signature` and
+  deterministic `-optimization-plan` JSON, with checker metadata, transparent
+  backend execution, documentation, and regression coverage.
 
 ### Changed
 

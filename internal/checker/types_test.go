@@ -233,6 +233,94 @@ func TestAnalyzeSchemaBridgeRejectsUnknownTargetAtTargetLocation(t *testing.T) {
 	}
 }
 
+func TestAnalyzeOptimizationSignatureRecordsMetadataAndBodyType(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(optimize_signature support_prompt
+			(metric "accuracy")
+			(test "go test ./...")
+			(test "go test ./internal/checker")
+			(candidate "baseline" "Answer clearly.")
+			(candidate "strict" "Answer only with verified facts.")
+			(+ 1 2)))`)
+
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", analysis.Diagnostics)
+	}
+	if len(analysis.OptimizationSignatures) != 1 {
+		t.Fatalf("optimization signatures = %+v, want one", analysis.OptimizationSignatures)
+	}
+	signature := analysis.OptimizationSignatures[0]
+	if signature.Name != "support_prompt" || signature.Metric != "accuracy" ||
+		signature.Line != 2 || signature.Column != 3 || signature.BodyType.Kind != ast.Int {
+		t.Fatalf("unexpected optimization signature: %+v", signature)
+	}
+	if len(signature.Tests) != 2 || signature.Tests[0] != "go test ./..." ||
+		signature.Tests[1] != "go test ./internal/checker" {
+		t.Fatalf("unexpected test commands: %+v", signature.Tests)
+	}
+	if len(signature.Candidates) != 2 ||
+		signature.Candidates[0].Label != "baseline" ||
+		signature.Candidates[0].Payload != "Answer clearly." ||
+		signature.Candidates[1].Label != "strict" {
+		t.Fatalf("unexpected candidates: %+v", signature.Candidates)
+	}
+	if root.Children[1].Inferred.Kind != ast.Int {
+		t.Fatalf("wrapper inference = %+v, want body type int", root.Children[1].Inferred)
+	}
+}
+
+func TestAnalyzeOptimizationSignatureRejectsMalformedMetadata(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		reason string
+	}{
+		{
+			name:   "arity",
+			source: `(cli_app (optimize_signature only_name))`,
+			reason: "optimize_signature expects a name, metric, one or more tests, one or more candidates, and a body",
+		},
+		{
+			name:   "name",
+			source: `(cli_app (optimize_signature "named" (metric "accuracy") (test "go test ./...") (candidate "base" "prompt") (print "body")))`,
+			reason: "optimize_signature name must be a symbol",
+		},
+		{
+			name:   "metric form",
+			source: `(cli_app (optimize_signature named (metric accuracy) (test "go test ./...") (candidate "base" "prompt") (print "body")))`,
+			reason: `optimize_signature metric expects (metric "name")`,
+		},
+		{
+			name:   "test form",
+			source: `(cli_app (optimize_signature named (metric "accuracy") (test command) (candidate "base" "prompt") (print "body")))`,
+			reason: `optimize_signature test expects (test "command")`,
+		},
+		{
+			name:   "candidate label",
+			source: `(cli_app (optimize_signature named (metric "accuracy") (test "go test ./...") (candidate base "prompt") (print "body")))`,
+			reason: "optimize_signature candidate label must be a string",
+		},
+		{
+			name:   "candidate payload",
+			source: `(cli_app (optimize_signature named (metric "accuracy") (test "go test ./...") (candidate "base" prompt) (print "body")))`,
+			reason: "optimize_signature candidate payload must be a string",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			analysis := Analyze(parseTestProgram(t, test.source))
+			if len(analysis.Diagnostics) == 0 || analysis.Diagnostics[0].Reason != test.reason {
+				t.Fatalf("diagnostics = %+v, want first reason %q", analysis.Diagnostics, test.reason)
+			}
+			if len(analysis.OptimizationSignatures) != 0 {
+				t.Fatalf("malformed signature was recorded: %+v", analysis.OptimizationSignatures)
+			}
+		})
+	}
+}
+
 func TestAnalyzeRejectsInconsistentAggregateLayouts(t *testing.T) {
 	root := parseTestProgram(t, `(cli_app
 		(let (items (list 1 "two"))

@@ -18,6 +18,7 @@ import (
 	"zero/internal/ir"
 	"zero/internal/lexer"
 	"zero/internal/masking"
+	"zero/internal/optimization"
 	"zero/internal/parser"
 	"zero/internal/vm"
 )
@@ -34,6 +35,7 @@ func main() {
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
+	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
@@ -77,6 +79,15 @@ func main() {
 		plan, err := json.Marshal(masking.CompileAnalysis(analysis))
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode mask plan: %v", err), 0, 0)
+		}
+		fmt.Println(string(plan))
+		return
+	}
+
+	if *optimizationPlan {
+		plan, err := json.Marshal(optimization.CompileAnalysis(analysis))
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to encode optimization plan: %v", err), 0, 0)
 		}
 		fmt.Println(string(plan))
 		return

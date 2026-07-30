@@ -1,0 +1,7 @@
+(cli_app
+(optimize_signature support_prompt
+	(metric "accuracy")
+	(test "go test ./...")
+	(candidate "baseline" "Answer clearly.")
+	(candidate "strict" "Answer only with verified facts.")
+	(print "optimization signature body")))

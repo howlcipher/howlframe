@@ -866,6 +866,9 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if head == "schema_bridge" {
 		return generateStatementRaw(node.Children[2], reqVar, depth+1)
 	}
+	if head == "optimize_signature" {
+		return generateStatementRaw(node.Children[len(node.Children)-1], reqVar, depth+1)
+	}
 	if ir, ok := ir.LowerShared(node); ok {
 		return EmitGoIR(ir, reqVar, depth)
 	}

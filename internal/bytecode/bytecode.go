@@ -306,6 +306,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "schema_bridge":
 			insts = append(insts, c.compileNode(node.Children[2])...)
 
+		case "optimize_signature":
+			insts = append(insts, c.compileNode(node.Children[len(node.Children)-1])...)
+
 		case "let":
 			binding := node.Children[1]
 			varName := binding.Children[0].Value

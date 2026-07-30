@@ -45,6 +45,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 35 | [`tests/test_achieve.zero` is not a standalone root fixture](#35-test_achievezero-is-not-a-standalone-root-fixture) | Pending | 1.0 (2×1÷2) | — | — | gpt-5.6-luna | The fixture starts with a bare `defun`, so the normal checker rejects it before the shipped `achieve` primitive is exercised. |
 | 36 | [`confidence` fixture uses invalid comparison arity](#36-confidence-fixture-uses-invalid-comparison-arity) | Pending | 1.0 (2×1÷2) | — | — | gpt-5.6-luna | The fixture calls `(> score 0.8)` but the lexer/parser tokenizes `0.8` in a way that reaches shared validation as a third argument, so the documented stochastic-control fixture does not transpile. |
 | 37 | [`lazy_synthesize` Go backend fixture builds with unresolved function](#37-lazy_synthesize-go-backend-fixture-builds-with-unresolved-function) | Pending | 1.0 (3×1÷3) | — | — | gpt-5.6-terra | `tests/test_lazy_synthesize.zero` transpiles to generated Go that calls `my_add` without defining it, so the Go backend fixture fails at build time. |
+| 38 | [`test_primitives.zero` wraps deterministic conversions in `try_let`](#38-test_primitiveszero-wraps-deterministic-conversions-in-try_let) | Pending | 3.0 (3×1÷1) | — | — | gpt-5.6-luna | The fixture uses `try_let` around `to_int` and `to_float`, but those deterministic conversions return one value, so generated tests fail with assignment-mismatch errors. |
 ## Details
 
 ### 1. Lexer panics on EOF during unterminated string
@@ -303,3 +304,10 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Why:** Found while running the fixture transpile/build loop for bug #32. Improvement #37 documents `lazy_synthesize` as implemented in the interpreter and bytecode VM, but the Go backend fixture is present in the general `tests/*.zero` set and currently fails as a normal generated-Go fixture.
 * **Impact:** 3/10 (Low-Medium - backend coverage and fixture classification are inconsistent for a shipped runtime primitive).
 * **Fix sketch:** Either implement a Go backend stub/runtime path for `lazy_synthesize`, or move this fixture to an interpreter/bytecode-only test path and make the general generated-Go fixture loop skip it explicitly with documentation.
+
+### 38. `test_primitives.zero` wraps deterministic conversions in `try_let`
+* **Description:** `tests/test_primitives.zero` uses `(try_let (i (to_int "42")) ...)` and `(try_let (f (to_float "3.14")) ...)`, but `to_int` and `to_float` compile to single-value deterministic conversions. Generated `server_test.go` therefore fails with assignment mismatches such as `2 variables but func() int {…} returns 1 value`.
+* **Why:** Found during the isolated full fixture transpile/build sweep for improvement #69. Bug #17's Done note correctly describes `to_int`/`to_float` as deterministic zero-value-on-error conversions, not `(value, error)` primitives, so the fixture's `try_let` shape is stale relative to the shipped API.
+* **Impact:** 3/10 (Low-Medium - isolated fixture break, but it blocks using the general fixture sweep as a clean regression gate for conversion primitives).
+* **Repro:** Transpile `tests/test_primitives.zero` to an isolated output directory, then compile the generated `server.go`/`server_test.go`; Go reports assignment mismatch errors for the `to_int` and `to_float` test blocks.
+* **Fix sketch:** Replace the first two `try_let` blocks with plain `let` bindings or `do` bodies that exercise `to_int` and `to_float` directly, while keeping the `read_file` `try_let` coverage because `read_file` still returns `(value, error)`.

@@ -29,15 +29,35 @@ type SchemaBridge struct {
 	Constraint ast.TypeInfo
 }
 
+// OptimizationCandidate is one labeled prompt or program variant recorded by
+// an optimize_signature declaration.
+type OptimizationCandidate struct {
+	Label   string
+	Payload string
+}
+
+// OptimizationSignature records compile-time optimization intent. Test
+// commands and candidates are metadata only; the compiler never executes them.
+type OptimizationSignature struct {
+	Name       string
+	Metric     string
+	Tests      []string
+	Candidates []OptimizationCandidate
+	Line       int
+	Column     int
+	BodyType   ast.TypeInfo
+}
+
 // Analysis contains the inferred type/layout for every visited AST node.
 // The AST nodes are also annotated so later lowering passes can consume the
 // metadata without maintaining a second node-keyed lookup table.
 type Analysis struct {
-	Types       map[*ast.Node]ast.TypeInfo
-	Functions   map[string]FunctionInfo
-	Structs     map[string]ast.TypeInfo
-	Bridges     []SchemaBridge
-	Diagnostics []Diagnostic
+	Types                  map[*ast.Node]ast.TypeInfo
+	Functions              map[string]FunctionInfo
+	Structs                map[string]ast.TypeInfo
+	Bridges                []SchemaBridge
+	OptimizationSignatures []OptimizationSignature
+	Diagnostics            []Diagnostic
 }
 
 type typeEnv map[string]ast.TypeInfo
@@ -540,6 +560,8 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			Constraint: constraint,
 		})
 		return constraint
+	case "optimize_signature":
+		return a.inferOptimizationSignature(node, env)
 	case "env":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
@@ -582,6 +604,111 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Unknown)
 	}
+}
+
+func (a *Analysis) inferOptimizationSignature(node *ast.Node, env typeEnv) ast.TypeInfo {
+	if len(node.Children) < 6 {
+		for _, child := range node.Children[1:] {
+			a.infer(child, env)
+		}
+		a.add(node, "optimize_signature expects a name, metric, one or more tests, one or more candidates, and a body")
+		return ast.Layout(ast.Unknown)
+	}
+
+	valid := true
+	nameNode := node.Children[1]
+	if nameNode.Type != "SYMBOL" {
+		a.add(nameNode, "optimize_signature name must be a symbol")
+		valid = false
+	}
+
+	metricNode := node.Children[2]
+	metric := ""
+	if !isMetadataForm(metricNode, "metric", 2) || metricNode.Children[1].Type != "STRING" {
+		a.add(metricNode, `optimize_signature metric expects (metric "name")`)
+		valid = false
+	} else {
+		metric = metricNode.Children[1].Value
+	}
+
+	index := 3
+	tests := []string{}
+	for index < len(node.Children)-1 && metadataHead(node.Children[index]) == "test" {
+		testNode := node.Children[index]
+		if !isMetadataForm(testNode, "test", 2) || testNode.Children[1].Type != "STRING" {
+			a.add(testNode, `optimize_signature test expects (test "command")`)
+			valid = false
+		} else {
+			tests = append(tests, testNode.Children[1].Value)
+		}
+		index++
+	}
+	if len(tests) == 0 {
+		a.add(node, `optimize_signature requires at least one (test "command") form`)
+		valid = false
+	}
+
+	candidates := []OptimizationCandidate{}
+	for index < len(node.Children)-1 && metadataHead(node.Children[index]) == "candidate" {
+		candidateNode := node.Children[index]
+		if !isMetadataForm(candidateNode, "candidate", 3) {
+			a.add(candidateNode, `optimize_signature candidate expects (candidate "label" "payload")`)
+			valid = false
+		} else {
+			labelNode := candidateNode.Children[1]
+			payloadNode := candidateNode.Children[2]
+			if labelNode.Type != "STRING" {
+				a.add(labelNode, "optimize_signature candidate label must be a string")
+				valid = false
+			}
+			if payloadNode.Type != "STRING" {
+				a.add(payloadNode, "optimize_signature candidate payload must be a string")
+				valid = false
+			}
+			if labelNode.Type == "STRING" && payloadNode.Type == "STRING" {
+				candidates = append(candidates, OptimizationCandidate{
+					Label:   labelNode.Value,
+					Payload: payloadNode.Value,
+				})
+			}
+		}
+		index++
+	}
+	if len(candidates) == 0 {
+		a.add(node, `optimize_signature requires at least one (candidate "label" "payload") form`)
+		valid = false
+	}
+	if index != len(node.Children)-1 {
+		a.add(node.Children[index], "optimize_signature metadata must be metric, then tests, then candidates, followed by one body")
+		valid = false
+	}
+
+	body := node.Children[len(node.Children)-1]
+	bodyType := a.infer(body, env)
+	if valid {
+		a.OptimizationSignatures = append(a.OptimizationSignatures, OptimizationSignature{
+			Name:       nameNode.Value,
+			Metric:     metric,
+			Tests:      tests,
+			Candidates: candidates,
+			Line:       node.Line,
+			Column:     node.Column,
+			BodyType:   bodyType,
+		})
+	}
+	return bodyType
+}
+
+func metadataHead(node *ast.Node) string {
+	if node == nil || node.Type != "List" || len(node.Children) == 0 ||
+		node.Children[0].Type != "SYMBOL" {
+		return ""
+	}
+	return node.Children[0].Value
+}
+
+func isMetadataForm(node *ast.Node, head string, length int) bool {
+	return metadataHead(node) == head && len(node.Children) == length
 }
 
 func (a *Analysis) inferLetChain(node *ast.Node, env typeEnv) ast.TypeInfo {

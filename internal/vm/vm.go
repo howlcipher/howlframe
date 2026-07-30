@@ -193,6 +193,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr("schema_bridge expects (schema_bridge StructName source)", node)
 		}
 		return interp.eval(node.Children[2], env)
+	case "optimize_signature":
+		if len(node.Children) < 6 {
+			InterpErr("optimize_signature expects a name, metric, one or more tests, one or more candidates, and a body", node)
+		}
+		return interp.eval(node.Children[len(node.Children)-1], env)
 	case "let":
 		return interp.evalLet(node, env)
 	case "set":

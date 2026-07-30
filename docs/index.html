@@ -117,8 +117,9 @@ go run zero.go -run-bc /tmp/test_store_bytecode.zbc</code></pre>
                     <li><strong>Functions and types:</strong> <code>defun</code>, <code>call</code>, <code>return</code>, <code>type_hint</code>, <code>type_param</code>, <code>struct</code>, <code>parse_json</code>, and <code>schema_bridge</code> for typed constrained-output boundaries in provider-neutral mask plans.</li>
                     <li><strong>Collections and strings:</strong> lists, dictionaries, mutation, random-access reads, splitting, joining, regex matching, and deterministic conversions.</li>
                     <li><strong>Runtime primitives:</strong> file I/O, subprocess execution, CLI args, HTTP fetches, middleware, environment reads, imports, includes, spawning, bytecode-native record stores, and native tests where supported by the target.</li>
-                    <li><strong>AI-oriented primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, patching, context threading, optimization blocks, and agent tasks.</li>
+                    <li><strong>AI-oriented primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, patching, context threading, runtime optimization blocks, compile-time optimization signatures, and agent tasks.</li>
                 </ul>
+                <p><code>(optimize_signature name (metric "accuracy") (test "go test ./...") (candidate "baseline" "prompt") body)</code> records compile-time optimization intent while evaluating <code>body</code> normally. Run <code>go run zero.go -optimization-plan program.zero</code> to print deterministic JSON with commands, candidates, source coordinates, and the inferred body type. Plan generation never runs tests, calls a model, rewrites source, or selects a candidate.</p>
             </section>
 
             <section id="benchmark">
