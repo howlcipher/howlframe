@@ -15,6 +15,7 @@ import (
 	"zero/internal/backend/wasm"
 	"zero/internal/bytecode"
 	"zero/internal/checker"
+	"zero/internal/ir"
 	"zero/internal/lexer"
 	"zero/internal/masking"
 	"zero/internal/parser"
@@ -27,9 +28,10 @@ func init() {
 }
 
 func main() {
-	outDir := flag.String("o", "", "output directory, or exact bytecode output file with -compile-bc")
+	outDir := flag.String("o", "", "output directory, or exact artifact file after input with -compile-bc or -compile-wasm")
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
+	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	flag.Parse()
@@ -99,6 +101,35 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *compileWasm {
+		expression, err := ssaWasmExpression(root)
+		if err != nil {
+			line, column := 0, 0
+			if root != nil {
+				line, column = root.Line, root.Column
+			}
+			ast.ReportError(err.Error(), line, column)
+		}
+		graph, err := ir.LowerSSA(expression)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to lower SSA graph: %v", err), expression.Line, expression.Column)
+		}
+		wasmCode, err := wasm.SerializeSSA(graph)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to serialize SSA graph: %v", err), expression.Line, expression.Column)
+		}
+		outFile := inputFile + ".ssa.wat"
+		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
+			outFile = outputFile
+		} else if *outDir != "" {
+			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".ssa.wat")
+		}
+		if err = os.WriteFile(outFile, []byte(wasmCode), 0644); err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
+		}
+		os.Exit(0)
+	}
+
 	if *runMode {
 		os.Exit(vm.Interpret(root, flag.Args()[1:]))
 	}
@@ -147,6 +178,17 @@ func main() {
 			os.Remove(serverTestFile)
 		}
 	}
+}
+
+func ssaWasmExpression(root *ast.Node) (*ast.Node, error) {
+	if root == nil || root.Type != "List" || len(root.Children) == 0 ||
+		root.Children[0].Type != "SYMBOL" || root.Children[0].Value != "cli_app" {
+		return nil, fmt.Errorf("-compile-wasm requires a cli_app root")
+	}
+	if len(root.Children) != 2 {
+		return nil, fmt.Errorf("-compile-wasm requires cli_app to contain exactly one expression")
+	}
+	return root.Children[1], nil
 }
 
 func outputFlagAfterInput(args []string, inputFile string) string {

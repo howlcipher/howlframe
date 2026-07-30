@@ -8,6 +8,7 @@ The current toolchain includes:
 - Go code generation for `http_server` and `cli_app` programs.
 - JavaScript generation for `web_app` programs.
 - A WebAssembly Text prototype for `wasm_app` programs.
+- Typed SSA/CFG to WebAssembly Text serialization with `-compile-wasm`.
 - Direct AST execution for a bounded `cli_app` subset with `-run`.
 - Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`, including VM-local native stores.
 
@@ -84,6 +85,19 @@ go run zero.go -o build examples/wasm_math.zero
 ```
 
 That writes `build/app.wat`.
+
+To compile a checked `cli_app` expression through the typed SSA/CFG backend:
+
+```bash
+go run zero.go -compile-wasm examples/native_math.zero
+go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
+```
+
+The default artifact is `<input>.ssa.wat`. This initial native serializer
+supports integer and boolean constants, integer arithmetic and comparisons,
+boolean `and`/`or`, lexical `let` value flow, `if`/phi merges, and returns.
+Loops, calls, mutation, aggregates, printing, strings, and conversions fail
+with an explicit backend error.
 
 ## Language Roots
 
@@ -213,6 +227,7 @@ By default, Zero writes generated files into the current directory:
 - Go targets write `server.go` and, when tests exist, `server_test.go`.
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
 - WebAssembly targets write `app.wat`.
+- SSA WebAssembly compilation writes `<input>.ssa.wat` by default.
 - Bytecode compilation writes `<input>.bc.bin` by default.
 
 Use `-o <dir>` to write generated artifacts elsewhere:
@@ -225,6 +240,13 @@ For bytecode compilation, `-o <file>` can also name the exact bytecode output fi
 
 ```bash
 go run zero.go -compile-bc examples/cli_hello.zero -o build/cli_hello.zbc
+```
+
+The same exact-output handling applies to SSA WebAssembly compilation when
+`-o <file>` follows the input:
+
+```bash
+go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
 ```
 
 ## Observability

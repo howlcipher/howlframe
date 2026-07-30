@@ -107,6 +107,40 @@ func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 	}
 }
 
+func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "native.zero")
+	source := `(cli_app (let (x 4) (if (> x 2) (+ x 3) (- x 1))))`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write native backend input: %v", err)
+	}
+
+	if output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile).CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile SSA WAT: %v\n%s", err, output)
+	}
+	defaultOutput := inputFile + ".ssa.wat"
+	wat, err := os.ReadFile(defaultOutput)
+	if err != nil {
+		t.Fatalf("default SSA WAT output was not written to %s: %v", defaultOutput, err)
+	}
+	if !strings.Contains(string(wat), "(if (result i64)") {
+		t.Fatalf("SSA WAT does not contain the lowered if/phi merge:\n%s", wat)
+	}
+
+	exactOutput := filepath.Join(tempDir, "exact.wat")
+	if output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile, "-o", exactOutput).CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile SSA WAT to exact output: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(exactOutput); err != nil {
+		t.Fatalf("exact SSA WAT output was not written to %s: %v", exactOutput, err)
+	}
+}
+
 func TestCrashStateSerialization(t *testing.T) {
 	cmd := exec.Command("go", "build", "-o", "zero", ".")
 	if err := cmd.Run(); err != nil {

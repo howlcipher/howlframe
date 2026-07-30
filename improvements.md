@@ -79,7 +79,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 68 | [Native Logit Masking](#68-native-logit-masking) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
 | 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Done (2026-07-30) | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
-| 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Emit LLVM IR or WebAssembly natively. |
+| 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Added a bounded typed SSA/CFG to WAT serializer and independent CLI artifact path. |
 | 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
 | 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
 ## Details
@@ -523,6 +523,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Why:** Achieving the core goal of Zero as a direct-to-machine-code language.
 * **Impact:** 6/10 (Medium-High - the Wasm prototype lowered the remaining value, but production-native codegen is still a major milestone).
 * **Groomed (2026-07-30):** Still Pending after #54's Wasm prototype and #64's typed metadata work. Value is decayed/rescoped to 6 because a partial Wasm backend already exists; effort remains 4 until LLVM/native serializers and stronger validators are chosen. Score remains 1.5 (6×1÷4). Technology tradeoff: LLVM gives mature optimization and tooling at the cost of a large dependency surface; direct Wasm is simpler and sandbox-friendly but less native; a custom emitter maximizes control but is the riskiest path.
+* **Done (2026-07-30):** Chose direct Wasm over LLVM to reuse the typed SSA/CFG, existing WAT validator, and dependency-free backend path. Added `SerializeSSA`, which consumes only `ir.Graph` and emits validated WAT for integer/boolean constants, arithmetic, comparisons, boolean logic, lexical SSA value flow, canonical acyclic `if`/phi merges, and return terminators. Unsupported loops, calls, mutation, aggregates, printing, strings, and conversions fail clearly. Added `-compile-wasm` for checked single-expression `cli_app` inputs with default `<input>.ssa.wat` and bytecode-style exact `-o` handling. Serializer and CLI tests exercise a four-block branch CFG and two-input phi, all required operators, explicit branch returns, and rejection paths. Verified with `go test ./...`, `go vet ./...`, `git diff --check`, and external `wasm-tools validate` on the CLI-generated example artifact.
 
 ### 68. Native Logit Masking
 * **Description:** Allow Zero types to natively compile into inference-level logit masks to restrict LLM generation space.
