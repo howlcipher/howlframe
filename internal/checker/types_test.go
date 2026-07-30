@@ -1,6 +1,9 @@
 package checker
 
 import (
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"zero/internal/ast"
 	"zero/internal/ir"
@@ -280,5 +283,79 @@ func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
 		if !found {
 			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
 		}
+	}
+}
+
+func TestAnalyzeReportsMalformedSharedForms(t *testing.T) {
+	tests := []struct {
+		source string
+		want   string
+	}{
+		{`(cli_app (return))`, "return expects 1 argument"},
+		{`(cli_app (if true))`, "if expects 2 or 3 arguments"},
+		{`(cli_app (while true))`, "while expects 2 arguments"},
+		{`(cli_app (set value))`, "set expects 2 arguments"},
+		{`(cli_app (match value))`, "match expects a value and at least one case"},
+		{`(cli_app (match value (default)))`, "match cases expect a label and body"},
+		{`(cli_app (sleep))`, "sleep expects 1 argument"},
+		{`(cli_app (to_int))`, "to_int expects 1 argument"},
+		{`(cli_app (to_float))`, "to_float expects 1 argument"},
+		{`(cli_app (to_string))`, "to_string expects 1 argument"},
+		{`(cli_app (bytes_to_string))`, "bytes_to_string expects 1 argument"},
+		{`(cli_app (str_split value))`, "str_split expects 2 arguments"},
+		{`(cli_app (str_join values))`, "str_join expects 2 arguments"},
+		{`(cli_app (regex_match pattern))`, "regex_match expects 2 arguments"},
+		{`(cli_app (append values))`, "append expects 2 arguments"},
+		{`(cli_app (map_set values key))`, "map_set expects 3 arguments"},
+		{`(cli_app (map_delete values))`, "map_delete expects 2 arguments"},
+		{`(cli_app (map_get values))`, "map_get expects 2 arguments"},
+		{`(cli_app (list_get values))`, "list_get expects 2 arguments"},
+		{`(cli_app (+ 1))`, "+ expects 2 arguments"},
+		{`(cli_app (call))`, "call expects at least a function name"},
+		{`(cli_app (let))`, "let expects 2 arguments"},
+		{`(cli_app (let value body))`, "let binding expects (var val)"},
+		{`(cli_app (try_let (value 1) (catch err (print err))))`, "try_let expects 3 arguments"},
+		{`(cli_app (try_let value (catch err (print err)) (print value)))`, "try_let binding expects (var val)"},
+		{`(cli_app (try_let (value 1) err (print value)))`, "try_let expects (catch err body)"},
+		{`(cli_app (spawn))`, "spawn expects 1 argument"},
+		{`(cli_app (spawn worker))`, "spawn expects a lambda"},
+		{`(cli_app (for item items))`, "for expects 3 arguments"},
+		{`(cli_app (dict ("ok" "value") ("bad")))`, "dict expects (k v) pairs"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.want, func(t *testing.T) {
+			analysis := Analyze(parseTestProgram(t, test.source))
+			if len(analysis.Diagnostics) == 0 {
+				t.Fatalf("expected diagnostic containing %q", test.want)
+			}
+			if !strings.Contains(analysis.Diagnostics[0].Reason, test.want) {
+				t.Fatalf("diagnostic %q does not contain %q", analysis.Diagnostics[0].Reason, test.want)
+			}
+			if analysis.Diagnostics[0].Line == 0 || analysis.Diagnostics[0].Column == 0 {
+				t.Fatalf("diagnostic lacks source location: %+v", analysis.Diagnostics[0])
+			}
+		})
+	}
+}
+
+func TestCheckReportsMalformedSharedForm(t *testing.T) {
+	if os.Getenv("ZERO_CHECKER_HELPER") == "1" {
+		Check(parseTestProgram(t, `(cli_app (return))`))
+		return
+	}
+
+	command := exec.Command(os.Args[0], "-test.run=^TestCheckReportsMalformedSharedForm$")
+	command.Env = append(os.Environ(), "ZERO_CHECKER_HELPER=1")
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatal("checker accepted malformed return")
+	}
+	exitError, ok := err.(*exec.ExitError)
+	if !ok || exitError.ExitCode() != 1 {
+		t.Fatalf("checker failed unexpectedly: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), `{"reason":"return expects 1 argument, got 0","line":1,"column":10}`) {
+		t.Fatalf("checker did not emit the expected diagnostic: %s", output)
 	}
 }

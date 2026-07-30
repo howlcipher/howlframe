@@ -10,6 +10,9 @@
 * Semantic diagnostics for incompatible aggregate elements, keys, mutations,
   indexes, function arity, numeric operands, and branch layouts before IR
   lowering.
+* Front-loaded shared-form shape diagnostics for malformed control-flow,
+  conversion, string, collection, call, binding, and loop forms before backend
+  emission.
 * OpenAI model recommendations across the bug and improvement backlogs,
   matching the existing Claude/Gemini routing columns with GPT-5.6 Luna,
   Terra, and Sol tiers.

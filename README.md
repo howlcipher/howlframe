@@ -20,7 +20,7 @@ LLMs are good at producing structure, but they often lose time on syntax details
 Key design points:
 
 - **Uniform syntax:** Zero source is built from balanced S-expressions, which are easier to grammar-constrain than full-size general-purpose languages.
-- **Semantic feedback:** Invalid programs fail with localized JSON errors before backend code is emitted.
+- **Semantic feedback:** Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted.
 - **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping.
 - **Multiple execution paths:** The same front end can feed Go, JavaScript, WAT, direct interpretation, or bytecode depending on the root node and flags.
 

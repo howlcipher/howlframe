@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"zero/internal/ast"
+	"zero/internal/ir"
 )
 
 // Diagnostic is a semantic error that can be reported without terminating a
@@ -259,6 +260,10 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	if info, ok := a.Functions[head]; ok {
 		a.checkCall(node, head, node.Children[1:], info, env)
 		return info.Return
+	}
+	if reason, shared := ir.ValidateShared(node); shared && reason != "" {
+		a.add(node, reason)
+		return ast.Layout(ast.Unknown)
 	}
 	if isBinary(head) {
 		left, right := a.inferChild(node, 1, env), a.inferChild(node, 2, env)
