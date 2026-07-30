@@ -1119,6 +1119,40 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return "", err }
 			return res.Response, nil
 		}()`, modelStr, promptStr)
+	} else if head == "neural_circuit" {
+		if len(node.Children) < 3 {
+			ast.ReportError("neural_circuit expects (neural_circuit (args) \"instruction\")", node.Line, node.Column)
+		}
+		argsNode := node.Children[1]
+		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
+
+		var argVals []string
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, generateExpression(arg, reqVar, depth+1))
+		}
+
+		promptVar := ""
+		if len(argVals) > 0 {
+			promptVar = fmt.Sprintf("fmt.Sprintf(\"Instruction: %%s\\nInputs: %%v\", %s, []any{%s})", instructionStr, strings.Join(argVals, ", "))
+		} else {
+			promptVar = fmt.Sprintf("fmt.Sprintf(\"Instruction: %%s\", %s)", instructionStr)
+		}
+
+		return fmt.Sprintf(`func() string {
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": %s,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `+"`json:\"response\"`"+`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			return res.Response
+		}()`, promptVar)
 	} else if head == "fuzzy_cast" {
 		if len(node.Children) < 3 {
 			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)

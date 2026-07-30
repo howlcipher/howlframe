@@ -207,6 +207,18 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: constraintStr})
 			insts = append(insts, BCInstruction{OpString: "ACHIEVE", Op: OpAchieve})
 
+		case "neural_circuit":
+			if len(node.Children) < 3 {
+				ast.ReportError("neural_circuit expects (neural_circuit (args...) \"instruction\")", node.Line, node.Column)
+			}
+			argsNode := node.Children[1]
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			for _, arg := range argsNode.Children {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "NEURAL_CIRCUIT", Op: OpNeuralCircuit, IntOperand: int64(len(argsNode.Children))})
+
+
 		case "llm_generate":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			modelStr := "llama3"

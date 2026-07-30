@@ -67,7 +67,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 50 | [Agentic Observability Layer](#50-agentic-observability-layer) | Done (2026-07-29) | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Architectural shift; high effort. Decay 0.25 from 2 shipped observability items (#55, #56). |
 | 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | Done (2026-07-29) | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Self-healing reasoning layer. Decay 0.25 from 2 shipped self-healing items (#58, #59). |
 | 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | Done (2026-07-29) | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
-| 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | ⚠️ below floor | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
+| 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | Done | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | ⚠️ below floor | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | ⚠️ below floor | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ⚠️ below floor | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
@@ -432,7 +432,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Impact:** 8.5/10 (Replaces the human debugger).
 
 ### 57. `(neural_circuit)` Runtime Primitive
-* **Status Note:** ⚠️ scored 0.15, below the ROI floor of 0.5. Re-verified 2026-07-27: no `neural_circuit` AST node exists and the three prior LLM-backed runtime primitives (#26/#35/#36) still imply decay 0.125; value 6 and effort 5 remain unchanged.
+* **Status Note:** Done
 * **Description:** A new primitive where the developer only writes `(neural_circuit (args) "sort list alphabetically")`. At runtime, Zero fetches the logic from an LLM and executes it.
 * **Impact:** 7.5/10 (First iteration of ephemeral models).
 

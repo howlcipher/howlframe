@@ -50,6 +50,7 @@ const (
 	OpSpawnAgent
 	OpTask
 	OpAchieve
+	OpNeuralCircuit
 )
 
 type OperandType string
@@ -128,6 +129,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpSpawnAgent: {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapProcess, Description: "Spawns an autonomous subagent"},
 	OpTask:      {Code: OpTask, Name: "TASK", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Description: "Defines a task for a subagent"},
 	OpAchieve:   {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Achieves a target state given a constraint"},
+	OpNeuralCircuit: {Code: OpNeuralCircuit, Name: "NEURAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Executes an LLM logic circuit with a given number of inputs and an instruction"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

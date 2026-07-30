@@ -185,6 +185,18 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### Neural Circuits
+
+The `neural_circuit` primitive lets developers write simple logic specifications as natural language instructions. At runtime, Zero fetches the logic from a local LLM and executes it seamlessly as part of the execution flow.
+
+```lisp
+(cli_app
+  (let (sorted_list (neural_circuit (list "b" "c" "a") "sort list alphabetically"))
+    (print sorted_list)
+  )
+)
+```
+
 ### Semantic Routing
 
 With `semantic_match`, you can route execution based on semantic intent rather than brittle regexes or exact string matching. It dynamically evaluates the user input against a set of constraints using a local LLM, then executes the corresponding branch.

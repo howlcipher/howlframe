@@ -206,6 +206,39 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
+	case "neural_circuit":
+		if len(node.Children) < 3 {
+			InterpErr("neural_circuit expects (neural_circuit (args...) \"instruction\")", node)
+		}
+		argsNode := node.Children[1]
+		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
+		var argVals []any
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, interp.eval(arg, env))
+		}
+
+		prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+		if len(argVals) > 0 {
+			prompt += fmt.Sprintf("\nInputs: %v", argVals)
+		}
+
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": prompt,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
 	case "achieve":
 		if len(node.Children) != 3 {
 			InterpErr("achieve expects (achieve target constraint)", node)
@@ -1091,6 +1124,38 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
+		case bytecode.OpNeuralCircuit:
+			numInputs := int(inst.IntOperand)
+			inputs := make([]any, numInputs)
+			for i := numInputs - 1; i >= 0; i-- {
+				inputs[i] = vm.pop(inst.Op)
+			}
+			instructionAny := vm.pop(inst.Op)
+			instructionStr := fmt.Sprintf("%v", instructionAny)
+
+			prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+			if numInputs > 0 {
+				prompt += fmt.Sprintf("\nInputs: %v", inputs)
+			}
+
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": prompt,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			vm.push(res.Response)
+
 		case bytecode.OpAchieve:
 			constraintAny := vm.pop(inst.Op)
 			targetAny := vm.pop(inst.Op)
