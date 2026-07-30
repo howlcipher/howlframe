@@ -2,6 +2,7 @@
 
 | Opcode | Operands | Pops | Pushes | Capability | Description |
 |---|---|---|---|---|---|
+| `ACHIEVE` |  | 2 | 1 |  | Achieves a target state given a constraint |
 | `APPEND` | string | 1 | 0 |  | Appends to a list |
 | `BINOP` | string | 2 | 1 |  | Binary operation |
 | `CALL` | string, int64 | var | 1 |  | Calls a function |
@@ -10,6 +11,7 @@
 | `CONVERT` | string | 1 | 1 |  | Type conversion |
 | `DB_CONNECT` | string, string, string | 0 | 0 | database | Connects to a database |
 | `ENV` |  | 1 | 1 | environment | Gets an environment variable |
+| `EPHEMERAL_CIRCUIT` | int64 | var | 1 |  | Generates an ephemeral specialized model, executes it, and discards it |
 | `EXEC` | int64 | var | 1 | process | Executes a shell command |
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
@@ -29,6 +31,7 @@
 | `MAP_GET` | string | 1 | 1 |  | Gets a value from a dictionary |
 | `MAP_SET` | string | 2 | 0 |  | Sets a key in a dictionary |
 | `MKDIR` |  | 1 | 0 | filesystem | Creates a directory |
+| `NEURAL_CIRCUIT` | int64 | var | 1 |  | Executes an LLM logic circuit with a given number of inputs and an instruction |
 | `PARSE_JSON` | string | 0 | 1 |  | Parses JSON from a string variable |
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |

@@ -524,6 +524,172 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		arg1 := generateExpression(ir.Kids[0], reqVar, depth+1)
 		arg2 := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpGoToken(ir.Op), arg2)
+	case "let":
+		var letPrefix strings.Builder
+		letPrefix.WriteString("		{\n")
+		declaredVars := make(map[string]bool)
+
+		curr := &ast.Node{Type: "List", Children: []*ast.Node{{Type: "SYMBOL", Value: "let"}, ir.Kids[0], ir.Kids[1]}}
+		for curr.Type == "List" && len(curr.Children) == 3 && curr.Children[0].Value == "let" {
+			binds := curr.Children[1]
+			varName := binds.Children[0].Value
+			valNode := binds.Children[1]
+			var valStr string
+			if valNode.Type == "STRING" {
+				valStr = fmt.Sprintf("%q", valNode.Value)
+			} else if valNode.Type == "List" && len(valNode.Children) > 0 {
+				funcName := valNode.Children[0].Value
+				if funcName == "call" {
+					var args []string
+					for j := 2; j < len(valNode.Children); j++ {
+						args = append(args, generateExpression(valNode.Children[j], reqVar, depth+1))
+					}
+					valStr = fmt.Sprintf("%s(%s)", valNode.Children[1].Value, strings.Join(args, ", "))
+				} else if funcName == "list" {
+					var items []string
+					for j := 1; j < len(valNode.Children); j++ {
+						if valNode.Children[j].Type == "STRING" {
+							items = append(items, fmt.Sprintf("%q", valNode.Children[j].Value))
+						} else {
+							items = append(items, generateExpression(valNode.Children[j], reqVar, depth+1))
+						}
+					}
+					valStr = fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
+				} else if funcName == "dict" {
+					var pairs []string
+					for j := 1; j < len(valNode.Children); j++ {
+						pair := valNode.Children[j]
+						if pair.Type == "List" && len(pair.Children) == 2 {
+							k := pair.Children[0].Value
+							if pair.Children[0].Type == "STRING" {
+								k = fmt.Sprintf("%q", k)
+							} else {
+								k = generateExpression(pair.Children[0], reqVar, depth+1)
+							}
+							v := pair.Children[1].Value
+							if pair.Children[1].Type == "STRING" {
+								v = fmt.Sprintf("%q", v)
+							} else {
+								v = generateExpression(pair.Children[1], reqVar, depth+1)
+							}
+							pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
+						}
+					}
+					valStr = fmt.Sprintf("map[string]string{%s}", strings.Join(pairs, ", "))
+				} else if funcName == "env" {
+					keyNode := valNode.Children[1]
+					if keyNode.Type == "STRING" {
+						valStr = fmt.Sprintf("os.Getenv(%q)", keyNode.Value)
+					}
+				} else if funcName == "parse_json" {
+					// Handled downstream
+				} else {
+					valStr = generateStatement(valNode, reqVar, depth+1)
+				}
+			} else {
+				valStr = generateStatement(valNode, reqVar, depth+1)
+			}
+
+			if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
+				targetType := valNode.Children[1].Value
+				bodyVar := valNode.Children[2].Value
+				if bodyVar == "req.body" {
+					bodyVar = reqVar + ".Body"
+				}
+				if bodyVar == reqVar+".Body" {
+					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.NewDecoder(%s).Decode(&%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
+				} else {
+					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.Unmarshal([]byte(%s), &%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
+				}
+				declaredVars[varName] = true
+			} else {
+				if declaredVars[varName] {
+					letPrefix.WriteString(fmt.Sprintf("			%s = %s\n			_ = %s\n", varName, valStr, varName))
+				} else {
+					letPrefix.WriteString(fmt.Sprintf("			%s := %s\n			_ = %s\n", varName, valStr, varName))
+					declaredVars[varName] = true
+				}
+			}
+
+			curr = curr.Children[2]
+		}
+
+		bodyCode := generateStatement(curr, reqVar, depth+1)
+		return fmt.Sprintf("%s%s\n		}", letPrefix.String(), bodyCode)
+	case "try_let":
+		binds := ir.Kids[0]
+		varName := binds.Children[0].Value
+		valNode := binds.Children[1]
+
+		catchNode := ir.Kids[1]
+		errVar := catchNode.Children[1].Value
+		catchBodyCode := generateStatement(catchNode.Children[2], reqVar, depth+1)
+		successBodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
+
+		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
+			targetType := valNode.Children[1].Value
+			bodyVar := valNode.Children[2].Value
+			if bodyVar == "req.body" {
+				bodyVar = reqVar + ".Body"
+				return fmt.Sprintf(`		{
+			var %s %s
+			if %s := json.NewDecoder(%s).Decode(&%s); %s != nil {
+%s
+			} else {
+				_ = %s
+%s
+			}
+		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
+			} else {
+				return fmt.Sprintf(`		{
+			var %s %s
+			if %s := json.Unmarshal([]byte(%s), &%s); %s != nil {
+%s
+			} else {
+				_ = %s
+%s
+			}
+		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
+			}
+		}
+
+		valStr := generateStatement(valNode, reqVar, depth+1)
+		return fmt.Sprintf(`		{
+			%s, %s := %s
+			if %s != nil {
+%s
+			} else {
+				_ = %s
+%s
+			}
+		}`, varName, errVar, valStr, errVar, catchBodyCode, varName, successBodyCode)
+	case "spawn":
+		lambdaNode := ir.Kids[0]
+		bodyCode := generateStatement(lambdaNode.Children[2], reqVar, depth+1)
+		traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{})()\n", "spawn_lambda")
+		return fmt.Sprintf("		go func() {\n%s%s\n		}()", traceInject, bodyCode)
+	case "call":
+		funcName := ir.Kids[0].Value
+		var args []string
+		for j := 1; j < len(ir.Kids); j++ {
+			argNode := ir.Kids[j]
+			if argNode.Type == "STRING" {
+				args = append(args, fmt.Sprintf("%q", argNode.Value))
+			} else if argNode.Type == "NUMBER" || argNode.Type == "SYMBOL" {
+				args = append(args, argNode.Value)
+			} else {
+				args = append(args, generateExpression(argNode, reqVar, depth+1))
+			}
+		}
+		return fmt.Sprintf("		%s(%s)", funcName, strings.Join(args, ", "))
+	case "for":
+		itemNode := ir.Kids[0].Value
+		listNode := ir.Kids[1].Value
+		bodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
+		return fmt.Sprintf(`		for _, %s := range %s {
+			_ = %s
+%s
+		}`, itemNode, listNode, itemNode, bodyCode)
 	case "return":
 		return fmt.Sprintf("		return %s", generateStatementRaw(ir.Kids[0], reqVar, depth+1))
 	case "if":
@@ -746,181 +912,6 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		w.WriteHeader(%s)
 		fmt.Fprint(w, %q)`, contentType, status, resBody)
 		}
-	} else if head == "let" {
-		if len(node.Children) != 3 {
-			ast.ReportError("let expects (let (var val) body) — wrap multiple body statements in (do ...)", node.Line, node.Column)
-		}
-		var letPrefix strings.Builder
-		letPrefix.WriteString("		{\n")
-		declaredVars := make(map[string]bool)
-
-		curr := node
-		for curr.Type == "List" && len(curr.Children) == 3 && curr.Children[0].Value == "let" {
-			binds := curr.Children[1]
-			if binds.Type != "List" || len(binds.Children) != 2 {
-				ast.ReportError("let binding expects (var val)", binds.Line, binds.Column)
-			}
-			varName := binds.Children[0].Value
-			valNode := binds.Children[1]
-			var valStr string
-			if valNode.Type == "STRING" {
-				valStr = fmt.Sprintf("%q", valNode.Value)
-			} else if valNode.Type == "List" && len(valNode.Children) > 0 {
-				funcName := valNode.Children[0].Value
-				if funcName == "call" {
-					var args []string
-					for j := 2; j < len(valNode.Children); j++ {
-						args = append(args, generateExpression(valNode.Children[j], reqVar, depth+1))
-					}
-					valStr = fmt.Sprintf("%s(%s)", valNode.Children[1].Value, strings.Join(args, ", "))
-				} else if funcName == "list" {
-					var items []string
-					for j := 1; j < len(valNode.Children); j++ {
-						if valNode.Children[j].Type == "STRING" {
-							items = append(items, fmt.Sprintf("%q", valNode.Children[j].Value))
-						} else {
-							items = append(items, generateExpression(valNode.Children[j], reqVar, depth+1))
-						}
-					}
-					valStr = fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
-				} else if funcName == "dict" {
-					var pairs []string
-					for j := 1; j < len(valNode.Children); j++ {
-						pair := valNode.Children[j]
-						if pair.Type == "List" && len(pair.Children) == 2 {
-							k := pair.Children[0].Value
-							if pair.Children[0].Type == "STRING" {
-								k = fmt.Sprintf("%q", k)
-							} else {
-								k = generateExpression(pair.Children[0], reqVar, depth+1)
-							}
-							v := pair.Children[1].Value
-							if pair.Children[1].Type == "STRING" {
-								v = fmt.Sprintf("%q", v)
-							} else {
-								v = generateExpression(pair.Children[1], reqVar, depth+1)
-							}
-							pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
-						}
-					}
-					valStr = fmt.Sprintf("map[string]string{%s}", strings.Join(pairs, ", "))
-				} else if funcName == "env" {
-					if len(valNode.Children) != 2 {
-						ast.ReportError("env expects (env \"KEY\")", valNode.Line, valNode.Column)
-					}
-					keyNode := valNode.Children[1]
-					if keyNode.Type == "STRING" {
-						valStr = fmt.Sprintf("os.Getenv(%q)", keyNode.Value)
-					}
-				} else if funcName == "parse_json" {
-					if len(valNode.Children) != 3 {
-						ast.ReportError("parse_json expects (parse_json Type body)", valNode.Line, valNode.Column)
-					}
-					// Handled downstream
-				} else {
-					valStr = generateStatement(valNode, reqVar, depth+1)
-				}
-			} else {
-				valStr = generateStatement(valNode, reqVar, depth+1)
-			}
-
-			if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-				targetType := valNode.Children[1].Value
-				bodyVar := valNode.Children[2].Value
-				if bodyVar == "req.body" {
-					bodyVar = reqVar + ".Body"
-				}
-				if bodyVar == reqVar+".Body" {
-					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.NewDecoder(%s).Decode(&%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
-				} else {
-					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.Unmarshal([]byte(%s), &%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
-				}
-				declaredVars[varName] = true
-			} else {
-				if declaredVars[varName] {
-					letPrefix.WriteString(fmt.Sprintf("			%s = %s\n			_ = %s\n", varName, valStr, varName))
-				} else {
-					letPrefix.WriteString(fmt.Sprintf("			%s := %s\n			_ = %s\n", varName, valStr, varName))
-					declaredVars[varName] = true
-				}
-			}
-
-			curr = curr.Children[2]
-		}
-
-		bodyCode := generateStatement(curr, reqVar, depth+1)
-		return fmt.Sprintf("%s%s\n		}", letPrefix.String(), bodyCode)
-	} else if head == "try_let" {
-		if len(node.Children) != 4 {
-			ast.ReportError("try_let expects (try_let (var val) (catch err catchBody) successBody)", node.Line, node.Column)
-		}
-		binds := node.Children[1]
-		if binds.Type != "List" || len(binds.Children) != 2 {
-			ast.ReportError("try_let binding expects (var val)", binds.Line, binds.Column)
-		}
-		varName := binds.Children[0].Value
-		valNode := binds.Children[1]
-
-		catchNode := node.Children[2]
-		if catchNode.Type != "List" || len(catchNode.Children) != 3 || catchNode.Children[0].Value != "catch" {
-			ast.ReportError("try_let catch expects (catch errVar catchBody)", catchNode.Line, catchNode.Column)
-		}
-		errVar := catchNode.Children[1].Value
-		catchBodyCode := generateStatement(catchNode.Children[2], reqVar, depth+1)
-		successBodyCode := generateStatement(node.Children[3], reqVar, depth+1)
-
-		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-			targetType := valNode.Children[1].Value
-			bodyVar := valNode.Children[2].Value
-			if bodyVar == "req.body" {
-				bodyVar = reqVar + ".Body"
-				return fmt.Sprintf(`		{
-			var %s %s
-			if %s := json.NewDecoder(%s).Decode(&%s); %s != nil {
-%s
-			} else {
-				_ = %s
-%s
-			}
-		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
-			} else {
-				return fmt.Sprintf(`		{
-			var %s %s
-			if %s := json.Unmarshal([]byte(%s), &%s); %s != nil {
-%s
-			} else {
-				_ = %s
-%s
-			}
-		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
-			}
-		}
-
-		valStr := generateStatement(valNode, reqVar, depth+1)
-		return fmt.Sprintf(`		{
-			%s, %s := %s
-			if %s != nil {
-%s
-			} else {
-				_ = %s
-%s
-			}
-		}`, varName, errVar, valStr, errVar, catchBodyCode, varName, successBodyCode)
-	} else if head == "spawn" {
-		if len(node.Children) != 2 {
-			ast.ReportError("spawn expects (spawn (lambda () body))", node.Line, node.Column)
-		}
-		lambdaNode := node.Children[1]
-		if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
-			ast.ReportError("spawn expects a lambda", lambdaNode.Line, lambdaNode.Column)
-		}
-		argsNode := lambdaNode.Children[1]
-		if argsNode.Type != "List" || len(argsNode.Children) != 0 {
-			ast.ReportError("spawn lambda expects no arguments ()", argsNode.Line, argsNode.Column)
-		}
-		bodyCode := generateStatement(lambdaNode.Children[2], reqVar, depth+1)
-		traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{})()\n", "spawn_lambda")
-		return fmt.Sprintf("		go func() {\n%s%s\n		}()", traceInject, bodyCode)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
 			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
@@ -966,17 +957,6 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		queryNode := node.Children[2]
 		queryStr := generateExpression(queryNode, reqVar, depth+1)
 		return fmt.Sprintf("		%s.Query(%s)", dbVar, queryStr)
-	} else if head == "for" {
-		if len(node.Children) != 4 {
-			ast.ReportError("for expects (for item list body)", node.Line, node.Column)
-		}
-		itemNode := node.Children[1].Value
-		listNode := node.Children[2].Value
-		bodyCode := generateStatement(node.Children[3], reqVar, depth+1)
-		return fmt.Sprintf(`		for _, %s := range %s {
-			_ = %s
-%s
-		}`, itemNode, listNode, itemNode, bodyCode)
 	} else if head == "read_file" {
 		if len(node.Children) != 2 {
 			ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
@@ -1340,23 +1320,6 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return false }
 			return strings.TrimSpace(strings.ToLower(res.Response)) == "true"
 		}()`, condStr, varStr)
-	} else if head == "call" {
-		if len(node.Children) < 2 {
-			ast.ReportError("call expects (call func args...)", node.Line, node.Column)
-		}
-		funcName := node.Children[1].Value
-		var args []string
-		for j := 2; j < len(node.Children); j++ {
-			argNode := node.Children[j]
-			if argNode.Type == "STRING" {
-				args = append(args, fmt.Sprintf("%q", argNode.Value))
-			} else if argNode.Type == "NUMBER" || argNode.Type == "SYMBOL" {
-				args = append(args, argNode.Value)
-			} else {
-				args = append(args, generateExpression(argNode, reqVar, depth+1))
-			}
-		}
-		return fmt.Sprintf("		%s(%s)", funcName, strings.Join(args, ", "))
 	} else if head == "cli_args" {
 		if len(node.Children) == 1 {
 			return "os.Args[1:]"

@@ -40,6 +40,10 @@ class EnvInstruction(BaseModel):
     op: Literal["ENV"]
     pass
 
+class EphemeralCircuitInstruction(BaseModel):
+    op: Literal["EPHEMERAL_CIRCUIT"]
+    int_operand: int
+
 class ExecInstruction(BaseModel):
     op: Literal["EXEC"]
     int_operand: int
@@ -118,6 +122,10 @@ class MapSetInstruction(BaseModel):
 class MkdirInstruction(BaseModel):
     op: Literal["MKDIR"]
     pass
+
+class NeuralCircuitInstruction(BaseModel):
+    op: Literal["NEURAL_CIRCUIT"]
+    int_operand: int
 
 class ParseJsonInstruction(BaseModel):
     op: Literal["PARSE_JSON"]
@@ -205,6 +213,7 @@ Instruction = Annotated[
         ConvertInstruction,
         DbConnectInstruction,
         EnvInstruction,
+        EphemeralCircuitInstruction,
         ExecInstruction,
         FetchInstruction,
         ForInitInstruction,
@@ -224,6 +233,7 @@ Instruction = Annotated[
         MapGetInstruction,
         MapSetInstruction,
         MkdirInstruction,
+        NeuralCircuitInstruction,
         ParseJsonInstruction,
         PrintInstruction,
         ReadFileInstruction,
