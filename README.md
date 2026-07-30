@@ -24,10 +24,10 @@ Beyond simple language mechanics, the ultimate **End Goal** of Zero is to comple
 
 The roadmap to this future includes:
 - **Direct Neural Bytecode Synthesis:** Outputting raw machine instructions or Neural Intermediate Representation (NIR) directly. **Shipped 2026-07-29**: direct binary bytecode execution (`-compile-bc` and `-run-bc`) proves the core premise — real Zero programs are compiled to binary gob encoding and executed with zero Go/JS text ever generated. Full design and coverage are in `docs/direct_execution_design.md`.
-- **Latent Execution:** Processing inputs and outputs directly through the model's neural pathways, skipping compilation entirely.
-- **Ephemeral Neural Circuits:** Generating highly specialized micro-models for a single task that delete themselves after execution.
-- **Agentic Observability:** Replacing traditional debugging with observer AI models that monitor system behavior, analyze full context traces, and trigger self-healing workflows autonomously.
-- **Leveraging Agent Skills:** Utilizing autonomous agent skills and the unique reasoning capabilities of AI (which often exceed human understanding) to act as the verification and observability layer, ensuring safety without needing to read code.
+- **Latent Execution (Teleological Execution):** Processing inputs and outputs directly through the model's neural pathways, skipping compilation entirely. **Shipped 2026-07-29**.
+- **Ephemeral Neural Circuits:** Generating highly specialized micro-models for a single task that delete themselves after execution. **Shipped 2026-07-29**.
+- **Agentic Observability:** Replacing traditional debugging with observer AI models that monitor system behavior, analyze full context traces, and trigger self-healing workflows autonomously. **Shipped 2026-07-29**.
+- **Leveraging Agent Skills:** Utilizing autonomous agent skills and the unique reasoning capabilities of AI (which often exceed human understanding) to act as the verification and observability layer, ensuring safety without needing to read code. **Shipped 2026-07-29**.
 
 This will allow:
 - Seamless installation by AI agents anywhere via `curl` and GitHub Releases.
