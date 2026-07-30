@@ -239,6 +239,64 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			panic(err)
 		}
 		return res.Response
+	case "ephemeral_circuit":
+		if len(node.Children) < 3 {
+			InterpErr("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node)
+		}
+		argsNode := node.Children[1]
+		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
+		var argVals []any
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, interp.eval(arg, env))
+		}
+
+		prompt := ""
+		if len(argVals) > 0 {
+			prompt = fmt.Sprintf("Inputs: %v", argVals)
+		}
+
+		modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
+		modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
+
+		createReq, _ := json.Marshal(map[string]any{
+			"name":      modelName,
+			"modelfile": modelfile,
+			"stream":    false,
+		})
+		createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+		if err != nil {
+			panic(err)
+		}
+		createResp.Body.Close()
+
+		defer func() {
+			delReq, _ := json.Marshal(map[string]any{"name": modelName})
+			req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{}
+			resp, _ := client.Do(req)
+			if resp != nil {
+				resp.Body.Close()
+			}
+		}()
+
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  modelName,
+			"prompt": prompt,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
 	case "achieve":
 		if len(node.Children) != 3 {
 			InterpErr("achieve expects (achieve target constraint)", node)
@@ -763,10 +821,10 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
-	prog  *bytecode.BCProgram
-	stack []any
-	env   *BcEnv
-	ip    int
+	prog     *bytecode.BCProgram
+	stack    []any
+	env      *BcEnv
+	ip       int
 	insts    []bytecode.BCInstruction
 	args     []string
 	executed int
@@ -1156,6 +1214,63 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			vm.push(res.Response)
 
+		case bytecode.OpEphemeralCircuit:
+			numInputs := int(inst.IntOperand)
+			inputs := make([]any, numInputs)
+			for i := numInputs - 1; i >= 0; i-- {
+				inputs[i] = vm.pop(inst.Op)
+			}
+			instructionAny := vm.pop(inst.Op)
+			instructionStr := fmt.Sprintf("%v", instructionAny)
+
+			prompt := ""
+			if numInputs > 0 {
+				prompt = fmt.Sprintf("Inputs: %v", inputs)
+			}
+
+			modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
+			modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
+
+			createReq, _ := json.Marshal(map[string]any{
+				"name":      modelName,
+				"modelfile": modelfile,
+				"stream":    false,
+			})
+			createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+			if err != nil {
+				panic(err)
+			}
+			createResp.Body.Close()
+
+			func() {
+				delReq, _ := json.Marshal(map[string]any{"name": modelName})
+				req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+				req.Header.Set("Content-Type", "application/json")
+				client := &http.Client{}
+				resp, _ := client.Do(req)
+				if resp != nil {
+					resp.Body.Close()
+				}
+			}()
+
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  modelName,
+				"prompt": prompt,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			resp.Body.Close()
+			vm.push(res.Response)
+
 		case bytecode.OpAchieve:
 			constraintAny := vm.pop(inst.Op)
 			targetAny := vm.pop(inst.Op)
@@ -1538,7 +1653,8 @@ func BcConvert(target string, a any) any {
 	switch target {
 	case "to_int":
 		switch t := a.(type) {
-		case float64: return float64(int64(t))
+		case float64:
+			return float64(int64(t))
 		case string:
 			v, _ := strconv.ParseInt(t, 10, 64)
 			return float64(v)

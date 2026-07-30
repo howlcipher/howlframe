@@ -185,6 +185,18 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### Ephemeral Neural Circuits
+
+Using `ephemeral_circuit`, Zero can provision a narrowly specialized micro-model dynamically on the fly, configured with a system prompt for a single task. Once the inputs are evaluated, the model is immediately torn down to release resources.
+
+```lisp
+(cli_app
+  (let (ans (ephemeral_circuit (list "hello" "world") "Translate to French"))
+    (print ans)
+  )
+)
+```
+
 ### Neural Circuits
 
 The `neural_circuit` primitive lets developers write simple logic specifications as natural language instructions. At runtime, Zero fetches the logic from a local LLM and executes it seamlessly as part of the execution flow.

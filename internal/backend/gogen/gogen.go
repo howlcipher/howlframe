@@ -1153,6 +1153,61 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
 			return res.Response
 		}()`, promptVar)
+	} else if head == "ephemeral_circuit" {
+		if len(node.Children) < 3 {
+			ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)
+		}
+		argsNode := node.Children[1]
+		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
+
+		var argVals []string
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, generateExpression(arg, reqVar, depth+1))
+		}
+
+		promptVar := ""
+		if len(argVals) > 0 {
+			promptVar = fmt.Sprintf("fmt.Sprintf(\"Inputs: %%v\", []any{%s})", strings.Join(argVals, ", "))
+		} else {
+			promptVar = `""`
+		}
+
+		return fmt.Sprintf(`func() string {
+			modelName := fmt.Sprintf("ephemeral-%%d", time.Now().UnixNano())
+			modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %%s", %s)
+			
+			createReq, _ := json.Marshal(map[string]any{
+				"name":      modelName,
+				"modelfile": modelfile,
+				"stream":    false,
+			})
+			createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+			if err != nil { panic(err) }
+			createResp.Body.Close()
+
+			defer func() {
+				delReq, _ := json.Marshal(map[string]any{"name": modelName})
+				req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+				req.Header.Set("Content-Type", "application/json")
+				client := &http.Client{}
+				resp, _ := client.Do(req)
+				if resp != nil { resp.Body.Close() }
+			}()
+
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  modelName,
+				"prompt": %s,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `+"`json:\"response\"`"+`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			return res.Response
+		}()`, instructionStr, promptVar)
 	} else if head == "fuzzy_cast" {
 		if len(node.Children) < 3 {
 			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)

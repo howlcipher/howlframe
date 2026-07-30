@@ -10,7 +10,7 @@ import (
 func Trace(funcName string, vars map[string]any) func() {
 	varsJSON, _ := json.Marshal(vars)
 	entryMsg := fmt.Sprintf("{\"event\":\"enter\", \"func\":%q, \"vars\":%s}\n", funcName, varsJSON)
-	
+
 	f, err := os.OpenFile("telemetry.jsonl", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
 		f.WriteString(entryMsg)

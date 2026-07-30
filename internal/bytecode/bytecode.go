@@ -218,6 +218,16 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "NEURAL_CIRCUIT", Op: OpNeuralCircuit, IntOperand: int64(len(argsNode.Children))})
 
+		case "ephemeral_circuit":
+			if len(node.Children) < 3 {
+				ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node.Line, node.Column)
+			}
+			argsNode := node.Children[1]
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			for _, arg := range argsNode.Children {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "EPHEMERAL_CIRCUIT", Op: OpEphemeralCircuit, IntOperand: int64(len(argsNode.Children))})
 
 		case "llm_generate":
 			insts = append(insts, c.compileNode(node.Children[1])...)

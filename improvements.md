@@ -68,7 +68,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | Done (2026-07-29) | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Self-healing reasoning layer. Decay 0.25 from 2 shipped self-healing items (#58, #59). |
 | 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | Done (2026-07-29) | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 | 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | Done | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
-| 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | ⚠️ below floor | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
+| 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | Done (2026-07-29) | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | ⚠️ below floor | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ⚠️ below floor | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 ## Details
@@ -403,9 +403,11 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Done (2026-07-29):** Created Python structures (`HealthState`, `ObservabilityLayer`) in `observer.py` to continuously track telemetry anomalies and export a summarized JSON health view. Relevant test fixtures added to `test_observer.py`.
 
 ### 51. Ephemeral Neural Circuits
-* **Status Note:** ⚠️ scored 0.146, below the ROI floor of 0.5. Re-verified 2026-07-27: this row previously had no detail section even though its table link targeted one. No ephemeral-circuit AST or runtime exists. It remains in the LLM-backed runtime-primitive theme with three prior ships (#26/#35/#36), so value 7×decay 0.125÷effort 6 = 0.146.
+* **Status Note:** Done
 * **Description:** Generate a narrowly specialized model or executable reasoning circuit for one task, use it for that task, then discard it.
 * **Impact:** 7/10 (Potentially reduces repeated general-model cost, but requires model generation, lifecycle isolation, and safe execution machinery that Zero does not currently have).
+* **Done (2026-07-29):** Implemented `ephemeral_circuit` primitive in AST and Bytecode VMs as well as Go backend. It dynamically generates a unique `ephemeral-<uuid>` model via Ollama API using a highly specialized system prompt for the task, evaluates the inputs, generates the output, and deletes the model before returning.
+
 
 ### 52. Automated Counterfactual Debugging
 * **Description:** Given a crash dump from #58, have an LLM reason about *what input/state would not have crashed* (counterfactual), not just patch the immediate symptom — the reasoning layer #59's Auto-Patching Loop would call into.
