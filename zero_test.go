@@ -260,3 +260,61 @@ func TestWasmBackendReadsStringListPointers(t *testing.T) {
 		}
 	}
 }
+
+func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "dict_get.zero")
+	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate dict WAT: %v: %s", err, output)
+	}
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range []string{
+		"(func (export \"main\") (result i32)", "(i32.const 264)", "\\74\\77\\6f",
+	} {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated dict WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}
+
+func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "int_dict_get.zero")
+	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" 10) ("b" 20)) "b"))`), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate integer dict WAT: %v: %s", err, output)
+	}
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range []string{
+		"(func (export \"main\") (result i64)", "(i64.const 20)", "\\14\\00\\00\\00\\00\\00\\00\\00",
+	} {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated integer dict WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}

@@ -21,9 +21,9 @@ func GenerateWasmCode(node *ast.Node) string {
 	resultType := wasmType(node.Children[1].Inferred)
 	memory := ""
 	data := ""
-	if findStaticList(node.Children[1]) != nil {
+	if aggregate := findStaticAggregate(node.Children[1]); aggregate != nil {
 		memory = "  (memory (export \"memory\") 1)\n"
-		data = staticAggregateData(findStaticList(node.Children[1]))
+		data = staticAggregateData(aggregate)
 	}
 	code := fmt.Sprintf("(module\n%s%s  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", memory, data, resultType, generateWasmExpression(node.Children[1]))
 	if err := ValidateWAT(code); err != nil {
@@ -106,6 +106,19 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		byteOffset := fmt.Sprintf("(i32.mul (i32.wrap_i64 %s) (i32.const 8))", index)
 		address := fmt.Sprintf("(i32.add %s %s)", listPointer, byteOffset)
 		return fmt.Sprintf("(if (result i64) (i64.lt_u %s %s) (then (i64.load %s)) (else (i64.const 0)))", index, length, address)
+	case "dict":
+		return "(i32.const 8)"
+	case "map_get":
+		if value, offset, ok := staticDictValue(ir.Kids[0], ir.Kids[1].Value); ok {
+			if value.Type == "STRING" {
+				return fmt.Sprintf("(i32.const %d)", offset)
+			}
+			return generateWasmExpression(value)
+		}
+		if ir.Type.Kind == ast.String {
+			return "(i32.const 0)"
+		}
+		return "(i64.const 0)"
 	case "to_float":
 		child := ir.Kids[0]
 		value := generateWasmExpression(child)
@@ -127,7 +140,13 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 }
 
 func staticAggregateData(node *ast.Node) string {
-	if node.Type != "List" || len(node.Children) == 0 || node.Children[0].Value != "list" {
+	if node.Type != "List" || len(node.Children) == 0 {
+		return ""
+	}
+	if node.Children[0].Value == "dict" {
+		return staticDictData(node)
+	}
+	if node.Children[0].Value != "list" {
 		return ""
 	}
 	var encoded strings.Builder
@@ -166,11 +185,19 @@ func staticAggregateData(node *ast.Node) string {
 	return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", encoded.String())
 }
 
-func findStaticList(node *ast.Node) *ast.Node {
+func findStaticAggregate(node *ast.Node) *ast.Node {
 	if node == nil {
 		return nil
 	}
-	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "list" {
+	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "list" || node.Children[0].Value == "dict") {
+		if node.Children[0].Value == "dict" {
+			for _, pair := range node.Children[1:] {
+				if pair.Type != "List" || len(pair.Children) != 2 || pair.Children[0].Type != "STRING" || (pair.Children[1].Type != "INT" && pair.Children[1].Type != "STRING") {
+					return nil
+				}
+			}
+			return node
+		}
 		for _, child := range node.Children[1:] {
 			if child.Type != "INT" && child.Type != "STRING" {
 				return nil
@@ -179,11 +206,65 @@ func findStaticList(node *ast.Node) *ast.Node {
 		return node
 	}
 	for _, child := range node.Children {
-		if found := findStaticList(child); found != nil {
+		if found := findStaticAggregate(child); found != nil {
 			return found
 		}
 	}
 	return nil
+}
+
+func staticDictData(node *ast.Node) string {
+	payload := make([]byte, 256)
+	binary.LittleEndian.PutUint64(payload[:8], uint64(len(node.Children)-1))
+	offset := 256
+	for index, pair := range node.Children[1:] {
+		key := []byte(pair.Children[0].Value)
+		value := pair.Children[1]
+		binary.LittleEndian.PutUint32(payload[8+index*8:], uint32(offset))
+		payload = append(payload, key...)
+		payload = append(payload, 0)
+		offset += len(key) + 1
+		binary.LittleEndian.PutUint32(payload[8+index*8+4:], uint32(offset))
+		if value.Type == "STRING" {
+			payload = append(payload, []byte(value.Value)...)
+			payload = append(payload, 0)
+			offset += len(value.Value) + 1
+		} else {
+			var encoded [8]byte
+			parsed, err := strconv.ParseInt(value.Value, 10, 64)
+			if err != nil {
+				return ""
+			}
+			binary.LittleEndian.PutUint64(encoded[:], uint64(parsed))
+			payload = append(payload, encoded[:]...)
+			offset += 8
+		}
+	}
+	return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", watEncodeBytes(payload))
+}
+
+func staticDictValue(dict *ast.Node, key string) (*ast.Node, uint32, bool) {
+	if dict.Type != "List" || len(dict.Children) == 0 || dict.Children[0].Value != "dict" {
+		return nil, 0, false
+	}
+	offset := uint32(256)
+	for _, pair := range dict.Children[1:] {
+		if pair.Type != "List" || len(pair.Children) != 2 {
+			return nil, 0, false
+		}
+		keyNode, valueNode := pair.Children[0], pair.Children[1]
+		valueOffset := offset + uint32(len(keyNode.Value)+1)
+		if keyNode.Value == key {
+			return valueNode, valueOffset, true
+		}
+		offset = valueOffset
+		if valueNode.Type == "STRING" {
+			offset += uint32(len(valueNode.Value) + 1)
+		} else {
+			offset += 8
+		}
+	}
+	return nil, 0, false
 }
 
 func watEncodeBytes(data []byte) string {
