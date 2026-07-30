@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Union, Literal, Annotated, Any
 
+class AchieveInstruction(BaseModel):
+    op: Literal["ACHIEVE"]
+    pass
+
 class AppendInstruction(BaseModel):
     op: Literal["APPEND"]
     string_operand: str
@@ -155,6 +159,10 @@ class SpawnInstruction(BaseModel):
     op: Literal["SPAWN"]
     int_operand: int
 
+class SpawnAgentInstruction(BaseModel):
+    op: Literal["SPAWN_AGENT"]
+    string_operand: str
+
 class SqlQueryInstruction(BaseModel):
     op: Literal["SQL_QUERY"]
     string_operand: str
@@ -172,6 +180,10 @@ class StrSplitInstruction(BaseModel):
     op: Literal["STR_SPLIT"]
     pass
 
+class TaskInstruction(BaseModel):
+    op: Literal["TASK"]
+    string_operand: str
+
 class TryLetInstruction(BaseModel):
     op: Literal["TRY_LET"]
     string_operand: str
@@ -184,6 +196,7 @@ class WriteFileInstruction(BaseModel):
 
 Instruction = Annotated[
     Union[
+        AchieveInstruction,
         AppendInstruction,
         BinopInstruction,
         CallInstruction,
@@ -221,10 +234,12 @@ Instruction = Annotated[
         SetVarInstruction,
         SleepInstruction,
         SpawnInstruction,
+        SpawnAgentInstruction,
         SqlQueryInstruction,
         StoreVarInstruction,
         StrJoinInstruction,
         StrSplitInstruction,
+        TaskInstruction,
         TryLetInstruction,
         WriteFileInstruction,
     ],

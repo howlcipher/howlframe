@@ -1,0 +1,5 @@
+(cli_app
+  (spawn_agent "Researcher" (task "find sources on quantum computing"))
+  (spawn_agent "Writer" (task "summarize the findings"))
+  (sleep 200)
+)

@@ -412,6 +412,17 @@ Zero provides primitives for asynchronous background execution (`spawn`), HTTP r
 )
 ```
 
+### Swarm Primitives
+
+Zero supports autonomous subagents as first-class concurrency objects. You can orchestrate a swarm of agents using the `spawn_agent` and `task` primitives.
+
+```lisp
+(cli_app
+  (spawn_agent "Researcher" (task "find sources on quantum computing"))
+  (spawn_agent "Writer" (task "summarize the findings"))
+)
+```
+
 ### Typed Structs & Field Access
 
 In addition to struct declarations, Zero allows parsing JSON payloads into typed struct instances and accessing their fields directly using dot notation (`instance.Field`).

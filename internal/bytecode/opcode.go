@@ -47,6 +47,9 @@ const (
 	OpCliArgs
 	OpSleep
 	OpEnv
+	OpSpawnAgent
+	OpTask
+	OpAchieve
 )
 
 type OperandType string
@@ -122,6 +125,9 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpCliArgs:   {Code: OpCliArgs, Name: "CLI_ARGS", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets command line arguments"},
 	OpSleep:     {Code: OpSleep, Name: "SLEEP", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Sleeps for a duration"},
 	OpEnv:       {Code: OpEnv, Name: "ENV", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: CapEnvironment, Description: "Gets an environment variable"},
+	OpSpawnAgent: {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapProcess, Description: "Spawns an autonomous subagent"},
+	OpTask:      {Code: OpTask, Name: "TASK", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Description: "Defines a task for a subagent"},
+	OpAchieve:   {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Achieves a target state given a constraint"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

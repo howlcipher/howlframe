@@ -162,6 +162,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			bodyInsts := c.compileNode(lambdaNode.Children[2])
 			insts = append(insts, BCInstruction{OpString: "SPAWN", Op: OpSpawn, IntOperand: int64(float64(len(bodyInsts)))})
 			insts = append(insts, bodyInsts...)
+		case "spawn_agent":
+			agentName := node.Children[1].Value
+			taskInsts := c.compileNode(node.Children[2])
+			insts = append(insts, taskInsts...)
+			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName})
+		case "task":
+			insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: node.Children[1].Value})
 		case "res":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
@@ -189,6 +196,16 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "confidence":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "CONFIDENCE", Op: OpConfidence})
+
+		case "achieve":
+			if len(node.Children) != 3 {
+				ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
+			}
+			targetStr := ast.Stringify(node.Children[1])
+			constraintStr := ast.Stringify(node.Children[2])
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, Operands: []any{targetStr}})
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, Operands: []any{constraintStr}})
+			insts = append(insts, BCInstruction{OpString: "ACHIEVE", Op: OpAchieve})
 
 		case "llm_generate":
 			insts = append(insts, c.compileNode(node.Children[1])...)

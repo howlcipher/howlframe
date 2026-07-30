@@ -206,6 +206,29 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
+	case "achieve":
+		if len(node.Children) != 3 {
+			InterpErr("achieve expects (achieve target constraint)", node)
+		}
+		targetStr := ast.Stringify(node.Children[1])
+		constraintStr := ast.Stringify(node.Children[2])
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
 	case "confidence":
 		if len(node.Children) != 2 {
 			InterpErr("confidence expects (confidence prompt)", node)
@@ -1068,6 +1091,29 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
+		case bytecode.OpAchieve:
+			constraintAny := vm.pop(inst.Op)
+			targetAny := vm.pop(inst.Op)
+			constraintStr := fmt.Sprintf("%v", constraintAny)
+			targetStr := fmt.Sprintf("%v", targetAny)
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			vm.push(res.Response)
+
 		case bytecode.OpConfidence:
 			promptStrAny := vm.pop(inst.Op)
 			promptStr := fmt.Sprintf("%v", promptStrAny)

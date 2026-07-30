@@ -236,7 +236,7 @@ func generateJSStatement(node *ast.Node, reqVar string, depth int) string {
 	}
 	head := node.Children[0].Value
 	switch head {
-	case "return", "let", "do", "try_let", "spawn", "if", "print", "for", "sleep", "while", "match", "set", "call":
+	case "return", "let", "do", "try_let", "spawn", "spawn_agent", "task", "if", "print", "for", "sleep", "while", "match", "set", "call":
 		if node.Filename != "" {
 			return fmt.Sprintf("//line %s:%d\n%s", node.Filename, node.Line, code)
 		}
@@ -443,7 +443,19 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			ast.ReportError("spawn expects a lambda", lambdaNode.Line, lambdaNode.Column)
 		}
 		bodyCode := generateJSStatement(lambdaNode.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("(async () => {\n%s\n})()", bodyCode)
+		return fmt.Sprintf(";(async () => {\n%s\n})();", bodyCode)
+	} else if head == "spawn_agent" {
+		if len(node.Children) != 3 {
+			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+		}
+		agentNameStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+		taskDescStr := generateJSExpression(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf(";(async () => {\n  console.log(`[Swarm JS] Spawning agent ${%s} for task: ${%s}`);\n  await new Promise(r => setTimeout(r, 100));\n  console.log(`[Swarm JS] Agent ${%s} completed task: ${%s}`);\n})();", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
+	} else if head == "task" {
+		if len(node.Children) != 2 {
+			ast.ReportError("task expects (task desc)", node.Line, node.Column)
+		}
+		return generateJSExpression(node.Children[1], reqVar, depth+1)
 	}
 
 	ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)

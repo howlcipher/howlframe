@@ -62,8 +62,8 @@ Pending rows are ranked by a diminishing-returns score:
 | 59 | [Auto-Patching Loop](#59-auto-patching-loop) | Done (2026-07-27) | 0.66 (8×0.5÷6) | Sonnet 3.5 | Gemini 1.5 Pro | Closes the loop on #58. High effort integration. Decay 0.5 from 1 shipped self-healing item (#58). |
 | 54 | [WebAssembly (Wasm) Backend Prototype](#54-webassembly-wasm-backend-prototype) | Done (2026-07-27) | 0.50 (7×0.5÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Delivered a bounded third code generator for portable numeric/control-flow WAT; decay 0.5 from the prior JS backend (#45). |
 | 41 | [Add Stochastic Control Flow](#41-add-stochastic-control-flow) | Done (2026-07-29) | 0.29 (2×1.0÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Introduces fuzzy logic natively; deferred as non-essential for initial MVP. |
-| 38 | [Add Swarm Primitives](#38-add-swarm-primitives) | ⚠️ below floor | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Extremely advanced futurist concept; deferred to maintain MVP scope. |
-| 39 | [Add Teleological Execution](#39-add-teleological-execution) | ⚠️ below floor | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Radical paradigm shift, non-critical enhancement deferred from MVP. |
+| 38 | [Add Swarm Primitives](#38-add-swarm-primitives) | Done | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Extremely advanced futurist concept; deferred to maintain MVP scope. |
+| 39 | [Add Teleological Execution](#39-add-teleological-execution) | Done (2026-07-29) | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Radical paradigm shift, non-critical enhancement deferred from MVP. |
 | 50 | [Agentic Observability Layer](#50-agentic-observability-layer) | ⚠️ below floor | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Architectural shift; high effort. Decay 0.25 from 2 shipped observability items (#55, #56). |
 | 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | ⚠️ below floor | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Self-healing reasoning layer. Decay 0.25 from 2 shipped self-healing items (#58, #59). |
 | 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | ⚠️ below floor | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
@@ -182,13 +182,13 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 5/10 (Medium - innovative but complex to execute).
 
 ### 38. Add Swarm Primitives
-* **Status Note:** ⚠️ scored 0.25, below ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `spawn_agent` AST node exists; value 2, new-curve decay 1.0, and effort 8 remain honest.
+* **Status Note:** Done (2026-07-29). Implemented basic `spawn_agent` and `task` nodes in AST.
 * **Description:** Introduces autonomous subagents as first-class concurrency objects. Developers orchestrate a swarm of agents using primitives like `(spawn_agent "Researcher" (task "find sources"))` that communicate via typed message-passing channels and autonomously negotiate tasks.
 * **Why:** Concurrency shifts from deterministic CPU scheduling to non-deterministic, autonomous orchestration, breaking conventional rules and allowing agents to independently verify upstream outputs.
 * **Impact:** 2/10 (Low - extremely advanced, deferred for strict MVP scoping).
 
 ### 39. Add Teleological Execution
-* **Status Note:** ⚠️ scored 0.25, below ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `achieve` AST node exists; value 2, new-curve decay 1.0, and effort 8 remain honest.
+* **Status Note:** Done (2026-07-29). Native `achieve` node implemented for direct VM execution and Go codegen.
 * **Description:** A goal-driven syntax where developers define a target state (e.g., `(achieve (is_sorted list) (using "quick sort algorithm"))`) rather than imperative steps. The runtime acts as a solver to dynamically search for the execution path and execute necessary steps.
 * **Why:** Abandons imperative control flow entirely. Code becomes a set of constraints and objectives, making execution a continuous planning and state-space search process.
 * **Impact:** 2/10 (Low - radical shift, deferred for MVP).

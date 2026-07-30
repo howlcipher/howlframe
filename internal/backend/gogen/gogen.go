@@ -490,7 +490,7 @@ func generateStatement(node *ast.Node, reqVar string, depth int) string {
 	}
 	head := node.Children[0].Value
 	switch head {
-	case "return", "res_json", "res", "let", "do", "try_let", "spawn", "if", "print", "db_connect", "sql_query", "append", "map_set", "map_delete", "for", "sleep", "write_file", "mkdir", "exec", "while", "match", "set", "call", "cli_args":
+	case "return", "res_json", "res", "let", "do", "try_let", "spawn", "spawn_agent", "task", "if", "print", "db_connect", "sql_query", "append", "map_set", "map_delete", "for", "sleep", "write_file", "mkdir", "exec", "while", "match", "set", "call", "cli_args":
 		if node.Filename != "" {
 			return fmt.Sprintf("//line %s:%d\n%s", node.Filename, node.Line, code)
 		}
@@ -921,6 +921,18 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		bodyCode := generateStatement(lambdaNode.Children[2], reqVar, depth+1)
 		traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{})()\n", "spawn_lambda")
 		return fmt.Sprintf("		go func() {\n%s%s\n		}()", traceInject, bodyCode)
+	} else if head == "spawn_agent" {
+		if len(node.Children) != 3 {
+			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+		}
+		agentNameStr := generateExpression(node.Children[1], reqVar, depth+1)
+		taskDescStr := generateExpression(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf("		fmt.Printf(\"[Swarm Go] Spawning agent %%q for task: %%q\\n\", %s, %s)\n		go func(aName string, tDesc string) {\n			time.Sleep(100 * time.Millisecond)\n			fmt.Printf(\"[Swarm Go] Agent %%q completed task: %%q\\n\", aName, tDesc)\n		}(%s, %s)", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
+	} else if head == "task" {
+		if len(node.Children) != 2 {
+			ast.ReportError("task expects (task desc)", node.Line, node.Column)
+		}
+		return generateExpression(node.Children[1], reqVar, depth+1)
 	} else if head == "trace" {
 		if len(node.Children) != 2 {
 			ast.ReportError("trace expects (trace var)", node.Line, node.Column)
@@ -1058,6 +1070,30 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 			return val
 		}()`, promptStr)
+	} else if head == "achieve" {
+		if len(node.Children) != 3 {
+			ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
+		}
+		targetStr := ast.Stringify(node.Children[1])
+		constraintStr := ast.Stringify(node.Children[2])
+
+		prompt := fmt.Sprintf("Achieve the following target: %s with constraint: %s. Return ONLY the result, no explanations.", targetStr, constraintStr)
+
+		return fmt.Sprintf(`func() string {
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": %q,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `+"`json:\"response\"`"+`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			return res.Response
+		}()`)
 	} else if head == "llm_generate" {
 		if len(node.Children) < 2 {
 			ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)

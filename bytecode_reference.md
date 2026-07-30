@@ -39,9 +39,11 @@
 | `SET_VAR` | string | 1 | 0 |  | Pops a value and updates an existing variable |
 | `SLEEP` |  | 1 | 0 |  | Sleeps for a duration |
 | `SPAWN` | int64 | 0 | 0 | process | Spawns a background task |
+| `SPAWN_AGENT` | string | 1 | 0 | process | Spawns an autonomous subagent |
 | `SQL_QUERY` | string, string | 0 | 1 | database | Executes a SQL query |
 | `STORE_VAR` | string | 1 | 0 |  | Pops a value and stores it in a new variable |
 | `STR_JOIN` |  | 2 | 1 |  | Joins a list of strings |
 | `STR_SPLIT` |  | 2 | 1 |  | Splits a string |
+| `TASK` | string | 0 | 1 |  | Defines a task for a subagent |
 | `TRY_LET` | string, string, int64 | 0 | 0 |  | Try block with let binding |
 | `WRITE_FILE` |  | 2 | 0 | filesystem | Writes to a file |
