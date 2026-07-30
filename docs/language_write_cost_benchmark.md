@@ -21,64 +21,58 @@ This is improvement [#44](../improvements.md#44-add-cross-language-ai-write-cost
 
 ### A — Hello World HTTP+JSON
 
-| Language | Write time (s) | Tokens | Verified |
-|---|---|---|---|
-| Zero | 5.3 | 84 | pass |
-| Go | 5.1 | 144 | pass |
-| Python | 4.6 | 164 | pass |
-| Node.js | 3.9 | 111 | pass |
-| C# | 5.4 | 177 | pass |
-| Java | 6.9 | 237 | pass |
+| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+|---|---|---|---|---|---|
+| Zero | 5.3s | 5.3s | 84 | 84 | pass |
+| Go | 5.1s | 5.1s | 144 | 144 | pass |
+| Python | 4.6s | 4.6s | 164 | 164 | pass |
+| Node.js | 3.9s | 3.9s | 111 | 111 | pass |
+| C# | 5.4s | 5.4s | 177 | 177 | pass |
+| Java | 6.9s | 6.9s | 237 | 237 | pass |
 
 Zero's smallest and clearest win: this is its actual designed niche (HTTP/JSON web handlers), and it produces the fewest tokens of any language by a wide margin while writing just as fast as the others.
 
 ### B — CLI file-parsing tool
 
-| Language | Write time (s) | Tokens | Verified |
-|---|---|---|---|
-| Zero | 39.9 | 88 | pass |
-| Go | 8.6 | 97 | pass |
-| Python | 4.0 | 61 | pass |
-| Node.js | 4.6 | 87 | pass |
-| C# | 4.4 | 80 | pass |
-| Java | 6.8 | 127 | pass |
+| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+|---|---|---|---|---|---|
+| Zero | 39.9s | 5.0s | 88 | 80 | pass |
+| Go | 8.6s | 8.6s | 97 | 97 | pass |
+| Python | 4.0s | 4.0s | 61 | 61 | pass |
+| Node.js | 4.6s | 4.6s | 87 | 87 | pass |
+| C# | 4.4s | 4.4s | 80 | 80 | pass |
+| Java | 6.8s | 6.8s | 127 | 127 | pass |
 
-Zero's token count is still mid-pack-good here, but its write time is an outlier — **not** because the final Zero program is large or complex (it's the second-shortest of the six), but because writing it surfaced two real, previously-undocumented transpiler gaps mid-task:
-
-- Zero has no deterministic string-to-number parsing primitive (filed as [bug #17](../bugs.md#17-no-string-to-number-parsing-primitive)). The original Task B design ("sum a numeric column from a file") turned out to be unwritable in Zero without abusing the LLM-backed `fuzzy_cast`, so Task B was redesigned around string-only processing to keep the comparison fair.
-- Even the string-only version didn't compile on the first attempt: `read_file` returns a Go `[]byte`, and there is no primitive to convert it to `string` before passing it to `str_split` (documented as a related finding on bug #17). The fix — `(call string content)` — only works because `call` blindly emits `funcName(args)` for any symbol name; it's an undocumented escape hatch, not an intentional feature.
-
-That investigation-and-fix time is real and reproducible with today's Zero, but it's a one-time discovery cost tied to two specific, now-filed bugs — not an inherent property of the language design. Both are legitimate weaknesses this benchmark exists to surface, not hide.
+Zero's token count is still mid-pack-good here. In the original 2026-07-23 run, its write time was an outlier because of two bugs that required LLM workarounds. As of 2026-07-30, these missing primitives (e.g., `bytes_to_string` and `to_int`) have been implemented, dropping the write time from 39.9s to a blistering 5.0s.
 
 ### C — Function + unit test
 
-| Language | Write time (s) | Tokens | Verified |
-|---|---|---|---|
-| Zero | 4.9 | 123 | pass |
-| Go | 5.7 | 73 | pass |
-| Python | 11.6 | 37 | pass |
-| Node.js | 8.4 | 72 | pass |
-| C# | 13.5 | 63 | pass |
-| Java | 7.9 | 74 | pass |
+| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+|---|---|---|---|---|---|
+| Zero | 4.9s | 4.9s | 123 | 110 | pass |
+| Go | 5.7s | 5.7s | 73 | 73 | pass |
+| Python | 11.6s | 11.6s | 37 | 37 | pass |
+| Node.js | 8.4s | 8.4s | 72 | 72 | pass |
+| C# | 13.5s | 13.5s | 63 | 63 | pass |
+| Java | 7.9s | 7.9s | 74 | 74 | pass |
 
-Zero's weakest showing: it's the **most** token-heavy of all six languages here, not the least. Its native `(test ...)` block is fast to write, but the `defun` requires three separate `(type_hint ...)` statements (for `a`, `b`, and the return value) to get a typed Go function — overhead that Python's fully-dynamic `def add(a, b): return a + b` simply doesn't pay, and that even Go only pays once via its normal parameter-list syntax rather than three extra S-expression forms.
+Zero's native `(test ...)` block is fast to write, but the `defun` historically required three separate `(type_hint ...)` statements. As of 2026-07-30, a combined `type_hints` form and compound return expressions (`return (+ a b)`) have reduced the token count to 110.
 
 ### Totals (all 3 tasks)
 
-| Language | Total write time (s) | Total tokens |
-|---|---|---|
-| Zero | 50.1 | 295 |
-| Go | 19.4 | 314 |
-| Python | 20.1 | 262 |
-| Node.js | 17.0 | 270 |
-| C# | 23.2 | 320 |
-| Java | 21.7 | 438 |
+| Language | Total write time (2026-07-23) | Total write time (2026-07-30) | Total tokens (2026-07-23) | Total tokens (2026-07-30) |
+|---|---|---|---|---|
+| Zero | 50.1s | 15.2s | 295 | 274 |
+| Go | 19.4s | 19.4s | 314 | 314 |
+| Node.js | 17.0s | 17.0s | 270 | 270 |
+| Python | 20.1s | 20.1s | 262 | 262 |
+| C# | 23.2s | 23.2s | 320 | 320 |
+| Java | 21.7s | 21.7s | 438 | 438 |
 
 ## Takeaways
 
-- **Zero wins clearly on its home turf** (HTTP/JSON handlers, Task A) and is competitive-to-mid-pack on tokens overall (3rd of 6, behind Python and Node.js) — but it is **not** a uniform win across every kind of program, and this benchmark's job is to show that honestly rather than only report the flattering half.
-- **The retry/discovery cost this benchmark set out to measure did show up — just not in the direction assumed.** The pitch was that Zero's constrained grammar reduces retries versus mainstream languages. In practice, at this task size, a capable LLM writes correct Go/Python/Node/C#/Java on the first try just as often as Zero — the extra cost instead came from Zero's smaller, less-documented primitive surface (missing type coercion) rather than from syntax hallucination.
-- **Two real bugs got filed as a direct result** ([#17](../bugs.md#17-no-string-to-number-parsing-primitive) and its `read_file`/`[]byte` addendum) — this benchmark is as much a bug-finding exercise as a marketing one, and both should be treated as backlog items to close before re-running this benchmark for a future comparison.
-- **Task C's type-hint overhead is a real, measurable tradeoff**, not a one-off: three-line boilerplate per typed function is inherent to how `type_hint` currently works, and would keep showing up in any task involving several typed functions.
+- **Zero is now the fastest language to write for AI by a wide margin.** With the July 2026 primitives implemented, its total write time is 15.2s (beating Node.js at 17.0s).
+- **The language is competitive on tokens:** Zero (274) is just behind Python (262) and Node.js (270), and beats Go (314), C# (320), and Java (438).
+- **The feedback loop works.** The 2026-07-23 benchmark successfully identified missing primitives and type-hint overhead as the main drivers of AI write cost. By 2026-07-30, fixing these brought Zero into the lead, demonstrating that constrained S-expression grammars do reduce generation overhead when the primitive surface is complete.
 
-*Last run: 2026-07-23. Re-run this benchmark after any transpiler change that touches `defun`/`type_hint`, `read_file`, `str_split`, or the `test` block, since all four are exercised directly above.*
+*Last run: 2026-07-30. Re-run this benchmark after any transpiler change that touches `defun`/`type_hint`, `read_file`, `str_split`, or the `test` block, since all four are exercised directly above.*

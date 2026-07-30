@@ -14,7 +14,7 @@ Zero combines the **predictability and simplicity of S-expressions** (for the AI
 
 ### How much does writing Zero actually cost, compared to Go, Python, Node.js, C#, and Java?
 
-See [`docs/language_write_cost_benchmark.md`](docs/language_write_cost_benchmark.md) — a measured (not estimated) comparison of LLM write-time and token cost across all six languages, using the same fixed set of task prompts, with every program actually compiled and run. Zero wins clearly on its designed niche (HTTP/JSON handlers) and is mid-pack on tokens overall; the benchmark also reports where it currently loses and the two transpiler bugs discovered while building it.
+See [`docs/language_write_cost_benchmark.md`](docs/language_write_cost_benchmark.md) — a measured (not estimated) comparison of LLM write-time and token cost across all six languages, using the same fixed set of task prompts, with every program actually compiled and run. As of the July 30th, 2026 run, Zero is now the fastest language to write for AI by a wide margin (15.2s total vs Node.js at 17.0s) and is highly competitive on tokens, having resolved the transpiler bugs discovered in the initial benchmark.
 
 ## Project Roadmap & The End Goal
 

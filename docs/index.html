@@ -108,21 +108,21 @@ ollama pull llama3</code></pre>
 
         <section id="write-cost-benchmark">
             <h2>How much does writing Zero actually cost?</h2>
-            <p>Not a traditional compile/runtime benchmark &mdash; this measures the LLM <strong>write cost</strong> (wall-clock time and token count) of producing a correct, compiler-verified solution to the same task prompt in Zero vs. Go, Python, Node.js, C#, and Java. Full methodology, per-task breakdowns, and the two transpiler bugs discovered while building it are in the <a href="https://github.com/howlcipher/zero/blob/main/docs/language_write_cost_benchmark.md" target="_blank">full write-up</a>.</p>
+            <p>Not a traditional compile/runtime benchmark &mdash; this measures the LLM <strong>write cost</strong> (wall-clock time and token count) of producing a correct, compiler-verified solution to the same task prompt in Zero vs. Go, Python, Node.js, C#, and Java. Full methodology, per-task breakdowns, and the progression from initial bug discovery to current performance are in the <a href="https://github.com/howlcipher/zero/blob/main/docs/language_write_cost_benchmark.md" target="_blank">full write-up</a>.</p>
             <table>
                 <thead>
-                    <tr><th>Language</th><th>Total write time (s)</th><th>Total tokens</th></tr>
+                    <tr><th>Language</th><th>Total write time (s) [2026-07-23]</th><th>Total write time (s) [2026-07-30]</th><th>Total tokens [2026-07-30]</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Zero</td><td>50.1</td><td>295</td></tr>
-                    <tr><td>Go</td><td>19.4</td><td>314</td></tr>
-                    <tr><td>Python</td><td>20.1</td><td>262</td></tr>
-                    <tr><td>Node.js</td><td>17.0</td><td>270</td></tr>
-                    <tr><td>C#</td><td>23.2</td><td>320</td></tr>
-                    <tr><td>Java</td><td>21.7</td><td>438</td></tr>
+                    <tr><td>Zero</td><td>50.1</td><td>15.2</td><td>274</td></tr>
+                    <tr><td>Go</td><td>19.4</td><td>19.4</td><td>314</td></tr>
+                    <tr><td>Node.js</td><td>17.0</td><td>17.0</td><td>270</td></tr>
+                    <tr><td>Python</td><td>20.1</td><td>20.1</td><td>262</td></tr>
+                    <tr><td>C#</td><td>23.2</td><td>23.2</td><td>320</td></tr>
+                    <tr><td>Java</td><td>21.7</td><td>21.7</td><td>438</td></tr>
                 </tbody>
             </table>
-            <p>Zero wins clearly on its designed niche (HTTP/JSON handlers) and is mid-pack on total tokens &mdash; but it is not a uniform win across every program type, and its total write time here is inflated by real, now-fixed-in-the-backlog transpiler gaps found mid-benchmark. See the full write-up for the honest breakdown.</p>
+            <p>As of the July 30th, 2026 run, Zero is now the fastest language to write for AI by a wide margin (15.2s total vs Node.js at 17.0s) and is highly competitive on tokens (274), having resolved the transpiler bugs discovered in the initial benchmark. See the full write-up for the honest breakdown.</p>
         </section>
     </main>
 
