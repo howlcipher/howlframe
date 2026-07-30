@@ -74,12 +74,12 @@ Pending rows are ranked by a diminishing-returns score:
 | 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Done | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
 | 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Documentation gap identified; these features are in README but lack code examples. |
 | 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Pending | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
-| 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
-| 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
-| 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Emit LLVM IR or WebAssembly natively. |
 | 68 | [Native Logit Masking](#68-native-logit-masking) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
-| 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
+| 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
+| 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Emit LLVM IR or WebAssembly natively. |
+| 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
+| 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
 ## Details
 
 ### 62. Phase 2 IR Abstraction
@@ -442,7 +442,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Groomed (2026-07-27):** corrected the stale "bypass human-readable text" claim because `.wat` is textual, and aligned the detail value (7) with the ranked-table calculation. No `wat2wasm`, `wasm-tools`, Wasmtime, or Wasmer executable is installed; Node can host a compiled module but cannot validate WAT directly. The tooling gap and roughly 30 backend-specific node kinds keep effort at 7. With one prior shipped backend (#45), score remains exactly 7×0.5÷7 = 0.50.
 * **Done (2026-07-27):** Added the `wasm_app` root and `generateWasmCode`/`emitWasmIR`. It emits a standards-compliant `app.wat` module for a deliberately portable subset: numeric literals, arithmetic/comparisons, `if` with both branches, `do`, and `return`. Unsupported nodes fail with a clear compiler diagnostic instead of being silently miscompiled. `examples/wasm_math.zero` and subprocess tests cover output shape and rejection behavior. `go test ./...`, `go vet`, and the standalone Go fixture compile loop pass. No WAT validator was installed, so `.wasm` compilation/instantiation remains optional external-tool verification rather than a claimed result.
 * **Groomed (2026-07-30):** The semantic checker now feeds type/layout metadata into the Wasm backend. Zero `int` results emit as `i64`, floats as `f64`, boolean control-flow values remain `i32`, aggregate values are represented as `i32` pointers, and static int/string lists plus homogeneous static int/string dictionaries have linear-memory data segments and checked read paths. The backend now performs a local structural WAT validation pass; full instruction/type validation still requires `wat2wasm` or `wasm-tools` when available.
-* **Groomed (2026-07-27):** #54 is now the second shipped code-generation backend after #45. No Pending row remains in the backend theme, so this shipment changes no other Pending score. All remaining improvement rows are below the 0.5 ROI floor and retain their explicit flags.
+* **Groomed (2026-07-30):** #54 is now the second shipped code-generation backend after #45. Current Pending improvement rows score from 1.0 to 3.0, so no open improvement is below the 0.5 ROI floor in this pass.
 
 ### 55. Native Telemetry Injection
 * **Description:** The transpiler should invisibly inject `observer.Trace(...)` calls at the start and end of every function block, logging variable states.
@@ -492,34 +492,41 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 ### 64. Semantic Type Checker Pass
 * **Description:** Introduce a strict type-inference pass before lowering to IR to define precise byte sizes, alignments, and pointer types.
 * **Why:** Necessary for targeting native machine code or LLVM IR, which lack Go's runtime typing.
-* **Impact:** 8/10 (High - blocks native compilation).
+* **Impact:** 6/10 (Medium-High - Phase 1 has shipped, but remaining layout and validation gaps still block native compilation).
+* **Groomed (2026-07-30):** Kept Pending. `docs/journals/2026-07-30_semantic_validation_pass.md` shows a typed value lattice, checker pass, IR metadata propagation, and Wasm layout consumption are in place, but full WAT instruction/type validation and remaining aggregate/dynamic layout decisions are still outstanding. Re-scored to 3.0 (6×1÷2) rather than the original full-gap value.
 
 ### 65. Linear SSA-based IR
 * **Description:** Lower the high-level tree IR into a flat Static Single Assignment (SSA) format modeling control flow graphs and basic blocks.
 * **Why:** Essential step for backend native code generation.
-* **Impact:** 7/10 (High).
+* **Impact:** 8/10 (High).
+* **Groomed (2026-07-30):** Still Pending and still a distinct compiler architecture step after #64; no same-theme shipment closes SSA/CFG lowering. Score remains 2.0 (8×1÷4), with effort unchanged because it cuts across control flow and backend contracts.
 
 ### 66. Standalone Zero Runtime Environment
 * **Description:** Implement a lightweight runtime library (in C, Zig, or Rust) to handle memory management, GC, and OS syscalls natively.
 * **Why:** Zero currently depends entirely on Go's runtime. We must shed this dependency to emit true standalone binaries.
 * **Impact:** 8/10 (High).
+* **Groomed (2026-07-30):** Still Pending and above the ROI floor, but ranked last among current Pending improvements because it is the largest remaining implementation slice. Score remains 1.0 (8×1÷8). Architecture options should be evaluated explicitly before implementation: C is smallest and ABI-stable but puts memory safety burden on Zero; Rust is safer but adds toolchain/runtime complexity; Zig is a pragmatic systems-language fit but smaller ecosystem.
 
 ### 67. Native Backend Code Generators
 * **Description:** Implement LLVM IR or Wasm backend serializers to replace textual Go string concatenations.
 * **Why:** Achieving the core goal of Zero as a direct-to-machine-code language.
-* **Impact:** 8/10 (High).
+* **Impact:** 6/10 (Medium-High - the Wasm prototype lowered the remaining value, but production-native codegen is still a major milestone).
+* **Groomed (2026-07-30):** Still Pending after #54's Wasm prototype and #64's typed metadata work. Value is decayed/rescoped to 6 because a partial Wasm backend already exists; effort remains 4 until LLVM/native serializers and stronger validators are chosen. Score remains 1.5 (6×1÷4). Technology tradeoff: LLVM gives mature optimization and tooling at the cost of a large dependency surface; direct Wasm is simpler and sandbox-friendly but less native; a custom emitter maximizes control but is the riskiest path.
 
 ### 68. Native Logit Masking
 * **Description:** Allow Zero types to natively compile into inference-level logit masks to restrict LLM generation space.
 * **Why:** Strongly inspired by LMQL to eliminate syntax hallucination at the token-generation level.
-* **Impact:** 8/10 (High - core agentic-first feature).
+* **Impact:** 5/10 (Medium - valuable for AI authoring reliability, but it depends on type/checker maturity and model-inference integration).
+* **Groomed (2026-07-30):** Still Pending and now ranked behind #64 because typed constraints need the checker foundation first. Score remains 2.5 (5×1÷2). Likely approaches: grammar/logit masks are direct and fast but syntax-focused; type-derived masks are stronger but more complex; external constrained decoding libraries reduce effort but add integration coupling.
 
 ### 69. First-Class Optimization Signatures
 * **Description:** Built-in "Teleprompter" step that runs tests and automatically optimizes embedded logic/prompts during compilation.
 * **Why:** Inspired by DSPy to automate prompt engineering within the compilation loop.
 * **Impact:** 6/10 (Medium - advanced agentic feature).
+* **Groomed (2026-07-30):** Still Pending. The shipped `optimize_block` runtime primitive (#40) handles runtime hot-swapping, not compile-time prompt/program optimization signatures, so it does not close this item. Score remains 1.5 (6×1÷4).
 
 ### 70. Type-Safe Schema Bridges
 * **Description:** Force LLM outputs into strongly typed interfaces via semantic type checking rather than loose JSON mapping.
 * **Why:** Inspired by BAML for robust schema extraction.
-* **Impact:** 7/10 (High - improves reliability of agent outputs).
+* **Impact:** 5/10 (Medium - improves reliability of agent outputs, but it builds on the semantic checker and overlaps with existing JSON/struct primitives).
+* **Groomed (2026-07-30):** Still Pending and tied with #68 at 2.5 (5×1÷2). This remains a new-capability curve for LLM output boundaries, but current value is lower than the original broad framing because `struct`, `parse_json`, and checker metadata already cover part of the schema story. Design options: BAML-style schema compiler gives strong guarantees but may be larger than Zero needs; JSON Schema interop is familiar but looser; native Zero schema forms keep the grammar small but require more compiler work.

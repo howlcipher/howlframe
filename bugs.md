@@ -39,8 +39,9 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 30 | [`EmitGoIR` still uses `generateStatement` instead of `generateExpression` for many nodes](#30-emitgoir-still-uses-generatestatement-instead-of-generateexpression-for-many-nodes) | Done (2026-07-29) | 2.0 (8×0.5÷2) | — | Gemini 3.1 Pro | gpt-5.6-terra | Re-introduces Bug #19's `//line` directive syntax error corruption for most primitives when nested. Decay 0.5 from Bug #19. |
 | 29 | [`let` binding's special `call` case drops compound arguments](#29-let-bindings-special-call-case-drops-compound-arguments) | Done (2026-07-29) | 0.5 (8×0.0625÷1) | — | Gemini 3.1 Pro | gpt-5.6-terra | Same leaf `.Value` theme as bugs #13/#20/#27/#28 (decay 0.0625). Reverts the Bug #20 fix for `call` when nested inside a `let`. |
 | 31 | [`db_connect` and `sql_query` silently drop compound arguments](#31-db_connect-and-sql_query-silently-drop-compound-arguments) | Done (2026-07-29) | 0.25 (8×0.03125÷1) | — | Gemini 3.1 Pro | gpt-5.6-terra | Same leaf `.Value` theme (decay 0.03125). |
-| 32 | [Deep AST Nesting Stack Limits](#32-deep-ast-nesting-stack-limits) | Pending | 2.0 (4×1÷2) | — | — | gpt-5.6-terra | Current traversal is prone to stack overflows from deep nesting without tail-call optimization. |
+| 34 | [Benchmark Zero fixtures are stale relative to 2026-07-30 results](#34-benchmark-zero-fixtures-are-stale-relative-to-2026-07-30-results) | Pending | 5.0 (5×1÷1) | — | — | gpt-5.6-sol | The 2026-07-30 benchmark write-up and CSV claim reduced Zero token counts, but the committed Zero benchmark sources still tokenize to the old 2026-07-23 counts. |
 | 33 | [Late Semantic Validation](#33-late-semantic-validation) | Pending | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Complex constructs are validated in the Go emission phase rather than during AST generation. |
+| 32 | [Deep AST Nesting Stack Limits](#32-deep-ast-nesting-stack-limits) | Pending | 2.0 (4×1÷2) | — | — | gpt-5.6-terra | Current traversal is prone to stack overflows from deep nesting without tail-call optimization. |
 ## Details
 
 ### 1. Lexer panics on EOF during unterminated string
@@ -270,3 +271,11 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Description:** The parser treats complex constructs as simple nested lists, pushing semantic validation down to the backend emission phase instead of resolving them in the AST phase.
 * **Why:** Misses early error detection and complicates code generators.
 * **Impact:** 6/10 (Medium-High - brittle architecture).
+* **Groomed (2026-07-30):** Still worth tracking while #64 remains incomplete. The in-flight checker journal shows type/layout analysis has started, but semantic validation is still not a complete pre-lowering gate for every construct. Score remains 3.0 (6×1÷2).
+
+### 34. Benchmark Zero fixtures are stale relative to 2026-07-30 results
+* **Description:** `docs/language_write_cost_benchmark.md` and `benchmarks/language_write_cost/results.csv` record improved 2026-07-30 Zero token counts for Task B (80 tokens) and Task C (110 tokens), but the committed source fixtures still encode the old forms: `benchmarks/language_write_cost/task_b_cli_file_sum/zero/greet.zero` uses `(call string content)` and tokenizes to 88, while `benchmarks/language_write_cost/task_c_function_test/zero/add.zero` still uses three separate `(type_hint ...)` forms plus a throwaway `let`, tokenizing to 123.
+* **Why:** The benchmark is now a standing regression gate, so its raw source files must reproduce the published CSV and documentation numbers. If the sources remain stale, future benchmark reruns will either regress the results or require hidden/manual edits outside version control.
+* **Impact:** 5/10 (Medium - does not break the transpiler, but undermines the project's main measured claim and the reproducibility of improvement #44/#46).
+* **Repro:** `python3` with `tiktoken.get_encoding("cl100k_base")` reports 88 tokens for Task B's checked-in Zero fixture and 123 for Task C's checked-in Zero fixture on 2026-07-30, contradicting the CSV/doc rows that report 80 and 110.
+* **Fix sketch:** Update the Zero benchmark source fixtures to the same optimized forms used for the 2026-07-30 run (`bytes_to_string`/`to_string` instead of the old `(call string ...)` escape hatch, combined `type_hints`, and direct compound returns where appropriate), then rerun the language write-cost token counter and verification commands so `results.csv`, source fixtures, and `docs/language_write_cost_benchmark.md` agree.
