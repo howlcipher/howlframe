@@ -173,6 +173,18 @@ Zero can automatically inject context variables into function calls within a spe
 )
 ```
 
+### Teleological Execution
+
+Zero supports goal-driven execution where the runtime dynamically searches for a solution rather than relying on imperative steps. You can specify a target state and a constraint, and Zero delegates execution to a local LLM via the `achieve` node.
+
+```lisp
+(cli_app
+  (let (result (achieve (is_sorted list) (using "quick sort algorithm")))
+    (print result)
+  )
+)
+```
+
 ## How to Run
 
 1. **Transpile and Run in one step**:

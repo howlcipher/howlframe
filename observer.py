@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
@@ -29,6 +29,48 @@ TRANSIENT_NAMES = {
 @dataclass(frozen=True)
 class PatchResult:
     status: str
+
+
+@dataclass
+class HealthState:
+    status: str = "normal"
+    anomalies_detected: int = 0
+    last_anomaly_time: int | None = None
+    recent_telemetry: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "anomalies_detected": self.anomalies_detected,
+            "last_anomaly_time": self.last_anomaly_time,
+            "recent_telemetry": self.recent_telemetry,
+        }
+
+
+class ObservabilityLayer:
+    def __init__(self, capacity: int = 100):
+        self.state = HealthState()
+        self.capacity = capacity
+
+    def add_telemetry(self, event: str) -> None:
+        try:
+            parsed = json.loads(event)
+        except Exception:
+            parsed = {"raw": event}
+        self.state.recent_telemetry.append(parsed)
+        if len(self.state.recent_telemetry) > self.capacity:
+            self.state.recent_telemetry.pop(0)
+
+    def report_anomaly(self, timestamp: int) -> None:
+        self.state.status = "anomaly"
+        self.state.anomalies_detected += 1
+        self.state.last_anomaly_time = timestamp
+
+    def report_normal(self) -> None:
+        self.state.status = "normal"
+
+    def get_view(self) -> dict:
+        return self.state.to_dict()
 
 
 def resolve_project_path(
@@ -277,7 +319,11 @@ def tail_file(filepath: Path):
             yield line
 
 
-def check_anomalies(client: object, events: Iterable[str]) -> None:
+def check_anomalies(
+    client: object,
+    events: Iterable[str],
+    layer: ObservabilityLayer | None = None,
+) -> None:
     prompt = (
         "Review this Go application telemetry for anomalies, infinite loops, "
         "or unexpected state changes. Respond NORMAL when no anomaly exists."
@@ -293,23 +339,41 @@ def check_anomalies(client: object, events: Iterable[str]) -> None:
         reply = response.choices[0].message.content.strip()
         if "NORMAL" not in reply.upper() or len(reply) > 20:
             _log_event("telemetry_analysis", "anomaly")
+            if layer is not None:
+                layer.report_anomaly(int(time.time()))
         else:
             _log_event("telemetry_analysis", "normal")
+            if layer is not None:
+                layer.report_normal()
     except Exception:
         _log_event("telemetry_analysis", "request_failed")
 
 
-def observe_telemetry(client: object, telemetry_file: Path) -> None:
+def observe_telemetry(
+    client: object,
+    telemetry_file: Path,
+    view_file: Path = Path("health.json"),
+) -> None:
     telemetry_file.touch(exist_ok=True)
     events: list[str] = []
+    layer = ObservabilityLayer()
     try:
         for line in tail_file(telemetry_file):
             stripped_line = line.strip()
             if stripped_line:
                 events.append(stripped_line)
+                layer.add_telemetry(stripped_line)
+                view_file.write_text(
+                    json.dumps(layer.get_view(), indent=2),
+                    encoding="utf-8",
+                )
             if len(events) >= 10:
-                check_anomalies(client, events)
+                check_anomalies(client, events, layer)
                 events = []
+                view_file.write_text(
+                    json.dumps(layer.get_view(), indent=2),
+                    encoding="utf-8",
+                )
     except KeyboardInterrupt:
         _log_event("observer", "stopped")
 
