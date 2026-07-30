@@ -111,7 +111,7 @@ func TestWasmBackendWritesPortableWAT(t *testing.T) {
 		t.Fatalf("Failed to read generated WAT: %v", err)
 	}
 	for _, fragment := range []string{
-		"(module", "(func (export \"main\") (result i32)", "(if (result i32)", "(i32.gt_s", "(i32.add", "(i32.mul",
+		"(module", "(func (export \"main\") (result i64)", "(if (result i64)", "(i64.gt_s", "(i64.add", "(i64.mul",
 	} {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)

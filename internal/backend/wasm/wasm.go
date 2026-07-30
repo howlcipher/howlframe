@@ -16,12 +16,13 @@ func GenerateWasmCode(node *ast.Node) string {
 		// ast.ReportError("Expected wasm_app as root symbol", head.Line, head.Column)
 	}
 
-	return fmt.Sprintf("(module\n  (func (export \"main\") (result i32)\n    %s\n  )\n)\n", generateWasmExpression(node.Children[1]))
+	resultType := wasmType(node.Children[1].Inferred)
+	return fmt.Sprintf("(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", resultType, generateWasmExpression(node.Children[1]))
 }
 
 func generateWasmExpression(node *ast.Node) string {
 	if node.Type == "INT" {
-		return fmt.Sprintf("(i32.const %s)", node.Value)
+		return fmt.Sprintf("(%s.const %s)", wasmType(node.Inferred), node.Value)
 	}
 	if node.Type == "SYMBOL" {
 		switch node.Value {
@@ -53,17 +54,21 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		if len(ir.Kids) != 2 {
 			// ast.ReportError(fmt.Sprintf("%s expects 2 arguments", ir.Op), source.Line, source.Column)
 		}
+		valueType := wasmType(ir.Kids[0].Inferred)
+		if ir.Op == "and" || ir.Op == "or" {
+			valueType = "i32"
+		}
 		ops := map[string]string{
-			"+": "i32.add", "-": "i32.sub", "*": "i32.mul", "/": "i32.div_s",
-			"<": "i32.lt_s", ">": "i32.gt_s", "<=": "i32.le_s", ">=": "i32.ge_s",
-			"=": "i32.eq", "==": "i32.eq", "!=": "i32.ne", "and": "i32.and", "or": "i32.or",
+			"+": valueType + ".add", "-": valueType + ".sub", "*": valueType + ".mul", "/": valueType + ".div_s",
+			"<": valueType + ".lt_s", ">": valueType + ".gt_s", "<=": valueType + ".le_s", ">=": valueType + ".ge_s",
+			"=": valueType + ".eq", "==": valueType + ".eq", "!=": valueType + ".ne", "and": "i32.and", "or": "i32.or",
 		}
 		return fmt.Sprintf("(%s %s %s)", ops[ir.Op], generateWasmExpression(ir.Kids[0]), generateWasmExpression(ir.Kids[1]))
 	case "if":
 		if len(ir.Kids) != 3 {
 			// ast.ReportError("Wasm backend requires if to include an else branch", source.Line, source.Column)
 		}
-		return fmt.Sprintf("(if (result i32) %s (then %s) (else %s))", generateWasmExpression(ir.Kids[0]), generateWasmExpression(ir.Kids[1]), generateWasmExpression(ir.Kids[2]))
+		return fmt.Sprintf("(if (result %s) %s (then %s) (else %s))", wasmType(ir.Kids[1].Inferred), generateWasmExpression(ir.Kids[0]), generateWasmExpression(ir.Kids[1]), generateWasmExpression(ir.Kids[2]))
 	case "do":
 		if len(ir.Kids) == 0 {
 			// ast.ReportError("Wasm backend requires do to contain a result expression", source.Line, source.Column)
@@ -76,11 +81,24 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 			}
 			parts = append(parts, expr)
 		}
-		return fmt.Sprintf("(block (result i32) %s)", strings.Join(parts, " "))
+		return fmt.Sprintf("(block (result %s) %s)", wasmType(ir.Kids[len(ir.Kids)-1].Inferred), strings.Join(parts, " "))
 	case "return":
 		return fmt.Sprintf("(return %s)", generateWasmExpression(ir.Kids[0]))
 	default:
 		// ast.ReportError(fmt.Sprintf("Wasm backend does not support %q", ir.Kind), source.Line, source.Column)
 	}
 	return ""
+}
+
+// wasmType consumes the semantic layout selected by the checker. Zero's
+// native int is 64-bit, while boolean control-flow values remain i32 in Wasm.
+func wasmType(info ast.TypeInfo) string {
+	switch info.Kind {
+	case ast.Int:
+		return "i64"
+	case ast.Bool:
+		return "i32"
+	default:
+		return "i32"
+	}
 }
