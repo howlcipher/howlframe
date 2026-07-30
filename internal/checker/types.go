@@ -61,54 +61,62 @@ func Analyze(root *ast.Node) *Analysis {
 }
 
 func (a *Analysis) collectStructs(node *ast.Node) {
-	if node == nil {
-		return
-	}
-	if node.Type == "List" && len(node.Children) > 1 && node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "struct" || node.Children[0].Value == "schema") {
-		name := node.Children[1].Value
-		info := ast.Layout(ast.Struct)
-		info.Name = name
-		info.Fields = make(map[string]ast.TypeInfo)
-		var fieldOrder []string
-		for _, field := range node.Children[2:] {
-			if field.Type != "List" || len(field.Children) < 2 {
-				continue
-			}
-			start := 0
-			if node.Children[0].Value == "schema" && len(field.Children) == 3 && field.Children[0].Value == "column" {
-				start = 1
-			}
-			fieldName := field.Children[start].Value
-			fieldType := a.resolveType(field.Children[start+1].Value)
-			info.Fields[fieldName] = fieldType
-			fieldOrder = append(fieldOrder, fieldName)
-			if len(fieldName) > 0 {
-				capitalized := strings.ToUpper(fieldName[:1]) + fieldName[1:]
-				info.Fields[capitalized] = fieldType
-			}
+	for stack := []*ast.Node{node}; len(stack) > 0; {
+		node = stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if node == nil {
+			continue
 		}
-		info.Size, info.Align, info.FieldOffsets = structLayout(info.Fields, fieldOrder)
-		a.Structs[name] = info
-	}
-	if node.Type == "List" {
-		for _, child := range node.Children {
-			a.collectStructs(child)
+		if node.Type == "List" && len(node.Children) > 1 && node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "struct" || node.Children[0].Value == "schema") {
+			name := node.Children[1].Value
+			info := ast.Layout(ast.Struct)
+			info.Name = name
+			info.Fields = make(map[string]ast.TypeInfo)
+			var fieldOrder []string
+			for _, field := range node.Children[2:] {
+				if field.Type != "List" || len(field.Children) < 2 {
+					continue
+				}
+				start := 0
+				if node.Children[0].Value == "schema" && len(field.Children) == 3 && field.Children[0].Value == "column" {
+					start = 1
+				}
+				fieldName := field.Children[start].Value
+				fieldType := a.resolveType(field.Children[start+1].Value)
+				info.Fields[fieldName] = fieldType
+				fieldOrder = append(fieldOrder, fieldName)
+				if len(fieldName) > 0 {
+					capitalized := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+					info.Fields[capitalized] = fieldType
+				}
+			}
+			info.Size, info.Align, info.FieldOffsets = structLayout(info.Fields, fieldOrder)
+			a.Structs[name] = info
+		}
+		if node.Type == "List" {
+			for i := len(node.Children) - 1; i >= 0; i-- {
+				stack = append(stack, node.Children[i])
+			}
 		}
 	}
 }
 
 func (a *Analysis) collectFunctions(node *ast.Node) {
-	if node == nil {
-		return
-	}
-	if node.Type == "List" && len(node.Children) > 0 {
-		if node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun" && len(node.Children) >= 4 {
-			name := node.Children[1].Value
-			params, ret := a.functionSignature(node)
-			a.Functions[name] = FunctionInfo{Params: params, Return: ret}
+	for stack := []*ast.Node{node}; len(stack) > 0; {
+		node = stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if node == nil {
+			continue
 		}
-		for _, child := range node.Children {
-			a.collectFunctions(child)
+		if node.Type == "List" && len(node.Children) > 0 {
+			if node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun" && len(node.Children) >= 4 {
+				name := node.Children[1].Value
+				params, ret := a.functionSignature(node)
+				a.Functions[name] = FunctionInfo{Params: params, Return: ret}
+			}
+			for i := len(node.Children) - 1; i >= 0; i-- {
+				stack = append(stack, node.Children[i])
+			}
 		}
 	}
 }
@@ -313,14 +321,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	}
 	switch head {
 	case "let":
-		if len(node.Children) < 3 || node.Children[1].Type != "List" || len(node.Children[1].Children) < 2 {
-			return ast.Layout(ast.Unknown)
-		}
-		binding := node.Children[1]
-		value := a.infer(binding.Children[1], env)
-		childEnv := cloneEnv(env)
-		childEnv[binding.Children[0].Value] = value
-		return a.infer(node.Children[2], childEnv)
+		return a.inferLetChain(node, env)
 	case "do":
 		result := ast.Layout(ast.Void)
 		for _, child := range node.Children[1:] {
@@ -581,6 +582,29 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Unknown)
 	}
+}
+
+func (a *Analysis) inferLetChain(node *ast.Node, env typeEnv) ast.TypeInfo {
+	bindings, body := ast.LetChain(node)
+	if len(bindings) == 0 {
+		return ast.Layout(ast.Unknown)
+	}
+	chain := make([]*ast.Node, 0, len(bindings))
+	current := node
+	childEnv := env
+	for _, binding := range bindings {
+		value := a.infer(binding.Children[1], childEnv)
+		childEnv = cloneEnv(childEnv)
+		childEnv[binding.Children[0].Value] = value
+		chain = append(chain, current)
+		current = current.Children[2]
+	}
+	result := a.infer(body, childEnv)
+	for _, letNode := range chain {
+		a.Types[letNode] = result
+		letNode.Inferred = result
+	}
+	return result
 }
 
 func (a *Analysis) checkCall(node *ast.Node, name string, args []*ast.Node, info FunctionInfo, env typeEnv) {

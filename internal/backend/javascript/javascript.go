@@ -33,9 +33,8 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		letPrefix.WriteString("{\n")
 		declaredVars := make(map[string]bool)
 
-		curr := &ast.Node{Type: "List", Children: []*ast.Node{{Type: "SYMBOL", Value: "let"}, ir.Kids[0], ir.Kids[1]}}
-		for curr.Type == "List" && len(curr.Children) == 3 && curr.Children[0].Value == "let" {
-			binds := curr.Children[1]
+		bindings, curr := ast.LetChain(&ast.Node{Type: "List", Children: []*ast.Node{{Type: "SYMBOL", Value: "let"}, ir.Kids[0], ir.Kids[1]}})
+		for _, binds := range bindings {
 			varName := binds.Children[0].Value
 			valNode := binds.Children[1]
 
@@ -99,7 +98,6 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 				letPrefix.WriteString(fmt.Sprintf("let %s = %s;\n", varName, valStr))
 				declaredVars[varName] = true
 			}
-			curr = curr.Children[2]
 		}
 		bodyCode := generateJSStatement(curr, reqVar, depth+1)
 		return fmt.Sprintf("%s%s\n}", letPrefix.String(), bodyCode)

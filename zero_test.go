@@ -2,12 +2,54 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
+	const chainLength = 2000
+
+	var source strings.Builder
+	source.WriteString("(cli_app ")
+	for i := 0; i < chainLength; i++ {
+		if i == 0 {
+			fmt.Fprint(&source, "(let (value0 0) ")
+		} else {
+			fmt.Fprintf(&source, "(let (value%d value%d) ", i, i-1)
+		}
+	}
+	fmt.Fprintf(&source, "(print value%d)%s)", chainLength-1, strings.Repeat(")", chainLength))
+
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	}
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "deep-let.zero")
+	if err := os.WriteFile(inputFile, []byte(source.String()), 0o644); err != nil {
+		t.Fatalf("failed to write deep let chain: %v", err)
+	}
+	if output, err := exec.Command(zeroBinary, "-o", outDir, inputFile).CombinedOutput(); err != nil {
+		t.Fatalf("deep let chain failed to transpile: %v\n%s", err, output)
+	}
+
+	generated, err := os.ReadFile(filepath.Join(outDir, "server.go"))
+	if err != nil {
+		t.Fatalf("failed to read generated server.go: %v", err)
+	}
+	lastBinding := fmt.Sprintf("value%d := value%d", chainLength-1, chainLength-2)
+	if !strings.Contains(string(generated), lastBinding) {
+		t.Fatalf("generated Go omitted the final let binding %q", lastBinding)
+	}
+	if output, err := exec.Command("go", "build", "-o", filepath.Join(outDir, "deep-let"), filepath.Join(outDir, "server.go")).CombinedOutput(); err != nil {
+		t.Fatalf("generated Go for deep let chain did not build: %v\n%s", err, output)
+	}
+}
 
 func TestOutputDirectoryFlag(t *testing.T) {
 	// Build the zero binary

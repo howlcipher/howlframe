@@ -30,6 +30,21 @@ type Node struct {
 	Inferred TypeInfo
 }
 
+// LetChain returns the bindings in a consecutive, well-formed let chain and
+// the first body that is not another let. Keeping this shape traversal in one
+// place lets passes process long lexical scopes without consuming one Go stack
+// frame per binding.
+func LetChain(node *Node) (bindings []*Node, body *Node) {
+	current := node
+	for current != nil && current.Type == "List" && len(current.Children) == 3 &&
+		current.Children[0].Type == "SYMBOL" && current.Children[0].Value == "let" &&
+		current.Children[1].Type == "List" && len(current.Children[1].Children) == 2 {
+		bindings = append(bindings, current.Children[1])
+		current = current.Children[2]
+	}
+	return bindings, current
+}
+
 // ValueKind is the language-level type category inferred by the semantic
 // checker. Unknown is intentional: Zero permits dynamic values at runtime,
 // while known values still carry enough layout information for native
@@ -135,6 +150,13 @@ func ApplyPatches(node *Node) {
 	if node == nil || node.Type != "List" {
 		return
 	}
+	if bindings, body := LetChain(node); len(bindings) > 0 {
+		for _, binding := range bindings {
+			ApplyPatches(binding)
+		}
+		ApplyPatches(body)
+		return
+	}
 	var newChildren []*Node
 	for i := 0; i < len(node.Children); i++ {
 		child := node.Children[i]
@@ -185,6 +207,24 @@ func ApplyWithContext(node *Node, ctxVars []*Node) *Node {
 	}
 
 	head := node.Children[0].Value
+	if bindings, body := LetChain(node); len(bindings) > 0 {
+		result := ApplyWithContext(body, ctxVars)
+		for i := len(bindings) - 1; i >= 0; i-- {
+			binding := bindings[i]
+			result = &Node{
+				Type:     "List",
+				Line:     node.Line,
+				Column:   node.Column,
+				Filename: node.Filename,
+				Children: []*Node{
+					{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					{Type: "List", Line: binding.Line, Column: binding.Column, Filename: binding.Filename, Children: []*Node{binding.Children[0], ApplyWithContext(binding.Children[1], ctxVars)}},
+					result,
+				},
+			}
+		}
+		return result
+	}
 	if head == "with_context" {
 		if len(node.Children) < 3 {
 			ReportError("with_context expects (with_context vars body...)", node.Line, node.Column)

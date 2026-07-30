@@ -195,6 +195,12 @@ func checkJSStatement(node *ast.Node, depth int) {
 	}
 	if irNode, ok := ir.LowerShared(node); ok {
 		switch irNode.Kind {
+		case "let":
+			bindings, body := ast.LetChain(node)
+			for _, binding := range bindings {
+				checkJSStatement(binding.Children[1], depth+1)
+			}
+			checkJSStatement(body, depth+1)
 		case "binop":
 			checkJSStatement(irNode.Kids[0], depth+1)
 			checkJSStatement(irNode.Kids[1], depth+1)
@@ -403,6 +409,12 @@ func checkGoStatement(node *ast.Node, depth int) {
 	irNode, ok := ir.LowerShared(node)
 	if ok {
 		switch irNode.Kind {
+		case "let":
+			bindings, body := ast.LetChain(node)
+			for _, binding := range bindings {
+				checkGoStatement(binding.Children[1], depth+1)
+			}
+			checkGoStatement(body, depth+1)
 		case "binop":
 			if len(irNode.Kids) != 2 {
 				ast.ReportError(fmt.Sprintf("%s expects 2 arguments", irNode.Op), node.Line, node.Column)

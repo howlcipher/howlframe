@@ -4,7 +4,7 @@
 Bug #32: Deep AST Nesting Stack Limits
 
 ## Status
-In progress
+Implementation verified
 
 ## Model Routing
 - OpenAI model listed in `bugs.md`: `gpt-5.6-terra`
@@ -20,7 +20,10 @@ The AST traversal currently relies on recursive walks in parser include expansio
 - Current main branch matched `origin/main` at selection (`0b78adb feat(schema): add type-safe schema bridges`).
 
 ## Delegations
-- Pending: delegate implementation to `gpt-5.6-terra` via `codex exec`.
+- 2026-07-30: delegated implementation to `gpt-5.6-terra` via `codex exec`.
+  - Outcome: implemented shared `ast.LetChain` traversal, iterative handling in AST preprocessing, semantic collection/inference, Go/JS validation, and Go/JS emitters, plus a 2,000-level CLI `let` chain regression.
+  - Delegate-reported verification: `go test ./...`, `go vet ./...`, and `git diff --check` passed.
+  - Orchestrator re-verification: `GOCACHE=/tmp/zero-gocache go test ./...`, `GOCACHE=/tmp/zero-gocache go vet ./...`, and `git diff --check` passed.
 
 ## Next Step
-Delegate a focused implementation pass that removes the deep `let` chain recursion hazard, adds regression coverage for a long valid chain, and preserves existing JSON diagnostics for malformed programs.
+Mark Bug #32 done in `bugs.md`, update durable change notes, delete this journal in the final closeout commit, and push.
