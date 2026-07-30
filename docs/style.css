@@ -138,7 +138,15 @@ h1, h2, h3, h4, h5, h6 {
 h1 {
   font-size: 3rem;
   margin-bottom: 0;
-  letter-spacing: -2px;
+  letter-spacing: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 h2 {

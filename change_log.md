@@ -19,6 +19,8 @@
 * Refreshed the README and GitHub Pages content to reflect the current
   semantic checker, typed backend metadata, direct binary bytecode, and expanded
   WebAssembly Text backend scope.
+* Removed stale transpiler branding and Go-only positioning from the README,
+  GitHub Pages landing page, and current public docs.
 * Re-scored the remaining self-healing backlog after auto-patching shipped,
   corrected the WebAssembly prototype's WAT scope, and restored the missing
   Ephemeral Neural Circuits detail section.

@@ -16,7 +16,7 @@ A tree-walking interpreter reusing the existing, unchanged front end (`NewLexer`
 
 Wired into `main()` via a new `-run` boolean flag:
 - `./zero -run script.zero [args...]` — interpret and execute immediately, no files written.
-- `./zero script.zero` (no `-run`) — unchanged: transpile to `server.go`/`server_test.go` as before.
+- `./zero script.zero` (no `-run`) — unchanged: compile through the Go backend to `server.go`/`server_test.go` as before.
 - `-run` combined with an `http_server` or `web_app` root produces a clear JSON error (`{"reason":"-run only supports cli_app in Phase 1",...}`) rather than a silent partial execution.
 
 ### Covered node kinds

@@ -3,135 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Zero is an AI-first, Lisp-like coding language designed specifically to be written by LLMs, transpiling to Go.">
+    <meta name="description" content="Zero is an AI-first S-expression language and toolchain with Go, JavaScript, WebAssembly Text, direct execution, and bytecode paths.">
 
-    <!-- Open Graph / Facebook / LinkedIn -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Zero Transpiler">
-    <meta property="og:description" content="Zero is an AI-first, Lisp-like coding language designed specifically to be written by LLMs, transpiling to Go.">
+    <meta property="og:title" content="Zero">
+    <meta property="og:description" content="An AI-first S-expression language and toolchain with multiple execution targets.">
     <meta property="og:image" content="https://howlcipher.github.io/zero/favicon.jpg">
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Zero Transpiler">
-    <meta name="twitter:description" content="Zero is an AI-first, Lisp-like coding language designed specifically to be written by LLMs, transpiling to Go.">
+    <meta name="twitter:title" content="Zero">
+    <meta name="twitter:description" content="An AI-first S-expression language and toolchain with multiple execution targets.">
     <meta name="twitter:image" content="https://howlcipher.github.io/zero/favicon.jpg">
 
-    <title>Zero Transpiler</title>
+    <title>Zero</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/jpeg" href="favicon.jpg">
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="container">
-    <header>
-        <div>
-            <p class="kicker">// system online — s-expressions for autonomous agents</p>
-            <h1 id="main-title">Zero Transpiler</h1>
-        </div>
-        <div style="display: flex; gap: 1rem; align-items: center; margin-top: 10px;">
-            <a href="https://github.com/howlcipher/zero" target="_blank" style="color: inherit; text-decoration: underline; font-family: inherit;">[ View on GitHub ]</a>
-            <button id="theme-toggle">Toggle Theme</button>
-        </div>
-    </header>
+        <header>
+            <div>
+                <p class="kicker">// ai-first s-expressions for validated programs</p>
+                <h1 id="main-title">Zero</h1>
+            </div>
+            <div class="header-actions">
+                <a href="https://github.com/howlcipher/zero" target="_blank" rel="noreferrer">[ View on GitHub ]</a>
+                <button id="theme-toggle" type="button">Toggle Theme</button>
+            </div>
+        </header>
 
-    <main id="main-content">
-        <section id="why-zero">
-            <h2>Why Zero?</h2>
-            <ul>
-                <li><strong>Hallucination-proof:</strong> Designed to constrain LLMs and avoid syntax or semantic hallucinations.</li>
-                <li><strong>Immediate Semantic Feedback:</strong> Runs a dedicated semantic checker before backend generation, returning localized JSON errors for invalid ASTs.</li>
-                <li><strong>Abstraction Constraints:</strong> Simplifies concepts to keep the AI-generated code predictable and maintainable.</li>
-                <li><strong>Typed Compiler Metadata:</strong> The checker annotates expressions with inferred type layouts, native size/alignment, pointer metadata, list/dict element types, and struct field offsets for lower-level backends.</li>
-                <li><strong>LLM-Native Primitives:</strong> Built-in <code>llm_generate</code>, <code>fuzzy_cast</code>, and <code>assert_semantic</code> to trivially utilize, orchestrate, and enforce constraints on other AIs directly from the language.</li>
-                <li><strong>AST-Level Semantic Patching:</strong> Allows AIs to surgically update specific functions via a <code>(patch ...)</code> node without perfectly rewriting large files.</li>
-                <li><strong>Native Automation & String Suite:</strong> Built-in support for File I/O (<code>read_file</code>, <code>write_file</code>, <code>mkdir</code>), subprocess execution (<code>exec</code>), CLI argument parsing (<code>cli_args</code>), string manipulation (<code>str_split</code>, <code>str_join</code>, <code>regex_match</code>), and type conversion (<code>to_int</code>, <code>to_float</code>, <code>to_string</code>).</li>
-                <li><strong>Advanced Control Flow:</strong> Provides primitives tailored for AI parsers and state machines, including <code>while</code> loops, <code>match</code> pattern matching, and <code>set</code> variable mutations.</li>
-                <li><strong>Safe Concurrency & Guardrails:</strong> Easily spawn background routines (<code>spawn</code>), make HTTP requests (<code>fetch</code>), or enforce AI API call safety using <code>rate_limit</code> and <code>retry</code> blocks.</li>
-                <li><strong>Database & Persistence:</strong> Native SQL connection and query primitives (<code>db_connect</code>, <code>sql_query</code>) that transpile directly to Go's standard <code>database/sql</code> package.</li>
-                <li><strong>Modularity & Imports:</strong> Support for file inclusion via <code>include</code> and standard Go package imports via <code>import</code>.</li>
-                <li><strong>Collections & Typed Structs:</strong> Strong typing with <code>struct</code> (including direct field access on parsed JSON), mutable list mutation (<code>append</code>), map management (<code>map_set</code>, <code>map_delete</code>), and random-access reads (<code>map_get</code>, <code>list_get</code>).</li>
-                <li><strong>Security & Middleware:</strong> Protect routes with HTTP <code>middleware</code>, pipeline control (<code>next</code>), and environment variable reads (<code>env</code>).</li>
-                <li><strong>Implicit Context Threading:</strong> Built-in <code>(with_context ...)</code> macro that implicitly injects variables into function calls, reducing the cognitive load for AIs to remember to pass state like request objects and database connections down the call stack.</li>
-                <li><strong>Native Unit Test Blocks:</strong> Accelerates Test-Driven Development (TDD) for AIs with a native <code>(test "description" ...)</code> block that seamlessly compiles to Go test files.</li>
-                <li><strong>Compiles to JavaScript too:</strong> Swap the root block to <code>(web_app ...)</code> to target the browser with the same grammar &mdash; DOM primitives (<code>dom_query</code>, <code>on_event</code>, <code>set_text</code>) plus every existing logic primitive, unchanged.</li>
-                <li><strong>Typed WebAssembly Text Backend:</strong> <code>wasm_app</code> emits structurally validated WAT with <code>i64</code> ints, <code>f64</code> floats, <code>i32</code> booleans/pointers, typed int/string lists, and static dictionary reads.</li>
-                <li><strong>Built-in Observability:</strong> Every generated program auto-injects call tracing (<code>telemetry.jsonl</code>) and crash-state serialization (<code>crash.json</code> with a full stack trace on panic) with zero extra syntax, plus a standalone Python observer agent (<code>observer.py</code>) that watches for anomalies live.</li>
-                <li><strong>Go Generics:</strong> <code>(type_param T)</code> on a <code>defun</code> generates a real Go generic function instead of falling back to <code>any</code> and runtime type assertions.</li>
-                <li><strong>Direct AST Execution:</strong> <code>-run</code> interprets a <code>cli_app</code> script directly &mdash; no Go text ever generated, no <code>go build</code>/<code>go run</code> invoked &mdash; Phase 1 toward Zero's eventual goal of bypassing text-based codegen entirely (see the project's <a href="https://github.com/howlcipher/zero/blob/main/README.md#project-roadmap--the-end-goal" target="_blank">roadmap</a>).</li>
-                <li><strong>Direct Binary Bytecode:</strong> <code>-compile-bc</code> and <code>-run-bc</code> allow compiling Zero programs directly to binary gob bytecode and executing them natively.</li>
-                <li><strong>Auto-Mutating Runtime:</strong> The <code>optimize_block</code> primitive enables Zero to be self-rewriting. It monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime.</li>
-                <li><strong>Ephemeral Neural Circuits:</strong> Using <code>ephemeral_circuit</code>, Zero can provision a narrowly specialized micro-model dynamically on the fly, configured with a system prompt for a single task.</li>
-                <li><strong>Neural Circuits:</strong> The <code>neural_circuit</code> primitive lets developers write simple logic specifications as natural language instructions. At runtime, Zero fetches the logic from a local LLM and executes it seamlessly as part of the execution flow.</li>
-                <li><strong>Semantic Routing:</strong> With <code>semantic_match</code>, you can route execution based on semantic intent rather than brittle regexes or exact string matching.</li>
-                <li><strong>Automated Counterfactual Debugging:</strong> When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed, generating self-healing code that prevents the crash from recurring.</li>
-                <li><strong>Teleological Execution:</strong> Zero supports goal-driven execution where the runtime dynamically searches for a solution rather than relying on imperative steps using the <code>achieve</code> node.</li>
-                <li><strong>Leveraging Agent Skills:</strong> Utilizing autonomous agent skills and AI reasoning capabilities to act as the verification and observability layer, ensuring safety without needing to read code.</li>
-                <li><strong>JIT Function Generation:</strong> With <code>lazy_synthesize</code>, you can define a function using only its signature and a natural language docstring. Zero dynamically synthesizes the implementation at runtime using a local LLM upon the first invocation.</li>
-            </ul>
-        </section>
+        <main id="main-content">
+            <section id="overview">
+                <h2>Overview</h2>
+                <p>Zero is an AI-first, S-expression programming language and toolchain. It keeps source syntax small and uniform so language models can generate programs that are easier to constrain, check, and route to different execution paths.</p>
+                <p>Generated Go remains the broadest backend, but Zero now also includes JavaScript generation, a WebAssembly Text prototype, direct AST execution for a bounded CLI subset, and binary bytecode execution through the VM.</p>
+            </section>
 
-        <section id="installation">
-            <h2>Installation & Setup</h2>
-            <p>To use the AI Orchestrator to generate Zero code, you need a few tools:</p>
-            <ul>
-                <li><strong>Go 1.20+</strong> (To compile the transpiled code)</li>
-                <li><strong>Python 3.10+</strong> (For the orchestrator script)</li>
-                <li><strong>Ollama</strong> (To run local LLMs like <code>llama3</code>)</li>
-            </ul>
-            <pre><code>git clone https://github.com/howlcipher/zero.git
+            <section id="toolchain">
+                <h2>Toolchain</h2>
+                <ul>
+                    <li><strong>Front end:</strong> lexer, parser, AST transforms, semantic checking, and shared IR lowering.</li>
+                    <li><strong>Go target:</strong> <code>cli_app</code> and <code>http_server</code> programs emit <code>server.go</code> plus optional Go tests.</li>
+                    <li><strong>JavaScript target:</strong> <code>web_app</code> programs emit <code>app.js</code> plus optional Node tests.</li>
+                    <li><strong>WAT target:</strong> <code>wasm_app</code> emits structurally validated WebAssembly Text for the supported typed expression subset.</li>
+                    <li><strong>Direct execution:</strong> <code>-run</code> interprets supported <code>cli_app</code> programs without writing generated source.</li>
+                    <li><strong>Bytecode:</strong> <code>-compile-bc</code> writes binary bytecode and <code>-run-bc</code> executes it in the VM.</li>
+                </ul>
+            </section>
+
+            <section id="why-zero">
+                <h2>Why Zero?</h2>
+                <ul>
+                    <li><strong>Uniform syntax:</strong> balanced S-expressions are easier to grammar-constrain than full-size languages.</li>
+                    <li><strong>Semantic feedback:</strong> invalid programs return localized JSON errors before backend output is written.</li>
+                    <li><strong>Explicit capabilities:</strong> behavior must have an implemented AST, IR, backend, or VM mapping.</li>
+                    <li><strong>Target-aware limits:</strong> unsupported backend and VM combinations are rejected rather than presented as universally available.</li>
+                </ul>
+            </section>
+
+            <section id="quick-start">
+                <h2>Quick Start</h2>
+                <p>Zero requires Go 1.21 or newer for normal toolchain use. Python, Outlines, OpenAI-compatible client support, and Ollama are optional for the local orchestrator experiment.</p>
+                <pre><code>git clone https://github.com/howlcipher/zero.git
 cd zero
-pip install outlines openai
-ollama serve
-ollama pull llama3</code></pre>
-        </section>
+go run zero.go examples/cli_hello.zero
+go run server.go</code></pre>
+            </section>
 
-        <section id="orchestrator">
-            <h2>Generating Code with AI (Orchestrator)</h2>
-            <p>We provide an orchestrator script (<code>orchestrator.py</code>) that handles interaction with the LLM, strictly enforces syntax boundaries, and handles error feedback loops.</p>
-            <ol>
-                <li>Ensure Ollama is running and the <code>llama3</code> model is available.</li>
-                <li>Open <code>orchestrator.py</code> and modify the <code>prompt</code> variable to instruct the AI on what to build.</li>
-                <li>Run the orchestrator: <code>python orchestrator.py</code></li>
-                <li>The AI will generate a `.zero` file. The orchestrator will automatically run the Go transpiler.</li>
-                <li>If the transpiler encounters a semantic error, the orchestrator intercepts it and sends it back to the AI for automatic self-correction.</li>
-                <li>Once successful, it compiles the Go binary and executes the application.</li>
-            </ol>
-        </section>
+            <section id="examples">
+                <h2>Examples</h2>
+                <h3>CLI</h3>
+                <pre><code>(cli_app
+  (print "Hello, World!")
+  (let (name "Zero")
+    (print "Welcome to" name)
+  )
+)</code></pre>
 
-        <section id="hello-world">
-            <h2>Hello World HTTP Server</h2>
-            <pre><code>(http_server 8080
+                <h3>HTTP</h3>
+                <pre><code>(http_server 8080
   (route "/" (lambda (req)
-    (res 200 "text/plain" "Hello, World! Zero language is alive!")
+    (res 200 "text/plain" "Hello from Zero")
   ))
 )</code></pre>
-        </section>
 
-        <section id="write-cost-benchmark">
-            <h2>How much does writing Zero actually cost?</h2>
-            <p>Not a traditional compile/runtime benchmark &mdash; this measures the LLM <strong>write cost</strong> (wall-clock time and token count) of producing a correct, compiler-verified solution to the same task prompt in Zero vs. Go, Python, Node.js, C#, and Java. Full methodology, per-task breakdowns, and the progression from initial bug discovery to current performance are in the <a href="https://github.com/howlcipher/zero/blob/main/docs/language_write_cost_benchmark.md" target="_blank">full write-up</a>.</p>
-            <table>
-                <thead>
-                    <tr><th>Language</th><th>Total write time (s) [2026-07-23]</th><th>Total write time (s) [2026-07-30]</th><th>Total tokens [2026-07-30]</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>Zero</td><td>50.1</td><td>15.2</td><td>274</td></tr>
-                    <tr><td>Go</td><td>19.4</td><td>19.4</td><td>314</td></tr>
-                    <tr><td>Node.js</td><td>17.0</td><td>17.0</td><td>270</td></tr>
-                    <tr><td>Python</td><td>20.1</td><td>20.1</td><td>262</td></tr>
-                    <tr><td>C#</td><td>23.2</td><td>23.2</td><td>320</td></tr>
-                    <tr><td>Java</td><td>21.7</td><td>21.7</td><td>438</td></tr>
-                </tbody>
-            </table>
-            <p>As of the July 30th, 2026 run, Zero is now the fastest language to write for AI by a wide margin (15.2s total vs Node.js at 17.0s) and is highly competitive on tokens (274), having resolved the transpiler bugs discovered in the initial benchmark. See the full write-up for the honest breakdown.</p>
-        </section>
-    </main>
+                <h3>Web App Logic</h3>
+                <pre><code>(web_app
+  (defun increment (n)
+    (type_hint n "int")
+    (type_hint return "int")
+    (return (+ n 1))
+  )
+)</code></pre>
 
-    <footer>
-        <span><span class="status-dot" aria-hidden="true"></span>STATUS: OPERATIONAL &mdash; ZERO://TRANSPILER</span>
-        <a href="https://github.com/howlcipher/zero" target="_blank">github.com/howlcipher/zero</a>
-    </footer>
+                <h3>Direct Execution</h3>
+                <pre><code>go run zero.go -run examples/cli_hello.zero</code></pre>
+
+                <h3>Bytecode</h3>
+                <pre><code>go run zero.go -compile-bc examples/cli_hello.zero
+go run zero.go -run-bc examples/cli_hello.zero.bc.bin</code></pre>
+
+                <h3>WebAssembly Text</h3>
+                <pre><code>go run zero.go -o build examples/wasm_math.zero</code></pre>
+            </section>
+
+            <section id="features">
+                <h2>Language Surface</h2>
+                <ul>
+                    <li><strong>Control flow:</strong> <code>let</code>, <code>set</code>, <code>if</code>, <code>while</code>, <code>for</code>, <code>match</code>, and <code>do</code>.</li>
+                    <li><strong>Functions and types:</strong> <code>defun</code>, <code>call</code>, <code>return</code>, <code>type_hint</code>, <code>type_param</code>, <code>struct</code>, and <code>parse_json</code>.</li>
+                    <li><strong>Collections and strings:</strong> lists, dictionaries, mutation, random-access reads, splitting, joining, regex matching, and deterministic conversions.</li>
+                    <li><strong>Runtime primitives:</strong> file I/O, subprocess execution, CLI args, HTTP fetches, middleware, environment reads, imports, includes, spawning, and native tests where supported by the target.</li>
+                    <li><strong>AI-oriented primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, patching, context threading, optimization blocks, and agent tasks.</li>
+                </ul>
+            </section>
+
+            <section id="benchmark">
+                <h2>Write-Cost Benchmark</h2>
+                <p>The benchmark measures LLM write time and token count for producing compiler-verified solutions in Zero, Go, Python, Node.js, C#, and Java. It is a write-cost benchmark, not a runtime performance benchmark.</p>
+                <p><a href="https://github.com/howlcipher/zero/blob/main/docs/language_write_cost_benchmark.md" target="_blank" rel="noreferrer">Read the full benchmark methodology and current results</a>.</p>
+            </section>
+        </main>
+
+        <footer>
+            <span><span class="status-dot" aria-hidden="true"></span>STATUS: ACTIVE &mdash; ZERO://TOOLCHAIN</span>
+            <a href="https://github.com/howlcipher/zero" target="_blank" rel="noreferrer">github.com/howlcipher/zero</a>
+        </footer>
     </div>
 
     <script src="script.js"></script>

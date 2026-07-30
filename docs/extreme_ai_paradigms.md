@@ -1,6 +1,6 @@
 # Extreme AI Paradigms for Zero
 
-As Zero evolves into a next-generation AI-first language, we must push beyond standard semantic abstractions and rethink the very foundation of programming models. Drawing inspiration from machine learning operations (MLOps), systems logic (DAG-based tiering, cyclic dependency resolution), and the inherent probabilistic nature of modern AI, here are four radical paradigms that redefine what an AI-native language can be.
+As Zero evolves as an AI-first language and multi-target toolchain, it can push beyond standard semantic abstractions and rethink the foundation of programming models. Drawing inspiration from machine learning operations (MLOps), systems logic (DAG-based tiering, cyclic dependency resolution), and the probabilistic nature of modern AI, here are four paradigms that frame what an AI-native language can become.
 
 ## 1. Swarm Primitives (Agentic Actor Models)
 **Description:** 
@@ -18,7 +18,7 @@ It abandons imperative control flow entirely. Code becomes a set of constraints 
 
 ## 3. Auto-Mutating Runtime (JIT-LLM Compilation)
 **Description:** 
-Zero introduces a self-rewriting primitive, `(optimize_block ...)`, which continuously monitors its own execution metrics (e.g., latency, memory usage, drift). If performance degrades or bottlenecks are detected, the runtime automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime. It profiles itself and synthesizes more optimized code on the fly.
+Zero includes a self-rewriting primitive, `(optimize_block ...)`, which monitors execution metrics such as latency, memory usage, and drift. Where the selected backend and runtime support it, the runtime can ask an LLM to synthesize an optimized replacement path and load that replacement under controlled conditions.
 
 **Why it breaks conventional rules:** 
 Code is no longer immutable after deployment. The program evolves organically in production, transforming compilation from a static, build-time process into an active, continuous, AI-driven evolutionary cycle. It blurs the line between execution and development, natively incorporating model evaluation and dynamic code generation into the runtime.

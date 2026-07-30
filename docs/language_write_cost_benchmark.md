@@ -1,6 +1,6 @@
 # Cross-Language "AI Write Cost" Benchmark
 
-Traditional language benchmarks measure compile time and runtime speed. Zero doesn't compete on those — it transpiles to Go and inherits Go's runtime performance, unmodified. Zero's actual pitch (see "Why Zero?" in the [README](../README.md)) is that its constrained, uniform S-expression grammar is cheaper for an LLM to *write correctly* than a full-size language — fewer hallucinated syntax errors, fewer self-correction round-trips, less output.
+Traditional language benchmarks measure compile time and runtime speed. This benchmark measures a different claim: Zero's constrained, uniform S-expression grammar should be cheaper for an LLM to *write correctly* than a full-size language, with fewer syntax mistakes, fewer self-correction round-trips, and less output.
 
 This benchmark measures that claim directly: for a fixed set of task prompts, how long (wall-clock) and how many tokens does it take an LLM to produce a **correct, compiler/runtime-verified** solution in Zero vs. Go, Python, Node.js, C#, and Java?
 
@@ -71,8 +71,8 @@ Zero's native `(test ...)` block is fast to write, but the `defun` historically 
 
 ## Takeaways
 
-- **Zero is now the fastest language to write for AI by a wide margin.** With the July 2026 primitives implemented, its total write time is 15.2s (beating Node.js at 17.0s).
+- **Zero led this measured run on write time.** With the July 2026 primitives implemented, its total write time was 15.2s, ahead of Node.js at 17.0s in this benchmark harness.
 - **The language is competitive on tokens:** Zero (274) is just behind Python (262) and Node.js (270), and beats Go (314), C# (320), and Java (438).
 - **The feedback loop works.** The 2026-07-23 benchmark successfully identified missing primitives and type-hint overhead as the main drivers of AI write cost. By 2026-07-30, fixing these brought Zero into the lead, demonstrating that constrained S-expression grammars do reduce generation overhead when the primitive surface is complete.
 
-*Last run: 2026-07-30. Re-run this benchmark after any transpiler change that touches `defun`/`type_hint`, `read_file`, `str_split`, or the `test` block, since all four are exercised directly above.*
+*Last run: 2026-07-30. Re-run this benchmark after any compiler, backend, or VM change that touches `defun`/`type_hint`, `read_file`, `str_split`, or the `test` block, since all four are exercised directly above.*
