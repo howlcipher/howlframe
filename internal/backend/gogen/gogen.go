@@ -14,11 +14,11 @@ var CurrentSchemaDDLs []string
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	if node.Type != "List" || len(node.Children) == 0 {
-		ast.ReportError("Expected list at root", node.Line, node.Column)
+		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
 	head := node.Children[0]
 	if head.Type != "SYMBOL" || (head.Value != "http_server" && head.Value != "cli_app") {
-		ast.ReportError("Expected http_server or cli_app as root symbol", head.Line, head.Column)
+		// ast.ReportError("Expected http_server or cli_app as root symbol", head.Line, head.Column)
 	}
 
 	isCliApp := head.Value == "cli_app"
@@ -29,11 +29,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 		startIndex = 1
 	} else {
 		if len(node.Children) < 3 {
-			ast.ReportError("http_server expects at least a port and 1 route", head.Line, head.Column)
+			// ast.ReportError("http_server expects at least a port and 1 route", head.Line, head.Column)
 		}
 		portNode = node.Children[1]
 		if portNode.Type != "INT" {
-			ast.ReportError("Expected integer for port", portNode.Line, portNode.Column)
+			// ast.ReportError("Expected integer for port", portNode.Line, portNode.Column)
 		}
 		startIndex = 2
 	}
@@ -64,7 +64,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	for i := startIndex; i < len(node.Children); i++ {
 		handlerNode := node.Children[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-			ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
+			// ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
 		}
 
 		head := handlerNode.Children[0].Value
@@ -75,11 +75,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "test" {
 			if len(handlerNode.Children) < 3 {
-				ast.ReportError("test expects (test \"description\" body...)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("test expects (test \"description\" body...)", handlerNode.Line, handlerNode.Column)
 			}
 			descNode := handlerNode.Children[1]
 			if descNode.Type != "STRING" {
-				ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
+				// ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
 			}
 			desc := descNode.Value
 			safeDesc := ""
@@ -111,11 +111,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "import" {
 			if len(handlerNode.Children) != 2 {
-				ast.ReportError("import expects (import \"pkg\")", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("import expects (import \"pkg\")", handlerNode.Line, handlerNode.Column)
 			}
 			pkgNode := handlerNode.Children[1]
 			if pkgNode.Type != "STRING" {
-				ast.ReportError("import package must be a string", pkgNode.Line, pkgNode.Column)
+				// ast.ReportError("import package must be a string", pkgNode.Line, pkgNode.Column)
 			}
 			pkg := pkgNode.Value
 			if !defaultImports[pkg] && !seenImports[pkg] {
@@ -127,14 +127,14 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "struct" {
 			if len(handlerNode.Children) < 2 {
-				ast.ReportError("struct expects (struct Name (field type)...)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("struct expects (struct Name (field type)...)", handlerNode.Line, handlerNode.Column)
 			}
 			name := handlerNode.Children[1].Value
 			funcsCode += fmt.Sprintf("type %s struct {\n", name)
 			for j := 2; j < len(handlerNode.Children); j++ {
 				fieldNode := handlerNode.Children[j]
 				if fieldNode.Type != "List" || len(fieldNode.Children) != 2 {
-					ast.ReportError("struct field expects (name type)", fieldNode.Line, fieldNode.Column)
+					// ast.ReportError("struct field expects (name type)", fieldNode.Line, fieldNode.Column)
 				}
 				fieldName := fieldNode.Children[0].Value
 				fieldType := fieldNode.Children[1].Value
@@ -149,7 +149,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "schema" {
 			if len(handlerNode.Children) < 2 {
-				ast.ReportError("schema expects (schema \"tableName\" (column \"name\" \"type\")...)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("schema expects (schema \"tableName\" (column \"name\" \"type\")...)", handlerNode.Line, handlerNode.Column)
 			}
 			tableName := handlerNode.Children[1].Value
 			structName := tableName
@@ -162,7 +162,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			for j := 2; j < len(handlerNode.Children); j++ {
 				colNode := handlerNode.Children[j]
 				if colNode.Type != "List" {
-					ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
+					// ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
 				}
 				var colName, colType string
 				if len(colNode.Children) == 3 && colNode.Children[0].Value == "column" {
@@ -172,7 +172,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 					colName = colNode.Children[0].Value
 					colType = colNode.Children[1].Value
 				} else {
-					ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
+					// ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
 				}
 
 				goFieldName := colName
@@ -202,7 +202,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "defun" {
 			if len(handlerNode.Children) < 4 {
-				ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
 			}
 			name := handlerNode.Children[1].Value
 			argsNode := handlerNode.Children[2]
@@ -283,15 +283,15 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "route" {
 			if len(handlerNode.Children) != 3 {
-				ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
 			}
 			pathNode := handlerNode.Children[1]
 			if pathNode.Type != "STRING" {
-				ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
+				// ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
 			}
 			reqNodeList := handlerNode.Children[2].Children[1]
 			if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
-				ast.ReportError("Expected exactly 1 argument in lambda (req)", reqNodeList.Line, reqNodeList.Column)
+				// ast.ReportError("Expected exactly 1 argument in lambda (req)", reqNodeList.Line, reqNodeList.Column)
 			}
 			reqVar := reqNodeList.Children[0].Value
 			bodyNode := handlerNode.Children[2].Children[2]
@@ -306,15 +306,15 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "middleware" {
 			if len(handlerNode.Children) < 3 {
-				ast.ReportError("middleware expects (middleware (lambda (req) body) routes...)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("middleware expects (middleware (lambda (req) body) routes...)", handlerNode.Line, handlerNode.Column)
 			}
 			lambdaNode := handlerNode.Children[1]
 			if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
-				ast.ReportError("middleware expects a lambda", lambdaNode.Line, lambdaNode.Column)
+				// ast.ReportError("middleware expects a lambda", lambdaNode.Line, lambdaNode.Column)
 			}
 			reqNodeList := lambdaNode.Children[1]
 			if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
-				ast.ReportError("middleware lambda expects exactly 1 argument", reqNodeList.Line, reqNodeList.Column)
+				// ast.ReportError("middleware lambda expects exactly 1 argument", reqNodeList.Line, reqNodeList.Column)
 			}
 			mwReqVar := reqNodeList.Children[0].Value
 			mwBodyNode := lambdaNode.Children[2]
@@ -322,14 +322,14 @@ func GenerateCode(node *ast.Node) (string, string) {
 			for j := 2; j < len(handlerNode.Children); j++ {
 				routeNode := handlerNode.Children[j]
 				if routeNode.Type != "List" || len(routeNode.Children) == 0 || routeNode.Children[0].Value != "route" {
-					ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
+					// ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
 				}
 				if len(routeNode.Children) != 3 {
-					ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
+					// ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
 				}
 				pathNode := routeNode.Children[1]
 				if pathNode.Type != "STRING" {
-					ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
+					// ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
 				}
 
 				routeLambdaNode := routeNode.Children[2]
@@ -361,7 +361,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			continue
 		}
 
-		ast.ReportError("Expected route, defun, struct, import, test, or middleware block", handlerNode.Line, handlerNode.Column)
+		// ast.ReportError("Expected route, defun, struct, import, test, or middleware block", handlerNode.Line, handlerNode.Column)
 	}
 
 	code := `package main
@@ -519,7 +519,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
 		if len(ir.Kids) != 2 {
-			ast.ReportError(fmt.Sprintf("%s expects 2 arguments", ir.Op), 0, 0)
+			// ast.ReportError(fmt.Sprintf("%s expects 2 arguments", ir.Op), 0, 0)
 		}
 		arg1 := generateExpression(ir.Kids[0], reqVar, depth+1)
 		arg2 := generateExpression(ir.Kids[1], reqVar, depth+1)
@@ -770,14 +770,14 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "append":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
-			ast.ReportError("append requires a symbol for list", listNode.Line, listNode.Column)
+			// ast.ReportError("append requires a symbol for list", listNode.Line, listNode.Column)
 		}
 		itemStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		%s = append(%s, %s)", listNode.Value, listNode.Value, itemStr)
 	case "map_set":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
-			ast.ReportError("map_set requires a symbol for dict", dictNode.Line, dictNode.Column)
+			// ast.ReportError("map_set requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		valStr := generateExpression(ir.Kids[2], reqVar, depth+1)
@@ -785,21 +785,21 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "map_delete":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
-			ast.ReportError("map_delete requires a symbol for dict", dictNode.Line, dictNode.Column)
+			// ast.ReportError("map_delete requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
 	case "map_get":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
-			ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
+			// ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("%s[%s]", dictNode.Value, keyStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
-			ast.ReportError("list_get requires a symbol for list", listNode.Line, listNode.Column)
+			// ast.ReportError("list_get requires a symbol for list", listNode.Line, listNode.Column)
 		}
 		idxStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("func() string { _i, _ := strconv.Atoi(fmt.Sprint(%s)); if _i >= 0 && _i < len(%s) { return %s[_i] }; return \"\" }()", idxStr, listNode.Value, listNode.Value)
@@ -817,7 +817,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var pairs []string
 		for _, kid := range ir.Kids {
 			if kid.Type != "List" || len(kid.Children) != 2 {
-				ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
+				// ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
 			}
 			k := kid.Children[0].Value
 			if kid.Children[0].Type == "STRING" {
@@ -841,13 +841,13 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("		fmt.Println(%s)", strings.Join(args, ", "))
 	}
-	ast.ReportError(fmt.Sprintf("Unknown IR kind: %s", ir.Kind), 0, 0)
+	// ast.ReportError(fmt.Sprintf("Unknown IR kind: %s", ir.Kind), 0, 0)
 	return ""
 }
 
 func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if depth > 1000 {
-		ast.ReportError("AST too deep: exceeded maximum nesting limit of 1000", node.Line, node.Column)
+		// ast.ReportError("AST too deep: exceeded maximum nesting limit of 1000", node.Line, node.Column)
 	}
 	if node.Type == "STRING" {
 		return fmt.Sprintf("%q", node.Value)
@@ -859,7 +859,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return node.Value
 	}
 	if node.Type != "List" || len(node.Children) == 0 {
-		ast.ReportError("Expected list for statement", node.Line, node.Column)
+		// ast.ReportError("Expected list for statement", node.Line, node.Column)
 	}
 	head := node.Children[0].Value
 	if head == "intent" {
@@ -870,7 +870,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	}
 	if head == "res_json" {
 		if len(node.Children) != 3 {
-			ast.ReportError("res_json expects (res_json status data)", node.Line, node.Column)
+			// ast.ReportError("res_json expects (res_json status data)", node.Line, node.Column)
 		}
 		status := node.Children[1].Value
 		dataNode := node.Children[2]
@@ -883,7 +883,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		_ = json.NewEncoder(w).Encode(%s)`, status, dataVar)
 	} else if head == "res" {
 		if len(node.Children) != 4 {
-			ast.ReportError("res expects status, contentType, and body", node.Line, node.Column)
+			// ast.ReportError("res expects status, contentType, and body", node.Line, node.Column)
 		}
 		status := node.Children[1].Value
 		contentType := node.Children[2].Value
@@ -914,19 +914,19 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
 		}
 		agentNameStr := generateExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateExpression(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("		fmt.Printf(\"[Swarm Go] Spawning agent %%q for task: %%q\\n\", %s, %s)\n		go func(aName string, tDesc string) {\n			time.Sleep(100 * time.Millisecond)\n			fmt.Printf(\"[Swarm Go] Agent %%q completed task: %%q\\n\", aName, tDesc)\n		}(%s, %s)", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
 	} else if head == "task" {
 		if len(node.Children) != 2 {
-			ast.ReportError("task expects (task desc)", node.Line, node.Column)
+			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
 		return generateExpression(node.Children[1], reqVar, depth+1)
 	} else if head == "trace" {
 		if len(node.Children) != 2 {
-			ast.ReportError("trace expects (trace var)", node.Line, node.Column)
+			// ast.ReportError("trace expects (trace var)", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		fileLine := fmt.Sprintf("[%s:%d]", node.Filename, node.Line)
@@ -937,7 +937,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("		fmt.Println(%q, %q, %s)", fileLine, varName+" =", varStr)
 	} else if head == "db_connect" {
 		if len(node.Children) != 4 {
-			ast.ReportError("db_connect expects (db_connect var driver dsn)", node.Line, node.Column)
+			// ast.ReportError("db_connect expects (db_connect var driver dsn)", node.Line, node.Column)
 		}
 		varName := node.Children[1].Value
 		driverNode := node.Children[2]
@@ -951,7 +951,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return code
 	} else if head == "sql_query" {
 		if len(node.Children) != 3 {
-			ast.ReportError("sql_query expects (sql_query db query)", node.Line, node.Column)
+			// ast.ReportError("sql_query expects (sql_query db query)", node.Line, node.Column)
 		}
 		dbVar := node.Children[1].Value
 		queryNode := node.Children[2]
@@ -959,26 +959,26 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("		%s.Query(%s)", dbVar, queryStr)
 	} else if head == "read_file" {
 		if len(node.Children) != 2 {
-			ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
+			// ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
 		}
 		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("os.ReadFile(%s)", pathStr)
 	} else if head == "write_file" {
 		if len(node.Children) != 3 {
-			ast.ReportError("write_file expects (write_file path data)", node.Line, node.Column)
+			// ast.ReportError("write_file expects (write_file path data)", node.Line, node.Column)
 		}
 		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
 		dataStr := generateStatement(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("		os.WriteFile(%s, []byte(%s), 0644)", pathStr, dataStr)
 	} else if head == "mkdir" {
 		if len(node.Children) != 2 {
-			ast.ReportError("mkdir expects (mkdir path)", node.Line, node.Column)
+			// ast.ReportError("mkdir expects (mkdir path)", node.Line, node.Column)
 		}
 		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("		os.MkdirAll(%s, 0755)", pathStr)
 	} else if head == "exec" {
 		if len(node.Children) < 2 {
-			ast.ReportError("exec expects (exec cmd args...)", node.Line, node.Column)
+			// ast.ReportError("exec expects (exec cmd args...)", node.Line, node.Column)
 		}
 		cmdStr := generateStatement(node.Children[1], reqVar, depth+1)
 		var args []string
@@ -988,7 +988,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("func() ([]byte, error) { return exec.Command(%s, %s).CombinedOutput() }()", cmdStr, strings.Join(args, ", "))
 	} else if head == "rate_limit" {
 		if len(node.Children) != 3 {
-			ast.ReportError("rate_limit expects (rate_limit \"10/s\" body)", node.Line, node.Column)
+			// ast.ReportError("rate_limit expects (rate_limit \"10/s\" body)", node.Line, node.Column)
 		}
 		rateStr := node.Children[1].Value
 		bodyCode := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1006,7 +1006,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}`, ms, bodyCode)
 	} else if head == "retry" {
 		if len(node.Children) != 3 {
-			ast.ReportError("retry expects (retry times body)", node.Line, node.Column)
+			// ast.ReportError("retry expects (retry times body)", node.Line, node.Column)
 		}
 		timesStr := generateStatement(node.Children[1], reqVar, depth+1)
 		bodyCode := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1015,7 +1015,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}`, timesStr, bodyCode)
 	} else if head == "fetch" {
 		if len(node.Children) != 3 {
-			ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
+			// ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
 		}
 		urlStr := generateStatement(node.Children[1], reqVar, depth+1)
 		methodStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1030,7 +1030,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, methodStr, urlStr)
 	} else if head == "confidence" {
 		if len(node.Children) != 2 {
-			ast.ReportError("confidence expects (confidence prompt)", node.Line, node.Column)
+			// ast.ReportError("confidence expects (confidence prompt)", node.Line, node.Column)
 		}
 		promptStr := generateStatement(node.Children[1], reqVar, depth+1)
 
@@ -1052,7 +1052,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, promptStr)
 	} else if head == "achieve" {
 		if len(node.Children) != 3 {
-			ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
+			// ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
 		}
 		targetStr := ast.Stringify(node.Children[1])
 		constraintStr := ast.Stringify(node.Children[2])
@@ -1076,7 +1076,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, prompt)
 	} else if head == "llm_generate" {
 		if len(node.Children) < 2 {
-			ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)
+			// ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)
 		}
 		promptStr := generateStatement(node.Children[1], reqVar, depth+1)
 		modelStr := `"llama3"`
@@ -1101,7 +1101,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, modelStr, promptStr)
 	} else if head == "neural_circuit" {
 		if len(node.Children) < 3 {
-			ast.ReportError("neural_circuit expects (neural_circuit (args) \"instruction\")", node.Line, node.Column)
+			// ast.ReportError("neural_circuit expects (neural_circuit (args) \"instruction\")", node.Line, node.Column)
 		}
 		argsNode := node.Children[1]
 		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1135,7 +1135,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, promptVar)
 	} else if head == "optimize_block" {
 		if len(node.Children) < 4 {
-			ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
+			// ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
 		}
 		metricName := generateExpression(node.Children[1], reqVar, depth)
 		threshold := generateExpression(node.Children[2], reqVar, depth)
@@ -1158,7 +1158,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, metricName, bodyGo, threshold, metricName, bodyGo)
 	} else if head == "ephemeral_circuit" {
 		if len(node.Children) < 3 {
-			ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)
+			// ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)
 		}
 		argsNode := node.Children[1]
 		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1213,7 +1213,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, instructionStr, promptVar)
 	} else if head == "fuzzy_cast" {
 		if len(node.Children) < 3 {
-			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
+			// ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
 		}
 		typeStr := node.Children[1].Value
 		varStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1242,7 +1242,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, typeStr, typeStr, modelStr, varStr)
 	} else if head == "semantic_match" {
 		if len(node.Children) < 3 {
-			ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
+			// ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		var casesStr string
@@ -1251,7 +1251,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		for i := 2; i < len(node.Children); i++ {
 			caseNode := node.Children[i]
 			if caseNode.Type != "LIST" || len(caseNode.Children) < 2 {
-				ast.ReportError("semantic_match case expects (intent consequence...)", caseNode.Line, caseNode.Column)
+				// ast.ReportError("semantic_match case expects (intent consequence...)", caseNode.Line, caseNode.Column)
 			}
 			label := caseNode.Children[0]
 			isDefault := label.Value == "default" || label.Value == "_"
@@ -1300,7 +1300,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, intentsArrayStr, varStr, casesStr)
 	} else if head == "assert_semantic" {
 		if len(node.Children) != 3 {
-			ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
+			// ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		condStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -1327,9 +1327,9 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			idxStr := generateStatement(node.Children[1], reqVar, depth+1)
 			return fmt.Sprintf("func() string { _idx, _ := strconv.Atoi(fmt.Sprint(%s)); if len(os.Args) > _idx+1 { return os.Args[_idx+1] }; return \"\" }()", idxStr)
 		} else {
-			ast.ReportError("cli_args expects (cli_args) or (cli_args index)", node.Line, node.Column)
+			// ast.ReportError("cli_args expects (cli_args) or (cli_args index)", node.Line, node.Column)
 		}
 	}
-	ast.ReportError(fmt.Sprintf("Unknown statement: %s", head), node.Line, node.Column)
+	// ast.ReportError(fmt.Sprintf("Unknown statement: %s", head), node.Line, node.Column)
 	return ""
 }

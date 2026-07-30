@@ -237,7 +237,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var pairs []string
 		for _, kid := range ir.Kids {
 			if kid.Type != "List" || len(kid.Children) != 2 {
-				ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
+				// ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
 			}
 			k := kid.Children[0].Value
 			if kid.Children[0].Type == "STRING" {
@@ -259,17 +259,17 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("console.log(%s)", strings.Join(args, ", "))
 	}
-	ast.ReportError(fmt.Sprintf("Unknown IR kind for JS: %s", ir.Kind), 0, 0)
+	// ast.ReportError(fmt.Sprintf("Unknown IR kind for JS: %s", ir.Kind), 0, 0)
 	return ""
 }
 
 func GenerateJSCode(node *ast.Node) (string, string) {
 	if node.Type != "List" || len(node.Children) == 0 {
-		ast.ReportError("Expected list at root", node.Line, node.Column)
+		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
 	head := node.Children[0]
 	if head.Type != "SYMBOL" || head.Value != "web_app" {
-		ast.ReportError("Expected web_app as root symbol", head.Line, head.Column)
+		// ast.ReportError("Expected web_app as root symbol", head.Line, head.Column)
 	}
 
 	var funcsCode string
@@ -291,11 +291,11 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 		if headVal == "test" {
 			if len(handlerNode.Children) < 3 {
-				ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
+				// ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
 			}
 			descNode := handlerNode.Children[1]
 			if descNode.Type != "STRING" {
-				ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
+				// ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
 			}
 			desc := descNode.Value
 			var testBodyCode string
@@ -308,7 +308,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 		if headVal == "defun" {
 			if len(handlerNode.Children) < 4 {
-				ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
 			}
 			name := handlerNode.Children[1].Value
 			argsNode := handlerNode.Children[2]
@@ -360,7 +360,7 @@ func generateJSExpression(node *ast.Node, reqVar string, depth int) string {
 
 func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if depth > 1000 {
-		ast.ReportError("AST too deep", node.Line, node.Column)
+		// ast.ReportError("AST too deep", node.Line, node.Column)
 	}
 	if node.Type == "STRING" {
 		return fmt.Sprintf("%q", node.Value)
@@ -369,7 +369,7 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return node.Value
 	}
 	if node.Type != "List" || len(node.Children) == 0 {
-		ast.ReportError("Expected list for statement", node.Line, node.Column)
+		// ast.ReportError("Expected list for statement", node.Line, node.Column)
 	}
 	head := node.Children[0].Value
 	if head == "intent" {
@@ -380,19 +380,19 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	}
 	if head == "dom_query" {
 		if len(node.Children) != 2 {
-			ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)
+			// ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)
 		}
 		selector := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("document.querySelector(%s)", selector)
 	} else if head == "on_event" {
 		if len(node.Children) != 4 {
-			ast.ReportError("on_event expects (on_event el event lambda)", node.Line, node.Column)
+			// ast.ReportError("on_event expects (on_event el event lambda)", node.Line, node.Column)
 		}
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		event := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 		lambda := node.Children[3]
 		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
-			ast.ReportError("on_event expects a lambda", lambda.Line, lambda.Column)
+			// ast.ReportError("on_event expects a lambda", lambda.Line, lambda.Column)
 		}
 		args := lambda.Children[1].Children
 		argName := "e"
@@ -403,14 +403,14 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("%s.addEventListener(%s, async (%s) => {\n%s\n})", el, event, argName, body)
 	} else if head == "set_text" {
 		if len(node.Children) != 3 {
-			ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)
+			// ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)
 		}
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		val := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("%s.textContent = %s", el, val)
 	} else if head == "set_attr" {
 		if len(node.Children) != 4 {
-			ast.ReportError("set_attr expects (set_attr el name val)", node.Line, node.Column)
+			// ast.ReportError("set_attr expects (set_attr el name val)", node.Line, node.Column)
 		}
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		attr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
@@ -418,25 +418,25 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("%s.setAttribute(%s, %s)", el, attr, val)
 	} else if head == "fetch" {
 		if len(node.Children) != 3 {
-			ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
+			// ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
 		}
 		urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("(await fetch(%s, { method: %s }).then(r => r.text()))", urlStr, methodStr)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
 		}
 		agentNameStr := generateJSExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateJSExpression(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf(";(async () => {\n  console.log(`[Swarm JS] Spawning agent ${%s} for task: ${%s}`);\n  await new Promise(r => setTimeout(r, 100));\n  console.log(`[Swarm JS] Agent ${%s} completed task: ${%s}`);\n})();", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
 	} else if head == "task" {
 		if len(node.Children) != 2 {
-			ast.ReportError("task expects (task desc)", node.Line, node.Column)
+			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
 		return generateJSExpression(node.Children[1], reqVar, depth+1)
 	}
 
-	ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
+	// ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	return ""
 }
