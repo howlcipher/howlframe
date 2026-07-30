@@ -7,6 +7,7 @@ type IRNode struct {
 	Op    string
 	Kids  []*ast.Node
 	Cases []IRCase
+	Type  ast.TypeInfo
 }
 
 type IRCase struct {
@@ -29,7 +30,18 @@ var BinOpKinds = map[string]bool{
 // arity check is absent where Go's exists) — preserving each backend's exact
 // pre-refactor behavior takes priority over cosmetic validation parity, so
 // those extra checks stay in the per-backend emit functions.
+// LowerShared preserves the semantic type annotation produced by the
+// checker. Backends that need native layout information can consume IRNode's
+// Type without walking back to the source node.
 func LowerShared(node *ast.Node) (*IRNode, bool) {
+	result, ok := lowerShared(node)
+	if ok {
+		result.Type = node.Inferred
+	}
+	return result, ok
+}
+
+func lowerShared(node *ast.Node) (*IRNode, bool) {
 	if node.Type != "List" || len(node.Children) == 0 {
 		return nil, false
 	}

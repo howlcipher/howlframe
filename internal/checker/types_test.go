@@ -3,6 +3,7 @@ package checker
 import (
 	"testing"
 	"zero/internal/ast"
+	"zero/internal/ir"
 	"zero/internal/lexer"
 	"zero/internal/parser"
 )
@@ -37,6 +38,24 @@ func TestAnalyzePropagatesTypesAndNativeLayout(t *testing.T) {
 	}
 	if add.Return.Kind != ast.Int || add.Return.Size != 8 || add.Return.Align != 8 {
 		t.Fatalf("unexpected return layout: %+v", add.Return)
+	}
+	var plus *ast.Node
+	var findPlus func(*ast.Node)
+	findPlus = func(node *ast.Node) {
+		if node == nil {
+			return
+		}
+		if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Value == "+" {
+			plus = node
+		}
+		for _, child := range node.Children {
+			findPlus(child)
+		}
+	}
+	findPlus(root)
+	typedIR, ok := ir.LowerShared(plus)
+	if !ok || typedIR.Type.Kind != ast.Int || typedIR.Type.Size != 8 {
+		t.Fatalf("IR did not preserve inferred layout: ok=%v ir=%+v", ok, typedIR)
 	}
 
 	var listType ast.TypeInfo
