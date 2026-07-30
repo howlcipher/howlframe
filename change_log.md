@@ -4,6 +4,9 @@
 
 ### Added
 
+* A typed flat SSA/CFG lowering layer in `internal/ir`, with ordered basic
+  blocks, explicit branch/jump/return terminators, phi nodes for control-flow
+  joins and loop-carried values, source locations, and graph validation.
 * Provider-neutral constrained-decoding mask plans in `internal/masking`,
   derived from semantic checker `TypeInfo` and full `checker.Analysis` output
   for downstream tokenizer/logit integrations.

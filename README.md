@@ -4,14 +4,14 @@ Zero is an AI-first, S-expression programming language and toolchain. It is desi
 
 The current toolchain includes:
 
-- A lexer, parser, AST layer, semantic checker, and shared IR lowering pipeline.
+- A lexer, parser, AST layer, semantic checker, shared tree IR, and flat SSA/CFG lowering pipeline.
 - Go code generation for `http_server` and `cli_app` programs.
 - JavaScript generation for `web_app` programs.
 - A WebAssembly Text prototype for `wasm_app` programs.
 - Direct AST execution for a bounded `cli_app` subset with `-run`.
 - Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`, including VM-local native stores.
 
-Zero still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The longer-term direction is to reduce dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit.
+Zero still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The compiler also exposes a typed SSA control-flow graph layer for future native backends, reducing dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit.
 
 ## Why Zero?
 

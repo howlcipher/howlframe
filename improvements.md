@@ -78,7 +78,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Done (2026-07-30) | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
 | 68 | [Native Logit Masking](#68-native-logit-masking) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Done (2026-07-30) | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
-| 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
+| 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Done (2026-07-30) | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
 | 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Emit LLVM IR or WebAssembly natively. |
 | 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
 | 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
@@ -510,6 +510,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Why:** Essential step for backend native code generation.
 * **Impact:** 8/10 (High).
 * **Groomed (2026-07-30):** Still Pending and still a distinct compiler architecture step after #64; no same-theme shipment closes SSA/CFG lowering. Score remains 2.0 (8×1÷4), with effort unchanged because it cuts across control flow and backend contracts.
+* **Done (2026-07-30):** Added a typed flat SSA/CFG layer in `internal/ir` with graph, basic block, SSA value, instruction, phi, source-location, and explicit branch/jump/return terminator types. `LowerSSA` now lowers shared AST forms for literals/symbols, binary ops, `do`, let chains, `set`, `return`, `if`, `while`, `call`, `list`/`dict`, `map_get`/`list_get`, `print`, and conversion primitives without disrupting the existing Go, JavaScript, or Wasm tree-IR backends. Graph validation rejects missing entries, duplicate labels or values, missing terminators, bad branch/jump targets, malformed phi nodes, and undefined operands. Verified with `go test ./internal/ir ./internal/checker ./internal/backend/wasm`, `go test ./...`, `go vet ./...`, `go test -race ./internal/ir`, and `git diff --check`.
 
 ### 66. Standalone Zero Runtime Environment
 * **Description:** Implement a lightweight runtime library (in C, Zig, or Rust) to handle memory management, GC, and OS syscalls natively.
