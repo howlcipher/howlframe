@@ -73,6 +73,13 @@ Pending rows are ranked by a diminishing-returns score:
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 | 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Done | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
 | 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | Documentation gap identified; these features are in README but lack code examples. |
+| 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Pending | 3.0 (6×1÷2) | — | — | Essential for native code generation (explicit memory layouts). |
+| 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | Flatten the IR into control flow graphs and basic blocks. |
+| 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | Replace Go runtime dependency with C/Rust/Zig library. |
+| 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Pending | 1.5 (6×1÷4) | — | — | Emit LLVM IR or WebAssembly natively. |
+| 68 | [Native Logit Masking](#68-native-logit-masking) | Pending | 2.5 (5×1÷2) | — | — | Compile types into inference constraints like LMQL. |
+| 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Pending | 1.5 (6×1÷4) | — | — | Teleprompter-style compile-time optimizations like DSPy. |
+| 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Pending | 2.5 (5×1÷2) | — | — | Strongly-typed API boundaries for LLM outputs like BAML. |
 ## Details
 
 ### 62. Phase 2 IR Abstraction
@@ -480,3 +487,38 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Why:** Aligns with the project's goal of bringing Zero into a fully agentic language, not relying on human text, but direct to binary or other machine style. Replaces the legacy human-readable JSON bytecode with fully binary `gob` encoding, reducing parsing overhead.
 * **Impact:** 8/10 (High — fulfills the pure binary and machine-agentic goal of the Zero language model workflow).
 * **Done (2026-07-29):** Replaced `encoding/json` with `encoding/gob` for `--compile-bc` and `--run-bc` in `zero.go`. Verified serialization of types (like float64 and strings) correctly mapping to binary.
+
+### 64. Semantic Type Checker Pass
+* **Description:** Introduce a strict type-inference pass before lowering to IR to define precise byte sizes, alignments, and pointer types.
+* **Why:** Necessary for targeting native machine code or LLVM IR, which lack Go's runtime typing.
+* **Impact:** 8/10 (High - blocks native compilation).
+
+### 65. Linear SSA-based IR
+* **Description:** Lower the high-level tree IR into a flat Static Single Assignment (SSA) format modeling control flow graphs and basic blocks.
+* **Why:** Essential step for backend native code generation.
+* **Impact:** 7/10 (High).
+
+### 66. Standalone Zero Runtime Environment
+* **Description:** Implement a lightweight runtime library (in C, Zig, or Rust) to handle memory management, GC, and OS syscalls natively.
+* **Why:** Zero currently depends entirely on Go's runtime. We must shed this dependency to emit true standalone binaries.
+* **Impact:** 8/10 (High).
+
+### 67. Native Backend Code Generators
+* **Description:** Implement LLVM IR or Wasm backend serializers to replace textual Go string concatenations.
+* **Why:** Achieving the core goal of Zero as a direct-to-machine-code language.
+* **Impact:** 8/10 (High).
+
+### 68. Native Logit Masking
+* **Description:** Allow Zero types to natively compile into inference-level logit masks to restrict LLM generation space.
+* **Why:** Strongly inspired by LMQL to eliminate syntax hallucination at the token-generation level.
+* **Impact:** 8/10 (High - core agentic-first feature).
+
+### 69. First-Class Optimization Signatures
+* **Description:** Built-in "Teleprompter" step that runs tests and automatically optimizes embedded logic/prompts during compilation.
+* **Why:** Inspired by DSPy to automate prompt engineering within the compilation loop.
+* **Impact:** 6/10 (Medium - advanced agentic feature).
+
+### 70. Type-Safe Schema Bridges
+* **Description:** Force LLM outputs into strongly typed interfaces via semantic type checking rather than loose JSON mapping.
+* **Why:** Inspired by BAML for robust schema extraction.
+* **Impact:** 7/10 (High - improves reliability of agent outputs).

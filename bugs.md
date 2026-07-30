@@ -39,6 +39,8 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 30 | [`EmitGoIR` still uses `generateStatement` instead of `generateExpression` for many nodes](#30-emitgoir-still-uses-generatestatement-instead-of-generateexpression-for-many-nodes) | Done (2026-07-29) | 2.0 (8×0.5÷2) | — | Gemini 3.1 Pro | — | Re-introduces Bug #19's `//line` directive syntax error corruption for most primitives when nested. Decay 0.5 from Bug #19. |
 | 29 | [`let` binding's special `call` case drops compound arguments](#29-let-bindings-special-call-case-drops-compound-arguments) | Done (2026-07-29) | 0.5 (8×0.0625÷1) | — | Gemini 3.1 Pro | — | Same leaf `.Value` theme as bugs #13/#20/#27/#28 (decay 0.0625). Reverts the Bug #20 fix for `call` when nested inside a `let`. |
 | 31 | [`db_connect` and `sql_query` silently drop compound arguments](#31-db_connect-and-sql_query-silently-drop-compound-arguments) | Done (2026-07-29) | 0.25 (8×0.03125÷1) | — | Gemini 3.1 Pro | — | Same leaf `.Value` theme (decay 0.03125). |
+| 32 | [Deep AST Nesting Stack Limits](#32-deep-ast-nesting-stack-limits) | Pending | 2.0 (4×1÷2) | — | — | — | Current traversal is prone to stack overflows from deep nesting without tail-call optimization. |
+| 33 | [Late Semantic Validation](#33-late-semantic-validation) | Pending | 3.0 (6×1÷2) | — | — | — | Complex constructs are validated in the Go emission phase rather than during AST generation. |
 ## Details
 
 ### 1. Lexer panics on EOF during unterminated string
@@ -258,3 +260,13 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Repro:** `(db_connect db "sqlite3" (env "DB_URL"))` emits `db, _ := sql.Open("sqlite3", "")` with the environment variable read dropped entirely.
 * **Fix sketch:** In `gogen.go`'s `db_connect` and `sql_query` handlers, replace `.Value` accesses for arguments with `generateExpression(node, reqVar, depth+1)`. (Ensure string formatting like `%q` is preserved where applicable).
 * **Done (2026-07-29):** Replaced `.Value` with `generateExpression` for the connection and query arguments in both primitive nodes. Verified via transpile and `go test`.
+
+### 32. Deep AST Nesting Stack Limits
+* **Description:** The AST tree traversal is prone to stack overflows from deep nesting (e.g. long sequences of `let` chaining). Currently mitigated by a hardcoded depth limit during generation.
+* **Why:** The traversal lacks tail-call optimization or an iterative approach.
+* **Impact:** 6/10 (Medium-High - arbitrary limits on generated code length).
+
+### 33. Late Semantic Validation
+* **Description:** The parser treats complex constructs as simple nested lists, pushing semantic validation down to the backend emission phase instead of resolving them in the AST phase.
+* **Why:** Misses early error detection and complicates code generators.
+* **Impact:** 6/10 (Medium-High - brittle architecture).
