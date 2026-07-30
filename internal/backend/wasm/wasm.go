@@ -1,7 +1,9 @@
 package wasm
 
 import (
+	"encoding/binary"
 	"fmt"
+	"strconv"
 	"strings"
 	"zero/internal/ast"
 	"zero/internal/ir"
@@ -17,7 +19,13 @@ func GenerateWasmCode(node *ast.Node) string {
 	}
 
 	resultType := wasmType(node.Children[1].Inferred)
-	code := fmt.Sprintf("(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", resultType, generateWasmExpression(node.Children[1]))
+	memory := ""
+	data := ""
+	if describeLayout(node.Children[1].Inferred).Indirect {
+		memory = "  (memory (export \"memory\") 1)\n"
+		data = staticAggregateData(node.Children[1])
+	}
+	code := fmt.Sprintf("(module\n%s%s  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", memory, data, resultType, generateWasmExpression(node.Children[1]))
 	if err := ValidateWAT(code); err != nil {
 		ast.ReportError(fmt.Sprintf("invalid generated WAT: %v", err), node.Line, node.Column)
 	}
@@ -84,6 +92,8 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		return fmt.Sprintf("(block (result %s) %s)", wasmType(ir.Kids[len(ir.Kids)-1].Inferred), strings.Join(parts, " "))
 	case "return":
 		return fmt.Sprintf("(return %s)", generateWasmExpression(ir.Kids[0]))
+	case "list":
+		return "(i32.const 0)"
 	case "to_float":
 		child := ir.Kids[0]
 		value := generateWasmExpression(child)
@@ -102,6 +112,28 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		// ast.ReportError(fmt.Sprintf("Wasm backend does not support %q", ir.Kind), source.Line, source.Column)
 	}
 	return ""
+}
+
+func staticAggregateData(node *ast.Node) string {
+	if node.Type != "List" || len(node.Children) == 0 || node.Children[0].Value != "list" {
+		return ""
+	}
+	var encoded strings.Builder
+	for _, child := range node.Children[1:] {
+		value, err := strconv.ParseInt(child.Value, 10, 64)
+		if err != nil {
+			return ""
+		}
+		var bytes [8]byte
+		binary.LittleEndian.PutUint64(bytes[:], uint64(value))
+		for _, byteValue := range bytes {
+			encoded.WriteString(fmt.Sprintf("\\%02x", byteValue))
+		}
+	}
+	if encoded.Len() == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", encoded.String())
 }
 
 // wasmType consumes the semantic layout selected by the checker. Zero's

@@ -87,6 +87,13 @@ func checkWasmExpression(node *ast.Node) {
 		for _, kid := range irNode.Kids {
 			checkWasmExpression(kid)
 		}
+	case "list":
+		if irNode.Type.Element == nil || irNode.Type.Element.Kind != ast.Int {
+			ast.ReportError("Wasm list aggregates currently require int elements", node.Line, node.Column)
+		}
+		for _, kid := range irNode.Kids {
+			checkWasmExpression(kid)
+		}
 	case "return":
 		checkWasmExpression(irNode.Kids[0])
 	case "to_float":
