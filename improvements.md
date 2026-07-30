@@ -71,7 +71,19 @@ Pending rows are ranked by a diminishing-returns score:
 | 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | Done (2026-07-29) | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | Done (2026-07-30) | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
+| 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Pending | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
+| 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Pending | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | Documentation gap identified; these features are in README but lack code examples. |
 ## Details
+
+### 62. Phase 2 IR Abstraction
+* **Description:** Extend the `IRNode`/`lowerShared`/`emitGoIR`/`emitJSIR` abstraction introduced in improvement #53 to support the remaining core nodes: `let`, `try_let`, `call`, `for`, and `spawn`.
+* **Why:** Phase 1 intentionally deferred these because of per-backend implementation differences (like JS's `await`/async threading vs Go's sync, or `env` let-binding special cases). A third backend (Wasm) shipped (#54), which means a unified IR for these nodes is highly valuable to avoid duplicating logic.
+* **Impact:** 6/10 (Medium-High — critical unblocker for adding more target backends cleanly).
+
+### 63. Add Code Examples
+* **Description:** The `README.md` file correctly describes `semantic_match` (Semantic Routing) and Automated Counterfactual Debugging, but lacks code blocks demonstrating their usage.
+* **Why:** Developers and AIs learn via examples. Providing concrete code blocks clarifies the syntax and reduces hallucination.
+* **Impact:** 3/10 (Low/Medium — pure documentation fix but high visibility).
 
 ### 60. Add Collection Read Access (map_get/list_get)
 * **Description:** `zero.go` has no `[` bracket token anywhere in the lexer (`grep -n "'\['" zero.go` → no match) and no `map_get`/`list_get`/index node in the AST. `dict` and `list` support construction (`(dict ...)`, `(list ...)`), mutation (`append`, `map_set`, `map_delete`), and iteration (`for`) — but there is no way to read a single value back out by key or index. A dict built with `map_set` can only be inspected by printing the whole thing; a list can only be consumed by iterating every element.
