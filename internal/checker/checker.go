@@ -94,6 +94,12 @@ func checkWasmExpression(node *ast.Node) {
 		for _, kid := range irNode.Kids {
 			checkWasmExpression(kid)
 		}
+	case "list_get":
+		if len(irNode.Kids) != 2 || irNode.Kids[0].Inferred.Element == nil || irNode.Kids[0].Inferred.Element.Kind != ast.Int || irNode.Kids[1].Inferred.Kind != ast.Int {
+			ast.ReportError("Wasm list_get requires an integer list and integer index", node.Line, node.Column)
+		}
+		checkWasmExpression(irNode.Kids[0])
+		checkWasmExpression(irNode.Kids[1])
 	case "return":
 		checkWasmExpression(irNode.Kids[0])
 	case "to_float":

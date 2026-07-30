@@ -21,9 +21,9 @@ func GenerateWasmCode(node *ast.Node) string {
 	resultType := wasmType(node.Children[1].Inferred)
 	memory := ""
 	data := ""
-	if describeLayout(node.Children[1].Inferred).Indirect {
+	if findStaticIntegerList(node.Children[1]) != nil {
 		memory = "  (memory (export \"memory\") 1)\n"
-		data = staticAggregateData(node.Children[1])
+		data = staticAggregateData(findStaticIntegerList(node.Children[1]))
 	}
 	code := fmt.Sprintf("(module\n%s%s  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", memory, data, resultType, generateWasmExpression(node.Children[1]))
 	if err := ValidateWAT(code); err != nil {
@@ -94,6 +94,12 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		return fmt.Sprintf("(return %s)", generateWasmExpression(ir.Kids[0]))
 	case "list":
 		return "(i32.const 0)"
+	case "list_get":
+		listPointer := generateWasmExpression(ir.Kids[0])
+		index := generateWasmExpression(ir.Kids[1])
+		byteOffset := fmt.Sprintf("(i32.mul (i32.wrap_i64 %s) (i32.const 8))", index)
+		address := fmt.Sprintf("(i32.add %s %s)", listPointer, byteOffset)
+		return fmt.Sprintf("(i64.load %s)", address)
 	case "to_float":
 		child := ir.Kids[0]
 		value := generateWasmExpression(child)
@@ -134,6 +140,26 @@ func staticAggregateData(node *ast.Node) string {
 		return ""
 	}
 	return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", encoded.String())
+}
+
+func findStaticIntegerList(node *ast.Node) *ast.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "list" {
+		for _, child := range node.Children[1:] {
+			if child.Type != "INT" {
+				return nil
+			}
+		}
+		return node
+	}
+	for _, child := range node.Children {
+		if found := findStaticIntegerList(child); found != nil {
+			return found
+		}
+	}
+	return nil
 }
 
 // wasmType consumes the semantic layout selected by the checker. Zero's
