@@ -239,9 +239,31 @@ The `neural_circuit` primitive lets developers write simple logic specifications
 
 With `semantic_match`, you can route execution based on semantic intent rather than brittle regexes or exact string matching. It dynamically evaluates the user input against a set of constraints using a local LLM, then executes the corresponding branch.
 
+```lisp
+(cli_app
+  (semantic_match "I want to book a flight"
+    ("travel intent" (print "Routing to travel agent"))
+    ("support intent" (print "Routing to support"))
+    ("default" (print "Unknown intent"))
+  )
+)
+```
+
 ### Automated Counterfactual Debugging
 
 When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed. The runtime automatically feeds this back into an auto-patching loop, generating self-healing code that prevents the crash from recurring.
+
+You can observe this by running a program that intentionally crashes:
+
+```lisp
+(cli_app
+  (let (x (call risk_func))
+    (print x)
+  )
+)
+```
+
+Upon crashing, Zero generates a `crash.json`. You can run `observer.py` to process the crash dump, allowing the LLM to trigger self-healing workflows or suggest a patch.
 
 ## How to Run
 
