@@ -1,0 +1,4 @@
+(web_app
+  (spawn_agent "JS_Researcher" (task "find sources"))
+  (spawn_agent "JS_Writer" (task "summarize"))
+)

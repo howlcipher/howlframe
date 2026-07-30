@@ -38,7 +38,7 @@ from typing import List, Dict, Union, Literal, Annotated, Any
 
 		py.WriteString(fmt.Sprintf("class %s(BaseModel):\n", className))
 		py.WriteString(fmt.Sprintf("    op: Literal[\"%s\"]\n", spec.Name))
-		
+
 		strIdx, intIdx := 1, 1
 		for _, opType := range spec.Operands {
 			if opType == bytecode.OperandString {
@@ -59,7 +59,7 @@ from typing import List, Dict, Union, Literal, Annotated, Any
 				py.WriteString("    value_operand: Any\n")
 			}
 		}
-		
+
 		if len(spec.Operands) == 0 {
 			py.WriteString("    pass\n")
 		}
@@ -98,12 +98,12 @@ func generateMarkdown(opcodes []bytecode.OpcodeSpec) {
 			ops = append(ops, string(o))
 		}
 		opsStr := strings.Join(ops, ", ")
-		
+
 		popsStr := fmt.Sprintf("%d", spec.Pops)
 		if spec.Pops == -1 {
 			popsStr = "var"
 		}
-		
+
 		md.WriteString(fmt.Sprintf("| `%s` | %s | %s | %d | %s | %s |\n",
 			spec.Name, opsStr, popsStr, spec.Pushes, spec.Capability, spec.Description))
 	}

@@ -173,3 +173,20 @@ func ApplyWithContext(node *Node, ctxVars []*Node) *Node {
 	}
 	return newNode
 }
+
+func Stringify(node *Node) string {
+	if node == nil {
+		return ""
+	}
+	if node.Type == "List" {
+		var parts []string
+		for _, c := range node.Children {
+			parts = append(parts, Stringify(c))
+		}
+		return "(" + strings.Join(parts, " ") + ")"
+	}
+	if node.Type == "STRING" {
+		return `"` + node.Value + `"`
+	}
+	return node.Value
+}

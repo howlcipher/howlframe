@@ -173,6 +173,98 @@ Zero can automatically inject context variables into function calls within a spe
 )
 ```
 
+### Teleological Execution
+
+Zero supports goal-driven execution where the runtime dynamically searches for a solution rather than relying on imperative steps. You can specify a target state and a constraint, and Zero delegates execution to a local LLM via the `achieve` node.
+
+```lisp
+(cli_app
+  (let (result (achieve (is_sorted list) (using "quick sort algorithm")))
+    (print result)
+  )
+)
+```
+
+### JIT Function Generation
+
+With `lazy_synthesize`, you can define a function using only its signature and a natural language docstring. Zero dynamically synthesizes the implementation at runtime using a local LLM upon the first invocation, then caches the generated logic for subsequent calls.
+
+```lisp
+(cli_app
+  (lazy_synthesize extract_emails (text) "Extracts all email addresses from the text and returns them as a list")
+  (print (call extract_emails "Contact us at support@example.com or sales@example.com"))
+)
+```
+
+### Auto-Mutating Runtime
+
+The `optimize_block` primitive enables Zero to be self-rewriting. It monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime (via Go plugins) if performance bottlenecks are detected.
+
+```lisp
+(cli_app
+  (optimize_block "heavy_computation" 500
+    ;; If this block takes > 500ms, Zero will generate and load an optimized CGo/Go plugin in the background
+    (let (result (call expensive_operation))
+      (print result)
+    )
+  )
+)
+```
+
+### Ephemeral Neural Circuits
+
+Using `ephemeral_circuit`, Zero can provision a narrowly specialized micro-model dynamically on the fly, configured with a system prompt for a single task. Once the inputs are evaluated, the model is immediately torn down to release resources.
+
+```lisp
+(cli_app
+  (let (ans (ephemeral_circuit (list "hello" "world") "Translate to French"))
+    (print ans)
+  )
+)
+```
+
+### Neural Circuits
+
+The `neural_circuit` primitive lets developers write simple logic specifications as natural language instructions. At runtime, Zero fetches the logic from a local LLM and executes it seamlessly as part of the execution flow.
+
+```lisp
+(cli_app
+  (let (sorted_list (neural_circuit (list "b" "c" "a") "sort list alphabetically"))
+    (print sorted_list)
+  )
+)
+```
+
+### Semantic Routing
+
+With `semantic_match`, you can route execution based on semantic intent rather than brittle regexes or exact string matching. It dynamically evaluates the user input against a set of constraints using a local LLM, then executes the corresponding branch.
+
+```lisp
+(cli_app
+  (semantic_match "I want to book a flight"
+    ("travel intent" (print "Routing to travel agent"))
+    ("support intent" (print "Routing to support"))
+    ("default" (print "Unknown intent"))
+  )
+)
+```
+
+### Automated Counterfactual Debugging
+
+When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed. The runtime automatically feeds this back into an auto-patching loop, generating self-healing code that prevents the crash from recurring.
+
+You can observe this by running a program that intentionally crashes:
+
+```lisp
+(cli_app
+  (let (x (call risk_func))
+    (print x)
+  )
+)
+```
+
+Upon crashing, Zero generates a `crash.json`. You can run `observer.py` to process the crash dump, allowing the LLM to trigger self-healing workflows or suggest a patch.
+
 ## How to Run
 
 1. **Transpile and Run in one step**:
@@ -409,6 +501,17 @@ Zero provides primitives for asynchronous background execution (`spawn`), HTTP r
       (default (print "Unknown status"))
     )
   )
+)
+```
+
+### Swarm Primitives
+
+Zero supports autonomous subagents as first-class concurrency objects. You can orchestrate a swarm of agents using the `spawn_agent` and `task` primitives.
+
+```lisp
+(cli_app
+  (spawn_agent "Researcher" (task "find sources on quantum computing"))
+  (spawn_agent "Writer" (task "summarize the findings"))
 )
 ```
 

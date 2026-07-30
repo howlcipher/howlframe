@@ -41,8 +41,11 @@ type BCProgram struct {
 }
 
 type BCFunction struct {
-	Params       []string        `json:"params"`
-	Instructions []BCInstruction `json:"instructions"`
+	Params         []string        `json:"params"`
+	Instructions   []BCInstruction `json:"instructions"`
+	LazySynthesize bool            `json:"lazy_synthesize,omitempty"`
+	Docstring      string          `json:"docstring,omitempty"`
+	Name           string          `json:"name,omitempty"`
 }
 
 // compiler state
@@ -105,8 +108,22 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				bodyInsts = append(bodyInsts, c.compileNode(child)...)
 			}
 			c.funcs[funcName] = &BCFunction{
+				Name:         funcName,
 				Params:       params,
 				Instructions: bodyInsts,
+			}
+		case "lazy_synthesize":
+			funcName := node.Children[1].Value
+			var params []string
+			for _, p := range node.Children[2].Children {
+				params = append(params, p.Value)
+			}
+			docstring := node.Children[3].Value
+			c.funcs[funcName] = &BCFunction{
+				Name:           funcName,
+				Params:         params,
+				LazySynthesize: true,
+				Docstring:      docstring,
 			}
 		case "type_hint":
 			// ignore type hints in execution
@@ -162,6 +179,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			bodyInsts := c.compileNode(lambdaNode.Children[2])
 			insts = append(insts, BCInstruction{OpString: "SPAWN", Op: OpSpawn, IntOperand: int64(float64(len(bodyInsts)))})
 			insts = append(insts, bodyInsts...)
+		case "spawn_agent":
+			agentName := node.Children[1].Value
+			taskInsts := c.compileNode(node.Children[2])
+			insts = append(insts, taskInsts...)
+			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName})
+		case "task":
+			insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: node.Children[1].Value})
 		case "res":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
@@ -189,6 +213,38 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "confidence":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "CONFIDENCE", Op: OpConfidence})
+
+		case "achieve":
+			if len(node.Children) != 3 {
+				ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
+			}
+			targetStr := ast.Stringify(node.Children[1])
+			constraintStr := ast.Stringify(node.Children[2])
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: targetStr})
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: constraintStr})
+			insts = append(insts, BCInstruction{OpString: "ACHIEVE", Op: OpAchieve})
+
+		case "neural_circuit":
+			if len(node.Children) < 3 {
+				ast.ReportError("neural_circuit expects (neural_circuit (args...) \"instruction\")", node.Line, node.Column)
+			}
+			argsNode := node.Children[1]
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			for _, arg := range argsNode.Children {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "NEURAL_CIRCUIT", Op: OpNeuralCircuit, IntOperand: int64(len(argsNode.Children))})
+
+		case "ephemeral_circuit":
+			if len(node.Children) < 3 {
+				ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node.Line, node.Column)
+			}
+			argsNode := node.Children[1]
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			for _, arg := range argsNode.Children {
+				insts = append(insts, c.compileNode(arg)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "EPHEMERAL_CIRCUIT", Op: OpEphemeralCircuit, IntOperand: int64(len(argsNode.Children))})
 
 		case "llm_generate":
 			insts = append(insts, c.compileNode(node.Children[1])...)
@@ -330,6 +386,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "env":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "ENV", Op: OpEnv})
+		case "optimize_block":
+			if len(node.Children) < 4 {
+				ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
+			}
+			for _, child := range node.Children[3:] {
+				insts = append(insts, c.compileNode(child)...)
+			}
 		case "do":
 			for _, child := range node.Children[1:] {
 				insts = append(insts, c.compileNode(child)...)

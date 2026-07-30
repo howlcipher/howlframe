@@ -1,0 +1,5 @@
+(cli_app
+  (let (res (ephemeral_circuit (2 3) "multiply the inputs together and return ONLY the number"))
+    (print res)
+  )
+)

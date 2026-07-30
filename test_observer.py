@@ -201,3 +201,28 @@ def test_real_commands_validate_copy_and_restart_live_project(tmp_path):
     assert result.status == "applied"
     assert source_path.read_text(encoding="utf-8") == candidate
     assert restart_marker.read_text(encoding="utf-8") == "yes"
+
+
+def test_observability_layer_tracks_telemetry_and_anomalies():
+    layer = observer.ObservabilityLayer(capacity=2)
+    layer.add_telemetry('{"id": 1}')
+    layer.add_telemetry('{"id": 2}')
+    layer.add_telemetry('{"id": 3}')
+    
+    view = layer.get_view()
+    assert len(view["recent_telemetry"]) == 2
+    assert view["recent_telemetry"][0] == {"id": 2}
+    assert view["recent_telemetry"][1] == {"id": 3}
+    assert view["status"] == "normal"
+    assert view["anomalies_detected"] == 0
+    
+    layer.report_anomaly(123456789)
+    view = layer.get_view()
+    assert view["status"] == "anomaly"
+    assert view["anomalies_detected"] == 1
+    assert view["last_anomaly_time"] == 123456789
+    
+    layer.report_normal()
+    view = layer.get_view()
+    assert view["status"] == "normal"
+    assert view["anomalies_detected"] == 1

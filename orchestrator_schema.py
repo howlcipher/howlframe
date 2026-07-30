@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Union, Literal, Annotated, Any
 
+class AchieveInstruction(BaseModel):
+    op: Literal["ACHIEVE"]
+    pass
+
 class AppendInstruction(BaseModel):
     op: Literal["APPEND"]
     string_operand: str
@@ -35,6 +39,10 @@ class DbConnectInstruction(BaseModel):
 class EnvInstruction(BaseModel):
     op: Literal["ENV"]
     pass
+
+class EphemeralCircuitInstruction(BaseModel):
+    op: Literal["EPHEMERAL_CIRCUIT"]
+    int_operand: int
 
 class ExecInstruction(BaseModel):
     op: Literal["EXEC"]
@@ -115,6 +123,10 @@ class MkdirInstruction(BaseModel):
     op: Literal["MKDIR"]
     pass
 
+class NeuralCircuitInstruction(BaseModel):
+    op: Literal["NEURAL_CIRCUIT"]
+    int_operand: int
+
 class ParseJsonInstruction(BaseModel):
     op: Literal["PARSE_JSON"]
     string_operand: str
@@ -155,6 +167,10 @@ class SpawnInstruction(BaseModel):
     op: Literal["SPAWN"]
     int_operand: int
 
+class SpawnAgentInstruction(BaseModel):
+    op: Literal["SPAWN_AGENT"]
+    string_operand: str
+
 class SqlQueryInstruction(BaseModel):
     op: Literal["SQL_QUERY"]
     string_operand: str
@@ -172,6 +188,10 @@ class StrSplitInstruction(BaseModel):
     op: Literal["STR_SPLIT"]
     pass
 
+class TaskInstruction(BaseModel):
+    op: Literal["TASK"]
+    string_operand: str
+
 class TryLetInstruction(BaseModel):
     op: Literal["TRY_LET"]
     string_operand: str
@@ -184,6 +204,7 @@ class WriteFileInstruction(BaseModel):
 
 Instruction = Annotated[
     Union[
+        AchieveInstruction,
         AppendInstruction,
         BinopInstruction,
         CallInstruction,
@@ -192,6 +213,7 @@ Instruction = Annotated[
         ConvertInstruction,
         DbConnectInstruction,
         EnvInstruction,
+        EphemeralCircuitInstruction,
         ExecInstruction,
         FetchInstruction,
         ForInitInstruction,
@@ -211,6 +233,7 @@ Instruction = Annotated[
         MapGetInstruction,
         MapSetInstruction,
         MkdirInstruction,
+        NeuralCircuitInstruction,
         ParseJsonInstruction,
         PrintInstruction,
         ReadFileInstruction,
@@ -221,10 +244,12 @@ Instruction = Annotated[
         SetVarInstruction,
         SleepInstruction,
         SpawnInstruction,
+        SpawnAgentInstruction,
         SqlQueryInstruction,
         StoreVarInstruction,
         StrJoinInstruction,
         StrSplitInstruction,
+        TaskInstruction,
         TryLetInstruction,
         WriteFileInstruction,
     ],

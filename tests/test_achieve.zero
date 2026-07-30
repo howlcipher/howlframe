@@ -1,0 +1,3 @@
+(defun main ()
+  (let (result (achieve (is_sorted list) (using "quick sort algorithm")))
+    (print result)))

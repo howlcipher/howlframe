@@ -15,6 +15,8 @@ import (
 	"time"
 	"zero/internal/ast"
 	"zero/internal/bytecode"
+	"zero/internal/lexer"
+	"zero/internal/parser"
 	"zero/internal/ir"
 )
 
@@ -58,8 +60,11 @@ func (e *InterpEnv) set(name string, val any) bool {
 }
 
 type InterpFunc struct {
-	params []string
-	body   *ast.Node
+	params         []string
+	body           *ast.Node
+	lazySynthesize bool
+	docstring      string
+	name           string
 }
 
 // Interpreter holds the global function table for a single -run invocation.
@@ -120,13 +125,14 @@ func Interpret(ast *ast.Node, args []string) int {
 
 func IsDefun(node *ast.Node) bool {
 	return node.Type == "List" && len(node.Children) > 0 &&
-		node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun"
+		node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "defun" || node.Children[0].Value == "lazy_synthesize")
 }
 
 func (interp *Interpreter) registerDefun(node *ast.Node) {
 	if len(node.Children) < 4 {
-		InterpErr("defun expects (defun name (args) body)", node)
+		InterpErr("defun/lazy_synthesize expects (defun name (args) body) or (lazy_synthesize name (args) docstring)", node)
 	}
+	head := node.Children[0].Value
 	name := node.Children[1].Value
 	argsNode := node.Children[2]
 	var params []string
@@ -137,8 +143,13 @@ func (interp *Interpreter) registerDefun(node *ast.Node) {
 			params = append(params, arg.Value)
 		}
 	}
-	body := node.Children[len(node.Children)-1]
-	interp.funcs[name] = &InterpFunc{params: params, body: body}
+	if head == "lazy_synthesize" {
+		docstring := node.Children[3].Value
+		interp.funcs[name] = &InterpFunc{params: params, lazySynthesize: true, docstring: docstring, name: name}
+	} else {
+		body := node.Children[len(node.Children)-1]
+		interp.funcs[name] = &InterpFunc{params: params, body: body}
+	}
 }
 
 func (interp *Interpreter) eval(node *ast.Node, env *InterpEnv) any {
@@ -186,6 +197,15 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return interp.evalWhile(node, env)
 	case "for":
 		return interp.evalFor(node, env)
+	case "optimize_block":
+		if len(node.Children) < 4 {
+			InterpErr("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node)
+		}
+		var result any
+		for _, kid := range node.Children[3:] {
+			result = interp.eval(kid, env)
+		}
+		return result
 	case "do":
 		var result any
 		for _, kid := range node.Children[1:] {
@@ -206,6 +226,120 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
+	case "neural_circuit":
+		if len(node.Children) < 3 {
+			InterpErr("neural_circuit expects (neural_circuit (args...) \"instruction\")", node)
+		}
+		argsNode := node.Children[1]
+		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
+		var argVals []any
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, interp.eval(arg, env))
+		}
+
+		prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+		if len(argVals) > 0 {
+			prompt += fmt.Sprintf("\nInputs: %v", argVals)
+		}
+
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": prompt,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
+	case "ephemeral_circuit":
+		if len(node.Children) < 3 {
+			InterpErr("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node)
+		}
+		argsNode := node.Children[1]
+		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
+		var argVals []any
+		for _, arg := range argsNode.Children {
+			argVals = append(argVals, interp.eval(arg, env))
+		}
+
+		prompt := ""
+		if len(argVals) > 0 {
+			prompt = fmt.Sprintf("Inputs: %v", argVals)
+		}
+
+		modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
+		modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
+
+		createReq, _ := json.Marshal(map[string]any{
+			"name":      modelName,
+			"modelfile": modelfile,
+			"stream":    false,
+		})
+		createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+		if err != nil {
+			panic(err)
+		}
+		createResp.Body.Close()
+
+		defer func() {
+			delReq, _ := json.Marshal(map[string]any{"name": modelName})
+			req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{}
+			resp, _ := client.Do(req)
+			if resp != nil {
+				resp.Body.Close()
+			}
+		}()
+
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  modelName,
+			"prompt": prompt,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
+	case "achieve":
+		if len(node.Children) != 3 {
+			InterpErr("achieve expects (achieve target constraint)", node)
+		}
+		targetStr := ast.Stringify(node.Children[1])
+		constraintStr := ast.Stringify(node.Children[2])
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
+		return res.Response
 	case "confidence":
 		if len(node.Children) != 2 {
 			InterpErr("confidence expects (confidence prompt)", node)
@@ -431,6 +565,40 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 	fn, ok := interp.funcs[funcName]
 	if !ok {
 		InterpErr(fmt.Sprintf("%q is not a defined function (only user defun functions are callable under -run in Phase 1)", funcName), node.Children[1])
+	}
+
+	if fn.lazySynthesize {
+		promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": promptStr,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			resp.Body.Close()
+			panic(err)
+		}
+		resp.Body.Close()
+		code := strings.TrimSpace(res.Response)
+
+		code = strings.TrimPrefix(code, "```lisp")
+		code = strings.TrimPrefix(code, "```")
+		code = strings.TrimSuffix(code, "```")
+		code = strings.TrimSpace(code)
+		progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.name, strings.Join(fn.params, " "), code)
+		lx := lexer.NewLexer(progCode)
+		p := parser.NewParser(lx, "lazy_synthesize")
+		astNode := p.ParseExpression()
+
+		fn.body = astNode.Children[len(astNode.Children)-1]
+		fn.lazySynthesize = false
 	}
 	var argVals []any
 	for _, argNode := range node.Children[2:] {
@@ -707,10 +875,10 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
-	prog  *bytecode.BCProgram
-	stack []any
-	env   *BcEnv
-	ip    int
+	prog     *bytecode.BCProgram
+	stack    []any
+	env      *BcEnv
+	ip       int
 	insts    []bytecode.BCInstruction
 	args     []string
 	executed int
@@ -1068,6 +1236,118 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
+		case bytecode.OpNeuralCircuit:
+			numInputs := int(inst.IntOperand)
+			inputs := make([]any, numInputs)
+			for i := numInputs - 1; i >= 0; i-- {
+				inputs[i] = vm.pop(inst.Op)
+			}
+			instructionAny := vm.pop(inst.Op)
+			instructionStr := fmt.Sprintf("%v", instructionAny)
+
+			prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+			if numInputs > 0 {
+				prompt += fmt.Sprintf("\nInputs: %v", inputs)
+			}
+
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": prompt,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			vm.push(res.Response)
+
+		case bytecode.OpEphemeralCircuit:
+			numInputs := int(inst.IntOperand)
+			inputs := make([]any, numInputs)
+			for i := numInputs - 1; i >= 0; i-- {
+				inputs[i] = vm.pop(inst.Op)
+			}
+			instructionAny := vm.pop(inst.Op)
+			instructionStr := fmt.Sprintf("%v", instructionAny)
+
+			prompt := ""
+			if numInputs > 0 {
+				prompt = fmt.Sprintf("Inputs: %v", inputs)
+			}
+
+			modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
+			modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
+
+			createReq, _ := json.Marshal(map[string]any{
+				"name":      modelName,
+				"modelfile": modelfile,
+				"stream":    false,
+			})
+			createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+			if err != nil {
+				panic(err)
+			}
+			createResp.Body.Close()
+
+			func() {
+				delReq, _ := json.Marshal(map[string]any{"name": modelName})
+				req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+				req.Header.Set("Content-Type", "application/json")
+				client := &http.Client{}
+				resp, _ := client.Do(req)
+				if resp != nil {
+					resp.Body.Close()
+				}
+			}()
+
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  modelName,
+				"prompt": prompt,
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			resp.Body.Close()
+			vm.push(res.Response)
+
+		case bytecode.OpAchieve:
+			constraintAny := vm.pop(inst.Op)
+			targetAny := vm.pop(inst.Op)
+			constraintStr := fmt.Sprintf("%v", constraintAny)
+			targetStr := fmt.Sprintf("%v", targetAny)
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+			var res struct {
+				Response string `json:"response"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
+			vm.push(res.Response)
+
 		case bytecode.OpConfidence:
 			promptStrAny := vm.pop(inst.Op)
 			promptStr := fmt.Sprintf("%v", promptStrAny)
@@ -1170,6 +1450,43 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			fn, ok := vm.prog.Functions[funcName]
 			if !ok {
 				panic("undefined function: " + funcName)
+			}
+
+			if fn.LazySynthesize {
+				promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
+				reqBody, _ := json.Marshal(map[string]any{
+					"model":  "llama3",
+					"prompt": promptStr,
+					"stream": false,
+				})
+				resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+				if err != nil {
+					panic(err)
+				}
+				var res struct {
+					Response string `json:"response"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+					resp.Body.Close()
+					panic(err)
+				}
+				resp.Body.Close()
+				code := strings.TrimSpace(res.Response)
+
+				// Strip potential markdown blocks
+				code = strings.TrimPrefix(code, "```lisp")
+				code = strings.TrimPrefix(code, "```")
+				code = strings.TrimSuffix(code, "```")
+				code = strings.TrimSpace(code)
+
+				progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.Name, strings.Join(fn.Params, " "), code)
+				lx := lexer.NewLexer(progCode)
+				p := parser.NewParser(lx, "lazy_synthesize")
+				astNode := p.ParseExpression()
+
+				newProg := bytecode.CompileToBytecode(astNode)
+				fn.Instructions = newProg.Functions[fn.Name].Instructions
+				fn.LazySynthesize = false
 			}
 
 			var argVals []any
@@ -1427,7 +1744,8 @@ func BcConvert(target string, a any) any {
 	switch target {
 	case "to_int":
 		switch t := a.(type) {
-		case float64: return float64(int64(t))
+		case float64:
+			return float64(int64(t))
 		case string:
 			v, _ := strconv.ParseInt(t, 10, 64)
 			return float64(v)

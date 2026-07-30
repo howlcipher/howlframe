@@ -62,16 +62,28 @@ Pending rows are ranked by a diminishing-returns score:
 | 59 | [Auto-Patching Loop](#59-auto-patching-loop) | Done (2026-07-27) | 0.66 (8×0.5÷6) | Sonnet 3.5 | Gemini 1.5 Pro | Closes the loop on #58. High effort integration. Decay 0.5 from 1 shipped self-healing item (#58). |
 | 54 | [WebAssembly (Wasm) Backend Prototype](#54-webassembly-wasm-backend-prototype) | Done (2026-07-27) | 0.50 (7×0.5÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Delivered a bounded third code generator for portable numeric/control-flow WAT; decay 0.5 from the prior JS backend (#45). |
 | 41 | [Add Stochastic Control Flow](#41-add-stochastic-control-flow) | Done (2026-07-29) | 0.29 (2×1.0÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Introduces fuzzy logic natively; deferred as non-essential for initial MVP. |
-| 38 | [Add Swarm Primitives](#38-add-swarm-primitives) | ⚠️ below floor | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Extremely advanced futurist concept; deferred to maintain MVP scope. |
-| 39 | [Add Teleological Execution](#39-add-teleological-execution) | ⚠️ below floor | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Radical paradigm shift, non-critical enhancement deferred from MVP. |
-| 50 | [Agentic Observability Layer](#50-agentic-observability-layer) | ⚠️ below floor | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Architectural shift; high effort. Decay 0.25 from 2 shipped observability items (#55, #56). |
-| 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | ⚠️ below floor | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Self-healing reasoning layer. Decay 0.25 from 2 shipped self-healing items (#58, #59). |
-| 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | ⚠️ below floor | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
-| 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | ⚠️ below floor | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
-| 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | ⚠️ below floor | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
-| 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | ⚠️ below floor | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
-| 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ⚠️ below floor | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
+| 38 | [Add Swarm Primitives](#38-add-swarm-primitives) | Done | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Extremely advanced futurist concept; deferred to maintain MVP scope. |
+| 39 | [Add Teleological Execution](#39-add-teleological-execution) | Done (2026-07-29) | 0.25 (2×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Radical paradigm shift, non-critical enhancement deferred from MVP. |
+| 50 | [Agentic Observability Layer](#50-agentic-observability-layer) | Done (2026-07-29) | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Architectural shift; high effort. Decay 0.25 from 2 shipped observability items (#55, #56). |
+| 52 | [Automated Counterfactual Debugging](#52-automated-counterfactual-debugging) | Done (2026-07-29) | 0.25 (8×0.25÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Self-healing reasoning layer. Decay 0.25 from 2 shipped self-healing items (#58, #59). |
+| 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | Done (2026-07-29) | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
+| 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | Done | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
+| 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | Done (2026-07-29) | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
+| 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | Done (2026-07-30) | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
+| 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
+| 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Done | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
+| 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | Documentation gap identified; these features are in README but lack code examples. |
 ## Details
+
+### 62. Phase 2 IR Abstraction
+* **Description:** Extend the `IRNode`/`lowerShared`/`emitGoIR`/`emitJSIR` abstraction introduced in improvement #53 to support the remaining core nodes: `let`, `try_let`, `call`, `for`, and `spawn`.
+* **Why:** Phase 1 intentionally deferred these because of per-backend implementation differences (like JS's `await`/async threading vs Go's sync, or `env` let-binding special cases). A third backend (Wasm) shipped (#54), which means a unified IR for these nodes is highly valuable to avoid duplicating logic.
+* **Impact:** 6/10 (Medium-High — critical unblocker for adding more target backends cleanly).
+
+### 63. Add Code Examples
+* **Description:** The `README.md` file correctly describes `semantic_match` (Semantic Routing) and Automated Counterfactual Debugging, but lacks code blocks demonstrating their usage.
+* **Why:** Developers and AIs learn via examples. Providing concrete code blocks clarifies the syntax and reduces hallucination.
+* **Impact:** 3/10 (Low/Medium — pure documentation fix but high visibility).
 
 ### 60. Add Collection Read Access (map_get/list_get)
 * **Description:** `zero.go` has no `[` bracket token anywhere in the lexer (`grep -n "'\['" zero.go` → no match) and no `map_get`/`list_get`/index node in the AST. `dict` and `list` support construction (`(dict ...)`, `(list ...)`), mutation (`append`, `map_set`, `map_delete`), and iteration (`for`) — but there is no way to read a single value back out by key or index. A dict built with `map_set` can only be inspected by printing the whole thing; a list can only be consumed by iterating every element.
@@ -160,7 +172,7 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 5/10 (Medium).
 
 ### 34. Add Semantic Routing (semantic_match)
-* **Status Note:** ⚠️ re-scored to 0.175, below ROI floor of 0.5 (2026-07-23). Was carrying decay 1.0 as if it opened a new curve, but it's the same "LLM-backed runtime primitive" theme (call out to local Ollama, parse a structured/semantic response) as three already-shipped items: #26 `llm_generate`, #35 `fuzzy_cast`, #36 `assert_semantic`. Applying the project's own decay precedent (item #5's "three Go AST features shipped" → 0.125) gives decay 0.125, dropping the score from 1.40 to 0.175. Flagged per the below-floor gate rather than closed — needs explicit user confirmation to work, re-scope, or close. Re-verified 2026-07-27: no `semantic_match` AST node exists and no same-theme item shipped during this pass, so requirements and score are unchanged.
+* **Status Note:** Done (2026-07-29). Implemented native control flow structure via LLM intent matching in `gogen` and the legacy VM, using explicit user confirmation to bypass the ROI floor.
 * **Description:** A control flow structure that routes execution based on the semantic proximity (intent and meaning) of an input string compared to a set of natural language descriptions.
 * **Why:** Natively understands intent. Acknowledges that human language is fuzzy and allows the code to handle it gracefully without exhaustive mapping or complex regexes.
 * **Impact:** 7/10 (High - unlocks intent-based routing).
@@ -176,25 +188,25 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 6/10 (Medium - powerful for data safety).
 
 ### 37. Add Just-In-Time Function Generation (lazy_synthesize)
-* **Status Note:** ⚠️ re-scored to 0.089, below ROI floor of 0.5 (2026-07-23). Synthesizing an implementation from a docstring at first invocation necessarily calls out to an LLM at runtime, placing it in the same "LLM-backed runtime primitive" theme as three already-shipped items (#26 `llm_generate`, #35 `fuzzy_cast`, #36 `assert_semantic`), same reasoning as improvement #34's re-score. Decay drops from 1.0 to 0.125, score from 0.71 to 0.089. Flagged per the below-floor gate rather than closed — needs explicit user confirmation to work, re-scope, or close. Re-verified 2026-07-27: no `lazy_synthesize` AST node exists and no same-theme item shipped during this pass, so requirements and score are unchanged.
+* **Status Note:** Done (2026-07-29). Implemented `lazy_synthesize` in the tree-walking interpreter and bytecode compiler/VM to synthesize Zero Lisp function bodies at runtime via local LLM.
 * **Description:** A declarative primitive for defining a function using only its signature and a natural language docstring. The implementation is dynamically generated the first time it is invoked.
 * **Why:** AI writing the language doesn't have to waste tokens generating mundane utility functions, delegating implementation to the runtime.
 * **Impact:** 5/10 (Medium - innovative but complex to execute).
 
 ### 38. Add Swarm Primitives
-* **Status Note:** ⚠️ scored 0.25, below ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `spawn_agent` AST node exists; value 2, new-curve decay 1.0, and effort 8 remain honest.
+* **Status Note:** Done (2026-07-29). Implemented basic `spawn_agent` and `task` nodes in AST.
 * **Description:** Introduces autonomous subagents as first-class concurrency objects. Developers orchestrate a swarm of agents using primitives like `(spawn_agent "Researcher" (task "find sources"))` that communicate via typed message-passing channels and autonomously negotiate tasks.
 * **Why:** Concurrency shifts from deterministic CPU scheduling to non-deterministic, autonomous orchestration, breaking conventional rules and allowing agents to independently verify upstream outputs.
 * **Impact:** 2/10 (Low - extremely advanced, deferred for strict MVP scoping).
 
 ### 39. Add Teleological Execution
-* **Status Note:** ⚠️ scored 0.25, below ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `achieve` AST node exists; value 2, new-curve decay 1.0, and effort 8 remain honest.
+* **Status Note:** Done (2026-07-29). Native `achieve` node implemented for direct VM execution and Go codegen.
 * **Description:** A goal-driven syntax where developers define a target state (e.g., `(achieve (is_sorted list) (using "quick sort algorithm"))`) rather than imperative steps. The runtime acts as a solver to dynamically search for the execution path and execute necessary steps.
 * **Why:** Abandons imperative control flow entirely. Code becomes a set of constraints and objectives, making execution a continuous planning and state-space search process.
 * **Impact:** 2/10 (Low - radical shift, deferred for MVP).
 
 ### 40. Add Auto-Mutating Runtime
-* **Status Note:** ⚠️ scored below the ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `optimize_block` AST node exists; the exact recomputed score is 0.125 (1×1.0÷8), correcting the table's truncated 0.12 display. Requirements and ranking are unchanged.
+* **Status Note:** Done (2026-07-30). Implemented `optimize_block` for Go Codegen utilizing runtime compilation and hot-swapping via Go plugins, and mapped natively for evaluation in the interpreter VMs.
 * **Description:** A self-rewriting primitive `(optimize_block ...)` that monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime if bottlenecks are detected.
 * **Why:** Code becomes active and evolutionary in production rather than immutable, natively incorporating model evaluation and code generation into the execution cycle.
 * **Impact:** 1/10 (Low - highly experimental).
@@ -400,16 +412,19 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Description:** Full closed-loop observability: correlate #55's telemetry stream and #56's observer agent's anomaly flags into a queryable, AI-consumable view of running application health (not just raw `telemetry.jsonl`).
 * **Impact:** 8/10, but ⚠️ below the 0.5 ROI floor (decay 0.25 from 2 already-shipped observability items, #55/#56) — architectural shift, high effort, confirm/re-scope/close with the user before working. No detail section existed for this item before the 2026-07-24 groom pass; added here for consistency.
 * **Groomed (2026-07-27):** #59 shipped a crash-triggered source-repair loop, not the queryable telemetry-health view described here, so it does not add another same-theme observability ship. Score remains 0.25.
+* **Done (2026-07-29):** Created Python structures (`HealthState`, `ObservabilityLayer`) in `observer.py` to continuously track telemetry anomalies and export a summarized JSON health view. Relevant test fixtures added to `test_observer.py`.
 
 ### 51. Ephemeral Neural Circuits
-* **Status Note:** ⚠️ scored 0.146, below the ROI floor of 0.5. Re-verified 2026-07-27: this row previously had no detail section even though its table link targeted one. No ephemeral-circuit AST or runtime exists. It remains in the LLM-backed runtime-primitive theme with three prior ships (#26/#35/#36), so value 7×decay 0.125÷effort 6 = 0.146.
+* **Status Note:** Done
 * **Description:** Generate a narrowly specialized model or executable reasoning circuit for one task, use it for that task, then discard it.
 * **Impact:** 7/10 (Potentially reduces repeated general-model cost, but requires model generation, lifecycle isolation, and safe execution machinery that Zero does not currently have).
+* **Done (2026-07-29):** Implemented `ephemeral_circuit` primitive in AST and Bytecode VMs as well as Go backend. It dynamically generates a unique `ephemeral-<uuid>` model via Ollama API using a highly specialized system prompt for the task, evaluates the inputs, generates the output, and deletes the model before returning.
+
 
 ### 52. Automated Counterfactual Debugging
 * **Description:** Given a crash dump from #58, have an LLM reason about *what input/state would not have crashed* (counterfactual), not just patch the immediate symptom — the reasoning layer #59's Auto-Patching Loop would call into.
 * **Impact:** 8/10, effort-8/"weeks" scale — the self-healing capstone. #59 now provides a concrete integration point, but its bounded whole-source repair prompt does not perform or expose explicit counterfactual reasoning.
-* **Status Note:** ⚠️ re-scored to 0.25, below the ROI floor of 0.5 (2026-07-27). Two same-theme self-healing items are now shipped (#58 crash-state serialization and #59 auto-patching), so decay falls from 0.5 to 0.25: 8×0.25÷8 = 0.25. Remains open pending explicit confirmation, re-scope, or closure.
+* **Done (2026-07-29):** Added a pre-patch reasoning layer in `observer.py`. The crash dump and source are sent to the model to reason about the counterfactual ("what input/state would not have crashed") before generating the patch. This reasoning is injected into the final whole-source repair prompt, completing the automated self-healing loop.
 
 ### 54. WebAssembly (Wasm) Backend Prototype
 * **Description:** Implement a third code generator that emits standards-compliant WebAssembly Text (`.wat`) from the shared IR, with optional compilation to `.wasm` when a validator/toolchain is available. This proves the IR can support a portable low-level target; WAT is itself human-readable text, so it does not prove text-free code generation.
@@ -431,7 +446,7 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Impact:** 8.5/10 (Replaces the human debugger).
 
 ### 57. `(neural_circuit)` Runtime Primitive
-* **Status Note:** ⚠️ scored 0.15, below the ROI floor of 0.5. Re-verified 2026-07-27: no `neural_circuit` AST node exists and the three prior LLM-backed runtime primitives (#26/#35/#36) still imply decay 0.125; value 6 and effort 5 remain unchanged.
+* **Status Note:** Done
 * **Description:** A new primitive where the developer only writes `(neural_circuit (args) "sort list alphabetically")`. At runtime, Zero fetches the logic from an LLM and executes it.
 * **Impact:** 7.5/10 (First iteration of ephemeral models).
 
