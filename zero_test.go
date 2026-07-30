@@ -195,7 +195,7 @@ func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
 		t.Fatalf("Failed to read generated WAT: %v", err)
 	}
 	for _, fragment := range []string{
-		"(memory (export \"memory\") 1)", "(data (i32.const 0)", "(func (export \"main\") (result i32)", "(i32.const 0)",
+		"(memory (export \"memory\") 1)", "(data (i32.const 0)", "(func (export \"main\") (result i32)", "(i32.const 8)",
 	} {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated list WAT is missing %q:\n%s", fragment, wat)
@@ -224,7 +224,7 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 		t.Fatalf("Failed to read generated WAT: %v", err)
 	}
 	for _, fragment := range []string{
-		"(i64.load", "(i32.wrap_i64 (i64.const 1))", "(i32.mul", "(memory (export \"memory\") 1)",
+		"(i64.load", "(i64.lt_u", "(i32.wrap_i64 (i64.const 1))", "(i32.mul", "(i64.const 0)", "(memory (export \"memory\") 1)",
 	} {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated list_get WAT is missing %q:\n%s", fragment, wat)

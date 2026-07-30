@@ -93,13 +93,14 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 	case "return":
 		return fmt.Sprintf("(return %s)", generateWasmExpression(ir.Kids[0]))
 	case "list":
-		return "(i32.const 0)"
+		return "(i32.const 8)"
 	case "list_get":
 		listPointer := generateWasmExpression(ir.Kids[0])
 		index := generateWasmExpression(ir.Kids[1])
 		byteOffset := fmt.Sprintf("(i32.mul (i32.wrap_i64 %s) (i32.const 8))", index)
 		address := fmt.Sprintf("(i32.add %s %s)", listPointer, byteOffset)
-		return fmt.Sprintf("(i64.load %s)", address)
+		length := "(i64.load (i32.const 0))"
+		return fmt.Sprintf("(if (result i64) (i64.lt_u %s %s) (then (i64.load %s)) (else (i64.const 0)))", index, length, address)
 	case "to_float":
 		child := ir.Kids[0]
 		value := generateWasmExpression(child)
@@ -125,6 +126,11 @@ func staticAggregateData(node *ast.Node) string {
 		return ""
 	}
 	var encoded strings.Builder
+	var length [8]byte
+	binary.LittleEndian.PutUint64(length[:], uint64(len(node.Children)-1))
+	for _, byteValue := range length {
+		encoded.WriteString(fmt.Sprintf("\\%02x", byteValue))
+	}
 	for _, child := range node.Children[1:] {
 		value, err := strconv.ParseInt(child.Value, 10, 64)
 		if err != nil {
