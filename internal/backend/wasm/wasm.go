@@ -58,11 +58,7 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		if ir.Op == "and" || ir.Op == "or" {
 			valueType = "i32"
 		}
-		ops := map[string]string{
-			"+": valueType + ".add", "-": valueType + ".sub", "*": valueType + ".mul", "/": valueType + ".div_s",
-			"<": valueType + ".lt_s", ">": valueType + ".gt_s", "<=": valueType + ".le_s", ">=": valueType + ".ge_s",
-			"=": valueType + ".eq", "==": valueType + ".eq", "!=": valueType + ".ne", "and": "i32.and", "or": "i32.or",
-		}
+		ops := wasmOps(valueType)
 		return fmt.Sprintf("(%s %s %s)", ops[ir.Op], generateWasmExpression(ir.Kids[0]), generateWasmExpression(ir.Kids[1]))
 	case "if":
 		if len(ir.Kids) != 3 {
@@ -84,6 +80,20 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 		return fmt.Sprintf("(block (result %s) %s)", wasmType(ir.Kids[len(ir.Kids)-1].Inferred), strings.Join(parts, " "))
 	case "return":
 		return fmt.Sprintf("(return %s)", generateWasmExpression(ir.Kids[0]))
+	case "to_float":
+		child := ir.Kids[0]
+		value := generateWasmExpression(child)
+		if child.Inferred.Kind == ast.Int {
+			return fmt.Sprintf("(f64.convert_s/i64 %s)", value)
+		}
+		return value
+	case "to_int":
+		child := ir.Kids[0]
+		value := generateWasmExpression(child)
+		if child.Inferred.Kind == ast.Float {
+			return fmt.Sprintf("(i64.trunc_f64_s %s)", value)
+		}
+		return value
 	default:
 		// ast.ReportError(fmt.Sprintf("Wasm backend does not support %q", ir.Kind), source.Line, source.Column)
 	}
@@ -96,9 +106,26 @@ func wasmType(info ast.TypeInfo) string {
 	switch info.Kind {
 	case ast.Int:
 		return "i64"
+	case ast.Float:
+		return "f64"
 	case ast.Bool:
 		return "i32"
 	default:
 		return "i32"
+	}
+}
+
+func wasmOps(valueType string) map[string]string {
+	if valueType == "f64" {
+		return map[string]string{
+			"+": "f64.add", "-": "f64.sub", "*": "f64.mul", "/": "f64.div",
+			"<": "f64.lt", ">": "f64.gt", "<=": "f64.le", ">=": "f64.ge",
+			"=": "f64.eq", "==": "f64.eq", "!=": "f64.ne",
+		}
+	}
+	return map[string]string{
+		"+": valueType + ".add", "-": valueType + ".sub", "*": valueType + ".mul", "/": valueType + ".div_s",
+		"<": valueType + ".lt_s", ">": valueType + ".gt_s", "<=": valueType + ".le_s", ">=": valueType + ".ge_s",
+		"=": valueType + ".eq", "==": valueType + ".eq", "!=": valueType + ".ne", "and": "i32.and", "or": "i32.or",
 	}
 }

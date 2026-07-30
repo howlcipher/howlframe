@@ -89,6 +89,16 @@ func checkWasmExpression(node *ast.Node) {
 		}
 	case "return":
 		checkWasmExpression(irNode.Kids[0])
+	case "to_float":
+		if len(irNode.Kids) != 1 || (irNode.Kids[0].Inferred.Kind != ast.Int && irNode.Kids[0].Inferred.Kind != ast.Float) {
+			ast.ReportError("Wasm to_float requires an int or float operand", node.Line, node.Column)
+		}
+		checkWasmExpression(irNode.Kids[0])
+	case "to_int":
+		if len(irNode.Kids) != 1 || (irNode.Kids[0].Inferred.Kind != ast.Int && irNode.Kids[0].Inferred.Kind != ast.Float) {
+			ast.ReportError("Wasm to_int requires an int or float operand", node.Line, node.Column)
+		}
+		checkWasmExpression(irNode.Kids[0])
 	default:
 		ast.ReportError(fmt.Sprintf("Wasm backend does not support %q", irNode.Kind), node.Line, node.Column)
 	}

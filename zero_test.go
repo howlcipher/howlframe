@@ -141,3 +141,35 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 		t.Errorf("Expected a clear unsupported-node diagnostic, got: %s", output)
 	}
 }
+
+func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "float.zero")
+	input := `(wasm_app (if (> (to_float 2) (to_float 1)) (return (to_float 7)) (return (to_float 0))))`
+	if err := os.WriteFile(inputFile, []byte(input), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate float WAT: %v: %s", err, output)
+	}
+
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range []string{
+		"(func (export \"main\") (result f64)", "(if (result f64)", "(f64.gt", "(f64.convert_s/i64 (i64.const 2))",
+	} {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated float WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}

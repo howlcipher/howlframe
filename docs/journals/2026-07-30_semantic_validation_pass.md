@@ -10,7 +10,7 @@ The in-flight work adds a dedicated `internal/checker` frontend pass and moves t
 
 The first checkpoint was structural/backend-capability validation. Phase 1 now adds a typed value lattice in `internal/ast`, an `Analyze` pass in `internal/checker/types.go`, and AST annotations containing source kind plus native size, alignment, and pointer metadata. It infers literals, typed `defun` signatures, `let`, `call`, `if`, `while`, `do`, `set`, `try_let`, `for`, `spawn`, `match`, structs, field access, `parse_json`, `env`, file I/O, typed casts, lists, dictionaries, collection reads, conversions, and common operators. Unknown or dynamic values remain legal.
 
-`IRNode` now carries the inferred `ast.TypeInfo` through `LowerShared`, and the Wasm backend consumes it to select scalar layouts: Zero `int` values are emitted as Wasm `i64`, while boolean control-flow values remain `i32`. Backend-specific runtime types are still intentionally conservative. Backlog item #64 remains pending until the remaining layout decisions are complete and verified with a Wasm validator.
+`IRNode` now carries the inferred `ast.TypeInfo` through `LowerShared`, and the Wasm backend consumes it to select scalar layouts: Zero `int` values are emitted as Wasm `i64`, floats as `f64`, and boolean control-flow values remain `i32`. Native integer/float conversions are emitted explicitly, while unsupported string conversions are rejected before lowering. Backend-specific runtime types are still intentionally conservative. Backlog item #64 remains pending until the remaining layout decisions are complete and verified with a Wasm validator.
 
 ## Verification
 
@@ -22,10 +22,11 @@ The first checkpoint was structural/backend-capability validation. Phase 1 now a
 - Representative existing fixtures for advanced control flow, primitives, JSON parsing, direct execution, mutable collections, no-else conditionals, and compound comparisons all pass the checker.
 - Representative backend-specific fixtures for JSON parsing, primitive conversions, schema/database declarations, AI casts, environment variables, and context threading all pass the checker.
 - The Wasm regression test verifies inferred integer metadata changes module results, arithmetic, comparisons, and branch results from `i32` to `i64`; `wat2wasm` is not installed, so external WAT validation remains a follow-up environment check.
+- The Wasm regression test verifies inferred float metadata selects an `f64` module result, `f64` comparison, and `f64.convert_s/i64` conversion.
 - `CCACHE_DISABLE=1 GOCACHE=/tmp/zero-gocache go vet ./...` passes.
 - `CCACHE_DISABLE=1 GOCACHE=/tmp/zero-gocache go build -o /tmp/zero-check .` passes.
 - The fixture sweep passes valid fixtures; `tests/routes.zero` and `examples/routes.zero` are include-only fragments, `tests/test_achieve.zero` is a top-level function fragment, and `tests/test_confidence.zero` exposes the existing lexer limitation for decimal literals.
 
 ## Next step
 
-Next, extend native layout selection to float and aggregate representations, install/use a WAT validator when available, and verify the generated module end to end. Do not mark #64 done until those decisions are validated beyond string-fragment tests.
+Next, extend native layout selection to aggregate representations, install/use a WAT validator when available, and verify the generated module end to end. Do not mark #64 done until those decisions are validated beyond string-fragment tests.
