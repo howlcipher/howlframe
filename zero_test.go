@@ -85,6 +85,28 @@ func TestOutputDirectoryFlag(t *testing.T) {
 	}
 }
 
+func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "store.zero")
+	outputFile := filepath.Join(tempDir, "store.zbc")
+	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
+		t.Fatalf("failed to write bytecode input: %v", err)
+	}
+
+	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile bytecode: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(outputFile); err != nil {
+		t.Fatalf("bytecode output was not written to %s: %v", outputFile, err)
+	}
+}
+
 func TestCrashStateSerialization(t *testing.T) {
 	cmd := exec.Command("go", "build", "-o", "zero", ".")
 	if err := cmd.Run(); err != nil {

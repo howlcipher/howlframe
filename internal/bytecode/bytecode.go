@@ -151,6 +151,55 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			dbVar := node.Children[1].Value
 			queryStr := node.Children[2].Value
 			insts = append(insts, BCInstruction{OpString: "SQL_QUERY", Op: OpSqlQuery, StringOperand: dbVar, StringOperand2: queryStr})
+		case "store_open":
+			if len(node.Children) != 3 {
+				ast.ReportError(`store_open expects (store_open handle "memory://name")`, node.Line, node.Column)
+			}
+			handleNode := node.Children[1]
+			uriNode := node.Children[2]
+			if handleNode.Type != "SYMBOL" {
+				ast.ReportError("store_open handle must be a symbol", handleNode.Line, handleNode.Column)
+			}
+			if uriNode.Type != "STRING" {
+				ast.ReportError("store_open URI must be a string", uriNode.Line, uriNode.Column)
+			}
+			insts = append(insts, BCInstruction{
+				OpString:       "STORE_OPEN",
+				Op:             OpStoreOpen,
+				StringOperand:  handleNode.Value,
+				StringOperand2: uriNode.Value,
+			})
+		case "store_put":
+			if len(node.Children) != 4 {
+				ast.ReportError("store_put expects (store_put handle key record)", node.Line, node.Column)
+			}
+			handleNode := node.Children[1]
+			if handleNode.Type != "SYMBOL" {
+				ast.ReportError("store_put handle must be a symbol", handleNode.Line, handleNode.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, c.compileNode(node.Children[3])...)
+			insts = append(insts, BCInstruction{OpString: "STORE_PUT", Op: OpStorePut, StringOperand: handleNode.Value})
+		case "store_get":
+			if len(node.Children) != 3 {
+				ast.ReportError("store_get expects (store_get handle key)", node.Line, node.Column)
+			}
+			handleNode := node.Children[1]
+			if handleNode.Type != "SYMBOL" {
+				ast.ReportError("store_get handle must be a symbol", handleNode.Line, handleNode.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "STORE_GET", Op: OpStoreGet, StringOperand: handleNode.Value})
+		case "store_delete":
+			if len(node.Children) != 3 {
+				ast.ReportError("store_delete expects (store_delete handle key)", node.Line, node.Column)
+			}
+			handleNode := node.Children[1]
+			if handleNode.Type != "SYMBOL" {
+				ast.ReportError("store_delete handle must be a symbol", handleNode.Line, handleNode.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "STORE_DELETE", Op: OpStoreDelete, StringOperand: handleNode.Value})
 		case "fetch":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)

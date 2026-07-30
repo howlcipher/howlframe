@@ -1,0 +1,17 @@
+;; Improvement #71 Phase 2 regression fixture.
+;; A missing store key deterministically evaluates to nil.
+(cli_app
+  (store_open primary "memory://session")
+  (store_open attached "memory://session")
+
+  (store_put primary
+    (str_join (list "task" "1") ":")
+    (dict
+      ("title" (str_join (list "Add" "login") " "))
+      ("status" "open")))
+
+  (print "stored:" (store_get attached (str_join (list "task" "1") ":")))
+
+  (store_delete attached (str_join (list "task" "1") ":"))
+  (store_delete attached (str_join (list "task" "1") ":"))
+  (print "missing:" (store_get primary (str_join (list "task" "1") ":"))))

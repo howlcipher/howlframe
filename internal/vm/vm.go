@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"zero/internal/ast"
 	"zero/internal/bytecode"
@@ -883,11 +884,38 @@ type BCVM struct {
 	prog     *bytecode.BCProgram
 	stack    []any
 	env      *BcEnv
+	stores   *bcStoreRegistry
 	ip       int
 	insts    []bytecode.BCInstruction
 	args     []string
 	executed int
 	Limits   VMLimits
+}
+
+type bcStoreRegistry struct {
+	mu     sync.Mutex
+	stores map[string]*bcMemoryStore
+}
+
+type bcMemoryStore struct {
+	mu      sync.RWMutex
+	records map[string]map[string]any
+}
+
+func newBCStoreRegistry() *bcStoreRegistry {
+	return &bcStoreRegistry{stores: make(map[string]*bcMemoryStore)}
+}
+
+func (registry *bcStoreRegistry) open(uri string) *bcMemoryStore {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+
+	store, ok := registry.stores[uri]
+	if !ok {
+		store = &bcMemoryStore{records: make(map[string]map[string]any)}
+		registry.stores[uri] = store
+	}
+	return store
 }
 
 type BcEnv struct {
@@ -930,6 +958,7 @@ func RunBytecode(prog *bytecode.BCProgram, cliArgs []string) int {
 		env:    NewBcEnv(nil),
 		insts:  prog.Main,
 		args:   cliArgs,
+		stores: newBCStoreRegistry(),
 		Limits: DefaultLimits,
 	}
 
@@ -961,7 +990,60 @@ func (vm *BCVM) pop(inst bytecode.Opcode) any {
 	return v
 }
 
+func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemoryStore {
+	value, ok := env.get(name)
+	if !ok {
+		panic(NewRuntimeError(
+			"UNDEFINED_STORE",
+			"main",
+			vm.ip,
+			op,
+			"undefined store handle: %s",
+			name,
+		))
+	}
+	store, ok := value.(*bcMemoryStore)
+	if !ok {
+		panic(NewRuntimeError(
+			"INVALID_STORE_HANDLE",
+			"main",
+			vm.ip,
+			op,
+			"%s is not a store handle",
+			name,
+		))
+	}
+	return store
+}
+
+func cloneStoreRecord(record map[string]any) map[string]any {
+	clone := make(map[string]any, len(record))
+	for key, value := range record {
+		clone[key] = cloneStoreValue(value)
+	}
+	return clone
+}
+
+func cloneStoreValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneStoreRecord(typed)
+	case []any:
+		clone := make([]any, len(typed))
+		for index, item := range typed {
+			clone[index] = cloneStoreValue(item)
+		}
+		return clone
+	default:
+		return value
+	}
+}
+
 func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
+	if vm.stores == nil {
+		vm.stores = newBCStoreRegistry()
+	}
+
 	ip := 0
 	for ip < len(insts) {
 		vm.executed++
@@ -1046,6 +1128,58 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				results = append(results, rowMap)
 			}
 			vm.push(results)
+		case bytecode.OpStoreOpen:
+			uri := inst.StringOperand2
+			if !strings.HasPrefix(uri, "memory://") || len(uri) == len("memory://") {
+				panic(NewRuntimeError(
+					"INVALID_STORE_URI",
+					"main",
+					vm.ip,
+					inst.Op,
+					"store URI must use memory:// with a non-empty name",
+				))
+			}
+			env.vars[inst.StringOperand] = vm.stores.open(uri)
+		case bytecode.OpStorePut:
+			recordAny := vm.pop(inst.Op)
+			key := fmt.Sprint(vm.pop(inst.Op))
+			record, ok := recordAny.(map[string]any)
+			if !ok {
+				panic(NewRuntimeError(
+					"INVALID_STORE_RECORD",
+					"main",
+					vm.ip,
+					inst.Op,
+					"store_put record must be a dict, got %T",
+					recordAny,
+				))
+			}
+			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			store.mu.Lock()
+			store.records[key] = cloneStoreRecord(record)
+			store.mu.Unlock()
+		case bytecode.OpStoreGet:
+			key := fmt.Sprint(vm.pop(inst.Op))
+			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			store.mu.RLock()
+			record, ok := store.records[key]
+			if ok {
+				record = cloneStoreRecord(record)
+			}
+			store.mu.RUnlock()
+			if !ok {
+				// Missing records have one stable sentinel instead of an
+				// allocated empty dict that could be mistaken for stored data.
+				vm.push(nil)
+			} else {
+				vm.push(record)
+			}
+		case bytecode.OpStoreDelete:
+			key := fmt.Sprint(vm.pop(inst.Op))
+			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			store.mu.Lock()
+			delete(store.records, key)
+			store.mu.Unlock()
 		case bytecode.OpFetch:
 			method := vm.pop(inst.Op).(string)
 			urlStr := vm.pop(inst.Op).(string)
@@ -1159,7 +1293,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{prog: vm.prog, env: cEnv}
+				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
@@ -1223,7 +1357,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = w
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{prog: prog, env: reqEnv}
+				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits}
 				func() {
 					defer func() { recover() }()
 					childVM.run(bodyInsts, reqEnv)

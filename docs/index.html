@@ -48,7 +48,7 @@
                     <li><strong>JavaScript target:</strong> <code>web_app</code> programs emit <code>app.js</code> plus optional Node tests.</li>
                     <li><strong>WAT target:</strong> <code>wasm_app</code> emits structurally validated WebAssembly Text for the supported typed expression subset.</li>
                     <li><strong>Direct execution:</strong> <code>-run</code> interprets supported <code>cli_app</code> programs without writing generated source.</li>
-                    <li><strong>Bytecode:</strong> <code>-compile-bc</code> writes binary bytecode and <code>-run-bc</code> executes it in the VM.</li>
+                    <li><strong>Bytecode:</strong> <code>-compile-bc</code> writes binary bytecode and <code>-run-bc</code> executes it in the VM, including native in-memory stores for structured records.</li>
                 </ul>
             </section>
 
@@ -102,7 +102,9 @@ go run server.go</code></pre>
 
                 <h3>Bytecode</h3>
                 <pre><code>go run zero.go -compile-bc examples/cli_hello.zero
-go run zero.go -run-bc examples/cli_hello.zero.bc.bin</code></pre>
+go run zero.go -run-bc examples/cli_hello.zero.bc.bin
+go run zero.go -compile-bc tests/test_store_bytecode.zero -o /tmp/test_store_bytecode.zbc
+go run zero.go -run-bc /tmp/test_store_bytecode.zbc</code></pre>
 
                 <h3>WebAssembly Text</h3>
                 <pre><code>go run zero.go -o build examples/wasm_math.zero</code></pre>
@@ -114,7 +116,7 @@ go run zero.go -run-bc examples/cli_hello.zero.bc.bin</code></pre>
                     <li><strong>Control flow:</strong> <code>let</code>, <code>set</code>, <code>if</code>, <code>while</code>, <code>for</code>, <code>match</code>, and <code>do</code>.</li>
                     <li><strong>Functions and types:</strong> <code>defun</code>, <code>call</code>, <code>return</code>, <code>type_hint</code>, <code>type_param</code>, <code>struct</code>, <code>parse_json</code>, and <code>schema_bridge</code> for typed constrained-output boundaries in provider-neutral mask plans.</li>
                     <li><strong>Collections and strings:</strong> lists, dictionaries, mutation, random-access reads, splitting, joining, regex matching, and deterministic conversions.</li>
-                    <li><strong>Runtime primitives:</strong> file I/O, subprocess execution, CLI args, HTTP fetches, middleware, environment reads, imports, includes, spawning, and native tests where supported by the target.</li>
+                    <li><strong>Runtime primitives:</strong> file I/O, subprocess execution, CLI args, HTTP fetches, middleware, environment reads, imports, includes, spawning, bytecode-native record stores, and native tests where supported by the target.</li>
                     <li><strong>AI-oriented primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, patching, context threading, optimization blocks, and agent tasks.</li>
                 </ul>
             </section>

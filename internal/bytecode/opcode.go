@@ -52,6 +52,10 @@ const (
 	OpAchieve
 	OpNeuralCircuit
 	OpEphemeralCircuit
+	OpStoreOpen
+	OpStorePut
+	OpStoreGet
+	OpStoreDelete
 )
 
 type OperandType string
@@ -132,6 +136,10 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpAchieve:          {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Achieves a target state given a constraint"},
 	OpNeuralCircuit:    {Code: OpNeuralCircuit, Name: "NEURAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Executes an LLM logic circuit with a given number of inputs and an instruction"},
 	OpEphemeralCircuit: {Code: OpEphemeralCircuit, Name: "EPHEMERAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Generates an ephemeral specialized model, executes it, and discards it"},
+	OpStoreOpen:        {Code: OpStoreOpen, Name: "STORE_OPEN", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: CapDatabase, Description: "Creates or attaches a named in-memory store handle"},
+	OpStorePut:         {Code: OpStorePut, Name: "STORE_PUT", Operands: []OperandType{OperandString}, Pops: 2, Pushes: 0, Capability: CapDatabase, Description: "Upserts a structured record by key"},
+	OpStoreGet:         {Code: OpStoreGet, Name: "STORE_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: CapDatabase, Description: "Fetches a structured record by key"},
+	OpStoreDelete:      {Code: OpStoreDelete, Name: "STORE_DELETE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapDatabase, Description: "Deletes a structured record by key"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

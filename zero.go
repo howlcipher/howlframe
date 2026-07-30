@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"zero/internal/ast"
 	"zero/internal/backend/gogen"
 	"zero/internal/backend/javascript"
@@ -26,7 +27,7 @@ func init() {
 }
 
 func main() {
-	outDir := flag.String("o", "", "output directory")
+	outDir := flag.String("o", "", "output directory, or exact bytecode output file with -compile-bc")
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
@@ -87,7 +88,9 @@ func main() {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := inputFile + ".bc.bin"
-		if *outDir != "" {
+		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
+			outFile = outputFile
+		} else if *outDir != "" {
 			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".bc.bin")
 		}
 		if err = os.WriteFile(outFile, buf.Bytes(), 0644); err != nil {
@@ -144,4 +147,24 @@ func main() {
 			os.Remove(serverTestFile)
 		}
 	}
+}
+
+func outputFlagAfterInput(args []string, inputFile string) string {
+	inputSeen := false
+	for index, arg := range args {
+		if arg == inputFile {
+			inputSeen = true
+			continue
+		}
+		if !inputSeen {
+			continue
+		}
+		if arg == "-o" && index+1 < len(args) {
+			return args[index+1]
+		}
+		if strings.HasPrefix(arg, "-o=") {
+			return strings.TrimPrefix(arg, "-o=")
+		}
+	}
+	return ""
 }

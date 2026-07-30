@@ -9,7 +9,7 @@ The current toolchain includes:
 - JavaScript generation for `web_app` programs.
 - A WebAssembly Text prototype for `wasm_app` programs.
 - Direct AST execution for a bounded `cli_app` subset with `-run`.
-- Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`.
+- Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`, including VM-local native stores.
 
 Zero still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The longer-term direction is to reduce dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit.
 
@@ -28,7 +28,7 @@ Key design points:
 
 Zero is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
 
-The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors.
+The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors. The bytecode VM also supports an in-memory native store for structured records through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
 See:
 
@@ -73,6 +73,8 @@ For bytecode:
 ```bash
 go run zero.go -compile-bc examples/cli_hello.zero
 go run zero.go -run-bc examples/cli_hello.zero.bc.bin
+go run zero.go -compile-bc tests/test_store_bytecode.zero -o /tmp/test_store_bytecode.zbc
+go run zero.go -run-bc /tmp/test_store_bytecode.zbc
 ```
 
 For WebAssembly Text:
@@ -178,6 +180,7 @@ Zero supports the core control-flow and data primitives expected by the shipped 
 - `read_file`, `write_file`, `mkdir`, `exec`, `sleep`, and `cli_args`.
 - `spawn`, `fetch`, `middleware`, `next`, `env`, `import`, and `include` where supported by the target backend.
 - `test` blocks that generate Go or Node tests depending on the target.
+- Bytecode-native record stores through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
 AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive; unsupported combinations should fail during checking or execution instead of being silently accepted.
 
@@ -210,12 +213,18 @@ By default, Zero writes generated files into the current directory:
 - Go targets write `server.go` and, when tests exist, `server_test.go`.
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
 - WebAssembly targets write `app.wat`.
-- Bytecode compilation writes `<input>.bc.bin`.
+- Bytecode compilation writes `<input>.bc.bin` by default.
 
 Use `-o <dir>` to write generated artifacts elsewhere:
 
 ```bash
 go run zero.go -o build examples/hello.zero
+```
+
+For bytecode compilation, `-o <file>` can also name the exact bytecode output file:
+
+```bash
+go run zero.go -compile-bc examples/cli_hello.zero -o build/cli_hello.zbc
 ```
 
 ## Observability

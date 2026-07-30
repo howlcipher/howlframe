@@ -25,6 +25,11 @@
 * Isolated unit and subprocess integration coverage for path confinement,
   malformed model responses, test failure, atomic installation, and restart
   ordering.
+* Bytecode-native in-memory store opcodes for structured records:
+  `STORE_OPEN`, `STORE_PUT`, `STORE_GET`, and `STORE_DELETE`.
+* Compiler and VM regression coverage for store lowering, named store
+  attachment, idempotent deletion, missing-record behavior, record-copy
+  isolation, and bytecode fixture execution.
 
 ### Changed
 
@@ -46,3 +51,5 @@
 * Re-scored the remaining self-healing backlog after auto-patching shipped,
   corrected the WebAssembly prototype's WAT scope, and restored the missing
   Ephemeral Neural Circuits detail section.
+* `-compile-bc` now accepts `-o <file>` after the input path for exact bytecode
+  output files while keeping the existing output-directory behavior.

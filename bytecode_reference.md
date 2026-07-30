@@ -44,6 +44,10 @@
 | `SPAWN` | int64 | 0 | 0 | process | Spawns a background task |
 | `SPAWN_AGENT` | string | 1 | 0 | process | Spawns an autonomous subagent |
 | `SQL_QUERY` | string, string | 0 | 1 | database | Executes a SQL query |
+| `STORE_DELETE` | string | 1 | 0 | database | Deletes a structured record by key |
+| `STORE_GET` | string | 1 | 1 | database | Fetches a structured record by key |
+| `STORE_OPEN` | string, string | 0 | 0 | database | Creates or attaches a named in-memory store handle |
+| `STORE_PUT` | string | 2 | 0 | database | Upserts a structured record by key |
 | `STORE_VAR` | string | 1 | 0 |  | Pops a value and stores it in a new variable |
 | `STR_JOIN` |  | 2 | 1 |  | Joins a list of strings |
 | `STR_SPLIT` |  | 2 | 1 |  | Splits a string |

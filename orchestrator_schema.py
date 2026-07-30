@@ -176,6 +176,23 @@ class SqlQueryInstruction(BaseModel):
     string_operand: str
     string_operand_2: str
 
+class StoreDeleteInstruction(BaseModel):
+    op: Literal["STORE_DELETE"]
+    string_operand: str
+
+class StoreGetInstruction(BaseModel):
+    op: Literal["STORE_GET"]
+    string_operand: str
+
+class StoreOpenInstruction(BaseModel):
+    op: Literal["STORE_OPEN"]
+    string_operand: str
+    string_operand_2: str
+
+class StorePutInstruction(BaseModel):
+    op: Literal["STORE_PUT"]
+    string_operand: str
+
 class StoreVarInstruction(BaseModel):
     op: Literal["STORE_VAR"]
     string_operand: str
@@ -246,6 +263,10 @@ Instruction = Annotated[
         SpawnInstruction,
         SpawnAgentInstruction,
         SqlQueryInstruction,
+        StoreDeleteInstruction,
+        StoreGetInstruction,
+        StoreOpenInstruction,
+        StorePutInstruction,
         StoreVarInstruction,
         StrJoinInstruction,
         StrSplitInstruction,
