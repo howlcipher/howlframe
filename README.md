@@ -185,6 +185,10 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### Automated Counterfactual Debugging
+
+When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed. The runtime automatically feeds this back into an auto-patching loop, generating self-healing code that prevents the crash from recurring.
+
 ## How to Run
 
 1. **Transpile and Run in one step**:

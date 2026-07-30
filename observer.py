@@ -116,18 +116,45 @@ def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
     return set(names).intersection(TRANSIENT_NAMES)
 
 
-def _model_prompt(source: str, crash_data: dict) -> str:
+def _reason_counterfactual(client: object, source: str, crash_data: dict) -> str:
     crash_json = json.dumps(
         crash_data,
         ensure_ascii=True,
         separators=(",", ":"),
     )
-    return (
+    prompt = (
+        "Analyze this crash dump and the current source code. "
+        "Reason about what input or state would NOT have crashed (a counterfactual). "
+        "Explain the root cause and how the state should be different to prevent the crash."
+        f"\n\nCrash dump:\n{crash_json}\n\nCurrent source:\n{source}"
+    )
+    response = client.chat.completions.create(
+        model="llama3",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+    )
+    return response.choices[0].message.content
+
+
+def _model_prompt(source: str, crash_data: dict, reasoning: str = "") -> str:
+    crash_json = json.dumps(
+        crash_data,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    prompt = (
         "Repair this Zero source using the crash dump. Return strict JSON "
         'with exactly one key named "source" containing the complete '
         "replacement. Do not return commands, paths, markdown, or commentary."
         f"\n\nCrash dump:\n{crash_json}\n\nCurrent source:\n{source}"
     )
+    if reasoning:
+        prompt += f"\n\nCounterfactual reasoning:\n{reasoning}"
+    return prompt
 
 
 def _run_command(
@@ -188,12 +215,15 @@ def apply_crash_patch(
             raise ValueError("source must use the .zero extension")
         current_source = resolved_source.read_text(encoding="utf-8")
         crash_data = _load_crash(resolved_crash)
+        
+        reasoning = _reason_counterfactual(client, current_source, crash_data)
+        
         response = client.chat.completions.create(
             model="llama3",
             messages=[
                 {
                     "role": "user",
-                    "content": _model_prompt(current_source, crash_data),
+                    "content": _model_prompt(current_source, crash_data, reasoning),
                 }
             ],
             response_format={"type": "json_object"},
