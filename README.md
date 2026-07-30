@@ -33,6 +33,7 @@ The JavaScript backend supports `web_app` logic and Node test generation. The We
 See:
 
 - [Direct execution design](docs/direct_execution_design.md)
+- [Zero native store design](docs/zero_native_store_design.md)
 - [Language write-cost benchmark](docs/language_write_cost_benchmark.md)
 - [Bytecode reference](bytecode_reference.md)
 - [Improvement backlog](improvements.md)

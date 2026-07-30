@@ -73,6 +73,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 | 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Done | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
 | 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Documentation gap identified; these features are in README but lack code examples. |
+| 71 | [Zero Native Store Bytecode](#71-zero-native-store-bytecode) | Proposed | 1.0 (8×0.5÷4) | Sonnet 5 | Gemini 1.5 Pro | gpt-5.6-sol | Add a compiler-visible persistence layer so agents can query structured records without emitting SQL strings. Decay 0.5 because SQL persistence already shipped, but this is a different AI-native abstraction. |
 | 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Pending | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
 | 68 | [Native Logit Masking](#68-native-logit-masking) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
@@ -91,6 +92,12 @@ Pending rows are ranked by a diminishing-returns score:
 * **Description:** The `README.md` file correctly describes `semantic_match` (Semantic Routing) and Automated Counterfactual Debugging, but lacks code blocks demonstrating their usage.
 * **Why:** Developers and AIs learn via examples. Providing concrete code blocks clarifies the syntax and reduces hallucination.
 * **Impact:** 3/10 (Low/Medium — pure documentation fix but high visibility).
+
+### 71. Zero Native Store Bytecode
+* **Description:** Add a bytecode-native store abstraction with structured records, exact query predicates, indexes, transactions, and an explicit future semantic-retrieval path. The proposed design is documented in `docs/zero_native_store_design.md`.
+* **Why:** Zero already has `db_connect`/`sql_query` and schema DDL, but those primitives still make the AI write SQL strings. A Zero-native store would make persistence compiler-visible and VM-verifiable, giving agents a replacement for SQL/NoSQL at the language level while keeping SQL as an interoperability escape hatch.
+* **Impact:** 8/10 (High — persistence is the one major full-stack capability that still leaks a traditional host-language abstraction into AI-authored Zero programs).
+* **Fix sketch:** Start in the bytecode VM with in-memory `store_open`, `store_put`, `store_get`, and `store_delete`, then add `store_query` over structured `(where ...)` predicates, then durability behind the same bytecode contract. Add semantic indexes only after deterministic query semantics and capability checks are solid.
 
 ### 60. Add Collection Read Access (map_get/list_get)
 * **Description:** `zero.go` has no `[` bracket token anywhere in the lexer (`grep -n "'\['" zero.go` → no match) and no `map_get`/`list_get`/index node in the AST. `dict` and `list` support construction (`(dict ...)`, `(list ...)`), mutation (`append`, `map_set`, `map_delete`), and iteration (`for`) — but there is no way to read a single value back out by key or index. A dict built with `map_set` can only be inspected by printing the whole thing; a list can only be consumed by iterating every element.
