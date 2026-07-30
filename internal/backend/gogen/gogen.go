@@ -1148,6 +1148,64 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			err = json.Unmarshal([]byte(res.Response), &out)
 			return out, err
 		}()`, typeStr, typeStr, modelStr, varStr)
+	} else if head == "semantic_match" {
+		if len(node.Children) < 3 {
+			ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
+		}
+		varStr := generateStatement(node.Children[1], reqVar, depth+1)
+		var casesStr string
+		var intentExprs []string
+
+		for i := 2; i < len(node.Children); i++ {
+			caseNode := node.Children[i]
+			if caseNode.Type != "LIST" || len(caseNode.Children) < 2 {
+				ast.ReportError("semantic_match case expects (intent consequence...)", caseNode.Line, caseNode.Column)
+			}
+			label := caseNode.Children[0]
+			isDefault := label.Value == "default" || label.Value == "_"
+
+			bodyNode := &ast.Node{Type: "LIST", Children: append([]*ast.Node{{Type: "SYMBOL", Value: "do"}}, caseNode.Children[1:]...)}
+			bodyCode := generateStatement(bodyNode, reqVar, depth+1)
+
+			if isDefault {
+				casesStr += fmt.Sprintf("\t\t\tdefault:\n%s\n", bodyCode)
+			} else {
+				intentIdx := len(intentExprs)
+				intentExpr := generateExpression(label, reqVar, depth+1)
+				intentExprs = append(intentExprs, intentExpr)
+				casesStr += fmt.Sprintf("\t\t\tcase %d:\n%s\n", intentIdx, bodyCode)
+			}
+		}
+
+		intentsArrayStr := "[]string{" + strings.Join(intentExprs, ", ") + "}"
+
+		return fmt.Sprintf(`func() {
+			intents := %s
+			intentsStr := ""
+			for i, intent := range intents {
+				intentsStr += fmt.Sprintf("%%d: %%s\n", i, intent)
+			}
+			reqBody, _ := json.Marshal(map[string]any{
+				"model":  "llama3",
+				"prompt": fmt.Sprintf("Determine which of the following intents best matches the given input string. Return ONLY the integer ID of the matching intent. If none match, return 'default'.\n\nIntents:\n%%s\nInput: %%s", intentsStr, %s),
+				"stream": false,
+			})
+			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			if err != nil { panic(err) }
+			defer resp.Body.Close()
+			var res struct {
+				Response string `+"`json:\"response\"`"+`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+
+			ans := strings.TrimSpace(strings.ToLower(res.Response))
+			idx, err := strconv.Atoi(ans)
+			if err != nil {
+				idx = -1
+			}
+			switch idx {
+%s			}
+		}()`, intentsArrayStr, varStr, casesStr)
 	} else if head == "assert_semantic" {
 		if len(node.Children) != 3 {
 			ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)

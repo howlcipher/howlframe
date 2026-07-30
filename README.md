@@ -185,6 +185,10 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### Semantic Routing
+
+With `semantic_match`, you can route execution based on semantic intent rather than brittle regexes or exact string matching. It dynamically evaluates the user input against a set of constraints using a local LLM, then executes the corresponding branch.
+
 ### Automated Counterfactual Debugging
 
 When Zero encounters a crash, its agentic observability layer can capture a crash dump and utilize an LLM to reason counterfactually about what input or state would not have crashed. The runtime automatically feeds this back into an auto-patching loop, generating self-healing code that prevents the crash from recurring.
