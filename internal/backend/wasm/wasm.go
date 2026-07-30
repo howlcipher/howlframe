@@ -103,16 +103,7 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 // wasmType consumes the semantic layout selected by the checker. Zero's
 // native int is 64-bit, while boolean control-flow values remain i32 in Wasm.
 func wasmType(info ast.TypeInfo) string {
-	switch info.Kind {
-	case ast.Int:
-		return "i64"
-	case ast.Float:
-		return "f64"
-	case ast.Bool:
-		return "i32"
-	default:
-		return "i32"
-	}
+	return describeLayout(info).ValueType
 }
 
 func wasmOps(valueType string) map[string]string {
