@@ -231,3 +231,32 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 		}
 	}
 }
+
+func TestWasmBackendReadsStringListPointers(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "string_list_get.zero")
+	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list "alpha" "beta") 1))`), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate string-list WAT: %v: %s", err, output)
+	}
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range []string{
+		"(func (export \"main\") (result i32)", "(i32.load", "(i64.lt_u", "\\61\\6c\\70\\68\\61",
+	} {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated string-list WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}

@@ -21,9 +21,9 @@ func GenerateWasmCode(node *ast.Node) string {
 	resultType := wasmType(node.Children[1].Inferred)
 	memory := ""
 	data := ""
-	if findStaticIntegerList(node.Children[1]) != nil {
+	if findStaticList(node.Children[1]) != nil {
 		memory = "  (memory (export \"memory\") 1)\n"
-		data = staticAggregateData(findStaticIntegerList(node.Children[1]))
+		data = staticAggregateData(findStaticList(node.Children[1]))
 	}
 	code := fmt.Sprintf("(module\n%s%s  (func (export \"main\") (result %s)\n    %s\n  )\n)\n", memory, data, resultType, generateWasmExpression(node.Children[1]))
 	if err := ValidateWAT(code); err != nil {
@@ -97,9 +97,14 @@ func EmitWasmIR(ir *ir.IRNode, source *ast.Node) string {
 	case "list_get":
 		listPointer := generateWasmExpression(ir.Kids[0])
 		index := generateWasmExpression(ir.Kids[1])
+		length := "(i64.load (i32.const 0))"
+		if ir.Kids[0].Inferred.Element != nil && ir.Kids[0].Inferred.Element.Kind == ast.String {
+			byteOffset := fmt.Sprintf("(i32.mul (i32.wrap_i64 %s) (i32.const 4))", index)
+			address := fmt.Sprintf("(i32.add (i32.const 8) %s)", byteOffset)
+			return fmt.Sprintf("(if (result i32) (i64.lt_u %s %s) (then (i32.load %s)) (else (i32.const 0)))", index, length, address)
+		}
 		byteOffset := fmt.Sprintf("(i32.mul (i32.wrap_i64 %s) (i32.const 8))", index)
 		address := fmt.Sprintf("(i32.add %s %s)", listPointer, byteOffset)
-		length := "(i64.load (i32.const 0))"
 		return fmt.Sprintf("(if (result i64) (i64.lt_u %s %s) (then (i64.load %s)) (else (i64.const 0)))", index, length, address)
 	case "to_float":
 		child := ir.Kids[0]
@@ -128,6 +133,19 @@ func staticAggregateData(node *ast.Node) string {
 	var encoded strings.Builder
 	var length [8]byte
 	binary.LittleEndian.PutUint64(length[:], uint64(len(node.Children)-1))
+	if len(node.Children) > 1 && node.Children[1].Type == "STRING" {
+		payload := make([]byte, 256)
+		binary.LittleEndian.PutUint64(payload[:8], uint64(len(node.Children)-1))
+		offset := 256
+		for index, child := range node.Children[1:] {
+			binary.LittleEndian.PutUint32(payload[8+index*4:], uint32(offset))
+			value := []byte(child.Value)
+			payload = append(payload, value...)
+			payload = append(payload, 0)
+			offset += len(value) + 1
+		}
+		return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", watEncodeBytes(payload))
+	}
 	for _, byteValue := range length {
 		encoded.WriteString(fmt.Sprintf("\\%02x", byteValue))
 	}
@@ -148,24 +166,32 @@ func staticAggregateData(node *ast.Node) string {
 	return fmt.Sprintf("  (data (i32.const 0) \"%s\")\n", encoded.String())
 }
 
-func findStaticIntegerList(node *ast.Node) *ast.Node {
+func findStaticList(node *ast.Node) *ast.Node {
 	if node == nil {
 		return nil
 	}
 	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "list" {
 		for _, child := range node.Children[1:] {
-			if child.Type != "INT" {
+			if child.Type != "INT" && child.Type != "STRING" {
 				return nil
 			}
 		}
 		return node
 	}
 	for _, child := range node.Children {
-		if found := findStaticIntegerList(child); found != nil {
+		if found := findStaticList(child); found != nil {
 			return found
 		}
 	}
 	return nil
+}
+
+func watEncodeBytes(data []byte) string {
+	var encoded strings.Builder
+	for _, byteValue := range data {
+		encoded.WriteString(fmt.Sprintf("\\%02x", byteValue))
+	}
+	return encoded.String()
 }
 
 // wasmType consumes the semantic layout selected by the checker. Zero's

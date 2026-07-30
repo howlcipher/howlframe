@@ -88,15 +88,17 @@ func checkWasmExpression(node *ast.Node) {
 			checkWasmExpression(kid)
 		}
 	case "list":
-		if irNode.Type.Element == nil || irNode.Type.Element.Kind != ast.Int {
-			ast.ReportError("Wasm list aggregates currently require int elements", node.Line, node.Column)
+		if irNode.Type.Element == nil || (irNode.Type.Element.Kind != ast.Int && irNode.Type.Element.Kind != ast.String) {
+			ast.ReportError("Wasm list aggregates currently require int or string elements", node.Line, node.Column)
 		}
 		for _, kid := range irNode.Kids {
-			checkWasmExpression(kid)
+			if kid.Type != "STRING" {
+				checkWasmExpression(kid)
+			}
 		}
 	case "list_get":
-		if len(irNode.Kids) != 2 || irNode.Kids[0].Inferred.Element == nil || irNode.Kids[0].Inferred.Element.Kind != ast.Int || irNode.Kids[1].Inferred.Kind != ast.Int {
-			ast.ReportError("Wasm list_get requires an integer list and integer index", node.Line, node.Column)
+		if len(irNode.Kids) != 2 || irNode.Kids[0].Inferred.Element == nil || (irNode.Kids[0].Inferred.Element.Kind != ast.Int && irNode.Kids[0].Inferred.Element.Kind != ast.String) || irNode.Kids[1].Inferred.Kind != ast.Int {
+			ast.ReportError("Wasm list_get requires an int/string list and integer index", node.Line, node.Column)
 		}
 		checkWasmExpression(irNode.Kids[0])
 		checkWasmExpression(irNode.Kids[1])
