@@ -57,6 +57,7 @@
                 <li><strong>Built-in Observability:</strong> Every generated program auto-injects call tracing (<code>telemetry.jsonl</code>) and crash-state serialization (<code>crash.json</code> with a full stack trace on panic) with zero extra syntax, plus a standalone Python observer agent (<code>observer.py</code>) that watches for anomalies live.</li>
                 <li><strong>Go Generics:</strong> <code>(type_param T)</code> on a <code>defun</code> generates a real Go generic function instead of falling back to <code>any</code> and runtime type assertions.</li>
                 <li><strong>Direct AST Execution:</strong> <code>-run</code> interprets a <code>cli_app</code> script directly &mdash; no Go text ever generated, no <code>go build</code>/<code>go run</code> invoked &mdash; Phase 1 toward Zero's eventual goal of bypassing text-based codegen entirely (see the project's <a href="https://github.com/howlcipher/zero/blob/main/README.md#project-roadmap--the-end-goal" target="_blank">roadmap</a>).</li>
+                <li><strong>Direct Binary Bytecode:</strong> <code>-compile-bc</code> and <code>-run-bc</code> allow compiling Zero programs directly to binary bytecode and executing them natively.</li>
             </ul>
         </section>
 

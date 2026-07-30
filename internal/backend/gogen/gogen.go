@@ -553,11 +553,11 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("		{\n%s\n		}", stmts)
 	case "set":
-		varStr := generateStatement(ir.Kids[0], reqVar, depth+1)
-		valStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		varStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		%s = %s", varStr, valStr)
 	case "match":
-		varStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		varStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		var casesStr string
 		for _, c := range ir.Cases {
 			caseValStr := c.Label.Value
@@ -575,67 +575,67 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("		switch %s {\n%s		}", varStr, casesStr)
 	case "sleep":
-		msStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		msStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("		time.Sleep(time.Duration(%s) * time.Millisecond)", msStr)
 	case "to_int":
-		valStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() int { v, _ := strconv.Atoi(%s); return v }()", valStr)
 	case "to_float":
-		valStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() float64 { v, _ := strconv.ParseFloat(%s, 64); return v }()", valStr)
 	case "to_string":
-		valStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("fmt.Sprint(%s)", valStr)
 	case "bytes_to_string":
-		valStr := generateStatement(ir.Kids[0], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("string(%s)", valStr)
 	case "str_split":
-		sStr := generateStatement(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		sStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("strings.Split(%s, %s)", sStr, sepStr)
 	case "str_join":
-		listStr := generateStatement(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("strings.Join(%s, %s)", listStr, sepStr)
 	case "regex_match":
-		patStr := generateStatement(ir.Kids[0], reqVar, depth+1)
-		sStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		patStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		sStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("regexp.MatchString(%s, %s)", patStr, sStr)
 	case "append":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
 			ast.ReportError("append requires a symbol for list", listNode.Line, listNode.Column)
 		}
-		itemStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		itemStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		%s = append(%s, %s)", listNode.Value, listNode.Value, itemStr)
 	case "map_set":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
 			ast.ReportError("map_set requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
-		keyStr := generateStatement(ir.Kids[1], reqVar, depth+1)
-		valStr := generateStatement(ir.Kids[2], reqVar, depth+1)
+		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		valStr := generateExpression(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf("		%s[%s] = %s", dictNode.Value, keyStr, valStr)
 	case "map_delete":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
 			ast.ReportError("map_delete requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
-		keyStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
 	case "map_get":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
 			ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
-		keyStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("%s[%s]", dictNode.Value, keyStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
 			ast.ReportError("list_get requires a symbol for list", listNode.Line, listNode.Column)
 		}
-		idxStr := generateStatement(ir.Kids[1], reqVar, depth+1)
+		idxStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("func() string { _i, _ := strconv.Atoi(fmt.Sprint(%s)); if _i >= 0 && _i < len(%s) { return %s[_i] }; return \"\" }()", idxStr, listNode.Value, listNode.Value)
 	case "list":
 		var items []string
@@ -671,7 +671,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "print":
 		var args []string
 		for _, kid := range ir.Kids {
-			args = append(args, generateStatement(kid, reqVar, depth+1))
+			args = append(args, generateExpression(kid, reqVar, depth+1))
 		}
 		return fmt.Sprintf("		fmt.Println(%s)", strings.Join(args, ", "))
 	}
@@ -770,11 +770,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 				if funcName == "call" {
 					var args []string
 					for j := 2; j < len(valNode.Children); j++ {
-						if valNode.Children[j].Type == "STRING" {
-							args = append(args, fmt.Sprintf("%q", valNode.Children[j].Value))
-						} else {
-							args = append(args, valNode.Children[j].Value)
-						}
+						args = append(args, generateExpression(valNode.Children[j], reqVar, depth+1))
 					}
 					valStr = fmt.Sprintf("%s(%s)", valNode.Children[1].Value, strings.Join(args, ", "))
 				} else if funcName == "list" {
@@ -943,7 +939,9 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		varName := node.Children[1].Value
 		driverNode := node.Children[2]
 		dsnNode := node.Children[3]
-		code := fmt.Sprintf("		%s, _ := sql.Open(%q, %q)\n		_ = %s", varName, driverNode.Value, dsnNode.Value, varName)
+		driverStr := generateExpression(driverNode, reqVar, depth+1)
+		dsnStr := generateExpression(dsnNode, reqVar, depth+1)
+		code := fmt.Sprintf("		%s, _ := sql.Open(%s, %s)\n		_ = %s", varName, driverStr, dsnStr, varName)
 		for _, ddl := range CurrentSchemaDDLs {
 			code += fmt.Sprintf("\n		%s.Exec(%q)", varName, ddl)
 		}
@@ -954,10 +952,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		dbVar := node.Children[1].Value
 		queryNode := node.Children[2]
-		queryStr := queryNode.Value
-		if queryNode.Type == "STRING" {
-			queryStr = fmt.Sprintf("%q", queryStr)
-		}
+		queryStr := generateExpression(queryNode, reqVar, depth+1)
 		return fmt.Sprintf("		%s.Query(%s)", dbVar, queryStr)
 	} else if head == "for" {
 		if len(node.Children) != 4 {
