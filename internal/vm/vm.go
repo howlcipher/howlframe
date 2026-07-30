@@ -15,9 +15,9 @@ import (
 	"time"
 	"zero/internal/ast"
 	"zero/internal/bytecode"
+	"zero/internal/ir"
 	"zero/internal/lexer"
 	"zero/internal/parser"
-	"zero/internal/ir"
 )
 
 // interpreter.go implements Phase 1 of improvement #49 (Direct Neural
@@ -187,6 +187,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 	switch head {
 	case "intent":
 		return nil
+	case "schema_bridge":
+		if len(node.Children) != 3 {
+			InterpErr("schema_bridge expects (schema_bridge StructName source)", node)
+		}
+		return interp.eval(node.Children[2], env)
 	case "let":
 		return interp.evalLet(node, env)
 	case "set":

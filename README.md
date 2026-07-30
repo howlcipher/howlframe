@@ -183,7 +183,9 @@ AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, 
 
 ## Constrained Decoding Plans
 
-The `internal/masking` package compiles semantic `ast.TypeInfo` values and complete `checker.Analysis` results into deterministic, JSON-serializable mask plans. Plans describe provider-neutral token classes, literals, collection delimiters, struct fields, and function parameter and return constraints for use by downstream constrained decoders.
+The `internal/masking` package compiles semantic `ast.TypeInfo` values and complete `checker.Analysis` results into deterministic, JSON-serializable mask plans. Plans describe provider-neutral token classes, literals, collection delimiters, struct fields, function parameter and return constraints, and schema bridges for use by downstream constrained decoders.
+
+Use `(schema_bridge User output)` to bind an output source to a declared `User` struct. The checker rejects unknown targets and the plan records the exact struct constraint; `go run zero.go -mask-plan program.zero` prints the complete plan.
 
 This API does not call a model or map constraints to provider-specific token IDs. Live logit masking remains the responsibility of an inference integration that consumes the plan.
 

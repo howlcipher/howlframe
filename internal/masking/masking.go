@@ -74,12 +74,20 @@ type FunctionPlan struct {
 	Return TypePlan    `json:"return"`
 }
 
+// BridgePlan identifies one schema-bound output source and the exact struct
+// constraint a downstream constrained decoder must enforce.
+type BridgePlan struct {
+	Target     string   `json:"target"`
+	Constraint TypePlan `json:"constraint"`
+}
+
 // ProgramPlan contains all named struct and function constraints collected by
 // the semantic checker.
 type ProgramPlan struct {
 	Format    string          `json:"format"`
 	Structs   []NamedTypePlan `json:"structs"`
 	Functions []FunctionPlan  `json:"functions"`
+	Bridges   []BridgePlan    `json:"bridges"`
 }
 
 // CompileType compiles one semantic type into a provider-neutral mask plan.
@@ -95,6 +103,7 @@ func CompileAnalysis(analysis *checker.Analysis) ProgramPlan {
 		Format:    FormatV1,
 		Structs:   []NamedTypePlan{},
 		Functions: []FunctionPlan{},
+		Bridges:   []BridgePlan{},
 	}
 	if analysis == nil {
 		return plan
@@ -123,6 +132,13 @@ func CompileAnalysis(analysis *checker.Analysis) ProgramPlan {
 			})
 		}
 		plan.Functions = append(plan.Functions, function)
+	}
+
+	for _, bridge := range analysis.Bridges {
+		plan.Bridges = append(plan.Bridges, BridgePlan{
+			Target:     bridge.Target,
+			Constraint: CompileType(bridge.Constraint),
+		})
 	}
 
 	return plan

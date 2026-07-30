@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"zero/internal/bytecode"
 	"zero/internal/checker"
 	"zero/internal/lexer"
+	"zero/internal/masking"
 	"zero/internal/parser"
 	"zero/internal/vm"
 )
@@ -28,6 +30,7 @@ func main() {
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
+	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
@@ -65,7 +68,16 @@ func main() {
 
 	root = ast.ApplyWithContext(root, nil)
 
-	checker.Check(root)
+	analysis := checker.Check(root)
+
+	if *maskPlan {
+		plan, err := json.Marshal(masking.CompileAnalysis(analysis))
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to encode mask plan: %v", err), 0, 0)
+		}
+		fmt.Println(string(plan))
+		return
+	}
 
 	if *compileBc {
 		prog := bytecode.CompileToBytecode(root)

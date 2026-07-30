@@ -435,6 +435,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
 		return generateJSExpression(node.Children[1], reqVar, depth+1)
+	} else if head == "schema_bridge" {
+		return generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 	}
 
 	// ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)

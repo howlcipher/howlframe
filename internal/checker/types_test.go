@@ -184,6 +184,55 @@ func TestAnalyzeBackendSpecificLayoutsAndFields(t *testing.T) {
 	}
 }
 
+func TestAnalyzeSchemaBridgeConstrainsDeclaredStructAndVisitsSource(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(struct Profile (name string) (score int))
+		(schema_bridge Profile (+ true false)))`)
+
+	analysis := Analyze(root)
+	if len(analysis.Bridges) != 1 {
+		t.Fatalf("bridges = %+v, want one bridge", analysis.Bridges)
+	}
+	bridge := analysis.Bridges[0]
+	if bridge.Target != "Profile" || bridge.Constraint.Kind != ast.Struct || bridge.Constraint.Name != "Profile" ||
+		bridge.Constraint.Fields["score"].Kind != ast.Int {
+		t.Fatalf("unexpected schema bridge: %+v", bridge)
+	}
+	bridgeNode := root.Children[2]
+	if bridgeNode.Inferred.Kind != ast.Struct || bridgeNode.Inferred.Name != "Profile" {
+		t.Fatalf("bridge inference = %+v, want Profile struct", bridgeNode.Inferred)
+	}
+
+	foundNestedError := false
+	for _, diagnostic := range analysis.Diagnostics {
+		if diagnostic.Reason == "+ requires numeric operands, got bool and bool" {
+			foundNestedError = true
+		}
+	}
+	if !foundNestedError {
+		t.Fatalf("schema bridge did not visit source expression: %+v", analysis.Diagnostics)
+	}
+}
+
+func TestAnalyzeSchemaBridgeRejectsUnknownTargetAtTargetLocation(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app (schema_bridge Missing (to_int "1")))`)
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %+v, want unknown-target diagnostic", analysis.Diagnostics)
+	}
+	diagnostic := analysis.Diagnostics[0]
+	if diagnostic.Reason != `schema_bridge target "Missing" is not a declared struct` {
+		t.Fatalf("unexpected diagnostic: %+v", diagnostic)
+	}
+	target := root.Children[1].Children[1]
+	if diagnostic.Line != target.Line || diagnostic.Column != target.Column {
+		t.Fatalf("diagnostic location = %d:%d, want target location %d:%d", diagnostic.Line, diagnostic.Column, target.Line, target.Column)
+	}
+	if root.Children[1].Children[2].Inferred.Kind != ast.Int {
+		t.Fatalf("unknown-target bridge did not infer source: %+v", root.Children[1].Children[2].Inferred)
+	}
+}
+
 func TestAnalyzeRejectsInconsistentAggregateLayouts(t *testing.T) {
 	root := parseTestProgram(t, `(cli_app
 		(let (items (list 1 "two"))

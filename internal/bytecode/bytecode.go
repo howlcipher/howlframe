@@ -254,6 +254,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "LLM_GENERATE", Op: OpLlmGenerate, StringOperand: modelStr})
 
+		case "schema_bridge":
+			insts = append(insts, c.compileNode(node.Children[2])...)
+
 		case "let":
 			binding := node.Children[1]
 			varName := binding.Children[0].Value

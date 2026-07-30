@@ -122,6 +122,7 @@ func TestCompileTypePreservesDistinctFieldsWithoutCheckerAliases(t *testing.T) {
 func TestCompileAnalysisProducesStableProgramPlan(t *testing.T) {
 	root := parseProgram(t, `(cli_app
 		(struct User (name string) (age int))
+		(schema_bridge User (llm_generate "describe a user"))
 		(defun describe ((user User) (verbose bool))
 			(type_hint return "string")
 			(return user.name)))`)
@@ -151,6 +152,11 @@ func TestCompileAnalysisProducesStableProgramPlan(t *testing.T) {
 		function.Return.Kind != ast.String {
 		t.Fatalf("unexpected function constraint: %+v", function)
 	}
+	if len(plan.Bridges) != 1 || plan.Bridges[0].Target != "User" ||
+		plan.Bridges[0].Constraint.Kind != ast.Struct || plan.Bridges[0].Constraint.Name != "User" ||
+		len(plan.Bridges[0].Constraint.Fields) != 2 {
+		t.Fatalf("unexpected bridge constraint: %+v", plan.Bridges)
+	}
 
 	first, err := json.Marshal(plan)
 	if err != nil {
@@ -167,7 +173,7 @@ func TestCompileAnalysisProducesStableProgramPlan(t *testing.T) {
 
 func TestCompileAnalysisAcceptsNil(t *testing.T) {
 	plan := CompileAnalysis(nil)
-	if plan.Format != FormatV1 || len(plan.Structs) != 0 || len(plan.Functions) != 0 {
+	if plan.Format != FormatV1 || len(plan.Structs) != 0 || len(plan.Functions) != 0 || len(plan.Bridges) != 0 {
 		t.Fatalf("unexpected nil analysis plan: %+v", plan)
 	}
 }

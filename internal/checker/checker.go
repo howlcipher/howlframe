@@ -6,9 +6,9 @@ import (
 	"zero/internal/ir"
 )
 
-func Check(node *ast.Node) {
+func Check(node *ast.Node) *Analysis {
 	if node == nil {
-		return
+		return Analyze(nil)
 	}
 	analysis := Analyze(node)
 	if len(analysis.Diagnostics) > 0 {
@@ -34,6 +34,7 @@ func Check(node *ast.Node) {
 	default:
 		ast.ReportError(fmt.Sprintf("Expected http_server, cli_app, web_app, or wasm_app as root symbol, got %s", head.Value), head.Line, head.Column)
 	}
+	return analysis
 }
 
 func checkWasmApp(node *ast.Node) {

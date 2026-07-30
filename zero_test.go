@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -545,5 +546,66 @@ func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated integer dict WAT is missing %q:\n%s", fragment, wat)
 		}
+	}
+}
+
+func TestMaskPlanIncludesSchemaBridge(t *testing.T) {
+	source := `(cli_app
+		(struct User (name string) (age int))
+		(schema_bridge User (llm_generate "describe a user")))`
+	input := filepath.Join(t.TempDir(), "bridge.zero")
+	if err := os.WriteFile(input, []byte(source), 0600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	command := exec.Command("go", "run", "zero.go", "-mask-plan", input)
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("run -mask-plan: %v", err)
+	}
+
+	var plan struct {
+		Bridges []struct {
+			Target     string `json:"target"`
+			Constraint struct {
+				Kind   string `json:"kind"`
+				Name   string `json:"name"`
+				Fields []struct {
+					Name string `json:"name"`
+				} `json:"fields"`
+			} `json:"constraint"`
+		} `json:"bridges"`
+	}
+	if err := json.Unmarshal(output, &plan); err != nil {
+		t.Fatalf("decode mask plan: %v\n%s", err, output)
+	}
+	if len(plan.Bridges) != 1 || plan.Bridges[0].Target != "User" ||
+		plan.Bridges[0].Constraint.Kind != "struct" || plan.Bridges[0].Constraint.Name != "User" ||
+		len(plan.Bridges[0].Constraint.Fields) != 2 {
+		t.Fatalf("unexpected bridge plan: %+v", plan.Bridges)
+	}
+}
+
+func TestSchemaBridgeEmitsWrappedSourceExpression(t *testing.T) {
+	source := `(cli_app
+		(struct User (name string) (age int))
+		(print (schema_bridge User "ok")))`
+	outDir := t.TempDir()
+	input := filepath.Join(outDir, "bridge_run.zero")
+	if err := os.WriteFile(input, []byte(source), 0600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	command := exec.Command("go", "run", "zero.go", "-o", outDir, input)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("transpile schema_bridge: %v\n%s", err, output)
+	}
+	server := filepath.Join(outDir, "server.go")
+	generated, err := os.ReadFile(server)
+	if err != nil {
+		t.Fatalf("read generated server: %v", err)
+	}
+	if !strings.Contains(string(generated), `fmt.Println("ok")`) {
+		t.Fatalf("schema_bridge did not emit wrapped source expression:\n%s", generated)
 	}
 }

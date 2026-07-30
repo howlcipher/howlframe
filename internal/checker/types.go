@@ -22,6 +22,13 @@ type FunctionInfo struct {
 	Return ast.TypeInfo
 }
 
+// SchemaBridge records a source expression whose output is constrained to a
+// declared Zero struct at a model or other structured-output boundary.
+type SchemaBridge struct {
+	Target     string
+	Constraint ast.TypeInfo
+}
+
 // Analysis contains the inferred type/layout for every visited AST node.
 // The AST nodes are also annotated so later lowering passes can consume the
 // metadata without maintaining a second node-keyed lookup table.
@@ -29,6 +36,7 @@ type Analysis struct {
 	Types       map[*ast.Node]ast.TypeInfo
 	Functions   map[string]FunctionInfo
 	Structs     map[string]ast.TypeInfo
+	Bridges     []SchemaBridge
 	Diagnostics []Diagnostic
 }
 
@@ -504,6 +512,33 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			}
 		}
 		return ast.Layout(ast.Unknown)
+	case "schema_bridge":
+		if len(node.Children) != 3 {
+			for _, child := range node.Children[1:] {
+				a.infer(child, env)
+			}
+			a.add(node, fmt.Sprintf("schema_bridge expects a struct name and source expression, got %d arguments", len(node.Children)-1))
+			return ast.Layout(ast.Unknown)
+		}
+
+		// Infer the source even when the target is invalid so errors nested in
+		// the boundary remain visible to the author.
+		a.infer(node.Children[2], env)
+		target := node.Children[1]
+		if target.Type != "SYMBOL" {
+			a.add(target, "schema_bridge target must be a declared struct name")
+			return ast.Layout(ast.Unknown)
+		}
+		constraint, ok := a.Structs[target.Value]
+		if !ok {
+			a.add(target, fmt.Sprintf("schema_bridge target %q is not a declared struct", target.Value))
+			return ast.Layout(ast.Unknown)
+		}
+		a.Bridges = append(a.Bridges, SchemaBridge{
+			Target:     target.Value,
+			Constraint: constraint,
+		})
+		return constraint
 	case "env":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
