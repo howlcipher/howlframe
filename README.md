@@ -185,6 +185,17 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### JIT Function Generation
+
+With `lazy_synthesize`, you can define a function using only its signature and a natural language docstring. Zero dynamically synthesizes the implementation at runtime using a local LLM upon the first invocation, then caches the generated logic for subsequent calls.
+
+```lisp
+(cli_app
+  (lazy_synthesize extract_emails (text) "Extracts all email addresses from the text and returns them as a list")
+  (print (call extract_emails "Contact us at support@example.com or sales@example.com"))
+)
+```
+
 ### Auto-Mutating Runtime
 
 The `optimize_block` primitive enables Zero to be self-rewriting. It monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime (via Go plugins) if performance bottlenecks are detected.

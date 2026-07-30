@@ -1,0 +1,4 @@
+(cli_app
+  (lazy_synthesize my_add (a b) "Returns the sum of a and b")
+  (print (call my_add 10 20))
+)

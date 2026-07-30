@@ -41,8 +41,11 @@ type BCProgram struct {
 }
 
 type BCFunction struct {
-	Params       []string        `json:"params"`
-	Instructions []BCInstruction `json:"instructions"`
+	Params         []string        `json:"params"`
+	Instructions   []BCInstruction `json:"instructions"`
+	LazySynthesize bool            `json:"lazy_synthesize,omitempty"`
+	Docstring      string          `json:"docstring,omitempty"`
+	Name           string          `json:"name,omitempty"`
 }
 
 // compiler state
@@ -105,8 +108,22 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				bodyInsts = append(bodyInsts, c.compileNode(child)...)
 			}
 			c.funcs[funcName] = &BCFunction{
+				Name:         funcName,
 				Params:       params,
 				Instructions: bodyInsts,
+			}
+		case "lazy_synthesize":
+			funcName := node.Children[1].Value
+			var params []string
+			for _, p := range node.Children[2].Children {
+				params = append(params, p.Value)
+			}
+			docstring := node.Children[3].Value
+			c.funcs[funcName] = &BCFunction{
+				Name:           funcName,
+				Params:         params,
+				LazySynthesize: true,
+				Docstring:      docstring,
 			}
 		case "type_hint":
 			// ignore type hints in execution

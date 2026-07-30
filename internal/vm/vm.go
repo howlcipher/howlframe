@@ -15,6 +15,8 @@ import (
 	"time"
 	"zero/internal/ast"
 	"zero/internal/bytecode"
+	"zero/internal/lexer"
+	"zero/internal/parser"
 	"zero/internal/ir"
 )
 
@@ -58,8 +60,11 @@ func (e *InterpEnv) set(name string, val any) bool {
 }
 
 type InterpFunc struct {
-	params []string
-	body   *ast.Node
+	params         []string
+	body           *ast.Node
+	lazySynthesize bool
+	docstring      string
+	name           string
 }
 
 // Interpreter holds the global function table for a single -run invocation.
@@ -120,13 +125,14 @@ func Interpret(ast *ast.Node, args []string) int {
 
 func IsDefun(node *ast.Node) bool {
 	return node.Type == "List" && len(node.Children) > 0 &&
-		node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun"
+		node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "defun" || node.Children[0].Value == "lazy_synthesize")
 }
 
 func (interp *Interpreter) registerDefun(node *ast.Node) {
 	if len(node.Children) < 4 {
-		InterpErr("defun expects (defun name (args) body)", node)
+		InterpErr("defun/lazy_synthesize expects (defun name (args) body) or (lazy_synthesize name (args) docstring)", node)
 	}
+	head := node.Children[0].Value
 	name := node.Children[1].Value
 	argsNode := node.Children[2]
 	var params []string
@@ -137,8 +143,13 @@ func (interp *Interpreter) registerDefun(node *ast.Node) {
 			params = append(params, arg.Value)
 		}
 	}
-	body := node.Children[len(node.Children)-1]
-	interp.funcs[name] = &InterpFunc{params: params, body: body}
+	if head == "lazy_synthesize" {
+		docstring := node.Children[3].Value
+		interp.funcs[name] = &InterpFunc{params: params, lazySynthesize: true, docstring: docstring, name: name}
+	} else {
+		body := node.Children[len(node.Children)-1]
+		interp.funcs[name] = &InterpFunc{params: params, body: body}
+	}
 }
 
 func (interp *Interpreter) eval(node *ast.Node, env *InterpEnv) any {
@@ -554,6 +565,40 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 	fn, ok := interp.funcs[funcName]
 	if !ok {
 		InterpErr(fmt.Sprintf("%q is not a defined function (only user defun functions are callable under -run in Phase 1)", funcName), node.Children[1])
+	}
+
+	if fn.lazySynthesize {
+		promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
+		reqBody, _ := json.Marshal(map[string]any{
+			"model":  "llama3",
+			"prompt": promptStr,
+			"stream": false,
+		})
+		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			panic(err)
+		}
+		var res struct {
+			Response string `json:"response"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			resp.Body.Close()
+			panic(err)
+		}
+		resp.Body.Close()
+		code := strings.TrimSpace(res.Response)
+
+		code = strings.TrimPrefix(code, "```lisp")
+		code = strings.TrimPrefix(code, "```")
+		code = strings.TrimSuffix(code, "```")
+		code = strings.TrimSpace(code)
+		progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.name, strings.Join(fn.params, " "), code)
+		lx := lexer.NewLexer(progCode)
+		p := parser.NewParser(lx, "lazy_synthesize")
+		astNode := p.ParseExpression()
+
+		fn.body = astNode.Children[len(astNode.Children)-1]
+		fn.lazySynthesize = false
 	}
 	var argVals []any
 	for _, argNode := range node.Children[2:] {
@@ -1405,6 +1450,43 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			fn, ok := vm.prog.Functions[funcName]
 			if !ok {
 				panic("undefined function: " + funcName)
+			}
+
+			if fn.LazySynthesize {
+				promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
+				reqBody, _ := json.Marshal(map[string]any{
+					"model":  "llama3",
+					"prompt": promptStr,
+					"stream": false,
+				})
+				resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+				if err != nil {
+					panic(err)
+				}
+				var res struct {
+					Response string `json:"response"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+					resp.Body.Close()
+					panic(err)
+				}
+				resp.Body.Close()
+				code := strings.TrimSpace(res.Response)
+
+				// Strip potential markdown blocks
+				code = strings.TrimPrefix(code, "```lisp")
+				code = strings.TrimPrefix(code, "```")
+				code = strings.TrimSuffix(code, "```")
+				code = strings.TrimSpace(code)
+
+				progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.Name, strings.Join(fn.Params, " "), code)
+				lx := lexer.NewLexer(progCode)
+				p := parser.NewParser(lx, "lazy_synthesize")
+				astNode := p.ParseExpression()
+
+				newProg := bytecode.CompileToBytecode(astNode)
+				fn.Instructions = newProg.Functions[fn.Name].Instructions
+				fn.LazySynthesize = false
 			}
 
 			var argVals []any

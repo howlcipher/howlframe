@@ -70,7 +70,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | Done | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | Done (2026-07-29) | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | Done (2026-07-30) | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
-| 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ⚠️ below floor | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
+| 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ✅ Done | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 ## Details
 
 ### 60. Add Collection Read Access (map_get/list_get)
@@ -176,7 +176,7 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 6/10 (Medium - powerful for data safety).
 
 ### 37. Add Just-In-Time Function Generation (lazy_synthesize)
-* **Status Note:** ⚠️ re-scored to 0.089, below ROI floor of 0.5 (2026-07-23). Synthesizing an implementation from a docstring at first invocation necessarily calls out to an LLM at runtime, placing it in the same "LLM-backed runtime primitive" theme as three already-shipped items (#26 `llm_generate`, #35 `fuzzy_cast`, #36 `assert_semantic`), same reasoning as improvement #34's re-score. Decay drops from 1.0 to 0.125, score from 0.71 to 0.089. Flagged per the below-floor gate rather than closed — needs explicit user confirmation to work, re-scope, or close. Re-verified 2026-07-27: no `lazy_synthesize` AST node exists and no same-theme item shipped during this pass, so requirements and score are unchanged.
+* **Status Note:** Done (2026-07-29). Implemented `lazy_synthesize` in the tree-walking interpreter and bytecode compiler/VM to synthesize Zero Lisp function bodies at runtime via local LLM.
 * **Description:** A declarative primitive for defining a function using only its signature and a natural language docstring. The implementation is dynamically generated the first time it is invoked.
 * **Why:** AI writing the language doesn't have to waste tokens generating mundane utility functions, delegating implementation to the runtime.
 * **Impact:** 5/10 (Medium - innovative but complex to execute).
