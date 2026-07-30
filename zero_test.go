@@ -128,7 +128,7 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "unsupported.zero")
-	if err := os.WriteFile(inputFile, []byte("(wasm_app \"not supported\")"), 0644); err != nil {
+	if err := os.WriteFile(inputFile, []byte(`(wasm_app (env "TOKEN"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
@@ -139,6 +139,116 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "Wasm backend does not support") {
 		t.Errorf("Expected a clear unsupported-node diagnostic, got: %s", output)
+	}
+}
+
+func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	tests := []struct {
+		name   string
+		input  string
+		reason string
+	}{
+		{
+			name:   "heterogeneous list",
+			input:  `(wasm_app (list 1 "two"))`,
+			reason: "list element 2 has type string, want int",
+		},
+		{
+			name:   "incompatible branches",
+			input:  `(wasm_app (if true 1 (to_float 2)))`,
+			reason: "if branches have incompatible types int and float64",
+		},
+		{
+			name:   "string aggregate expression",
+			input:  `(wasm_app (list_get (list (to_string 1)) 0))`,
+			reason: "to_string",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			outDir := t.TempDir()
+			inputFile := filepath.Join(outDir, "invalid.zero")
+			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
+				t.Fatalf("Failed to write input file: %v", err)
+			}
+
+			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				t.Fatalf("Expected semantic validation to fail")
+			}
+			if !strings.Contains(string(output), test.reason) {
+				t.Fatalf("Expected diagnostic %q, got: %s", test.reason, output)
+			}
+			if _, statErr := os.Stat(filepath.Join(outDir, "app.wat")); !os.IsNotExist(statErr) {
+				t.Fatalf("app.wat must not be written after semantic failure: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "multi_aggregate.zero")
+	input := `(wasm_app (if true (list_get (list 10 20) 1) (list_get (list 30 40) 0)))`
+	if err := os.WriteFile(inputFile, []byte(input), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate multi aggregate WAT: %v: %s", err, output)
+	}
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range []string{
+		`(data (i32.const 0)`,
+		`(data (i32.const 24)`,
+		`(i64.load (i32.const 0))`,
+		`(i64.load (i32.const 24))`,
+		`(i32.const 8)`,
+		`(i32.const 32)`,
+	} {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated multi aggregate WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}
+
+func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	outDir := t.TempDir()
+	inputFile := filepath.Join(outDir, "dict_key.zero")
+	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("list" 10)) "list"))`), 0644); err != nil {
+		t.Fatalf("Failed to write input file: %v", err)
+	}
+
+	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to generate WAT for dict key named list: %v: %s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "app.wat")); err != nil {
+		t.Fatalf("Expected app.wat to be written: %v", err)
 	}
 }
 
@@ -166,7 +276,7 @@ func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
 		t.Fatalf("Failed to read generated WAT: %v", err)
 	}
 	for _, fragment := range []string{
-		"(func (export \"main\") (result f64)", "(if (result f64)", "(f64.gt", "(f64.convert_s/i64 (i64.const 2))",
+		"(func (export \"main\") (result f64)", "(if (result f64)", "(f64.gt", "(f64.convert_i64_s (i64.const 2))",
 	} {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated float WAT is missing %q:\n%s", fragment, wat)
@@ -229,6 +339,125 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated list_get WAT is missing %q:\n%s", fragment, wat)
 		}
+	}
+}
+
+func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	tests := []struct {
+		name      string
+		input     string
+		fragments []string
+	}{
+		{
+			name:  "list expression",
+			input: `(wasm_app (list_get (list (+ 4 6) 20) 0))`,
+			fragments: []string{
+				"(i64.store (i32.const 8) (i64.add (i64.const 4) (i64.const 6)))",
+				"(i64.load",
+			},
+		},
+		{
+			name:  "dictionary expression",
+			input: `(wasm_app (map_get (dict ("answer" (+ 4 6))) "answer"))`,
+			fragments: []string{
+				"(i64.store (i32.const 256) (i64.add (i64.const 4) (i64.const 6)))",
+				"(i64.load (i32.const 256))",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			outDir := t.TempDir()
+			inputFile := filepath.Join(outDir, "aggregate.zero")
+			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
+				t.Fatalf("Failed to write input file: %v", err)
+			}
+			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("Failed to generate aggregate WAT: %v: %s", err, output)
+			}
+			wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+			if err != nil {
+				t.Fatalf("Failed to read generated WAT: %v", err)
+			}
+			for _, fragment := range test.fragments {
+				if !strings.Contains(string(wat), fragment) {
+					t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)
+				}
+			}
+		})
+	}
+}
+
+func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
+	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to build zero binary: %v", err)
+	}
+	defer os.Remove("zero")
+
+	tests := []struct {
+		name      string
+		input     string
+		fragments []string
+	}{
+		{
+			name:  "list string expression",
+			input: `(wasm_app (list_get (list (if true "alpha" "beta")) 0))`,
+			fragments: []string{
+				"(i32.store (i32.const 8)",
+				"(i32.load (i32.add (i32.const 8)",
+				"\\61\\6c\\70\\68\\61\\00",
+				"\\62\\65\\74\\61\\00",
+			},
+		},
+		{
+			name:  "dynamic integer dict key",
+			input: `(wasm_app (map_get (dict ("a" 10) ("b" 20)) (if true "b" "a")))`,
+			fragments: []string{
+				"(i32.eq",
+				"(i64.load (i32.const 256))",
+				"(i64.load (i32.const 264))",
+			},
+		},
+		{
+			name:  "dynamic string dict value and key",
+			input: `(wasm_app (map_get (dict ("a" "one") ("b" (if true "two" "alt"))) (if true "b" "a")))`,
+			fragments: []string{
+				"(i32.store (i32.const 20)",
+				"(i32.load (i32.const 20))",
+				"\\74\\77\\6f\\00",
+				"\\61\\6c\\74\\00",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			outDir := t.TempDir()
+			inputFile := filepath.Join(outDir, "dynamic_string.zero")
+			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
+				t.Fatalf("Failed to write input file: %v", err)
+			}
+			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("Failed to generate WAT: %v: %s", err, output)
+			}
+			wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+			if err != nil {
+				t.Fatalf("Failed to read generated WAT: %v", err)
+			}
+			for _, fragment := range test.fragments {
+				if !strings.Contains(string(wat), fragment) {
+					t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)
+				}
+			}
+		})
 	}
 }
 
@@ -311,7 +540,7 @@ func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
 		t.Fatalf("Failed to read generated WAT: %v", err)
 	}
 	for _, fragment := range []string{
-		"(func (export \"main\") (result i64)", "(i64.const 20)", "\\14\\00\\00\\00\\00\\00\\00\\00",
+		"(func (export \"main\") (result i64)", "(i64.load (i32.const 264))", "\\14\\00\\00\\00\\00\\00\\00\\00",
 	} {
 		if !strings.Contains(string(wat), fragment) {
 			t.Errorf("Generated integer dict WAT is missing %q:\n%s", fragment, wat)

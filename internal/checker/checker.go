@@ -50,6 +50,9 @@ func checkWasmExpression(node *ast.Node) {
 	if node.Type == "INT" {
 		return
 	}
+	if node.Type == "STRING" {
+		return
+	}
 	if node.Type == "SYMBOL" {
 		if node.Value != "true" && node.Value != "false" {
 			ast.ReportError(fmt.Sprintf("Wasm backend does not support symbol %q", node.Value), node.Line, node.Column)
@@ -107,7 +110,8 @@ func checkWasmExpression(node *ast.Node) {
 			ast.ReportError("Wasm dict aggregates currently require int or string values", node.Line, node.Column)
 		}
 		for _, pair := range irNode.Kids {
-			if pair.Type != "List" || len(pair.Children) != 2 || pair.Children[0].Type != "STRING" || (pair.Children[1].Type != "INT" && pair.Children[1].Type != "STRING") {
+			if pair.Type != "List" || len(pair.Children) != 2 || pair.Children[0].Type != "STRING" ||
+				(pair.Children[1].Inferred.Kind != ast.Int && pair.Children[1].Inferred.Kind != ast.String) {
 				ast.ReportError("Wasm dict aggregates require string keys and int/string values", node.Line, node.Column)
 			}
 			valueType := pair.Children[1].Inferred.Kind
@@ -116,10 +120,11 @@ func checkWasmExpression(node *ast.Node) {
 			}
 		}
 	case "map_get":
-		if len(irNode.Kids) != 2 || irNode.Kids[0].Type != "List" || len(irNode.Kids[0].Children) == 0 || irNode.Kids[0].Children[0].Value != "dict" || irNode.Kids[1].Type != "STRING" {
-			ast.ReportError("Wasm map_get requires a static dict and string key", node.Line, node.Column)
+		if len(irNode.Kids) != 2 || irNode.Kids[0].Type != "List" || len(irNode.Kids[0].Children) == 0 || irNode.Kids[0].Children[0].Value != "dict" || irNode.Kids[1].Inferred.Kind != ast.String {
+			ast.ReportError("Wasm map_get requires a static dict and string key expression", node.Line, node.Column)
 		}
 		checkWasmExpression(irNode.Kids[0])
+		checkWasmExpression(irNode.Kids[1])
 	case "return":
 		checkWasmExpression(irNode.Kids[0])
 	case "to_float":

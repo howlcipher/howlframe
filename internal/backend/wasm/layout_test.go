@@ -38,3 +38,23 @@ func TestDescribeLayoutUsesTypedAggregateRepresentations(t *testing.T) {
 		t.Fatalf("aggregate field offsets were not preserved: %+v", structLayout)
 	}
 }
+
+func TestAggregatePayloadLayoutGrowsPastReservedTable(t *testing.T) {
+	if got := aggregatePayloadStart(8 + 8*40); got != 328 {
+		t.Fatalf("dictionary payload overlaps its table: got %d, want 328", got)
+	}
+
+	element := ast.Layout(ast.String)
+	largeList := &ast.Node{
+		Type: "List",
+		Children: []*ast.Node{
+			{Type: "SYMBOL", Value: "list"},
+			{Type: "STRING", Value: string(make([]byte, int(wasmPage)))},
+		},
+		Inferred: ast.TypeInfo{Kind: ast.List, Element: &element},
+	}
+	generator := newWasmGenerator(largeList)
+	if generator.memorySize <= wasmPage {
+		t.Fatalf("large aggregate string payload must require more than one page, got %d bytes", generator.memorySize)
+	}
+}

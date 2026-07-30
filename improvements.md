@@ -74,7 +74,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 62 | [Phase 2 IR Abstraction (let, try_let, call, for, spawn)](#62-phase-2-ir-abstraction) | Done | 2.0 (8×1÷4) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Necessary to migrate remaining core nodes to the unified IR so backends are completely decoupled. |
 | 63 | [Add Code Examples for Semantic Match and Counterfactual Debugging](#63-add-code-examples) | Done | 1.0 (2×1÷2) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Documentation gap identified; these features are in README but lack code examples. |
 | 71 | [Zero Native Store Bytecode](#71-zero-native-store-bytecode) | Proposed | 1.0 (8×0.5÷4) | Sonnet 5 | Gemini 1.5 Pro | gpt-5.6-sol | Add a compiler-visible persistence layer so agents can query structured records without emitting SQL strings. Decay 0.5 because SQL persistence already shipped, but this is a different AI-native abstraction. |
-| 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Pending | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
+| 64 | [Semantic Type Checker Pass](#64-semantic-type-checker-pass) | Done (2026-07-30) | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Essential for native code generation (explicit memory layouts). |
 | 68 | [Native Logit Masking](#68-native-logit-masking) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-sol | Compile types into inference constraints like LMQL. |
 | 70 | [Type-Safe Schema Bridges](#70-type-safe-schema-bridges) | Pending | 2.5 (5×1÷2) | — | — | gpt-5.6-terra | Strongly-typed API boundaries for LLM outputs like BAML. |
 | 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Pending | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
@@ -499,8 +499,9 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 ### 64. Semantic Type Checker Pass
 * **Description:** Introduce a strict type-inference pass before lowering to IR to define precise byte sizes, alignments, and pointer types.
 * **Why:** Necessary for targeting native machine code or LLVM IR, which lack Go's runtime typing.
-* **Impact:** 6/10 (Medium-High - Phase 1 has shipped, but remaining layout and validation gaps still block native compilation).
+* **Impact:** 6/10 (Medium-High - Phase 1 shipped the semantic/layout foundation needed before native compilation).
 * **Groomed (2026-07-30):** Kept Pending. `docs/journals/2026-07-30_semantic_validation_pass.md` shows a typed value lattice, checker pass, IR metadata propagation, and Wasm layout consumption are in place, but full WAT instruction/type validation and remaining aggregate/dynamic layout decisions are still outstanding. Re-scored to 3.0 (6×1÷2) rather than the original full-gap value.
+* **Done (2026-07-30):** Replaced the text-only WAT shape gate with a local parser and instruction/type validator for the backend's emitted folded subset. Aggregate metadata now records dictionary key and value types and rejects incompatible construction, access, and mutation before lowering. The Wasm backend runtime-initializes integer and string list/dictionary expressions, supports dynamic dictionary key expressions through interned string pointers, reads integer dictionary values from memory, allocates independent aligned regions for multiple aggregate literals, grows aggregate table offsets safely, and sizes memory pages from payloads. Installed `wasm-tools` locally, parsed and validated representative generated WAT modules, then instantiated the compiled Wasm through Node and called `main` for numeric and pointer-returning cases.
 
 ### 65. Linear SSA-based IR
 * **Description:** Lower the high-level tree IR into a flat Static Single Assignment (SSA) format modeling control flow graphs and basic blocks.

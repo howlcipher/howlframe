@@ -4,6 +4,12 @@
 
 ### Added
 
+* A local parser and instruction/type validator for the folded WebAssembly Text
+  subset emitted by the Wasm backend, including function results, operands,
+  control flow, memory access, constants, and data bounds.
+* Semantic diagnostics for incompatible aggregate elements, keys, mutations,
+  indexes, function arity, numeric operands, and branch layouts before IR
+  lowering.
 * OpenAI model recommendations across the bug and improvement backlogs,
   matching the existing Claude/Gemini routing columns with GPT-5.6 Luna,
   Terra, and Sol tiers.
@@ -16,6 +22,11 @@
 
 ### Changed
 
+* Integer and string list/dictionary expressions now initialize Wasm linear
+  memory with typed stores, dynamic dictionary keys compare interned string
+  pointers, integer dictionary reads use typed loads, multiple aggregate
+  literals receive independent aligned memory regions, and aggregate tables and
+  memory page counts scale with their payloads.
 * Refreshed the README and GitHub Pages content to reflect the current
   semantic checker, typed backend metadata, direct binary bytecode, and expanded
   WebAssembly Text backend scope.

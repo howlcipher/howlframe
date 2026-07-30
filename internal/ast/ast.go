@@ -58,6 +58,7 @@ type TypeInfo struct {
 	Size         uint64
 	Align        uint64
 	Pointer      bool
+	Key          *TypeInfo
 	Element      *TypeInfo
 	Fields       map[string]TypeInfo
 	FieldOffsets map[string]uint64

@@ -28,7 +28,7 @@ Key design points:
 
 Zero is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
 
-The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits structurally validated WAT for typed numeric/control-flow expressions and static aggregate reads. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors.
+The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors.
 
 See:
 

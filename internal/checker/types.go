@@ -257,12 +257,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	}
 	head := node.Children[0].Value
 	if info, ok := a.Functions[head]; ok {
-		for i, arg := range node.Children[1:] {
-			got := a.infer(arg, env)
-			if i < len(info.Params) && known(got) && known(info.Params[i]) && !compatible(info.Params[i], got) {
-				a.add(node, fmt.Sprintf("argument %d to %q has type %s, want %s", i+1, head, typeName(got), typeName(info.Params[i])))
-			}
-		}
+		a.checkCall(node, head, node.Children[1:], info, env)
 		return info.Return
 	}
 	if isBinary(head) {
@@ -282,18 +277,24 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			}
 			return ast.Layout(ast.Bool)
 		}
-		if known(left) && known(right) && !numeric(left) && !compatible(left, right) {
-			a.add(node, fmt.Sprintf("%s cannot combine %s and %s", head, typeName(left), typeName(right)))
-			return ast.Layout(ast.Unknown)
+		if known(left) && known(right) {
+			if head == "+" && left.Kind == ast.String && right.Kind == ast.String {
+				return ast.Layout(ast.String)
+			}
+			if !numeric(left) || !numeric(right) {
+				a.add(node, fmt.Sprintf("%s requires numeric operands, got %s and %s", head, typeName(left), typeName(right)))
+				return ast.Layout(ast.Unknown)
+			}
+			if left.Kind != right.Kind {
+				a.add(node, fmt.Sprintf("%s requires matching numeric types, got %s and %s", head, typeName(left), typeName(right)))
+				return ast.Layout(ast.Unknown)
+			}
 		}
 		if left.Kind == ast.Float || right.Kind == ast.Float {
 			return ast.Layout(ast.Float)
 		}
 		if left.Kind == ast.Int && right.Kind == ast.Int {
 			return ast.Layout(ast.Int)
-		}
-		if left.Kind == ast.String && right.Kind == ast.String && head == "+" {
-			return ast.Layout(ast.String)
 		}
 		return ast.Layout(ast.Unknown)
 	}
@@ -320,7 +321,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		thenType := a.inferChild(node, 2, env)
 		if len(node.Children) == 4 {
-			return join(thenType, a.inferChild(node, 3, env))
+			elseType := a.inferChild(node, 3, env)
+			if known(thenType) && known(elseType) && !compatible(thenType, elseType) {
+				a.add(node, fmt.Sprintf("if branches have incompatible types %s and %s", typeName(thenType), typeName(elseType)))
+			}
+			return join(thenType, elseType)
 		}
 		return thenType
 	case "while":
@@ -388,41 +393,95 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		return ast.Layout(ast.Void)
 	case "list":
 		result := ast.Layout(ast.List)
-		for _, child := range node.Children[1:] {
+		for index, child := range node.Children[1:] {
 			value := a.infer(child, env)
 			if result.Element == nil && known(value) {
 				copy := value
 				result.Element = &copy
+			} else if result.Element != nil && known(value) && !compatible(*result.Element, value) {
+				a.add(node, fmt.Sprintf("list element %d has type %s, want %s", index+1, typeName(value), typeName(*result.Element)))
 			}
 		}
 		return result
 	case "dict":
 		result := ast.Layout(ast.Dict)
-		for _, pair := range node.Children[1:] {
+		keyType := ast.Layout(ast.String)
+		result.Key = &keyType
+		for index, pair := range node.Children[1:] {
 			if pair.Type == "List" && len(pair.Children) == 2 {
-				a.infer(pair.Children[0], env)
+				key := a.infer(pair.Children[0], env)
+				if known(key) && key.Kind != ast.String {
+					a.add(node, fmt.Sprintf("dict key %d has type %s, want string", index+1, typeName(key)))
+				}
 				value := a.infer(pair.Children[1], env)
 				if result.Element == nil && known(value) {
 					copy := value
 					result.Element = &copy
+				} else if result.Element != nil && known(value) && !compatible(*result.Element, value) {
+					a.add(node, fmt.Sprintf("dict value %d has type %s, want %s", index+1, typeName(value), typeName(*result.Element)))
 				}
 			}
 		}
 		return result
 	case "list_get":
 		list := a.inferChild(node, 1, env)
-		a.inferChild(node, 2, env)
+		index := a.inferChild(node, 2, env)
+		if known(list) && list.Kind != ast.List {
+			a.add(node, fmt.Sprintf("list_get target must be list, got %s", typeName(list)))
+		}
+		if known(index) && index.Kind != ast.Int {
+			a.add(node, fmt.Sprintf("list_get index must be int, got %s", typeName(index)))
+		}
 		if list.Element != nil {
 			return *list.Element
 		}
 		return ast.Layout(ast.Unknown)
 	case "map_get":
 		dict := a.inferChild(node, 1, env)
-		a.inferChild(node, 2, env)
+		key := a.inferChild(node, 2, env)
+		if known(dict) && dict.Kind != ast.Dict {
+			a.add(node, fmt.Sprintf("map_get target must be dict, got %s", typeName(dict)))
+		}
+		if known(key) && key.Kind != ast.String {
+			a.add(node, fmt.Sprintf("map_get key must be string, got %s", typeName(key)))
+		}
 		if dict.Element != nil {
 			return *dict.Element
 		}
 		return ast.Layout(ast.Unknown)
+	case "append":
+		list := a.inferChild(node, 1, env)
+		item := a.inferChild(node, 2, env)
+		if known(list) && list.Kind != ast.List {
+			a.add(node, fmt.Sprintf("append target must be list, got %s", typeName(list)))
+		} else if list.Element != nil && known(item) && !compatible(*list.Element, item) {
+			a.add(node, fmt.Sprintf("append item has type %s, want %s", typeName(item), typeName(*list.Element)))
+		}
+		return ast.Layout(ast.Void)
+	case "map_set":
+		dict := a.inferChild(node, 1, env)
+		key := a.inferChild(node, 2, env)
+		value := a.inferChild(node, 3, env)
+		if known(dict) && dict.Kind != ast.Dict {
+			a.add(node, fmt.Sprintf("map_set target must be dict, got %s", typeName(dict)))
+		}
+		if known(key) && key.Kind != ast.String {
+			a.add(node, fmt.Sprintf("map_set key must be string, got %s", typeName(key)))
+		}
+		if dict.Element != nil && known(value) && !compatible(*dict.Element, value) {
+			a.add(node, fmt.Sprintf("map_set value has type %s, want %s", typeName(value), typeName(*dict.Element)))
+		}
+		return ast.Layout(ast.Void)
+	case "map_delete":
+		dict := a.inferChild(node, 1, env)
+		key := a.inferChild(node, 2, env)
+		if known(dict) && dict.Kind != ast.Dict {
+			a.add(node, fmt.Sprintf("map_delete target must be dict, got %s", typeName(dict)))
+		}
+		if known(key) && key.Kind != ast.String {
+			a.add(node, fmt.Sprintf("map_delete key must be string, got %s", typeName(key)))
+		}
+		return ast.Layout(ast.Void)
 	case "to_int":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.Int)
@@ -459,7 +518,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			a.infer(child, env)
 		}
 		return ast.Layout(ast.Void)
-	case "print", "append", "map_set", "map_delete", "sleep", "test":
+	case "print", "sleep", "test":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
 		}
@@ -468,12 +527,35 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		for _, child := range node.Children[2:] {
 			a.infer(child, env)
 		}
+		if len(node.Children) >= 2 {
+			name := node.Children[1].Value
+			if info, ok := a.Functions[name]; ok {
+				a.checkCall(node, name, node.Children[2:], info, env)
+				return info.Return
+			}
+		}
 		return ast.Layout(ast.Unknown)
 	default:
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
 		}
 		return ast.Layout(ast.Unknown)
+	}
+}
+
+func (a *Analysis) checkCall(node *ast.Node, name string, args []*ast.Node, info FunctionInfo, env typeEnv) {
+	if len(args) != len(info.Params) {
+		noun := "arguments"
+		if len(info.Params) == 1 {
+			noun = "argument"
+		}
+		a.add(node, fmt.Sprintf("function %q expects %d %s, got %d", name, len(info.Params), noun, len(args)))
+	}
+	for i, arg := range args {
+		got := a.infer(arg, env)
+		if i < len(info.Params) && known(got) && known(info.Params[i]) && !compatible(info.Params[i], got) {
+			a.add(node, fmt.Sprintf("argument %d to %q has type %s, want %s", i+1, name, typeName(got), typeName(info.Params[i])))
+		}
 	}
 }
 
@@ -521,6 +603,10 @@ func typeFromName(name string) ast.TypeInfo {
 		return result
 	case "map[string]string":
 		result := ast.Layout(ast.Dict)
+		key := ast.Layout(ast.String)
+		element := ast.Layout(ast.String)
+		result.Key = &key
+		result.Element = &element
 		result.Name = name
 		return result
 	default:

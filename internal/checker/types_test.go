@@ -78,6 +78,15 @@ func TestAnalyzePropagatesTypesAndNativeLayout(t *testing.T) {
 	if !listType.Pointer || listType.Size != 24 || listType.Align != 8 {
 		t.Fatalf("unexpected list layout: %+v", listType)
 	}
+
+	dictRoot := parseTestProgram(t, `(cli_app (dict ("answer" 42)))`)
+	dictAnalysis := Analyze(dictRoot)
+	dictType := dictRoot.Children[1].Inferred
+	if len(dictAnalysis.Diagnostics) != 0 || dictType.Kind != ast.Dict ||
+		dictType.Key == nil || dictType.Key.Kind != ast.String ||
+		dictType.Element == nil || dictType.Element.Kind != ast.Int {
+		t.Fatalf("unexpected dictionary layout: diagnostics=%+v type=%+v", dictAnalysis.Diagnostics, dictType)
+	}
 }
 
 func TestAnalyzeReportsProvableTypeErrors(t *testing.T) {
@@ -169,5 +178,107 @@ func TestAnalyzeBackendSpecificLayoutsAndFields(t *testing.T) {
 	visit(root)
 	if age.Kind != ast.Int || token.Kind != ast.String || raw.Kind != ast.Bytes {
 		t.Fatalf("backend-specific types were not propagated: age=%+v token=%+v raw=%+v", age, token, raw)
+	}
+}
+
+func TestAnalyzeRejectsInconsistentAggregateLayouts(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (items (list 1 "two"))
+			(list_get items "zero"))
+		(let (values (dict ("one" 1) ("two" "two")))
+			(map_get values 2)))`)
+
+	analysis := Analyze(root)
+	reasons := make([]string, 0, len(analysis.Diagnostics))
+	for _, diagnostic := range analysis.Diagnostics {
+		reasons = append(reasons, diagnostic.Reason)
+	}
+	for _, expected := range []string{
+		"list element 2 has type string, want int",
+		"list_get index must be int, got string",
+		"dict value 2 has type string, want int",
+		"map_get key must be string, got int",
+	} {
+		found := false
+		for _, reason := range reasons {
+			if reason == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
+		}
+	}
+}
+
+func TestAnalyzeRejectsInvalidAggregateMutationTypes(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (items (list "one"))
+			(do
+				(append items 2)
+				(map_set items "key" "value")))
+		(let (values (dict ("one" "1")))
+			(do
+				(map_set values 2 "two")
+				(map_set values "two" 2)
+				(append values "three"))))`)
+
+	analysis := Analyze(root)
+	reasons := make([]string, 0, len(analysis.Diagnostics))
+	for _, diagnostic := range analysis.Diagnostics {
+		reasons = append(reasons, diagnostic.Reason)
+	}
+	for _, expected := range []string{
+		"append item has type int, want string",
+		"map_set target must be dict, got list",
+		"map_set key must be string, got int",
+		"map_set value has type int, want string",
+		"append target must be list, got dict",
+	} {
+		found := false
+		for _, reason := range reasons {
+			if reason == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
+		}
+	}
+}
+
+func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(defun choose ((value int)) int (return value))
+		(call choose)
+		(call choose 1 2)
+		(if true 1 (to_float 2))
+		(+ true false)
+		(+ 1 (to_float 2)))`)
+
+	analysis := Analyze(root)
+	reasons := make([]string, 0, len(analysis.Diagnostics))
+	for _, diagnostic := range analysis.Diagnostics {
+		reasons = append(reasons, diagnostic.Reason)
+	}
+	for _, expected := range []string{
+		`function "choose" expects 1 argument, got 0`,
+		`function "choose" expects 1 argument, got 2`,
+		"if branches have incompatible types int and float64",
+		"+ requires numeric operands, got bool and bool",
+		"+ requires matching numeric types, got int and float64",
+	} {
+		found := false
+		for _, reason := range reasons {
+			if reason == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
+		}
 	}
 }
