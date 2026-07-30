@@ -47,6 +47,7 @@ const (
 	Bytes   ValueKind = "bytes"
 	List    ValueKind = "list"
 	Dict    ValueKind = "dict"
+	Struct  ValueKind = "struct"
 )
 
 // TypeInfo describes both the source-level type and its native layout. Size
@@ -58,6 +59,7 @@ type TypeInfo struct {
 	Align   uint64
 	Pointer bool
 	Element *TypeInfo
+	Fields  map[string]TypeInfo
 }
 
 func Layout(kind ValueKind) TypeInfo {
@@ -76,6 +78,8 @@ func Layout(kind ValueKind) TypeInfo {
 		return TypeInfo{Kind: List, Name: "list", Size: 24, Align: 8, Pointer: true}
 	case Dict:
 		return TypeInfo{Kind: Dict, Name: "dict", Size: 8, Align: 8, Pointer: true}
+	case Struct:
+		return TypeInfo{Kind: Struct, Name: "struct", Align: 1, Fields: map[string]TypeInfo{}}
 	case Void:
 		return TypeInfo{Kind: Void, Name: "void", Align: 1}
 	case Any:

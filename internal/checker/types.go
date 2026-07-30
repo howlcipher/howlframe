@@ -27,6 +27,7 @@ type FunctionInfo struct {
 type Analysis struct {
 	Types       map[*ast.Node]ast.TypeInfo
 	Functions   map[string]FunctionInfo
+	Structs     map[string]ast.TypeInfo
 	Diagnostics []Diagnostic
 }
 
@@ -39,13 +40,50 @@ func Analyze(root *ast.Node) *Analysis {
 	a := &Analysis{
 		Types:     make(map[*ast.Node]ast.TypeInfo),
 		Functions: make(map[string]FunctionInfo),
+		Structs:   make(map[string]ast.TypeInfo),
 	}
 	if root == nil {
 		return a
 	}
+	a.collectStructs(root)
 	a.collectFunctions(root)
 	a.inferRoot(root)
 	return a
+}
+
+func (a *Analysis) collectStructs(node *ast.Node) {
+	if node == nil {
+		return
+	}
+	if node.Type == "List" && len(node.Children) > 1 && node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "struct" || node.Children[0].Value == "schema") {
+		name := node.Children[1].Value
+		info := ast.Layout(ast.Struct)
+		info.Name = name
+		info.Fields = make(map[string]ast.TypeInfo)
+		for _, field := range node.Children[2:] {
+			if field.Type != "List" || len(field.Children) < 2 {
+				continue
+			}
+			start := 0
+			if node.Children[0].Value == "schema" && len(field.Children) == 3 && field.Children[0].Value == "column" {
+				start = 1
+			}
+			fieldName := field.Children[start].Value
+			fieldType := a.resolveType(field.Children[start+1].Value)
+			info.Fields[fieldName] = fieldType
+			if len(fieldName) > 0 {
+				capitalized := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+				info.Fields[capitalized] = fieldType
+			}
+		}
+		info.Size, info.Align = structLayout(info.Fields)
+		a.Structs[name] = info
+	}
+	if node.Type == "List" {
+		for _, child := range node.Children {
+			a.collectStructs(child)
+		}
+	}
 }
 
 func (a *Analysis) collectFunctions(node *ast.Node) {
@@ -55,7 +93,7 @@ func (a *Analysis) collectFunctions(node *ast.Node) {
 	if node.Type == "List" && len(node.Children) > 0 {
 		if node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun" && len(node.Children) >= 4 {
 			name := node.Children[1].Value
-			params, ret := functionSignature(node)
+			params, ret := a.functionSignature(node)
 			a.Functions[name] = FunctionInfo{Params: params, Return: ret}
 		}
 		for _, child := range node.Children {
@@ -90,7 +128,7 @@ func (a *Analysis) inferRoot(root *ast.Node) {
 }
 
 func (a *Analysis) inferFunction(node *ast.Node) {
-	params, ret := functionSignature(node)
+	params, ret := a.functionSignature(node)
 	env := typeEnv{}
 	args := node.Children[2]
 	for i, arg := range args.Children {
@@ -109,12 +147,12 @@ func (a *Analysis) inferFunction(node *ast.Node) {
 	}
 }
 
-func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
+func (a *Analysis) functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 	args := node.Children[2]
 	params := make([]ast.TypeInfo, 0, len(args.Children))
 	for _, arg := range args.Children {
 		if arg.Type == "List" && len(arg.Children) >= 2 {
-			params = append(params, typeFromName(arg.Children[1].Value))
+			params = append(params, a.resolveType(arg.Children[1].Value))
 		} else {
 			params = append(params, ast.Layout(ast.String))
 		}
@@ -122,7 +160,7 @@ func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 	ret := ast.Layout(ast.String)
 	bodyStart := 3
 	if len(node.Children) > 4 && node.Children[3].Type == "SYMBOL" {
-		ret = typeFromName(node.Children[3].Value)
+		ret = a.resolveType(node.Children[3].Value)
 		bodyStart = 4
 	}
 	for i := bodyStart; i < len(node.Children)-1; i++ {
@@ -134,7 +172,7 @@ func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 		case "type_hint":
 			if len(cfg.Children) >= 3 {
 				if cfg.Children[1].Value == "return" {
-					ret = typeFromName(cfg.Children[2].Value)
+					ret = a.resolveType(cfg.Children[2].Value)
 				} else {
 					for index, arg := range args.Children {
 						name := arg.Value
@@ -142,7 +180,7 @@ func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 							name = arg.Children[0].Value
 						}
 						if name == cfg.Children[1].Value && index < len(params) {
-							params[index] = typeFromName(cfg.Children[2].Value)
+							params[index] = a.resolveType(cfg.Children[2].Value)
 						}
 					}
 				}
@@ -153,7 +191,7 @@ func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 					continue
 				}
 				if pair.Children[0].Value == "return" {
-					ret = typeFromName(pair.Children[1].Value)
+					ret = a.resolveType(pair.Children[1].Value)
 					continue
 				}
 				for index, arg := range args.Children {
@@ -162,7 +200,7 @@ func functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
 						name = arg.Children[0].Value
 					}
 					if name == pair.Children[0].Value && index < len(params) {
-						params[index] = typeFromName(pair.Children[1].Value)
+						params[index] = a.resolveType(pair.Children[1].Value)
 					}
 				}
 			}
@@ -190,6 +228,13 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 			result = ast.Layout(ast.Bool)
 		default:
 			result = env[node.Value]
+			if result.Kind == "" && strings.Contains(node.Value, ".") {
+				parts := strings.SplitN(node.Value, ".", 2)
+				base := env[parts[0]]
+				if base.Fields != nil {
+					result = base.Fields[parts[1]]
+				}
+			}
 			if result.Kind == "" {
 				result = ast.Layout(ast.Unknown)
 			}
@@ -385,6 +430,33 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "to_string", "bytes_to_string":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
+	case "parse_json":
+		a.inferChild(node, 2, env)
+		if len(node.Children) >= 2 {
+			if result, ok := a.Structs[node.Children[1].Value]; ok {
+				return result
+			}
+		}
+		return ast.Layout(ast.Unknown)
+	case "env":
+		a.inferChild(node, 1, env)
+		return ast.Layout(ast.String)
+	case "read_file":
+		a.inferChild(node, 1, env)
+		return ast.Layout(ast.Bytes)
+	case "fuzzy_cast":
+		a.inferChild(node, 2, env)
+		if len(node.Children) >= 2 {
+			if result, ok := a.Structs[node.Children[1].Value]; ok {
+				return result
+			}
+		}
+		return ast.Layout(ast.Unknown)
+	case "write_file", "mkdir", "exec":
+		for _, child := range node.Children[1:] {
+			a.infer(child, env)
+		}
+		return ast.Layout(ast.Void)
 	case "print", "append", "map_set", "map_delete", "sleep", "test":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
@@ -454,6 +526,42 @@ func typeFromName(name string) ast.TypeInfo {
 	}
 }
 
+func (a *Analysis) resolveType(name string) ast.TypeInfo {
+	if result := typeFromName(name); result.Kind != ast.Unknown {
+		return result
+	}
+	if result, ok := a.Structs[name]; ok {
+		return result
+	}
+	return ast.TypeInfo{Kind: ast.Unknown, Name: name}
+}
+
+func structLayout(fields map[string]ast.TypeInfo) (uint64, uint64) {
+	var size, alignment uint64 = 0, 1
+	for name, field := range fields {
+		if name != strings.ToLower(name) {
+			if _, hasLowercaseAlias := fields[strings.ToLower(name)]; hasLowercaseAlias {
+				continue
+			}
+		}
+		fieldAlign := field.Align
+		if fieldAlign == 0 {
+			fieldAlign = 1
+		}
+		if remainder := size % fieldAlign; remainder != 0 {
+			size += fieldAlign - remainder
+		}
+		size += field.Size
+		if fieldAlign > alignment {
+			alignment = fieldAlign
+		}
+	}
+	if remainder := size % alignment; remainder != 0 {
+		size += alignment - remainder
+	}
+	return size, alignment
+}
+
 func isBinary(head string) bool {
 	return irBinops[head]
 }
@@ -475,6 +583,9 @@ func numeric(value ast.TypeInfo) bool {
 func compatible(left, right ast.TypeInfo) bool {
 	if !known(left) || !known(right) {
 		return true
+	}
+	if left.Kind == ast.Struct || right.Kind == ast.Struct {
+		return left.Kind == right.Kind && left.Name == right.Name
 	}
 	return left.Kind == right.Kind
 }

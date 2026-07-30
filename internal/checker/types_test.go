@@ -126,3 +126,48 @@ func TestAnalyzePropagatesDeferredControlFlow(t *testing.T) {
 		t.Fatalf("for-loop element lost its inferred layout: %+v", loopItem)
 	}
 }
+
+func TestAnalyzeBackendSpecificLayoutsAndFields(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(struct User (name string) (age int))
+		(let (user (parse_json User payload))
+			(let (age user.age)
+				(let (token (env "TOKEN"))
+					(let (raw (read_file "data.txt"))
+						(print age token raw))))))`)
+
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", analysis.Diagnostics)
+	}
+	user := analysis.Structs["User"]
+	if user.Kind != ast.Struct || user.Size != 24 || user.Align != 8 || len(user.Fields) != 4 {
+		t.Fatalf("unexpected User layout: %+v", user)
+	}
+	if user.Fields["age"].Kind != ast.Int || user.Fields["name"].Kind != ast.String {
+		t.Fatalf("unexpected User fields: %+v", user.Fields)
+	}
+
+	var age, token, raw ast.TypeInfo
+	var visit func(*ast.Node)
+	visit = func(node *ast.Node) {
+		if node == nil {
+			return
+		}
+		switch node.Value {
+		case "user.age":
+			age = node.Inferred
+		case "token":
+			token = node.Inferred
+		case "raw":
+			raw = node.Inferred
+		}
+		for _, child := range node.Children {
+			visit(child)
+		}
+	}
+	visit(root)
+	if age.Kind != ast.Int || token.Kind != ast.String || raw.Kind != ast.Bytes {
+		t.Fatalf("backend-specific types were not propagated: age=%+v token=%+v raw=%+v", age, token, raw)
+	}
+}
