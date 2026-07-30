@@ -69,7 +69,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 34 | [Add Semantic Routing (semantic_match)](#34-add-semantic-routing-semantic_match) | Done (2026-07-29) | 0.175 (7×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | Natively understands intent, replacing brittle traditional conditional routing and regexes. Re-scored 2026-07-23: same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 | 57 | [`(neural_circuit)` Runtime Primitive](#57-neural_circuit-runtime-primitive) | Done | 0.15 (6×0.125÷5) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
 | 51 | [Ephemeral Neural Circuits](#51-ephemeral-neural-circuits) | Done (2026-07-29) | 0.146 (7×0.125÷6) | Sonnet 3.5 | Gemini 1.5 Pro | LLM-backed runtime primitive (3 prior ships → decay 0.125). |
-| 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | ⚠️ below floor | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
+| 40 | [Add Auto-Mutating Runtime](#40-add-auto-mutating-runtime) | Done (2026-07-30) | 0.125 (1×1.0÷8) | Sonnet 3.5 | Gemini 1.5 Pro | Highly experimental runtime evolution; deferred per strict MVP boundaries. |
 | 37 | [Add Just-In-Time Function Generation (lazy_synthesize)](#37-add-just-in-time-function-generation-lazy_synthesize) | ⚠️ below floor | 0.089 (5×0.125÷7) | Sonnet 3.5 | Gemini 1.5 Pro | Defers boilerplate generation to runtime, allowing AI to focus only on high-level logic. Re-scored 2026-07-23: at runtime it would itself call an LLM to synthesize code, placing it in the same "LLM-backed runtime primitive" theme as shipped #26/#35/#36 (3 prior ships → decay 0.125, was uncounted at 1.0). |
 ## Details
 
@@ -194,7 +194,7 @@ Pending rows are ranked by a diminishing-returns score:
 * **Impact:** 2/10 (Low - radical shift, deferred for MVP).
 
 ### 40. Add Auto-Mutating Runtime
-* **Status Note:** ⚠️ scored below the ROI floor of 0.5 (2026-07-23). Re-verified 2026-07-27: no `optimize_block` AST node exists; the exact recomputed score is 0.125 (1×1.0÷8), correcting the table's truncated 0.12 display. Requirements and ranking are unchanged.
+* **Status Note:** Done (2026-07-30). Implemented `optimize_block` for Go Codegen utilizing runtime compilation and hot-swapping via Go plugins, and mapped natively for evaluation in the interpreter VMs.
 * **Description:** A self-rewriting primitive `(optimize_block ...)` that monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime if bottlenecks are detected.
 * **Why:** Code becomes active and evolutionary in production rather than immutable, natively incorporating model evaluation and code generation into the execution cycle.
 * **Impact:** 1/10 (Low - highly experimental).

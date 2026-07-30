@@ -186,6 +186,15 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return interp.evalWhile(node, env)
 	case "for":
 		return interp.evalFor(node, env)
+	case "optimize_block":
+		if len(node.Children) < 4 {
+			InterpErr("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node)
+		}
+		var result any
+		for _, kid := range node.Children[3:] {
+			result = interp.eval(kid, env)
+		}
+		return result
 	case "do":
 		var result any
 		for _, kid := range node.Children[1:] {

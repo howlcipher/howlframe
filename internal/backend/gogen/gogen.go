@@ -1153,6 +1153,29 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
 			return res.Response
 		}()`, promptVar)
+	} else if head == "optimize_block" {
+		if len(node.Children) < 4 {
+			ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
+		}
+		metricName := generateExpression(node.Children[1], reqVar, depth)
+		threshold := generateExpression(node.Children[2], reqVar, depth)
+
+		bodyNode := &ast.Node{Type: "LIST", Children: append([]*ast.Node{{Type: "SYMBOL", Value: "do"}}, node.Children[3:]...)}
+		bodyGo := generateStatement(bodyNode, reqVar, depth+1)
+
+		return fmt.Sprintf(`func() {
+			if optFn, ok := observer.GetOptimizedPlugin(%s); ok {
+				optFn()
+				return
+			}
+			start := time.Now()
+			func() {
+				%s
+			}()
+			if time.Since(start).Milliseconds() > int64(%s) {
+				go observer.OptimizeGoImplementation(%s, %q)
+			}
+		}()`, metricName, bodyGo, threshold, metricName, bodyGo)
 	} else if head == "ephemeral_circuit" {
 		if len(node.Children) < 3 {
 			ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)

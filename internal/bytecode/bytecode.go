@@ -369,6 +369,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "env":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "ENV", Op: OpEnv})
+		case "optimize_block":
+			if len(node.Children) < 4 {
+				ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
+			}
+			for _, child := range node.Children[3:] {
+				insts = append(insts, c.compileNode(child)...)
+			}
 		case "do":
 			for _, child := range node.Children[1:] {
 				insts = append(insts, c.compileNode(child)...)

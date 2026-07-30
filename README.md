@@ -185,6 +185,21 @@ Zero supports goal-driven execution where the runtime dynamically searches for a
 )
 ```
 
+### Auto-Mutating Runtime
+
+The `optimize_block` primitive enables Zero to be self-rewriting. It monitors execution metrics and automatically employs an LLM to rewrite and hot-swap its underlying Go implementation at runtime (via Go plugins) if performance bottlenecks are detected.
+
+```lisp
+(cli_app
+  (optimize_block "heavy_computation" 500
+    ;; If this block takes > 500ms, Zero will generate and load an optimized CGo/Go plugin in the background
+    (let (result (call expensive_operation))
+      (print result)
+    )
+  )
+)
+```
+
 ### Ephemeral Neural Circuits
 
 Using `ephemeral_circuit`, Zero can provision a narrowly specialized micro-model dynamically on the fly, configured with a system prompt for a single task. Once the inputs are evaluated, the model is immediately torn down to release resources.
