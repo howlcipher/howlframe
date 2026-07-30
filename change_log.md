@@ -28,6 +28,9 @@
 
 ### Changed
 
+* Long valid `let` chains now use shared iterative traversal across AST
+  preprocessing, semantic checking, and Go/JavaScript emission, with a
+  2,000-binding regression covering transpilation and generated Go builds.
 * Synchronized the Zero language write-cost benchmark fixtures with the
   published 2026-07-30 token counts for Tasks B and C.
 * Integer and string list/dictionary expressions now initialize Wasm linear

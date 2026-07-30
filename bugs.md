@@ -41,7 +41,10 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 31 | [`db_connect` and `sql_query` silently drop compound arguments](#31-db_connect-and-sql_query-silently-drop-compound-arguments) | Done (2026-07-29) | 0.25 (8×0.03125÷1) | — | Gemini 3.1 Pro | gpt-5.6-terra | Same leaf `.Value` theme (decay 0.03125). |
 | 34 | [Benchmark Zero fixtures are stale relative to 2026-07-30 results](#34-benchmark-zero-fixtures-are-stale-relative-to-2026-07-30-results) | Done (2026-07-30) | 5.0 (5×1÷1) | — | — | gpt-5.6-sol | The 2026-07-30 benchmark write-up and CSV claim reduced Zero token counts, but the committed Zero benchmark sources still tokenize to the old 2026-07-23 counts. |
 | 33 | [Late Semantic Validation](#33-late-semantic-validation) | Done (2026-07-30) | 3.0 (6×1÷2) | — | — | gpt-5.6-sol | Complex constructs are validated in the Go emission phase rather than during AST generation. |
-| 32 | [Deep AST Nesting Stack Limits](#32-deep-ast-nesting-stack-limits) | Pending | 2.0 (4×1÷2) | — | — | gpt-5.6-terra | Current traversal is prone to stack overflows from deep nesting without tail-call optimization. |
+| 32 | [Deep AST Nesting Stack Limits](#32-deep-ast-nesting-stack-limits) | Done (2026-07-30) | 2.0 (4×1÷2) | — | — | gpt-5.6-terra | Current traversal is prone to stack overflows from deep nesting without tail-call optimization. |
+| 35 | [`tests/test_achieve.zero` is not a standalone root fixture](#35-test_achievezero-is-not-a-standalone-root-fixture) | Pending | 1.0 (2×1÷2) | — | — | gpt-5.6-luna | The fixture starts with a bare `defun`, so the normal checker rejects it before the shipped `achieve` primitive is exercised. |
+| 36 | [`confidence` fixture uses invalid comparison arity](#36-confidence-fixture-uses-invalid-comparison-arity) | Pending | 1.0 (2×1÷2) | — | — | gpt-5.6-luna | The fixture calls `(> score 0.8)` but the lexer/parser tokenizes `0.8` in a way that reaches shared validation as a third argument, so the documented stochastic-control fixture does not transpile. |
+| 37 | [`lazy_synthesize` Go backend fixture builds with unresolved function](#37-lazy_synthesize-go-backend-fixture-builds-with-unresolved-function) | Pending | 1.0 (3×1÷3) | — | — | gpt-5.6-terra | `tests/test_lazy_synthesize.zero` transpiles to generated Go that calls `my_add` without defining it, so the Go backend fixture fails at build time. |
 ## Details
 
 ### 1. Lexer panics on EOF during unterminated string
@@ -266,6 +269,7 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Description:** The AST tree traversal is prone to stack overflows from deep nesting (e.g. long sequences of `let` chaining). Currently mitigated by a hardcoded depth limit during generation.
 * **Why:** The traversal lacks tail-call optimization or an iterative approach.
 * **Impact:** 6/10 (Medium-High - arbitrary limits on generated code length).
+* **Done (2026-07-30):** Added a shared iterative `ast.LetChain` helper and reused it in AST preprocessing, semantic collection/inference, Go/JS validation, and Go/JS emission so valid long `let` chains no longer consume one traversal stack frame per binding in those passes. Added an end-to-end regression that builds the transpiler, transpiles a 2,000-binding `cli_app` chain into a temp output directory, verifies the final binding is emitted, and compiles the generated Go. Verified with `GOCACHE=/tmp/zero-gocache go test ./...`, `GOCACHE=/tmp/zero-gocache go vet ./...`, and `git diff --check`.
 
 ### 33. Late Semantic Validation
 * **Description:** The parser treats complex constructs as simple nested lists, pushing semantic validation down to the backend emission phase instead of resolving them in the AST phase.
@@ -281,3 +285,21 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Repro:** `python3` with `tiktoken.get_encoding("cl100k_base")` reports 88 tokens for Task B's checked-in Zero fixture and 123 for Task C's checked-in Zero fixture on 2026-07-30, contradicting the CSV/doc rows that report 80 and 110.
 * **Fix sketch:** Update the Zero benchmark source fixtures to the same optimized forms used for the 2026-07-30 run (`bytes_to_string`/`to_string` instead of the old `(call string ...)` escape hatch, combined `type_hints`, and direct compound returns where appropriate), then rerun the language write-cost token counter and verification commands so `results.csv`, source fixtures, and `docs/language_write_cost_benchmark.md` agree.
 * **Done (2026-07-30):** Replaced Task B's Go builtin escape hatch with native `bytes_to_string`, combined Task C's type hints, and returned its compound sum directly. Verified exact `cl100k_base` counts of 80 and 110, transpiled and built both fixtures in scratch modules under `/tmp`, and passed Task C's generated Go test.
+
+### 35. `tests/test_achieve.zero` is not a standalone root fixture
+* **Description:** `tests/test_achieve.zero` begins with `(defun main ...)` instead of a supported root form such as `(cli_app ...)`, `(http_server ...)`, `(web_app ...)`, or `(wasm_app ...)`.
+* **Why:** Found while running the fixture transpile/build loop for bug #32. The checker rejects the file with `{"reason":"Expected http_server, cli_app, web_app, or wasm_app as root symbol, got defun","line":1,"column":2}`, so the fixture never exercises the shipped `achieve` primitive.
+* **Impact:** 2/10 (Low - isolated fixture coverage gap, but it weakens regression confidence for a shipped AI primitive).
+* **Fix sketch:** Wrap the fixture in `(cli_app ...)` or move the `achieve` call into an existing valid root-level CLI form, then verify both direct VM/bytecode coverage and generated backend behavior appropriate to the primitive.
+
+### 36. `confidence` fixture uses invalid comparison arity
+* **Description:** `tests/test_confidence.zero` currently fails shared semantic validation with `{"reason":"> expects 2 arguments, got 3","line":3,"column":9}` at `(> score 0.8)`.
+* **Why:** Found while running the fixture transpile/build loop for bug #32. The stochastic-control improvement says `confidence` is shipped, but this fixture cannot transpile far enough to test the primitive.
+* **Impact:** 2/10 (Low - isolated fixture/parser coverage gap, but it hides whether the documented probabilistic control-flow syntax works).
+* **Fix sketch:** Decide whether decimal literals are valid Zero syntax. If they are, fix lexing/parsing so `0.8` is one float token; if they are not, update the fixture to a supported numeric form and ensure `confidence` comparisons transpile and build.
+
+### 37. `lazy_synthesize` Go backend fixture builds with unresolved function
+* **Description:** `tests/test_lazy_synthesize.zero` transpiles, but generated Go fails to build with `undefined: my_add` for `(lazy_synthesize my_add (a b) "Returns the sum of a and b")` followed by `(print (call my_add 10 20))`.
+* **Why:** Found while running the fixture transpile/build loop for bug #32. Improvement #37 documents `lazy_synthesize` as implemented in the interpreter and bytecode VM, but the Go backend fixture is present in the general `tests/*.zero` set and currently fails as a normal generated-Go fixture.
+* **Impact:** 3/10 (Low-Medium - backend coverage and fixture classification are inconsistent for a shipped runtime primitive).
+* **Fix sketch:** Either implement a Go backend stub/runtime path for `lazy_synthesize`, or move this fixture to an interpreter/bytecode-only test path and make the general generated-Go fixture loop skip it explicitly with documentation.
