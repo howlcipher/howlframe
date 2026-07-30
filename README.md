@@ -7,7 +7,7 @@ Zero is an AI-first, Lisp-like coding language designed specifically to be writt
 You might wonder: *If Zero just compiles into Go, why not have the AI write Go directly?*
 
 1. **Hallucination-Proof Generation**: Modern LLMs often hallucinate invalid syntax or complex abstractions in strictly typed languages. Zero uses simple, uniformly structured S-expressions (Lisp-like grammar). Because the syntax is so simple, we can use tools like `outlines` (as seen in `orchestrator.py`) to mathematically guarantee the AI generates perfectly balanced, structurally valid code.
-2. **Immediate Semantic Feedback**: If the AI attempts to do something semantically invalid (e.g., calling a method that doesn't exist), the Go transpiler immediately catches it and returns a clean, localized JSON error. The Orchestrator automatically feeds this back to the AI for self-correction.
+2. **Immediate Semantic Feedback**: If the AI attempts to do something semantically invalid (e.g., calling a method that doesn't exist), the transpiler's dedicated checker catches it before backend code generation and returns a clean, localized JSON error. The Orchestrator automatically feeds this back to the AI for self-correction.
 3. **Abstraction Constraints**: The AI is strictly constrained by what the transpiler supports. It cannot hallucinate complex, dangerous, or unintended behavior unless an explicit AST mapping exists for it.
 
 Zero combines the **predictability and simplicity of S-expressions** (for the AI to write) with the **performance, safety, and ecosystem of Go** (for the server to run).
@@ -15,6 +15,10 @@ Zero combines the **predictability and simplicity of S-expressions** (for the AI
 ### How much does writing Zero actually cost, compared to Go, Python, Node.js, C#, and Java?
 
 See [`docs/language_write_cost_benchmark.md`](docs/language_write_cost_benchmark.md) — a measured (not estimated) comparison of LLM write-time and token cost across all six languages, using the same fixed set of task prompts, with every program actually compiled and run. As of the July 30th, 2026 run, Zero is now the fastest language to write for AI by a wide margin (15.2s total vs Node.js at 17.0s) and is highly competitive on tokens, having resolved the transpiler bugs discovered in the initial benchmark.
+
+## Current State
+
+The current compiler front end is split into lexer/parser/AST packages, a semantic checker, shared IR lowering, and backend packages for Go, JavaScript, and WebAssembly Text. The checker annotates expressions with inferred type and layout metadata, including native size, alignment, pointer-ness, list/dict element types, and struct field offsets. Go and JavaScript remain the broadest production targets; direct AST execution and binary bytecode cover a bounded `cli_app` subset; `wasm_app` is an actively growing low-level backend with typed numeric/control-flow output and static aggregate memory support.
 
 ## Project Roadmap & The End Goal
 
@@ -293,16 +297,22 @@ Upon crashing, Zero generates a `crash.json`. You can run `observer.py` to proce
    ```
 
 4. **Emit a portable WebAssembly prototype**:
-   A `wasm_app` emits `app.wat`, a standards-compliant WebAssembly Text module
-   with an exported `main(): i32`. The prototype intentionally supports only
-   integer literals, arithmetic/comparisons, `if` with both branches, `do`,
-   and `return`; I/O, strings, variables, functions, and collection primitives
-   are rejected rather than silently miscompiled. Compile `app.wat` with a
-   WAT toolchain when one is available.
+   A `wasm_app` emits `app.wat`, a structurally validated WebAssembly Text
+   module with one exported `main` result. The backend consumes semantic type
+   metadata: Zero `int` values emit as `i64`, floats as `f64`, booleans as
+   `i32`, and aggregate values as `i32` linear-memory pointers. It supports
+   numeric literals, arithmetic/comparisons, `if` with both branches, `do`,
+   `return`, explicit int/float conversions, static int/string lists with
+   bounds-checked `list_get`, and static homogeneous int/string dictionaries
+   with string-key `map_get`. Unsupported dynamic/runtime primitives are
+   rejected rather than silently miscompiled. Compile `app.wat` with a full WAT
+   toolchain when one is available; the repo currently performs local
+   structural validation, not full instruction type-checking.
    ```bash
    go run zero.go -o build examples/wasm_math.zero
    ```
-   This is Phase 1 of the "bypass text-based codegen entirely" end goal below — see [Project Roadmap](#project-roadmap--the-end-goal). `http_server`/`web_app` scripts and a handful of primitives that depend on `try_let` (`read_file`, `write_file`, `db_connect`, etc.) aren't supported under `-run` yet and produce a clear error naming the unsupported node.
+   This is part of the native-code roadmap, distinct from `-run`. `http_server`
+   and `web_app` scripts still target their existing Go/JavaScript backends.
 
 The server will spin up on `http://localhost:8080`.
 
