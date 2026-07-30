@@ -81,7 +81,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 65 | [Linear SSA-based IR](#65-linear-ssa-based-ir) | Done (2026-07-30) | 2.0 (8×1÷4) | — | — | gpt-5.6-sol | Flatten the IR into control flow graphs and basic blocks. |
 | 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Added a bounded typed SSA/CFG to WAT serializer and independent CLI artifact path. |
 | 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
-| 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with C/Rust/Zig library. |
+| 66 | [Standalone Zero Runtime Environment](#66-standalone-zero-runtime-environment) | Pending | 1.0 (8×1÷8) | — | — | gpt-5.6-sol | Replace Go runtime dependency with a C or Rust library. |
 ## Details
 
 ### 62. Phase 2 IR Abstraction
@@ -513,10 +513,10 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Done (2026-07-30):** Added a typed flat SSA/CFG layer in `internal/ir` with graph, basic block, SSA value, instruction, phi, source-location, and explicit branch/jump/return terminator types. `LowerSSA` now lowers shared AST forms for literals/symbols, binary ops, `do`, let chains, `set`, `return`, `if`, `while`, `call`, `list`/`dict`, `map_get`/`list_get`, `print`, and conversion primitives without disrupting the existing Go, JavaScript, or Wasm tree-IR backends. Graph validation rejects missing entries, duplicate labels or values, missing terminators, bad branch/jump targets, malformed phi nodes, and undefined operands. Verified with `go test ./internal/ir ./internal/checker ./internal/backend/wasm`, `go test ./...`, `go vet ./...`, `go test -race ./internal/ir`, and `git diff --check`.
 
 ### 66. Standalone Zero Runtime Environment
-* **Description:** Implement a lightweight runtime library (in C, Zig, or Rust) to handle memory management, GC, and OS syscalls natively.
+* **Description:** Implement a lightweight runtime library (in C or Rust) to handle memory management, GC, and OS syscalls natively.
 * **Why:** Zero currently depends entirely on Go's runtime. We must shed this dependency to emit true standalone binaries.
 * **Impact:** 8/10 (High).
-* **Groomed (2026-07-30):** Still Pending and above the ROI floor, but ranked last among current Pending improvements because it is the largest remaining implementation slice. Score remains 1.0 (8×1÷8). Architecture options should be evaluated explicitly before implementation: C is smallest and ABI-stable but puts memory safety burden on Zero; Rust is safer but adds toolchain/runtime complexity; Zig is a pragmatic systems-language fit but smaller ecosystem.
+* **Groomed (2026-07-30):** Still Pending and above the ROI floor, but ranked last among current Pending improvements because it is the largest remaining implementation slice. Score remains 1.0 (8×1÷8). Architecture options should be evaluated explicitly before implementation: C is smallest and ABI-stable but puts memory safety burden on Zero; Rust is safer but adds toolchain/runtime complexity. Zig is intentionally removed from consideration for this project.
 
 ### 67. Native Backend Code Generators
 * **Description:** Implement LLVM IR or Wasm backend serializers to replace textual Go string concatenations.
