@@ -92,6 +92,18 @@ func TestAnalyzePropagatesTypesAndNativeLayout(t *testing.T) {
 	}
 }
 
+func TestAnalyzeInfersFloatLiteral(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app (if (> score 0.8) (print "yes") (print "no")))`)
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", analysis.Diagnostics)
+	}
+	floatNode := root.Children[1].Children[1].Children[2]
+	if floatNode.Type != "FLOAT" || floatNode.Inferred.Kind != ast.Float {
+		t.Fatalf("unexpected float node: %#v", floatNode)
+	}
+}
+
 func TestAnalyzeReportsProvableTypeErrors(t *testing.T) {
 	root := parseTestProgram(t, `(cli_app
 		(defun bad () int (return "not an int"))

@@ -81,6 +81,11 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: float64(val)})
 		return insts
 	}
+	if node.Type == "FLOAT" {
+		val, _ := strconv.ParseFloat(node.Value, 64)
+		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: val})
+		return insts
+	}
 	if node.Type == "STRING" {
 		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: node.Value})
 		return insts

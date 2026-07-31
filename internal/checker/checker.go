@@ -51,6 +51,9 @@ func checkWasmExpression(node *ast.Node) {
 	if node.Type == "INT" {
 		return
 	}
+	if node.Type == "FLOAT" {
+		return
+	}
 	if node.Type == "STRING" {
 		return
 	}
@@ -183,7 +186,7 @@ func checkJSStatement(node *ast.Node, depth int) {
 	if depth > 1000 {
 		ast.ReportError("AST too deep", node.Line, node.Column)
 	}
-	if node.Type == "STRING" || node.Type == "SYMBOL" || node.Type == "INT" {
+	if node.Type == "STRING" || node.Type == "SYMBOL" || node.Type == "INT" || node.Type == "FLOAT" {
 		return
 	}
 	if node.Type != "List" || len(node.Children) == 0 {

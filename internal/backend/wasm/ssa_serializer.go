@@ -166,6 +166,11 @@ func (serializer *ssaSerializer) constant(instruction *ir.Instruction) (string, 
 			return "", "", fmt.Errorf("SSA int constant %%%d has invalid literal %q", instruction.Result.ID, instruction.Literal)
 		}
 		return fmt.Sprintf("(i64.const %s)", instruction.Literal), "i64", nil
+	case ast.Float:
+		if _, err := strconv.ParseFloat(instruction.Literal, 64); err != nil {
+			return "", "", fmt.Errorf("SSA float constant %%%d has invalid literal %q", instruction.Result.ID, instruction.Literal)
+		}
+		return fmt.Sprintf("(f64.const %s)", instruction.Literal), "f64", nil
 	case ast.Bool:
 		switch instruction.Literal {
 		case "true":
@@ -356,10 +361,32 @@ func ssaWasmOperator(operation ir.SSAOp, operandType string) (string, string, st
 		if operation == ir.OpNotEqual {
 			suffix = "ne"
 		}
-		if operandType == "i64" || operandType == "i32" {
+		if operandType == "i64" || operandType == "i32" || operandType == "f64" {
 			return operandType + "." + suffix, operandType, "i32"
 		}
 		return "", "", ""
+	}
+	if operandType == "f64" {
+		operators := map[ir.SSAOp]string{
+			ir.OpAdd:          "f64.add",
+			ir.OpSubtract:     "f64.sub",
+			ir.OpMultiply:     "f64.mul",
+			ir.OpDivide:       "f64.div",
+			ir.OpLess:         "f64.lt",
+			ir.OpGreater:      "f64.gt",
+			ir.OpLessEqual:    "f64.le",
+			ir.OpGreaterEqual: "f64.ge",
+		}
+		operator := operators[operation]
+		if operator == "" {
+			return "", "", ""
+		}
+		resultType := "f64"
+		if operation == ir.OpLess || operation == ir.OpGreater ||
+			operation == ir.OpLessEqual || operation == ir.OpGreaterEqual {
+			resultType = "i32"
+		}
+		return operator, "f64", resultType
 	}
 	operators := map[ir.SSAOp]string{
 		ir.OpAdd:          "i64.add",
@@ -389,6 +416,8 @@ func wasmPrimitiveType(info ast.TypeInfo) (string, error) {
 		return "i64", nil
 	case ast.Bool:
 		return "i32", nil
+	case ast.Float:
+		return "f64", nil
 	default:
 		return "", fmt.Errorf("unsupported primitive type %s", primitiveName(info))
 	}

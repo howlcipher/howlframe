@@ -1,8 +1,8 @@
 # Bug 36: confidence fixture decimal literals
 
-Status: Selected
+Status: Implemented
 
-Next Step: Delegate the decimal-literal lexer/parser fix to `gpt-5.6-luna`, then review the diff and verify `tests/test_confidence.zero`.
+Next Step: Commit the implementation milestone, then delete this journal in the closeout commit after final verification.
 
 ## Context
 
@@ -25,4 +25,15 @@ The fixture uses `(> score 0.8)`. Current lexer behavior parses `0.8` as integer
 
 ## Delegations
 
-- Pending: `gpt-5.6-luna` via `codex exec`.
+- `gpt-5.6-luna` via `codex exec`: implemented `FLOAT` tokenization/parsing and support across checker, Go/JS/Wasm codegen, bytecode, VM, and tests.
+- Orchestrator review found one follow-up issue in the changed Wasm SSA serializer: float constants were supported, but float arithmetic still selected `i64.*` operators. Fixed manually by adding `f64.*` operator selection, `ast.Float` primitive serialization, and Wasm serializer tests.
+
+## Verification
+
+- `go run zero.go -o /tmp/zero_confidence_check tests/test_confidence.zero`
+- `go build -o /tmp/zero_confidence_check/confidencecheck /tmp/zero_confidence_check/server.go`
+- `go run zero.go -compile-bc tests/test_confidence.zero -o /tmp/test_confidence.zbc`
+- `go run zero.go -compile-wasm /tmp/zero_float_wasm.zero -o /tmp/zero_float_wasm.wat` with `(cli_app (+ 1.5 2.5))`
+- `go test ./...`
+- `go vet ./...`
+- `git diff --check`

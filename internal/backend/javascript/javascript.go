@@ -363,7 +363,7 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if node.Type == "STRING" {
 		return fmt.Sprintf("%q", node.Value)
 	}
-	if node.Type == "SYMBOL" || node.Type == "INT" {
+	if node.Type == "SYMBOL" || node.Type == "INT" || node.Type == "FLOAT" {
 		return node.Value
 	}
 	if node.Type != "List" || len(node.Children) == 0 {

@@ -71,6 +71,9 @@ func TestSerializeSSASupportedOperators(t *testing.T) {
 		{"equal", serializerList("=", serializerInt("8"), serializerInt("2")), "i64.eq", "i32"},
 		{"double equal", serializerList("==", serializerInt("8"), serializerInt("2")), "i64.eq", "i32"},
 		{"not equal", serializerList("!=", serializerInt("8"), serializerInt("2")), "i64.ne", "i32"},
+		{"float add", serializerList("+", serializerFloat("1.5"), serializerFloat("2.5")), "f64.add", "f64"},
+		{"float greater", serializerList(">", serializerFloat("1.5"), serializerFloat("2.5")), "f64.gt", "i32"},
+		{"float equal", serializerList("=", serializerFloat("1.5"), serializerFloat("2.5")), "f64.eq", "i32"},
 		{"and", serializerList("and", serializerBool(true), serializerBool(false)), "i32.and", "i32"},
 		{"or", serializerList("or", serializerBool(true), serializerBool(false)), "i32.or", "i32"},
 	}
@@ -194,6 +197,10 @@ func serializerSymbol(value string) *ast.Node {
 
 func serializerInt(value string) *ast.Node {
 	return &ast.Node{Type: "INT", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+}
+
+func serializerFloat(value string) *ast.Node {
+	return &ast.Node{Type: "FLOAT", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
 }
 
 func serializerBool(value bool) *ast.Node {

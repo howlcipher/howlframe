@@ -14,6 +14,7 @@ const (
 	TokenRParen TokenType = "RPAREN"
 	TokenSymbol TokenType = "SYMBOL"
 	TokenInt    TokenType = "INT"
+	TokenFloat  TokenType = "FLOAT"
 	TokenString TokenType = "STRING"
 	TokenEOF    TokenType = "EOF"
 )
@@ -125,6 +126,19 @@ func (l *Lexer) NextToken() Token {
 		val := string(ch)
 		for unicode.IsDigit(l.peekChar()) {
 			val += string(l.nextChar())
+		}
+		if l.peekChar() == '.' {
+			l.nextChar()
+			if unicode.IsDigit(l.peekChar()) {
+				val += "."
+				for unicode.IsDigit(l.peekChar()) {
+					val += string(l.nextChar())
+				}
+				return Token{Type: TokenFloat, Value: val, Line: startLine, Column: startCol}
+			}
+			// Leave a trailing dot available to the normal symbol lexer.
+			l.pos--
+			l.column--
 		}
 		return Token{Type: TokenInt, Value: val, Line: startLine, Column: startCol}
 	}

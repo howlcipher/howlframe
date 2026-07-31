@@ -50,6 +50,17 @@ func TestCompileStoreOperations(t *testing.T) {
 	assertStoreSpec(t, OpStoreDelete, "STORE_DELETE", 1, 0)
 }
 
+func TestCompileFloatLiteral(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(cli_app (print 0.8))`), "float.zero").ParseExpression()
+	program := CompileToBytecode(root)
+	if len(program.Main) < 2 || program.Main[1].Op != OpPrint {
+		t.Fatalf("unexpected bytecode: %#v", program.Main)
+	}
+	if program.Main[0].ValueOperand != float64(0.8) {
+		t.Fatalf("got float constant %#v", program.Main[0].ValueOperand)
+	}
+}
+
 func assertStoreSpec(t *testing.T, op Opcode, name string, pops int, pushes int) {
 	t.Helper()
 

@@ -163,6 +163,12 @@ func (interp *Interpreter) eval(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("invalid integer literal: %s", node.Value), node)
 		}
 		return v
+	case "FLOAT":
+		v, err := strconv.ParseFloat(node.Value, 64)
+		if err != nil {
+			InterpErr(fmt.Sprintf("invalid float literal: %s", node.Value), node)
+		}
+		return v
 	case "SYMBOL":
 		if v, ok := env.get(node.Value); ok {
 			return v

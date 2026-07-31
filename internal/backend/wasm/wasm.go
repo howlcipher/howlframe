@@ -125,6 +125,9 @@ func (g *wasmGenerator) expression(node *ast.Node) string {
 	if node.Type == "INT" {
 		return fmt.Sprintf("(%s.const %s)", wasmType(node.Inferred), node.Value)
 	}
+	if node.Type == "FLOAT" {
+		return fmt.Sprintf("(f64.const %s)", node.Value)
+	}
 	if node.Type == "STRING" {
 		return fmt.Sprintf("(i32.const %d)", g.allocateString(node.Value))
 	}

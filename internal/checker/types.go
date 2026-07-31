@@ -259,6 +259,8 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 	switch node.Type {
 	case "INT":
 		result = ast.Layout(ast.Int)
+	case "FLOAT":
+		result = ast.Layout(ast.Float)
 	case "STRING":
 		result = ast.Layout(ast.String)
 	case "SYMBOL":

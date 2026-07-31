@@ -33,7 +33,7 @@ func (p *Parser) ParseExpression() *ast.Node {
 		p.Cur = p.lexer.NextToken() // consume ')'
 		return node
 	}
-	if p.Cur.Type == lexer.TokenSymbol || p.Cur.Type == lexer.TokenInt || p.Cur.Type == lexer.TokenString {
+	if p.Cur.Type == lexer.TokenSymbol || p.Cur.Type == lexer.TokenInt || p.Cur.Type == lexer.TokenFloat || p.Cur.Type == lexer.TokenString {
 		node := &ast.Node{Type: string(p.Cur.Type), Value: p.Cur.Value, Line: p.Cur.Line, Column: p.Cur.Column, Filename: p.filename}
 		p.Cur = p.lexer.NextToken()
 		return node
