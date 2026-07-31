@@ -281,6 +281,60 @@ func GenerateCode(node *ast.Node) (string, string) {
 			continue
 		}
 
+		if head == "lazy_synthesize" {
+			if len(handlerNode.Children) != 4 {
+				// ast.ReportError("lazy_synthesize expects (lazy_synthesize name (args) docstring)", handlerNode.Line, handlerNode.Column)
+			}
+			name := handlerNode.Children[1].Value
+			argsNode := handlerNode.Children[2]
+			docstring := handlerNode.Children[3].Value
+
+			var params []string
+			var argsList []string
+			for _, arg := range argsNode.Children {
+				var argName string
+				if arg.Type == "List" && len(arg.Children) >= 1 {
+					argName = arg.Children[0].Value
+				} else {
+					argName = arg.Value
+				}
+				params = append(params, argName)
+				argsList = append(argsList, argName+" string")
+			}
+			argsStr := strings.Join(argsList, ", ")
+
+			var promptExpr string
+			if len(params) == 0 {
+				prompt := fmt.Sprintf("You are a Zero compiler. Synthesize and directly execute the function %q with parameters []. Docstring: %q. Reply ONLY with the result value, no explanation, no markdown.", name, docstring)
+				promptExpr = fmt.Sprintf("%q", prompt)
+			} else {
+				var inputFmtParts []string
+				for _, p := range params {
+					inputFmtParts = append(inputFmtParts, p+"=%v")
+				}
+				promptTemplate := fmt.Sprintf("You are a Zero compiler. Synthesize and directly execute the function %q with parameters %v. Docstring: %q. Given inputs %s, reply ONLY with the result value, no explanation, no markdown.", name, params, docstring, strings.Join(inputFmtParts, ", "))
+				promptExpr = fmt.Sprintf("fmt.Sprintf(%q, %s)", promptTemplate, strings.Join(params, ", "))
+			}
+
+			bodyCode := fmt.Sprintf(`	reqBody, _ := json.Marshal(map[string]any{
+		"model":  "llama3",
+		"prompt": %s,
+		"stream": false,
+	})
+	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+	if err != nil { panic(err) }
+	defer resp.Body.Close()
+	var res struct {
+		Response string `+"`json:\"response\"`"+`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+	return strings.TrimSpace(res.Response)
+`, promptExpr)
+
+			funcsCode += fmt.Sprintf("//line %s:%d\nfunc %s(%s) string {\n%s}\n\n", handlerNode.Filename, handlerNode.Line, name, argsStr, bodyCode)
+			continue
+		}
+
 		if head == "route" {
 			if len(handlerNode.Children) != 3 {
 				// ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
