@@ -3,14 +3,15 @@ package wasm
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"zero/internal/ast"
 	"zero/internal/ir"
 )
 
-// SerializeSSA emits a standalone WAT module from a typed, acyclic SSA graph.
-// The first slice deliberately supports primitive numeric and boolean values
-// plus canonical if/phi control flow. Unsupported graph operations return an
-// error instead of falling back to AST code generation.
+// SerializeSSA emits a standalone WAT module from a typed SSA graph.
+// Supports primitive numeric/boolean values, canonical if/phi control flow,
+// and structured while loops (back edges produced by lowerWhile in ssa.go).
+// Unsupported graph shapes return an error instead of falling back silently.
 func SerializeSSA(graph *ir.Graph) (string, error) {
 	if err := graph.Validate(); err != nil {
 		return "", fmt.Errorf("invalid SSA graph: %w", err)
@@ -26,28 +27,65 @@ func SerializeSSA(graph *ir.Graph) (string, error) {
 		for index := range block.Instructions {
 			instruction := &block.Instructions[index]
 			serializer.instructions[instruction.Result.ID] = instruction
-			if !supportedSSAOperation(instruction.Op) {
-				return "", serializer.unsupported(instruction)
-			}
 		}
 	}
-	if err := serializer.rejectCycles(); err != nil {
-		return "", err
-	}
 
-	body, resultType, err := serializer.functionBody()
+	// Detect loop structure (or reject unsupported cycles).
+	loop, err := serializer.detectAndValidateLoop()
 	if err != nil {
 		return "", err
 	}
-	wat := fmt.Sprintf(
-		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
-		resultType,
-		body,
-	)
+
+	// Now that the loop shape is validated, verify all instructions are supported.
+	// OpUnit is a void marker emitted by lowerWhile in exit/body blocks — always safe to allow.
+	// OpSet appears in loop body blocks and is handled specially during loop codegen.
+	loopBodyLabels := map[ir.BlockLabel]bool{}
+	if loop != nil {
+		loopBodyLabels[loop.bodyBlock.Label] = true
+		loopBodyLabels[loop.exitBlock.Label] = true
+	}
+	for _, block := range graph.Blocks {
+		for index := range block.Instructions {
+			instruction := &block.Instructions[index]
+			if loopBodyLabels[block.Label] {
+				// Loop body/exit blocks allow OpSet and OpUnit in addition to normal ops.
+				if !supportedSSAOperation(instruction.Op) &&
+					instruction.Op != ir.OpSet && instruction.Op != ir.OpUnit {
+					return "", serializer.unsupported(instruction)
+				}
+			} else {
+				if !supportedSSAOperation(instruction.Op) {
+					return "", serializer.unsupported(instruction)
+				}
+			}
+		}
+	}
+
+	var wat string
+	if loop != nil {
+		wat, err = serializer.buildLoopModule(loop)
+	} else {
+		wat, err = serializer.buildSimpleModule()
+	}
+	if err != nil {
+		return "", err
+	}
 	if err := ValidateWAT(wat); err != nil {
 		return "", fmt.Errorf("invalid SSA WAT: %w", err)
 	}
 	return wat, nil
+}
+
+// loopInfo describes the structured while loop shape produced by lowerWhile.
+type loopInfo struct {
+	preheaderBlock *ir.BasicBlock
+	headerBlock    *ir.BasicBlock
+	bodyBlock      *ir.BasicBlock
+	exitBlock      *ir.BasicBlock
+	// phis is the list of phi instructions in the header block (the loop-carried variables).
+	phis []ir.Instruction
+	// localNames maps phi ValueID → WAT local name (e.g. "$total_3").
+	localNames map[ir.ValueID]string
 }
 
 type ssaSerializer struct {
@@ -55,11 +93,352 @@ type ssaSerializer struct {
 	blocks       map[ir.BlockLabel]*ir.BasicBlock
 	instructions map[ir.ValueID]*ir.Instruction
 	resolving    map[ir.ValueID]bool
+	// loopLocals maps loop-carried phi ValueIDs to their WAT local names.
+	// Non-nil only while generating a loop.
+	loopLocals map[ir.ValueID]string
 }
 
 type ssaReturn struct {
 	block *ir.BasicBlock
 	value ir.ValueID
+}
+
+// detectAndValidateLoop performs a DFS over the graph to find cycles.
+// If it finds exactly the structured while-loop pattern produced by lowerWhile,
+// it returns a *loopInfo describing it.
+// Any other cycle (or a structurally incorrect loop) returns an error.
+func (serializer *ssaSerializer) detectAndValidateLoop() (*loopInfo, error) {
+	state := make(map[ir.BlockLabel]uint8) // 0=unvisited, 1=on-stack, 2=done
+	var backedgeFrom, backedgeTo ir.BlockLabel
+
+	var visit func(ir.BlockLabel) error
+	visit = func(label ir.BlockLabel) error {
+		switch state[label] {
+		case 1:
+			// Back edge found: label is on the DFS stack.
+			if backedgeTo != "" {
+				// A second back edge — nested loops are not supported.
+				return fmt.Errorf("SSA Wasm backend does not support loops involving block %q (nested loops not supported)", label)
+			}
+			backedgeTo = label
+			return nil
+		case 2:
+			return nil
+		}
+		state[label] = 1
+		block := serializer.blocks[label]
+		var targets []ir.BlockLabel
+		switch block.Terminator.Kind {
+		case ir.TermJump:
+			targets = append(targets, block.Terminator.Target)
+		case ir.TermBranch:
+			targets = append(targets, block.Terminator.TrueTarget, block.Terminator.FalseTarget)
+		}
+		for _, target := range targets {
+			if state[target] == 1 {
+				// Record the block causing the backedge.
+				if backedgeTo != "" && backedgeTo != target {
+					return fmt.Errorf("SSA Wasm backend does not support loops involving block %q (nested loops not supported)", target)
+				}
+				backedgeTo = target
+				backedgeFrom = label
+				continue
+			}
+			if err := visit(target); err != nil {
+				return err
+			}
+			// After visiting, see if the backedgeFrom was set inside a nested call.
+			if backedgeFrom == "" && backedgeTo == target {
+				// This shouldn't happen but guard anyway.
+			}
+		}
+		state[label] = 2
+		return nil
+	}
+
+	if err := visit(serializer.graph.Entry); err != nil {
+		return nil, err
+	}
+
+	if backedgeTo == "" {
+		// No cycle — acyclic graph, existing path handles it.
+		return nil, nil
+	}
+
+	// A cycle was found. Validate that it matches the lowerWhile pattern.
+	return serializer.validateLoopShape(backedgeTo, backedgeFrom)
+}
+
+// validateLoopShape checks that the cycle from backedgeFrom → backedgeTo
+// matches the exact shape produced by lowerWhile, and returns loopInfo if so.
+func (serializer *ssaSerializer) validateLoopShape(headerLabel, bodyLabel ir.BlockLabel) (*loopInfo, error) {
+	headerBlock := serializer.blocks[headerLabel]
+	if headerBlock == nil {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q", headerLabel)
+	}
+	bodyBlock := serializer.blocks[bodyLabel]
+	if bodyBlock == nil {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q", bodyLabel)
+	}
+
+	// The header must have a TermBranch (the loop condition).
+	if headerBlock.Terminator.Kind != ir.TermBranch {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (header must end with a branch)", headerLabel)
+	}
+
+	// The header's instructions must start with OpPhi instructions for loop-carried variables.
+	// There must be at least one phi (otherwise this is not a structured loop we can lower).
+	var phis []ir.Instruction
+	for _, instr := range headerBlock.Instructions {
+		if instr.Op == ir.OpPhi {
+			if len(instr.Operands) != 2 || len(instr.Blocks) != 2 {
+				return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (phi %%%d must have exactly 2 operands)", headerLabel, instr.Result.ID)
+			}
+			phis = append(phis, instr)
+		}
+		// Non-phi instructions in the header are the condition computation — fine.
+	}
+	if len(phis) == 0 {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q", headerLabel)
+	}
+
+	// The body block must end with a TermJump back to the header.
+	if bodyBlock.Terminator.Kind != ir.TermJump || bodyBlock.Terminator.Target != headerLabel {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (body must jump back to header)", bodyLabel)
+	}
+
+	// Find the preheader: the unique predecessor of the header that is NOT the body.
+	// In lowerWhile, the preheader is the block that jumps to the header first.
+	var preheaderBlock *ir.BasicBlock
+	for _, block := range serializer.graph.Blocks {
+		if block.Label == headerLabel || block.Label == bodyLabel {
+			continue
+		}
+		term := block.Terminator
+		if term.Kind == ir.TermJump && term.Target == headerLabel {
+			if preheaderBlock != nil {
+				return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (multiple preheaders)", headerLabel)
+			}
+			preheaderBlock = block
+		}
+	}
+	if preheaderBlock == nil {
+		return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (no preheader found)", headerLabel)
+	}
+
+	// Verify each phi's incoming blocks: one from the preheader, one from the body.
+	for _, phi := range phis {
+		hasPreheader := false
+		hasBody := false
+		for _, block := range phi.Blocks {
+			if block == preheaderBlock.Label {
+				hasPreheader = true
+			}
+			if block == bodyLabel {
+				hasBody = true
+			}
+		}
+		if !hasPreheader || !hasBody {
+			return nil, fmt.Errorf("SSA Wasm backend does not support loops involving block %q (phi %%%d has unexpected predecessors)", headerLabel, phi.Result.ID)
+		}
+	}
+
+	// Find the exit block: the false target of the header's branch.
+	exitLabel := headerBlock.Terminator.FalseTarget
+	exitBlock := serializer.blocks[exitLabel]
+	if exitBlock == nil {
+		return nil, fmt.Errorf("loop exit block %q not found", exitLabel)
+	}
+
+	// Build local names for each phi.
+	localNames := make(map[ir.ValueID]string, len(phis))
+	for _, phi := range phis {
+		// Use symbol (source variable name) + value ID for uniqueness.
+		name := fmt.Sprintf("$%s_%d", phi.Symbol, phi.Result.ID)
+		if phi.Symbol == "" {
+			name = fmt.Sprintf("$v%d", phi.Result.ID)
+		}
+		localNames[phi.Result.ID] = name
+	}
+
+	return &loopInfo{
+		preheaderBlock: preheaderBlock,
+		headerBlock:    headerBlock,
+		bodyBlock:      bodyBlock,
+		exitBlock:      exitBlock,
+		phis:           phis,
+		localNames:     localNames,
+	}, nil
+}
+
+// buildSimpleModule handles the original acyclic case.
+func (serializer *ssaSerializer) buildSimpleModule() (string, error) {
+	body, resultType, err := serializer.functionBody()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(
+		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
+		resultType,
+		body,
+	), nil
+}
+
+// buildLoopModule generates the WAT module for a graph containing a while loop.
+// The structure uses a nested block pattern:
+//
+//	(block (result T)            ;; outer: provides the return value
+//	  (local.set ...)            ;; init each phi from preheader value
+//	  (block                     ;; inner void block: exit target for br_if
+//	    (loop                    ;; loop header
+//	      (br_if 1 (i32.eqz condition))  ;; exit inner block if cond false
+//	      <body stmts>
+//	      (br 0)                 ;; back to loop top
+//	    )
+//	  )
+//	  (local.get $returnVar)     ;; produce function result from local
+//	)
+func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error) {
+	// Set up loop-local resolution so that expression() on a loop phi → local.get.
+	serializer.loopLocals = loop.localNames
+
+	// Determine the result type from the return value.
+	var returnValue ir.ValueID
+	for _, block := range serializer.graph.Blocks {
+		if block.Terminator.Kind == ir.TermReturn && block.Terminator.Value != 0 {
+			returnValue = block.Terminator.Value
+			break
+		}
+	}
+	if returnValue == 0 {
+		return "", fmt.Errorf("SSA loop graph has no return value")
+	}
+
+	returnExpr, resultType, err := serializer.expression(returnValue)
+	if err != nil {
+		return "", fmt.Errorf("loop return expression: %w", err)
+	}
+
+	// Build local declarations.
+	var localDecls []string
+	for _, phi := range loop.phis {
+		localType, err := wasmPrimitiveType(phi.Result.Type)
+		if err != nil {
+			return "", fmt.Errorf("loop phi %%%d: %w", phi.Result.ID, err)
+		}
+		localDecls = append(localDecls, fmt.Sprintf("(local %s %s)", loop.localNames[phi.Result.ID], localType))
+	}
+
+	// Build local.set initializations from phi preheader operands.
+	var initStmts []string
+	for _, phi := range loop.phis {
+		localName := loop.localNames[phi.Result.ID]
+		preheaderOperand := ir.ValueID(0)
+		for idx, block := range phi.Blocks {
+			if block == loop.preheaderBlock.Label {
+				preheaderOperand = phi.Operands[idx]
+				break
+			}
+		}
+		if preheaderOperand == 0 {
+			return "", fmt.Errorf("loop phi %%%d has no preheader operand", phi.Result.ID)
+		}
+		initExpr, _, err := serializer.expression(preheaderOperand)
+		if err != nil {
+			return "", fmt.Errorf("loop phi %%%d init: %w", phi.Result.ID, err)
+		}
+		initStmts = append(initStmts, fmt.Sprintf("(local.set %s %s)", localName, initExpr))
+	}
+
+	// Build the loop condition from the header's branch condition.
+	condExpr, condType, err := serializer.expression(loop.headerBlock.Terminator.Cond)
+	if err != nil {
+		return "", fmt.Errorf("loop condition: %w", err)
+	}
+	if condType != "i32" {
+		return "", fmt.Errorf("loop condition has type %s, want i32", condType)
+	}
+
+	// Build body statements from the body block.
+	// OpSet → emit (local.set $name <expr>)
+	// OpUnit → skip (void marker)
+	// Other ops → resolved lazily via expression() when referenced by OpSet
+	var bodyStmts []string
+	for _, instr := range loop.bodyBlock.Instructions {
+		switch instr.Op {
+		case ir.OpSet:
+			localName := serializer.findLocalNameBySymbol(instr.Symbol, loop)
+			if localName == "" {
+				return "", fmt.Errorf("loop body OpSet for symbol %q has no matching loop phi", instr.Symbol)
+			}
+			valExpr, _, err := serializer.expression(instr.Operands[0])
+			if err != nil {
+				return "", fmt.Errorf("loop body set %q: %w", instr.Symbol, err)
+			}
+			bodyStmts = append(bodyStmts, fmt.Sprintf("(local.set %s %s)", localName, valExpr))
+		case ir.OpUnit:
+			// void marker — skip
+		default:
+			// Binary ops and constants are computed lazily by expression()
+			// and only appear in output when referenced. No need to emit them standalone.
+		}
+	}
+
+	// Assemble the WAT using a two-block nesting pattern:
+	// outer (block (result T)) → inner (block) void exit target → (loop) body
+	//
+	// Inside the loop:
+	//   (br_if 1 (i32.eqz cond))  ;; exit inner void block when cond is false
+	//   body stmts
+	//   (br 0)                     ;; continue loop
+	//
+	// After inner block exits (cond was false): local.get provides the result.
+	indent := "        "
+	loopBody := []string{
+		fmt.Sprintf("(br_if 1 (i32.eqz %s))", condExpr),
+	}
+	loopBody = append(loopBody, bodyStmts...)
+	loopBody = append(loopBody, "(br 0)")
+
+	loopStmt := fmt.Sprintf("(loop\n%s%s\n      )",
+		indent,
+		strings.Join(loopBody, "\n"+indent))
+
+	innerBlock := fmt.Sprintf("(block\n      %s\n    )", loopStmt)
+
+	// outer block: inits + inner block + result expr
+	var outerContents []string
+	outerContents = append(outerContents, initStmts...)
+	outerContents = append(outerContents, innerBlock)
+	outerContents = append(outerContents, returnExpr)
+
+	outerBlock := fmt.Sprintf("(block (result %s)\n    %s\n  )",
+		resultType,
+		strings.Join(outerContents, "\n    "))
+
+	// Assemble function with local declarations then the outer block.
+	var funcParts []string
+	for _, decl := range localDecls {
+		funcParts = append(funcParts, decl)
+	}
+	funcParts = append(funcParts, outerBlock)
+
+	wat := fmt.Sprintf(
+		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
+		resultType,
+		strings.Join(funcParts, "\n    "),
+	)
+	return wat, nil
+}
+
+// findLocalNameBySymbol finds the WAT local name for a phi with the given symbol name.
+func (serializer *ssaSerializer) findLocalNameBySymbol(symbol string, loop *loopInfo) string {
+	for _, phi := range loop.phis {
+		if phi.Symbol == symbol {
+			return loop.localNames[phi.Result.ID]
+		}
+	}
+	return ""
 }
 
 func (serializer *ssaSerializer) functionBody() (string, string, error) {
@@ -153,6 +532,16 @@ func (serializer *ssaSerializer) expression(value ir.ValueID) (string, string, e
 	case ir.OpConst:
 		return serializer.constant(instruction)
 	case ir.OpPhi:
+		// Loop-carried phi: resolve via local.get instead of recursive phi expansion.
+		if serializer.loopLocals != nil {
+			if localName, ok := serializer.loopLocals[value]; ok {
+				localType, err := wasmPrimitiveType(instruction.Result.Type)
+				if err != nil {
+					return "", "", fmt.Errorf("loop phi %%%d: %w", value, err)
+				}
+				return fmt.Sprintf("(local.get %s)", localName), localType, nil
+			}
+		}
 		return serializer.phi(instruction)
 	default:
 		return serializer.binary(instruction)
@@ -291,36 +680,6 @@ func (serializer *ssaSerializer) phi(instruction *ir.Instruction) (string, strin
 		), resultType, nil
 	}
 	return "", "", fmt.Errorf("phi %%%d is not controlled by a matching branch", instruction.Result.ID)
-}
-
-func (serializer *ssaSerializer) rejectCycles() error {
-	state := make(map[ir.BlockLabel]uint8)
-	var visit func(ir.BlockLabel) error
-	visit = func(label ir.BlockLabel) error {
-		switch state[label] {
-		case 1:
-			return fmt.Errorf("SSA Wasm backend does not support loops involving block %q", label)
-		case 2:
-			return nil
-		}
-		state[label] = 1
-		block := serializer.blocks[label]
-		var targets []ir.BlockLabel
-		switch block.Terminator.Kind {
-		case ir.TermJump:
-			targets = append(targets, block.Terminator.Target)
-		case ir.TermBranch:
-			targets = append(targets, block.Terminator.TrueTarget, block.Terminator.FalseTarget)
-		}
-		for _, target := range targets {
-			if err := visit(target); err != nil {
-				return err
-			}
-		}
-		state[label] = 2
-		return nil
-	}
-	return visit(serializer.graph.Entry)
 }
 
 func (serializer *ssaSerializer) unsupported(instruction *ir.Instruction) error {

@@ -171,6 +171,52 @@ func TestSerializeSSARejectsLoopsClearly(t *testing.T) {
 	}
 }
 
+// TestSerializeSSAWhileLoopAccumulator tests that a simple counting while loop
+// (let (i 0) (do (while (< i 5) (set i (+ i 1))) (return i)))
+// lowers to valid WAT containing loop, local.set, and local.get instructions.
+func TestSerializeSSAWhileLoopAccumulator(t *testing.T) {
+	// Build: (let (i 0) (do (while (< i 5) (set i (+ i 1))) (return i)))
+	root := serializerList("let",
+		serializerPair(serializerSymbol("i"), serializerInt("0")),
+		serializerList("do",
+			serializerList("while",
+				serializerList("<", serializerSymbol("i"), serializerInt("5")),
+				serializerList("set", serializerSymbol("i"),
+					serializerList("+", serializerSymbol("i"), serializerInt("1"))),
+			),
+			serializerList("return", serializerSymbol("i")),
+		),
+	)
+	analysis := checker.Analyze(serializerList("cli_app", root))
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("Analyze() diagnostics = %+v", analysis.Diagnostics)
+	}
+	graph, err := ir.LowerSSA(root)
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+	wat, err := SerializeSSA(graph)
+	if err != nil {
+		t.Fatalf("SerializeSSA() error = %v", err)
+	}
+	for _, fragment := range []string{
+		`(func (export "main") (result i64)`,
+		`(loop`,
+		`(local.set `,
+		`(local.get `,
+		`(br_if `,
+		`(i32.eqz `,
+		`(br 0)`,
+	} {
+		if !strings.Contains(wat, fragment) {
+			t.Errorf("serialized WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+	if err := ValidateWAT(wat); err != nil {
+		t.Fatalf("ValidateWAT() error = %v\n%s", err, wat)
+	}
+}
+
 func serializerList(head string, children ...*ast.Node) *ast.Node {
 	return &ast.Node{
 		Type:     "List",
