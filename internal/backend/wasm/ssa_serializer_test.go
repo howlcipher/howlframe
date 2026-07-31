@@ -102,6 +102,24 @@ func TestSerializeSSARejectsUnsupportedOperations(t *testing.T) {
 		Blocks: []*ir.BasicBlock{{
 			Label: "entry",
 			Instructions: []ir.Instruction{{
+				Result: ir.Value{ID: 1, Type: ast.Layout(ast.List)},
+				Op:     ir.OpList,
+			}},
+			Terminator: &ir.Terminator{Kind: ir.TermReturn, Value: 1},
+		}},
+	}
+	_, err := SerializeSSA(graph)
+	if err == nil || !strings.Contains(err.Error(), `does not support operation "list"`) {
+		t.Fatalf("SerializeSSA() error = %v, want clear unsupported operation diagnostic", err)
+	}
+}
+
+func TestSerializeSSARejectsCallToUndefinedFunction(t *testing.T) {
+	graph := &ir.Graph{
+		Entry: "entry",
+		Blocks: []*ir.BasicBlock{{
+			Label: "entry",
+			Instructions: []ir.Instruction{{
 				Result: ir.Value{ID: 1, Type: ast.Layout(ast.Int)},
 				Op:     ir.OpCall,
 				Symbol: "work",
@@ -110,8 +128,8 @@ func TestSerializeSSARejectsUnsupportedOperations(t *testing.T) {
 		}},
 	}
 	_, err := SerializeSSA(graph)
-	if err == nil || !strings.Contains(err.Error(), `does not support operation "call"`) {
-		t.Fatalf("SerializeSSA() error = %v, want clear unsupported operation diagnostic", err)
+	if err == nil || !strings.Contains(err.Error(), `does not support calling undefined function "work"`) {
+		t.Fatalf("SerializeSSA() error = %v, want clear undefined function diagnostic", err)
 	}
 }
 
@@ -254,4 +272,139 @@ func serializerBool(value bool) *ast.Node {
 		return serializerSymbol("true")
 	}
 	return serializerSymbol("false")
+}
+
+func serializerString(value string) *ast.Node {
+	return &ast.Node{Type: "STRING", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+}
+
+// TestSerializeSSAProgramCallsHelperFunction builds the equivalent of
+//
+//	(cli_app
+//	  (defun square (x) (type_hint x "int") (type_hint return "int") (* x x))
+//	  (call square 3))
+//
+// through the same checker → ir.LowerSSAFunction/ir.LowerSSA → SerializeSSAProgram
+// path zero.go's -compile-wasm flag uses, and checks the callee is emitted
+// as its own WAT function and the call site resolves to it.
+func TestSerializeSSAProgramCallsHelperFunction(t *testing.T) {
+	defunNode := serializerList("defun",
+		serializerSymbol("square"),
+		serializerList("x"),
+		serializerList("type_hint", serializerSymbol("x"), serializerString("int")),
+		serializerList("type_hint", serializerSymbol("return"), serializerString("int")),
+		serializerList("*", serializerSymbol("x"), serializerSymbol("x")),
+	)
+	entryNode := serializerList("call", serializerSymbol("square"), serializerInt("3"))
+	root := serializerList("cli_app", defunNode, entryNode)
+
+	analysis := checker.Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("Analyze() diagnostics = %+v", analysis.Diagnostics)
+	}
+	info, ok := analysis.Functions["square"]
+	if !ok {
+		t.Fatalf("Analyze() did not collect a signature for square")
+	}
+
+	params := []ir.Param{{Name: "x", Type: info.Params[0]}}
+	functionGraph, err := ir.LowerSSAFunction(params, defunNode.Children[len(defunNode.Children)-1])
+	if err != nil {
+		t.Fatalf("LowerSSAFunction() error = %v", err)
+	}
+	entryGraph, err := ir.LowerSSA(entryNode)
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+
+	wat, err := SerializeSSAProgram([]Function{{
+		Name:   "square",
+		Params: params,
+		Return: info.Return,
+		Graph:  functionGraph,
+	}}, entryGraph)
+	if err != nil {
+		t.Fatalf("SerializeSSAProgram() error = %v", err)
+	}
+	for _, fragment := range []string{
+		`(func $square (param $x i64) (result i64)`,
+		`(i64.mul (local.get $x) (local.get $x))`,
+		`(func $main (export "main") (result i64)`,
+		`(call $square (i64.const 3))`,
+	} {
+		if !strings.Contains(wat, fragment) {
+			t.Errorf("serialized WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+	if err := ValidateWAT(wat); err != nil {
+		t.Fatalf("ValidateWAT() error = %v\n%s", err, wat)
+	}
+}
+
+// TestSerializeSSAProgramWithNoFunctionsMatchesSerializeSSA proves
+// SerializeSSAProgram degrades to byte-identical output to SerializeSSA when
+// there are no functions, so -compile-wasm's existing single-expression
+// fixtures are unaffected by this feature.
+func TestSerializeSSAProgramWithNoFunctionsMatchesSerializeSSA(t *testing.T) {
+	root := serializerList("+", serializerInt("1"), serializerInt("2"))
+	checker.Analyze(serializerList("cli_app", root))
+	graph, err := ir.LowerSSA(root)
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+	direct, err := SerializeSSA(graph)
+	if err != nil {
+		t.Fatalf("SerializeSSA() error = %v", err)
+	}
+	viaProgram, err := SerializeSSAProgram(nil, graph)
+	if err != nil {
+		t.Fatalf("SerializeSSAProgram() error = %v", err)
+	}
+	if direct != viaProgram {
+		t.Fatalf("SerializeSSAProgram(nil, graph) = %q, want byte-identical to SerializeSSA(graph) = %q", viaProgram, direct)
+	}
+}
+
+func TestSerializeSSAProgramRejectsNonScalarParameter(t *testing.T) {
+	params := []ir.Param{{Name: "s", Type: ast.Layout(ast.String)}}
+	body := serializerSymbol("s")
+	functionGraph, err := ir.LowerSSAFunction(params, body)
+	if err != nil {
+		t.Fatalf("LowerSSAFunction() error = %v", err)
+	}
+	entryGraph, err := ir.LowerSSA(serializerInt("1"))
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+	_, err = SerializeSSAProgram([]Function{{
+		Name:   "identity",
+		Params: params,
+		Return: ast.Layout(ast.String),
+		Graph:  functionGraph,
+	}}, entryGraph)
+	if err == nil || !strings.Contains(err.Error(), "unsupported primitive type") {
+		t.Fatalf("SerializeSSAProgram() error = %v, want a clear non-scalar rejection", err)
+	}
+}
+
+func TestSerializeSSAProgramRejectsDuplicateFunctionName(t *testing.T) {
+	graphA, err := ir.LowerSSAFunction(nil, serializerInt("1"))
+	if err != nil {
+		t.Fatalf("LowerSSAFunction() error = %v", err)
+	}
+	graphB, err := ir.LowerSSAFunction(nil, serializerInt("2"))
+	if err != nil {
+		t.Fatalf("LowerSSAFunction() error = %v", err)
+	}
+	entryGraph, err := ir.LowerSSA(serializerInt("0"))
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+	_, err = SerializeSSAProgram([]Function{
+		{Name: "dup", Return: ast.Layout(ast.Int), Graph: graphA},
+		{Name: "dup", Return: ast.Layout(ast.Int), Graph: graphB},
+	}, entryGraph)
+	if err == nil || !strings.Contains(err.Error(), `duplicate function "dup"`) {
+		t.Fatalf("SerializeSSAProgram() error = %v, want a clear duplicate function diagnostic", err)
+	}
 }

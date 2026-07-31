@@ -17,10 +17,138 @@ func SerializeSSA(graph *ir.Graph) (string, error) {
 		return "", fmt.Errorf("invalid SSA graph: %w", err)
 	}
 
+	serializer := newSSASerializer(graph, nil)
+	body, resultType, err := serializer.buildBody()
+	if err != nil {
+		return "", err
+	}
+
+	wat := fmt.Sprintf(
+		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
+		resultType,
+		body,
+	)
+	if err := ValidateWAT(wat); err != nil {
+		return "", fmt.Errorf("invalid SSA WAT: %w", err)
+	}
+	return wat, nil
+}
+
+// Function is one named, typed function ready for multi-function Wasm
+// program serialization via SerializeSSAProgram. Graph is produced by
+// ir.LowerSSAFunction from the same Params.
+type Function struct {
+	Name   string
+	Params []ir.Param
+	Return ast.TypeInfo
+	Graph  *ir.Graph
+}
+
+// signatureInfo is the arity/type signature of one function in a program,
+// used to validate and generate code for ir.OpCall instructions.
+type signatureInfo struct {
+	params []ast.TypeInfo
+	result ast.TypeInfo
+}
+
+// SerializeSSAProgram emits a standalone WAT module containing one function
+// per entry in functions plus an exported "main" entrypoint for entry.
+// Calls between functions (including recursion) are resolved by name via
+// ir.OpCall. With no functions, this produces byte-identical output to
+// SerializeSSA(entry).
+func SerializeSSAProgram(functions []Function, entry *ir.Graph) (string, error) {
+	if len(functions) == 0 {
+		return SerializeSSA(entry)
+	}
+
+	signatures := make(map[string]signatureInfo, len(functions))
+	for _, function := range functions {
+		if function.Graph == nil {
+			return "", fmt.Errorf("function %q has no lowered graph", function.Name)
+		}
+		if _, exists := signatures[function.Name]; exists {
+			return "", fmt.Errorf("duplicate function %q", function.Name)
+		}
+		paramTypes := make([]ast.TypeInfo, len(function.Params))
+		for index, param := range function.Params {
+			paramTypes[index] = param.Type
+		}
+		signatures[function.Name] = signatureInfo{params: paramTypes, result: function.Return}
+	}
+
+	var declarations []string
+	for _, function := range functions {
+		declaration, err := serializeFunctionDeclaration(function.Name, "", function.Graph, function.Params, function.Return, signatures)
+		if err != nil {
+			return "", fmt.Errorf("function %q: %w", function.Name, err)
+		}
+		declarations = append(declarations, declaration)
+	}
+	mainDeclaration, err := serializeFunctionDeclaration("main", "main", entry, nil, ast.TypeInfo{}, signatures)
+	if err != nil {
+		return "", fmt.Errorf("entry expression: %w", err)
+	}
+	declarations = append(declarations, mainDeclaration)
+
+	wat := fmt.Sprintf("(module\n%s\n)\n", strings.Join(declarations, "\n"))
+	if err := ValidateWAT(wat); err != nil {
+		return "", fmt.Errorf("invalid SSA WAT: %w", err)
+	}
+	return wat, nil
+}
+
+// serializeFunctionDeclaration validates graph and emits its WAT (func ...)
+// declaration, with one (param $name type) clause per params entry and an
+// (export exportName) clause when exportName is non-empty. returnType is
+// checked against the graph's inferred result type when its Kind is set
+// (i.e. for a real defun signature); the zero value skips that check and
+// trusts the graph's own inferred result type (used for the entry function,
+// which has no separately-declared signature).
+func serializeFunctionDeclaration(name, exportName string, graph *ir.Graph, params []ir.Param, returnType ast.TypeInfo, signatures map[string]signatureInfo) (string, error) {
+	if err := graph.Validate(); err != nil {
+		return "", fmt.Errorf("invalid SSA graph: %w", err)
+	}
+	serializer := newSSASerializer(graph, signatures)
+	body, resultType, err := serializer.buildBody()
+	if err != nil {
+		return "", err
+	}
+	if returnType.Kind != "" {
+		declaredType, err := wasmPrimitiveType(returnType)
+		if err != nil {
+			return "", fmt.Errorf("declared return type: %w", err)
+		}
+		if declaredType != resultType {
+			return "", fmt.Errorf("declares result %s, body has type %s", declaredType, resultType)
+		}
+	}
+	var paramClauses strings.Builder
+	for _, param := range params {
+		paramType, err := wasmPrimitiveType(param.Type)
+		if err != nil {
+			return "", fmt.Errorf("parameter %q: %w", param.Name, err)
+		}
+		fmt.Fprintf(&paramClauses, " (param $%s %s)", param.Name, paramType)
+	}
+	exportClause := ""
+	if exportName != "" {
+		exportClause = fmt.Sprintf(" (export %q)", exportName)
+	}
+	return fmt.Sprintf(
+		"  (func $%s%s%s (result %s)\n    %s\n  )",
+		name, exportClause, paramClauses.String(), resultType, body,
+	), nil
+}
+
+// newSSASerializer builds an ssaSerializer with its block/instruction
+// indexes populated. signatures is nil for a single-function graph (any
+// ir.OpCall in that graph then fails as calling an undefined function).
+func newSSASerializer(graph *ir.Graph, signatures map[string]signatureInfo) *ssaSerializer {
 	serializer := &ssaSerializer{
 		graph:        graph,
 		blocks:       make(map[ir.BlockLabel]*ir.BasicBlock, len(graph.Blocks)),
 		instructions: make(map[ir.ValueID]*ir.Instruction),
+		signatures:   signatures,
 	}
 	for _, block := range graph.Blocks {
 		serializer.blocks[block.Label] = block
@@ -29,11 +157,18 @@ func SerializeSSA(graph *ir.Graph) (string, error) {
 			serializer.instructions[instruction.Result.ID] = instruction
 		}
 	}
+	return serializer
+}
 
+// buildBody validates the graph's loop shape (if any) and instruction
+// support, then serializes its body content — no (module ...)/(func ...)
+// wrapper — returning the body text and its result type. Shared by
+// SerializeSSA and SerializeSSAProgram so both stay in lockstep.
+func (serializer *ssaSerializer) buildBody() (string, string, error) {
 	// Detect loop structure (or reject unsupported cycles).
 	loop, err := serializer.detectAndValidateLoop()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Now that the loop shape is validated, verify all instructions are supported.
@@ -44,36 +179,27 @@ func SerializeSSA(graph *ir.Graph) (string, error) {
 		loopBodyLabels[loop.bodyBlock.Label] = true
 		loopBodyLabels[loop.exitBlock.Label] = true
 	}
-	for _, block := range graph.Blocks {
+	for _, block := range serializer.graph.Blocks {
 		for index := range block.Instructions {
 			instruction := &block.Instructions[index]
 			if loopBodyLabels[block.Label] {
 				// Loop body/exit blocks allow OpSet and OpUnit in addition to normal ops.
 				if !supportedSSAOperation(instruction.Op) &&
 					instruction.Op != ir.OpSet && instruction.Op != ir.OpUnit {
-					return "", serializer.unsupported(instruction)
+					return "", "", serializer.unsupported(instruction)
 				}
 			} else {
 				if !supportedSSAOperation(instruction.Op) {
-					return "", serializer.unsupported(instruction)
+					return "", "", serializer.unsupported(instruction)
 				}
 			}
 		}
 	}
 
-	var wat string
 	if loop != nil {
-		wat, err = serializer.buildLoopModule(loop)
-	} else {
-		wat, err = serializer.buildSimpleModule()
+		return serializer.loopFunctionBody(loop)
 	}
-	if err != nil {
-		return "", err
-	}
-	if err := ValidateWAT(wat); err != nil {
-		return "", fmt.Errorf("invalid SSA WAT: %w", err)
-	}
-	return wat, nil
+	return serializer.functionBody()
 }
 
 // loopInfo describes the structured while loop shape produced by lowerWhile.
@@ -96,6 +222,10 @@ type ssaSerializer struct {
 	// loopLocals maps loop-carried phi ValueIDs to their WAT local names.
 	// Non-nil only while generating a loop.
 	loopLocals map[ir.ValueID]string
+	// signatures holds every function's arity/type signature in the current
+	// program, used to validate and generate code for ir.OpCall. Nil when
+	// serializing a standalone single-function graph (SerializeSSA).
+	signatures map[string]signatureInfo
 }
 
 type ssaReturn struct {
@@ -271,21 +401,8 @@ func (serializer *ssaSerializer) validateLoopShape(headerLabel, bodyLabel ir.Blo
 	}, nil
 }
 
-// buildSimpleModule handles the original acyclic case.
-func (serializer *ssaSerializer) buildSimpleModule() (string, error) {
-	body, resultType, err := serializer.functionBody()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf(
-		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
-		resultType,
-		body,
-	), nil
-}
-
-// buildLoopModule generates the WAT module for a graph containing a while loop.
-// The structure uses a nested block pattern:
+// loopFunctionBody generates the WAT body for a graph containing a while
+// loop. The structure uses a nested block pattern:
 //
 //	(block (result T)            ;; outer: provides the return value
 //	  (local.set ...)            ;; init each phi from preheader value
@@ -298,7 +415,11 @@ func (serializer *ssaSerializer) buildSimpleModule() (string, error) {
 //	  )
 //	  (local.get $returnVar)     ;; produce function result from local
 //	)
-func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error) {
+//
+// It builds the local declarations, init statements, and
+// nested block/loop body for a structured while loop, returning the joined
+// body content (no module/func wrapper) and its result type.
+func (serializer *ssaSerializer) loopFunctionBody(loop *loopInfo) (string, string, error) {
 	// Set up loop-local resolution so that expression() on a loop phi → local.get.
 	serializer.loopLocals = loop.localNames
 
@@ -311,12 +432,12 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 		}
 	}
 	if returnValue == 0 {
-		return "", fmt.Errorf("SSA loop graph has no return value")
+		return "", "", fmt.Errorf("SSA loop graph has no return value")
 	}
 
 	returnExpr, resultType, err := serializer.expression(returnValue)
 	if err != nil {
-		return "", fmt.Errorf("loop return expression: %w", err)
+		return "", "", fmt.Errorf("loop return expression: %w", err)
 	}
 
 	// Build local declarations.
@@ -324,7 +445,7 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 	for _, phi := range loop.phis {
 		localType, err := wasmPrimitiveType(phi.Result.Type)
 		if err != nil {
-			return "", fmt.Errorf("loop phi %%%d: %w", phi.Result.ID, err)
+			return "", "", fmt.Errorf("loop phi %%%d: %w", phi.Result.ID, err)
 		}
 		localDecls = append(localDecls, fmt.Sprintf("(local %s %s)", loop.localNames[phi.Result.ID], localType))
 	}
@@ -341,11 +462,11 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 			}
 		}
 		if preheaderOperand == 0 {
-			return "", fmt.Errorf("loop phi %%%d has no preheader operand", phi.Result.ID)
+			return "", "", fmt.Errorf("loop phi %%%d has no preheader operand", phi.Result.ID)
 		}
 		initExpr, _, err := serializer.expression(preheaderOperand)
 		if err != nil {
-			return "", fmt.Errorf("loop phi %%%d init: %w", phi.Result.ID, err)
+			return "", "", fmt.Errorf("loop phi %%%d init: %w", phi.Result.ID, err)
 		}
 		initStmts = append(initStmts, fmt.Sprintf("(local.set %s %s)", localName, initExpr))
 	}
@@ -353,10 +474,10 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 	// Build the loop condition from the header's branch condition.
 	condExpr, condType, err := serializer.expression(loop.headerBlock.Terminator.Cond)
 	if err != nil {
-		return "", fmt.Errorf("loop condition: %w", err)
+		return "", "", fmt.Errorf("loop condition: %w", err)
 	}
 	if condType != "i32" {
-		return "", fmt.Errorf("loop condition has type %s, want i32", condType)
+		return "", "", fmt.Errorf("loop condition has type %s, want i32", condType)
 	}
 
 	// Build body statements from the body block.
@@ -369,11 +490,11 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 		case ir.OpSet:
 			localName := serializer.findLocalNameBySymbol(instr.Symbol, loop)
 			if localName == "" {
-				return "", fmt.Errorf("loop body OpSet for symbol %q has no matching loop phi", instr.Symbol)
+				return "", "", fmt.Errorf("loop body OpSet for symbol %q has no matching loop phi", instr.Symbol)
 			}
 			valExpr, _, err := serializer.expression(instr.Operands[0])
 			if err != nil {
-				return "", fmt.Errorf("loop body set %q: %w", instr.Symbol, err)
+				return "", "", fmt.Errorf("loop body set %q: %w", instr.Symbol, err)
 			}
 			bodyStmts = append(bodyStmts, fmt.Sprintf("(local.set %s %s)", localName, valExpr))
 		case ir.OpUnit:
@@ -423,12 +544,7 @@ func (serializer *ssaSerializer) buildLoopModule(loop *loopInfo) (string, error)
 	}
 	funcParts = append(funcParts, outerBlock)
 
-	wat := fmt.Sprintf(
-		"(module\n  (func (export \"main\") (result %s)\n    %s\n  )\n)\n",
-		resultType,
-		strings.Join(funcParts, "\n    "),
-	)
-	return wat, nil
+	return strings.Join(funcParts, "\n    "), resultType, nil
 }
 
 // findLocalNameBySymbol finds the WAT local name for a phi with the given symbol name.
@@ -543,9 +659,82 @@ func (serializer *ssaSerializer) expression(value ir.ValueID) (string, string, e
 			}
 		}
 		return serializer.phi(instruction)
+	case ir.OpParam:
+		return serializer.param(instruction)
+	case ir.OpCall:
+		return serializer.call(instruction)
 	default:
 		return serializer.binary(instruction)
 	}
+}
+
+// param resolves an OpParam reference to the WAT param local it was bound to
+// by serializeFunctionDeclaration (one (param $name type) per ir.Param, in
+// the same order LowerSSAFunction bound them into the function's env).
+func (serializer *ssaSerializer) param(instruction *ir.Instruction) (string, string, error) {
+	resultType, err := wasmPrimitiveType(instruction.Result.Type)
+	if err != nil {
+		return "", "", fmt.Errorf("SSA param %%%d: %w", instruction.Result.ID, err)
+	}
+	return fmt.Sprintf("(local.get $%s)", instruction.Symbol), resultType, nil
+}
+
+// call resolves an OpCall to another function in the same program, declared
+// via serializeFunctionDeclaration/SerializeSSAProgram. Arity and every
+// argument/result type are checked against the callee's signature; strings,
+// lists, dicts, and any other non-scalar type are rejected here (through
+// wasmPrimitiveType) rather than silently mis-serialized.
+func (serializer *ssaSerializer) call(instruction *ir.Instruction) (string, string, error) {
+	signature, ok := serializer.signatures[instruction.Symbol]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"SSA Wasm backend does not support calling undefined function %q at %%%d",
+			instruction.Symbol, instruction.Result.ID,
+		)
+	}
+	if len(instruction.Operands) != len(signature.params) {
+		return "", "", fmt.Errorf(
+			"call to %q at %%%d expects %d arguments, got %d",
+			instruction.Symbol, instruction.Result.ID, len(signature.params), len(instruction.Operands),
+		)
+	}
+	var argExprs []string
+	for index, operand := range instruction.Operands {
+		expr, actualType, err := serializer.expression(operand)
+		if err != nil {
+			return "", "", err
+		}
+		expectedType, err := wasmPrimitiveType(signature.params[index])
+		if err != nil {
+			return "", "", fmt.Errorf("call to %q argument %d: %w", instruction.Symbol, index+1, err)
+		}
+		if actualType != expectedType {
+			return "", "", fmt.Errorf(
+				"call to %q argument %d has type %s, want %s",
+				instruction.Symbol, index+1, actualType, expectedType,
+			)
+		}
+		argExprs = append(argExprs, expr)
+	}
+	resultType, err := wasmPrimitiveType(signature.result)
+	if err != nil {
+		return "", "", fmt.Errorf("call to %q result: %w", instruction.Symbol, err)
+	}
+	declaredType, err := wasmPrimitiveType(instruction.Result.Type)
+	if err != nil {
+		return "", "", fmt.Errorf("SSA result %%%d: %w", instruction.Result.ID, err)
+	}
+	if declaredType != resultType {
+		return "", "", fmt.Errorf(
+			"call to %q at %%%d declares result %s, want %s",
+			instruction.Symbol, instruction.Result.ID, declaredType, resultType,
+		)
+	}
+	argsClause := ""
+	if len(argExprs) > 0 {
+		argsClause = " " + strings.Join(argExprs, " ")
+	}
+	return fmt.Sprintf("(call $%s%s)", instruction.Symbol, argsClause), resultType, nil
 }
 
 func (serializer *ssaSerializer) constant(instruction *ir.Instruction) (string, string, error) {
@@ -701,7 +890,8 @@ func supportedSSAOperation(operation ir.SSAOp) bool {
 	case ir.OpConst, ir.OpPhi,
 		ir.OpAdd, ir.OpSubtract, ir.OpMultiply, ir.OpDivide,
 		ir.OpLess, ir.OpGreater, ir.OpLessEqual, ir.OpGreaterEqual,
-		ir.OpEqual, ir.OpNotEqual, ir.OpAnd, ir.OpOr:
+		ir.OpEqual, ir.OpNotEqual, ir.OpAnd, ir.OpOr,
+		ir.OpParam, ir.OpCall:
 		return true
 	default:
 		return false

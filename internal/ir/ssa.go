@@ -3,6 +3,7 @@ package ir
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"zero/internal/ast"
 )
 
@@ -49,6 +50,7 @@ const (
 	OpOr            SSAOp = "or"
 	OpSet           SSAOp = "set"
 	OpCall          SSAOp = "call"
+	OpParam         SSAOp = "param"
 	OpList          SSAOp = "list"
 	OpDict          SSAOp = "dict"
 	OpMapGet        SSAOp = "map_get"
@@ -127,6 +129,45 @@ func LowerSSA(node *ast.Node) (*Graph, error) {
 	graph := &Graph{Entry: "entry", Blocks: builder.blocks}
 	if err := graph.Validate(); err != nil {
 		return nil, fmt.Errorf("lowered invalid SSA graph: %w", err)
+	}
+	return graph, nil
+}
+
+// Param describes one function parameter for LowerSSAFunction: the name it
+// is referenced by within the function body, and its checker-inferred type.
+type Param struct {
+	Name string
+	Type ast.TypeInfo
+}
+
+// LowerSSAFunction lowers one function body into its own flat SSA graph,
+// pre-binding each parameter as a resolvable SYMBOL reference via an OpParam
+// instruction in the entry block, so the body's ordinary SYMBOL-lowering
+// path in lower() resolves parameter references exactly like any other name
+// bound by builder.env (e.g. a let binding).
+func LowerSSAFunction(params []Param, body *ast.Node) (*Graph, error) {
+	if body == nil {
+		return nil, fmt.Errorf("cannot lower a nil function body")
+	}
+	builder := newSSABuilder()
+	for index, param := range params {
+		value := builder.emit(OpParam, nil, param.Name, strconv.Itoa(index), param.Type, nil)
+		builder.env[param.Name] = value
+	}
+	value, err := builder.lower(body)
+	if err != nil {
+		return nil, err
+	}
+	if builder.current != nil && builder.current.Terminator == nil {
+		builder.current.Terminator = &Terminator{
+			Kind:   TermReturn,
+			Value:  value,
+			Source: sourceLocation(body),
+		}
+	}
+	graph := &Graph{Entry: "entry", Blocks: builder.blocks}
+	if err := graph.Validate(); err != nil {
+		return nil, fmt.Errorf("lowered invalid SSA graph for function: %w", err)
 	}
 	return graph, nil
 }

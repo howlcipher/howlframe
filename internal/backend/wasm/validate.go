@@ -158,9 +158,26 @@ func parseWATForm(tokens []watToken, index *int) (*watForm, error) {
 	return form, nil
 }
 
+// funcSignature is one function's arity/type signature, collected from its
+// declaration in a first pass so calls (including forward references and
+// recursion) can be validated regardless of declaration order.
+type funcSignature struct {
+	params []string
+	result string
+}
+
+// validationContext threads the module-wide facts (whether memory is
+// declared, and every function's signature) alongside the current
+// function's own locals/params through the recursive expression validators.
+type validationContext struct {
+	hasMemory bool
+	functions map[string]funcSignature
+	locals    map[string]string
+}
+
 func validateModule(module *watForm) error {
 	memoryBytes := uint64(0)
-	functions := 0
+	var funcForms []*watForm
 	for _, value := range module.args {
 		if value.form == nil {
 			return fmt.Errorf("module contains unexpected atom %q", value.atom)
@@ -177,18 +194,70 @@ func validateModule(module *watForm) error {
 				return err
 			}
 		case "func":
-			functions++
-			if err := validateFunction(value.form, memoryBytes > 0); err != nil {
-				return err
-			}
+			funcForms = append(funcForms, value.form)
 		default:
 			return fmt.Errorf("unsupported module field %q at byte %d", value.form.head, value.form.position)
 		}
 	}
-	if functions == 0 {
+	if len(funcForms) == 0 {
 		return fmt.Errorf("WAT module must contain a function")
 	}
+
+	functions := make(map[string]funcSignature, len(funcForms))
+	for _, form := range funcForms {
+		name, signature, err := parseFunctionSignature(form)
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			continue
+		}
+		if _, exists := functions[name]; exists {
+			return fmt.Errorf("duplicate function %q at byte %d", name, form.position)
+		}
+		functions[name] = signature
+	}
+
+	ctx := validationContext{hasMemory: memoryBytes > 0, functions: functions}
+	for _, form := range funcForms {
+		if err := validateFunction(form, ctx); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// parseFunctionSignature reads a (func $name? (export ...)? (param $p type)*
+// (result type) ...) form's name (if any) and signature, without validating
+// its body — used for the forward-reference pass in validateModule.
+func parseFunctionSignature(form *watForm) (string, funcSignature, error) {
+	index := 0
+	name := ""
+	if index < len(form.args) && form.args[index].form == nil && !form.args[index].quoted &&
+		strings.HasPrefix(form.args[index].atom, "$") {
+		name = form.args[index].atom
+		index++
+	}
+	if index < len(form.args) && form.args[index].form != nil && form.args[index].form.head == "export" {
+		index++
+	}
+	var params []string
+	for index < len(form.args) && form.args[index].form != nil && form.args[index].form.head == "param" {
+		_, paramType, err := validateLocalDecl(form.args[index].form)
+		if err != nil {
+			return "", funcSignature{}, err
+		}
+		params = append(params, paramType)
+		index++
+	}
+	if index >= len(form.args) || form.args[index].form == nil || form.args[index].form.head != "result" {
+		return "", funcSignature{}, fmt.Errorf("function requires one result declaration at byte %d", form.position)
+	}
+	resultType, err := declaredResult(form.args[index].form)
+	if err != nil {
+		return "", funcSignature{}, err
+	}
+	return name, funcSignature{params: params, result: resultType}, nil
 }
 
 func validateMemory(form *watForm) (uint64, error) {
@@ -230,12 +299,27 @@ func validateData(form *watForm, memoryBytes uint64) error {
 	return nil
 }
 
-func validateFunction(form *watForm, hasMemory bool) error {
+func validateFunction(form *watForm, ctx validationContext) error {
 	index := 0
-	if len(form.args) > 0 && form.args[0].form != nil && form.args[0].form.head == "export" {
-		if err := validateExport(form.args[0].form); err != nil {
+	if index < len(form.args) && form.args[index].form == nil && !form.args[index].quoted &&
+		strings.HasPrefix(form.args[index].atom, "$") {
+		index++
+	}
+	if index < len(form.args) && form.args[index].form != nil && form.args[index].form.head == "export" {
+		if err := validateExport(form.args[index].form); err != nil {
 			return err
 		}
+		index++
+	}
+	// Collect (param $name type) declarations; params are addressable via
+	// local.get/local.set exactly like (local ...) declarations.
+	locals := make(map[string]string)
+	for index < len(form.args) && form.args[index].form != nil && form.args[index].form.head == "param" {
+		name, paramType, perr := validateLocalDecl(form.args[index].form)
+		if perr != nil {
+			return perr
+		}
+		locals[name] = paramType
 		index++
 	}
 	if index >= len(form.args) || form.args[index].form == nil || form.args[index].form.head != "result" {
@@ -247,7 +331,6 @@ func validateFunction(form *watForm, hasMemory bool) error {
 	}
 	index++
 	// Collect optional (local $name type) declarations.
-	locals := make(map[string]string)
 	for index < len(form.args) && form.args[index].form != nil && form.args[index].form.head == "local" {
 		name, localType, lerr := validateLocalDecl(form.args[index].form)
 		if lerr != nil {
@@ -259,13 +342,14 @@ func validateFunction(form *watForm, hasMemory bool) error {
 	if index >= len(form.args) {
 		return fmt.Errorf("function requires at least one body expression at byte %d", form.position)
 	}
+	ctx.locals = locals
 	// Body may be one expression or a sequence (all-but-last void/bottom, last matches result).
 	body := form.args[index:]
 	for bodyIdx, value := range body {
 		if value.form == nil {
 			return fmt.Errorf("function body contains unexpected atom %q", value.atom)
 		}
-		actual, verr := validateExpression(value.form, resultType, hasMemory, locals)
+		actual, verr := validateExpression(value.form, resultType, ctx)
 		if verr != nil {
 			return verr
 		}
@@ -283,7 +367,7 @@ func validateFunction(form *watForm, hasMemory bool) error {
 	return nil
 }
 
-func validateExpression(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateExpression(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	if strings.HasSuffix(form.head, ".const") {
 		valueType := strings.TrimSuffix(form.head, ".const")
 		if !isWasmValueType(valueType) || len(form.args) != 1 || form.args[0].form != nil || form.args[0].quoted {
@@ -316,7 +400,7 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 			return "", err
 		}
 		for index, expected := range signature[:2] {
-			actual, err := validateExpression(form.args[index].form, functionResult, hasMemory, locals)
+			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
 			if err != nil {
 				return "", err
 			}
@@ -329,28 +413,28 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 
 	switch form.head {
 	case "f64.convert_i64_s":
-		return validateUnary(form, "i64", "f64", functionResult, hasMemory, locals)
+		return validateUnary(form, "i64", "f64", functionResult, ctx)
 	case "i64.trunc_f64_s":
-		return validateUnary(form, "f64", "i64", functionResult, hasMemory, locals)
+		return validateUnary(form, "f64", "i64", functionResult, ctx)
 	case "i32.wrap_i64":
-		return validateUnary(form, "i64", "i32", functionResult, hasMemory, locals)
+		return validateUnary(form, "i64", "i32", functionResult, ctx)
 	case "i32.eqz":
-		return validateUnary(form, "i32", "i32", functionResult, hasMemory, locals)
+		return validateUnary(form, "i32", "i32", functionResult, ctx)
 	case "i32.load", "i64.load":
-		if !hasMemory {
+		if !ctx.hasMemory {
 			return "", fmt.Errorf("%s requires declared memory at byte %d", form.head, form.position)
 		}
 		resultType := strings.TrimSuffix(form.head, ".load")
-		return validateUnary(form, "i32", resultType, functionResult, hasMemory, locals)
+		return validateUnary(form, "i32", resultType, functionResult, ctx)
 	case "i64.store":
-		if !hasMemory {
+		if !ctx.hasMemory {
 			return "", fmt.Errorf("%s requires declared memory at byte %d", form.head, form.position)
 		}
 		if err := requireExpressionArgs(form, 2); err != nil {
 			return "", err
 		}
 		for index, expected := range []string{"i32", "i64"} {
-			actual, err := validateExpression(form.args[index].form, functionResult, hasMemory, locals)
+			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
 			if err != nil {
 				return "", err
 			}
@@ -360,14 +444,14 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 		}
 		return watVoid, nil
 	case "i32.store":
-		if !hasMemory {
+		if !ctx.hasMemory {
 			return "", fmt.Errorf("%s requires declared memory at byte %d", form.head, form.position)
 		}
 		if err := requireExpressionArgs(form, 2); err != nil {
 			return "", err
 		}
 		for index, expected := range []string{"i32", "i32"} {
-			actual, err := validateExpression(form.args[index].form, functionResult, hasMemory, locals)
+			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
 			if err != nil {
 				return "", err
 			}
@@ -380,7 +464,7 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 		if err := requireExpressionArgs(form, 1); err != nil {
 			return "", err
 		}
-		actual, err := validateExpression(form.args[0].form, functionResult, hasMemory, locals)
+		actual, err := validateExpression(form.args[0].form, functionResult, ctx)
 		if err != nil {
 			return "", err
 		}
@@ -392,7 +476,7 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 		if err := requireExpressionArgs(form, 1); err != nil {
 			return "", err
 		}
-		actual, err := validateExpression(form.args[0].form, functionResult, hasMemory, locals)
+		actual, err := validateExpression(form.args[0].form, functionResult, ctx)
 		if err != nil {
 			return "", err
 		}
@@ -401,25 +485,27 @@ func validateExpression(form *watForm, functionResult string, hasMemory bool, lo
 		}
 		return watBottom, nil
 	case "if":
-		return validateIf(form, functionResult, hasMemory, locals)
+		return validateIf(form, functionResult, ctx)
 	case "block":
-		return validateBlock(form, functionResult, hasMemory, locals)
+		return validateBlock(form, functionResult, ctx)
 	case "loop":
-		return validateLoop(form, functionResult, hasMemory, locals)
+		return validateLoop(form, functionResult, ctx)
 	case "local.get":
-		return validateLocalGet(form, locals)
+		return validateLocalGet(form, ctx)
 	case "local.set":
-		return validateLocalSet(form, functionResult, hasMemory, locals)
+		return validateLocalSet(form, functionResult, ctx)
 	case "br":
 		return validateBr(form)
 	case "br_if":
-		return validateBrIf(form, functionResult, hasMemory, locals)
+		return validateBrIf(form, functionResult, ctx)
+	case "call":
+		return validateCall(form, functionResult, ctx)
 	default:
 		return "", fmt.Errorf("unsupported instruction %q at byte %d", form.head, form.position)
 	}
 }
 
-func validateIf(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateIf(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	if len(form.args) != 4 || form.args[0].form == nil || form.args[0].form.head != "result" ||
 		form.args[1].form == nil || form.args[2].form == nil || form.args[2].form.head != "then" ||
 		form.args[3].form == nil || form.args[3].form.head != "else" {
@@ -429,7 +515,7 @@ func validateIf(form *watForm, functionResult string, hasMemory bool, locals map
 	if err != nil {
 		return "", err
 	}
-	conditionType, err := validateExpression(form.args[1].form, functionResult, hasMemory, locals)
+	conditionType, err := validateExpression(form.args[1].form, functionResult, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -440,7 +526,7 @@ func validateIf(form *watForm, functionResult string, hasMemory bool, locals map
 		if len(branch.form.args) != 1 || branch.form.args[0].form == nil {
 			return "", fmt.Errorf("%s requires one expression at byte %d", branch.form.head, branch.form.position)
 		}
-		actual, err := validateExpression(branch.form.args[0].form, functionResult, hasMemory, locals)
+		actual, err := validateExpression(branch.form.args[0].form, functionResult, ctx)
 		if err != nil {
 			return "", err
 		}
@@ -451,7 +537,7 @@ func validateIf(form *watForm, functionResult string, hasMemory bool, locals map
 	return resultType, nil
 }
 
-func validateBlock(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateBlock(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	// block may optionally have a leading label atom: (block $label (result T) stmts...)
 	// or no label: (block (result T) stmts...)
 	// or a void block (no result): (block $label stmts...) or (block stmts...)
@@ -474,7 +560,7 @@ func validateBlock(form *watForm, functionResult string, hasMemory bool, locals 
 			if value.form == nil {
 				return "", fmt.Errorf("block contains unexpected atom %q", value.atom)
 			}
-			actual, err := validateExpression(value.form, functionResult, hasMemory, locals)
+			actual, err := validateExpression(value.form, functionResult, ctx)
 			if err != nil {
 				return "", err
 			}
@@ -494,7 +580,7 @@ func validateBlock(form *watForm, functionResult string, hasMemory bool, locals 
 		if value.form == nil {
 			return "", fmt.Errorf("block contains unexpected atom %q", value.atom)
 		}
-		actual, err := validateExpression(value.form, functionResult, hasMemory, locals)
+		actual, err := validateExpression(value.form, functionResult, ctx)
 		if err != nil {
 			return "", err
 		}
@@ -507,7 +593,7 @@ func validateBlock(form *watForm, functionResult string, hasMemory bool, locals 
 
 // validateLoop validates a (loop $label stmts...) form.
 // Loops in Wasm structured control flow have void result type.
-func validateLoop(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateLoop(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	// loop may optionally have a leading label atom: (loop $label stmts...)
 	start := 0
 	if len(form.args) > 0 && form.args[0].form == nil && !form.args[0].quoted &&
@@ -518,7 +604,7 @@ func validateLoop(form *watForm, functionResult string, hasMemory bool, locals m
 		if value.form == nil {
 			return "", fmt.Errorf("loop contains unexpected atom %q at position %d", value.atom, index)
 		}
-		actual, err := validateExpression(value.form, functionResult, hasMemory, locals)
+		actual, err := validateExpression(value.form, functionResult, ctx)
 		if err != nil {
 			return "", err
 		}
@@ -530,28 +616,28 @@ func validateLoop(form *watForm, functionResult string, hasMemory bool, locals m
 }
 
 // validateLocalGet validates (local.get $name) and returns the local's type.
-func validateLocalGet(form *watForm, locals map[string]string) (string, error) {
+func validateLocalGet(form *watForm, ctx validationContext) (string, error) {
 	if len(form.args) != 1 || form.args[0].form != nil || form.args[0].quoted {
 		return "", fmt.Errorf("local.get requires one label argument at byte %d", form.position)
 	}
 	name := form.args[0].atom
-	if localType, ok := locals[name]; ok {
+	if localType, ok := ctx.locals[name]; ok {
 		return localType, nil
 	}
 	return "", fmt.Errorf("local.get references undeclared local %q at byte %d", name, form.position)
 }
 
 // validateLocalSet validates (local.set $name expr) and returns void.
-func validateLocalSet(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateLocalSet(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	if len(form.args) != 2 || form.args[0].form != nil || form.args[0].quoted || form.args[1].form == nil {
 		return "", fmt.Errorf("local.set requires a label and expression at byte %d", form.position)
 	}
 	name := form.args[0].atom
-	localType, ok := locals[name]
+	localType, ok := ctx.locals[name]
 	if !ok {
 		return "", fmt.Errorf("local.set references undeclared local %q at byte %d", name, form.position)
 	}
-	actual, err := validateExpression(form.args[1].form, functionResult, hasMemory, locals)
+	actual, err := validateExpression(form.args[1].form, functionResult, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -570,11 +656,11 @@ func validateBr(form *watForm) (string, error) {
 }
 
 // validateBrIf validates (br_if $label cond) — conditional branch, returns void.
-func validateBrIf(form *watForm, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateBrIf(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	if len(form.args) != 2 || form.args[0].form != nil || form.args[0].quoted || form.args[1].form == nil {
 		return "", fmt.Errorf("br_if requires a label and condition expression at byte %d", form.position)
 	}
-	condType, err := validateExpression(form.args[1].form, functionResult, hasMemory, locals)
+	condType, err := validateExpression(form.args[1].form, functionResult, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -582,6 +668,38 @@ func validateBrIf(form *watForm, functionResult string, hasMemory bool, locals m
 		return "", fmt.Errorf("br_if condition has type %s, want i32 at byte %d", condType, form.position)
 	}
 	return watVoid, nil
+}
+
+// validateCall validates (call $name arg...) against the callee's collected
+// signature (from the module-wide forward-reference pass) and returns its
+// declared result type.
+func validateCall(form *watForm, functionResult string, ctx validationContext) (string, error) {
+	if len(form.args) == 0 || form.args[0].form != nil || !strings.HasPrefix(form.args[0].atom, "$") {
+		return "", fmt.Errorf("call requires a function name at byte %d", form.position)
+	}
+	name := form.args[0].atom
+	signature, ok := ctx.functions[name]
+	if !ok {
+		return "", fmt.Errorf("call references undeclared function %q at byte %d", name, form.position)
+	}
+	argForms := form.args[1:]
+	if len(argForms) != len(signature.params) {
+		return "", fmt.Errorf("call to %q expects %d arguments, got %d at byte %d", name, len(signature.params), len(argForms), form.position)
+	}
+	for index, argForm := range argForms {
+		if argForm.form == nil {
+			return "", fmt.Errorf("call argument %d is not a folded expression at byte %d", index+1, form.position)
+		}
+		actual, err := validateExpression(argForm.form, functionResult, ctx)
+		if err != nil {
+			return "", err
+		}
+		expected := signature.params[index]
+		if !watTypeMatches(expected, actual) {
+			return "", fmt.Errorf("call to %q argument %d has type %s, want %s", name, index+1, actual, expected)
+		}
+	}
+	return signature.result, nil
 }
 
 // validateLocalDecl validates (local $name type) and returns the name and type.
@@ -601,11 +719,11 @@ func validateLocalDecl(form *watForm) (string, string, error) {
 	return name, localType, nil
 }
 
-func validateUnary(form *watForm, operandType, resultType, functionResult string, hasMemory bool, locals map[string]string) (string, error) {
+func validateUnary(form *watForm, operandType, resultType, functionResult string, ctx validationContext) (string, error) {
 	if err := requireExpressionArgs(form, 1); err != nil {
 		return "", err
 	}
-	actual, err := validateExpression(form.args[0].form, functionResult, hasMemory, locals)
+	actual, err := validateExpression(form.args[0].form, functionResult, ctx)
 	if err != nil {
 		return "", err
 	}

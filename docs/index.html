@@ -47,6 +47,7 @@
                     <li><strong>Go target:</strong> <code>cli_app</code> and <code>http_server</code> programs emit <code>server.go</code> plus optional Go tests.</li>
                     <li><strong>JavaScript target:</strong> <code>web_app</code> programs emit <code>app.js</code> plus optional Node tests.</li>
                     <li><strong>WAT target:</strong> <code>wasm_app</code> emits structurally validated WebAssembly Text for the supported typed expression subset.</li>
+                    <li><strong>Standalone WAT target:</strong> <code>-compile-wasm</code> lowers a checked <code>cli_app</code> program through a typed SSA/CFG into WebAssembly Text with zero Go process at runtime &mdash; arithmetic, comparisons, <code>if</code>/phi control flow, structured <code>while</code> loops, and calls between <code>defun</code>s (including recursion) over scalar int/float/bool values, verified standalone with <code>wasmtime</code>.</li>
                     <li><strong>Direct execution:</strong> <code>-run</code> interprets supported <code>cli_app</code> programs without writing generated source.</li>
                     <li><strong>Bytecode:</strong> <code>-compile-bc</code> writes binary bytecode and <code>-run-bc</code> executes it in the VM, including native in-memory stores for structured records.</li>
                 </ul>

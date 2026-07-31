@@ -93,11 +93,15 @@ go run zero.go -compile-wasm examples/native_math.zero
 go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
 ```
 
-The default artifact is `<input>.ssa.wat`. This initial native serializer
-supports integer and boolean constants, integer arithmetic and comparisons,
-boolean `and`/`or`, lexical `let` value flow, `if`/phi merges, and returns.
-Loops, calls, mutation, aggregates, printing, strings, and conversions fail
-with an explicit backend error.
+The default artifact is `<input>.ssa.wat`. This native serializer supports
+integer, float, and boolean constants, arithmetic and comparisons, boolean
+`and`/`or`, lexical `let` value flow, `if`/phi merges, returns, structured
+`while` loops with loop-carried `set` mutation, and calls between top-level
+`defun`s with scalar (int/float/bool) parameters and return values,
+including recursion — all runnable standalone with no Go process, verified
+against `wasmtime`. Aggregates (`list`/`dict`), printing, strings, and type
+conversions still fail with an explicit backend error; see improvements.md
+items #73/#74 for that remaining language-surface work.
 
 ## Language Roots
 

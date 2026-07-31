@@ -1,0 +1,18 @@
+;; Regression fixture for improvement #72 (Standalone Zero Runtime Phase 2a):
+;; exercises a helper `defun` called from inside a `while` loop body, proving
+;; multi-function Wasm modules and structured loops compose. Sums the squares
+;; of 1..5 (1 + 4 + 9 + 16 + 25 = 55).
+(cli_app
+  (defun square (x)
+    (type_hint x "int")
+    (type_hint return "int")
+    (* x x))
+
+  (let (total 0)
+    (let (i 1)
+      (do
+        (while (<= i 5)
+          (do
+            (set total (+ total (call square i)))
+            (set i (+ i 1))))
+        (return total)))))

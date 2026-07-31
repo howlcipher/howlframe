@@ -113,7 +113,7 @@ func main() {
 	}
 
 	if *compileWasm {
-		expression, err := ssaWasmExpression(root)
+		functionSources, expression, err := ssaWasmProgram(root, analysis)
 		if err != nil {
 			line, column := 0, 0
 			if root != nil {
@@ -121,11 +121,24 @@ func main() {
 			}
 			ast.ReportError(err.Error(), line, column)
 		}
+		var wasmFunctions []wasm.Function
+		for _, source := range functionSources {
+			functionGraph, err := ir.LowerSSAFunction(source.params, source.body)
+			if err != nil {
+				ast.ReportError(fmt.Sprintf("Failed to lower SSA graph for function %q: %v", source.name, err), source.body.Line, source.body.Column)
+			}
+			wasmFunctions = append(wasmFunctions, wasm.Function{
+				Name:   source.name,
+				Params: source.params,
+				Return: source.ret,
+				Graph:  functionGraph,
+			})
+		}
 		graph, err := ir.LowerSSA(expression)
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to lower SSA graph: %v", err), expression.Line, expression.Column)
 		}
-		wasmCode, err := wasm.SerializeSSA(graph)
+		wasmCode, err := wasm.SerializeSSAProgram(wasmFunctions, graph)
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to serialize SSA graph: %v", err), expression.Line, expression.Column)
 		}
@@ -191,15 +204,66 @@ func main() {
 	}
 }
 
-func ssaWasmExpression(root *ast.Node) (*ast.Node, error) {
+// wasmFunctionSource is one defun collected from a cli_app root, ready to be
+// lowered into its own ir.Graph via ir.LowerSSAFunction.
+type wasmFunctionSource struct {
+	name   string
+	params []ir.Param
+	ret    ast.TypeInfo
+	body   *ast.Node
+}
+
+// ssaWasmProgram splits a cli_app root into its top-level defun declarations
+// (if any) and its final entry expression for -compile-wasm. Each defun's
+// parameter/return types come from the checker's already-computed signature
+// (analysis.Functions), not re-derived here.
+func ssaWasmProgram(root *ast.Node, analysis *checker.Analysis) ([]wasmFunctionSource, *ast.Node, error) {
 	if root == nil || root.Type != "List" || len(root.Children) == 0 ||
 		root.Children[0].Type != "SYMBOL" || root.Children[0].Value != "cli_app" {
-		return nil, fmt.Errorf("-compile-wasm requires a cli_app root")
+		return nil, nil, fmt.Errorf("-compile-wasm requires a cli_app root")
 	}
-	if len(root.Children) != 2 {
-		return nil, fmt.Errorf("-compile-wasm requires cli_app to contain exactly one expression")
+	if len(root.Children) < 2 {
+		return nil, nil, fmt.Errorf("-compile-wasm requires cli_app to contain at least one expression")
 	}
-	return root.Children[1], nil
+
+	var functions []wasmFunctionSource
+	for _, child := range root.Children[1 : len(root.Children)-1] {
+		head := ""
+		if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Type == "SYMBOL" {
+			head = child.Children[0].Value
+		}
+		if head != "defun" {
+			if head == "" {
+				head = child.Type
+			}
+			return nil, nil, fmt.Errorf("-compile-wasm only supports defun declarations before the final entry expression, found %q", head)
+		}
+		if len(child.Children) < 4 {
+			return nil, nil, fmt.Errorf("-compile-wasm: defun is malformed, expected (defun name (args) body)")
+		}
+		name := child.Children[1].Value
+		info, ok := analysis.Functions[name]
+		if !ok {
+			return nil, nil, fmt.Errorf("-compile-wasm: no checker signature found for function %q", name)
+		}
+		argsNode := child.Children[2]
+		params := make([]ir.Param, len(argsNode.Children))
+		for index, arg := range argsNode.Children {
+			paramName := arg.Value
+			if arg.Type == "List" && len(arg.Children) > 0 {
+				paramName = arg.Children[0].Value
+			}
+			params[index] = ir.Param{Name: paramName, Type: info.Params[index]}
+		}
+		body := child.Children[len(child.Children)-1]
+		functions = append(functions, wasmFunctionSource{name: name, params: params, ret: info.Return, body: body})
+	}
+
+	entry := root.Children[len(root.Children)-1]
+	if entry.Type == "List" && len(entry.Children) > 0 && entry.Children[0].Type == "SYMBOL" && entry.Children[0].Value == "defun" {
+		return nil, nil, fmt.Errorf("-compile-wasm requires cli_app's final child to be an entry expression, not a defun")
+	}
+	return functions, entry, nil
 }
 
 func outputFlagAfterInput(args []string, inputFile string) string {
