@@ -82,7 +82,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 66 | [Standalone Zero Runtime Phase 1: Architecture Decision](#66-standalone-zero-runtime-phase-1-architecture-decision) | Done (2026-07-31) | 2.0 (8×1÷4) | Sonnet | — | gpt-5.6-sol | Rescoped 2026-07-31 from the single effort-8 "Standalone Zero Runtime Environment" item: decide the runtime architecture and prove it on one real construct end-to-end before committing to full-language coverage. |
 | 67 | [Native Backend Code Generators](#67-native-backend-code-generators) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Added a bounded typed SSA/CFG to WAT serializer and independent CLI artifact path. |
 | 69 | [First-Class Optimization Signatures](#69-first-class-optimization-signatures) | Done (2026-07-30) | 1.5 (6×1÷4) | — | — | gpt-5.6-sol | Teleprompter-style compile-time optimizations like DSPy. |
-| 72 | [Standalone Zero Runtime Phase 2: Full Language Cutover](#72-standalone-zero-runtime-phase-2-full-language-cutover) | Pending | 1.14 (8×1÷7) | — | — | gpt-5.6-sol | Rescoped 2026-07-31 from the same original item: extend Phase 1's proven architecture to the full language and make it a real alternate build target. Blocked on Phase 1 landing first. |
+| 72 | [Standalone Zero Runtime Phase 2: Full Language Cutover](#72-standalone-zero-runtime-phase-2-full-language-cutover) | Pending | 1.14 (8×1÷7) | Sonnet 5 | — | gpt-5.6-sol | Rescoped 2026-07-31 from the same original item: extend Phase 1's proven architecture to the full language and make it a real alternate build target. Blocked on Phase 1 landing first. |
 ## Details
 
 ### 62. Phase 2 IR Abstraction
