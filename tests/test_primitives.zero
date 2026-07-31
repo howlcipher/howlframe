@@ -1,11 +1,9 @@
 (cli_app
   (test "string_to_number"
-    (try_let (i (to_int "42"))
-      (catch err (print err))
+    (let (i (to_int "42"))
       (print "int:" i)
     )
-    (try_let (f (to_float "3.14"))
-      (catch err (print err))
+    (let (f (to_float "3.14"))
       (print "float:" f)
     )
   )
