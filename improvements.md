@@ -269,6 +269,7 @@ Pending rows are ranked by a diminishing-returns score:
 * **Description:** Move all `.zero` test files (e.g. `test_*.zero`) into a `tests/` directory, and example files (`hello.zero`, `cli_hello.zero`) into an `examples/` directory. Move or gitignore generated binaries.
 * **Why:** The project root is getting messy, making it hard to find core files like `zero.go` and `orchestrator.py`.
 * **Impact:** 4/10 (Quality of life, helps AI reasoning speed).
+* **Follow-up cleanup (2026-07-31):** Grouped optional Python tooling under `tools/`, generated references under `docs/reference/`, and historical backup source under `docs/archive/`. Removed tracked scratch/generated artifacts from the root (`app.js`, one-off patch/debug scripts, and sample plugin binaries), expanded `.gitignore` for generated outputs, and updated README plus GitHub Pages links to the new locations.
 
 ### 20. Auto-Tracing (`trace`)
 * **Description:** A `(trace var)` macro that auto-injects the variable's name, its current value, and the source line number into a `fmt.Println` call, so an AI debugging a `.zero` script doesn't have to hand-write ad hoc print statements.

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"zero/internal/bytecode"
@@ -82,7 +83,10 @@ class BytecodeProgram(BaseModel):
     main: List[Instruction]
 `)
 
-	os.WriteFile("orchestrator_schema.py", []byte(py.String()), 0644)
+	writeGeneratedFile(
+		filepath.Join("tools", "orchestrator", "orchestrator_schema.py"),
+		[]byte(py.String()),
+	)
 }
 
 func generateMarkdown(opcodes []bytecode.OpcodeSpec) {
@@ -108,7 +112,19 @@ func generateMarkdown(opcodes []bytecode.OpcodeSpec) {
 			spec.Name, opsStr, popsStr, spec.Pushes, spec.Capability, spec.Description))
 	}
 
-	os.WriteFile("bytecode_reference.md", []byte(md.String()), 0644)
+	writeGeneratedFile(
+		filepath.Join("docs", "reference", "bytecode_reference.md"),
+		[]byte(md.String()),
+	)
+}
+
+func writeGeneratedFile(path string, content []byte) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		panic(err)
+	}
 }
 
 func snakeToCamel(s string) string {

@@ -6,7 +6,9 @@ from unittest.mock import Mock
 
 import pytest
 
-import observer
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.observer_agent import observer_agent as observer
 
 
 def write_fixture(project_root: Path) -> tuple[Path, Path]:

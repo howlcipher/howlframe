@@ -77,4 +77,4 @@ Both must produce byte-identical stdout for the fixture to count as verified. Th
 
 ## Phase 3 (done)
 
-The literal original vision: given a stable Phase 2 bytecode format, have an LLM (via `orchestrator.py`'s existing structured-generation grammar, extended with a bytecode-shaped CFG) emit that format directly instead of `.zero` S-expression text — skipping the lexer/parser stage entirely for agents sophisticated enough to target it directly. Not attempted until Phase 2's format exists and is stable.
+The literal original vision: given a stable Phase 2 bytecode format, have an LLM (via `tools/orchestrator/orchestrator.py`'s existing structured-generation grammar, extended with a bytecode-shaped CFG) emit that format directly instead of `.zero` S-expression text — skipping the lexer/parser stage entirely for agents sophisticated enough to target it directly. Not attempted until Phase 2's format exists and is stable.
