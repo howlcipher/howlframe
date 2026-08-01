@@ -36,6 +36,7 @@ See:
 - [Direct execution design](docs/direct_execution_design.md)
 - [Zero native store design](docs/zero_native_store_design.md)
 - [Language write-cost benchmark](docs/language_write_cost_benchmark.md)
+- [Architecture roadmap](docs/architecture_roadmap.md)
 - [Bytecode reference](docs/reference/bytecode_reference.md)
 - [Improvement backlog](improvements.md)
 - [Bug log](bugs.md)
@@ -255,6 +256,13 @@ Use `-o <dir>` to write generated artifacts elsewhere:
 
 ```bash
 go run zero.go -o build examples/hello.zero
+```
+
+`-o <dir>` may also follow the input file for Go, JavaScript, and legacy WAT
+generation; the directory is created when it does not exist:
+
+```bash
+go run zero.go examples/hello.zero -o build
 ```
 
 For bytecode compilation, `-o <file>` can also name the exact bytecode output file:

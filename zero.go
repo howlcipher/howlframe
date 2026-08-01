@@ -42,6 +42,7 @@ func main() {
 		ast.ReportError("Missing file argument", 0, 0)
 	}
 	inputFile := flag.Arg(0)
+	outputDir := outputDirectory(os.Args[1:], inputFile, *outDir)
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -106,7 +107,7 @@ func main() {
 		} else if *outDir != "" {
 			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".bc.bin")
 		}
-		if err = os.WriteFile(outFile, buf.Bytes(), 0644); err != nil {
+		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
 		os.Exit(0)
@@ -148,7 +149,7 @@ func main() {
 		} else if *outDir != "" {
 			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".ssa.wat")
 		}
-		if err = os.WriteFile(outFile, []byte(wasmCode), 0644); err != nil {
+		if err = writeArtifact(outFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
 		os.Exit(0)
@@ -160,22 +161,22 @@ func main() {
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
 		wasmCode := wasm.GenerateWasmCode(root)
-		wasmFile := filepath.Join(*outDir, "app.wat")
-		if err = os.WriteFile(wasmFile, []byte(wasmCode), 0644); err != nil {
+		wasmFile := filepath.Join(outputDir, "app.wat")
+		if err = writeArtifact(wasmFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", wasmFile, err), 0, 0)
 		}
 	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "web_app" {
 		jsCode, testCode := javascript.GenerateJSCode(root)
 
-		appFile := filepath.Join(*outDir, "app.js")
-		appTestFile := filepath.Join(*outDir, "app.test.js")
+		appFile := filepath.Join(outputDir, "app.js")
+		appTestFile := filepath.Join(outputDir, "app.test.js")
 
-		err = os.WriteFile(appFile, []byte(jsCode), 0644)
+		err = writeArtifact(appFile, []byte(jsCode))
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", appFile, err), 0, 0)
 		}
 		if testCode != "" {
-			err = os.WriteFile(appTestFile, []byte(testCode), 0644)
+			err = writeArtifact(appTestFile, []byte(testCode))
 			if err != nil {
 				ast.ReportError(fmt.Sprintf("Failed to write %s: %v", appTestFile, err), 0, 0)
 			}
@@ -185,16 +186,16 @@ func main() {
 	} else {
 		goCode, testCode := gogen.GenerateCode(root)
 
-		serverFile := filepath.Join(*outDir, "server.go")
-		serverTestFile := filepath.Join(*outDir, "server_test.go")
+		serverFile := filepath.Join(outputDir, "server.go")
+		serverTestFile := filepath.Join(outputDir, "server_test.go")
 
-		err = os.WriteFile(serverFile, []byte(goCode), 0644)
+		err = writeArtifact(serverFile, []byte(goCode))
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", serverFile, err), 0, 0)
 		}
 
 		if testCode != "" {
-			err = os.WriteFile(serverTestFile, []byte(testCode), 0644)
+			err = writeArtifact(serverTestFile, []byte(testCode))
 			if err != nil {
 				ast.ReportError(fmt.Sprintf("Failed to write %s: %v", serverTestFile, err), 0, 0)
 			}
@@ -284,4 +285,22 @@ func outputFlagAfterInput(args []string, inputFile string) string {
 		}
 	}
 	return ""
+}
+
+// outputDirectory accepts -o before or after the positional input file for
+// backends whose -o contract names a directory rather than an exact artifact.
+func outputDirectory(args []string, inputFile, configured string) string {
+	if output := outputFlagAfterInput(args, inputFile); output != "" {
+		return output
+	}
+	return configured
+}
+
+// writeArtifact creates the destination directory before writing an emitted
+// artifact, so every backend follows the same output contract.
+func writeArtifact(path string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, content, 0o644)
 }

@@ -30,6 +30,14 @@ Pending rows are ranked by a diminishing-returns score:
 
 | # | Improvement | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 85 | [Unify compiler entry points and artifact-output contract](#85-unify-compiler-entry-points-and-artifact-output-contract) | Done (2026-08-01) | 4.0 (8×1÷2) | Sonnet 5 | — | gpt-5.6-terra | Standardized the documented compiler's output handling and closed bug #39; ignored local scaffolding remains outside the shipped product surface. |
+| 86 | [Define Zero IR v1 as the canonical semantic program graph](#86-define-zero-ir-v1-as-the-canonical-semantic-program-graph) | Pending | 1.75 (7×1÷4) | Opus 5 | — | gpt-5.6-sol | AST, shared IR, SSA, bytecode, and backend walkers overlap today. A versioned typed graph with stable node identities, data/control edges, effects, and provenance is the prerequisite for localized AI edits and backend independence. |
+| 87 | [Build the ZIR verifier and versioned diagnostic contract](#87-build-the-zir-verifier-and-versioned-diagnostic-contract) | Pending | 1.75 (7×1÷4) | Opus 5 | — | gpt-5.6-sol | Verification must happen before backend emission. This unifies type/control-flow checks, diagnostic codes, effect inference, capability requirements, and deterministic evidence around the canonical graph. |
+| 88 | [Define a provider-neutral ZIR model-adapter protocol](#88-define-a-provider-neutral-zir-model-adapter-protocol) | Pending | 1.5 (6×1÷4) | Opus 5 | — | gpt-5.6-terra | Mask plans are provider-neutral but no adapter produces or repairs a verified semantic program artifact. A schema, constrained-decoding boundary, and delta protocol prevents lock-in and reduces regeneration cost. |
+| 90 | [Define the lowered-ZIR backend ABI and conformance suite](#90-define-the-lowered-zir-backend-abi-and-conformance-suite) | Pending | 1.5 (6×1÷4) | Opus 5 | — | gpt-5.6-sol | Go, JS, interpreter, bytecode, and Wasm currently implement overlapping semantics independently. A shared lowered contract plus deterministic conformance cases makes backend diversity trustworthy. |
+| 89 | [Add content-addressed ZIR storage and incremental compilation](#89-add-content-addressed-zir-storage-and-incremental-compilation) | Pending | 1.4 (7×1÷5) | Opus 5 | — | gpt-5.6-sol | Stable graph identities permit small repairs, dependency-closure recompilation, reproducible artifacts, and bounded model context instead of whole-program regeneration. |
+| 91 | [Add semantic patch deltas and bounded repair context](#91-add-semantic-patch-deltas-and-bounded-repair-context) | Pending | 1.2 (6×1÷5) | Opus 5 | — | gpt-5.6-terra | Existing patching and observer repair operate on source replacements. Verified ZIR deltas are safer, smaller, and inspectable, but depend on graph identity and validation. |
+| 92 | [Produce a verified standalone Wasm binary pipeline](#92-produce-a-verified-standalone-wasm-binary-pipeline) | Pending | 1.17 (7×1÷6) | Opus 5 | — | gpt-5.6-sol | WAT serialization proves a target but not a native executable product. A binary package, host ABI, validation, and reproducible benchmark path is the pragmatic first native target before LLVM/direct machine code. |
 | 1 | [Add Routing Support](#1-add-routing-support) | Done | — | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Highest value to allow building web apps with multiple endpoints instead of just the root path. |
 | 3 | [Extend Python Orchestrator Grammar](#3-extend-python-orchestrator-grammar) | Done | — | Haiku 3 | Gemini 1.5 Flash | gpt-5.6-luna | Must update the grammar in `orchestrator.py` immediately after adding new Go AST features so the LLM can use them. |
 | 2 | [Add Conditionals and Variables](#2-add-conditionals-and-variables) | Done | — | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Necessary for basic logic flow in handlers (checking methods, parsing headers). |
@@ -707,3 +715,60 @@ As Zero matures past transpilation into Go and JS, the ultimate objective is to 
 * **Documentation:** update the `-compile-wasm` limitations note in `README.md` and this file's #73/#74 entries to cross-reference this item.
 * **Recommended execution mode:** `plan-then-reviewed-edit` — "IR changes" explicitly listed in this category.
 * **Recommended model:** Claude Opus 5 (highest-reasoning — "IR architecture" explicitly listed).
+
+### 85. Unify compiler entry points and artifact-output contract
+* **Description:** Make one checked compiler pipeline authoritative; make `cmd/zero/main.go` a thin invocation of it or remove it after an explicit migration decision. Define one artifact-output API that handles flags independently of positional ordering, creates requested output directories, never writes into the repository implicitly, and reports produced paths in a manifest.
+* **Why:** `zero.go` invokes `checker.Check`, while tracked `cmd/zero/main.go` does not. Live audit also reproduced bug #39: `go run zero.go examples/cli_hello.zero -o /tmp/out` wrote `server.go` in the current directory. This is a verification boundary, not routine cleanup.
+* **Dependencies:** none. Fixes bug #39; precedes #76, #78, and ZIR work.
+* **Acceptance criteria:** every documented invocation has identical check/lower behavior; all backend and flag-order combinations honor `-o`; output tests prove no repository-root artifacts.
+* **Required tests:** subprocess tests for output order, file/directory outputs, rejection parity, and manifest content.
+* **Done (2026-08-01):** Confirmed that `cmd/zero/main.go` is ignored local scaffolding rather than a tracked product entry point, so it was preserved. The documented `zero.go` CLI remains the shipped checker boundary. Introduced shared output helpers for directory and artifact writes, fixed post-input `-o` for Go/JS/legacy WAT, and added output-directory creation. No output manifest was added: that requires the future versioned artifact-manifest format in #89 and must not be improvised as an unstable one-off CLI response.
+
+### 86. Define Zero IR v1 as the canonical semantic program graph
+* **Description:** Define and implement a versioned ZIR graph with stable node IDs, typed ports, data/control edges, declared effects/capabilities, module namespaces, provenance spans, invariant references, deterministic serialization, and AST-to-ZIR compatibility lowering. Existing shared IR, SSA, and bytecode become migration inputs, not semantic authorities.
+* **Why:** AST, `IRNode`, SSA, bytecode, and backend walkers overlap today. A canonical graph is required for local AI edits and backend independence.
+* **Dependencies:** #85; benefits from #76, #77, and #80.
+* **Acceptance criteria:** deterministic serialization, stable IDs across unrelated changes, invalid reference/cycle/type rejection, and a checked `cli_app` fixture lowered without target syntax.
+* **Required tests:** graph integrity, serialization determinism, ID stability, and AST compatibility fixtures.
+
+### 87. Build the ZIR verifier and versioned diagnostic contract
+* **Description:** Add pre-emission verification for types/layouts, data/control-flow invariants, effect inference, capability requirements, target feasibility, and stable diagnostic code/severity/location/related-node fields. Fold #77 into the diagnostic contract and make #79 consume inferred effects.
+* **Why:** Current diagnostics are largely message strings, and capability labels are advisory. Verification must be a product boundary, not a backend side effect.
+* **Dependencies:** #86.
+* **Acceptance criteria:** deterministic diagnostic JSON, unbound-reference diagnostics, declared requirements for every effectful node, and pre-emission target/effect rejection.
+* **Required tests:** golden diagnostics, invalid graph/property tests, policy fixtures, and target-rejection tests.
+
+### 88. Define a provider-neutral ZIR model-adapter protocol
+* **Description:** Define schemas and adapter interfaces for complete ZIR, minimal verified deltas, constrained decoding, repair feedback, token accounting, and model metadata. Reuse #68 mask plans and #70 schema bridges without binding ZIR to provider token IDs.
+* **Why:** The orchestrator is an OpenAI-compatible local experiment. A model-agnostic platform requires providers to produce the same verified graph.
+* **Dependencies:** #86 and #87.
+* **Acceptance criteria:** valid fixture graphs pass through two adapter test doubles, invalid model output never executes, and repair requests carry bounded graph context plus stable diagnostics.
+* **Required tests:** schema conformance, malformed-output rejection, deterministic adapter fixtures, and context accounting.
+
+### 89. Add content-addressed ZIR storage and incremental compilation
+* **Description:** Store canonical nodes, modules, verification evidence, and lowered artifacts by content hash, with forward/reverse dependency indexes and reproducible artifact manifests.
+* **Why:** This is the mechanism for small repairs, bounded context, dependency-closure recompilation, and deterministic regeneration.
+* **Dependencies:** #86 and #87.
+* **Acceptance criteria:** unrelated edits preserve cache outside the reverse dependency closure; clean builds reproduce manifests; cache corruption cannot bypass verification.
+* **Required tests:** invalidation, hash determinism, corruption recovery, and reproducible-build integration.
+
+### 90. Define the lowered-ZIR backend ABI and conformance suite
+* **Description:** Specify a target-independent lowered ZIR ABI for typed CFG/SSA, calls, memory/runtime imports, errors, effects, and capability boundaries. Migrate a deterministic core subset and compare interpreter, bytecode, Go, JS where applicable, and Wasm outcomes or explicit rejections.
+* **Why:** Each current backend owns overlapping semantics. More backend expansion without a contract will amplify drift.
+* **Dependencies:** #86 and #87; incorporates #78. #73 and #84 should target this ABI.
+* **Acceptance criteria:** one lowering runs equivalently on each supported target; unsupported effects use the same feasibility contract.
+* **Required tests:** differential and property-based deterministic fixtures plus negative capability tests.
+
+### 91. Add semantic patch deltas and bounded repair context
+* **Description:** Make autonomous repair operate on ZIR deltas addressed to stable IDs. Require preconditions, touched dependencies, expected invariants, and regression evidence, with compact context extracted from graph neighborhoods and diagnostics.
+* **Why:** Source replacement patching is coarse. Verified graph deltas are safer, smaller, reviewable, and conflict-detectable.
+* **Dependencies:** #86, #87, and #89.
+* **Acceptance criteria:** unrelated graph regions remain byte-identical; conflicting edits fail deterministically; accepted deltas rerun affected verification and tests.
+* **Required tests:** precondition failure, conflict detection, localized invalidation, and rollback.
+
+### 92. Produce a verified standalone Wasm binary pipeline
+* **Description:** Compile validated lowered ZIR to `.wasm` binaries with a minimal host ABI, deterministic package/manifest, runtime capability mediation, and startup/size/runtime benchmarks. Keep Go/JS compatibility paths; defer LLVM/direct machine code until the ABI is stable.
+* **Why:** WAT proves lowering but is not the standalone executable product. Wasm is the pragmatic first native target.
+* **Dependencies:** #87 and #90. #73/#84 add coverage only after the ABI exists.
+* **Acceptance criteria:** a deterministic fixture validates externally in CI, runs without Go/Node, carries its capability manifest, and produces a reproducible hash.
+* **Required tests:** binary validation, standalone execution, denied host imports, reproducibility, and performance regressions.

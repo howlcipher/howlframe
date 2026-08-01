@@ -85,6 +85,58 @@ func TestOutputDirectoryFlag(t *testing.T) {
 	}
 }
 
+func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	}
+
+	tests := []struct {
+		name     string
+		source   string
+		artifact string
+	}{
+		{
+			name:     "go",
+			source:   `(cli_app (print "Hello"))`,
+			artifact: "server.go",
+		},
+		{
+			name:     "javascript",
+			source:   `(web_app (set_text (dom_query "#label") "Hello"))`,
+			artifact: "app.js",
+		},
+		{
+			name:     "wasm",
+			source:   `(wasm_app (+ 1 2))`,
+			artifact: "app.wat",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			workDir := t.TempDir()
+			inputFile := filepath.Join(workDir, test.name+".zero")
+			outputDir := filepath.Join(workDir, "nested", "artifacts")
+			if err := os.WriteFile(inputFile, []byte(test.source), 0o644); err != nil {
+				t.Fatalf("failed to write input: %v", err)
+			}
+
+			command := exec.Command(zeroBinary, inputFile, "-o", outputDir)
+			command.Dir = workDir
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("transpilation failed: %v\n%s", err, output)
+			}
+			if _, err := os.Stat(filepath.Join(outputDir, test.artifact)); err != nil {
+				t.Fatalf("expected %s in requested output directory: %v", test.artifact, err)
+			}
+			if _, err := os.Stat(filepath.Join(workDir, test.artifact)); !os.IsNotExist(err) {
+				t.Fatalf("unexpected artifact in working directory: %v", err)
+			}
+		})
+	}
+}
+
 func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 	zeroBinary := filepath.Join(t.TempDir(), "zero")
 	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
@@ -93,7 +145,7 @@ func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "store.zero")
-	outputFile := filepath.Join(tempDir, "store.zbc")
+	outputFile := filepath.Join(tempDir, "nested", "store.zbc")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
 		t.Fatalf("failed to write bytecode input: %v", err)
 	}
@@ -132,7 +184,7 @@ func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
 		t.Fatalf("SSA WAT does not contain the lowered if/phi merge:\n%s", wat)
 	}
 
-	exactOutput := filepath.Join(tempDir, "exact.wat")
+	exactOutput := filepath.Join(tempDir, "nested", "exact.wat")
 	if output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile, "-o", exactOutput).CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile SSA WAT to exact output: %v\n%s", err, output)
 	}

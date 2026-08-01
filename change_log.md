@@ -39,6 +39,8 @@
 
 ### Changed
 
+* Output directories are now created consistently, and Go, JavaScript, and
+  legacy WAT generation accept `-o` before or after the input path.
 * Long valid `let` chains now use shared iterative traversal across AST
   preprocessing, semantic checking, and Go/JavaScript emission, with a
   2,000-binding regression covering transpilation and generated Go builds.
