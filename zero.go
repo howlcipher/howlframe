@@ -34,6 +34,7 @@ func main() {
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
+	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
@@ -91,6 +92,9 @@ func main() {
 			ast.ReportError(fmt.Sprintf("Failed to encode optimization plan: %v", err), 0, 0)
 		}
 		fmt.Println(string(plan))
+		return
+	}
+	if *validateMode {
 		return
 	}
 
