@@ -8,6 +8,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 
 | # | Bug | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 40 | [Missing `.agents/prompts/work_next_item.md` file](#40-missing-agentspromptswork_next_itemmd-file) | Pending | 3.0 (3×1÷1) | — | — | — | The `work_next_item` skill expects a prompt file `.agents/prompts/work_next_item.md` which does not exist in the repository, making the skill fail to load its prompt. |
 | 1 | [Lexer panics on EOF during unterminated string](#1-lexer-panics-on-eof-during-unterminated-string) | Done | 4.0 (4×1÷1) | Haiku 3 | Gemini 1.5 Flash | gpt-5.6-luna | The lexer reports the error via `reportError`, but an explicit bounds check prevents potential runtime panics during deep parsing. |
 | 2 | [Python Orchestrator timeout with heavy models](#2-python-orchestrator-timeout-with-heavy-models) | Done | 3.0 (3×1÷1) | Haiku 3 | Gemini 1.5 Flash | gpt-5.6-luna | Added explicit UX warnings to console so users don't assume the script has frozen when loading heavy models in Outlines. |
 | 3 | [Variable Shadowing in Go Generation](#3-variable-shadowing-in-go-generation) | Done | 4.0 (4×1÷1) | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | `let` expressions without inner `{}` brackets risk leaking scopes or redeclaring variables, causing Go compilation to fail on nested conditionals. |
