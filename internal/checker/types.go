@@ -129,7 +129,7 @@ func (a *Analysis) collectFunctions(node *ast.Node) {
 			continue
 		}
 		if node.Type == "List" && len(node.Children) > 0 {
-			if node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "defun" && len(node.Children) >= 4 {
+			if node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "defun" || node.Children[0].Value == "lazy_synthesize") && len(node.Children) >= 4 {
 				name := node.Children[1].Value
 				params, ret := a.functionSignature(node)
 				a.Functions[name] = FunctionInfo{Params: params, Return: ret}
@@ -150,7 +150,7 @@ func (a *Analysis) inferRoot(root *ast.Node) {
 	for _, child := range root.Children[1:] {
 		if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Type == "SYMBOL" {
 			switch child.Children[0].Value {
-			case "defun":
+			case "defun", "lazy_synthesize":
 				a.inferFunction(child)
 				continue
 			case "struct", "schema", "import", "intent", "test":
@@ -163,6 +163,14 @@ func (a *Analysis) inferRoot(root *ast.Node) {
 			}
 		}
 		a.infer(child, env)
+		if child.Type == "List" && len(child.Children) >= 2 && child.Children[0].Type == "SYMBOL" {
+			head := child.Children[0].Value
+			if head == "db_connect" || head == "store_open" {
+				if child.Children[1].Type == "SYMBOL" {
+					env[child.Children[1].Value] = ast.Layout(ast.Unknown)
+				}
+			}
+		}
 	}
 }
 
@@ -272,11 +280,20 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 			if result.Kind == "" && strings.Contains(node.Value, ".") {
 				parts := strings.SplitN(node.Value, ".", 2)
 				base := env[parts[0]]
-				if base.Fields != nil {
-					result = base.Fields[parts[1]]
+				if base.Kind != "" {
+					if base.Fields != nil && base.Fields[parts[1]].Kind != "" {
+						result = base.Fields[parts[1]]
+					} else {
+						result = ast.Layout(ast.Unknown)
+					}
 				}
 			}
 			if result.Kind == "" {
+				if _, isFunc := a.Functions[node.Value]; !isFunc && !isKeyword(node.Value) {
+					if _, isStruct := a.Structs[node.Value]; !isStruct {
+						a.add(node, fmt.Sprintf("undefined reference to %q", node.Value))
+					}
+				}
 				result = ast.Layout(ast.Unknown)
 			}
 		}
@@ -345,9 +362,18 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "let":
 		return a.inferLetChain(node, env)
 	case "do":
+		childEnv := cloneEnv(env)
 		result := ast.Layout(ast.Void)
 		for _, child := range node.Children[1:] {
-			result = a.infer(child, env)
+			result = a.infer(child, childEnv)
+			if child.Type == "List" && len(child.Children) >= 2 && child.Children[0].Type == "SYMBOL" {
+				hd := child.Children[0].Value
+				if hd == "db_connect" || hd == "store_open" {
+					if child.Children[1].Type == "SYMBOL" {
+						childEnv[child.Children[1].Value] = ast.Layout(ast.Unknown)
+					}
+				}
+			}
 		}
 		return result
 	case "if":
@@ -412,12 +438,37 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			if caseNode.Type != "List" || len(caseNode.Children) < 2 {
 				continue
 			}
-			a.infer(caseNode.Children[0], env)
+			labelNode := caseNode.Children[0]
+			if labelNode.Type != "SYMBOL" || labelNode.Value != "default" {
+				a.infer(labelNode, env)
+			}
 			result = join(result, a.infer(caseNode.Children[1], env))
 		}
 		return result
+	case "db_connect", "store_open":
+		for _, child := range node.Children[2:] {
+			a.infer(child, env)
+		}
+		return ast.Layout(ast.Void)
 	case "return":
 		return a.inferChild(node, 1, env)
+	case "lambda":
+		if len(node.Children) >= 3 && node.Children[1].Type == "List" {
+			childEnv := cloneEnv(env)
+			for _, param := range node.Children[1].Children {
+				if param.Type == "SYMBOL" {
+					childEnv[param.Value] = ast.Layout(ast.Unknown)
+				}
+			}
+			for _, child := range node.Children[2:] {
+				a.infer(child, childEnv)
+			}
+		} else {
+			for _, child := range node.Children[1:] {
+				a.infer(child, env)
+			}
+		}
+		return ast.Layout(ast.Unknown)
 	case "set":
 		if len(node.Children) >= 3 {
 			value := a.infer(node.Children[2], env)
@@ -597,6 +648,10 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			if info, ok := a.Functions[name]; ok {
 				a.checkCall(node, name, node.Children[2:], info, env)
 				return info.Return
+			} else {
+				if !isKeyword(name) && !strings.Contains(name, ".") {
+					a.add(node.Children[1], fmt.Sprintf("undefined reference to function %q", name))
+				}
 			}
 		}
 		return ast.Layout(ast.Unknown)
@@ -610,10 +665,10 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 
 func (a *Analysis) inferOptimizationSignature(node *ast.Node, env typeEnv) ast.TypeInfo {
 	if len(node.Children) < 6 {
+		a.add(node, "optimize_signature expects a name, metric, one or more tests, one or more candidates, and a body")
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
 		}
-		a.add(node, "optimize_signature expects a name, metric, one or more tests, one or more candidates, and a body")
 		return ast.Layout(ast.Unknown)
 	}
 
@@ -769,6 +824,26 @@ func cloneEnv(env typeEnv) typeEnv {
 		copy[name] = value
 	}
 	return copy
+}
+
+func isKeyword(name string) bool {
+	switch name {
+	case "if", "let", "defun", "struct", "schema", "column", "import", "test",
+		"cli_app", "http_server", "web_app", "wasm_app", "module", "route",
+		"lambda", "parse_json", "res_json", "spawn", "catch", "try_let",
+		"print", "env", "read_file", "write_file", "mkdir", "exec", "call",
+		"return", "do", "while", "for", "match", "default", "set", "list",
+		"dict", "list_get", "map_get", "map_set", "map_delete", "append",
+		"to_int", "to_float", "to_string", "bytes_to_string", "str_split",
+		"str_join", "regex_match", "confidence", "achieve", "fuzzy_cast",
+		"lazy_synthesize", "semantic_match", "neural_circuit",
+		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
+		"store_get", "store_put", "store_delete", "intent",
+		"optimize_signature", "schema_bridge", "cli_args", "rate_limit",
+		"void", "string", "int", "float", "bool":
+		return true
+	}
+	return false
 }
 
 func typeFromName(name string) ast.TypeInfo {

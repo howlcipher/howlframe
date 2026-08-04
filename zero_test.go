@@ -207,13 +207,14 @@ func TestCrashStateSerialization(t *testing.T) {
 	defer os.RemoveAll(outDir)
 
 	inputFile := filepath.Join(outDir, "panic.zero")
-	if err := os.WriteFile(inputFile, []byte(`(cli_app (call panic "test crash dump"))`), 0644); err != nil {
+	if err := os.WriteFile(inputFile, []byte(`(cli_app (let (z 0) (print (/ 1 z))))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
 	cmd = exec.Command("./zero", "-o", outDir, inputFile)
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to transpilation: %v", err)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to transpilation: %v\n%s", err, string(out))
 	}
 
 	serverFile := filepath.Join(outDir, "server.go")
