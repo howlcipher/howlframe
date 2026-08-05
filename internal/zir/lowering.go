@@ -15,12 +15,12 @@ func LowerAST(root *ast.Node, module string) (*Graph, error) {
 		Graph:  NewGraph(),
 		Module: module,
 	}
-	
+
 	entry, err := ctx.lowerNode(root)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ctx.Graph.EntryNode = entry
 	return ctx.Graph, nil
 }
@@ -29,7 +29,7 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 	if astNode == nil {
 		return "", nil
 	}
-	
+
 	node := &Node{
 		Module: ctx.Module,
 		Provenance: Provenance{
@@ -55,9 +55,9 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 		if head.Type != "SYMBOL" {
 			node.Kind = "call"
 		}
-		
+
 		id := ctx.Graph.AddNode(node)
-		
+
 		for i, child := range astNode.Children {
 			if i == 0 && head.Type == "SYMBOL" {
 				continue
@@ -72,7 +72,7 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 				})
 			}
 		}
-		
+
 		return id, nil
 	}
 

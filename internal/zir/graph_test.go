@@ -10,7 +10,7 @@ func TestDeterministicSerialization(t *testing.T) {
 	n1 := &Node{Kind: "const", Value: "1"}
 	n2 := &Node{Kind: "const", Value: "2"}
 	n3 := &Node{Kind: "add", DataInputs: []DataEdge{{SourceNode: "n1"}, {SourceNode: "n2"}}}
-	
+
 	g.AddNode(n1)
 	g.AddNode(n2)
 	g.AddNode(n3)

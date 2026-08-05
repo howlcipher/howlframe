@@ -2628,12 +2628,16 @@ func (interp *Interpreter) evalList(node *Node, env *interpEnv) any {
 			"stream": false,
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil { panic(err) }
+		if err != nil {
+			panic(err)
+		}
 		defer resp.Body.Close()
 		var res struct {
 			Response string `json:"response"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			panic(err)
+		}
 		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 		return val
 	case "list":
@@ -3112,6 +3116,7 @@ func sliceToAny(strs []string) []any {
 	}
 	return out
 }
+
 type BCInstruction struct {
 	Op   string `json:"op"`
 	Args []any  `json:"args,omitempty"`
@@ -3142,7 +3147,7 @@ func CompileToBytecode(ast *Node) *BCProgram {
 		},
 		funcs: make(map[string]*BCFunction),
 	}
-	
+
 	// Phase 1 interpreter expects ast to be a single block (cli_app) usually,
 	// but ast is just a Node.
 	mainInsts := comp.compileNode(ast)
@@ -3169,7 +3174,7 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 		insts = append(insts, BCInstruction{Op: "LOAD_VAR", Args: []any{node.Value}})
 		return insts
 	}
-	
+
 	if node.Type == "List" && len(node.Children) > 0 {
 		head := node.Children[0].Value
 		switch head {
@@ -3193,19 +3198,19 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 			}
 		case "type_hint":
 			// ignore type hints in execution
-		
+
 		case "try_let":
 			binding := node.Children[1]
 			varName := binding.Children[0].Value
 			valInsts := c.compileNode(binding.Children[1])
-			
+
 			catchNode := node.Children[2]
 			errVar := catchNode.Children[1].Value
 			catchBodyInsts := c.compileNode(catchNode.Children[2])
 			successBodyInsts := c.compileNode(node.Children[3])
-			
+
 			insts = append(insts, BCInstruction{
-				Op: "TRY_LET", 
+				Op:   "TRY_LET",
 				Args: []any{varName, errVar, float64(len(valInsts)), float64(len(catchBodyInsts)), float64(len(successBodyInsts))},
 			})
 			insts = append(insts, valInsts...)
@@ -3288,7 +3293,7 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 			binding := node.Children[1]
 			varName := binding.Children[0].Value
 			valInsts := c.compileNode(binding.Children[1])
-			
+
 			insts = append(insts, valInsts...)
 			insts = append(insts, BCInstruction{Op: "STORE_VAR", Args: []any{varName}})
 			insts = append(insts, c.compileNode(node.Children[2])...)
@@ -3304,7 +3309,7 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 				elseInsts = c.compileNode(node.Children[3])
 			}
 			insts = append(insts, condInsts...)
-			
+
 			// JUMP_IF_FALSE to else (or end)
 			if len(elseInsts) == 0 {
 				insts = append(insts, BCInstruction{Op: "JUMP_IF_FALSE", Args: []any{float64(len(thenInsts) + 1)}})
@@ -3318,7 +3323,7 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 		case "while":
 			condInsts := c.compileNode(node.Children[1])
 			bodyInsts := c.compileNode(node.Children[2])
-			
+
 			insts = append(insts, condInsts...)
 			// jump to end if false
 			insts = append(insts, BCInstruction{Op: "JUMP_IF_FALSE", Args: []any{float64(len(bodyInsts) + 2)}})
@@ -3330,10 +3335,10 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 			itemName := node.Children[1].Value
 			listInsts := c.compileNode(node.Children[2])
 			bodyInsts := c.compileNode(node.Children[3])
-			
+
 			insts = append(insts, listInsts...)
 			insts = append(insts, BCInstruction{Op: "FOR_INIT"}) // pops list, pushes iterator
-			
+
 			loopStart := len(insts)
 			insts = append(insts, BCInstruction{Op: "FOR_NEXT", Args: []any{itemName, float64(len(bodyInsts) + 2)}}) // if done, jump to end
 			insts = append(insts, bodyInsts...)
@@ -3427,12 +3432,12 @@ func (c *BCCompiler) compileNode(node *Node) []BCInstruction {
 
 // VM state
 type BCVM struct {
-	prog   *BCProgram
-	stack  []any
-	env    *bcEnv
-	ip     int
-	insts  []BCInstruction
-	args   []string
+	prog  *BCProgram
+	stack []any
+	env   *bcEnv
+	ip    int
+	insts []BCInstruction
+	args  []string
 }
 
 type bcEnv struct {
@@ -3476,14 +3481,14 @@ func RunBytecode(prog *BCProgram, cliArgs []string) int {
 		insts: prog.Main,
 		args:  cliArgs,
 	}
-	
+
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("VM panic: %v\n", r)
 			os.Exit(1)
 		}
 	}()
-	
+
 	vm.run(vm.insts, vm.env)
 	return 0
 }
@@ -3506,18 +3511,18 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 	for ip < len(insts) {
 		inst := insts[ip]
 		switch inst.Op {
-		
+
 		case "TRY_LET":
 			varName := inst.Args[0].(string)
 			errVar := inst.Args[1].(string)
 			valLen := int(inst.Args[2].(float64))
 			catchLen := int(inst.Args[3].(float64))
 			successLen := int(inst.Args[4].(float64))
-			
+
 			valInsts := insts[ip+1 : ip+1+valLen]
 			catchInsts := insts[ip+1+valLen : ip+1+valLen+catchLen]
 			successInsts := insts[ip+1+valLen+catchLen : ip+1+valLen+catchLen+successLen]
-			
+
 			var tryErr error
 			func() {
 				defer func() {
@@ -3530,7 +3535,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 				}()
 				vm.run(valInsts, env)
 			}()
-			
+
 			if tryErr != nil {
 				env.vars[errVar] = tryErr.Error()
 				vm.run(catchInsts, env)
@@ -3545,22 +3550,30 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			driver := inst.Args[1].(string)
 			dsn := inst.Args[2].(string)
 			db, err := sql.Open(driver, dsn)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			env.vars[varName] = db
 		case "SQL_QUERY":
 			dbVar := inst.Args[0].(string)
 			queryStr := inst.Args[1].(string)
 			dbAny, ok := env.get(dbVar)
-			if !ok { panic("undefined db: " + dbVar) }
+			if !ok {
+				panic("undefined db: " + dbVar)
+			}
 			db := dbAny.(*sql.DB)
 			rows, err := db.Query(queryStr)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			var results []any
 			cols, _ := rows.Columns()
 			for rows.Next() {
 				vals := make([]any, len(cols))
 				valPtrs := make([]any, len(cols))
-				for i := range vals { valPtrs[i] = &vals[i] }
+				for i := range vals {
+					valPtrs[i] = &vals[i]
+				}
 				rows.Scan(valPtrs...)
 				rowMap := make(map[string]any)
 				for i, col := range cols {
@@ -3577,21 +3590,33 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			method := vm.pop(inst.Op).(string)
 			urlStr := vm.pop(inst.Op).(string)
 			req, err := http.NewRequest(method, urlStr, nil)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			resp, err := http.DefaultClient.Do(req)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			defer resp.Body.Close()
 			b, err := io.ReadAll(resp.Body)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			var bytesAny []any
-			for _, bb := range b { bytesAny = append(bytesAny, float64(bb)) }
+			for _, bb := range b {
+				bytesAny = append(bytesAny, float64(bb))
+			}
 			vm.push(bytesAny)
 		case "READ_FILE":
 			path := vm.pop(inst.Op).(string)
 			b, err := os.ReadFile(path)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			var bytesAny []any
-			for _, bb := range b { bytesAny = append(bytesAny, float64(bb)) }
+			for _, bb := range b {
+				bytesAny = append(bytesAny, float64(bb))
+			}
 			vm.push(bytesAny)
 		case "WRITE_FILE":
 			dataAny := vm.pop(inst.Op)
@@ -3600,14 +3625,20 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			if s, ok := dataAny.(string); ok {
 				data = []byte(s)
 			} else if b, ok := dataAny.([]any); ok {
-				for _, bb := range b { data = append(data, byte(bb.(float64))) }
+				for _, bb := range b {
+					data = append(data, byte(bb.(float64)))
+				}
 			}
 			err := os.WriteFile(path, data, 0644)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 		case "MKDIR":
 			path := vm.pop(inst.Op).(string)
 			err := os.MkdirAll(path, 0755)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 		case "EXEC":
 			numArgs := int(inst.Args[0].(float64))
 			var args []string
@@ -3616,30 +3647,44 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			}
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
 			out, err := exec.Command(cmdStr, args...).CombinedOutput()
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			var bytesAny []any
-			for _, bb := range out { bytesAny = append(bytesAny, float64(bb)) }
+			for _, bb := range out {
+				bytesAny = append(bytesAny, float64(bb))
+			}
 			vm.push(bytesAny)
 		case "PARSE_JSON":
 			bodyVar := inst.Args[0].(string)
 			var data []byte
 			if bodyVar == "req.body" {
 				reqAny, ok := env.get("req")
-				if !ok { panic("undefined req") }
+				if !ok {
+					panic("undefined req")
+				}
 				req := reqAny.(*http.Request)
 				data, _ = io.ReadAll(req.Body)
 				req.Body = io.NopCloser(bytes.NewBuffer(data))
 			} else {
 				bodyAny, ok := env.get(bodyVar)
-				if !ok { panic("undefined var: " + bodyVar) }
-				if s, ok := bodyAny.(string); ok { data = []byte(s) }
+				if !ok {
+					panic("undefined var: " + bodyVar)
+				}
+				if s, ok := bodyAny.(string); ok {
+					data = []byte(s)
+				}
 				if b, ok := bodyAny.([]any); ok {
-					for _, bb := range b { data = append(data, byte(bb.(float64))) }
+					for _, bb := range b {
+						data = append(data, byte(bb.(float64)))
+					}
 				}
 			}
 			var result any
 			err := json.Unmarshal(data, &result)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			vm.push(result)
 		case "SPAWN":
 			bodyLen := int(inst.Args[0].(float64))
@@ -3664,7 +3709,9 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			contentType := vm.pop(inst.Op).(string)
 			status := int(toBCFloat(vm.pop(inst.Op)))
 			wAny, ok := env.get("w")
-			if !ok { panic("no response writer") }
+			if !ok {
+				panic("no response writer")
+			}
 			w := wAny.(http.ResponseWriter)
 			w.Header().Set("Content-Type", contentType)
 			w.WriteHeader(status)
@@ -3672,14 +3719,18 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 				w.Write([]byte(s))
 			} else if b, ok := bodyAny.([]any); ok {
 				var data []byte
-				for _, bb := range b { data = append(data, byte(bb.(float64))) }
+				for _, bb := range b {
+					data = append(data, byte(bb.(float64)))
+				}
 				w.Write(data)
 			}
 		case "RES_JSON":
 			data := vm.pop(inst.Op)
 			status := int(toBCFloat(vm.pop(inst.Op)))
 			wAny, ok := env.get("w")
-			if !ok { panic("no response writer") }
+			if !ok {
+				panic("no response writer")
+			}
 			w := wAny.(http.ResponseWriter)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
@@ -3693,10 +3744,10 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			reqVar := inst.Args[1].(string)
 			bodyLen := int(inst.Args[2].(float64))
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
-			
+
 			muxAny, _ := env.get("__http_mux")
 			mux := muxAny.(*http.ServeMux)
-			
+
 			capturedEnv := newBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
 				for k, v := range e.vars {
@@ -3705,7 +3756,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 					}
 				}
 			}
-			
+
 			prog := vm.prog
 			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 				reqEnv := newBcEnv(capturedEnv)
@@ -3727,7 +3778,9 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			port := portAny.(string)
 			fmt.Println("Listening on " + port)
 			err := http.ListenAndServe(port, mux)
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 		case "CONFIDENCE":
 			promptStrAny := vm.pop(inst.Op)
 			promptStr := fmt.Sprintf("%v", promptStrAny)
@@ -3737,12 +3790,16 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 				"stream": false,
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
 			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 			vm.push(val)
 
@@ -3755,12 +3812,16 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 				"stream": false,
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
+			if err != nil {
+				panic(err)
+			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
+			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				panic(err)
+			}
 			vm.push(res.Response)
 
 		case "LOAD_CONST":
@@ -3800,13 +3861,13 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "FOR_NEXT":
 			varName := inst.Args[0].(string)
 			offset := int(inst.Args[1].(float64))
-			
+
 			idxAny := vm.pop(inst.Op)
 			itemsAny := vm.pop(inst.Op)
-			
+
 			idx := int(idxAny.(float64))
 			items := itemsAny.([]any)
-			
+
 			if idx < len(items) {
 				env.vars[varName] = items[idx]
 				vm.push(items)
@@ -3818,22 +3879,22 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "CALL":
 			funcName := inst.Args[0].(string)
 			numArgs := int(inst.Args[1].(float64))
-			
+
 			fn, ok := vm.prog.Functions[funcName]
 			if !ok {
 				panic("undefined function: " + funcName)
 			}
-			
+
 			var argVals []any
 			for i := 0; i < numArgs; i++ {
 				argVals = append([]any{vm.pop(inst.Op)}, argVals...)
 			}
-			
+
 			callEnv := newBcEnv(nil)
 			for i, p := range fn.Params {
 				callEnv.vars[p] = argVals[i]
 			}
-			
+
 			var result any
 			func() {
 				defer func() {
@@ -3905,7 +3966,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			for i := 0; i < num*2; i++ {
 				pairs = append([]any{vm.pop(inst.Op)}, pairs...)
 			}
-			for i := 0; i < num*2; i+=2 {
+			for i := 0; i < num*2; i += 2 {
 				key := fmt.Sprint(pairs[i])
 				dict[key] = pairs[i+1]
 			}
@@ -3913,7 +3974,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "APPEND":
 			varName := inst.Args[0].(string)
 			item := vm.pop(inst.Op)
-			
+
 			current, ok := env.get(varName)
 			if !ok {
 				panic("undefined variable: " + varName)
@@ -3925,7 +3986,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 			varName := inst.Args[0].(string)
 			val := vm.pop(inst.Op)
 			key := fmt.Sprint(vm.pop(inst.Op))
-			
+
 			current, ok := env.get(varName)
 			if !ok {
 				panic("undefined variable: " + varName)
@@ -3935,7 +3996,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "MAP_DELETE":
 			varName := inst.Args[0].(string)
 			key := fmt.Sprint(vm.pop(inst.Op))
-			
+
 			current, ok := env.get(varName)
 			if !ok {
 				panic("undefined variable: " + varName)
@@ -3945,7 +4006,7 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "MAP_GET":
 			varName := inst.Args[0].(string)
 			key := fmt.Sprint(vm.pop(inst.Op))
-			
+
 			current, ok := env.get(varName)
 			if !ok {
 				panic("undefined variable: " + varName)
@@ -3955,13 +4016,13 @@ func (vm *BCVM) run(insts []BCInstruction, env *bcEnv) any {
 		case "LIST_GET":
 			varName := inst.Args[0].(string)
 			idxAny := vm.pop(inst.Op)
-			
+
 			idxStr := strings.TrimSpace(fmt.Sprint(idxAny))
 			idx, err := strconv.Atoi(idxStr)
 			if err != nil {
 				panic("list_get index must be a number")
 			}
-			
+
 			current, ok := env.get(varName)
 			if !ok {
 				panic("undefined variable: " + varName)
@@ -4029,16 +4090,24 @@ func bcNumericBinop(op string, a, b any) any {
 	// try to coerce float64 since JSON uses float64
 	af := toBCFloat(a)
 	bf := toBCFloat(b)
-	
+
 	switch op {
-	case "+": return af + bf
-	case "-": return af - bf
-	case "*": return af * bf
-	case "/": return af / bf
-	case "<": return af < bf
-	case ">": return af > bf
-	case "<=": return af <= bf
-	case ">=": return af >= bf
+	case "+":
+		return af + bf
+	case "-":
+		return af - bf
+	case "*":
+		return af * bf
+	case "/":
+		return af / bf
+	case "<":
+		return af < bf
+	case ">":
+		return af > bf
+	case "<=":
+		return af <= bf
+	case ">=":
+		return af >= bf
 	}
 	panic("unknown binop")
 }
@@ -4071,7 +4140,8 @@ func bcConvert(target string, a any) any {
 	switch target {
 	case "to_int":
 		switch t := a.(type) {
-		case float64: return float64(int64(t))
+		case float64:
+			return float64(int64(t))
 		case string:
 			v, _ := strconv.ParseInt(t, 10, 64)
 			return float64(v)
