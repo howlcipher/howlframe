@@ -31,8 +31,8 @@ func TestVerifier(t *testing.T) {
 	t.Run("Unbound reference", func(t *testing.T) {
 		g := NewGraph()
 		g.AddNode(&Node{
-			Kind: "symbol",
-			Type: ast.TypeInfo{Kind: ast.Unknown},
+			Kind:  "symbol",
+			Type:  ast.TypeInfo{Kind: ast.Unknown},
 			Value: "my_var",
 		})
 
@@ -70,7 +70,7 @@ func TestVerifier(t *testing.T) {
 		if len(diags) != 0 {
 			t.Fatalf("Expected no diagnostics, got %v", diags)
 		}
-		
+
 		node := g.nodeMap[id]
 		if len(node.Effects) != 1 || node.Effects[0].Capability != "filesystem" {
 			t.Fatalf("Expected filesystem capability effect, got %v", node.Effects)
