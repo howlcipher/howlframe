@@ -22,6 +22,10 @@ class CliArgsInstruction(BaseModel):
     op: Literal["CLI_ARGS"]
     pass
 
+class CliArgsGetInstruction(BaseModel):
+    op: Literal["CLI_ARGS_GET"]
+    pass
+
 class ConfidenceInstruction(BaseModel):
     op: Literal["CONFIDENCE"]
     pass
@@ -226,6 +230,7 @@ Instruction = Annotated[
         BinopInstruction,
         CallInstruction,
         CliArgsInstruction,
+        CliArgsGetInstruction,
         ConfidenceInstruction,
         ConvertInstruction,
         DbConnectInstruction,

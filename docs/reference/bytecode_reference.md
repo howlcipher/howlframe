@@ -2,11 +2,12 @@
 
 | Opcode | Operands | Pops | Pushes | Capability | Description |
 |---|---|---|---|---|---|
-| `ACHIEVE` |  | 2 | 1 |  | Achieves a target state given a constraint |
+| `ACHIEVE` |  | 2 | 1 | network | Achieves a target state given a constraint |
 | `APPEND` | string | 1 | 0 |  | Appends to a list |
 | `BINOP` | string | 2 | 1 |  | Binary operation |
 | `CALL` | string, int64 | var | 1 |  | Calls a function |
 | `CLI_ARGS` |  | 0 | 1 |  | Gets command line arguments |
+| `CLI_ARGS_GET` |  | 1 | 1 |  | Gets a specific command line argument |
 | `CONFIDENCE` |  | 1 | 1 |  | Returns confidence score for LLM generate |
 | `CONVERT` | string | 1 | 1 |  | Type conversion |
 | `DB_CONNECT` | string, string, string | 0 | 0 | database | Connects to a database |
