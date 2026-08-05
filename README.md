@@ -278,6 +278,18 @@ The same exact-output handling applies to SSA WebAssembly compilation when
 go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
 ```
 
+## Capability Security
+
+Every bytecode opcode declares a `Capability` in `internal/bytecode/opcode.go` (`network`, `filesystem`, `process`, `environment`, `database`, or none). `-run-bc` enforces this at the VM level: before executing an instruction, `internal/vm.BCVM` checks the instruction's capability against an allow-list, and panics with a structured `CAPABILITY_DENIED` runtime error if it isn't present. The default is fail-closed — with no allow-list, every capability-gated instruction is denied and only `CapNone` instructions (arithmetic, control flow, printing, in-process data structures, etc.) run.
+
+Pass an allow-list with `-allow-caps`, a comma-separated list of capability names, placed *before* the input file (like all of `zero.go`'s other flags — Go's `flag` package stops parsing at the first positional argument):
+
+```bash
+go run zero.go -run-bc -allow-caps network,filesystem examples/cli_hello.zero.bc.bin
+```
+
+An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
+
 ## Observability
 
 Generated Go programs include built-in tracing and crash capture. `tools/observer_agent/observer_agent.py` can tail telemetry, inspect crashes, and run an opt-in patch workflow against an isolated project copy when all required patch-mode options are supplied.

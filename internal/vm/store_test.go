@@ -84,9 +84,10 @@ func TestBytecodeStoreCopiesRecords(t *testing.T) {
 
 func newStoreTestVM() *BCVM {
 	return &BCVM{
-		env:    NewBcEnv(nil),
-		Limits: DefaultLimits,
-		stores: newBCStoreRegistry(),
+		env:         NewBcEnv(nil),
+		Limits:      DefaultLimits,
+		stores:      newBCStoreRegistry(),
+		AllowedCaps: []bytecode.Capability{bytecode.CapDatabase},
 	}
 }
 

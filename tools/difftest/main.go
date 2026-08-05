@@ -97,7 +97,9 @@ func main() {
 			continue
 		}
 
-		out6, err := runCommand("go", "run", "zero.go", "-run-bc", bcPath)
+		// Differential testing checks backend parity, not capability enforcement,
+		// so run bytecode with every capability allowed.
+		out6, err := runCommand("go", "run", "zero.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
 		if err != nil {
 			fmt.Printf("FAIL %s (run-bc): %v\n%s\n", base, err, out6)
 			failed++

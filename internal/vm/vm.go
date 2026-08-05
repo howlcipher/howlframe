@@ -895,15 +895,16 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
-	prog     *bytecode.BCProgram
-	stack    []any
-	env      *BcEnv
-	stores   *bcStoreRegistry
-	ip       int
-	insts    []bytecode.BCInstruction
-	args     []string
-	executed int
-	Limits   VMLimits
+	prog        *bytecode.BCProgram
+	stack       []any
+	env         *BcEnv
+	stores      *bcStoreRegistry
+	ip          int
+	insts       []bytecode.BCInstruction
+	args        []string
+	executed    int
+	Limits      VMLimits
+	AllowedCaps []bytecode.Capability
 }
 
 type bcStoreRegistry struct {
@@ -966,14 +967,15 @@ type VmReturn struct {
 	val any
 }
 
-func RunBytecode(prog *bytecode.BCProgram, cliArgs []string) int {
+func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []bytecode.Capability) int {
 	vm := &BCVM{
-		prog:   prog,
-		env:    NewBcEnv(nil),
-		insts:  prog.Main,
-		args:   cliArgs,
-		stores: newBCStoreRegistry(),
-		Limits: DefaultLimits,
+		prog:        prog,
+		env:         NewBcEnv(nil),
+		insts:       prog.Main,
+		args:        cliArgs,
+		stores:      newBCStoreRegistry(),
+		Limits:      DefaultLimits,
+		AllowedCaps: allowedCaps,
 	}
 
 	defer func() {
@@ -1066,6 +1068,21 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		}
 		vm.ip = ip
 		inst := insts[ip]
+
+		spec := bytecode.Registry[inst.Op]
+		if spec.Capability != bytecode.CapNone {
+			allowed := false
+			for _, cap := range vm.AllowedCaps {
+				if cap == spec.Capability {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, inst.Op, "capability denied: %s", spec.Capability))
+			}
+		}
+
 		switch inst.Op {
 
 		case bytecode.OpTryLet:

@@ -159,6 +159,48 @@ func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 	}
 }
 
+func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "env_read.zero")
+	source := `(cli_app (print "value:" (env "ZERO_TEST_ALLOW_CAPS_VAR")))`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write bytecode input: %v", err)
+	}
+
+	bytecodeFile := filepath.Join(tempDir, "env_read.zbc")
+	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
+		t.Fatalf("failed to compile bytecode: %v\n%s", err, output)
+	}
+
+	runWithEnv := func(env []string, args ...string) ([]byte, error) {
+		cmd := exec.Command(zeroBinary, args...)
+		cmd.Env = env
+		return cmd.CombinedOutput()
+	}
+
+	if output, err := runWithEnv(os.Environ(), "-run-bc", bytecodeFile); err == nil {
+		t.Fatalf("expected denial without -allow-caps, but command succeeded:\n%s", output)
+	} else if !strings.Contains(string(output), "CAPABILITY_DENIED") {
+		t.Fatalf("expected CAPABILITY_DENIED in output, got: %v\n%s", err, output)
+	}
+
+	allowedEnv := append(os.Environ(), "ZERO_TEST_ALLOW_CAPS_VAR=granted")
+	if output, err := runWithEnv(allowedEnv, "-run-bc", "-allow-caps", "environment", bytecodeFile); err != nil {
+		t.Fatalf("expected success with -allow-caps environment: %v\n%s", err, output)
+	} else if !strings.Contains(string(output), "granted") {
+		t.Fatalf("expected output to contain the env value, got:\n%s", output)
+	}
+
+	if output, err := runWithEnv(os.Environ(), "-run-bc", "-allow-caps", "not-a-real-capability", bytecodeFile); err == nil {
+		t.Fatalf("expected rejection of an unknown -allow-caps value, but command succeeded:\n%s", output)
+	}
+}
+
 func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
 	zeroBinary := filepath.Join(t.TempDir(), "zero")
 	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {

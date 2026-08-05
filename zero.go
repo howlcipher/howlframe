@@ -34,6 +34,7 @@ func main() {
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
+	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
@@ -57,7 +58,7 @@ func main() {
 		if err := dec.Decode(&prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		os.Exit(vm.RunBytecode(&prog, flag.Args()[1:]))
+		os.Exit(vm.RunBytecode(&prog, flag.Args()[1:], parseAllowedCaps(*allowCaps)))
 	}
 
 	lx := lexer.NewLexer(string(content))
@@ -297,6 +298,36 @@ func outputDirectory(args []string, inputFile, configured string) string {
 		return output
 	}
 	return configured
+}
+
+var knownCapabilities = map[bytecode.Capability]bool{
+	bytecode.CapNetwork:     true,
+	bytecode.CapFilesystem:  true,
+	bytecode.CapProcess:     true,
+	bytecode.CapEnvironment: true,
+	bytecode.CapDatabase:    true,
+}
+
+// parseAllowedCaps turns -allow-caps into a capability allow-list. An empty
+// or unset flag denies every capability-gated instruction (fail-closed
+// default); RunBytecode always permits CapNone regardless of this list.
+func parseAllowedCaps(raw string) []bytecode.Capability {
+	if raw == "" {
+		return nil
+	}
+	var caps []bytecode.Capability
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		cap := bytecode.Capability(part)
+		if !knownCapabilities[cap] {
+			ast.ReportError(fmt.Sprintf("unknown capability in -allow-caps: %q", part), 0, 0)
+		}
+		caps = append(caps, cap)
+	}
+	return caps
 }
 
 // writeArtifact creates the destination directory before writing an emitted
