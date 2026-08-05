@@ -24,7 +24,5 @@
   "test_advanced_control.zero": "unsupported in run",
   "test_let_arity.zero": "unsupported in run",
   "test_primitives.zero": "unsupported in run",
-  "test_void_defun.zero": "unsupported in run",
-  "test_cli.zero": "stdout mismatch (bug)",
-  "test_collection_read.zero": "stdout mismatch (bug)"
+  "test_void_defun.zero": "unsupported in run"
 }

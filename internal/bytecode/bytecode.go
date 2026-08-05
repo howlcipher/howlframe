@@ -439,7 +439,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, c.compileNode(node.Children[2])...) // index
 			insts = append(insts, BCInstruction{OpString: "LIST_GET", Op: OpListGet, StringOperand: node.Children[1].Value})
 		case "cli_args":
-			insts = append(insts, BCInstruction{OpString: "CLI_ARGS", Op: OpCliArgs})
+			if len(node.Children) == 2 {
+				insts = append(insts, c.compileNode(node.Children[1])...)
+				insts = append(insts, BCInstruction{OpString: "CLI_ARGS_GET", Op: OpCliArgsGet})
+			} else {
+				insts = append(insts, BCInstruction{OpString: "CLI_ARGS", Op: OpCliArgs})
+			}
 		case "sleep":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "SLEEP", Op: OpSleep})

@@ -45,6 +45,7 @@ const (
 	OpMapGet
 	OpListGet
 	OpCliArgs
+	OpCliArgsGet
 	OpSleep
 	OpEnv
 	OpSpawnAgent
@@ -129,6 +130,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpMapGet:           {Code: OpMapGet, Name: "MAP_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Description: "Gets a value from a dictionary"},
 	OpListGet:          {Code: OpListGet, Name: "LIST_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Description: "Gets a value from a list"},
 	OpCliArgs:          {Code: OpCliArgs, Name: "CLI_ARGS", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets command line arguments"},
+	OpCliArgsGet:       {Code: OpCliArgsGet, Name: "CLI_ARGS_GET", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Gets a specific command line argument"},
 	OpSleep:            {Code: OpSleep, Name: "SLEEP", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Sleeps for a duration"},
 	OpEnv:              {Code: OpEnv, Name: "ENV", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: CapEnvironment, Description: "Gets an environment variable"},
 	OpSpawnAgent:       {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapProcess, Description: "Spawns an autonomous subagent"},

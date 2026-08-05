@@ -728,7 +728,10 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 		InterpErr(fmt.Sprintf("map_get target %q is not a dict", dictNode.Value), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
-	return d[key]
+	if val, ok := d[key]; ok {
+		return val
+	}
+	return ""
 }
 
 func (interp *Interpreter) evalListGet(node *ast.Node, env *InterpEnv) any {
@@ -1766,7 +1769,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic("undefined variable: " + varName)
 			}
 			dict := current.(map[string]any)
-			vm.push(dict[key])
+			if val, ok := dict[key]; ok {
+				vm.push(val)
+			} else {
+				vm.push("")
+			}
 		case bytecode.OpListGet:
 			varName := inst.StringOperand
 			idxAny := vm.pop(inst.Op)
@@ -1793,6 +1800,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				argsAny = append(argsAny, arg)
 			}
 			vm.push(argsAny)
+		case bytecode.OpCliArgsGet:
+			idxAny := vm.pop(inst.Op)
+			idx, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idxAny)))
+			if err != nil {
+				panic("cli_args index must be a number")
+			}
+			if idx >= 0 && idx < len(vm.args) {
+				vm.push(vm.args[idx])
+			} else {
+				vm.push("")
+			}
 		case bytecode.OpSleep:
 			msAny := vm.pop(inst.Op)
 			ms, ok := msAny.(float64)
