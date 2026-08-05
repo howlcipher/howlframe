@@ -38,6 +38,7 @@ func TestCapabilityGatePerKind(t *testing.T) {
 		inst bytecode.BCInstruction
 	}{
 		{"network", capability.Network, bytecode.BCInstruction{Op: bytecode.OpFetch, OpString: "FETCH"}},
+		{"network_achieve", capability.Network, bytecode.BCInstruction{Op: bytecode.OpAchieve, OpString: "ACHIEVE"}},
 		{"filesystem", capability.Filesystem, bytecode.BCInstruction{Op: bytecode.OpReadFile, OpString: "READ_FILE"}},
 		{"process", capability.Process, bytecode.BCInstruction{Op: bytecode.OpExec, OpString: "EXEC"}},
 		{"environment", capability.Environment, bytecode.BCInstruction{Op: bytecode.OpEnv, OpString: "ENV"}},

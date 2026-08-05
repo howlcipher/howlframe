@@ -128,7 +128,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpEnv:              {Code: OpEnv, Name: "ENV", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.Environment, Description: "Gets an environment variable"},
 	OpSpawnAgent:       {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: capability.Process, Description: "Spawns an autonomous subagent"},
 	OpTask:             {Code: OpTask, Name: "TASK", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Description: "Defines a task for a subagent"},
-	OpAchieve:          {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Achieves a target state given a constraint"},
+	OpAchieve:          {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Capability: capability.Network, Description: "Achieves a target state given a constraint"},
 	OpNeuralCircuit:    {Code: OpNeuralCircuit, Name: "NEURAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Executes an LLM logic circuit with a given number of inputs and an instruction"},
 	OpEphemeralCircuit: {Code: OpEphemeralCircuit, Name: "EPHEMERAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Generates an ephemeral specialized model, executes it, and discards it"},
 	OpStoreOpen:        {Code: OpStoreOpen, Name: "STORE_OPEN", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: capability.Database, Description: "Creates or attaches a named in-memory store handle"},
