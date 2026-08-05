@@ -148,38 +148,51 @@ func checkWasmExpression(node *ast.Node) {
 
 func checkWebApp(node *ast.Node) {
 	for i := 1; i < len(node.Children); i++ {
-		handlerNode := node.Children[i]
-		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-			checkJSStatement(handlerNode, 0)
-			continue
-		}
-		headVal := handlerNode.Children[0].Value
-		if headVal == "intent" {
-			continue
-		}
-		if headVal == "test" {
-			if len(handlerNode.Children) < 3 {
-				ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
-			}
-			descNode := handlerNode.Children[1]
-			if descNode.Type != "STRING" {
-				ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
-			}
-			for j := 2; j < len(handlerNode.Children); j++ {
-				checkJSStatement(handlerNode.Children[j], 0)
-			}
-			continue
-		}
-		if headVal == "defun" {
-			if len(handlerNode.Children) < 4 {
-				ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
-			}
-			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
-			checkJSStatement(bodyNode, 0)
-			continue
-		}
-		checkJSStatement(handlerNode, 0)
+		checkWebAppHandler(node.Children[i])
 	}
+}
+
+func checkWebAppHandler(handlerNode *ast.Node) {
+	if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
+		checkJSStatement(handlerNode, 0)
+		return
+	}
+	headVal := handlerNode.Children[0].Value
+	if headVal == "module" {
+		for j := 2; j < len(handlerNode.Children); j++ {
+			checkWebAppHandler(handlerNode.Children[j])
+		}
+		return
+	}
+	if headVal == "export" {
+		checkWebAppHandler(handlerNode.Children[1])
+		return
+	}
+	if headVal == "intent" {
+		return
+	}
+	if headVal == "test" {
+		if len(handlerNode.Children) < 3 {
+			ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
+		}
+		descNode := handlerNode.Children[1]
+		if descNode.Type != "STRING" {
+			ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
+		}
+		for j := 2; j < len(handlerNode.Children); j++ {
+			checkJSStatement(handlerNode.Children[j], 0)
+		}
+		return
+	}
+	if headVal == "defun" {
+		if len(handlerNode.Children) < 4 {
+			ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
+		}
+		bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
+		checkJSStatement(bodyNode, 0)
+		return
+	}
+	checkJSStatement(handlerNode, 0)
 }
 
 func checkJSStatement(node *ast.Node, depth int) {
@@ -293,114 +306,123 @@ func checkGoApp(node *ast.Node) {
 		startIndex = 2
 	}
 	for i := startIndex; i < len(node.Children); i++ {
-		handlerNode := node.Children[i]
-		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-			ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
+		checkGoAppHandler(node.Children[i], isCliApp)
+	}
+}
+
+func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
+	if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
+		ast.ReportError("Expected route, defun, struct, import, test, export, module, or middleware definition", handlerNode.Line, handlerNode.Column)
+	}
+	hHead := handlerNode.Children[0].Value
+	switch hHead {
+	case "module":
+		for j := 2; j < len(handlerNode.Children); j++ {
+			checkGoAppHandler(handlerNode.Children[j], isCliApp)
 		}
-		hHead := handlerNode.Children[0].Value
-		switch hHead {
-		case "intent":
-			// skip
-		case "test":
-			if len(handlerNode.Children) < 3 {
-				ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
+	case "export":
+		checkGoAppHandler(handlerNode.Children[1], isCliApp)
+	case "intent":
+		// skip
+	case "test":
+		if len(handlerNode.Children) < 3 {
+			ast.ReportError(`test expects (test "description" body...)`, handlerNode.Line, handlerNode.Column)
+		}
+		descNode := handlerNode.Children[1]
+		if descNode.Type != "STRING" {
+			ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
+		}
+		for j := 2; j < len(handlerNode.Children); j++ {
+			checkGoStatement(handlerNode.Children[j], 0)
+		}
+	case "go_import":
+		if len(handlerNode.Children) != 2 {
+			ast.ReportError(`go_import expects (go_import "pkg")`, handlerNode.Line, handlerNode.Column)
+		}
+		pkgNode := handlerNode.Children[1]
+		if pkgNode.Type != "STRING" {
+			ast.ReportError("go_import package must be a string", pkgNode.Line, pkgNode.Column)
+		}
+	case "struct":
+		if len(handlerNode.Children) < 2 {
+			ast.ReportError("struct expects (struct Name (field type)...)", handlerNode.Line, handlerNode.Column)
+		}
+		for j := 2; j < len(handlerNode.Children); j++ {
+			fieldNode := handlerNode.Children[j]
+			if fieldNode.Type != "List" || len(fieldNode.Children) != 2 {
+				ast.ReportError("struct field expects (name type)", fieldNode.Line, fieldNode.Column)
 			}
-			descNode := handlerNode.Children[1]
-			if descNode.Type != "STRING" {
-				ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
+		}
+	case "schema":
+		if len(handlerNode.Children) < 2 {
+			ast.ReportError(`schema expects (schema "tableName" (column "name" "type")...)`, handlerNode.Line, handlerNode.Column)
+		}
+		for j := 2; j < len(handlerNode.Children); j++ {
+			colNode := handlerNode.Children[j]
+			if colNode.Type != "List" {
+				ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
 			}
-			for j := 2; j < len(handlerNode.Children); j++ {
-				checkGoStatement(handlerNode.Children[j], 0)
+			if len(colNode.Children) == 3 && colNode.Children[0].Value == "column" {
+			} else if len(colNode.Children) == 2 {
+			} else {
+				ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
 			}
-		case "go_import":
-			if len(handlerNode.Children) != 2 {
-				ast.ReportError(`go_import expects (go_import "pkg")`, handlerNode.Line, handlerNode.Column)
+		}
+	case "defun":
+		if len(handlerNode.Children) < 4 {
+			ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
+		}
+		bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
+		checkGoStatement(bodyNode, 0)
+	case "route":
+		if len(handlerNode.Children) != 3 {
+			ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
+		}
+		pathNode := handlerNode.Children[1]
+		if pathNode.Type != "STRING" {
+			ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
+		}
+		reqNodeList := handlerNode.Children[2].Children[1]
+		if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
+			ast.ReportError("Expected exactly 1 argument in lambda (req)", reqNodeList.Line, reqNodeList.Column)
+		}
+		bodyNode := handlerNode.Children[2].Children[2]
+		checkGoStatement(bodyNode, 0)
+	case "middleware":
+		if len(handlerNode.Children) < 3 {
+			ast.ReportError("middleware expects (middleware (lambda (req) body) routes...)", handlerNode.Line, handlerNode.Column)
+		}
+		lambdaNode := handlerNode.Children[1]
+		if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
+			ast.ReportError("middleware expects a lambda", lambdaNode.Line, lambdaNode.Column)
+		}
+		reqNodeList := lambdaNode.Children[1]
+		if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
+			ast.ReportError("middleware lambda expects exactly 1 argument", reqNodeList.Line, reqNodeList.Column)
+		}
+		mwBodyNode := lambdaNode.Children[2]
+		checkGoStatement(mwBodyNode, 0)
+		for j := 2; j < len(handlerNode.Children); j++ {
+			routeNode := handlerNode.Children[j]
+			if routeNode.Type != "List" || len(routeNode.Children) == 0 || routeNode.Children[0].Value != "route" {
+				ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
 			}
-			pkgNode := handlerNode.Children[1]
-			if pkgNode.Type != "STRING" {
-				ast.ReportError("go_import package must be a string", pkgNode.Line, pkgNode.Column)
+			if len(routeNode.Children) != 3 {
+				ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
 			}
-		case "struct":
-			if len(handlerNode.Children) < 2 {
-				ast.ReportError("struct expects (struct Name (field type)...)", handlerNode.Line, handlerNode.Column)
-			}
-			for j := 2; j < len(handlerNode.Children); j++ {
-				fieldNode := handlerNode.Children[j]
-				if fieldNode.Type != "List" || len(fieldNode.Children) != 2 {
-					ast.ReportError("struct field expects (name type)", fieldNode.Line, fieldNode.Column)
-				}
-			}
-		case "schema":
-			if len(handlerNode.Children) < 2 {
-				ast.ReportError(`schema expects (schema "tableName" (column "name" "type")...)`, handlerNode.Line, handlerNode.Column)
-			}
-			for j := 2; j < len(handlerNode.Children); j++ {
-				colNode := handlerNode.Children[j]
-				if colNode.Type != "List" {
-					ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
-				}
-				if len(colNode.Children) == 3 && colNode.Children[0].Value == "column" {
-				} else if len(colNode.Children) == 2 {
-				} else {
-					ast.ReportError("schema column expects (column name type) or (name type)", colNode.Line, colNode.Column)
-				}
-			}
-		case "defun":
-			if len(handlerNode.Children) < 4 {
-				ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
-			}
-			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
-			checkGoStatement(bodyNode, 0)
-		case "route":
-			if len(handlerNode.Children) != 3 {
-				ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
-			}
-			pathNode := handlerNode.Children[1]
+			pathNode := routeNode.Children[1]
 			if pathNode.Type != "STRING" {
 				ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
 			}
-			reqNodeList := handlerNode.Children[2].Children[1]
-			if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
-				ast.ReportError("Expected exactly 1 argument in lambda (req)", reqNodeList.Line, reqNodeList.Column)
-			}
-			bodyNode := handlerNode.Children[2].Children[2]
-			checkGoStatement(bodyNode, 0)
-		case "middleware":
-			if len(handlerNode.Children) < 3 {
-				ast.ReportError("middleware expects (middleware (lambda (req) body) routes...)", handlerNode.Line, handlerNode.Column)
-			}
-			lambdaNode := handlerNode.Children[1]
-			if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
-				ast.ReportError("middleware expects a lambda", lambdaNode.Line, lambdaNode.Column)
-			}
-			reqNodeList := lambdaNode.Children[1]
-			if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
-				ast.ReportError("middleware lambda expects exactly 1 argument", reqNodeList.Line, reqNodeList.Column)
-			}
-			mwBodyNode := lambdaNode.Children[2]
-			checkGoStatement(mwBodyNode, 0)
-			for j := 2; j < len(handlerNode.Children); j++ {
-				routeNode := handlerNode.Children[j]
-				if routeNode.Type != "List" || len(routeNode.Children) == 0 || routeNode.Children[0].Value != "route" {
-					ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
-				}
-				if len(routeNode.Children) != 3 {
-					ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
-				}
-				pathNode := routeNode.Children[1]
-				if pathNode.Type != "STRING" {
-					ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
-				}
-				routeLambdaNode := routeNode.Children[2]
-				routeBodyNode := routeLambdaNode.Children[2]
-				checkGoStatement(routeBodyNode, 0)
-			}
-		default:
-			if isCliApp {
-				checkGoStatement(handlerNode, 0)
-			} else {
-				ast.ReportError("Expected route, defun, struct, import, test, or middleware block", handlerNode.Line, handlerNode.Column)
-			}
+			routeLambdaNode := routeNode.Children[2]
+			routeBodyNode := routeLambdaNode.Children[2]
+			checkGoStatement(routeBodyNode, 0)
+		}
+	default:
+		if isCliApp {
+			checkGoStatement(handlerNode, 0)
+		} else {
+			ast.ReportError("Expected route, defun, struct, import, test, module, export, or middleware block", handlerNode.Line, handlerNode.Column)
 		}
 	}
 }

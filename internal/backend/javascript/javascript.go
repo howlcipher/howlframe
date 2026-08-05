@@ -22,6 +22,39 @@ func BinOpJSToken(head string) string {
 	}
 }
 
+func flattenModulesJS(nodes []*ast.Node) []*ast.Node {
+	var result []*ast.Node
+	for _, node := range nodes {
+		if node.Type == "List" && len(node.Children) > 0 {
+			head := node.Children[0].Value
+			if head == "module" {
+				result = append(result, flattenModulesJS(node.Children[2:])...)
+				continue
+			}
+			if head == "export" && len(node.Children) == 2 {
+				result = append(result, flattenModulesJS([]*ast.Node{node.Children[1]})...)
+				continue
+			}
+		}
+		result = append(result, node)
+	}
+	return result
+}
+
+func sanitizeJSName(name string) string {
+	if !strings.Contains(name, "/") {
+		return name
+	}
+	parts := strings.Split(name, "/")
+	res := parts[0]
+	for _, p := range parts[1:] {
+		if len(p) > 0 {
+			res += "_" + p
+		}
+	}
+	return res
+}
+
 func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
@@ -52,7 +85,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 							args = append(args, generateJSExpression(valNode.Children[j], reqVar, depth+1))
 						}
 					}
-					valStr = fmt.Sprintf("(await %s(%s))", valNode.Children[1].Value, strings.Join(args, ", "))
+					valStr = fmt.Sprintf("(await %s(%s))", sanitizeJSName(valNode.Children[1].Value), strings.Join(args, ", "))
 				} else if funcName == "list" {
 					var items []string
 					for j := 1; j < len(valNode.Children); j++ {
@@ -126,7 +159,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		bodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf("for (let %s of %s) {\n%s\n}", itemNode, listNode, bodyCode)
 	case "call":
-		funcName := ir.Kids[0].Value
+		funcName := sanitizeJSName(ir.Kids[0].Value)
 		var args []string
 		for j := 1; j < len(ir.Kids); j++ {
 			args = append(args, generateJSExpression(ir.Kids[j], reqVar, depth+1))
@@ -274,8 +307,9 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	var appCode string
 	var testCode string
 
-	for i := 1; i < len(node.Children); i++ {
-		handlerNode := node.Children[i]
+	handlers := flattenModulesJS(node.Children[1:])
+	for i := 0; i < len(handlers); i++ {
+		handlerNode := handlers[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
 			appCode += generateJSStatement(handlerNode, "", 0) + "\n"
 			continue
@@ -308,7 +342,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			if len(handlerNode.Children) < 4 {
 				// ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
 			}
-			name := handlerNode.Children[1].Value
+			name := sanitizeJSName(handlerNode.Children[1].Value)
 			argsNode := handlerNode.Children[2]
 
 			var argsList []string

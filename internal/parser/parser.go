@@ -85,7 +85,7 @@ func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 			moduleNode.Children = append(moduleNode.Children, &ast.Node{Type: "STRING", Value: alias, Line: child.Line, Column: child.Column})
 			
 			if includedAst.Type == "List" && len(includedAst.Children) > 0 && includedAst.Children[0].Value == "module" {
-				moduleNode.Children = append(moduleNode.Children, includedAst.Children[1:]...)
+				moduleNode.Children = append(moduleNode.Children, includedAst.Children[2:]...)
 			} else {
 				moduleNode.Children = append(moduleNode.Children, includedAst)
 			}
@@ -115,7 +115,7 @@ func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 			ExpandIncludes(includedAst, filepath.Dir(fullPath), depth+1)
 
 			if includedAst.Type == "List" && len(includedAst.Children) > 0 && includedAst.Children[0].Value == "module" {
-				newChildren = append(newChildren, includedAst.Children[1:]...)
+				newChildren = append(newChildren, includedAst.Children[2:]...)
 			} else {
 				newChildren = append(newChildren, includedAst)
 			}

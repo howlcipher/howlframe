@@ -11,6 +11,39 @@ import (
 
 var CurrentSchemaDDLs []string
 
+func flattenModules(nodes []*ast.Node) []*ast.Node {
+	var result []*ast.Node
+	for _, node := range nodes {
+		if node.Type == "List" && len(node.Children) > 0 {
+			head := node.Children[0].Value
+			if head == "module" {
+				result = append(result, flattenModules(node.Children[2:])...)
+				continue
+			}
+			if head == "export" && len(node.Children) == 2 {
+				result = append(result, flattenModules([]*ast.Node{node.Children[1]})...)
+				continue
+			}
+		}
+		result = append(result, node)
+	}
+	return result
+}
+
+func sanitizeGoName(name string) string {
+	if !strings.Contains(name, "/") {
+		return name
+	}
+	parts := strings.Split(name, "/")
+	res := parts[0]
+	for _, p := range parts[1:] {
+		if len(p) > 0 {
+			res += "_" + strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return res
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	if node.Type != "List" || len(node.Children) == 0 {
@@ -61,8 +94,9 @@ func GenerateCode(node *ast.Node) (string, string) {
 	}
 	seenImports := make(map[string]bool)
 
-	for i := startIndex; i < len(node.Children); i++ {
-		handlerNode := node.Children[i]
+	handlers := flattenModules(node.Children[startIndex:])
+	for i := 0; i < len(handlers); i++ {
+		handlerNode := handlers[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
 			// ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
 		}
@@ -129,7 +163,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			if len(handlerNode.Children) < 2 {
 				// ast.ReportError("struct expects (struct Name (field type)...)", handlerNode.Line, handlerNode.Column)
 			}
-			name := handlerNode.Children[1].Value
+			name := sanitizeGoName(handlerNode.Children[1].Value)
 			funcsCode += fmt.Sprintf("type %s struct {\n", name)
 			for j := 2; j < len(handlerNode.Children); j++ {
 				fieldNode := handlerNode.Children[j]
@@ -152,7 +186,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 				// ast.ReportError("schema expects (schema \"tableName\" (column \"name\" \"type\")...)", handlerNode.Line, handlerNode.Column)
 			}
 			tableName := handlerNode.Children[1].Value
-			structName := tableName
+			structName := sanitizeGoName(tableName)
 			if len(structName) > 0 {
 				structName = strings.ToUpper(structName[:1]) + structName[1:]
 			}
@@ -204,7 +238,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			if len(handlerNode.Children) < 4 {
 				// ast.ReportError("defun expects (defun name (args) body)", handlerNode.Line, handlerNode.Column)
 			}
-			name := handlerNode.Children[1].Value
+			name := sanitizeGoName(handlerNode.Children[1].Value)
 			argsNode := handlerNode.Children[2]
 
 			returnType := "string"
@@ -220,15 +254,15 @@ func GenerateCode(node *ast.Node) (string, string) {
 				cfgNode := handlerNode.Children[j]
 				if cfgNode.Type == "List" && len(cfgNode.Children) >= 3 && cfgNode.Children[0].Value == "type_hint" {
 					varName := cfgNode.Children[1].Value
-					varType := cfgNode.Children[2].Value
+					varType := sanitizeGoName(cfgNode.Children[2].Value)
 					typeHints[varName] = varType
 				} else if cfgNode.Type == "List" && len(cfgNode.Children) >= 2 && cfgNode.Children[0].Value == "type_param" {
-					typeParams = append(typeParams, cfgNode.Children[1].Value)
+					typeParams = append(typeParams, sanitizeGoName(cfgNode.Children[1].Value))
 				} else if cfgNode.Type == "List" && len(cfgNode.Children) >= 1 && cfgNode.Children[0].Value == "type_hints" {
 					for k := 1; k < len(cfgNode.Children); k++ {
 						hintPair := cfgNode.Children[k]
 						if hintPair.Type == "List" && len(hintPair.Children) >= 2 {
-							typeHints[hintPair.Children[0].Value] = hintPair.Children[1].Value
+							typeHints[hintPair.Children[0].Value] = sanitizeGoName(hintPair.Children[1].Value)
 						}
 					}
 				}
@@ -285,7 +319,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			if len(handlerNode.Children) != 4 {
 				// ast.ReportError("lazy_synthesize expects (lazy_synthesize name (args) docstring)", handlerNode.Line, handlerNode.Column)
 			}
-			name := handlerNode.Children[1].Value
+			name := sanitizeGoName(handlerNode.Children[1].Value)
 			argsNode := handlerNode.Children[2]
 			docstring := handlerNode.Children[3].Value
 
@@ -644,7 +678,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			}
 
 			if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-				targetType := valNode.Children[1].Value
+				targetType := sanitizeGoName(valNode.Children[1].Value)
 				bodyVar := valNode.Children[2].Value
 				if bodyVar == "req.body" {
 					bodyVar = reqVar + ".Body"
@@ -679,7 +713,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		successBodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
 
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-			targetType := valNode.Children[1].Value
+			targetType := sanitizeGoName(valNode.Children[1].Value)
 			bodyVar := valNode.Children[2].Value
 			if bodyVar == "req.body" {
 				bodyVar = reqVar + ".Body"
@@ -721,7 +755,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{})()\n", "spawn_lambda")
 		return fmt.Sprintf("		go func() {\n%s%s\n		}()", traceInject, bodyCode)
 	case "call":
-		funcName := ir.Kids[0].Value
+		funcName := sanitizeGoName(ir.Kids[0].Value)
 		var args []string
 		for j := 1; j < len(ir.Kids); j++ {
 			argNode := ir.Kids[j]

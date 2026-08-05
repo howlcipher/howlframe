@@ -58,6 +58,7 @@ type Analysis struct {
 	Bridges                []SchemaBridge
 	OptimizationSignatures []OptimizationSignature
 	Diagnostics            []Diagnostic
+	Private                map[string]bool
 }
 
 type typeEnv map[string]ast.TypeInfo
@@ -70,14 +71,95 @@ func Analyze(root *ast.Node) *Analysis {
 		Types:     make(map[*ast.Node]ast.TypeInfo),
 		Functions: make(map[string]FunctionInfo),
 		Structs:   make(map[string]ast.TypeInfo),
+		Private:   make(map[string]bool),
 	}
 	if root == nil {
 		return a
 	}
+	a.resolveNamespaces(root, "", false)
 	a.collectStructs(root)
 	a.collectFunctions(root)
 	a.inferRoot(root)
 	return a
+}
+
+func (a *Analysis) resolveNamespaces(node *ast.Node, currentModule string, inExport bool) {
+	if node == nil || node.Type != "List" || len(node.Children) == 0 {
+		return
+	}
+	head := node.Children[0].Value
+	if head == "module" && len(node.Children) >= 2 {
+		modName := node.Children[1].Value
+		locals := make(map[string]bool)
+		collectLocals(node, locals)
+		for _, child := range node.Children[2:] {
+			a.renameModuleNodes(child, modName, false, locals)
+		}
+		return
+	}
+	for _, child := range node.Children {
+		a.resolveNamespaces(child, currentModule, inExport)
+	}
+}
+
+func collectLocals(node *ast.Node, locals map[string]bool) {
+	if node == nil || node.Type != "List" || len(node.Children) == 0 {
+		return
+	}
+	head := node.Children[0].Value
+	if head == "module" {
+		return
+	}
+	if head == "export" && len(node.Children) == 2 {
+		collectLocals(node.Children[1], locals)
+		return
+	}
+	if (head == "defun" || head == "lazy_synthesize" || head == "struct" || head == "schema") && len(node.Children) > 1 {
+		locals[node.Children[1].Value] = true
+	}
+	for _, child := range node.Children {
+		collectLocals(child, locals)
+	}
+}
+
+func (a *Analysis) renameModuleNodes(node *ast.Node, modName string, inExport bool, locals map[string]bool) {
+	if node == nil {
+		return
+	}
+	if node.Type == "SYMBOL" || node.Type == "STRING" {
+		if locals[node.Value] {
+			node.Value = modName + "/" + node.Value
+		}
+		return
+	}
+	if node.Type == "List" && len(node.Children) > 0 {
+		head := node.Children[0].Value
+		if head == "module" {
+			return
+		}
+		if head == "export" && len(node.Children) == 2 {
+			a.renameModuleNodes(node.Children[1], modName, true, locals)
+			return
+		}
+		if (head == "defun" || head == "lazy_synthesize" || head == "struct" || head == "schema") && len(node.Children) > 1 {
+			origName := node.Children[1].Value
+			if locals[origName] {
+				newName := modName + "/" + origName
+				node.Children[1].Value = newName
+				if !inExport {
+					a.Private[newName] = true
+				}
+			}
+			a.renameModuleNodes(node.Children[0], modName, inExport, locals)
+			for j := 2; j < len(node.Children); j++ {
+				a.renameModuleNodes(node.Children[j], modName, inExport, locals)
+			}
+			return
+		}
+		for _, child := range node.Children {
+			a.renameModuleNodes(child, modName, inExport, locals)
+		}
+	}
 }
 
 func (a *Analysis) collectStructs(node *ast.Node) {
@@ -292,6 +374,15 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 				if _, isFunc := a.Functions[node.Value]; !isFunc && !isKeyword(node.Value) {
 					if _, isStruct := a.Structs[node.Value]; !isStruct {
 						a.add(node, fmt.Sprintf("undefined reference to %q", node.Value))
+					}
+				}
+				if a.Private[node.Value] {
+					mod := ""
+					if modInfo, ok := env["__module__"]; ok && modInfo.Name != "" {
+						mod = modInfo.Name
+					}
+					if !strings.HasPrefix(node.Value, mod+"/") {
+						a.add(node, fmt.Sprintf("cannot use unexported symbol %q", node.Value))
 					}
 				}
 				result = ast.Layout(ast.Unknown)
@@ -629,6 +720,17 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			}
 		}
 		return ast.Layout(ast.Unknown)
+	case "module":
+		childEnv := cloneEnv(env)
+		moduleInfo := ast.Layout(ast.Unknown)
+		moduleInfo.Name = node.Children[1].Value
+		childEnv["__module__"] = moduleInfo
+		for _, child := range node.Children[2:] {
+			a.infer(child, childEnv)
+		}
+		return ast.Layout(ast.Void)
+	case "export":
+		return a.inferChild(node, 1, env)
 	case "write_file", "mkdir", "exec":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
