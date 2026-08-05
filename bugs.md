@@ -360,3 +360,12 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Impact:** 7/10 (High — silent semantic divergence).
 * **Effort:** 3 (Small — likely just a `fmt.Sprint` formatting difference or nil-handling issue in the Go emitter).
 * **Score:** 2.33 (7 × 1 ÷ 3)
+
+### 44. `ACHIEVE` capability mismatch between ZIR and runtime bytecode
+* **Description:** ZIR lowers the `achieve` construct with a `network` capability requirement (`internal/zir/verifier.go` / `capability.ForConstruct`), but the corresponding runtime bytecode instruction `OpAchieve` has no capability specified in `internal/bytecode/opcode.go`.
+* **Why:** Discovered during improvement #94 (centralizing capability metadata). The mismatch means the compiler expects the operation to require network access, but the VM doesn't enforce it at runtime. Fixing it in #94 would have silently altered the VM's security boundary, violating the scope constraint, so it was recorded here.
+* **Impact:** 4/10 (Medium — missing runtime enforcement for an AI primitive that makes external calls).
+* **Repro:** Run a program with `achieve` under a `-allow-caps` policy without `network`; it succeeds instead of returning `CAPABILITY_DENIED`.
+* **Fix sketch:** Update `OpAchieve` in `internal/bytecode/opcode.go` to use `Capability: capability.Network`, then add/update tests proving it is blocked without the capability.
+* **Status:** Pending — skipped in `TestOpcodeCapabilityDrift` to avoid breaking builds until resolved.
+

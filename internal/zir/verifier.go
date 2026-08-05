@@ -2,6 +2,7 @@ package zir
 
 import (
 	"zero/internal/ast"
+	"zero/internal/capability"
 )
 
 type Verifier struct {
@@ -35,17 +36,17 @@ func (v *Verifier) Verify() []Diagnostic {
 
 	for _, node := range v.Graph.Nodes {
 		// 1. Effect Inference & Capability Requirements (#87 / #79)
-		capReq := getCapability(node.Kind)
-		if capReq != "" {
+		capReq := capability.ForConstruct(node.Kind)
+		if string(capReq) != "" {
 			hasCap := false
 			for _, eff := range node.Effects {
-				if eff.Capability == capReq {
+				if eff.Capability == string(capReq) {
 					hasCap = true
 					break
 				}
 			}
 			if !hasCap {
-				node.Effects = append(node.Effects, Effect{Type: "capability", Capability: capReq})
+				node.Effects = append(node.Effects, Effect{Type: "capability", Capability: string(capReq)})
 			}
 		}
 
@@ -92,31 +93,6 @@ func (v *Verifier) Verify() []Diagnostic {
 	}
 
 	return v.Diagnostics
-}
-
-// getCapability is a hardcoded, ZIR-local capability mapping. It duplicates
-// internal/bytecode/opcode.go's OpInfo table, which is the capability source
-// of truth for the -allow-caps/-run-bc bytecode VM path. The two are not
-// wired together (see improvement #94 in improvements.md, filed alongside
-// this comment): merging them would mean either importing internal/bytecode
-// into internal/zir (a backwards layering dependency - zir is meant to be
-// target/backend-independent) or refactoring bytecode.go's opcode switch,
-// both out of scope for this phase. Keep this list in sync by hand until #94
-// lands.
-func getCapability(kind string) string {
-	switch kind {
-	case "db_connect", "sql_query", "store_open", "store_put", "store_get", "store_delete":
-		return "database"
-	case "fetch", "res", "res_json", "http_server_start", "http_route", "http_server_serve", "llm_generate", "achieve":
-		return "network"
-	case "read_file", "write_file", "mkdir":
-		return "filesystem"
-	case "exec", "spawn", "spawn_agent":
-		return "process"
-	case "env":
-		return "environment"
-	}
-	return ""
 }
 
 // isFeasible has real rejection rules only for target == "wasm" today. Every

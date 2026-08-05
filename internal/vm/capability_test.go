@@ -3,6 +3,7 @@ package vm
 import (
 	"testing"
 	"zero/internal/bytecode"
+	"zero/internal/capability"
 )
 
 // capabilityDenialCode runs a single instruction under the given allow-list
@@ -12,7 +13,7 @@ import (
 // the gate let it through: a denied instruction always panics with
 // CAPABILITY_DENIED before touching the stack, while an allowed instruction
 // either succeeds or fails for an unrelated (non-capability) reason.
-func capabilityDenialCode(inst bytecode.BCInstruction, allowedCaps []bytecode.Capability) (code string) {
+func capabilityDenialCode(inst bytecode.BCInstruction, allowedCaps []capability.Capability) (code string) {
 	vm := &BCVM{
 		env:         NewBcEnv(nil),
 		Limits:      DefaultLimits,
@@ -33,14 +34,14 @@ func capabilityDenialCode(inst bytecode.BCInstruction, allowedCaps []bytecode.Ca
 func TestCapabilityGatePerKind(t *testing.T) {
 	cases := []struct {
 		name string
-		cap  bytecode.Capability
+		cap  capability.Capability
 		inst bytecode.BCInstruction
 	}{
-		{"network", bytecode.CapNetwork, bytecode.BCInstruction{Op: bytecode.OpFetch, OpString: "FETCH"}},
-		{"filesystem", bytecode.CapFilesystem, bytecode.BCInstruction{Op: bytecode.OpReadFile, OpString: "READ_FILE"}},
-		{"process", bytecode.CapProcess, bytecode.BCInstruction{Op: bytecode.OpExec, OpString: "EXEC"}},
-		{"environment", bytecode.CapEnvironment, bytecode.BCInstruction{Op: bytecode.OpEnv, OpString: "ENV"}},
-		{"database", bytecode.CapDatabase, bytecode.BCInstruction{Op: bytecode.OpDbConnect, OpString: "DB_CONNECT"}},
+		{"network", capability.Network, bytecode.BCInstruction{Op: bytecode.OpFetch, OpString: "FETCH"}},
+		{"filesystem", capability.Filesystem, bytecode.BCInstruction{Op: bytecode.OpReadFile, OpString: "READ_FILE"}},
+		{"process", capability.Process, bytecode.BCInstruction{Op: bytecode.OpExec, OpString: "EXEC"}},
+		{"environment", capability.Environment, bytecode.BCInstruction{Op: bytecode.OpEnv, OpString: "ENV"}},
+		{"database", capability.Database, bytecode.BCInstruction{Op: bytecode.OpDbConnect, OpString: "DB_CONNECT"}},
 	}
 
 	for _, tc := range cases {
@@ -51,7 +52,7 @@ func TestCapabilityGatePerKind(t *testing.T) {
 		})
 
 		t.Run(tc.name+"/deniedByOtherCaps", func(t *testing.T) {
-			var otherCaps []bytecode.Capability
+			var otherCaps []capability.Capability
 			for _, other := range cases {
 				if other.cap != tc.cap {
 					otherCaps = append(otherCaps, other.cap)
@@ -63,7 +64,7 @@ func TestCapabilityGatePerKind(t *testing.T) {
 		})
 
 		t.Run(tc.name+"/allowed", func(t *testing.T) {
-			if code := capabilityDenialCode(tc.inst, []bytecode.Capability{tc.cap}); code == "CAPABILITY_DENIED" {
+			if code := capabilityDenialCode(tc.inst, []capability.Capability{tc.cap}); code == "CAPABILITY_DENIED" {
 				t.Fatalf("instruction denied even though %s was allowed", tc.cap)
 			}
 		})

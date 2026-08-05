@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 	"zero/internal/bytecode"
+	"zero/internal/capability"
 )
 
 func TestBytecodeStoreLifecycleAndNamedAttachment(t *testing.T) {
@@ -87,7 +88,7 @@ func newStoreTestVM() *BCVM {
 		env:         NewBcEnv(nil),
 		Limits:      DefaultLimits,
 		stores:      newBCStoreRegistry(),
-		AllowedCaps: []bytecode.Capability{bytecode.CapDatabase},
+		AllowedCaps: []capability.Capability{capability.Database},
 	}
 }
 

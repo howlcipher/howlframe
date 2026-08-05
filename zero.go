@@ -14,6 +14,7 @@ import (
 	"zero/internal/backend/javascript"
 	"zero/internal/backend/wasm"
 	"zero/internal/bytecode"
+	"zero/internal/capability"
 	"zero/internal/checker"
 	"zero/internal/ir"
 	"zero/internal/lexer"
@@ -401,28 +402,28 @@ func reportZirDiagnostics(diags []zir.Diagnostic) {
 	os.Exit(1)
 }
 
-var knownCapabilities = map[bytecode.Capability]bool{
-	bytecode.CapNetwork:     true,
-	bytecode.CapFilesystem:  true,
-	bytecode.CapProcess:     true,
-	bytecode.CapEnvironment: true,
-	bytecode.CapDatabase:    true,
+var knownCapabilities = map[capability.Capability]bool{
+	capability.Network:     true,
+	capability.Filesystem:  true,
+	capability.Process:     true,
+	capability.Environment: true,
+	capability.Database:    true,
 }
 
 // parseAllowedCaps turns -allow-caps into a capability allow-list. An empty
 // or unset flag denies every capability-gated instruction (fail-closed
 // default); RunBytecode always permits CapNone regardless of this list.
-func parseAllowedCaps(raw string) []bytecode.Capability {
+func parseAllowedCaps(raw string) []capability.Capability {
 	if raw == "" {
 		return nil
 	}
-	var caps []bytecode.Capability
+	var caps []capability.Capability
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		cap := bytecode.Capability(part)
+		cap := capability.Capability(part)
 		if !knownCapabilities[cap] {
 			ast.ReportError(fmt.Sprintf("unknown capability in -allow-caps: %q", part), 0, 0)
 		}

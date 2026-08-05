@@ -2,6 +2,7 @@ package bytecode
 
 import (
 	"testing"
+	"zero/internal/capability"
 	"zero/internal/lexer"
 	"zero/internal/parser"
 )
@@ -71,7 +72,7 @@ func assertStoreSpec(t *testing.T, op Opcode, name string, pops int, pushes int)
 	if spec.Name != name || spec.Pops != pops || spec.Pushes != pushes {
 		t.Fatalf("unexpected %s spec: %#v", name, spec)
 	}
-	if spec.Capability != CapDatabase {
-		t.Fatalf("%s capability = %q, want %q", name, spec.Capability, CapDatabase)
+	if spec.Capability != capability.Database {
+		t.Fatalf("%s capability = %q, want %q", name, spec.Capability, capability.Database)
 	}
 }

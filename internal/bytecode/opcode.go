@@ -1,5 +1,9 @@
 package bytecode
 
+import (
+	"zero/internal/capability"
+)
+
 type Opcode uint16
 
 const (
@@ -67,24 +71,13 @@ const (
 	OperandValue  OperandType = "value" // can be string, float64, bool, nil
 )
 
-type Capability string
-
-const (
-	CapNone        Capability = ""
-	CapNetwork     Capability = "network"
-	CapFilesystem  Capability = "filesystem"
-	CapProcess     Capability = "process"
-	CapEnvironment Capability = "environment"
-	CapDatabase    Capability = "database"
-)
-
 type OpcodeSpec struct {
 	Code        Opcode
 	Name        string
 	Operands    []OperandType
 	Pops        int // -1 means variable (based on operand)
 	Pushes      int
-	Capability  Capability
+	Capability  capability.Capability
 	Description string
 }
 
@@ -94,22 +87,22 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpStoreVar:         {Code: OpStoreVar, Name: "STORE_VAR", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Description: "Pops a value and stores it in a new variable"},
 	OpSetVar:           {Code: OpSetVar, Name: "SET_VAR", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Description: "Pops a value and updates an existing variable"},
 	OpTryLet:           {Code: OpTryLet, Name: "TRY_LET", Operands: []OperandType{OperandString, OperandString, OperandInt}, Pops: 0, Pushes: 0, Description: "Try block with let binding"},
-	OpDbConnect:        {Code: OpDbConnect, Name: "DB_CONNECT", Operands: []OperandType{OperandString, OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: CapDatabase, Description: "Connects to a database"},
-	OpSqlQuery:         {Code: OpSqlQuery, Name: "SQL_QUERY", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 1, Capability: CapDatabase, Description: "Executes a SQL query"},
-	OpFetch:            {Code: OpFetch, Name: "FETCH", Operands: []OperandType{}, Pops: 2, Pushes: 1, Capability: CapNetwork, Description: "Fetches a URL"},
-	OpReadFile:         {Code: OpReadFile, Name: "READ_FILE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: CapFilesystem, Description: "Reads a file"},
-	OpWriteFile:        {Code: OpWriteFile, Name: "WRITE_FILE", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: CapFilesystem, Description: "Writes to a file"},
-	OpMkdir:            {Code: OpMkdir, Name: "MKDIR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Capability: CapFilesystem, Description: "Creates a directory"},
-	OpExec:             {Code: OpExec, Name: "EXEC", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Capability: CapProcess, Description: "Executes a shell command"},
+	OpDbConnect:        {Code: OpDbConnect, Name: "DB_CONNECT", Operands: []OperandType{OperandString, OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: capability.Database, Description: "Connects to a database"},
+	OpSqlQuery:         {Code: OpSqlQuery, Name: "SQL_QUERY", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 1, Capability: capability.Database, Description: "Executes a SQL query"},
+	OpFetch:            {Code: OpFetch, Name: "FETCH", Operands: []OperandType{}, Pops: 2, Pushes: 1, Capability: capability.Network, Description: "Fetches a URL"},
+	OpReadFile:         {Code: OpReadFile, Name: "READ_FILE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.Filesystem, Description: "Reads a file"},
+	OpWriteFile:        {Code: OpWriteFile, Name: "WRITE_FILE", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: capability.Filesystem, Description: "Writes to a file"},
+	OpMkdir:            {Code: OpMkdir, Name: "MKDIR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Capability: capability.Filesystem, Description: "Creates a directory"},
+	OpExec:             {Code: OpExec, Name: "EXEC", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Capability: capability.Process, Description: "Executes a shell command"},
 	OpParseJson:        {Code: OpParseJson, Name: "PARSE_JSON", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Description: "Parses JSON from a string variable"},
-	OpSpawn:            {Code: OpSpawn, Name: "SPAWN", Operands: []OperandType{OperandInt}, Pops: 0, Pushes: 0, Capability: CapProcess, Description: "Spawns a background task"},
-	OpRes:              {Code: OpRes, Name: "RES", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: CapNetwork, Description: "Sends an HTTP response"},
-	OpResJson:          {Code: OpResJson, Name: "RES_JSON", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: CapNetwork, Description: "Sends a JSON HTTP response"},
-	OpHttpServerStart:  {Code: OpHttpServerStart, Name: "HTTP_SERVER_START", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 0, Capability: CapNetwork, Description: "Starts an HTTP server"},
-	OpHttpRoute:        {Code: OpHttpRoute, Name: "HTTP_ROUTE", Operands: []OperandType{OperandString, OperandString, OperandInt}, Pops: 0, Pushes: 0, Capability: CapNetwork, Description: "Registers an HTTP route"},
-	OpHttpServerServe:  {Code: OpHttpServerServe, Name: "HTTP_SERVER_SERVE", Operands: []OperandType{}, Pops: 0, Pushes: 0, Capability: CapNetwork, Description: "Serves HTTP requests"},
+	OpSpawn:            {Code: OpSpawn, Name: "SPAWN", Operands: []OperandType{OperandInt}, Pops: 0, Pushes: 0, Capability: capability.Process, Description: "Spawns a background task"},
+	OpRes:              {Code: OpRes, Name: "RES", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: capability.Network, Description: "Sends an HTTP response"},
+	OpResJson:          {Code: OpResJson, Name: "RES_JSON", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: capability.Network, Description: "Sends a JSON HTTP response"},
+	OpHttpServerStart:  {Code: OpHttpServerStart, Name: "HTTP_SERVER_START", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Starts an HTTP server"},
+	OpHttpRoute:        {Code: OpHttpRoute, Name: "HTTP_ROUTE", Operands: []OperandType{OperandString, OperandString, OperandInt}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Registers an HTTP route"},
+	OpHttpServerServe:  {Code: OpHttpServerServe, Name: "HTTP_SERVER_SERVE", Operands: []OperandType{}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Serves HTTP requests"},
 	OpConfidence:       {Code: OpConfidence, Name: "CONFIDENCE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns confidence score for LLM generate"},
-	OpLlmGenerate:      {Code: OpLlmGenerate, Name: "LLM_GENERATE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: CapNetwork, Description: "Generates text using an LLM"},
+	OpLlmGenerate:      {Code: OpLlmGenerate, Name: "LLM_GENERATE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: capability.Network, Description: "Generates text using an LLM"},
 	OpJumpIfFalse:      {Code: OpJumpIfFalse, Name: "JUMP_IF_FALSE", Operands: []OperandType{OperandInt}, Pops: 1, Pushes: 0, Description: "Jumps if top of stack is false"},
 	OpJump:             {Code: OpJump, Name: "JUMP", Operands: []OperandType{OperandInt}, Pops: 0, Pushes: 0, Description: "Unconditional jump"},
 	OpForInit:          {Code: OpForInit, Name: "FOR_INIT", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Initializes a for loop"},
@@ -132,16 +125,16 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpCliArgs:          {Code: OpCliArgs, Name: "CLI_ARGS", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets command line arguments"},
 	OpCliArgsGet:       {Code: OpCliArgsGet, Name: "CLI_ARGS_GET", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Gets a specific command line argument"},
 	OpSleep:            {Code: OpSleep, Name: "SLEEP", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Sleeps for a duration"},
-	OpEnv:              {Code: OpEnv, Name: "ENV", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: CapEnvironment, Description: "Gets an environment variable"},
-	OpSpawnAgent:       {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapProcess, Description: "Spawns an autonomous subagent"},
+	OpEnv:              {Code: OpEnv, Name: "ENV", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.Environment, Description: "Gets an environment variable"},
+	OpSpawnAgent:       {Code: OpSpawnAgent, Name: "SPAWN_AGENT", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: capability.Process, Description: "Spawns an autonomous subagent"},
 	OpTask:             {Code: OpTask, Name: "TASK", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Description: "Defines a task for a subagent"},
 	OpAchieve:          {Code: OpAchieve, Name: "ACHIEVE", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Achieves a target state given a constraint"},
 	OpNeuralCircuit:    {Code: OpNeuralCircuit, Name: "NEURAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Executes an LLM logic circuit with a given number of inputs and an instruction"},
 	OpEphemeralCircuit: {Code: OpEphemeralCircuit, Name: "EPHEMERAL_CIRCUIT", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Description: "Generates an ephemeral specialized model, executes it, and discards it"},
-	OpStoreOpen:        {Code: OpStoreOpen, Name: "STORE_OPEN", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: CapDatabase, Description: "Creates or attaches a named in-memory store handle"},
-	OpStorePut:         {Code: OpStorePut, Name: "STORE_PUT", Operands: []OperandType{OperandString}, Pops: 2, Pushes: 0, Capability: CapDatabase, Description: "Upserts a structured record by key"},
-	OpStoreGet:         {Code: OpStoreGet, Name: "STORE_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: CapDatabase, Description: "Fetches a structured record by key"},
-	OpStoreDelete:      {Code: OpStoreDelete, Name: "STORE_DELETE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: CapDatabase, Description: "Deletes a structured record by key"},
+	OpStoreOpen:        {Code: OpStoreOpen, Name: "STORE_OPEN", Operands: []OperandType{OperandString, OperandString}, Pops: 0, Pushes: 0, Capability: capability.Database, Description: "Creates or attaches a named in-memory store handle"},
+	OpStorePut:         {Code: OpStorePut, Name: "STORE_PUT", Operands: []OperandType{OperandString}, Pops: 2, Pushes: 0, Capability: capability.Database, Description: "Upserts a structured record by key"},
+	OpStoreGet:         {Code: OpStoreGet, Name: "STORE_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: capability.Database, Description: "Fetches a structured record by key"},
+	OpStoreDelete:      {Code: OpStoreDelete, Name: "STORE_DELETE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: capability.Database, Description: "Deletes a structured record by key"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

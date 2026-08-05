@@ -16,6 +16,7 @@ import (
 	"time"
 	"zero/internal/ast"
 	"zero/internal/bytecode"
+	"zero/internal/capability"
 	"zero/internal/ir"
 	"zero/internal/lexer"
 	"zero/internal/parser"
@@ -904,7 +905,7 @@ type BCVM struct {
 	args        []string
 	executed    int
 	Limits      VMLimits
-	AllowedCaps []bytecode.Capability
+	AllowedCaps []capability.Capability
 }
 
 type bcStoreRegistry struct {
@@ -967,7 +968,7 @@ type VmReturn struct {
 	val any
 }
 
-func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []bytecode.Capability) int {
+func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capability.Capability) int {
 	vm := &BCVM{
 		prog:        prog,
 		env:         NewBcEnv(nil),
@@ -1070,7 +1071,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		inst := insts[ip]
 
 		spec := bytecode.Registry[inst.Op]
-		if spec.Capability != bytecode.CapNone {
+		if spec.Capability != capability.None {
 			allowed := false
 			for _, cap := range vm.AllowedCaps {
 				if cap == spec.Capability {
