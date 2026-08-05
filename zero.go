@@ -21,6 +21,7 @@ import (
 	"zero/internal/optimization"
 	"zero/internal/parser"
 	"zero/internal/vm"
+	"zero/internal/zir"
 )
 
 func init() {
@@ -76,6 +77,7 @@ func main() {
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
 	analysis := checker.Check(root)
+	zirModule := filepath.Base(inputFile)
 
 	if *maskPlan {
 		plan, err := json.Marshal(masking.CompileAnalysis(analysis))
@@ -95,10 +97,12 @@ func main() {
 		return
 	}
 	if *validateMode {
+		runZirGate(root, zirModule, zirTargetNone)
 		return
 	}
 
 	if *compileBc {
+		runZirGate(root, zirModule, zirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
@@ -118,6 +122,7 @@ func main() {
 	}
 
 	if *compileWasm {
+		runZirGate(root, zirModule, zirTargetWasm)
 		functionSources, expression, err := ssaWasmProgram(root, analysis)
 		if err != nil {
 			line, column := 0, 0
@@ -160,16 +165,19 @@ func main() {
 	}
 
 	if *runMode {
+		runZirGate(root, zirModule, zirTargetInterpreter)
 		os.Exit(vm.Interpret(root, flag.Args()[1:]))
 	}
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
+		runZirGate(root, zirModule, zirTargetWasm)
 		wasmCode := wasm.GenerateWasmCode(root)
 		wasmFile := filepath.Join(outputDir, "app.wat")
 		if err = writeArtifact(wasmFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", wasmFile, err), 0, 0)
 		}
 	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "web_app" {
+		runZirGate(root, zirModule, zirTargetJavaScript)
 		jsCode, testCode := javascript.GenerateJSCode(root)
 
 		appFile := filepath.Join(outputDir, "app.js")
@@ -188,6 +196,7 @@ func main() {
 			os.Remove(appTestFile)
 		}
 	} else {
+		runZirGate(root, zirModule, zirTargetGo)
 		goCode, testCode := gogen.GenerateCode(root)
 
 		serverFile := filepath.Join(outputDir, "server.go")
@@ -298,6 +307,98 @@ func outputDirectory(args []string, inputFile, configured string) string {
 		return output
 	}
 	return configured
+}
+
+// zirTarget identifies which internal/zir verifier target identity a given
+// source-based compiler path is checked against. Only "wasm" has real
+// feasibility rules in internal/zir/verifier.go's isFeasible today; every
+// other identity below is accepted permissively by that function until
+// per-target rules exist for it (see improvements.md #87 Phase 2 notes).
+// Declaring these once here, instead of scattering literal strings at each
+// dispatch call site, keeps the CLI-mode -> target-identity mapping in one
+// place and gives runZirGate's callers a single source of truth for the
+// spelling.
+type zirTarget string
+
+const (
+	zirTargetNone        zirTarget = ""            // -validate: target-independent
+	zirTargetBytecode    zirTarget = "bytecode"    // -compile-bc
+	zirTargetWasm        zirTarget = "wasm"        // -compile-wasm and legacy wasm_app
+	zirTargetInterpreter zirTarget = "interpreter" // -run
+	zirTargetJavaScript  zirTarget = "javascript"  // web_app
+	zirTargetGo          zirTarget = "go"          // default cli_app/http_server backend
+)
+
+// zirBlockingCodes are the ZIR diagnostic codes currently trusted enough to
+// fail a production build closed. ZIR_UNBOUND_REF is deliberately excluded:
+// verifying against the real tests/*.zero corpus (see
+// TestZirGateAcceptsAllExistingFixtures in zero_test.go) showed it produces
+// false positives on any variable bound via try_let/catch or bound to the
+// result of a dynamically-typed primitive (llm_generate, generics, HTTP
+// lambda parameter field access, etc.) - internal/checker's Analysis.infer
+// (internal/checker/types.go) legitimately types these as ast.Unknown
+// without raising a checker diagnostic (this is intentional dynamic-typing
+// support, not a bug), but the checked AST's TypeInfo does not preserve the
+// difference between "resolved, dynamically typed" and "never resolved" by
+// the time ZIR lowers it - and a genuinely unresolved reference already
+// fails checker.Check before ZIR ever runs, so on real programs
+// ZIR_UNBOUND_REF currently has no reachable true positive, only false
+// positives. Tracked as bugs.md #42. Verify() still computes and returns
+// this diagnostic (internal/zir/verifier.go is unchanged) - this exclusion
+// lives only in the production gate's failure policy, not in the verifier
+// itself, so nothing here silently skips verification.
+var zirBlockingCodes = map[string]bool{
+	"ZIR_INVALID_REF":       true,
+	"ZIR_TARGET_INFEASIBLE": true,
+}
+
+// runZirGate lowers root to a ZIR graph and verifies it against target
+// (zirTargetNone for target-independent validation, used only by
+// -validate). Any lowering error, or any diagnostic whose code is in
+// zirBlockingCodes, is reported as one deterministic JSON array via
+// reportZirDiagnostics before any writeArtifact/backend call runs, so the
+// process exits before producing partial output - the same fail-closed
+// contract checker.Check already enforces via ast.ReportError. This
+// intentionally covers only the subset of verification internal/zir
+// currently implements safely for production (dangling data/control-edge
+// reference and wasm-target feasibility; capability-effect inference always
+// runs as a Verify() side effect but never itself produces a blocking
+// diagnostic) - real control-flow/cycle verification and non-wasm target
+// feasibility are not implemented in internal/zir yet (ControlEdges is
+// declared but never populated by LowerAST, and isFeasible only has rules
+// for "wasm").
+func runZirGate(root *ast.Node, module string, target zirTarget) {
+	graph, err := zir.LowerAST(root, module)
+	if err != nil {
+		line, column := 0, 0
+		if root != nil {
+			line, column = root.Line, root.Column
+		}
+		ast.ReportError(fmt.Sprintf("ZIR lowering failed: %v", err), line, column)
+	}
+
+	diags := zir.NewVerifier(graph, string(target)).Verify()
+	var errDiags []zir.Diagnostic
+	for _, d := range diags {
+		if d.Severity == zir.SeverityError && zirBlockingCodes[d.Code] {
+			errDiags = append(errDiags, d)
+		}
+	}
+	if len(errDiags) > 0 {
+		reportZirDiagnostics(errDiags)
+	}
+}
+
+// reportZirDiagnostics prints every ERROR diagnostic as one deterministic
+// JSON array line (preserving Verify()'s node-order-derived ordering) and
+// exits nonzero, mirroring ast.ReportError's one-line JSON contract without
+// truncating to a single diagnostic - internal/zir/verifier.go's Diagnostics
+// is a slice for a reason, and there is no existing consumer of ZIR
+// diagnostics to stay wire-compatible with yet.
+func reportZirDiagnostics(diags []zir.Diagnostic) {
+	b, _ := json.Marshal(diags)
+	fmt.Println(string(b))
+	os.Exit(1)
 }
 
 var knownCapabilities = map[bytecode.Capability]bool{

@@ -906,3 +906,195 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 		t.Fatalf("bytecode output = %q, want %q", output, expected)
 	}
 }
+
+// TestZirGateAcceptsAllExistingFixtures is the empirical check on
+// improvement #87 Phase 2's production ZIR gate: it must not false-positive
+// on any real, currently-passing tests/*.zero fixture. This must pass before
+// any other ZIR-gate test result is trusted. Two fixtures are skipped as
+// pre-existing, ZIR-unrelated failures that already fail checker.Check
+// before runZirGate is ever reached (confirmed by running them through
+// -validate on the pre-ZIR-gate binary): tests/routes.zero is an
+// include-only fragment with no standalone root, and tests/test_include.zero
+// hits a pre-existing module-system "use" resolution bug (bugs.md #43).
+func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	skip := map[string]bool{
+		"routes.zero":       true,
+		"test_include.zero": true,
+	}
+
+	fixtures, err := filepath.Glob("tests/*.zero")
+	if err != nil {
+		t.Fatalf("failed to glob tests/*.zero: %v", err)
+	}
+	if len(fixtures) == 0 {
+		t.Fatal("expected at least one tests/*.zero fixture")
+	}
+
+	for _, fixture := range fixtures {
+		name := filepath.Base(fixture)
+		if skip[name] {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(zeroBinary, "-validate", fixture)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("ZIR gate false-positived on a known-good fixture: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+// TestZirGateRejectsTargetInfeasibleWasmConstructBeforeArtifact proves
+// genuinely new coverage from wiring ZIR verification into -compile-wasm:
+// spawn_agent/exec are not structurally rejected by checker.Check for a
+// cli_app root (only wasm_app roots get that rejection, via
+// checker.checkWasmApp's own construct whitelist, independent of ZIR - see
+// the comment on the skipped legacy-wasm_app case below), so this is the
+// first point in the pipeline that rejects them for the wasm target.
+func TestZirGateRejectsTargetInfeasibleWasmConstructBeforeArtifact(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "infeasible.zero")
+	source := `(cli_app (spawn_agent "x" (task "y")))`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	cmd := exec.Command(zeroBinary, "-compile-wasm", inputFile)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -compile-wasm to reject a wasm-target-infeasible construct, got success:\n%s", output)
+	}
+	if !strings.Contains(string(output), "ZIR_TARGET_INFEASIBLE") {
+		t.Fatalf("expected ZIR_TARGET_INFEASIBLE in output, got: %s", output)
+	}
+	if _, statErr := os.Stat(inputFile + ".ssa.wat"); !os.IsNotExist(statErr) {
+		t.Fatalf(".ssa.wat must not be written after a ZIR gate rejection: %v", statErr)
+	}
+
+	// Note: the equivalent legacy wasm_app-root fixture
+	// ("(wasm_app (spawn_agent ...))") is NOT tested here because
+	// checker.checkWasmApp already rejects it structurally at
+	// checker.Check time (zero.go:79), before this branch's runZirGate call
+	// is ever reached - confirmed live during implementation. That path's
+	// rejection predates and is independent of this phase's ZIR wiring, so
+	// it would not exercise anything new.
+}
+
+// TestZirGateDiagnosticOrderingIsDeterministic is the CLI-level companion to
+// internal/zir/verifier_test.go's TestVerifierDiagnosticOrderIsDeterministic,
+// confirming the same ordering guarantee survives through
+// reportZirDiagnostics's JSON array output.
+func TestZirGateDiagnosticOrderingIsDeterministic(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "two_infeasible.zero")
+	source := `(cli_app (spawn_agent "x" (task "y")) (exec "ls"))`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	var outputs []string
+	for i := 0; i < 3; i++ {
+		output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile).CombinedOutput()
+		if err == nil {
+			t.Fatalf("run %d: expected -compile-wasm to reject, got success:\n%s", i, output)
+		}
+		outputs = append(outputs, string(output))
+	}
+	for i := 1; i < len(outputs); i++ {
+		if outputs[i] != outputs[0] {
+			t.Fatalf("diagnostic output differs across repeated runs:\nrun 0: %s\nrun %d: %s", outputs[0], i, outputs[i])
+		}
+	}
+	var diags []struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal([]byte(outputs[0]), &diags); err != nil {
+		t.Fatalf("failed to parse diagnostic JSON array: %v\n%s", err, outputs[0])
+	}
+	if len(diags) != 2 || diags[0].Code != "ZIR_TARGET_INFEASIBLE" || diags[1].Code != "ZIR_TARGET_INFEASIBLE" {
+		t.Fatalf("expected exactly 2 ZIR_TARGET_INFEASIBLE diagnostics in order, got: %v", diags)
+	}
+}
+
+// TestValidateModeRunsZirGateAndHasNoSideEffects confirms -validate remains
+// side-effect free now that it also runs the ZIR gate: a valid fixture
+// succeeds and leaves no files behind anywhere in the working directory.
+func TestValidateModeRunsZirGateAndHasNoSideEffects(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	workDir := t.TempDir()
+	inputFile := filepath.Join(workDir, "valid.zero")
+	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	before, err := os.ReadDir(workDir)
+	if err != nil {
+		t.Fatalf("failed to read workDir before running -validate: %v", err)
+	}
+
+	cmd := exec.Command(zeroBinary, "-validate", inputFile)
+	cmd.Dir = workDir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("-validate failed on a valid fixture: %v\n%s", err, output)
+	}
+
+	after, err := os.ReadDir(workDir)
+	if err != nil {
+		t.Fatalf("failed to read workDir after running -validate: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("-validate left files behind: before=%v after=%v", before, after)
+	}
+}
+
+// TestZirGateForCompileBcDoesNotRegressValidPrograms confirms the ZIR gate
+// added to -compile-bc doesn't break a valid program's bytecode compilation.
+// Note: unlike -compile-wasm, there is currently no way to make this gate
+// reject real Zero source through -compile-bc - ZIR_UNBOUND_REF is excluded
+// from the production gate's blocking set (bugs.md #42), ZIR_INVALID_REF
+// cannot arise from LowerAST's own construction on real parsed source (every
+// data/control edge it creates always points at a node it just added), and
+// isFeasible has no rules for the "bytecode" target. This is documented
+// honestly rather than tested against a contrived synthetic failure -
+// bytecode-specific target-feasibility rules are out of scope for this
+// phase (see improvements.md #87's Phase 2 status note).
+func TestZirGateForCompileBcDoesNotRegressValidPrograms(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "valid.zero")
+	outputFile := filepath.Join(tempDir, "valid.bc.bin")
+	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc failed on a valid program after adding the ZIR gate: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(outputFile); err != nil {
+		t.Fatalf("bytecode output was not written: %v", err)
+	}
+}

@@ -40,12 +40,24 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 		Type: astNode.Inferred,
 	}
 
-	if astNode.Type == "STRING" || astNode.Type == "NUMBER" || astNode.Type == "SYMBOL" || astNode.Type == "FLOAT" {
+	// Leaf type strings must track internal/lexer/lexer.go's TokenType
+	// constants exactly (integers lex as "INT", never "NUMBER").
+	if astNode.Type == "STRING" || astNode.Type == "INT" || astNode.Type == "SYMBOL" || astNode.Type == "FLOAT" {
 		node.Kind = "const"
 		if astNode.Type == "SYMBOL" {
 			node.Kind = "symbol"
 		}
 		node.Value = astNode.Value
+		return ctx.Graph.AddNode(node), nil
+	}
+
+	if astNode.Type == "List" && len(astNode.Children) == 0 {
+		// An empty parenthesized list: a zero-argument defun/lambda
+		// parameter list, or an empty list/dict literal. There is no head
+		// symbol to name this node's Kind, so it lowers to an explicit
+		// "empty_list" leaf with no data inputs, rather than falling through
+		// to the unknown-node-type error below.
+		node.Kind = "empty_list"
 		return ctx.Graph.AddNode(node), nil
 	}
 
