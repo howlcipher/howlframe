@@ -69,12 +69,11 @@ func main() {
 	}
 
 	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+	ast.ResolveModules(root)
 
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
-
 	root = ast.ApplyWithContext(root, nil)
-
 	analysis := checker.Check(root)
 
 	if *maskPlan {

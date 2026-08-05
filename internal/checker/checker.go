@@ -312,13 +312,13 @@ func checkGoApp(node *ast.Node) {
 			for j := 2; j < len(handlerNode.Children); j++ {
 				checkGoStatement(handlerNode.Children[j], 0)
 			}
-		case "import":
+		case "go_import":
 			if len(handlerNode.Children) != 2 {
-				ast.ReportError(`import expects (import "pkg")`, handlerNode.Line, handlerNode.Column)
+				ast.ReportError(`go_import expects (go_import "pkg")`, handlerNode.Line, handlerNode.Column)
 			}
 			pkgNode := handlerNode.Children[1]
 			if pkgNode.Type != "STRING" {
-				ast.ReportError("import package must be a string", pkgNode.Line, pkgNode.Column)
+				ast.ReportError("go_import package must be a string", pkgNode.Line, pkgNode.Column)
 			}
 		case "struct":
 			if len(handlerNode.Children) < 2 {

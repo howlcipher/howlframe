@@ -109,13 +109,13 @@ func GenerateCode(node *ast.Node) (string, string) {
 			continue
 		}
 
-		if head == "import" {
+		if head == "go_import" {
 			if len(handlerNode.Children) != 2 {
-				// ast.ReportError("import expects (import \"pkg\")", handlerNode.Line, handlerNode.Column)
+				// ast.ReportError("go_import expects (go_import \"pkg\")", handlerNode.Line, handlerNode.Column)
 			}
 			pkgNode := handlerNode.Children[1]
 			if pkgNode.Type != "STRING" {
-				// ast.ReportError("import package must be a string", pkgNode.Line, pkgNode.Column)
+				// ast.ReportError("go_import package must be a string", pkgNode.Line, pkgNode.Column)
 			}
 			pkg := pkgNode.Value
 			if !defaultImports[pkg] && !seenImports[pkg] {

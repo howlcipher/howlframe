@@ -1,5 +1,5 @@
 (cli_app
-  (import "github.com/mattn/go-sqlite3")
+  (go_import "github.com/mattn/go-sqlite3")
   (schema "users" (column "id" "int") (column "name" "string"))
   (db_connect db "sqlite3" "test.db")
   (sql_query db "INSERT INTO users (id, name) VALUES (1, 'Alice')")
