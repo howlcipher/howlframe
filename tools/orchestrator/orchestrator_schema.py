@@ -52,6 +52,10 @@ class ExecInstruction(BaseModel):
     op: Literal["EXEC"]
     int_operand: int
 
+class ExitInstruction(BaseModel):
+    op: Literal["EXIT"]
+    pass
+
 class FetchInstruction(BaseModel):
     op: Literal["FETCH"]
     pass
@@ -143,6 +147,10 @@ class ReadFileInstruction(BaseModel):
     op: Literal["READ_FILE"]
     pass
 
+class ReadLineInstruction(BaseModel):
+    op: Literal["READ_LINE"]
+    pass
+
 class RegexMatchInstruction(BaseModel):
     op: Literal["REGEX_MATCH"]
     pass
@@ -179,6 +187,10 @@ class SqlQueryInstruction(BaseModel):
     op: Literal["SQL_QUERY"]
     string_operand: str
     string_operand_2: str
+
+class StderrInstruction(BaseModel):
+    op: Literal["STDERR"]
+    pass
 
 class StoreDeleteInstruction(BaseModel):
     op: Literal["STORE_DELETE"]
@@ -237,6 +249,7 @@ Instruction = Annotated[
         EnvInstruction,
         EphemeralCircuitInstruction,
         ExecInstruction,
+        ExitInstruction,
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
@@ -259,6 +272,7 @@ Instruction = Annotated[
         ParseJsonInstruction,
         PrintInstruction,
         ReadFileInstruction,
+        ReadLineInstruction,
         RegexMatchInstruction,
         ResInstruction,
         ResJsonInstruction,
@@ -268,6 +282,7 @@ Instruction = Annotated[
         SpawnInstruction,
         SpawnAgentInstruction,
         SqlQueryInstruction,
+        StderrInstruction,
         StoreDeleteInstruction,
         StoreGetInstruction,
         StoreOpenInstruction,

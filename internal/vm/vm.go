@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -73,8 +74,16 @@ type InterpFunc struct {
 // defun bodies have no closure over caller scope, matching the Go backend's
 // model where defun compiles to an independent top-level function.
 type Interpreter struct {
-	funcs map[string]*InterpFunc
-	args  []string
+	funcs      map[string]*InterpFunc
+	args       []string
+	In         io.Reader
+	Out        io.Writer
+	ErrOut     io.Writer
+	lineReader *bufio.Reader
+}
+
+type VmExit struct {
+	code int
 }
 
 func InterpErr(reason string, node *ast.Node) {
@@ -88,7 +97,7 @@ func InterpErr(reason string, node *ast.Node) {
 // Interpret executes a cli_app AST directly and returns a process exit code.
 // http_server/web_app roots are rejected with a clear error — Phase 1 is
 // cli_app only, per docs/direct_execution_design.md.
-func Interpret(ast *ast.Node, args []string) int {
+func Interpret(ast *ast.Node, args []string, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
 	if ast == nil || ast.Type != "List" || len(ast.Children) == 0 || ast.Children[0].Type != "SYMBOL" {
 		InterpErr("Expected cli_app as root symbol", ast)
 	}
@@ -97,7 +106,23 @@ func Interpret(ast *ast.Node, args []string) int {
 		InterpErr(fmt.Sprintf("-run only supports cli_app in Phase 1 (see docs/direct_execution_design.md); got %q", root), ast.Children[0])
 	}
 
-	interp := &Interpreter{funcs: make(map[string]*InterpFunc), args: args}
+	interp := &Interpreter{
+		funcs:  make(map[string]*InterpFunc),
+		args:   args,
+		In:     in,
+		Out:    out,
+		ErrOut: errOut,
+	}
+	if interp.In == nil {
+		interp.In = os.Stdin
+	}
+	if interp.Out == nil {
+		interp.Out = os.Stdout
+	}
+	if interp.ErrOut == nil {
+		interp.ErrOut = os.Stderr
+	}
+	interp.lineReader = bufio.NewReader(interp.In)
 	globalEnv := NewInterpEnv(nil)
 
 	for _, child := range ast.Children[1:] {
@@ -109,20 +134,28 @@ func Interpret(ast *ast.Node, args []string) int {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				if _, ok := r.(returnSignal); ok {
+				if exit, ok := r.(VmExit); ok {
+					exitCode = exit.code
+					return
+				}
+				if returnSig, ok := r.(returnSignal); ok {
+					if returnSig.value != nil {
+						if num, ok := returnSig.value.(int64); ok {
+							exitCode = int(num)
+						}
+					}
 					return
 				}
 				panic(r)
 			}
 		}()
 		for _, child := range ast.Children[1:] {
-			if IsDefun(child) {
-				continue
+			if !IsDefun(child) {
+				interp.eval(child, globalEnv)
 			}
-			interp.eval(child, globalEnv)
 		}
 	}()
-	return 0
+	return exitCode
 }
 
 func IsDefun(node *ast.Node) bool {
@@ -235,8 +268,31 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, kid := range node.Children[1:] {
 			args = append(args, interp.eval(kid, env))
 		}
-		fmt.Println(args...)
+		var out []string
+		for _, arg := range args {
+			out = append(out, fmt.Sprint(arg))
+		}
+		fmt.Fprintln(interp.Out, strings.Join(out, " "))
 		return nil
+	case "stderr":
+		val := interp.eval(node.Children[1], env)
+		fmt.Fprint(interp.ErrOut, val)
+		return nil
+	case "exit":
+		val := interp.eval(node.Children[1], env)
+		code := int(val.(int64))
+		panic(VmExit{code: code})
+	case "read_line":
+		line, err := interp.lineReader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			InterpErr(fmt.Sprintf("Failed to read line: %v", err), node)
+		}
+		if err == io.EOF && line == "" {
+			return ""
+		}
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\r")
+		return line
 	case "return":
 		if len(node.Children) != 2 {
 			InterpErr("return expects (return val)", node)
@@ -640,7 +696,7 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 				panic(r)
 			}
 		}()
-		interp.eval(fn.body, callEnv)
+		result = interp.eval(fn.body, callEnv)
 	}()
 	return result
 }
@@ -906,6 +962,10 @@ type BCVM struct {
 	executed    int
 	Limits      VMLimits
 	AllowedCaps []capability.Capability
+	In          io.Reader
+	Out         io.Writer
+	ErrOut      io.Writer
+	lineReader  *bufio.Reader
 }
 
 type bcStoreRegistry struct {
@@ -968,7 +1028,7 @@ type VmReturn struct {
 	val any
 }
 
-func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capability.Capability) int {
+func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
 	vm := &BCVM{
 		prog:        prog,
 		env:         NewBcEnv(nil),
@@ -977,15 +1037,32 @@ func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capab
 		stores:      newBCStoreRegistry(),
 		Limits:      DefaultLimits,
 		AllowedCaps: allowedCaps,
+		In:          in,
+		Out:         out,
+		ErrOut:      errOut,
 	}
+	if vm.In == nil {
+		vm.In = os.Stdin
+	}
+	if vm.Out == nil {
+		vm.Out = os.Stdout
+	}
+	if vm.ErrOut == nil {
+		vm.ErrOut = os.Stderr
+	}
+	vm.lineReader = bufio.NewReader(vm.In)
 
 	defer func() {
 		if r := recover(); r != nil {
+			if exit, ok := r.(VmExit); ok {
+				exitCode = exit.code
+				return
+			}
 			if vmerr, ok := r.(*VMError); ok {
-				fmt.Println(vmerr.Error())
+				fmt.Fprintln(vm.ErrOut, vmerr.Error())
 				os.Exit(1)
 			}
-			fmt.Printf("VM internal panic: %v\n", r)
+			fmt.Fprintf(vm.ErrOut, "VM internal panic: %v\n", r)
 			os.Exit(1)
 		}
 	}()
@@ -1696,7 +1773,34 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			for _, v := range vals {
 				out = append(out, fmt.Sprint(v))
 			}
-			fmt.Println(strings.Join(out, " "))
+			fmt.Fprintln(vm.Out, strings.Join(out, " "))
+		case bytecode.OpStderr:
+			val := vm.pop(inst.Op)
+			fmt.Fprint(vm.ErrOut, val)
+		case bytecode.OpExit:
+			val := vm.pop(inst.Op)
+			var code int
+			switch v := val.(type) {
+			case int64:
+				code = int(v)
+			case float64:
+				code = int(v)
+			case int:
+				code = v
+			}
+			panic(VmExit{code: code})
+		case bytecode.OpReadLine:
+			line, err := vm.lineReader.ReadString('\n')
+			if err != nil && err != io.EOF {
+				panic(NewRuntimeError("IO_ERROR", "main", vm.ip, inst.Op, "Failed to read line: %v", err))
+			}
+			if err == io.EOF && line == "" {
+				vm.push("")
+			} else {
+				line = strings.TrimSuffix(line, "\n")
+				line = strings.TrimSuffix(line, "\r")
+				vm.push(line)
+			}
 		case bytecode.OpBinop:
 			b := vm.pop(inst.Op)
 			a := vm.pop(inst.Op)

@@ -61,6 +61,9 @@ const (
 	OpStorePut
 	OpStoreGet
 	OpStoreDelete
+	OpReadLine
+	OpStderr
+	OpExit
 )
 
 type OperandType string
@@ -135,6 +138,9 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpStorePut:         {Code: OpStorePut, Name: "STORE_PUT", Operands: []OperandType{OperandString}, Pops: 2, Pushes: 0, Capability: capability.Database, Description: "Upserts a structured record by key"},
 	OpStoreGet:         {Code: OpStoreGet, Name: "STORE_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: capability.Database, Description: "Fetches a structured record by key"},
 	OpStoreDelete:      {Code: OpStoreDelete, Name: "STORE_DELETE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: capability.Database, Description: "Deletes a structured record by key"},
+	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
+	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
+	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

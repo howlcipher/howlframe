@@ -709,6 +709,28 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "env":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
+	case "read_line":
+		if len(node.Children) != 1 {
+			a.add(node, fmt.Sprintf("read_line expects 0 arguments, got %d", len(node.Children)-1))
+		}
+		return ast.Layout(ast.String)
+	case "stderr":
+		if len(node.Children) != 2 {
+			a.add(node, fmt.Sprintf("stderr expects 1 argument, got %d", len(node.Children)-1))
+		} else {
+			a.inferChild(node, 1, env)
+		}
+		return ast.Layout(ast.Void)
+	case "exit":
+		if len(node.Children) != 2 {
+			a.add(node, fmt.Sprintf("exit expects 1 argument, got %d", len(node.Children)-1))
+		} else {
+			argType := a.inferChild(node, 1, env)
+			if argType.Kind != ast.Int {
+				a.add(node.Children[1], fmt.Sprintf("exit requires int, got %s", typeName(argType)))
+			}
+		}
+		return ast.Layout(ast.Void)
 	case "read_file":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.Bytes)
@@ -942,7 +964,7 @@ func isKeyword(name string) bool {
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
 		"store_get", "store_put", "store_delete", "intent",
 		"optimize_signature", "schema_bridge", "cli_args", "rate_limit",
-		"void", "string", "int", "float", "bool":
+		"void", "string", "int", "float", "bool", "read_line", "stderr", "exit":
 		return true
 	}
 	return false

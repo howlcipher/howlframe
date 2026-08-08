@@ -14,6 +14,7 @@
 | `ENV` |  | 1 | 1 | environment | Gets an environment variable |
 | `EPHEMERAL_CIRCUIT` | int64 | var | 1 |  | Generates an ephemeral specialized model, executes it, and discards it |
 | `EXEC` | int64 | var | 1 | process | Executes a shell command |
+| `EXIT` |  | 1 | 0 |  | Exits the process with a given status code |
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
 | `FOR_NEXT` | string, int64 | 0 | 0 |  | Next iteration of a for loop |
@@ -36,6 +37,7 @@
 | `PARSE_JSON` | string | 0 | 1 |  | Parses JSON from a string variable |
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |
+| `READ_LINE` |  | 0 | 1 |  | Reads a line from standard input |
 | `REGEX_MATCH` |  | 2 | 1 |  | Matches a string against a regex |
 | `RES` |  | 2 | 0 | network | Sends an HTTP response |
 | `RES_JSON` |  | 2 | 0 | network | Sends a JSON HTTP response |
@@ -45,6 +47,7 @@
 | `SPAWN` | int64 | 0 | 0 | process | Spawns a background task |
 | `SPAWN_AGENT` | string | 1 | 0 | process | Spawns an autonomous subagent |
 | `SQL_QUERY` | string, string | 0 | 1 | database | Executes a SQL query |
+| `STDERR` |  | 1 | 0 |  | Prints a value to standard error |
 | `STORE_DELETE` | string | 1 | 0 | database | Deletes a structured record by key |
 | `STORE_GET` | string | 1 | 1 | database | Fetches a structured record by key |
 | `STORE_OPEN` | string, string | 0 | 0 | database | Creates or attaches a named in-memory store handle |

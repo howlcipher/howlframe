@@ -380,6 +380,14 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				insts = append(insts, c.compileNode(arg)...)
 			}
 			insts = append(insts, BCInstruction{OpString: "PRINT", Op: OpPrint, IntOperand: int64(float64(len(node.Children) - 1))})
+		case "stderr":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "STDERR", Op: OpStderr})
+		case "exit":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "EXIT", Op: OpExit})
+		case "read_line":
+			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
 		case "call":
 			funcName := node.Children[1].Value
 			for _, arg := range node.Children[2:] {

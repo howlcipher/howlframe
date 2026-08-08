@@ -60,7 +60,7 @@ func main() {
 		if err := dec.Decode(&prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		os.Exit(vm.RunBytecode(&prog, flag.Args()[1:], parseAllowedCaps(*allowCaps)))
+		os.Exit(vm.RunBytecode(&prog, flag.Args()[1:], parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	lx := lexer.NewLexer(string(content))
@@ -167,7 +167,7 @@ func main() {
 
 	if *runMode {
 		runZirGate(root, zirModule, zirTargetInterpreter)
-		os.Exit(vm.Interpret(root, flag.Args()[1:]))
+		os.Exit(vm.Interpret(root, flag.Args()[1:], os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
