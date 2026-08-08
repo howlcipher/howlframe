@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"zero/internal/ast"
 	"zero/internal/construct"
 	"zero/internal/lexer"
 	"zero/internal/parser"
@@ -915,12 +916,13 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 // TestZirGateAcceptsAllExistingFixtures is the empirical check on
 // improvement #87 Phase 2's production ZIR gate: it must not false-positive
 // on any real, currently-passing tests/*.zero fixture. This must pass before
-// any other ZIR-gate test result is trusted. Two fixtures are skipped as
-// pre-existing, ZIR-unrelated failures that already fail checker.Check
-// before runZirGate is ever reached (confirmed by running them through
+// any other ZIR-gate test result is trusted. One fixture is skipped as a
+// pre-existing, ZIR-unrelated failure that already fails checker.Check
+// before runZirGate is ever reached (confirmed by running it through
 // -validate on the pre-ZIR-gate binary): tests/routes.zero is an
-// include-only fragment with no standalone root, and tests/test_include.zero
-// hits a pre-existing module-system "use" resolution bug (bugs.md #43).
+// include-only fragment with no standalone root, so it is only ever valid
+// when pulled in by an importer. tests/test_include.zero was skipped here
+// too until bugs.md #43 was fixed; it now passes the sweep unexempted.
 func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
 	zeroBinary := filepath.Join(t.TempDir(), "zero")
 	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
@@ -928,8 +930,7 @@ func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
 	}
 
 	skip := map[string]bool{
-		"routes.zero":       true,
-		"test_include.zero": true,
+		"routes.zero": true,
 	}
 
 	fixtures, err := filepath.Glob("tests/*.zero")
@@ -1259,11 +1260,12 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
 	}
 
-	// These two fail earlier, in checker.Check, on a pre-existing module
-	// resolution gap unrelated to construct support (bugs.md #43).
+	// routes.zero is an include-only fragment with no standalone root, so it
+	// fails earlier, in checker.Check, for reasons unrelated to construct
+	// support. (tests/test_include.zero was skipped here too until bugs.md
+	// #43 was fixed.)
 	skip := map[string]bool{
-		"routes.zero":       true,
-		"test_include.zero": true,
+		"routes.zero": true,
 	}
 
 	fixtures, err := filepath.Glob("tests/*.zero")
@@ -1285,7 +1287,13 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read fixture: %v", err)
 			}
+			// Scan the same AST the real -compile-bc path scans: zero.go
+			// expands includes and resolves modules before lowering, so a
+			// raw parse would see (use ...) heads the compiler never does
+			// and report violations -compile-bc does not.
 			root := parser.NewParser(lexer.NewLexer(string(source)), name).ParseExpression()
+			parser.ExpandIncludes(root, filepath.Dir(fixture), 0)
+			ast.ResolveModules(root)
 			violations := construct.Scan(root)
 
 			outputFile := filepath.Join(outDir, name+".bc.bin")
