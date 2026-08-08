@@ -36,6 +36,12 @@
 * Compile-time optimization signatures through `optimize_signature` and
   deterministic `-optimization-plan` JSON, with checker metadata, transparent
   backend execution, documentation, and regression coverage.
+* One authoritative, backend-independent construct-support registry in
+  `internal/construct`, classifying every Zero construct as `Supported`,
+  `CompileTimeOnly`, or `Unsupported` for the standalone bytecode target, with
+  parent-scoped sub-forms and a context-aware AST scan. A drift test parses
+  `compileNode`'s own `switch head` so the registry and the compiler cannot
+  diverge silently.
 
 ### Changed
 
@@ -61,3 +67,21 @@
   Ephemeral Neural Circuits detail section.
 * `-compile-bc` now accepts `-o <file>` after the input path for exact bytecode
   output files while keeping the existing output-directory behavior.
+* `-compile-bc` now fails closed on any construct the bytecode compiler cannot
+  lower, reporting a `ZIR_TARGET_INFEASIBLE` diagnostic that names the
+  construct, its source location, and the backlog item that owns the gap, and
+  writing no artifact. Type annotations and forms consumed by earlier passes
+  are classified separately and keep compiling unchanged.
+
+### Fixed
+
+* `-compile-bc` silently dropped every construct the bytecode compiler did not
+  recognize. `compileNode`'s head switch had no `default` case, so unknown
+  heads compiled to zero instructions and the resulting program ran to exit 0
+  while skipping them entirely: `tests/test_advanced_control.zero` produced no
+  output at all instead of `zero`/`one`/`other`. Unsupported constructs are now
+  rejected before an artifact is written, and `compileNode` has a fail-closed
+  backstop for callers that bypass the gate.
+* `type_hints` and `type_param` had no `compileNode` case and were only handled
+  by accident, through that same silent fall-through. They now have explicit
+  no-op cases alongside `type_hint`.

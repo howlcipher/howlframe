@@ -32,28 +32,28 @@ func TestStandaloneCLISemantics(t *testing.T) {
 		wantExit   int
 	}{
 		{
-			name: "stdin",
-			code: `(cli_app (let (name (read_line)) (print name)))`,
-			stdin: "Ada\n",
+			name:       "stdin",
+			code:       `(cli_app (let (name (read_line)) (print name)))`,
+			stdin:      "Ada\n",
 			wantStdout: "Ada\n",
-			wantExit: 0,
+			wantExit:   0,
 		},
 		{
-			name: "stderr",
-			code: `(cli_app (stderr "warning\n") (print "ok"))`,
+			name:       "stderr",
+			code:       `(cli_app (stderr "warning\n") (print "ok"))`,
 			wantStdout: "ok\n",
 			wantStderr: "warning\n",
+			wantExit:   0,
+		},
+		{
+			name:     "exit 0",
+			code:     `(cli_app (exit 0))`,
 			wantExit: 0,
 		},
 		{
-			name: "exit 0",
-			code: `(cli_app (exit 0))`,
-			wantExit: 0,
-		},
-		{
-			name: "exit 7",
-			code: `(cli_app (exit 7) (print "never"))`,
-			wantExit: 7,
+			name:       "exit 7",
+			code:       `(cli_app (exit 7) (print "never"))`,
+			wantExit:   7,
 			wantStdout: "",
 		},
 		{
@@ -65,9 +65,9 @@ func TestStandaloneCLISemantics(t *testing.T) {
         (stderr "input required")
         (exit 2))
       (print value))))`,
-			stdin: "",
+			stdin:      "",
 			wantStderr: "input required",
-			wantExit: 2,
+			wantExit:   2,
 		},
 		{
 			name: "combined success",
@@ -78,9 +78,9 @@ func TestStandaloneCLISemantics(t *testing.T) {
         (stderr "input required")
         (exit 2))
       (print value))))`,
-			stdin: "hello\n",
+			stdin:      "hello\n",
 			wantStdout: "hello\n",
-			wantExit: 0,
+			wantExit:   0,
 		},
 	}
 
@@ -89,7 +89,7 @@ func TestStandaloneCLISemantics(t *testing.T) {
 			node, _ := parseAndCompile(t, tt.code)
 			in := strings.NewReader(tt.stdin)
 			var out, errOut bytes.Buffer
-			
+
 			exitCode := Interpret(node, nil, in, &out, &errOut)
 			if exitCode != tt.wantExit {
 				t.Errorf("exitCode = %d, want %d", exitCode, tt.wantExit)
@@ -106,7 +106,7 @@ func TestStandaloneCLISemantics(t *testing.T) {
 			_, prog := parseAndCompile(t, tt.code)
 			in := strings.NewReader(tt.stdin)
 			var out, errOut bytes.Buffer
-			
+
 			exitCode := RunBytecode(prog, nil, nil, in, &out, &errOut)
 			if exitCode != tt.wantExit {
 				t.Errorf("exitCode = %d, want %d", exitCode, tt.wantExit)

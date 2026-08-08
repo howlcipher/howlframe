@@ -22,14 +22,14 @@ Key design points:
 
 - **Uniform syntax:** Zero source is built from balanced S-expressions, which are easier to grammar-constrain than full-size general-purpose languages.
 - **Semantic feedback:** Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted.
-- **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping.
+- **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. Coverage differs by target: the standalone bytecode target enforces this against an authoritative construct-support registry (`internal/construct`), so anything it cannot lower fails before an artifact is written rather than being silently dropped.
 - **Multiple execution paths:** The same front end can feed Go, JavaScript, WAT, direct interpretation, or bytecode depending on the root node and flags.
 
 ## Current State
 
 Zero is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
 
-The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors. The bytecode VM also supports an in-memory native store for structured records through `store_open`, `store_put`, `store_get`, and `store_delete`.
+The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors: the interpreter fails closed at the point of evaluation, and `-compile-bc` fails closed at compile time with a `ZIR_TARGET_INFEASIBLE` diagnostic naming the construct, its source location, and the backlog item that owns the gap. The bytecode VM also supports an in-memory native store for structured records through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
 See:
 
@@ -201,7 +201,7 @@ Zero supports the core control-flow and data primitives expected by the shipped 
 - `test` blocks that generate Go or Node tests depending on the target.
 - Bytecode-native record stores through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
-AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `optimize_signature`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive; unsupported combinations should fail during checking or execution instead of being silently accepted.
+AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `optimize_signature`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive. On the standalone bytecode target that difference is enforced: `internal/construct` classifies every construct as `Supported`, `CompileTimeOnly`, or `Unsupported`, and `-compile-bc` rejects the unsupported ones before emitting an artifact. The Go backend deliberately stays permissive, because it supports a large open set of heads.
 
 ## Constrained Decoding Plans
 
