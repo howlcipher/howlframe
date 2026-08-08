@@ -2,6 +2,7 @@ package bytecode
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"strconv"
 	"zero/internal/ast"
@@ -130,8 +131,11 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				LazySynthesize: true,
 				Docstring:      docstring,
 			}
-		case "type_hint":
-			// ignore type hints in execution
+		case "type_hint", "type_hints", "type_param":
+			// Type annotations carry no runtime meaning; they emit no
+			// instructions by design. They need explicit cases rather
+			// than falling through to the default below, which now
+			// fails closed (bugs.md #45).
 
 		case "try_let":
 			binding := node.Children[1]
@@ -470,6 +474,24 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			for _, child := range node.Children[1:] {
 				insts = append(insts, c.compileNode(child)...)
 			}
+		default:
+			// Fail-closed backstop (bugs.md #45). This switch used to
+			// have no default, so an unrecognized head compiled to zero
+			// instructions and the construct - plus everything nested
+			// inside it - vanished from the artifact with exit code 0.
+			//
+			// Programs reaching here have already passed
+			// zir.VerifyConstructs via zero.go's runZirGate, so this is
+			// unreachable through the CLI. It exists so a future caller
+			// that compiles without that gate still cannot emit a
+			// silently truncated program.
+			//
+			// A strict allow-list is safe because the structural lists
+			// that are not constructs - let/try_let bindings, dict
+			// key/value pairs, defun and lambda parameter lists - are
+			// destructured by their own cases above and never reach
+			// compileNode in head position.
+			ast.ReportError(fmt.Sprintf("bytecode compiler has no lowering for construct %q", head), node.Children[0].Line, node.Children[0].Column)
 		}
 	}
 	return insts

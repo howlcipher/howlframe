@@ -379,6 +379,17 @@ func runZirGate(root *ast.Node, module string, target zirTarget) {
 	}
 
 	diags := zir.NewVerifier(graph, string(target)).Verify()
+
+	// Construct-support verification runs over the AST rather than the
+	// lowered graph, because LowerAST names a node's Kind after the head of
+	// every list - including let bindings and sub-forms their parent
+	// destructures itself - so a rule matching on Kind would reject correct
+	// programs (bugs.md #45). Its diagnostics use ZIR_TARGET_INFEASIBLE,
+	// already in zirBlockingCodes, so the gate below fails closed before
+	// bytecode.CompileToBytecode and writeArtifact with no change to this
+	// gate's failure policy.
+	diags = append(diags, zir.VerifyConstructs(root, string(target))...)
+
 	var errDiags []zir.Diagnostic
 	for _, d := range diags {
 		if d.Severity == zir.SeverityError && zirBlockingCodes[d.Code] {

@@ -8,6 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"zero/internal/construct"
+	"zero/internal/lexer"
+	"zero/internal/parser"
+	"zero/internal/zir"
 )
 
 func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
@@ -1096,5 +1101,216 @@ func TestZirGateForCompileBcDoesNotRegressValidPrograms(t *testing.T) {
 	}
 	if _, err := os.Stat(outputFile); err != nil {
 		t.Fatalf("bytecode output was not written: %v", err)
+	}
+}
+
+// TestZirTargetBytecodeMatchesVerifierConstant keeps the CLI's target
+// identity and internal/zir's construct-support rule spelled the same way. If
+// they drift, -compile-bc silently stops being gated at all.
+func TestZirTargetBytecodeMatchesVerifierConstant(t *testing.T) {
+	if string(zirTargetBytecode) != zir.TargetBytecode {
+		t.Fatalf("zirTargetBytecode = %q, but zir.TargetBytecode = %q", zirTargetBytecode, zir.TargetBytecode)
+	}
+}
+
+// TestCompileBcFailsClosedOnUnsupportedConstruct is the direct regression test
+// for bugs.md #45. Before the fix, this fixture compiled to an artifact with
+// exit code 0 and then ran producing no output at all - the match expression,
+// which should print zero/one/other, was dropped by compileNode's switch
+// because it had no default case.
+func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	outputFile := filepath.Join(t.TempDir(), "advanced.bc.bin")
+	cmd := exec.Command(zeroBinary, "-compile-bc", "tests/test_advanced_control.zero", "-o", outputFile)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -compile-bc to reject an unsupported construct, got success:\n%s", output)
+	}
+	for _, want := range []string{"ZIR_TARGET_INFEASIBLE", `\"match\"`} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("expected %s in output, got: %s", want, output)
+		}
+	}
+	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
+		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
+	}
+}
+
+// TestCompileBcFailsClosedCitingOwningTracker proves the diagnostic points at
+// the backlog item that owns the gap, so the failure is actionable rather than
+// just a wall.
+func TestCompileBcFailsClosedCitingOwningTracker(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	outputFile := filepath.Join(t.TempDir(), "void.bc.bin")
+	cmd := exec.Command(zeroBinary, "-compile-bc", "tests/test_void_defun.zero", "-o", outputFile)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -compile-bc to reject a test block, got success:\n%s", output)
+	}
+	for _, want := range []string{"ZIR_TARGET_INFEASIBLE", `\"test\"`, "improvements.md #96"} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("expected %s in output, got: %s", want, output)
+		}
+	}
+	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
+		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
+	}
+}
+
+// TestCompileBcFailsClosedOnUnknownHead covers the open-ended half of the bug:
+// a head nobody has ever implemented used to pass -validate AND -compile-bc,
+// and the resulting program ran to exit 0 while skipping it.
+func TestCompileBcFailsClosedOnUnknownHead(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "bogus.zero")
+	outputFile := filepath.Join(tempDir, "bogus.bc.bin")
+	source := `(cli_app (do (print "before") (totally_made_up_head "x" 42) (print "after")))`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -compile-bc to reject an unknown head, got success:\n%s", output)
+	}
+	if !strings.Contains(string(output), "totally_made_up_head") {
+		t.Errorf("expected the offending head to be named, got: %s", output)
+	}
+	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
+		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
+	}
+}
+
+// TestCompileBcAcceptsCompileTimeOnlyAnnotations proves the fix distinguishes
+// "emits no instructions because it is an annotation" from "emits no
+// instructions because nobody implemented it". type_hint, type_hints and
+// type_param must still compile AND run unchanged.
+func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "annotated.zero")
+	outputFile := filepath.Join(tempDir, "annotated.bc.bin")
+	source := `(cli_app
+  (defun add (a b)
+    (type_hints (a int) (b int) (return int))
+    (return (+ a b))
+  )
+  (defun shout (a)
+    (type_hint return "void")
+    (print a)
+  )
+  (do
+    (print (call add 2 3))
+    (call shout "done")
+  )
+)`
+	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("failed to write input: %v", err)
+	}
+
+	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected a CompileTimeOnly annotation: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(outputFile); err != nil {
+		t.Fatalf("bytecode output was not written: %v", err)
+	}
+
+	output, err := exec.Command(zeroBinary, "-run-bc", outputFile).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc failed: %v\n%s", err, output)
+	}
+	got := strings.TrimSpace(string(output))
+	if got != "5\ndone" {
+		t.Fatalf("-run-bc output = %q, want \"5\\ndone\"", got)
+	}
+}
+
+// TestCompileBcCorpusPartitionMatchesRegistry is the empirical guard for the
+// whole change, and it exists because TestZirGateAcceptsAllExistingFixtures
+// cannot serve that role: that test runs -validate, which uses zirTargetNone,
+// and internal/zir's Verify only applies target rules for a non-empty target -
+// so it never reaches the construct-support check at all.
+//
+// For every tracked fixture, -compile-bc's exit status must agree exactly with
+// construct.Scan. A fixture that fails closed without a registered violation
+// is a false positive; one that compiles despite a violation means the gate
+// was bypassed.
+func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+
+	// These two fail earlier, in checker.Check, on a pre-existing module
+	// resolution gap unrelated to construct support (bugs.md #43).
+	skip := map[string]bool{
+		"routes.zero":       true,
+		"test_include.zero": true,
+	}
+
+	fixtures, err := filepath.Glob("tests/*.zero")
+	if err != nil {
+		t.Fatalf("failed to glob tests/*.zero: %v", err)
+	}
+	if len(fixtures) == 0 {
+		t.Fatal("expected at least one tests/*.zero fixture")
+	}
+
+	outDir := t.TempDir()
+	for _, fixture := range fixtures {
+		name := filepath.Base(fixture)
+		if skip[name] {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			source, err := os.ReadFile(fixture)
+			if err != nil {
+				t.Fatalf("failed to read fixture: %v", err)
+			}
+			root := parser.NewParser(lexer.NewLexer(string(source)), name).ParseExpression()
+			violations := construct.Scan(root)
+
+			outputFile := filepath.Join(outDir, name+".bc.bin")
+			output, runErr := exec.Command(zeroBinary, "-compile-bc", fixture, "-o", outputFile).CombinedOutput()
+
+			if len(violations) == 0 {
+				if runErr != nil {
+					t.Fatalf("-compile-bc failed on a fixture the registry considers supported: %v\n%s", runErr, output)
+				}
+				if _, err := os.Stat(outputFile); err != nil {
+					t.Fatalf("bytecode output was not written: %v", err)
+				}
+				return
+			}
+
+			if runErr == nil {
+				t.Fatalf("-compile-bc accepted a fixture containing %q; the gate was bypassed:\n%s",
+					violations[0].Name, output)
+			}
+			if !strings.Contains(string(output), violations[0].Name) {
+				t.Errorf("expected the diagnostic to name %q, got: %s", violations[0].Name, output)
+			}
+			if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
+				t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
+			}
+		})
 	}
 }
