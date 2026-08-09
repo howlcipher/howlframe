@@ -1,4 +1,4 @@
-;; Regression fixture for improvement #72 (Standalone Zero Runtime Phase 2a):
+;; Regression fixture for improvement #72 (Standalone HowlFrame Runtime Phase 2a):
 ;; exercises a helper `defun` called from inside a `while` loop body, proving
 ;; multi-function Wasm modules and structured loops compose. Sums the squares
 ;; of 1..5 (1 + 4 + 9 + 16 + 25 = 55).

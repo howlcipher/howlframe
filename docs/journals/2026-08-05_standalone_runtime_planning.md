@@ -19,23 +19,23 @@
 - **Error handling:** `try_let` exists, though its flexibility with arbitrary errors in the VM needs expansion.
 
 ### Program structure
-- **Modules (`use`, `export`):** Implemented in the semantic checker and Go/JS backends, but completely missing in ZIR lowering and the bytecode VM.
+- **Modules (`use`, `export`):** Implemented in the semantic checker and Go/JS backends, but completely missing in HFIR lowering and the bytecode VM.
 - **Multi-file compilation / nested modules:** Partial (via `include`), but proper module boundary encapsulation is pending.
 
 ### Testing
-- **Executing Zero `test` blocks in the VM:** Missing. Currently only emitted to `server_test.go`.
+- **Executing HowlFrame `test` blocks in the VM:** Missing. Currently only emitted to `server_test.go`.
 - **Unit/Workflow tests, Test results/fixtures:** Missing native support for structured test output or capability-aware test mocks.
 
 ### Artifact and runtime contract
 - **Bytecode packaging:** `gob` serialization works, but lacks hashes, source maps, a capability manifest envelope, artifact validation, or explicit versioning boundaries. 
 
 ### Tooling and distribution
-- **Validation and Dev runs:** `zero -validate` and `zero -run` exist.
+- **Validation and Dev runs:** `howlframe -validate` and `howlframe -run` exist.
 - **Project lifecycle (creation, tests, packaging, installation):** Missing.
 
 ## 2. Runtime Coverage Inventory
 
-| Construct | Checker | ZIR | Verifier | Bytecode | VM | Interpreter | Capability | Tests | Status | Gap | Tracker |
+| Construct | Checker | HFIR | Verifier | Bytecode | VM | Interpreter | Capability | Tests | Status | Gap | Tracker |
 |-----------|---------|-----|----------|----------|----|-------------|------------|-------|--------|-----|---------|
 | `let`/`set` | Yes | Yes | Yes | Yes | Yes | Yes | None | Yes | stable | None | - |
 | `if`/`while`/`for` | Yes | Yes | Yes | Yes | Yes | Yes | None | Yes | stable | None | - |
@@ -58,8 +58,8 @@
 | HTTP/Network primitives | Yes | Yes | Yes | Yes | Yes | No | Network | Yes | partial | Not in `-run` interpreter | - |
 | Database/Store primitives | Yes | Yes | Yes | Yes | Yes | No | Database | Yes | partial | Not in `-run` interpreter | - |
 | AI Primitives | Yes | Yes | Yes | Yes | Yes | Partial | Network/Proc | Yes | partial | `achieve` in interp, others vary | - |
-| `use`/`export` | Yes | No | No | No | No | No | None | No | unsupported | Missing in ZIR/Bytecode/VM | #95 |
-| `test` blocks | Yes | No | No | No | No | No | None | No | unsupported | Missing in ZIR/Bytecode/VM | #96 |
+| `use`/`export` | Yes | No | No | No | No | No | None | No | unsupported | Missing in HFIR/Bytecode/VM | #95 |
+| `test` blocks | Yes | No | No | No | No | No | None | No | unsupported | Missing in HFIR/Bytecode/VM | #96 |
 | `stdin`/`stderr` | No | No | No | No | No | No | None | No | unsupported | No opcodes exist | #97 |
 | `exit` | No | No | No | No | No | No | None | No | unsupported | No opcodes exist | #97 |
 
@@ -95,7 +95,7 @@
 No new bugs added. Discrepancies between checker and VM (like `use`/`export` and `test`) represent missing implementation phases, not broken implementations, so they belong in improvements.
 
 ### New Improvements Added
-- **Improvement #95**: Standalone Runtime: ZIR and Bytecode VM support for module `use` and `export`.
+- **Improvement #95**: Standalone Runtime: HFIR and Bytecode VM support for module `use` and `export`.
 - **Improvement #96**: Standalone Runtime: Execute `test` blocks natively in the VM.
 - **Improvement #97**: Standalone Runtime CLI Semantics: Phase 1 (stdin, stderr, exit codes).
 - **Improvement #98**: Standalone Runtime Artifacts: Define explicit artifact validation, hashing, and versioning.
@@ -114,4 +114,4 @@ No new bugs added. Discrepancies between checker and VM (like `use`/`export` and
 Prioritization principle #5 says "Add stdin, stderr, and explicit exit codes." Without these, building reliable CLI applications is impossible. The VM currently can only write to stdout (via `print`) and always exits 0 unless a panic occurs. 
 
 **Risks and blockers:**
-None. This is well-isolated. It requires updating `internal/bytecode/opcode.go`, AST lowering, the VM execution loop, and `zero.go` flag outputs. Implementation code was not changed during this planning session.
+None. This is well-isolated. It requires updating `internal/bytecode/opcode.go`, AST lowering, the VM execution loop, and `howlframe.go` flag outputs. Implementation code was not changed during this planning session.

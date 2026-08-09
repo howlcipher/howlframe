@@ -14,13 +14,13 @@ while (true)
 
     if (ctx.Request.Url?.AbsolutePath == "/json")
     {
-        var msg = new { status = "success", message = "Hello from Zero JSON endpoint!" };
+        var msg = new { status = "success", message = "Hello from HowlFrame JSON endpoint!" };
         buffer = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(msg));
         res.ContentType = "application/json";
     }
     else
     {
-        buffer = Encoding.UTF8.GetBytes("Hello, World! Zero language is alive!");
+        buffer = Encoding.UTF8.GetBytes("Hello, World! HowlFrame language is alive!");
         res.ContentType = "text/plain";
     }
 

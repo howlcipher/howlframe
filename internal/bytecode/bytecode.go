@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/howlcipher/howlframe/internal/ast"
 	"strconv"
-	"zero/internal/ast"
 )
 
 type BCInstruction struct {
@@ -481,7 +481,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			// inside it - vanished from the artifact with exit code 0.
 			//
 			// Programs reaching here have already passed
-			// zir.VerifyConstructs via zero.go's runZirGate, so this is
+			// hfir.VerifyConstructs via howlframe.go's runHFIRGate, so this is
 			// unreachable through the CLI. It exists so a future caller
 			// that compiles without that gate still cannot emit a
 			// silently truncated program.

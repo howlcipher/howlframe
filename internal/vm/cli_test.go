@@ -2,18 +2,18 @@ package vm
 
 import (
 	"bytes"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 	"strings"
 	"testing"
-	"zero/internal/ast"
-	"zero/internal/bytecode"
-	"zero/internal/lexer"
-	"zero/internal/parser"
 )
 
 func parseAndCompile(t *testing.T, code string) (*ast.Node, *bytecode.BCProgram) {
 	t.Helper()
 	l := lexer.NewLexer(code)
-	p := parser.NewParser(l, "test.zero")
+	p := parser.NewParser(l, "test.howl")
 	node := p.ParseExpression()
 	ast.ApplyPatches(node)
 	node = ast.ApplyWithContext(node, nil)

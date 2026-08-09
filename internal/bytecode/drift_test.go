@@ -1,14 +1,14 @@
 package bytecode
 
 import (
+	"github.com/howlcipher/howlframe/internal/capability"
 	"strings"
 	"testing"
-	"zero/internal/capability"
 )
 
 func TestOpcodeCapabilityDrift(t *testing.T) {
 	// For every capability-bearing opcode, verify it matches the capability
-	// inferred for the corresponding Zero construct (lowercased name).
+	// inferred for the corresponding HowlFrame construct (lowercased name).
 	for _, spec := range Registry {
 		constructName := strings.ToLower(spec.Name)
 		expectedCap := capability.ForConstruct(constructName)

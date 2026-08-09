@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"zero/internal/construct"
+	"github.com/howlcipher/howlframe/internal/construct"
 )
 
 // compileNodeHeads extracts the head symbols compileNode actually dispatches

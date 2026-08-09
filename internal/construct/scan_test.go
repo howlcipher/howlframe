@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"zero/internal/ast"
-	"zero/internal/lexer"
-	"zero/internal/parser"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
 
 func writeFile(t *testing.T, dir, name, content string) {
@@ -19,7 +19,7 @@ func writeFile(t *testing.T, dir, name, content string) {
 
 func parse(t *testing.T, source string) *parser.Parser {
 	t.Helper()
-	return parser.NewParser(lexer.NewLexer(source), "scan_test.zero")
+	return parser.NewParser(lexer.NewLexer(source), "scan_test.howl")
 }
 
 func scan(t *testing.T, source string) []Violation {
@@ -47,7 +47,7 @@ func assertClean(t *testing.T, name, source string) {
 // for bugs.md #45's implementation caveat. Each of these programs contains a
 // list whose head symbol is NOT a construct - a bound variable name, a
 // parameter, a dict key, or a sub-form the parent destructures itself. A
-// support check matching on head symbols alone (as a deny-list over ZIR node
+// support check matching on head symbols alone (as a deny-list over HFIR node
 // kinds would) rejects all of them.
 func TestScanAcceptsStructuralListsThatAreNotConstructs(t *testing.T) {
 	cases := []struct{ name, source string }{
@@ -97,7 +97,7 @@ func TestScanAcceptsStructuralListsThatAreNotConstructs(t *testing.T) {
 		},
 		{
 			// (test "cmd") here is optimize_signature metadata, not a
-			// test block. tests/optimization_signature.zero relies on
+			// test block. tests/optimization_signature.howl relies on
 			// this and is NOT exempt in tools/difftest/manifest.json.
 			"optimize_signature metadata",
 			`(cli_app (optimize_signature p (metric "accuracy") (test "go test ./...") (candidate "a" "A") (print "body")))`,
@@ -115,12 +115,12 @@ func TestScanAcceptsStructuralListsThatAreNotConstructs(t *testing.T) {
 		{
 			// improvements.md #95: use/export/module are CompileTimeOnly -
 			// parser.ExpandIncludes/ast.ResolveModules always resolve them
-			// before checker.Check or the ZIR gate run (zero.go:74-75), so a
+			// before checker.Check or the HFIR gate run (howlframe.go:74-75), so a
 			// raw, unresolved (use ...) node scans clean here. Its children
 			// are a string and symbols, not lists, so there is nothing for
 			// Scan to descend into either.
 			"raw unresolved use node",
-			`(http_server 8081 (use "routes.zero" as routes))`,
+			`(http_server 8081 (use "routes.howl" as routes))`,
 		},
 	}
 
@@ -132,12 +132,12 @@ func TestScanAcceptsStructuralListsThatAreNotConstructs(t *testing.T) {
 // TestScanAcceptsResolvedModuleProgram proves the real invariant behind
 // use/export/module's CompileTimeOnly classification (improvements.md #95):
 // a program that has actually been through parser.ExpandIncludes and
-// ast.ResolveModules - the same steps zero.go runs before the ZIR gate -
+// ast.ResolveModules - the same steps howlframe.go runs before the HFIR gate -
 // scans clean, because those passes fully consume every module/use/export
 // node before Scan (and the bytecode compiler) ever see the tree.
 func TestScanAcceptsResolvedModuleProgram(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "math.zero", `(module
+	writeFile(t, dir, "math.howl", `(module
 		(export (defun add_one (n)
 			(type_hint n "int")
 			(type_hint return "int")
@@ -146,7 +146,7 @@ func TestScanAcceptsResolvedModuleProgram(t *testing.T) {
 			(type_hint return "int")
 			(return 99)))`)
 
-	root := parse(t, `(cli_app (use "math.zero" as math) (print (call math/add_one 41)))`).ParseExpression()
+	root := parse(t, `(cli_app (use "math.howl" as math) (print (call math/add_one 41)))`).ParseExpression()
 	parser.ExpandIncludes(root, dir, 0)
 	ast.ResolveModules(root)
 
@@ -245,7 +245,7 @@ func TestScanAcceptsNilAndLeafNodes(t *testing.T) {
 }
 
 // TestScanIsDeterministic guards the diagnostic ordering contract that
-// zero.go's reportZirDiagnostics depends on.
+// howlframe.go's reportHFIRDiagnostics depends on.
 func TestScanIsDeterministic(t *testing.T) {
 	source := `(cli_app (trace "a") (middleware "b") (struct S (f int)))`
 	first := scanNames(t, source)

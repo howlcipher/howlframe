@@ -8,7 +8,7 @@ public class Main {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
 
         server.createContext("/json", exchange -> {
-            String body = "{\"status\":\"success\",\"message\":\"Hello from Zero JSON endpoint!\"}";
+            String body = "{\"status\":\"success\",\"message\":\"Hello from HowlFrame JSON endpoint!\"}";
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, bytes.length);
@@ -18,7 +18,7 @@ public class Main {
         });
 
         server.createContext("/", exchange -> {
-            String body = "Hello, World! Zero language is alive!";
+            String body = "Hello, World! HowlFrame language is alive!";
             exchange.getResponseHeaders().add("Content-Type", "text/plain");
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, bytes.length);

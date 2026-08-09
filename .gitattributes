@@ -1,2 +1,2 @@
-*.zero linguist-language=Scheme
-*.zero linguist-detectable=true
+*.howl linguist-language=Scheme
+*.howl linguist-detectable=true

@@ -2,7 +2,7 @@
   (export (defun build_report (
       repository_path
       total_files
-      zero_files
+      howlframe_files
       go_files
       python_files
       javascript_files
@@ -19,7 +19,7 @@
     (type_hints
       (repository_path string)
       (total_files int)
-      (zero_files int)
+      (howlframe_files int)
       (go_files int)
       (python_files int)
       (javascript_files int)
@@ -36,10 +36,10 @@
       (return string))
     (return (str_join
       (list
-        "zero_repo_analyst/v1\n"
+        "howlframe.repo_analyst/v1\n"
         "repository_path=" repository_path "\n"
         "total_files=" (to_string total_files) "\n"
-        "zero_files=" (to_string zero_files) "\n"
+        "howlframe_files=" (to_string howlframe_files) "\n"
         "go_files=" (to_string go_files) "\n"
         "python_files=" (to_string python_files) "\n"
         "javascript_files=" (to_string javascript_files) "\n"

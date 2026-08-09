@@ -1,17 +1,17 @@
-package zir
+package hfir
 
 import (
-	"zero/internal/ast"
-	"zero/internal/construct"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/construct"
 )
 
 // TargetBytecode is the verifier target identity for the standalone bytecode
-// runtime. zero.go's zirTargetBytecode must spell it the same way; the two are
+// runtime. howlframe.go's hfirTargetBytecode must spell it the same way; the two are
 // tied together by TestVerifyConstructsMatchesBytecodeTargetName.
 const TargetBytecode = "bytecode"
 
 // VerifyConstructs reports every construct in root that the given target
-// cannot execute, as ZIR_TARGET_INFEASIBLE diagnostics in source order.
+// cannot execute, as HFIR_TARGET_INFEASIBLE diagnostics in source order.
 //
 // This deliberately runs over the AST rather than over Graph node kinds.
 // LowerAST derives a node's Kind from the head symbol of every list, including
@@ -39,7 +39,7 @@ func VerifyConstructs(root *ast.Node, target string) []Diagnostic {
 	diags := make([]Diagnostic, 0, len(violations))
 	for _, violation := range violations {
 		diags = append(diags, Diagnostic{
-			Code:     "ZIR_TARGET_INFEASIBLE",
+			Code:     "HFIR_TARGET_INFEASIBLE",
 			Severity: SeverityError,
 			Message:  violation.Message(),
 			Location: Provenance{

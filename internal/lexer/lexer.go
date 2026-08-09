@@ -2,9 +2,9 @@ package lexer
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
 	"strconv"
 	"unicode"
-	"zero/internal/ast"
 )
 
 type TokenType string

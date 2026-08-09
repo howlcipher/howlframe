@@ -1,14 +1,21 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Theme toggle logic
     const themeToggleBtn = document.getElementById('theme-toggle');
     const body = document.body;
 
-    // Check localStorage for theme preference
-    // Default is dark mode, so we only need to add 'light-mode' class if saved as light
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light') {
         body.classList.add('light-mode');
     }
+
+    const updateThemeControl = () => {
+        const isLight = body.classList.contains('light-mode');
+        themeToggleBtn.setAttribute('aria-pressed', String(isLight));
+        themeToggleBtn.textContent = isLight
+            ? 'Switch to dark theme'
+            : 'Switch to light theme';
+    };
+
+    updateThemeControl();
 
     themeToggleBtn.addEventListener('click', () => {
         body.classList.toggle('light-mode');
@@ -17,10 +24,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             localStorage.setItem('theme', 'dark');
         }
+        updateThemeControl();
     });
 
-    // Retro text decoding/scramble effect on main title
     const mainTitle = document.getElementById('main-title');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (reducedMotion.matches) {
+        return;
+    }
+
     const originalText = mainTitle.innerText;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()_+';
     let iterations = 0;
@@ -29,9 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
         mainTitle.innerText = originalText
             .split('')
             .map((letter, index) => {
-                // If it's a space, keep it a space
                 if (letter === ' ') return ' ';
-                
+
                 if (index < iterations) {
                     return originalText[index];
                 }

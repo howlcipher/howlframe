@@ -1,9 +1,9 @@
 package wasm
 
-import "zero/internal/ast"
+import "github.com/howlcipher/howlframe/internal/ast"
 
 // NativeLayout is the representation selected by the Wasm backend for a
-// typed Zero value. Aggregate values are represented by a linear-memory
+// typed HowlFrame value. Aggregate values are represented by a linear-memory
 // pointer until Wasm memory access/code generation is added for them.
 type NativeLayout struct {
 	ValueType    string

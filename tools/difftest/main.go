@@ -21,7 +21,7 @@ func main() {
 		log.Fatalf("failed to parse manifest: %v", err)
 	}
 
-	files, err := filepath.Glob("tests/*.zero")
+	files, err := filepath.Glob("tests/*.howl")
 	if err != nil {
 		log.Fatalf("failed to glob tests: %v", err)
 	}
@@ -51,7 +51,7 @@ func main() {
 
 		fmt.Printf("RUN  %s...\n", base)
 
-		out1, err := runCommand("go", "run", "zero.go", "-run", file)
+		out1, err := runCommand("go", "run", "howlframe.go", "-run", file)
 		if err != nil {
 			fmt.Printf("FAIL %s (interpreter): %v\n%s\n", base, err, out1)
 			failed++
@@ -63,15 +63,15 @@ func main() {
 			log.Fatalf("failed to make temp dir: %v", err)
 		}
 
-		out2, err := runCommand("go", "run", "zero.go", "-o", outDir, file)
+		out2, err := runCommand("go", "run", "howlframe.go", "-o", outDir, file)
 		if err != nil {
 			fmt.Printf("FAIL %s (codegen): %v\n%s\n", base, err, out2)
 			failed++
 			continue
 		}
 
-		// Zero transpiler output directory name sets the resulting package/binary name.
-		// `filepath.Base` of the input file without `.zero` is used if `-o` is not provided,
+		// HowlFrame transpiler output directory name sets the resulting package/binary name.
+		// `filepath.Base` of the input file without `.howl` is used if `-o` is not provided,
 		// but with `-o` it writes `server.go` inside. Let's just build `server.go`.
 		binaryPath := filepath.Join(outDir, "server")
 		serverGoPath := filepath.Join(outDir, "server.go")
@@ -90,7 +90,7 @@ func main() {
 		}
 
 		bcPath := filepath.Join(outDir, "test.bc")
-		out5, err := runCommand("go", "run", "zero.go", "-compile-bc", file, "-o", bcPath)
+		out5, err := runCommand("go", "run", "howlframe.go", "-compile-bc", file, "-o", bcPath)
 		if err != nil {
 			fmt.Printf("FAIL %s (compile-bc): %v\n%s\n", base, err, out5)
 			failed++
@@ -99,7 +99,7 @@ func main() {
 
 		// Differential testing checks backend parity, not capability enforcement,
 		// so run bytecode with every capability allowed.
-		out6, err := runCommand("go", "run", "zero.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
+		out6, err := runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
 		if err != nil {
 			fmt.Printf("FAIL %s (run-bc): %v\n%s\n", base, err, out6)
 			failed++
@@ -128,8 +128,8 @@ func main() {
 
 func runCommand(name string, arg ...string) (string, error) {
 	cmd := exec.Command(name, arg...)
-	// Inherit env, but inject ZERO_TEST_TOKEN for tests that need it
-	cmd.Env = append(os.Environ(), "ZERO_TEST_TOKEN=expected-secret")
+	// Inherit env, but inject HOWLFRAME_TEST_TOKEN for tests that need it
+	cmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

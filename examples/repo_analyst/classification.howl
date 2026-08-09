@@ -1,7 +1,7 @@
 (module
-  (export (defun is_zero_file (path)
+  (export (defun is_howlframe_file (path)
     (type_hints (path string) (return bool))
-    (return (regex_match "\\.zero$" path))))
+    (return (regex_match "\\.howl$" path))))
 
   (export (defun is_go_file (path)
     (type_hints (path string) (return bool))
@@ -34,12 +34,12 @@
   (export (defun is_likely_entry_point (path)
     (type_hints (path string) (return bool))
     (return (regex_match
-      "(?i)(^|/)(main\\.(zero|go|py|js|ts)|index\\.(js|ts)|zero\\.go|repo_analyst\\.zero)$"
+      "(?i)(^|/)(main\\.(howl|go|py|js|ts)|index\\.(js|ts)|howlframe\\.go|repo_analyst\\.howl)$"
       path))))
 
   (export (defun is_text_file (path)
     (type_hints (path string) (return bool))
     (return (regex_match
-      "(?i)(\\.(zero|go|py|[cm]?jsx?|[cm]?tsx?|json|ya?ml|toml|ini|conf|md|txt|rst|html?|css|scss|sh|bash|zsh|fish|sql|xml|csv)$|(^|/)(Dockerfile|Makefile|go\\.mod|go\\.sum|\\.gitignore|LICENSE|README))"
+      "(?i)(\\.(howl|go|py|[cm]?jsx?|[cm]?tsx?|json|ya?ml|toml|ini|conf|md|txt|rst|html?|css|scss|sh|bash|zsh|fish|sql|xml|csv)$|(^|/)(Dockerfile|Makefile|go\\.mod|go\\.sum|\\.gitignore|LICENSE|README))"
       path))))
 )

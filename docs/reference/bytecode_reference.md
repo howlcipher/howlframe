@@ -1,4 +1,4 @@
-# Zero Bytecode Instruction Reference
+# HowlFrame Bytecode Instruction Reference
 
 | Opcode | Operands | Pops | Pushes | Capability | Description |
 |---|---|---|---|---|---|

@@ -1,12 +1,12 @@
-# Zero Native Store Design
+# HowlFrame Native Store Design
 
 ## Summary
 
-Zero already has database support through `db_connect`, `sql_query`, `schema`, the Go backend, and the bytecode VM. That is useful, but it is still a traditional SQL escape hatch: the AI must write SQL strings, reason about driver behavior, and accept target-specific runtime semantics.
+HowlFrame already has database support through `db_connect`, `sql_query`, `schema`, the Go backend, and the bytecode VM. That is useful, but it is still a traditional SQL escape hatch: the AI must write SQL strings, reason about driver behavior, and accept target-specific runtime semantics.
 
-The missing feature is not "add a database" in the normal application-stack sense. The missing feature is a Zero-native persistence and retrieval substrate that an AI can operate through structured bytecode instructions.
+The missing feature is not "add a database" in the normal application-stack sense. The missing feature is a HowlFrame-native persistence and retrieval substrate that an AI can operate through structured bytecode instructions.
 
-Recommended direction: build an embedded Zero store in the bytecode VM first, with SQL remaining as an interoperability escape hatch.
+Recommended direction: build an embedded HowlFrame store in the bytecode VM first, with SQL remaining as an interoperability escape hatch.
 
 ## Current Evidence
 
@@ -15,9 +15,9 @@ Recommended direction: build an embedded Zero store in the bytecode VM first, wi
 | SQL connection primitive | `internal/bytecode/opcode.go` defines `DB_CONNECT` with the `database` capability | Connection is external and driver-defined |
 | SQL query primitive | `internal/bytecode/opcode.go` defines `SQL_QUERY`; `internal/vm/vm.go` executes it through `database/sql` | Query is an opaque string to the compiler |
 | Declarative schema | `internal/backend/gogen/gogen.go` expands schema DDL around `db_connect` | Schema still lowers to SQL tables |
-| Bytecode VM | `-compile-bc` and `-run-bc` execute serialized Zero instructions | Database behavior is not yet Zero-native |
+| Bytecode VM | `-compile-bc` and `-run-bc` execute serialized HowlFrame instructions | Database behavior is not yet HowlFrame-native |
 
-The live source shows that Zero has persistence plumbing, but not a compiler-visible data model that replaces SQL or NoSQL for AI-authored programs.
+The live source shows that HowlFrame has persistence plumbing, but not a compiler-visible data model that replaces SQL or NoSQL for AI-authored programs.
 
 ## Design Goals
 
@@ -79,11 +79,11 @@ The VM can implement these against an embedded engine without exposing that engi
 | Option | Pros | Cons |
 | --- | --- | --- |
 | Keep only SQL primitives | Already shipped, broad ecosystem, easy interoperability | AI still writes opaque strings; weak compiler validation; does not replace SQL/NoSQL |
-| Wrap SQLite behind Zero store opcodes | Durable quickly; transactions and indexing are mature; small implementation risk | Still inherits relational storage internally; care needed to avoid leaking SQL concepts into Zero syntax |
-| Build append-only document store in VM | Strongest Zero identity; simple mental model; bytecode-native; easy audit trail | More work for queries, compaction, concurrency, and durability guarantees |
-| Use external NoSQL or vector database | Rich retrieval features; scalable if needed | Adds deployment burden; not embedded; weak fit for Zero's small self-contained toolchain |
+| Wrap SQLite behind HowlFrame store opcodes | Durable quickly; transactions and indexing are mature; small implementation risk | Still inherits relational storage internally; care needed to avoid leaking SQL concepts into HowlFrame syntax |
+| Build append-only document store in VM | Strongest HowlFrame identity; simple mental model; bytecode-native; easy audit trail | More work for queries, compaction, concurrency, and durability guarantees |
+| Use external NoSQL or vector database | Rich retrieval features; scalable if needed | Adds deployment burden; not embedded; weak fit for HowlFrame's small self-contained toolchain |
 
-Recommendation: start with a bytecode-native API backed by an embedded implementation. SQLite can be a private implementation detail for durability, but Zero programs should see records, predicates, indexes, and transactions, not tables and SQL strings.
+Recommendation: start with a bytecode-native API backed by an embedded implementation. SQLite can be a private implementation detail for durability, but HowlFrame programs should see records, predicates, indexes, and transactions, not tables and SQL strings.
 
 ## Query Model
 
@@ -129,7 +129,7 @@ The store needs stricter boundaries than the existing SQL escape hatch:
 
 | Phase | Deliverable | Verification |
 | --- | --- | --- |
-| 1 | Design and backlog the Zero store surface | Documentation links and backlog entry exist |
+| 1 | Design and backlog the HowlFrame store surface | Documentation links and backlog entry exist |
 | 2 | Implement in-memory `store_open`, `store_put`, `store_get`, `store_delete` in bytecode VM | Bytecode fixture compiles and runs through `-run-bc` |
 | 3 | Add `store_query` with exact predicates, `limit`, and simple indexes | VM tests prove deterministic filtering and ordering |
 | 4 | Add durable storage behind the same bytecode contract | Restart test proves persistence |
@@ -138,6 +138,6 @@ The store needs stricter boundaries than the existing SQL escape hatch:
 
 ## Recommendation
 
-Build this as a Zero-native store in bytecode, not as more SQL syntax.
+Build this as a HowlFrame-native store in bytecode, not as more SQL syntax.
 
-The key architectural move is to make persistence part of Zero's validated instruction set: records are structured values, queries are AST nodes, indexes are declarations, and storage engines are implementation details. That gives the AI a replacement for SQL and NoSQL at the language level while preserving the option to interoperate with traditional databases when needed.
+The key architectural move is to make persistence part of HowlFrame's validated instruction set: records are structured values, queries are AST nodes, indexes are declarations, and storage engines are implementation details. That gives the AI a replacement for SQL and NoSQL at the language level while preserving the option to interoperate with traditional databases when needed.

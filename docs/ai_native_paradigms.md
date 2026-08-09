@@ -1,8 +1,8 @@
-# AI-Native Programming Paradigms for Zero
+# AI-Native Programming Paradigms for HowlFrame
 
-The `Zero` language is built from the ground up to be written by AI and routed through a target-aware toolchain. By assuming the presence of an LLM both at generation time and, for specific primitives, as a runtime utility, Zero explores primitives that discard conventional deterministic boilerplate in favor of semantic, intent-driven operations.
+The `HowlFrame` language is built from the ground up to be written by AI and routed through a target-aware toolchain. By assuming the presence of an LLM both at generation time and, for specific primitives, as a runtime utility, HowlFrame explores primitives that discard conventional deterministic boilerplate in favor of semantic, intent-driven operations.
 
-Here are 4 core paradigms that define the Zero language:
+Here are 4 core paradigms that define the HowlFrame language:
 
 ## 1. `semantic_match` (Semantic Routing)
 **Name:** `semantic_match`
@@ -48,7 +48,7 @@ On a Go-backed path, this can lower to a runtime function that constructs a prom
 A declarative primitive for defining a function using only its signature and a natural language docstring describing what it should do. The actual logic block is entirely omitted.
 
 **Why it breaks conventional tropes:**
-Typically, all code must be written before execution. With `lazy_synthesize`, the AI writing the Zero language doesn't have to waste tokens generating mundane utility functions (e.g., custom sorting, bespoke string manipulation). Instead, it delegates the implementation to the runtime. The function is dynamically generated the very first time it is invoked, tailored specifically to the shape of the data it receives.
+Typically, all code must be written before execution. With `lazy_synthesize`, the AI writing the HowlFrame language doesn't have to waste tokens generating mundane utility functions (e.g., custom sorting, bespoke string manipulation). Instead, it delegates the implementation to the runtime. The function is dynamically generated the very first time it is invoked, tailored specifically to the shape of the data it receives.
 
 **Implementation Notes:**
 A backend can emit a stub that captures runtime arguments, the function signature, and the docstring on first use. A Go-backed path can send that context to a coding model and execute the generated implementation through a controlled dynamic execution mechanism, caching the result for later calls.

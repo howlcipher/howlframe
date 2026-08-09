@@ -1,11 +1,11 @@
 package wasm
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strings"
 	"testing"
-	"zero/internal/ast"
-	"zero/internal/checker"
-	"zero/internal/ir"
 )
 
 func TestSerializeSSAUsesBranchBlocksAndPhi(t *testing.T) {
@@ -240,7 +240,7 @@ func serializerList(head string, children ...*ast.Node) *ast.Node {
 		Type:     "List",
 		Line:     1,
 		Column:   1,
-		Filename: "serializer.zero",
+		Filename: "serializer.howl",
 		Children: append([]*ast.Node{serializerSymbol(head)}, children...),
 	}
 }
@@ -250,21 +250,21 @@ func serializerPair(left, right *ast.Node) *ast.Node {
 		Type:     "List",
 		Line:     1,
 		Column:   1,
-		Filename: "serializer.zero",
+		Filename: "serializer.howl",
 		Children: []*ast.Node{left, right},
 	}
 }
 
 func serializerSymbol(value string) *ast.Node {
-	return &ast.Node{Type: "SYMBOL", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+	return &ast.Node{Type: "SYMBOL", Value: value, Line: 1, Column: 1, Filename: "serializer.howl"}
 }
 
 func serializerInt(value string) *ast.Node {
-	return &ast.Node{Type: "INT", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+	return &ast.Node{Type: "INT", Value: value, Line: 1, Column: 1, Filename: "serializer.howl"}
 }
 
 func serializerFloat(value string) *ast.Node {
-	return &ast.Node{Type: "FLOAT", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+	return &ast.Node{Type: "FLOAT", Value: value, Line: 1, Column: 1, Filename: "serializer.howl"}
 }
 
 func serializerBool(value bool) *ast.Node {
@@ -275,7 +275,7 @@ func serializerBool(value bool) *ast.Node {
 }
 
 func serializerString(value string) *ast.Node {
-	return &ast.Node{Type: "STRING", Value: value, Line: 1, Column: 1, Filename: "serializer.zero"}
+	return &ast.Node{Type: "STRING", Value: value, Line: 1, Column: 1, Filename: "serializer.howl"}
 }
 
 // TestSerializeSSAProgramCallsHelperFunction builds the equivalent of
@@ -285,7 +285,7 @@ func serializerString(value string) *ast.Node {
 //	  (call square 3))
 //
 // through the same checker → ir.LowerSSAFunction/ir.LowerSSA → SerializeSSAProgram
-// path zero.go's -compile-wasm flag uses, and checks the callee is emitted
+// path howlframe.go's -compile-wasm flag uses, and checks the callee is emitted
 // as its own WAT function and the call site resolves to it.
 func TestSerializeSSAProgramCallsHelperFunction(t *testing.T) {
 	defunNode := serializerList("defun",

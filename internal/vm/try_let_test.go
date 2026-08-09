@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"zero/internal/bytecode"
-	"zero/internal/capability"
-	"zero/internal/checker"
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/checker"
 )
 
 func runBytecodeForTryLetTest(

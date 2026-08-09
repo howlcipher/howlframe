@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"zero/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/bytecode"
 )
 
 func runInstructionBudget(limit int) (runtimeErr *VMError, output string) {

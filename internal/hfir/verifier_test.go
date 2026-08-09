@@ -1,8 +1,8 @@
-package zir
+package hfir
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
 	"testing"
-	"zero/internal/ast"
 )
 
 func TestVerifier(t *testing.T) {
@@ -38,8 +38,8 @@ func TestVerifier(t *testing.T) {
 
 		verifier := NewVerifier(g, "go")
 		diags := verifier.Verify()
-		if len(diags) != 1 || diags[0].Code != "ZIR_UNBOUND_REF" {
-			t.Fatalf("Expected ZIR_UNBOUND_REF, got %v", diags)
+		if len(diags) != 1 || diags[0].Code != "HFIR_UNBOUND_REF" {
+			t.Fatalf("Expected HFIR_UNBOUND_REF, got %v", diags)
 		}
 		if diags[0].ContractVersion != DiagnosticContractVersion {
 			t.Errorf("expected ContractVersion %q, got %q", DiagnosticContractVersion, diags[0].ContractVersion)
@@ -60,8 +60,8 @@ func TestVerifier(t *testing.T) {
 
 		verifier := NewVerifier(g, "go")
 		diags := verifier.Verify()
-		if len(diags) != 1 || diags[0].Code != "ZIR_INVALID_REF" {
-			t.Fatalf("Expected ZIR_INVALID_REF, got %v", diags)
+		if len(diags) != 1 || diags[0].Code != "HFIR_INVALID_REF" {
+			t.Fatalf("Expected HFIR_INVALID_REF, got %v", diags)
 		}
 		if diags[0].ContractVersion != DiagnosticContractVersion {
 			t.Errorf("expected ContractVersion %q, got %q", DiagnosticContractVersion, diags[0].ContractVersion)
@@ -94,8 +94,8 @@ func TestVerifier(t *testing.T) {
 
 		verifier := NewVerifier(g, "wasm")
 		diags := verifier.Verify()
-		if len(diags) != 1 || diags[0].Code != "ZIR_TARGET_INFEASIBLE" {
-			t.Fatalf("Expected ZIR_TARGET_INFEASIBLE, got %v", diags)
+		if len(diags) != 1 || diags[0].Code != "HFIR_TARGET_INFEASIBLE" {
+			t.Fatalf("Expected HFIR_TARGET_INFEASIBLE, got %v", diags)
 		}
 		if diags[0].Target != "wasm" {
 			t.Errorf("expected Target %q, got %q", "wasm", diags[0].Target)
@@ -157,7 +157,7 @@ func TestVerifierDiagnosticOrderIsDeterministic(t *testing.T) {
 		if len(diags) != 3 {
 			t.Fatalf("run %d: expected 3 diagnostics, got %d: %v", i, len(diags), diags)
 		}
-		wantCodes := []string{"ZIR_UNBOUND_REF", "ZIR_INVALID_REF", "ZIR_UNBOUND_REF"}
+		wantCodes := []string{"HFIR_UNBOUND_REF", "HFIR_INVALID_REF", "HFIR_UNBOUND_REF"}
 		for j, want := range wantCodes {
 			if diags[j].Code != want {
 				t.Fatalf("run %d: diagnostic %d: expected code %q, got %q", i, j, want, diags[j].Code)

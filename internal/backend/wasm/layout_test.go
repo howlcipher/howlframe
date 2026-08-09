@@ -1,8 +1,8 @@
 package wasm
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
 	"testing"
-	"zero/internal/ast"
 )
 
 func TestDescribeLayoutUsesTypedAggregateRepresentations(t *testing.T) {

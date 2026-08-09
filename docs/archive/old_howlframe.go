@@ -632,7 +632,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"zero/observer"
+	"github.com/howlcipher/howlframe/observer"
 `
 	for _, imp := range extraImports {
 		code += fmt.Sprintf("\t%q\n", imp)
@@ -702,7 +702,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"zero/observer"
+	"github.com/howlcipher/howlframe/observer"
 `
 		for _, imp := range extraImports {
 			parts := strings.Split(imp, "/")
@@ -2019,7 +2019,7 @@ func generateJSCode(node *Node) (string, string) {
 // generateWasmCode emits the deliberately small, portable Wasm prototype.
 // The shared IR already captures the shape of simple expressions and control
 // flow; this backend supports only the i32 subset that maps directly to core
-// WebAssembly instructions. Runtime-dependent Zero primitives belong in a
+// WebAssembly instructions. Runtime-dependent HowlFrame primitives belong in a
 // future backend phase rather than being silently miscompiled.
 func generateWasmCode(node *Node) string {
 	if node.Type != "List" || len(node.Children) != 2 {

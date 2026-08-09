@@ -1,7 +1,7 @@
 (cli_app
-  (let (token (env "ZERO_TEST_TOKEN"))
+  (let (token (env "HOWLFRAME_TEST_TOKEN"))
     (if (= token "expected-secret")
-      (print "ok: env(ZERO_TEST_TOKEN) ==" token)
+      (print "ok: env(HOWLFRAME_TEST_TOKEN) ==" token)
       (print "Error: expected expected-secret got" token)
     )
   )

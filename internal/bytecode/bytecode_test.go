@@ -1,10 +1,10 @@
 package bytecode
 
 import (
+	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 	"testing"
-	"zero/internal/capability"
-	"zero/internal/lexer"
-	"zero/internal/parser"
 )
 
 func TestCompileStoreOperations(t *testing.T) {
@@ -17,7 +17,7 @@ func TestCompileStoreOperations(t *testing.T) {
 		(store_delete store (str_join (list "task" "1") ":")))`
 
 	lx := lexer.NewLexer(source)
-	p := parser.NewParser(lx, "store_test.zero")
+	p := parser.NewParser(lx, "store_test.howl")
 	prog := CompileToBytecode(p.ParseExpression())
 
 	var storeOps []BCInstruction
@@ -52,7 +52,7 @@ func TestCompileStoreOperations(t *testing.T) {
 }
 
 func TestCompileFloatLiteral(t *testing.T) {
-	root := parser.NewParser(lexer.NewLexer(`(cli_app (print 0.8))`), "float.zero").ParseExpression()
+	root := parser.NewParser(lexer.NewLexer(`(cli_app (print 0.8))`), "float.howl").ParseExpression()
 	program := CompileToBytecode(root)
 	if len(program.Main) < 2 || program.Main[1].Op != OpPrint {
 		t.Fatalf("unexpected bytecode: %#v", program.Main)

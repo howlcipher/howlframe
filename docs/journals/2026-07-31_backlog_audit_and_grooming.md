@@ -1,6 +1,6 @@
 # Implementation Journal
 
-Task: Repository audit and backlog grooming toward the Zero AI-first language mission (no implementation)
+Task: Repository audit and backlog grooming toward the HowlFrame AI-first language mission (no implementation)
 Date: 2026-07-31
 
 ## Scope
@@ -14,20 +14,20 @@ changed.
 ## Files inspected
 
 - `README.md`, `bugs.md` (full), `improvements.md` (full) — read directly, not just via agent summary.
-- `.agents/skills/zero_transpiler/SKILL.md` (lives in the sibling `ai_knowledge_library` repo, not in
-  the `zero` repo itself — noted as a location surprise, not a defect).
+- `.agents/skills/howlframe_transpiler/SKILL.md` (lives in the sibling `ai_knowledge_library` repo, not in
+  the `howlframe` repo itself — noted as a location surprise, not a defect).
 - `docs/journals/` (archive contents, naming convention `YYYY-MM-DD_task_name.md`).
 - Core pipeline via a dedicated Explore agent: `internal/lexer`, `internal/parser`, `internal/ast`,
   `internal/checker` (`checker.go`, `types.go`), `internal/ir` (`ir.go`, `ssa.go`),
   `internal/backend/gogen`, `internal/backend/javascript`, `internal/backend/wasm`
   (`wasm.go`, `ssa_serializer.go`, `validate.go`), `internal/bytecode`, `internal/vm`
-  (`vm.go`, `error.go`), `internal/masking`, `internal/optimization`, `zero.go`, `cmd/codegen`,
-  `cmd/zero` (untracked), `zero_test.go`, `tests/*.zero` (42 fixtures, counted not fully read).
+  (`vm.go`, `error.go`), `internal/masking`, `internal/optimization`, `howlframe.go`, `cmd/codegen`,
+  `cmd/howlframe` (untracked), `howlframe_test.go`, `tests/*.howl` (42 fixtures, counted not fully read).
 - No `.github/` directory, no `CONTRIBUTING.md` exist in this repo (confirmed absent).
 
 ## Commands run
 
-- `git status`, `git remote -v`, `git ls-files --error-unmatch cmd/zero/main.go` (confirmed untracked).
+- `git status`, `git remote -v`, `git ls-files --error-unmatch cmd/howlframe/main.go` (confirmed untracked).
 - Repository-wide greps for `TODO`/`not implemented`/`panic("not supported")`, `capability`/`effect`
   in `internal/vm`, `break`/`continue` language-wide, `*.yml`/`.yaml` (none), `*stdlib*`/`*std*` (none),
   `*contribut*`/`*develop*` (none).
@@ -40,14 +40,14 @@ changed.
 **None new.** The only open bug remains #39 (`-o <dir>` silently ignored when placed after the input
 file for the Go/JS backend, Pending, Score 6.0) — verified still accurately described against the
 current `bugs.md`. Considered but deliberately did NOT file as new bugs:
-- The untracked `cmd/zero/main.go` skips `checker.Check` entirely before codegen. This is real,
+- The untracked `cmd/howlframe/main.go` skips `checker.Check` entirely before codegen. This is real,
   reproducible code — but it isn't part of the tracked, documented product surface (git doesn't know
-  about it), so it doesn't meet the bar of "Zero accepts invalid programs" for the shipped CLI. Flagging
+  about it), so it doesn't meet the bar of "HowlFrame accepts invalid programs" for the shipped CLI. Flagging
   it as a repo-hygiene question for the user instead of filing a bug or improvement against it (see
   Unresolved Questions below) — didn't want to guess whether it's the user's own in-progress work.
 - `internal/backend/wasm/wasm.go`'s commented-out `ast.ReportError` calls (the legacy, non-SSA Wasm
   backend). This makes `GenerateWasmCode` unsafe to call without the checker running first, but the
-  only documented call path (the real `zero.go` CLI) always runs the checker first, so no invalid
+  only documented call path (the real `howlframe.go` CLI) always runs the checker first, so no invalid
   program is actually accepted today. Real latent risk, but not a currently-reproducible defect against
   the documented CLI — didn't file as a bug per the "must be reproducible" bar; could be raised as a
   small future hygiene item if someone wants to remove dead code, but wasn't scored as a backlog item
@@ -63,14 +63,14 @@ are in each item's Detail section in `improvements.md`). Summary:
 | # | Title | Score | Theme |
 |---|---|---|---|
 | 75 | Add CI (go build/vet/test on push/PR) | 3.5 | Foundation / Engineering |
-| 76 | `zero validate` (validation without side effects) | 3.5 | CLI maturity / AI-agent workflow |
+| 76 | `howlframe validate` (validation without side effects) | 3.5 | CLI maturity / AI-agent workflow |
 | 77 | Checker: unbound variable/function diagnostics | 2.0 | Foundation / semantics |
 | 80 | Module system Phase 1: inventory & design | 2.0 | Foundation / modules |
 | 82 | JS backend unit test coverage | 2.0 | Testing |
 | 78 | Cross-backend differential testing harness | 1.75 | Foundation / testing |
 | 79 | Capability enforcement Phase 1: VM allow/deny gate | 1.6 | Security / capabilities |
 | 73 | (existing) Standalone Runtime Phase 2b: Collections | 1.5 | Wasm/SSA |
-| 81 | Formatter Phase 1: canonical `zero fmt` | 1.5 | DX / formatter |
+| 81 | Formatter Phase 1: canonical `howlframe fmt` | 1.5 | DX / formatter |
 | 83 | JS backend AI-primitive parity | 1.25 | Application readiness |
 | 84 | SSA IR: lower `for`/`match`/`try_let`/`spawn` | 1.2 | Language completeness |
 | 74 | (existing) Standalone Runtime Phase 2c: LLM HTTP | 0.43 (below floor) | Wasm/SSA |
@@ -107,8 +107,8 @@ priority than the 10 items above — not filed as new items this session:
 - **Bounded repair context, source-preserving localized patching, LSP/editor services, intent-to-test
   traceability**: real per the mission doc, but no direct code evidence gathered this session to scope
   them concretely — would need a dedicated exploration pass rather than being bolted onto this one.
-- **CLI subcommand grammar** (`zero <verb> file`) unifying the current flag-only surface: intentionally
-  deferred until #76 (`zero validate`) and #81 (`zero fmt`) exist as standalone flags first, so a future
+- **CLI subcommand grammar** (`howlframe <verb> file`) unifying the current flag-only surface: intentionally
+  deferred until #76 (`howlframe validate`) and #81 (`howlframe fmt`) exist as standalone flags first, so a future
   subcommand-grammar redesign has two working examples to generalize from rather than guessing the shape
   up front.
 
@@ -121,16 +121,16 @@ rather than appended after them, so the table's "best ROI first" framing stays l
 actionable frontier (the table as a whole is not, and has never been, strictly globally sorted — many
 early Done rows predate the scoring convention entirely).
 
-#75 (CI) and #76 (`zero validate`) tied at 3.5. Broke the tie in CI's favor: CI is the more foundational,
+#75 (CI) and #76 (`howlframe validate`) tied at 3.5. Broke the tie in CI's favor: CI is the more foundational,
 cross-cutting multiplier (protects every other item in both backlog files going forward, including the
 other 9 new items just filed), matching the ranking rule that foundational work should rank highly when
-it unlocks/protects many later items. `zero validate` remains the clear #2 and a strong follow-on.
+it unlocks/protects many later items. `howlframe validate` remains the clear #2 and a strong follow-on.
 
 ## Dependency relationships (new items)
 
 - #75 (CI): no dependencies; recommended to land first since #78 (differential testing) benefits from
   running inside it.
-- #76 (`zero validate`): no dependencies. Related to #77 and #84 (same checker/CLI surface).
+- #76 (`howlframe validate`): no dependencies. Related to #77 and #84 (same checker/CLI surface).
 - #77 (unbound-identifier diagnostics): no dependencies. Extends the already-Done #64 (Semantic Type
   Checker Pass) rather than replacing it.
 - #78 (differential testing harness): benefits from #75 (CI) but not blocked by it.
@@ -145,9 +145,9 @@ it unlocks/protects many later items. `zero validate` remains the clear #2 and a
 
 ## Unresolved questions for the user
 
-1. **`cmd/zero/main.go` is untracked, duplicates a subset of `zero.go`'s flags, and skips
+1. **`cmd/howlframe/main.go` is untracked, duplicates a subset of `howlframe.go`'s flags, and skips
    `checker.Check` entirely.** Is this your own in-progress scaffolding, or should it be deleted /
-   committed / reconciled with `zero.go`? Not touched this session — flagged rather than guessed, per
+   committed / reconciled with `howlframe.go`? Not touched this session — flagged rather than guessed, per
    the instruction to investigate unfamiliar state rather than delete or assume.
 2. Confirm whether the two "deferred theme" categories above (versioned diagnostic schema; CLI
    subcommand grammar) should be filed as concrete items in the *next* grooming pass, or left implicit
@@ -162,7 +162,7 @@ candidates (new, isolated file — no application/runtime/parser/checker code to
 as the top summary finding of the pipeline-maturity audit ("no CI at all... every cross-backend/fixture
 verification claim in this backlog is manual and unrepeatable"); and it protects every one of the other
 nine items just filed, plus the entire existing backlog, from silent regressions going forward — the
-clearest "unlocks/protects many later items" case in this pass. `zero validate` (#76) is the strong
+clearest "unlocks/protects many later items" case in this pass. `howlframe validate` (#76) is the strong
 second choice and a natural follow-on next session.
 
 ## Confirmation

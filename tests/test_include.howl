@@ -1,5 +1,5 @@
 (http_server 8081
-	(use "routes.zero" as routes)
+	(use "routes.howl" as routes)
 	(route "/health" (lambda (req)
 		(res 200 "text/plain" "OK")))
 )

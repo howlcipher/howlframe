@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"zero/internal/ast"
-	"zero/internal/construct"
-	"zero/internal/lexer"
-	"zero/internal/parser"
-	"zero/internal/zir"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/construct"
+	"github.com/howlcipher/howlframe/internal/hfir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
 
 func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
@@ -31,17 +31,17 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 	}
 	fmt.Fprintf(&source, "(print value%d)%s)", chainLength-1, strings.Repeat(")", chainLength))
 
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
 	}
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "deep-let.zero")
+	inputFile := filepath.Join(outDir, "deep-let.howl")
 	if err := os.WriteFile(inputFile, []byte(source.String()), 0o644); err != nil {
 		t.Fatalf("failed to write deep let chain: %v", err)
 	}
-	if output, err := exec.Command(zeroBinary, "-o", outDir, inputFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-o", outDir, inputFile).CombinedOutput(); err != nil {
 		t.Fatalf("deep let chain failed to transpile: %v\n%s", err, output)
 	}
 
@@ -59,30 +59,30 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 }
 
 func TestOutputDirectoryFlag(t *testing.T) {
-	// Build the zero binary
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	// Build the HowlFrame binary
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	// Create a temporary directory for output
-	outDir, err := os.MkdirTemp("", "zero-test-out-*")
+	outDir, err := os.MkdirTemp("", "howlframe-test-out-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(outDir)
 
-	// Create a dummy .zero file
-	inputFile := filepath.Join(outDir, "dummy.zero")
+	// Create a dummy .howl file
+	inputFile := filepath.Join(outDir, "dummy.howl")
 	if err := os.WriteFile(inputFile, []byte("(cli_app (print \"Hello\"))"), 0644); err != nil {
 		t.Fatalf("Failed to write dummy file: %v", err)
 	}
 
-	// Run the zero binary with -o flag
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	// Run the HowlFrame binary with -o flag
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to run zero binary: %v", err)
+		t.Fatalf("Failed to run HowlFrame binary: %v", err)
 	}
 
 	// Check if server.go was created in the output directory
@@ -93,9 +93,9 @@ func TestOutputDirectoryFlag(t *testing.T) {
 }
 
 func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
 	}
 
 	tests := []struct {
@@ -123,13 +123,13 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			workDir := t.TempDir()
-			inputFile := filepath.Join(workDir, test.name+".zero")
+			inputFile := filepath.Join(workDir, test.name+".howl")
 			outputDir := filepath.Join(workDir, "nested", "artifacts")
 			if err := os.WriteFile(inputFile, []byte(test.source), 0o644); err != nil {
 				t.Fatalf("failed to write input: %v", err)
 			}
 
-			command := exec.Command(zeroBinary, inputFile, "-o", outputDir)
+			command := exec.Command(howlframeBinary, inputFile, "-o", outputDir)
 			command.Dir = workDir
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("transpilation failed: %v\n%s", err, output)
@@ -145,19 +145,19 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 }
 
 func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "store.zero")
-	outputFile := filepath.Join(tempDir, "nested", "store.zbc")
+	inputFile := filepath.Join(tempDir, "store.howl")
+	outputFile := filepath.Join(tempDir, "nested", "store.hfbc")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
 		t.Fatalf("failed to write bytecode input: %v", err)
 	}
 
-	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", outputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile bytecode: %v\n%s", err, output)
 	}
@@ -167,25 +167,25 @@ func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 }
 
 func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "env_read.zero")
-	source := `(cli_app (print "value:" (env "ZERO_TEST_ALLOW_CAPS_VAR")))`
+	inputFile := filepath.Join(tempDir, "env_read.howl")
+	source := `(cli_app (print "value:" (env "HOWLFRAME_TEST_ALLOW_CAPS_VAR")))`
 	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
 		t.Fatalf("failed to write bytecode input: %v", err)
 	}
 
-	bytecodeFile := filepath.Join(tempDir, "env_read.zbc")
-	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
+	bytecodeFile := filepath.Join(tempDir, "env_read.hfbc")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile bytecode: %v\n%s", err, output)
 	}
 
 	runWithEnv := func(env []string, args ...string) ([]byte, error) {
-		cmd := exec.Command(zeroBinary, args...)
+		cmd := exec.Command(howlframeBinary, args...)
 		cmd.Env = env
 		return cmd.CombinedOutput()
 	}
@@ -202,7 +202,7 @@ func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
 		t.Fatalf("expected CAPABILITY_DENIED under a custom instruction budget, got: %v\n%s", err, output)
 	}
 
-	allowedEnv := append(os.Environ(), "ZERO_TEST_ALLOW_CAPS_VAR=granted")
+	allowedEnv := append(os.Environ(), "HOWLFRAME_TEST_ALLOW_CAPS_VAR=granted")
 	if output, err := runWithEnv(allowedEnv, "-run-bc", "-allow-caps", "environment", bytecodeFile); err != nil {
 		t.Fatalf("expected success with -allow-caps environment: %v\n%s", err, output)
 	} else if !strings.Contains(string(output), "granted") {
@@ -215,14 +215,14 @@ func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
 }
 
 func TestRunBytecodeMaxInstructionsFlag(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "print.zero")
-	bytecodeFile := filepath.Join(tempDir, "print.zbc")
+	inputFile := filepath.Join(tempDir, "print.howl")
+	bytecodeFile := filepath.Join(tempDir, "print.hfbc")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
 		t.Fatalf("write bytecode input: %v", err)
 	}
-	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
 		t.Fatalf("compile bytecode: %v\n%s", err, output)
 	}
 
@@ -276,7 +276,7 @@ func TestRunBytecodeMaxInstructionsFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			output, err := exec.Command(zeroBinary, test.args...).CombinedOutput()
+			output, err := exec.Command(howlframeBinary, test.args...).CombinedOutput()
 			if test.wantError == "" {
 				if err != nil {
 					t.Fatalf("command failed: %v\n%s", err, output)
@@ -300,19 +300,19 @@ func TestRunBytecodeMaxInstructionsFlag(t *testing.T) {
 }
 
 func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", err, output)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "native.zero")
+	inputFile := filepath.Join(tempDir, "native.howl")
 	source := `(cli_app (let (x 4) (if (> x 2) (+ x 3) (- x 1))))`
 	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
 		t.Fatalf("failed to write native backend input: %v", err)
 	}
 
-	if output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-wasm", inputFile).CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile SSA WAT: %v\n%s", err, output)
 	}
 	defaultOutput := inputFile + ".ssa.wat"
@@ -325,7 +325,7 @@ func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
 	}
 
 	exactOutput := filepath.Join(tempDir, "nested", "exact.wat")
-	if output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile, "-o", exactOutput).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-wasm", inputFile, "-o", exactOutput).CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile SSA WAT to exact output: %v\n%s", err, output)
 	}
 	if _, err := os.Stat(exactOutput); err != nil {
@@ -334,24 +334,24 @@ func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
 }
 
 func TestCrashStateSerialization(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
-	outDir, err := os.MkdirTemp("", "zero-crash-test-*")
+	outDir, err := os.MkdirTemp("", "howlframe-crash-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(outDir)
 
-	inputFile := filepath.Join(outDir, "panic.zero")
+	inputFile := filepath.Join(outDir, "panic.howl")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (let (z 0) (print (/ 1 z))))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to transpilation: %v\n%s", err, string(out))
@@ -380,20 +380,20 @@ func TestCrashStateSerialization(t *testing.T) {
 }
 
 func TestWasmBackendWritesPortableWAT(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "math.zero")
+	inputFile := filepath.Join(outDir, "math.howl")
 	input := "(wasm_app (if (> (+ 2 3) 4) (return (* 6 7)) (return 0)))"
 	if err := os.WriteFile(inputFile, []byte(input), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 	}
@@ -412,19 +412,19 @@ func TestWasmBackendWritesPortableWAT(t *testing.T) {
 }
 
 func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "unsupported.zero")
+	inputFile := filepath.Join(outDir, "unsupported.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (env "TOKEN"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("Expected unsupported wasm node to fail")
@@ -435,11 +435,11 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 }
 
 func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	tests := []struct {
 		name   string
@@ -465,12 +465,12 @@ func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			outDir := t.TempDir()
-			inputFile := filepath.Join(outDir, "invalid.zero")
+			inputFile := filepath.Join(outDir, "invalid.howl")
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
 
-			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 			output, err := cmd.CombinedOutput()
 			if err == nil {
 				t.Fatalf("Expected semantic validation to fail")
@@ -486,20 +486,20 @@ func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
 }
 
 func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "multi_aggregate.zero")
+	inputFile := filepath.Join(outDir, "multi_aggregate.howl")
 	input := `(wasm_app (if true (list_get (list 10 20) 1) (list_get (list 30 40) 0)))`
 	if err := os.WriteFile(inputFile, []byte(input), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate multi aggregate WAT: %v: %s", err, output)
 	}
@@ -522,19 +522,19 @@ func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
 }
 
 func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "dict_key.zero")
+	inputFile := filepath.Join(outDir, "dict_key.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("list" 10)) "list"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to generate WAT for dict key named list: %v: %s", err, output)
@@ -545,20 +545,20 @@ func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
 }
 
 func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "float.zero")
+	inputFile := filepath.Join(outDir, "float.howl")
 	input := `(wasm_app (if (> (to_float 2) (to_float 1)) (return (to_float 7)) (return (to_float 0))))`
 	if err := os.WriteFile(inputFile, []byte(input), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate float WAT: %v: %s", err, output)
 	}
@@ -577,18 +577,18 @@ func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
 }
 
 func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "list.zero")
+	inputFile := filepath.Join(outDir, "list.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list 1 2))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list WAT: %v: %s", err, output)
 	}
@@ -606,18 +606,18 @@ func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
 }
 
 func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "list_get.zero")
+	inputFile := filepath.Join(outDir, "list_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list 10 20) 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list_get WAT: %v: %s", err, output)
 	}
@@ -635,11 +635,11 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 }
 
 func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	tests := []struct {
 		name      string
@@ -666,11 +666,11 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			outDir := t.TempDir()
-			inputFile := filepath.Join(outDir, "aggregate.zero")
+			inputFile := filepath.Join(outDir, "aggregate.howl")
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate aggregate WAT: %v: %s", err, output)
 			}
@@ -688,11 +688,11 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 }
 
 func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	tests := []struct {
 		name      string
@@ -732,11 +732,11 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			outDir := t.TempDir()
-			inputFile := filepath.Join(outDir, "dynamic_string.zero")
+			inputFile := filepath.Join(outDir, "dynamic_string.howl")
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./zero", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 			}
@@ -754,18 +754,18 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 }
 
 func TestWasmBackendReadsStringListPointers(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "string_list_get.zero")
+	inputFile := filepath.Join(outDir, "string_list_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list "alpha" "beta") 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate string-list WAT: %v: %s", err, output)
 	}
@@ -783,18 +783,18 @@ func TestWasmBackendReadsStringListPointers(t *testing.T) {
 }
 
 func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "dict_get.zero")
+	inputFile := filepath.Join(outDir, "dict_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate dict WAT: %v: %s", err, output)
 	}
@@ -812,18 +812,18 @@ func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
 }
 
 func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "zero", ".")
+	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build zero binary: %v", err)
+		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("zero")
+	defer os.Remove("howlframe")
 
 	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "int_dict_get.zero")
+	inputFile := filepath.Join(outDir, "int_dict_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" 10) ("b" 20)) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./zero", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate integer dict WAT: %v: %s", err, output)
 	}
@@ -844,12 +844,12 @@ func TestMaskPlanIncludesSchemaBridge(t *testing.T) {
 	source := `(cli_app
 		(struct User (name string) (age int))
 		(schema_bridge User (llm_generate "describe a user")))`
-	input := filepath.Join(t.TempDir(), "bridge.zero")
+	input := filepath.Join(t.TempDir(), "bridge.howl")
 	if err := os.WriteFile(input, []byte(source), 0600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
 
-	command := exec.Command("go", "run", "zero.go", "-mask-plan", input)
+	command := exec.Command("go", "run", "howlframe.go", "-mask-plan", input)
 	output, err := command.Output()
 	if err != nil {
 		t.Fatalf("run -mask-plan: %v", err)
@@ -882,12 +882,12 @@ func TestSchemaBridgeEmitsWrappedSourceExpression(t *testing.T) {
 		(struct User (name string) (age int))
 		(print (schema_bridge User "ok")))`
 	outDir := t.TempDir()
-	input := filepath.Join(outDir, "bridge_run.zero")
+	input := filepath.Join(outDir, "bridge_run.howl")
 	if err := os.WriteFile(input, []byte(source), 0600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
 
-	command := exec.Command("go", "run", "zero.go", "-o", outDir, input)
+	command := exec.Command("go", "run", "howlframe.go", "-o", outDir, input)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("transpile schema_bridge: %v\n%s", err, output)
 	}
@@ -902,7 +902,7 @@ func TestSchemaBridgeEmitsWrappedSourceExpression(t *testing.T) {
 }
 
 func TestOptimizationPlanIncludesSignatureMetadata(t *testing.T) {
-	command := exec.Command("go", "run", "zero.go", "-optimization-plan", "tests/optimization_signature.zero")
+	command := exec.Command("go", "run", "howlframe.go", "-optimization-plan", "tests/optimization_signature.howl")
 	output, err := command.Output()
 	if err != nil {
 		t.Fatalf("run -optimization-plan: %v", err)
@@ -926,7 +926,7 @@ func TestOptimizationPlanIncludesSignatureMetadata(t *testing.T) {
 	if err := json.Unmarshal(output, &plan); err != nil {
 		t.Fatalf("decode optimization plan: %v\n%s", err, output)
 	}
-	if plan.Format != "zero.optimization_plan/v1" || len(plan.Signatures) != 1 {
+	if plan.Format != "howlframe.optimization_plan/v1" || len(plan.Signatures) != 1 {
 		t.Fatalf("unexpected optimization plan: %+v", plan)
 	}
 	signature := plan.Signatures[0]
@@ -940,7 +940,7 @@ func TestOptimizationPlanIncludesSignatureMetadata(t *testing.T) {
 }
 
 func TestOptimizationSignatureReportsMalformedCandidateAsJSON(t *testing.T) {
-	input := filepath.Join(t.TempDir(), "invalid_optimization_signature.zero")
+	input := filepath.Join(t.TempDir(), "invalid_optimization_signature.howl")
 	source := `(cli_app
 		(optimize_signature named
 			(metric "accuracy")
@@ -951,7 +951,7 @@ func TestOptimizationSignatureReportsMalformedCandidateAsJSON(t *testing.T) {
 		t.Fatalf("write invalid signature: %v", err)
 	}
 
-	command := exec.Command("go", "run", "zero.go", "-optimization-plan", input)
+	command := exec.Command("go", "run", "howlframe.go", "-optimization-plan", input)
 	output, err := command.Output()
 	if err == nil {
 		t.Fatalf("malformed optimization signature unexpectedly succeeded:\n%s", output)
@@ -962,26 +962,26 @@ func TestOptimizationSignatureReportsMalformedCandidateAsJSON(t *testing.T) {
 		Column int    `json:"column"`
 	}
 	if decodeErr := json.Unmarshal(output, &reported); decodeErr != nil {
-		t.Fatalf("decode Zero JSON error: %v\n%s", decodeErr, output)
+		t.Fatalf("decode HowlFrame JSON error: %v\n%s", decodeErr, output)
 	}
 	if reported.Reason != "optimize_signature candidate label must be a string" ||
 		reported.Line != 5 || reported.Column <= 0 {
-		t.Fatalf("unexpected Zero JSON error: %+v", reported)
+		t.Fatalf("unexpected HowlFrame JSON error: %+v", reported)
 	}
 }
 
 func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 	const expected = "optimization signature body\n"
-	fixture := "tests/optimization_signature.zero"
+	fixture := "tests/optimization_signature.howl"
 
-	if output, err := exec.Command("go", "run", "zero.go", "-run", fixture).CombinedOutput(); err != nil {
+	if output, err := exec.Command("go", "run", "howlframe.go", "-run", fixture).CombinedOutput(); err != nil {
 		t.Fatalf("direct execution failed: %v\n%s", err, output)
 	} else if string(output) != expected {
 		t.Fatalf("direct output = %q, want %q", output, expected)
 	}
 
 	outDir := t.TempDir()
-	if output, err := exec.Command("go", "run", "zero.go", "-o", outDir, fixture).CombinedOutput(); err != nil {
+	if output, err := exec.Command("go", "run", "howlframe.go", "-o", outDir, fixture).CombinedOutput(); err != nil {
 		t.Fatalf("Go codegen failed: %v\n%s", err, output)
 	}
 	generatedBinary := filepath.Join(outDir, "optimization-signature")
@@ -994,48 +994,48 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 		t.Fatalf("generated output = %q, want %q", output, expected)
 	}
 
-	bytecodeFile := filepath.Join(outDir, "optimization-signature.zbc")
-	if output, err := exec.Command("go", "run", "zero.go", "-compile-bc", fixture, "-o", bytecodeFile).CombinedOutput(); err != nil {
+	bytecodeFile := filepath.Join(outDir, "optimization-signature.hfbc")
+	if output, err := exec.Command("go", "run", "howlframe.go", "-compile-bc", fixture, "-o", bytecodeFile).CombinedOutput(); err != nil {
 		t.Fatalf("bytecode compilation failed: %v\n%s", err, output)
 	}
-	if output, err := exec.Command("go", "run", "zero.go", "-run-bc", bytecodeFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command("go", "run", "howlframe.go", "-run-bc", bytecodeFile).CombinedOutput(); err != nil {
 		t.Fatalf("bytecode execution failed: %v\n%s", err, output)
 	} else if string(output) != expected {
 		t.Fatalf("bytecode output = %q, want %q", output, expected)
 	}
 }
 
-// TestZirGateAcceptsAllExistingFixtures is the empirical check on
-// improvement #87 Phase 2's production ZIR gate: it must not false-positive
-// on any real, currently-passing tests/*.zero fixture. This must pass before
-// any other ZIR-gate test result is trusted. One fixture is skipped as a
-// pre-existing, ZIR-unrelated failure that already fails checker.Check
-// before runZirGate is ever reached (confirmed by running it through
-// -validate on the pre-ZIR-gate binary): tests/routes.zero is an
+// TestHFIRGateAcceptsAllExistingFixtures is the empirical check on
+// improvement #87 Phase 2's production HFIR gate: it must not false-positive
+// on any real, currently-passing tests/*.howl fixture. This must pass before
+// any other HFIR-gate test result is trusted. One fixture is skipped as a
+// pre-existing, HFIR-unrelated failure that already fails checker.Check
+// before runHFIRGate is ever reached (confirmed by running it through
+// -validate on the pre-HFIR-gate binary): tests/routes.howl is an
 // include-only fragment with no standalone root, so it is only ever valid
-// when pulled in by an importer. tests/test_include.zero was skipped here
+// when pulled in by an importer. tests/test_include.howl was skipped here
 // too until bugs.md #43 was fixed; it now passes the sweep unexempted.
-// tests/module_math.zero (improvements.md #95) is skipped for the identical
-// reason as routes.zero: it is a bare (module ...) file with no importer, so
-// it is only ever valid when pulled in via tests/module_main.zero's (use
+// tests/module_math.howl (improvements.md #95) is skipped for the identical
+// reason as routes.howl: it is a bare (module ...) file with no importer, so
+// it is only ever valid when pulled in via tests/module_main.howl's (use
 // ...), which itself is a real cli_app root and passes the sweep unexempted.
-func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+func TestHFIRGateAcceptsAllExistingFixtures(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	skip := map[string]bool{
-		"routes.zero":      true,
-		"module_math.zero": true,
+		"routes.howl":      true,
+		"module_math.howl": true,
 	}
 
-	fixtures, err := filepath.Glob("tests/*.zero")
+	fixtures, err := filepath.Glob("tests/*.howl")
 	if err != nil {
-		t.Fatalf("failed to glob tests/*.zero: %v", err)
+		t.Fatalf("failed to glob tests/*.howl: %v", err)
 	}
 	if len(fixtures) == 0 {
-		t.Fatal("expected at least one tests/*.zero fixture")
+		t.Fatal("expected at least one tests/*.howl fixture")
 	}
 
 	for _, fixture := range fixtures {
@@ -1044,67 +1044,67 @@ func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
-			cmd := exec.Command(zeroBinary, "-validate", fixture)
+			cmd := exec.Command(howlframeBinary, "-validate", fixture)
 			if output, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("ZIR gate false-positived on a known-good fixture: %v\n%s", err, output)
+				t.Fatalf("HFIR gate false-positived on a known-good fixture: %v\n%s", err, output)
 			}
 		})
 	}
 }
 
-// TestZirGateRejectsTargetInfeasibleWasmConstructBeforeArtifact proves
-// genuinely new coverage from wiring ZIR verification into -compile-wasm:
+// TestHFIRGateRejectsTargetInfeasibleWasmConstructBeforeArtifact proves
+// genuinely new coverage from wiring HFIR verification into -compile-wasm:
 // spawn_agent/exec are not structurally rejected by checker.Check for a
 // cli_app root (only wasm_app roots get that rejection, via
-// checker.checkWasmApp's own construct whitelist, independent of ZIR - see
+// checker.checkWasmApp's own construct whitelist, independent of HFIR - see
 // the comment on the skipped legacy-wasm_app case below), so this is the
 // first point in the pipeline that rejects them for the wasm target.
-func TestZirGateRejectsTargetInfeasibleWasmConstructBeforeArtifact(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+func TestHFIRGateRejectsTargetInfeasibleWasmConstructBeforeArtifact(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "infeasible.zero")
+	inputFile := filepath.Join(tempDir, "infeasible.howl")
 	source := `(cli_app (spawn_agent "x" (task "y")))`
 	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
 		t.Fatalf("failed to write input: %v", err)
 	}
 
-	cmd := exec.Command(zeroBinary, "-compile-wasm", inputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-wasm", inputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -compile-wasm to reject a wasm-target-infeasible construct, got success:\n%s", output)
 	}
-	if !strings.Contains(string(output), "ZIR_TARGET_INFEASIBLE") {
-		t.Fatalf("expected ZIR_TARGET_INFEASIBLE in output, got: %s", output)
+	if !strings.Contains(string(output), "HFIR_TARGET_INFEASIBLE") {
+		t.Fatalf("expected HFIR_TARGET_INFEASIBLE in output, got: %s", output)
 	}
 	if _, statErr := os.Stat(inputFile + ".ssa.wat"); !os.IsNotExist(statErr) {
-		t.Fatalf(".ssa.wat must not be written after a ZIR gate rejection: %v", statErr)
+		t.Fatalf(".ssa.wat must not be written after a HFIR gate rejection: %v", statErr)
 	}
 
 	// Note: the equivalent legacy wasm_app-root fixture
 	// ("(wasm_app (spawn_agent ...))") is NOT tested here because
 	// checker.checkWasmApp already rejects it structurally at
-	// checker.Check time (zero.go:79), before this branch's runZirGate call
+	// checker.Check time (howlframe.go:79), before this branch's runHFIRGate call
 	// is ever reached - confirmed live during implementation. That path's
-	// rejection predates and is independent of this phase's ZIR wiring, so
+	// rejection predates and is independent of this phase's HFIR wiring, so
 	// it would not exercise anything new.
 }
 
-// TestZirGateDiagnosticOrderingIsDeterministic is the CLI-level companion to
-// internal/zir/verifier_test.go's TestVerifierDiagnosticOrderIsDeterministic,
+// TestHFIRGateDiagnosticOrderingIsDeterministic is the CLI-level companion to
+// internal/hfir/verifier_test.go's TestVerifierDiagnosticOrderIsDeterministic,
 // confirming the same ordering guarantee survives through
-// reportZirDiagnostics's JSON array output.
-func TestZirGateDiagnosticOrderingIsDeterministic(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+// reportHFIRDiagnostics's JSON array output.
+func TestHFIRGateDiagnosticOrderingIsDeterministic(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "two_infeasible.zero")
+	inputFile := filepath.Join(tempDir, "two_infeasible.howl")
 	source := `(cli_app (spawn_agent "x" (task "y")) (exec "ls"))`
 	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
 		t.Fatalf("failed to write input: %v", err)
@@ -1112,7 +1112,7 @@ func TestZirGateDiagnosticOrderingIsDeterministic(t *testing.T) {
 
 	var outputs []string
 	for i := 0; i < 3; i++ {
-		output, err := exec.Command(zeroBinary, "-compile-wasm", inputFile).CombinedOutput()
+		output, err := exec.Command(howlframeBinary, "-compile-wasm", inputFile).CombinedOutput()
 		if err == nil {
 			t.Fatalf("run %d: expected -compile-wasm to reject, got success:\n%s", i, output)
 		}
@@ -1129,22 +1129,22 @@ func TestZirGateDiagnosticOrderingIsDeterministic(t *testing.T) {
 	if err := json.Unmarshal([]byte(outputs[0]), &diags); err != nil {
 		t.Fatalf("failed to parse diagnostic JSON array: %v\n%s", err, outputs[0])
 	}
-	if len(diags) != 2 || diags[0].Code != "ZIR_TARGET_INFEASIBLE" || diags[1].Code != "ZIR_TARGET_INFEASIBLE" {
-		t.Fatalf("expected exactly 2 ZIR_TARGET_INFEASIBLE diagnostics in order, got: %v", diags)
+	if len(diags) != 2 || diags[0].Code != "HFIR_TARGET_INFEASIBLE" || diags[1].Code != "HFIR_TARGET_INFEASIBLE" {
+		t.Fatalf("expected exactly 2 HFIR_TARGET_INFEASIBLE diagnostics in order, got: %v", diags)
 	}
 }
 
-// TestValidateModeRunsZirGateAndHasNoSideEffects confirms -validate remains
-// side-effect free now that it also runs the ZIR gate: a valid fixture
+// TestValidateModeRunsHFIRGateAndHasNoSideEffects confirms -validate remains
+// side-effect free now that it also runs the HFIR gate: a valid fixture
 // succeeds and leaves no files behind anywhere in the working directory.
-func TestValidateModeRunsZirGateAndHasNoSideEffects(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+func TestValidateModeRunsHFIRGateAndHasNoSideEffects(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	workDir := t.TempDir()
-	inputFile := filepath.Join(workDir, "valid.zero")
+	inputFile := filepath.Join(workDir, "valid.howl")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
 		t.Fatalf("failed to write input: %v", err)
 	}
@@ -1154,7 +1154,7 @@ func TestValidateModeRunsZirGateAndHasNoSideEffects(t *testing.T) {
 		t.Fatalf("failed to read workDir before running -validate: %v", err)
 	}
 
-	cmd := exec.Command(zeroBinary, "-validate", inputFile)
+	cmd := exec.Command(howlframeBinary, "-validate", inputFile)
 	cmd.Dir = workDir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("-validate failed on a valid fixture: %v\n%s", err, output)
@@ -1169,45 +1169,45 @@ func TestValidateModeRunsZirGateAndHasNoSideEffects(t *testing.T) {
 	}
 }
 
-// TestZirGateForCompileBcDoesNotRegressValidPrograms confirms the ZIR gate
+// TestHFIRGateForCompileBcDoesNotRegressValidPrograms confirms the HFIR gate
 // added to -compile-bc doesn't break a valid program's bytecode compilation.
 // Note: unlike -compile-wasm, there is currently no way to make this gate
-// reject real Zero source through -compile-bc - ZIR_UNBOUND_REF is excluded
-// from the production gate's blocking set (bugs.md #42), ZIR_INVALID_REF
+// reject real HowlFrame source through -compile-bc - HFIR_UNBOUND_REF is excluded
+// from the production gate's blocking set (bugs.md #42), HFIR_INVALID_REF
 // cannot arise from LowerAST's own construction on real parsed source (every
 // data/control edge it creates always points at a node it just added), and
 // isFeasible has no rules for the "bytecode" target. This is documented
 // honestly rather than tested against a contrived synthetic failure -
 // bytecode-specific target-feasibility rules are out of scope for this
 // phase (see improvements.md #87's Phase 2 status note).
-func TestZirGateForCompileBcDoesNotRegressValidPrograms(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+func TestHFIRGateForCompileBcDoesNotRegressValidPrograms(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "valid.zero")
+	inputFile := filepath.Join(tempDir, "valid.howl")
 	outputFile := filepath.Join(tempDir, "valid.bc.bin")
 	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
 		t.Fatalf("failed to write input: %v", err)
 	}
 
-	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", outputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc failed on a valid program after adding the ZIR gate: %v\n%s", err, output)
+		t.Fatalf("-compile-bc failed on a valid program after adding the HFIR gate: %v\n%s", err, output)
 	}
 	if _, err := os.Stat(outputFile); err != nil {
 		t.Fatalf("bytecode output was not written: %v", err)
 	}
 }
 
-// TestZirTargetBytecodeMatchesVerifierConstant keeps the CLI's target
-// identity and internal/zir's construct-support rule spelled the same way. If
+// TestHFIRTargetBytecodeMatchesVerifierConstant keeps the CLI's target
+// identity and internal/hfir's construct-support rule spelled the same way. If
 // they drift, -compile-bc silently stops being gated at all.
-func TestZirTargetBytecodeMatchesVerifierConstant(t *testing.T) {
-	if string(zirTargetBytecode) != zir.TargetBytecode {
-		t.Fatalf("zirTargetBytecode = %q, but zir.TargetBytecode = %q", zirTargetBytecode, zir.TargetBytecode)
+func TestHFIRTargetBytecodeMatchesVerifierConstant(t *testing.T) {
+	if string(hfirTargetBytecode) != hfir.TargetBytecode {
+		t.Fatalf("hfirTargetBytecode = %q, but hfir.TargetBytecode = %q", hfirTargetBytecode, hfir.TargetBytecode)
 	}
 }
 
@@ -1217,18 +1217,18 @@ func TestZirTargetBytecodeMatchesVerifierConstant(t *testing.T) {
 // which should print zero/one/other, was dropped by compileNode's switch
 // because it had no default case.
 func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	outputFile := filepath.Join(t.TempDir(), "advanced.bc.bin")
-	cmd := exec.Command(zeroBinary, "-compile-bc", "tests/test_advanced_control.zero", "-o", outputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-bc", "tests/test_advanced_control.howl", "-o", outputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -compile-bc to reject an unsupported construct, got success:\n%s", output)
 	}
-	for _, want := range []string{"ZIR_TARGET_INFEASIBLE", `\"match\"`} {
+	for _, want := range []string{"HFIR_TARGET_INFEASIBLE", `\"match\"`} {
 		if !strings.Contains(string(output), want) {
 			t.Errorf("expected %s in output, got: %s", want, output)
 		}
@@ -1242,18 +1242,18 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 // the backlog item that owns the gap, so the failure is actionable rather than
 // just a wall.
 func TestCompileBcFailsClosedCitingOwningTracker(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	outputFile := filepath.Join(t.TempDir(), "void.bc.bin")
-	cmd := exec.Command(zeroBinary, "-compile-bc", "tests/test_void_defun.zero", "-o", outputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-bc", "tests/test_void_defun.howl", "-o", outputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -compile-bc to reject a test block, got success:\n%s", output)
 	}
-	for _, want := range []string{"ZIR_TARGET_INFEASIBLE", `\"test\"`, "improvements.md #96"} {
+	for _, want := range []string{"HFIR_TARGET_INFEASIBLE", `\"test\"`, "improvements.md #96"} {
 		if !strings.Contains(string(output), want) {
 			t.Errorf("expected %s in output, got: %s", want, output)
 		}
@@ -1267,20 +1267,20 @@ func TestCompileBcFailsClosedCitingOwningTracker(t *testing.T) {
 // a head nobody has ever implemented used to pass -validate AND -compile-bc,
 // and the resulting program ran to exit 0 while skipping it.
 func TestCompileBcFailsClosedOnUnknownHead(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "bogus.zero")
+	inputFile := filepath.Join(tempDir, "bogus.howl")
 	outputFile := filepath.Join(tempDir, "bogus.bc.bin")
 	source := `(cli_app (do (print "before") (totally_made_up_head "x" 42) (print "after")))`
 	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
 		t.Fatalf("failed to write input: %v", err)
 	}
 
-	cmd := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile)
+	cmd := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", outputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -compile-bc to reject an unknown head, got success:\n%s", output)
@@ -1298,13 +1298,13 @@ func TestCompileBcFailsClosedOnUnknownHead(t *testing.T) {
 // instructions because nobody implemented it". type_hint, type_hints and
 // type_param must still compile AND run unchanged.
 func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
 	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "annotated.zero")
+	inputFile := filepath.Join(tempDir, "annotated.howl")
 	outputFile := filepath.Join(tempDir, "annotated.bc.bin")
 	source := `(cli_app
   (defun add (a b)
@@ -1324,14 +1324,14 @@ func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
 		t.Fatalf("failed to write input: %v", err)
 	}
 
-	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", outputFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", outputFile).CombinedOutput(); err != nil {
 		t.Fatalf("-compile-bc rejected a CompileTimeOnly annotation: %v\n%s", err, output)
 	}
 	if _, err := os.Stat(outputFile); err != nil {
 		t.Fatalf("bytecode output was not written: %v", err)
 	}
 
-	output, err := exec.Command(zeroBinary, "-run-bc", outputFile).CombinedOutput()
+	output, err := exec.Command(howlframeBinary, "-run-bc", outputFile).CombinedOutput()
 	if err != nil {
 		t.Fatalf("-run-bc failed: %v\n%s", err, output)
 	}
@@ -1342,9 +1342,9 @@ func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
 }
 
 // TestCompileBcCorpusPartitionMatchesRegistry is the empirical guard for the
-// whole change, and it exists because TestZirGateAcceptsAllExistingFixtures
-// cannot serve that role: that test runs -validate, which uses zirTargetNone,
-// and internal/zir's Verify only applies target rules for a non-empty target -
+// whole change, and it exists because TestHFIRGateAcceptsAllExistingFixtures
+// cannot serve that role: that test runs -validate, which uses hfirTargetNone,
+// and internal/hfir's Verify only applies target rules for a non-empty target -
 // so it never reaches the construct-support check at all.
 //
 // For every tracked fixture, -compile-bc's exit status must agree exactly with
@@ -1352,28 +1352,28 @@ func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
 // is a false positive; one that compiles despite a violation means the gate
 // was bypassed.
 func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
 
-	// routes.zero is an include-only fragment with no standalone root, so it
+	// routes.howl is an include-only fragment with no standalone root, so it
 	// fails earlier, in checker.Check, for reasons unrelated to construct
-	// support. (tests/test_include.zero was skipped here too until bugs.md
-	// #43 was fixed.) module_math.zero (improvements.md #95) is the same
+	// support. (tests/test_include.howl was skipped here too until bugs.md
+	// #43 was fixed.) module_math.howl (improvements.md #95) is the same
 	// shape: a bare (module ...) file with no importer, valid only via
-	// module_main.zero's (use ...).
+	// module_main.howl's (use ...).
 	skip := map[string]bool{
-		"routes.zero":      true,
-		"module_math.zero": true,
+		"routes.howl":      true,
+		"module_math.howl": true,
 	}
 
-	fixtures, err := filepath.Glob("tests/*.zero")
+	fixtures, err := filepath.Glob("tests/*.howl")
 	if err != nil {
-		t.Fatalf("failed to glob tests/*.zero: %v", err)
+		t.Fatalf("failed to glob tests/*.howl: %v", err)
 	}
 	if len(fixtures) == 0 {
-		t.Fatal("expected at least one tests/*.zero fixture")
+		t.Fatal("expected at least one tests/*.howl fixture")
 	}
 
 	outDir := t.TempDir()
@@ -1387,7 +1387,7 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read fixture: %v", err)
 			}
-			// Scan the same AST the real -compile-bc path scans: zero.go
+			// Scan the same AST the real -compile-bc path scans: howlframe.go
 			// expands includes and resolves modules before lowering, so a
 			// raw parse would see (use ...) heads the compiler never does
 			// and report violations -compile-bc does not.
@@ -1397,7 +1397,7 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 			violations := construct.Scan(root)
 
 			outputFile := filepath.Join(outDir, name+".bc.bin")
-			output, runErr := exec.Command(zeroBinary, "-compile-bc", fixture, "-o", outputFile).CombinedOutput()
+			output, runErr := exec.Command(howlframeBinary, "-compile-bc", fixture, "-o", outputFile).CombinedOutput()
 
 			if len(violations) == 0 {
 				if runErr != nil {
@@ -1427,36 +1427,36 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 // beyond the corpus sweeps above: negative paths (private access, missing
 // module, nested/circular imports), the compile-time-linking proof (bytecode
 // runs after the source module disappears), interpreter/bytecode parity, and
-// ZIR provenance. tests/module_math.zero and tests/module_main.zero already
+// HFIR provenance. tests/module_math.howl and tests/module_main.howl already
 // prove the happy path through every real sweep (-validate, -compile-bc,
 // construct.Scan, tools/difftest); these are the shapes that must not become
 // permanent corpus fixtures, so they use scratch t.TempDir() files instead.
 
-func buildZeroBinaryForTest(t *testing.T) string {
+func buildHowlFrameBinaryForTest(t *testing.T) string {
 	t.Helper()
-	zeroBinary := filepath.Join(t.TempDir(), "zero")
-	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
 	}
-	return zeroBinary
+	return howlframeBinary
 }
 
 // TestModuleInterpreterAndBytecodeParity proves -run and -compile-bc+-run-bc
 // agree on the same multi-file module program, using the checked-in fixture
 // through the real pipeline (not a hand-built AST).
 func TestModuleInterpreterAndBytecodeParity(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
-	runOut, err := exec.Command(zeroBinary, "-run", "tests/module_main.zero").CombinedOutput()
+	runOut, err := exec.Command(howlframeBinary, "-run", "tests/module_main.howl").CombinedOutput()
 	if err != nil {
 		t.Fatalf("-run failed: %v\n%s", err, runOut)
 	}
 
 	bcFile := filepath.Join(t.TempDir(), "module_main.bc.bin")
-	if output, err := exec.Command(zeroBinary, "-compile-bc", "tests/module_main.zero", "-o", bcFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", "tests/module_main.howl", "-o", bcFile).CombinedOutput(); err != nil {
 		t.Fatalf("-compile-bc failed: %v\n%s", err, output)
 	}
-	runBcOut, err := exec.Command(zeroBinary, "-run-bc", bcFile).CombinedOutput()
+	runBcOut, err := exec.Command(howlframeBinary, "-run-bc", bcFile).CombinedOutput()
 	if err != nil {
 		t.Fatalf("-run-bc failed: %v\n%s", err, runBcOut)
 	}
@@ -1472,31 +1472,31 @@ func TestModuleInterpreterAndBytecodeParity(t *testing.T) {
 
 // TestModuleBytecodeRunsWithoutSourceModule is the direct proof that module
 // linking is compile-time, not an accidental runtime dependency on the
-// original .zero source: compile to bytecode, then make the imported module
+// original .howl source: compile to bytecode, then make the imported module
 // file unavailable, then run the bytecode.
 func TestModuleBytecodeRunsWithoutSourceModule(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	scratch := t.TempDir()
-	mathSrc, err := os.ReadFile("tests/module_math.zero")
+	mathSrc, err := os.ReadFile("tests/module_math.howl")
 	if err != nil {
 		t.Fatalf("failed to read fixture: %v", err)
 	}
-	mainSrc, err := os.ReadFile("tests/module_main.zero")
+	mainSrc, err := os.ReadFile("tests/module_main.howl")
 	if err != nil {
 		t.Fatalf("failed to read fixture: %v", err)
 	}
-	mathPath := filepath.Join(scratch, "module_math.zero")
-	mainPath := filepath.Join(scratch, "module_main.zero")
+	mathPath := filepath.Join(scratch, "module_math.howl")
+	mainPath := filepath.Join(scratch, "module_main.howl")
 	if err := os.WriteFile(mathPath, mathSrc, 0o644); err != nil {
-		t.Fatalf("failed to write module_math.zero: %v", err)
+		t.Fatalf("failed to write module_math.howl: %v", err)
 	}
 	if err := os.WriteFile(mainPath, mainSrc, 0o644); err != nil {
-		t.Fatalf("failed to write module_main.zero: %v", err)
+		t.Fatalf("failed to write module_main.howl: %v", err)
 	}
 
 	bcFile := filepath.Join(scratch, "module_main.bc.bin")
-	if output, err := exec.Command(zeroBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err != nil {
 		t.Fatalf("-compile-bc failed: %v\n%s", err, output)
 	}
 
@@ -1504,7 +1504,7 @@ func TestModuleBytecodeRunsWithoutSourceModule(t *testing.T) {
 		t.Fatalf("failed to remove module source: %v", err)
 	}
 
-	output, err := exec.Command(zeroBinary, "-run-bc", bcFile).CombinedOutput()
+	output, err := exec.Command(howlframeBinary, "-run-bc", bcFile).CombinedOutput()
 	if err != nil {
 		t.Fatalf("-run-bc failed after the source module was removed: %v\n%s", err, output)
 	}
@@ -1517,10 +1517,10 @@ func TestModuleBytecodeRunsWithoutSourceModule(t *testing.T) {
 // not obscurity: calling a non-exported symbol through its module's alias
 // must fail closed with a structured diagnostic, before execution.
 func TestModulePrivateSymbolIsNotReachable(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	dir := t.TempDir()
-	mustWriteFile(t, dir, "priv_math.zero", `(module
+	mustWriteFile(t, dir, "priv_math.howl", `(module
 	(export (defun add_one (n)
 		(type_hint n "int")
 		(type_hint return "int")
@@ -1531,12 +1531,12 @@ func TestModulePrivateSymbolIsNotReachable(t *testing.T) {
 		(return 99)
 	)
 )`)
-	mainPath := mustWriteFile(t, dir, "priv_main.zero", `(cli_app
-	(use "priv_math.zero" as math)
+	mainPath := mustWriteFile(t, dir, "priv_main.howl", `(cli_app
+	(use "priv_math.howl" as math)
 	(print (call math/hidden))
 )`)
 
-	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	output, err := exec.Command(howlframeBinary, "-validate", mainPath).CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -validate to reject a call to a private symbol, got success:\n%s", output)
 	}
@@ -1545,7 +1545,7 @@ func TestModulePrivateSymbolIsNotReachable(t *testing.T) {
 	}
 
 	bcFile := filepath.Join(dir, "priv_main.bc.bin")
-	if output, err := exec.Command(zeroBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err == nil {
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err == nil {
 		t.Fatalf("expected -compile-bc to reject a call to a private symbol, got success:\n%s", output)
 	}
 	if _, statErr := os.Stat(bcFile); !os.IsNotExist(statErr) {
@@ -1556,15 +1556,15 @@ func TestModulePrivateSymbolIsNotReachable(t *testing.T) {
 // TestModuleMissingImportFailsClosed proves a missing use target fails
 // closed with source location, rather than a confusing downstream error.
 func TestModuleMissingImportFailsClosed(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	dir := t.TempDir()
-	mainPath := mustWriteFile(t, dir, "missing_main.zero", `(cli_app
-	(use "does_not_exist.zero" as nope)
+	mainPath := mustWriteFile(t, dir, "missing_main.howl", `(cli_app
+	(use "does_not_exist.howl" as nope)
 	(print (call nope/foo))
 )`)
 
-	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	output, err := exec.Command(howlframeBinary, "-validate", mainPath).CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -validate to reject a missing module, got success:\n%s", output)
 	}
@@ -1576,7 +1576,7 @@ func TestModuleMissingImportFailsClosed(t *testing.T) {
 	if jsonErr := json.Unmarshal(output, &diag); jsonErr != nil {
 		t.Fatalf("expected a structured JSON diagnostic, got: %s", output)
 	}
-	if !strings.Contains(diag.Reason, "does_not_exist.zero") {
+	if !strings.Contains(diag.Reason, "does_not_exist.howl") {
 		t.Errorf("expected the diagnostic to name the missing module, got: %q", diag.Reason)
 	}
 	if diag.Line == 0 {
@@ -1591,26 +1591,26 @@ func TestModuleMissingImportFailsClosed(t *testing.T) {
 // linking is deliberately deferred (see the #95 journal); this is the
 // documented scope boundary, not a bug.
 func TestModuleNestedImportFailsClosed(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	dir := t.TempDir()
-	mustWriteFile(t, dir, "nest_b.zero", `(module
+	mustWriteFile(t, dir, "nest_b.howl", `(module
 	(export (defun b_fn () (type_hint return "int") (return 5)))
 )`)
-	mustWriteFile(t, dir, "nest_a.zero", `(module
-	(use "nest_b.zero" as b)
+	mustWriteFile(t, dir, "nest_a.howl", `(module
+	(use "nest_b.howl" as b)
 	(export (defun a_fn () (type_hint return "int") (return (call b/b_fn))))
 )`)
-	mainPath := mustWriteFile(t, dir, "nest_main.zero", `(cli_app
-	(use "nest_a.zero" as a)
+	mainPath := mustWriteFile(t, dir, "nest_main.howl", `(cli_app
+	(use "nest_a.howl" as a)
 	(print (call a/a_fn))
 )`)
 
-	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	output, err := exec.Command(howlframeBinary, "-validate", mainPath).CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected -validate to reject a nested module import, got success:\n%s", output)
 	}
-	for _, want := range []string{"nested module import", "nest_a.zero", "nest_b.zero"} {
+	for _, want := range []string{"nested module import", "nest_a.howl", "nest_b.howl"} {
 		if !strings.Contains(string(output), want) {
 			t.Errorf("expected %q in output, got: %s", want, output)
 		}
@@ -1623,19 +1623,19 @@ func TestModuleNestedImportFailsClosed(t *testing.T) {
 // TestModuleNestedImportFailsClosed's boundary already forbids outright, so
 // no cycle can be constructed at all; this test locks that guarantee in.
 func TestModuleCircularImportFailsClosed(t *testing.T) {
-	zeroBinary := buildZeroBinaryForTest(t)
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	dir := t.TempDir()
-	mustWriteFile(t, dir, "circ_a.zero", `(module
-	(use "circ_b.zero" as b)
+	mustWriteFile(t, dir, "circ_a.howl", `(module
+	(use "circ_b.howl" as b)
 	(export (defun a_fn (n) (type_hint n "int") (type_hint return "int") (return (call b/b_fn n))))
 )`)
-	mustWriteFile(t, dir, "circ_b.zero", `(module
-	(use "circ_a.zero" as a)
+	mustWriteFile(t, dir, "circ_b.howl", `(module
+	(use "circ_a.howl" as a)
 	(export (defun b_fn (n) (type_hint n "int") (type_hint return "int") (return (call a/a_fn n))))
 )`)
-	mainPath := mustWriteFile(t, dir, "circ_main.zero", `(cli_app
-	(use "circ_a.zero" as a)
+	mainPath := mustWriteFile(t, dir, "circ_main.howl", `(cli_app
+	(use "circ_a.howl" as a)
 	(print (call a/a_fn 1))
 )`)
 
@@ -1643,7 +1643,7 @@ func TestModuleCircularImportFailsClosed(t *testing.T) {
 	var output []byte
 	var cmdErr error
 	go func() {
-		output, cmdErr = exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+		output, cmdErr = exec.Command(howlframeBinary, "-validate", mainPath).CombinedOutput()
 		close(done)
 	}()
 	select {
@@ -1660,15 +1660,15 @@ func TestModuleCircularImportFailsClosed(t *testing.T) {
 	}
 }
 
-// TestModuleZirProvenanceSurvivesResolution proves that after module
-// resolution, ZIR nodes still carry source provenance pointing at the
+// TestModuleHFIRProvenanceSurvivesResolution proves that after module
+// resolution, HFIR nodes still carry source provenance pointing at the
 // originating file: an imported function's nodes are attributed to the
 // module file, and the importer's own statements to the importer file - with
-// no ZIR code changes needed, since ast.Node.Filename is set once at parse
+// no HFIR code changes needed, since ast.Node.Filename is set once at parse
 // time and ast.ResolveModules only ever rewrites .Value, never .Filename.
-func TestModuleZirProvenanceSurvivesResolution(t *testing.T) {
+func TestModuleHFIRProvenanceSurvivesResolution(t *testing.T) {
 	dir := t.TempDir()
-	mustWriteFile(t, dir, "prov_math.zero", `(module
+	mustWriteFile(t, dir, "prov_math.howl", `(module
 	(export (defun add_one (n)
 		(type_hint n "int")
 		(type_hint return "int")
@@ -1676,30 +1676,30 @@ func TestModuleZirProvenanceSurvivesResolution(t *testing.T) {
 	))
 )`)
 
-	source := `(cli_app (use "prov_math.zero" as math) (print (call math/add_one 41)))`
-	root := parser.NewParser(lexer.NewLexer(source), "prov_main.zero").ParseExpression()
+	source := `(cli_app (use "prov_math.howl" as math) (print (call math/add_one 41)))`
+	root := parser.NewParser(lexer.NewLexer(source), "prov_main.howl").ParseExpression()
 	parser.ExpandIncludes(root, dir, 0)
 	ast.ResolveModules(root)
 
-	graph, err := zir.LowerAST(root, "prov_main.zero")
+	graph, err := hfir.LowerAST(root, "prov_main.howl")
 	if err != nil {
-		t.Fatalf("zir.LowerAST failed: %v", err)
+		t.Fatalf("hfir.LowerAST failed: %v", err)
 	}
 
 	var sawImported, sawImporter bool
 	for _, node := range graph.Nodes {
 		switch node.Provenance.Filename {
-		case "prov_math.zero":
+		case "prov_math.howl":
 			sawImported = true
-		case "prov_main.zero":
+		case "prov_main.howl":
 			sawImporter = true
 		}
 	}
 	if !sawImported {
-		t.Error("expected at least one ZIR node with Filename \"prov_math.zero\" from the imported module")
+		t.Error("expected at least one HFIR node with Filename \"prov_math.howl\" from the imported module")
 	}
 	if !sawImporter {
-		t.Error("expected at least one ZIR node with Filename \"prov_main.zero\" from the importer")
+		t.Error("expected at least one HFIR node with Filename \"prov_main.howl\" from the importer")
 	}
 }
 

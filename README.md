@@ -1,10 +1,12 @@
-# Zero
+# HowlFrame
 
-Zero is an AI-first, S-expression programming language and toolchain. It is designed to be easy for language models to write, easy for tooling to validate, and flexible enough to target more than one runtime.
+HowlFrame is an AI-native programming language and verified execution platform for adaptive software, designed so probabilistic reasoning can operate inside explicit deterministic boundaries.
+
+The governing principle is simple: **intent is not authority**. Adaptive operations may reason, classify, generate, rank, plan, and propose. Deterministic machinery continues to own permissions, capability grants, persistent state, irreversible mutations, invariant enforcement, verification, and approval.
 
 The current toolchain includes:
 
-- A lexer, parser, AST layer, semantic checker, shared tree IR, and flat SSA/CFG lowering pipeline.
+- A lexer, parser, AST layer, semantic checker, HowlFrame Intermediate Representation (HFIR) verification gate, and flat SSA/CFG lowering pipeline.
 - Go code generation for `http_server` and `cli_app` programs.
 - JavaScript generation for `web_app` programs.
 - A WebAssembly Text prototype for `wasm_app` programs.
@@ -12,29 +14,29 @@ The current toolchain includes:
 - Direct AST execution for a bounded `cli_app` subset with `-run`.
 - Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`, including VM-local native stores.
 
-Zero still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The compiler also exposes a typed SSA control-flow graph layer for future native backends, reducing dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit.
+HowlFrame still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The compiler also exposes a typed SSA control-flow graph layer for future native backends, reducing dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit. HowlFrame is experimental; target coverage is deliberately explicit, and unfinished roadmap work is documented as such.
 
-## Why Zero?
+## Why HowlFrame?
 
-LLMs are good at producing structure, but they often lose time on syntax details, invalid APIs, and large rewrites. Zero keeps the source grammar small and uniform so generation can be constrained and validated before runtime.
+LLMs are good at producing structure, but they often lose time on syntax details, invalid APIs, and large rewrites. HowlFrame keeps the source grammar small and uniform so generation can be constrained and validated before runtime.
 
 Key design points:
 
-- **Uniform syntax:** Zero source is built from balanced S-expressions, which are easier to grammar-constrain than full-size general-purpose languages.
+- **Uniform syntax:** HowlFrame source is built from balanced S-expressions, which are easier to grammar-constrain than full-size general-purpose languages.
 - **Semantic feedback:** Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted.
 - **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. Coverage differs by target: the standalone bytecode target enforces this against an authoritative construct-support registry (`internal/construct`), so anything it cannot lower fails before an artifact is written rather than being silently dropped.
 - **Multiple execution paths:** The same front end can feed Go, JavaScript, WAT, direct interpretation, or bytecode depending on the root node and flags.
 
 ## Current State
 
-Zero is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
+HowlFrame is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
 
-The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors: the interpreter fails closed at the point of evaluation, and `-compile-bc` fails closed at compile time with a `ZIR_TARGET_INFEASIBLE` diagnostic naming the construct, its source location, and the backlog item that owns the gap. The bytecode VM also supports an in-memory native store for structured records through `store_open`, `store_put`, `store_get`, and `store_delete`.
+The JavaScript backend supports `web_app` logic and Node test generation. The WebAssembly backend is intentionally narrower: it emits locally parsed and type-validated WAT for typed numeric/control-flow expressions, static and dynamic aggregate reads, dynamic dictionary keys, and runtime initialization of integer and string aggregate expressions. Direct AST execution and bytecode VM execution cover bounded `cli_app` subsets and reject unsupported nodes with explicit errors: the interpreter fails closed at the point of evaluation, and `-compile-bc` fails closed at compile time with a `HFIR_TARGET_INFEASIBLE` diagnostic naming the construct, its source location, and the backlog item that owns the gap. The bytecode VM also supports an in-memory native store for structured records through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
 See:
 
 - [Direct execution design](docs/direct_execution_design.md)
-- [Zero native store design](docs/zero_native_store_design.md)
+- [HowlFrame native store design](docs/howlframe_native_store_design.md)
 - [Language write-cost benchmark](docs/language_write_cost_benchmark.md)
 - [Architecture roadmap](docs/architecture_roadmap.md)
 - [Bytecode reference](docs/reference/bytecode_reference.md)
@@ -55,35 +57,47 @@ pip install outlines openai
 
 ## Quick Start
 
-Clone the repo and run a Zero program:
+Clone the repo and run a HowlFrame program:
 
 ```bash
-git clone https://github.com/howlcipher/zero.git
-cd zero
-go run zero.go examples/cli_hello.zero
+git clone https://github.com/howlcipher/howlframe.git
+cd howlframe
+go run howlframe.go examples/cli_hello.howl
+```
+
+The default Go backend writes `server.go`. Run the generated program with:
+
+```bash
 go run server.go
+```
+
+To build the canonical compiler executable:
+
+```bash
+go build -o howlframe howlframe.go
+./howlframe -validate examples/cli_hello.howl
 ```
 
 For a `cli_app` supported by the interpreter subset, run without generating Go:
 
 ```bash
-go run zero.go -run examples/cli_hello.zero
+go run howlframe.go -run examples/cli_hello.howl
 ```
 
 For bytecode:
 
 ```bash
-go run zero.go -compile-bc examples/cli_hello.zero
-go run zero.go -run-bc examples/cli_hello.zero.bc.bin
-go run zero.go -compile-bc tests/test_store_bytecode.zero -o /tmp/test_store_bytecode.zbc
-go run zero.go -run-bc /tmp/test_store_bytecode.zbc
-go run zero.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.zbc
+go run howlframe.go -compile-bc examples/cli_hello.howl
+go run howlframe.go -run-bc examples/cli_hello.howl.bc.bin
+go run howlframe.go -compile-bc tests/test_store_bytecode.howl -o /tmp/test_store_bytecode.hfbc
+go run howlframe.go -run-bc /tmp/test_store_bytecode.hfbc
+go run howlframe.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.hfbc
 ```
 
 For WebAssembly Text:
 
 ```bash
-go run zero.go -o build examples/wasm_math.zero
+go run howlframe.go -o build examples/wasm_math.howl
 ```
 
 That writes `build/app.wat`.
@@ -91,8 +105,8 @@ That writes `build/app.wat`.
 To compile a checked `cli_app` expression through the typed SSA/CFG backend:
 
 ```bash
-go run zero.go -compile-wasm examples/native_math.zero
-go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
+go run howlframe.go -compile-wasm examples/native_math.howl
+go run howlframe.go -compile-wasm examples/native_math.howl -o build/native_math.wat
 ```
 
 The default artifact is `<input>.ssa.wat`. This native serializer supports
@@ -107,7 +121,7 @@ items #73/#74 for that remaining language-surface work.
 
 ## Language Roots
 
-Zero programs use one root form:
+HowlFrame programs use one root form:
 
 - `(cli_app ...)` for command-line programs.
 - `(http_server port ...)` for Go-backed HTTP servers.
@@ -121,7 +135,7 @@ Zero programs use one root form:
 ```lisp
 (cli_app
   (print "Hello, World!")
-  (let (name "Zero")
+  (let (name "HowlFrame")
     (print "Welcome to" name)
   )
 )
@@ -132,7 +146,7 @@ Zero programs use one root form:
 ```lisp
 (http_server 8080
   (route "/" (lambda (req)
-    (res 200 "text/plain" "Hello from Zero")
+    (res 200 "text/plain" "Hello from HowlFrame")
   ))
 
   (route "/json" (lambda (req)
@@ -146,7 +160,7 @@ Zero programs use one root form:
 Run it:
 
 ```bash
-go run zero.go examples/hello.zero
+go run howlframe.go examples/hello.howl
 go run server.go
 ```
 
@@ -173,7 +187,7 @@ go run server.go
 ```
 
 ```bash
-go run zero.go counter.zero
+go run howlframe.go counter.howl
 node --test app.test.js
 ```
 
@@ -186,16 +200,16 @@ node --test app.test.js
 ```
 
 ```bash
-go run zero.go -o build examples/wasm_math.zero
+go run howlframe.go -o build examples/wasm_math.howl
 ```
 
 ### Reference Application
 
-[Zero Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to Zero bytecode and analyzes repositories without generated Go or JavaScript. Its dogfooding tests prove both the unchanged default instruction ceiling and a larger finite budget explicitly authorized by the trusted runner.
+[HowlFrame Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to HowlFrame bytecode and analyzes repositories without generated Go or JavaScript. Its dogfooding tests prove both the unchanged default instruction ceiling and a larger finite budget explicitly authorized by the trusted runner.
 
 ## Common Language Features
 
-Zero supports the core control-flow and data primitives expected by the shipped backends:
+HowlFrame supports the core control-flow and data primitives expected by the shipped backends:
 
 - `let`, `set`, `if`, `while`, `for`, `match`, and `do`.
 - `defun`, `call`, `return`, `type_hint`, and `type_param`.
@@ -212,7 +226,7 @@ AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, 
 
 The `internal/masking` package compiles semantic `ast.TypeInfo` values and complete `checker.Analysis` results into deterministic, JSON-serializable mask plans. Plans describe provider-neutral token classes, literals, collection delimiters, struct fields, function parameter and return constraints, and schema bridges for use by downstream constrained decoders.
 
-Use `(schema_bridge User output)` to bind an output source to a declared `User` struct. The checker rejects unknown targets and the plan records the exact struct constraint; `go run zero.go -mask-plan program.zero` prints the complete plan.
+Use `(schema_bridge User output)` to bind an output source to a declared `User` struct. The checker rejects unknown targets and the plan records the exact struct constraint; `go run howlframe.go -mask-plan program.howl` prints the complete `howlframe.mask_plan/v1` plan.
 
 This API does not call a model or map constraints to provider-specific token IDs. Live logit masking remains the responsibility of an inference integration that consumes the plan.
 
@@ -229,11 +243,11 @@ Use `optimize_signature` to record optimization intent around an otherwise norma
   (print "body"))
 ```
 
-The form requires a symbol name, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run zero.go -optimization-plan program.zero` prints deterministic `zero.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
+The form requires a symbol name, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run howlframe.go -optimization-plan program.howl` prints deterministic `howlframe.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
 
 ## Orchestrator
 
-`tools/orchestrator/orchestrator.py` is an optional local-model experiment. It currently uses Outlines with an OpenAI-compatible Ollama endpoint to generate JSON bytecode that is executed by the Zero VM through `-run-bc`.
+`tools/orchestrator/orchestrator.py` is an optional local-model experiment. It currently uses Outlines with an OpenAI-compatible Ollama endpoint to generate JSON bytecode that is executed by the HowlFrame VM through `-run-bc`.
 
 Start Ollama, make sure the configured model exists, then run:
 
@@ -243,13 +257,13 @@ ollama pull llama3
 python tools/orchestrator/orchestrator.py
 ```
 
-The orchestrator is not required for normal Zero source files. Manual `.zero` development uses `go run zero.go ...` directly.
+The orchestrator is not required for normal HowlFrame source files. Manual `.howl` development uses `go run howlframe.go ...` directly.
 
 The generated bytecode schema used by that script lives at `tools/orchestrator/orchestrator_schema.py`, and its model prompt context lives at `tools/orchestrator/ai_prompt.md`.
 
 ## Output Files
 
-By default, Zero writes generated files into the current directory:
+By default, HowlFrame writes generated files into the current directory:
 
 - Go targets write `server.go` and, when tests exist, `server_test.go`.
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
@@ -260,27 +274,27 @@ By default, Zero writes generated files into the current directory:
 Use `-o <dir>` to write generated artifacts elsewhere:
 
 ```bash
-go run zero.go -o build examples/hello.zero
+go run howlframe.go -o build examples/hello.howl
 ```
 
 `-o <dir>` may also follow the input file for Go, JavaScript, and legacy WAT
 generation; the directory is created when it does not exist:
 
 ```bash
-go run zero.go examples/hello.zero -o build
+go run howlframe.go examples/hello.howl -o build
 ```
 
 For bytecode compilation, `-o <file>` can also name the exact bytecode output file:
 
 ```bash
-go run zero.go -compile-bc examples/cli_hello.zero -o build/cli_hello.zbc
+go run howlframe.go -compile-bc examples/cli_hello.howl -o build/cli_hello.hfbc
 ```
 
 The same exact-output handling applies to SSA WebAssembly compilation when
 `-o <file>` follows the input:
 
 ```bash
-go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
+go run howlframe.go -compile-wasm examples/native_math.howl -o build/native_math.wat
 ```
 
 ## Execution Policy
@@ -288,21 +302,21 @@ go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
 Every `-run-bc` execution uses a runner-owned execution policy. The default remains 100,000 instructions. A trusted runner may select another positive, finite ceiling by placing `--max-instructions` before the bytecode artifact:
 
 ```bash
-go run zero.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.zbc
+go run howlframe.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.hfbc
 ```
 
 The ceiling is the maximum number of VM instructions allowed. A program that needs exactly the configured count succeeds; the next attempted instruction fails before dispatch with structured `LIMIT_EXCEEDED`. Zero, negative, malformed, and overflowed values are rejected before bytecode execution. There is no unlimited value.
 
-Execution policy is not Zero source syntax and is not stored in ZIR or the bytecode artifact. Application code cannot raise its own budget. Instruction budget and capabilities are independent: more instructions never grant access to external resources.
+Execution policy is not HowlFrame source syntax and is not stored in HFIR or the bytecode artifact. Application code cannot raise its own budget. Instruction budget and capabilities are independent: more instructions never grant access to external resources.
 
 ## Capability Security
 
 Every bytecode opcode declares a `Capability` in `internal/bytecode/opcode.go` (`network`, `filesystem`, `process`, `environment`, `database`, or none). `-run-bc` enforces this at the VM level: before executing an instruction, `internal/vm.BCVM` checks the instruction's capability against an allow-list, and panics with a structured `CAPABILITY_DENIED` runtime error if it isn't present. The default is fail-closed — with no allow-list, every capability-gated instruction is denied and only `CapNone` instructions (arithmetic, control flow, printing, in-process data structures, etc.) run.
 
-Pass an allow-list with `-allow-caps`, a comma-separated list of capability names, placed *before* the input file (like all of `zero.go`'s other flags — Go's `flag` package stops parsing at the first positional argument):
+Pass an allow-list with `-allow-caps`, a comma-separated list of capability names, placed *before* the input file (like all of `howlframe.go`'s other flags — Go's `flag` package stops parsing at the first positional argument):
 
 ```bash
-go run zero.go -run-bc -allow-caps network,filesystem examples/cli_hello.zero.bc.bin
+go run howlframe.go -run-bc -allow-caps network,filesystem examples/cli_hello.howl.bc.bin
 ```
 
 An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
@@ -319,11 +333,11 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 
 | Path | Purpose |
 | --- | --- |
-| `zero.go` | Main CLI entry point for parsing, checking, code generation, direct execution, bytecode, mask plans, and optimization plans. |
+| `howlframe.go` | Main CLI entry point for parsing, checking, code generation, direct execution, bytecode, mask plans, and optimization plans. |
 | `internal/` | Go packages for AST, parser, checker, IR, backends, bytecode, VM, masking, and optimization internals. |
 | `cmd/` | Developer commands such as generated reference and schema output. |
-| `examples/` | User-facing `.zero` programs and reference applications. |
-| `tests/` | Zero fixtures plus Python and Go regression tests. |
+| `examples/` | User-facing `.howl` programs and reference applications. |
+| `tests/` | HowlFrame fixtures plus Python and Go regression tests. |
 | `docs/` | GitHub Pages site, design notes, journals, archived historical source, and generated reference material. |
 | `benchmarks/` | Checked-in benchmark programs and result data. |
 | `tools/` | Optional Python tools, including the orchestrator and observer agent. |
@@ -331,6 +345,6 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 
 ## Benchmark
 
-The write-cost benchmark compares the time and token cost of having an LLM produce working programs in Zero, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
+The write-cost benchmark compares the time and token cost of having an LLM produce working programs in HowlFrame, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
 
 See [docs/language_write_cost_benchmark.md](docs/language_write_cost_benchmark.md) for methodology, raw result links, limitations, and current results.

@@ -3,15 +3,15 @@
 package masking
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/checker"
 	"reflect"
 	"sort"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/checker"
 )
 
 // FormatV1 identifies the serialized mask plan schema.
-const FormatV1 = "zero.mask_plan/v1"
+const FormatV1 = "howlframe.mask_plan/v1"
 
 var unconstrainedTokenClasses = []string{
 	"null",
@@ -40,7 +40,7 @@ type FieldPlan struct {
 }
 
 // TypePlan describes the JSON-compatible token classes and structure accepted
-// for one semantic Zero type. Token classes are symbolic so a downstream
+// for one semantic HowlFrame type. Token classes are symbolic so a downstream
 // decoder can map them to provider-specific token IDs.
 type TypePlan struct {
 	Kind         ast.ValueKind  `json:"kind"`

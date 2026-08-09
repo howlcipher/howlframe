@@ -2,13 +2,13 @@ package checker
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/ir"
 )
 
 // Diagnostic is a semantic error that can be reported without terminating a
-// library caller. The command-line checker converts these into Zero's normal
+// library caller. The command-line checker converts these into HowlFrame's normal
 // JSON error format in Check.
 type Diagnostic struct {
 	Reason string
@@ -23,7 +23,7 @@ type FunctionInfo struct {
 }
 
 // SchemaBridge records a source expression whose output is constrained to a
-// declared Zero struct at a model or other structured-output boundary.
+// declared HowlFrame struct at a model or other structured-output boundary.
 type SchemaBridge struct {
 	Target     string
 	Constraint ast.TypeInfo

@@ -116,7 +116,11 @@ def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
     return set(names).intersection(TRANSIENT_NAMES)
 
 
-def _reason_counterfactual(client: object, source: str, crash_data: dict) -> str:
+def _reason_counterfactual(
+    client: object,
+    source: str,
+    crash_data: dict,
+) -> str:
     crash_json = json.dumps(
         crash_data,
         ensure_ascii=True,
@@ -124,8 +128,9 @@ def _reason_counterfactual(client: object, source: str, crash_data: dict) -> str
     )
     prompt = (
         "Analyze this crash dump and the current source code. "
-        "Reason about what input or state would NOT have crashed (a counterfactual). "
-        "Explain the root cause and how the state should be different to prevent the crash."
+        "Reason about what input or state would NOT have crashed "
+        "(a counterfactual). Explain the root cause and how the state "
+        "should be different to prevent the crash."
         f"\n\nCrash dump:\n{crash_json}\n\nCurrent source:\n{source}"
     )
     response = client.chat.completions.create(
@@ -147,7 +152,8 @@ def _model_prompt(source: str, crash_data: dict, reasoning: str = "") -> str:
         separators=(",", ":"),
     )
     prompt = (
-        "Repair this Zero source using the crash dump. Return strict JSON "
+        "Repair this HowlFrame source using the crash dump. Return strict "
+        "JSON "
         'with exactly one key named "source" containing the complete '
         "replacement. Do not return commands, paths, markdown, or commentary."
         f"\n\nCrash dump:\n{crash_json}\n\nCurrent source:\n{source}"
@@ -200,7 +206,7 @@ def apply_crash_patch(
     restart_command: Sequence[str],
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> PatchResult:
-    """Verify and install one model-proposed Zero source replacement."""
+    """Verify and install one model-proposed HowlFrame source replacement."""
     try:
         resolved_root = project_root.resolve(strict=True)
         resolved_source = resolve_project_path(
@@ -211,19 +217,23 @@ def apply_crash_patch(
             resolved_root,
             crash_path,
         )
-        if resolved_source.suffix != ".zero":
-            raise ValueError("source must use the .zero extension")
+        if resolved_source.suffix != ".howl":
+            raise ValueError("source must use the .howl extension")
         current_source = resolved_source.read_text(encoding="utf-8")
         crash_data = _load_crash(resolved_crash)
-        
+
         reasoning = _reason_counterfactual(client, current_source, crash_data)
-        
+
         response = client.chat.completions.create(
             model="llama3",
             messages=[
                 {
                     "role": "user",
-                    "content": _model_prompt(current_source, crash_data, reasoning),
+                    "content": _model_prompt(
+                        current_source,
+                        crash_data,
+                        reasoning,
+                    ),
                 }
             ],
             response_format={"type": "json_object"},
@@ -236,7 +246,7 @@ def apply_crash_patch(
 
     try:
         with tempfile.TemporaryDirectory(
-            prefix="zero-patch-"
+            prefix="howlframe-patch-"
         ) as temporary_directory:
             isolated_root = Path(temporary_directory)
             shutil.copytree(
@@ -416,7 +426,7 @@ def _command(value: str) -> tuple[str, ...]:
 
 
 def _argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Zero observer")
+    parser = argparse.ArgumentParser(description="HowlFrame observer")
     subparsers = parser.add_subparsers(dest="mode")
     subparsers.add_parser("observe", help="watch telemetry")
     patch_parser = subparsers.add_parser(

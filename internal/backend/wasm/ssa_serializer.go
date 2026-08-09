@@ -2,10 +2,10 @@ package wasm
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strconv"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/ir"
 )
 
 // SerializeSSA emits a standalone WAT module from a typed SSA graph.

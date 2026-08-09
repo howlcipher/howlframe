@@ -2,9 +2,9 @@ package javascript
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/ir"
 )
 
 func BinOpJSToken(head string) string {

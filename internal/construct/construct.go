@@ -1,4 +1,4 @@
-// Package construct is the single authoritative description of which Zero
+// Package construct is the single authoritative description of which HowlFrame
 // language constructs the standalone bytecode target can actually execute.
 //
 // It exists because internal/bytecode's compileNode switch used to have no
@@ -10,8 +10,8 @@
 // This package is deliberately backend-independent, exactly like
 // internal/capability (the precedent established by improvements.md #94): it
 // imports only internal/ast, and nothing here may import internal/bytecode,
-// internal/zir, or any backend. Consumers wire it in themselves -
-// internal/zir/constructs.go turns Scan's violations into ZIR diagnostics, and
+// internal/hfir, or any backend. Consumers wire it in themselves -
+// internal/hfir/constructs.go turns Scan's violations into HFIR diagnostics, and
 // internal/bytecode keeps an independent fail-closed default as a backstop.
 package construct
 
@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sort"
 
-	"zero/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ast"
 )
 
 // Support is how the standalone bytecode target handles a construct.
@@ -56,7 +56,7 @@ func (s Support) String() string {
 
 // Entry is one construct's classification for the bytecode target.
 type Entry struct {
-	// Name is the canonical Zero head symbol.
+	// Name is the canonical HowlFrame head symbol.
 	Name string
 
 	// Support is the classification.
@@ -199,10 +199,10 @@ func Lookup(name string) (Entry, bool) {
 // SubForm is a head symbol that only carries meaning as a child of a specific
 // parent construct, and that the parent's own compileNode case destructures
 // rather than dispatching on. These are why the support check has to run over
-// the AST and not over ZIR node kinds: zir.LowerAST names a node's Kind after
+// the AST and not over HFIR node kinds: hfir.LowerAST names a node's Kind after
 // the head of *every* list, so a catch clause becomes a node with Kind
 // "catch" even though it never reaches compileNode in head position, and a
-// deny-list over ZIR kinds would reject every try_let program (bugs.md #45's
+// deny-list over HFIR kinds would reject every try_let program (bugs.md #45's
 // implementation caveat).
 type SubForm struct {
 	Head   string

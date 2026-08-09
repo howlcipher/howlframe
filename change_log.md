@@ -4,10 +4,10 @@
 
 ### Added
 
-* Zero Repo Analyst, a deterministic five-module standalone application that
+* HowlFrame Repo Analyst, a deterministic five-module standalone application that
   discovers and classifies repository files, counts tests, configuration,
   entry points, and TODO/FIXME markers, emits or writes a versioned report, and
-  proves its bytecode artifact runs after imported `.zero` sources are removed.
+  proves its bytecode artifact runs after imported `.howl` sources are removed.
 * A typed flat SSA/CFG lowering layer in `internal/ir`, with ordered basic
   blocks, explicit branch/jump/return terminators, phi nodes for control-flow
   joins and loop-carried values, source locations, and graph validation.
@@ -27,7 +27,7 @@
   matching the existing Claude/Gemini routing columns with GPT-5.6 Luna,
   Terra, and Sol tiers.
 * Bounded, opt-in auto-patching for the observer. It validates a model-proposed
-  `.zero` replacement in an isolated project copy, installs it atomically only
+  `.howl` replacement in an isolated project copy, installs it atomically only
   after the configured tests pass, and then runs an explicit restart command.
 * Isolated unit and subprocess integration coverage for path confinement,
   malformed model responses, test failure, atomic installation, and restart
@@ -41,7 +41,7 @@
   deterministic `-optimization-plan` JSON, with checker metadata, transparent
   backend execution, documentation, and regression coverage.
 * One authoritative, backend-independent construct-support registry in
-  `internal/construct`, classifying every Zero construct as `Supported`,
+  `internal/construct`, classifying every HowlFrame construct as `Supported`,
   `CompileTimeOnly`, or `Unsupported` for the standalone bytecode target, with
   parent-scoped sub-forms and a context-aware AST scan. A drift test parses
   `compileNode`'s own `switch head` so the registry and the compiler cannot
@@ -49,12 +49,16 @@
 
 ### Changed
 
+* Completed the HowlFrame identity cutover across the repository, compiler,
+  canonical Go module, `.howl` source corpus, `.hfbc` bytecode examples, HFIR
+  packages and diagnostics, machine-readable namespaces, documentation,
+  website metadata and artwork, benchmarks, tools, and reference application.
 * Output directories are now created consistently, and Go, JavaScript, and
   legacy WAT generation accept `-o` before or after the input path.
 * Long valid `let` chains now use shared iterative traversal across AST
   preprocessing, semantic checking, and Go/JavaScript emission, with a
   2,000-binding regression covering transpilation and generated Go builds.
-* Synchronized the Zero language write-cost benchmark fixtures with the
+* Synchronized the HowlFrame language write-cost benchmark fixtures with the
   published 2026-07-30 token counts for Tasks B and C.
 * Integer and string list/dictionary expressions now initialize Wasm linear
   memory with typed stores, dynamic dictionary keys compare interned string
@@ -72,7 +76,7 @@
 * `-compile-bc` now accepts `-o <file>` after the input path for exact bytecode
   output files while keeping the existing output-directory behavior.
 * `-compile-bc` now fails closed on any construct the bytecode compiler cannot
-  lower, reporting a `ZIR_TARGET_INFEASIBLE` diagnostic that names the
+  lower, reporting a `HFIR_TARGET_INFEASIBLE` diagnostic that names the
   construct, its source location, and the backlog item that owns the gap, and
   writing no artifact. Type annotations and forms consumed by earlier passes
   are classified separately and keep compiling unchanged.
@@ -85,7 +89,7 @@
 * `-compile-bc` silently dropped every construct the bytecode compiler did not
   recognize. `compileNode`'s head switch had no `default` case, so unknown
   heads compiled to zero instructions and the resulting program ran to exit 0
-  while skipping them entirely: `tests/test_advanced_control.zero` produced no
+  while skipping them entirely: `tests/test_advanced_control.howl` produced no
   output at all instead of `zero`/`one`/`other`. Unsupported constructs are now
   rejected before an artifact is written, and `compileNode` has a fail-closed
   backstop for callers that bypass the gate.

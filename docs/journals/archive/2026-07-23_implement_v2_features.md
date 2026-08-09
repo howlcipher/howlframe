@@ -1,6 +1,6 @@
 # Implementation Journal
 
-Task: Implement V2 AI-First Language Optimizations for Zero
+Task: Implement V2 AI-First Language Optimizations for HowlFrame
 Date: 2026-07-23
 
 Features to implement:
@@ -10,4 +10,4 @@ Features to implement:
 - `exec` (Item 22)
 - `str_split`, `str_join`, `regex` (Item 30)
 
-We will modify `zero.go` to add these to the `generateStatementRaw` method and the AST whitelist in `generateStatement`.
+We will modify `howlframe.go` to add these to the `generateStatementRaw` method and the AST whitelist in `generateStatement`.

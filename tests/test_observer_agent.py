@@ -8,11 +8,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.observer_agent import observer_agent as observer
+from tools.observer_agent import observer_agent as observer  # noqa: E402
 
 
 def write_fixture(project_root: Path) -> tuple[Path, Path]:
-    source_path = project_root / "app.zero"
+    source_path = project_root / "app.howl"
     source_path.write_text('(cli_app (print "old"))\n', encoding="utf-8")
     crash_path = project_root / "crash.json"
     crash_path.write_text(
@@ -31,7 +31,7 @@ def model_client(candidate: str) -> Mock:
 
 
 def test_resolve_project_path_rejects_escape(tmp_path):
-    outside = tmp_path.parent / "outside.zero"
+    outside = tmp_path.parent / "outside.howl"
 
     with pytest.raises(ValueError, match="inside project root"):
         observer.resolve_project_path(tmp_path, outside)
@@ -41,7 +41,7 @@ def test_resolve_project_path_resolves_relative_to_root(tmp_path, monkeypatch):
     source_path, _ = write_fixture(tmp_path)
     monkeypatch.chdir(tmp_path.parent)
 
-    resolved = observer.resolve_project_path(tmp_path, Path("app.zero"))
+    resolved = observer.resolve_project_path(tmp_path, Path("app.howl"))
 
     assert resolved == source_path
 
@@ -98,7 +98,7 @@ def test_failed_candidate_tests_preserve_source_and_skip_restart(tmp_path):
     assert source_path.read_text(encoding="utf-8") == original
     assert runner.call_count == 1
     assert runner.call_args.args[0][0] == "verify"
-    assert Path(runner.call_args.args[0][1]).name == "app.zero"
+    assert Path(runner.call_args.args[0][1]).name == "app.howl"
     assert runner.call_args.kwargs["shell"] is False
 
 
@@ -138,10 +138,10 @@ def test_passing_candidate_is_installed_then_restarted(tmp_path):
     assert '(cli_app (print "old"))' in prompt
 
 
-def test_non_zero_source_is_rejected(tmp_path):
+def test_non_howlframe_source_is_rejected(tmp_path):
     source_path, crash_path = write_fixture(tmp_path)
     source_path = source_path.with_suffix(".txt")
-    source_path.write_text("not zero", encoding="utf-8")
+    source_path.write_text("not HowlFrame source", encoding="utf-8")
 
     result = observer.apply_crash_patch(
         client=model_client("candidate"),
@@ -210,20 +210,20 @@ def test_observability_layer_tracks_telemetry_and_anomalies():
     layer.add_telemetry('{"id": 1}')
     layer.add_telemetry('{"id": 2}')
     layer.add_telemetry('{"id": 3}')
-    
+
     view = layer.get_view()
     assert len(view["recent_telemetry"]) == 2
     assert view["recent_telemetry"][0] == {"id": 2}
     assert view["recent_telemetry"][1] == {"id": 3}
     assert view["status"] == "normal"
     assert view["anomalies_detected"] == 0
-    
+
     layer.report_anomaly(123456789)
     view = layer.get_view()
     assert view["status"] == "anomaly"
     assert view["anomalies_detected"] == 1
     assert view["last_anomaly_time"] == 123456789
-    
+
     layer.report_normal()
     view = layer.get_view()
     assert view["status"] == "normal"

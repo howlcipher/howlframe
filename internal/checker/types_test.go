@@ -1,19 +1,19 @@
 package checker
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
-	"zero/internal/ast"
-	"zero/internal/ir"
-	"zero/internal/lexer"
-	"zero/internal/parser"
 )
 
 func parseTestProgram(t *testing.T, source string) *ast.Node {
 	t.Helper()
-	p := parser.NewParser(lexer.NewLexer(source), "types_test.zero")
+	p := parser.NewParser(lexer.NewLexer(source), "types_test.howl")
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
 		t.Fatalf("parser stopped at %s", p.Cur.Value)
@@ -490,13 +490,13 @@ func TestAnalyzeReportsMalformedSharedForms(t *testing.T) {
 }
 
 func TestCheckReportsMalformedSharedForm(t *testing.T) {
-	if os.Getenv("ZERO_CHECKER_HELPER") == "1" {
+	if os.Getenv("HOWLFRAME_CHECKER_HELPER") == "1" {
 		Check(parseTestProgram(t, `(cli_app (return))`))
 		return
 	}
 
 	command := exec.Command(os.Args[0], "-test.run=^TestCheckReportsMalformedSharedForm$")
-	command.Env = append(os.Environ(), "ZERO_CHECKER_HELPER=1")
+	command.Env = append(os.Environ(), "HOWLFRAME_CHECKER_HELPER=1")
 	output, err := command.CombinedOutput()
 	if err == nil {
 		t.Fatal("checker accepted malformed return")

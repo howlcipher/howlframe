@@ -6,23 +6,23 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/backend/gogen"
+	"github.com/howlcipher/howlframe/internal/backend/javascript"
+	"github.com/howlcipher/howlframe/internal/backend/wasm"
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/hfir"
+	"github.com/howlcipher/howlframe/internal/ir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/masking"
+	"github.com/howlcipher/howlframe/internal/optimization"
+	"github.com/howlcipher/howlframe/internal/parser"
+	"github.com/howlcipher/howlframe/internal/vm"
 	"os"
 	"path/filepath"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/backend/gogen"
-	"zero/internal/backend/javascript"
-	"zero/internal/backend/wasm"
-	"zero/internal/bytecode"
-	"zero/internal/capability"
-	"zero/internal/checker"
-	"zero/internal/ir"
-	"zero/internal/lexer"
-	"zero/internal/masking"
-	"zero/internal/optimization"
-	"zero/internal/parser"
-	"zero/internal/vm"
-	"zero/internal/zir"
 )
 
 func init() {
@@ -84,7 +84,7 @@ func main() {
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
 	analysis := checker.Check(root)
-	zirModule := filepath.Base(inputFile)
+	hfirModule := filepath.Base(inputFile)
 
 	if *maskPlan {
 		plan, err := json.Marshal(masking.CompileAnalysis(analysis))
@@ -104,12 +104,12 @@ func main() {
 		return
 	}
 	if *validateMode {
-		runZirGate(root, zirModule, zirTargetNone)
+		runHFIRGate(root, hfirModule, hfirTargetNone)
 		return
 	}
 
 	if *compileBc {
-		runZirGate(root, zirModule, zirTargetBytecode)
+		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
@@ -129,7 +129,7 @@ func main() {
 	}
 
 	if *compileWasm {
-		runZirGate(root, zirModule, zirTargetWasm)
+		runHFIRGate(root, hfirModule, hfirTargetWasm)
 		functionSources, expression, err := ssaWasmProgram(root, analysis)
 		if err != nil {
 			line, column := 0, 0
@@ -172,19 +172,19 @@ func main() {
 	}
 
 	if *runMode {
-		runZirGate(root, zirModule, zirTargetInterpreter)
+		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
 		os.Exit(vm.Interpret(root, flag.Args()[1:], os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
-		runZirGate(root, zirModule, zirTargetWasm)
+		runHFIRGate(root, hfirModule, hfirTargetWasm)
 		wasmCode := wasm.GenerateWasmCode(root)
 		wasmFile := filepath.Join(outputDir, "app.wat")
 		if err = writeArtifact(wasmFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", wasmFile, err), 0, 0)
 		}
 	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "web_app" {
-		runZirGate(root, zirModule, zirTargetJavaScript)
+		runHFIRGate(root, hfirModule, hfirTargetJavaScript)
 		jsCode, testCode := javascript.GenerateJSCode(root)
 
 		appFile := filepath.Join(outputDir, "app.js")
@@ -203,7 +203,7 @@ func main() {
 			os.Remove(appTestFile)
 		}
 	} else {
-		runZirGate(root, zirModule, zirTargetGo)
+		runHFIRGate(root, hfirModule, hfirTargetGo)
 		goCode, testCode := gogen.GenerateCode(root)
 
 		serverFile := filepath.Join(outputDir, "server.go")
@@ -316,30 +316,30 @@ func outputDirectory(args []string, inputFile, configured string) string {
 	return configured
 }
 
-// zirTarget identifies which internal/zir verifier target identity a given
+// hfirTarget identifies which internal/hfir verifier target identity a given
 // source-based compiler path is checked against. Only "wasm" has real
-// feasibility rules in internal/zir/verifier.go's isFeasible today; every
+// feasibility rules in internal/hfir/verifier.go's isFeasible today; every
 // other identity below is accepted permissively by that function until
 // per-target rules exist for it (see improvements.md #87 Phase 2 notes).
 // Declaring these once here, instead of scattering literal strings at each
 // dispatch call site, keeps the CLI-mode -> target-identity mapping in one
-// place and gives runZirGate's callers a single source of truth for the
+// place and gives runHFIRGate's callers a single source of truth for the
 // spelling.
-type zirTarget string
+type hfirTarget string
 
 const (
-	zirTargetNone        zirTarget = ""            // -validate: target-independent
-	zirTargetBytecode    zirTarget = "bytecode"    // -compile-bc
-	zirTargetWasm        zirTarget = "wasm"        // -compile-wasm and legacy wasm_app
-	zirTargetInterpreter zirTarget = "interpreter" // -run
-	zirTargetJavaScript  zirTarget = "javascript"  // web_app
-	zirTargetGo          zirTarget = "go"          // default cli_app/http_server backend
+	hfirTargetNone        hfirTarget = ""            // -validate: target-independent
+	hfirTargetBytecode    hfirTarget = "bytecode"    // -compile-bc
+	hfirTargetWasm        hfirTarget = "wasm"        // -compile-wasm and legacy wasm_app
+	hfirTargetInterpreter hfirTarget = "interpreter" // -run
+	hfirTargetJavaScript  hfirTarget = "javascript"  // web_app
+	hfirTargetGo          hfirTarget = "go"          // default cli_app/http_server backend
 )
 
-// zirBlockingCodes are the ZIR diagnostic codes currently trusted enough to
-// fail a production build closed. ZIR_UNBOUND_REF is deliberately excluded:
-// verifying against the real tests/*.zero corpus (see
-// TestZirGateAcceptsAllExistingFixtures in zero_test.go) showed it produces
+// hfirBlockingCodes are the HFIR diagnostic codes currently trusted enough to
+// fail a production build closed. HFIR_UNBOUND_REF is deliberately excluded:
+// verifying against the real tests/*.howl corpus (see
+// TestHFIRGateAcceptsAllExistingFixtures in howlframe_test.go) showed it produces
 // false positives on any variable bound via try_let/catch or bound to the
 // result of a dynamically-typed primitive (llm_generate, generics, HTTP
 // lambda parameter field access, etc.) - internal/checker's Analysis.infer
@@ -347,73 +347,73 @@ const (
 // without raising a checker diagnostic (this is intentional dynamic-typing
 // support, not a bug), but the checked AST's TypeInfo does not preserve the
 // difference between "resolved, dynamically typed" and "never resolved" by
-// the time ZIR lowers it - and a genuinely unresolved reference already
-// fails checker.Check before ZIR ever runs, so on real programs
-// ZIR_UNBOUND_REF currently has no reachable true positive, only false
+// the time HFIR lowers it - and a genuinely unresolved reference already
+// fails checker.Check before HFIR ever runs, so on real programs
+// HFIR_UNBOUND_REF currently has no reachable true positive, only false
 // positives. Tracked as bugs.md #42. Verify() still computes and returns
-// this diagnostic (internal/zir/verifier.go is unchanged) - this exclusion
+// this diagnostic (internal/hfir/verifier.go is unchanged) - this exclusion
 // lives only in the production gate's failure policy, not in the verifier
 // itself, so nothing here silently skips verification.
-var zirBlockingCodes = map[string]bool{
-	"ZIR_INVALID_REF":       true,
-	"ZIR_TARGET_INFEASIBLE": true,
+var hfirBlockingCodes = map[string]bool{
+	"HFIR_INVALID_REF":       true,
+	"HFIR_TARGET_INFEASIBLE": true,
 }
 
-// runZirGate lowers root to a ZIR graph and verifies it against target
-// (zirTargetNone for target-independent validation, used only by
+// runHFIRGate lowers root to a HFIR graph and verifies it against target
+// (hfirTargetNone for target-independent validation, used only by
 // -validate). Any lowering error, or any diagnostic whose code is in
-// zirBlockingCodes, is reported as one deterministic JSON array via
-// reportZirDiagnostics before any writeArtifact/backend call runs, so the
+// hfirBlockingCodes, is reported as one deterministic JSON array via
+// reportHFIRDiagnostics before any writeArtifact/backend call runs, so the
 // process exits before producing partial output - the same fail-closed
 // contract checker.Check already enforces via ast.ReportError. This
-// intentionally covers only the subset of verification internal/zir
+// intentionally covers only the subset of verification internal/hfir
 // currently implements safely for production (dangling data/control-edge
 // reference and wasm-target feasibility; capability-effect inference always
 // runs as a Verify() side effect but never itself produces a blocking
 // diagnostic) - real control-flow/cycle verification and non-wasm target
-// feasibility are not implemented in internal/zir yet (ControlEdges is
+// feasibility are not implemented in internal/hfir yet (ControlEdges is
 // declared but never populated by LowerAST, and isFeasible only has rules
 // for "wasm").
-func runZirGate(root *ast.Node, module string, target zirTarget) {
-	graph, err := zir.LowerAST(root, module)
+func runHFIRGate(root *ast.Node, module string, target hfirTarget) {
+	graph, err := hfir.LowerAST(root, module)
 	if err != nil {
 		line, column := 0, 0
 		if root != nil {
 			line, column = root.Line, root.Column
 		}
-		ast.ReportError(fmt.Sprintf("ZIR lowering failed: %v", err), line, column)
+		ast.ReportError(fmt.Sprintf("HFIR lowering failed: %v", err), line, column)
 	}
 
-	diags := zir.NewVerifier(graph, string(target)).Verify()
+	diags := hfir.NewVerifier(graph, string(target)).Verify()
 
 	// Construct-support verification runs over the AST rather than the
 	// lowered graph, because LowerAST names a node's Kind after the head of
 	// every list - including let bindings and sub-forms their parent
 	// destructures itself - so a rule matching on Kind would reject correct
-	// programs (bugs.md #45). Its diagnostics use ZIR_TARGET_INFEASIBLE,
-	// already in zirBlockingCodes, so the gate below fails closed before
+	// programs (bugs.md #45). Its diagnostics use HFIR_TARGET_INFEASIBLE,
+	// already in hfirBlockingCodes, so the gate below fails closed before
 	// bytecode.CompileToBytecode and writeArtifact with no change to this
 	// gate's failure policy.
-	diags = append(diags, zir.VerifyConstructs(root, string(target))...)
+	diags = append(diags, hfir.VerifyConstructs(root, string(target))...)
 
-	var errDiags []zir.Diagnostic
+	var errDiags []hfir.Diagnostic
 	for _, d := range diags {
-		if d.Severity == zir.SeverityError && zirBlockingCodes[d.Code] {
+		if d.Severity == hfir.SeverityError && hfirBlockingCodes[d.Code] {
 			errDiags = append(errDiags, d)
 		}
 	}
 	if len(errDiags) > 0 {
-		reportZirDiagnostics(errDiags)
+		reportHFIRDiagnostics(errDiags)
 	}
 }
 
-// reportZirDiagnostics prints every ERROR diagnostic as one deterministic
+// reportHFIRDiagnostics prints every ERROR diagnostic as one deterministic
 // JSON array line (preserving Verify()'s node-order-derived ordering) and
 // exits nonzero, mirroring ast.ReportError's one-line JSON contract without
-// truncating to a single diagnostic - internal/zir/verifier.go's Diagnostics
-// is a slice for a reason, and there is no existing consumer of ZIR
+// truncating to a single diagnostic - internal/hfir/verifier.go's Diagnostics
+// is a slice for a reason, and there is no existing consumer of HFIR
 // diagnostics to stay wire-compatible with yet.
-func reportZirDiagnostics(diags []zir.Diagnostic) {
+func reportHFIRDiagnostics(diags []hfir.Diagnostic) {
 	b, _ := json.Marshal(diags)
 	fmt.Println(string(b))
 	os.Exit(1)
