@@ -1,4 +1,4 @@
-/* Zero - "01 Machine City" Terminal Aesthetic
+/* HowlFrame systems-console aesthetic
    Monochrome-first: all copy stays black/white for maximum readability.
    Gray, very-dark-navy, and very-dark-plum are woven in only as structural
    tone — panel washes, borders, and semantic accents — never as body text.
@@ -216,10 +216,9 @@ a:focus-visible,
   margin-top: 1rem;
 }
 
-#theme-toggle:hover, #theme-toggle:focus {
+#theme-toggle:hover {
   background-color: var(--fg);
   color: var(--bg);
-  outline: none;
 }
 
 pre {

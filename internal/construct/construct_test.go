@@ -86,8 +86,8 @@ func TestUnsupportedConstructsWithOwnersCiteThem(t *testing.T) {
 
 // TestModuleConstructsAreCompileTimeOnly locks in improvements.md #95's
 // classification: parser.ExpandIncludes and ast.ResolveModules fully consume
-// use/export/module before checker.Check or the ZIR gate ever run
-// (zero.go:74-75), so the bytecode target never needs a lowering for them.
+// use/export/module before checker.Check or the HFIR gate ever run
+// (howlframe.go:74-75), so the bytecode target never needs a lowering for them.
 func TestModuleConstructsAreCompileTimeOnly(t *testing.T) {
 	for _, name := range []string{"use", "export", "module"} {
 		entry, ok := Lookup(name)

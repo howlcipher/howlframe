@@ -46,7 +46,7 @@ func LetChain(node *Node) (bindings []*Node, body *Node) {
 }
 
 // ValueKind is the language-level type category inferred by the semantic
-// checker. Unknown is intentional: Zero permits dynamic values at runtime,
+// checker. Unknown is intentional: HowlFrame permits dynamic values at runtime,
 // while known values still carry enough layout information for native
 // backends to make safe decisions.
 type ValueKind string

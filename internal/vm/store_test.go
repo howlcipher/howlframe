@@ -1,10 +1,10 @@
 package vm
 
 import (
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"reflect"
 	"testing"
-	"zero/internal/bytecode"
-	"zero/internal/capability"
 )
 
 func TestBytecodeStoreLifecycleAndNamedAttachment(t *testing.T) {

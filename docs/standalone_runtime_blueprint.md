@@ -1,8 +1,8 @@
-# Zero Standalone Runtime Blueprint
+# HowlFrame Standalone Runtime Blueprint
 
 ## Status and authority
 
-This document defines the architectural direction for making Zero useful as an independent programming language and runtime rather than primarily as a source-to-source transpiler.
+This document defines the architectural direction for making HowlFrame useful as an independent programming language and runtime rather than primarily as a source-to-source transpiler.
 
 It is a **design blueprint, not a second backlog**.
 
@@ -13,45 +13,45 @@ It is a **design blueprint, not a second backlog**.
 
 This blueprint complements [the architecture roadmap](architecture_roadmap.md):
 
-- ZIR remains Zero's canonical semantic representation.
-- The Zero bytecode VM becomes the first complete standalone application runtime.
+- HFIR remains HowlFrame's canonical semantic representation.
+- The HowlFrame bytecode VM becomes the first complete standalone application runtime.
 - WebAssembly remains the first portable native artifact target.
-- Go and JavaScript remain valuable compatibility and deployment backends, but they do not define Zero's semantics.
+- Go and JavaScript remain valuable compatibility and deployment backends, but they do not define HowlFrame's semantics.
 
 ## Product decision
 
-Zero should become a language that can build, validate, test, package, and run useful applications without generating Go, JavaScript, or WAT as an intermediate product step.
+HowlFrame should become a language that can build, validate, test, package, and run useful applications without generating Go, JavaScript, or WAT as an intermediate product step.
 
 The first complete standalone category should be **command-line applications**.
 
 The target execution path is:
 
 ```text
-Zero source
+HowlFrame source
 -> parser and compatibility frontend
 -> semantic checker
--> semantic ZIR
--> ZIR verifier
--> lowered ZIR
--> Zero bytecode
--> Zero VM
+-> semantic HFIR
+-> HFIR verifier
+-> lowered HFIR
+-> HowlFrame bytecode
+-> HowlFrame VM
 -> structured execution result
 ```
 
 A source-level convenience command may perform several of these stages in memory, but it must not silently fall back to generated Go or another transpiler backend.
 
-Once this standalone foundation is trustworthy, Zero should evolve beyond ordinary application development into a **verified AI-native runtime**: deterministic Zero code owns state, permissions, invariants, and execution boundaries, while bounded probabilistic components can reason, plan, synthesize, and propose semantic changes under explicit verification and capability controls.
+Once this standalone foundation is trustworthy, HowlFrame should evolve beyond ordinary application development into a **verified AI-native runtime**: deterministic HowlFrame code owns state, permissions, invariants, and execution boundaries, while bounded probabilistic components can reason, plan, synthesize, and propose semantic changes under explicit verification and capability controls.
 
 The long-term goal is not “a normal language with LLM API calls.” It is software whose adaptive behavior is a first-class, inspectable part of the language/runtime contract.
 
 ## What "standalone" means
 
-A Zero application counts as standalone when all of the following are true:
+A HowlFrame application counts as standalone when all of the following are true:
 
-1. It can be built and run using the Zero toolchain and Zero runtime.
+1. It can be built and run using the HowlFrame toolchain and HowlFrame runtime.
 2. Running it does not require a Go compiler, Node.js, Python, or a target-language build tool.
 3. It does not generate human-language source files as a required intermediate step.
-4. Its behavior is defined by Zero semantics rather than accidental Go or JavaScript behavior.
+4. Its behavior is defined by HowlFrame semantics rather than accidental Go or JavaScript behavior.
 5. Unsupported constructs fail before execution with structured diagnostics.
 6. Effects such as filesystem, network, environment, process, and database access are explicit and policy-controlled.
 7. The resulting artifact has a versioned compatibility and validation envelope.
@@ -61,14 +61,14 @@ An application may still intentionally require an external service, database, mo
 
 ## Current implementation position
 
-As of August 5, 2026, Zero has crossed the line from being only a transpiler into being an experimental language runtime:
+As of August 5, 2026, HowlFrame has crossed the line from being only a transpiler into being an experimental language runtime:
 
 - `-run` directly interprets a bounded `cli_app` subset.
-- `-compile-bc` produces versioned Zero bytecode.
-- `-run-bc` executes bytecode through the Zero VM.
+- `-compile-bc` produces versioned HowlFrame bytecode.
+- `-run-bc` executes bytecode through the HowlFrame VM.
 - The VM supports control flow, functions, collections, file and process operations, HTTP operations, database operations, AI-oriented operations, and VM-native stores with varying maturity.
 - Runtime capabilities are deny-by-default for protected bytecode instructions.
-- ZIR verification is wired into source-based compiler paths.
+- HFIR verification is wired into source-based compiler paths.
 
 The standalone path is not yet the broadest or most polished route. Generated Go remains the most complete backend, and direct AST execution and bytecode execution still have bounded or uneven coverage.
 
@@ -76,13 +76,13 @@ The goal of this blueprint is to remove that qualifier for a focused application
 
 ## Runtime ownership decisions
 
-### ZIR owns semantic meaning
+### HFIR owns semantic meaning
 
-Zero semantics must be defined before backend or VM implementation.
+HowlFrame semantics must be defined before backend or VM implementation.
 
 For every portable construct:
 
-- ZIR represents its meaning.
+- HFIR represents its meaning.
 - The verifier checks its invariants, effects, capabilities, and target feasibility.
 - The bytecode compiler lowers it without changing its meaning.
 - The VM implements the defined behavior.
@@ -94,12 +94,12 @@ The bytecode VM must not become a second, competing semantic language.
 
 The bytecode VM should become the product path for standalone CLI applications because it already provides:
 
-- a Zero-owned instruction set,
+- a HowlFrame-owned instruction set,
 - runtime capability enforcement,
 - a compact execution representation,
 - functions and control flow,
 - host operations,
-- and a direct route from verified Zero programs to execution.
+- and a direct route from verified HowlFrame programs to execution.
 
 The tree-walking AST interpreter should remain useful for:
 
@@ -116,7 +116,7 @@ The VM-first plan does not replace the Wasm direction.
 
 The responsibilities are different:
 
-- **Zero VM:** first complete and controllable application runtime.
+- **HowlFrame VM:** first complete and controllable application runtime.
 - **Wasm:** first portable native deployment artifact with a stable host ABI.
 - **Go and JavaScript:** compatibility, interoperability, and deployment targets.
 
@@ -125,17 +125,17 @@ The responsibilities are different:
 The exact command names must follow the final CLI design, but the intended experience is:
 
 ```bash
-zero new cli invoice-report
-zero run invoice-report
-zero test invoice-report
-zero build invoice-report -o dist/invoice-report.zapp
-zero exec dist/invoice-report.zapp
+howlframe new cli invoice-report
+howlframe run invoice-report
+howlframe test invoice-report
+howlframe build invoice-report -o dist/invoice-report.zapp
+howlframe exec dist/invoice-report.zapp
 ```
 
 The source-level run command should conceptually perform:
 
 ```text
-parse -> check -> ZIR -> verify -> lower -> bytecode -> execute
+parse -> check -> HFIR -> verify -> lower -> bytecode -> execute
 ```
 
 without writing intermediate source files.
@@ -143,16 +143,16 @@ without writing intermediate source files.
 Advanced users should be able to inspect each stage:
 
 ```bash
-zero inspect app.zero --emit zir
-zero inspect app.zero --emit lowered-zir
-zero inspect app.zero --emit bytecode
-zero capabilities app.zero
-zero validate app.zero --json
+howlframe inspect app.howl --emit hfir
+howlframe inspect app.howl --emit lowered-hfir
+howlframe inspect app.howl --emit bytecode
+howlframe capabilities app.howl
+howlframe validate app.howl --json
 ```
 
 ## Standalone CLI v1 definition
 
-Zero should not claim a complete standalone CLI runtime until one coherent application lifecycle satisfies all of the following.
+HowlFrame should not claim a complete standalone CLI runtime until one coherent application lifecycle satisfies all of the following.
 
 ### Language and runtime surface
 
@@ -217,7 +217,7 @@ The runtime must fail predictably with:
 - stable error codes,
 - structured machine-readable details,
 - human-readable messages,
-- Zero source locations when available,
+- HowlFrame source locations when available,
 - nonzero exit codes,
 - and no partial artifacts or hidden transpiler fallback.
 
@@ -286,8 +286,8 @@ These milestones describe sequencing, not backlog status. Before implementation,
 Create one generated or test-enforced matrix that records, for every language construct:
 
 - semantic-checker support,
-- ZIR representation,
-- ZIR verification,
+- HFIR representation,
+- HFIR verification,
 - bytecode lowering,
 - VM execution,
 - direct interpreter execution,
@@ -296,7 +296,7 @@ Create one generated or test-enforced matrix that records, for every language co
 
 No feature should be described as standalone-supported merely because an opcode or AST branch exists.
 
-**Exit gate:** the repository can identify every gap between accepted Zero source and VM-executable behavior without manual code archaeology.
+**Exit gate:** the repository can identify every gap between accepted HowlFrame source and VM-executable behavior without manual code archaeology.
 
 ### Milestone 1: Deterministic CLI core
 
@@ -315,7 +315,7 @@ Complete and align:
 - seedable randomness,
 - and deterministic conversions.
 
-**Exit gate:** deterministic CLI programs run through the VM with no generated source and pass differential tests against the defined Zero semantics.
+**Exit gate:** deterministic CLI programs run through the VM with no generated source and pass differential tests against the defined HowlFrame semantics.
 
 ### Milestone 2: Errors, files, and modules
 
@@ -333,7 +333,7 @@ Complete:
 
 ### Milestone 3: Native test runner
 
-Make Zero `test` blocks executable through the standalone runtime rather than only generating Go or Node tests.
+Make HowlFrame `test` blocks executable through the standalone runtime rather than only generating Go or Node tests.
 
 Support:
 
@@ -348,7 +348,7 @@ Support:
 
 ### Milestone 4: Hardened artifact format
 
-Define a durable package or executable envelope around lowered ZIR and bytecode.
+Define a durable package or executable envelope around lowered HFIR and bytecode.
 
 Include:
 
@@ -421,16 +421,16 @@ Add standalone-runtime support for:
 
 Provide:
 
-- versioned Zero compiler/runtime releases,
+- versioned HowlFrame compiler/runtime releases,
 - cross-platform release binaries,
 - checksums,
 - installation instructions,
 - upgrade and compatibility guidance,
 - and a clean application distribution story.
 
-A first application distribution may require the Zero runtime to be installed. A later mode may embed the runtime into a self-contained executable.
+A first application distribution may require the HowlFrame runtime to be installed. A later mode may embed the runtime into a self-contained executable.
 
-**Exit gate:** a user can install Zero and run a packaged Zero CLI application on a supported platform without installing Go.
+**Exit gate:** a user can install HowlFrame and run a packaged HowlFrame CLI application on a supported platform without installing Go.
 
 ### Milestone 9: Expand beyond CLI
 
@@ -451,9 +451,9 @@ Do not use an incomplete web or game runtime as proof that the standalone core i
 
 ## AI-native evolution after the standalone foundation
 
-The standalone runtime is the trust boundary that makes Zero's more unusual AI-first direction credible.
+The standalone runtime is the trust boundary that makes HowlFrame's more unusual AI-first direction credible.
 
-Zero should not become:
+HowlFrame should not become:
 
 ```text
 prompt
@@ -471,13 +471,13 @@ machine-verifiable boundaries
 
 A concise product thesis is:
 
-> **Zero is a verified runtime for adaptive, agentic software where deterministic code surrounds bounded probabilistic reasoning.**
+> **HowlFrame is a verified runtime for adaptive, agentic software where deterministic code surrounds bounded probabilistic reasoning.**
 
 That is materially different from adding an `llm_generate()` function to an otherwise conventional language.
 
 ### Deterministic and adaptive regions
 
-Zero should make a clear semantic distinction between deterministic behavior and probabilistic/adaptive behavior.
+HowlFrame should make a clear semantic distinction between deterministic behavior and probabilistic/adaptive behavior.
 
 Deterministic regions should own operations where correctness and authority must not depend on a model, including:
 
@@ -512,7 +512,7 @@ An adaptive operation must never implicitly gain authority merely because a mode
 
 ### AI operations are explicit effects
 
-AI-backed behavior should be represented as an explicit effect in ZIR and the runtime, not as an ordinary pure function call.
+AI-backed behavior should be represented as an explicit effect in HFIR and the runtime, not as an ordinary pure function call.
 
 A model-backed operation should be able to declare or infer:
 
@@ -544,10 +544,10 @@ human or agent intent
 provider-neutral model planning
         |
         v
-typed ZIR proposal
+typed HFIR proposal
         |
         v
-ZIR verification
+HFIR verification
         |
         v
 capability and budget policy
@@ -563,7 +563,7 @@ tests, invariants, and evidence
         +---- failure ----> bounded semantic repair context
                                 |
                                 v
-                          model-proposed ZIR delta
+                          model-proposed HFIR delta
                                 |
                                 v
                           verify -> test -> approve
@@ -612,16 +612,16 @@ The important idea is not these exact forms. The architectural requirements are:
 - repairs are localized,
 - and execution authority remains with the deterministic runtime.
 
-Do not add this surface syntax until the underlying ZIR, capability, verification, and model-adapter contracts justify it.
+Do not add this surface syntax until the underlying HFIR, capability, verification, and model-adapter contracts justify it.
 
 ### Bounded semantic self-repair
 
-One of Zero's most differentiated long-term capabilities could be safe self-adaptation.
+One of HowlFrame's most differentiated long-term capabilities could be safe self-adaptation.
 
 The desired flow is:
 
 ```text
-running Zero application
+running HowlFrame application
         |
         v
 detect failed invariant or incompatible input
@@ -630,7 +630,7 @@ detect failed invariant or incompatible input
 produce bounded repair context
         |
         v
-model proposes semantic ZIR delta
+model proposes semantic HFIR delta
         |
         v
 verify graph + types + effects + capabilities
@@ -669,7 +669,7 @@ The runtime and verifier, not the model, decide whether a proposed repair is leg
 
 ### Learning and adaptation architecture
 
-Zero should treat "learning from itself" as a progression of increasingly powerful state changes rather than one undifferentiated self-modification feature.
+HowlFrame should treat "learning from itself" as a progression of increasingly powerful state changes rather than one undifferentiated self-modification feature.
 
 The recommended model has four levels:
 
@@ -678,7 +678,7 @@ The recommended model has four levels:
 | Experience memory | Stored observations, successes, failures, corrections, and examples | execution records, user feedback, test results | automatic within retention/privacy policy | Low |
 | Policy adaptation | Strategy selection, ranking, routing, thresholds, and fallback order | comparative success/cost/latency metrics | automatic when bounded by declared policy | Low-Medium |
 | Verified skills | Reusable behavior synthesized from repeated successful workflows | fixtures, tests, capability manifest, provenance | requires verification and promotion gate | Medium |
-| Semantic program adaptation | ZIR nodes/edges and executable application behavior | verifier, regression suite, shadow results, rollback point | tightly scoped; policy or human approval | High |
+| Semantic program adaptation | HFIR nodes/edges and executable application behavior | verifier, regression suite, shadow results, rollback point | tightly scoped; policy or human approval | High |
 
 This hierarchy should be explicit in the runtime and documentation. A system should not need permission to rewrite its program merely to remember that one strategy worked better than another.
 
@@ -686,11 +686,11 @@ This hierarchy should be explicit in the runtime and documentation. A system sho
 
 Adaptive state should not be stored as an opaque mutation of application source.
 
-Conceptually, a Zero application should maintain separate versioned domains:
+Conceptually, a HowlFrame application should maintain separate versioned domains:
 
 ```text
 program
-  verified semantic ZIR and immutable/protected regions
+  verified semantic HFIR and immutable/protected regions
 
 memory
   observations, examples, outcomes, failures, feedback, and retrieved context
@@ -739,7 +739,7 @@ Future executions may retrieve relevant prior experience as bounded context.
 
 The architecture should support both positive and negative evidence.
 
-Zero should remember:
+HowlFrame should remember:
 
 - successful strategies,
 - failed attempts,
@@ -764,11 +764,11 @@ Memory should be subject to:
 - deterministic test fixtures,
 - and limits on how much retrieved memory can influence one model operation.
 
-Long-term weight updates or automatic model fine-tuning are **not required** for this layer. Zero's first learning system should improve behavior through explicit runtime state that can be inspected, tested, deleted, and rolled back.
+Long-term weight updates or automatic model fine-tuning are **not required** for this layer. HowlFrame's first learning system should improve behavior through explicit runtime state that can be inspected, tested, deleted, and rolled back.
 
 #### Level 2: policy adaptation
 
-The next level should let Zero improve **which verified strategy it selects** without changing the strategy implementation itself.
+The next level should let HowlFrame improve **which verified strategy it selects** without changing the strategy implementation itself.
 
 For example:
 
@@ -805,7 +805,7 @@ Policy adaptation should operate only inside declared bounds.
 A policy update must not:
 
 - grant new runtime capabilities,
-- widen editable ZIR regions,
+- widen editable HFIR regions,
 - change protected invariants,
 - modify the tests used to approve itself,
 - exceed application budgets,
@@ -827,7 +827,7 @@ Policy updates should be versioned and measured against a baseline so the runtim
 
 #### Level 3: verified skill creation
 
-Zero should eventually be able to recognize repeated successful workflows and propose them as reusable skills.
+HowlFrame should eventually be able to recognize repeated successful workflows and propose them as reusable skills.
 
 The lifecycle is:
 
@@ -841,7 +841,7 @@ detect recurring semantic pattern
 propose typed skill contract
         |
         v
-synthesize ZIR implementation
+synthesize HFIR implementation
         |
         v
 infer effects and capabilities
@@ -863,7 +863,7 @@ A verified skill should include:
 
 - stable identifier and version,
 - typed inputs and outputs,
-- semantic ZIR body or reference,
+- semantic HFIR body or reference,
 - declared/inferred effects,
 - required capabilities,
 - deterministic fixtures,
@@ -894,7 +894,7 @@ A skill should not become trusted merely because it was generated from many exam
 
 #### Level 4: bounded semantic program adaptation
 
-Only after memory, policies, and verified skills are insufficient should Zero modify the program's semantic graph.
+Only after memory, policies, and verified skills are insufficient should HowlFrame modify the program's semantic graph.
 
 Programs should be able to distinguish regions conceptually equivalent to:
 
@@ -1003,14 +1003,14 @@ policy update
 skill creation/promotion
   -> verifier + tests + shadow evidence
 
-semantic ZIR modification
+semantic HFIR modification
   -> verifier + full required tests + policy gate + rollback point
 
 security/capability/approval-rule modification
   -> human approval by default
 ```
 
-Zero should make these promotion rules explicit rather than bury them inside agent prompts.
+HowlFrame should make these promotion rules explicit rather than bury them inside agent prompts.
 
 #### Immutable approval evidence
 
@@ -1073,7 +1073,7 @@ Repeated proposals that are semantically equivalent to a previously rejected cha
 
 "Learning" should include the ability to create new useful semantic structures, not only tune existing parameters.
 
-Given sufficient evidence and policy permission, Zero may eventually propose:
+Given sufficient evidence and policy permission, HowlFrame may eventually propose:
 
 - a new parser,
 - a new reusable skill,
@@ -1122,7 +1122,7 @@ The preferred high-level relationship is:
 
 ```text
                   +----------------------+
-                  | verified program ZIR |
+                  | verified program HFIR |
                   +----------+-----------+
                              |
                              v
@@ -1150,7 +1150,7 @@ The preferred high-level relationship is:
 
 This preserves a deterministic ownership boundary even while behavior evolves over time.
 
-#### What Zero should not call learning
+#### What HowlFrame should not call learning
 
 Avoid using "learning" as a label for behavior that is merely:
 
@@ -1161,11 +1161,11 @@ Avoid using "learning" as a label for behavior that is merely:
 - storing opaque model text with no provenance,
 - or selecting a different model without measured evidence.
 
-A Zero learning mechanism should produce durable, inspectable, versioned state and measurable behavioral change.
+A HowlFrame learning mechanism should produce durable, inspectable, versioned state and measurable behavioral change.
 
 #### Learning/adaptation completion gates
 
-Do not claim that Zero applications "learn from themselves" until at least the first two levels are real and measured.
+Do not claim that HowlFrame applications "learn from themselves" until at least the first two levels are real and measured.
 
 **Learning v1 — experience and policy:**
 
@@ -1180,7 +1180,7 @@ Do not claim that Zero applications "learn from themselves" until at least the f
 **Learning v2 — skill synthesis:**
 
 1. Repeated workflows can produce a candidate typed skill.
-2. Candidate skills lower to verified semantic ZIR.
+2. Candidate skills lower to verified semantic HFIR.
 3. Capabilities/effects are inferred before promotion.
 4. Tests are generated or assembled from independent evidence and cannot be rewritten by the candidate.
 5. Shadow or equivalent evaluation compares candidate and current behavior.
@@ -1189,7 +1189,7 @@ Do not claim that Zero applications "learn from themselves" until at least the f
 **Learning v3 — semantic adaptation:**
 
 1. Programs define protected and adaptive regions.
-2. Model proposals are minimal ZIR deltas scoped to adaptive regions.
+2. Model proposals are minimal HFIR deltas scoped to adaptive regions.
 3. The candidate cannot change its own capability ceiling or approval evidence.
 4. Full required verification and regression tests run before promotion.
 5. Promotion is atomic.
@@ -1198,7 +1198,7 @@ Do not claim that Zero applications "learn from themselves" until at least the f
 
 ### Examples beyond ordinary applications
 
-Once the verified AI-native layer exists, Zero could support application categories that are awkward to express safely in conventional languages:
+Once the verified AI-native layer exists, HowlFrame could support application categories that are awkward to express safely in conventional languages:
 
 - **Self-adapting integrations:** detect an upstream API/schema change, propose a new mapping, test it against fixtures, and adopt it only after verification.
 - **Adaptive data pipelines:** synthesize or revise parsers for previously unseen structured inputs while preserving output invariants.
@@ -1213,10 +1213,10 @@ These should be treated as evidence for the architecture, not as reasons to add 
 
 ### AI-native v1 completion gate
 
-Zero should not claim a complete AI-native runtime until at least the following are true:
+HowlFrame should not claim a complete AI-native runtime until at least the following are true:
 
 1. Model integration is provider-neutral at the semantic contract.
-2. AI operations are explicit ZIR effects.
+2. AI operations are explicit HFIR effects.
 3. Model inputs and outputs can be constrained by stable schemas.
 4. Every model operation declares or receives a capability and budget policy.
 5. Model output cannot directly bypass the verifier to mutate protected state.
@@ -1263,7 +1263,7 @@ verified skill synthesis and promotion
 bounded semantic repair/deltas
         |
         v
-content-addressed ZIR and incremental state
+content-addressed HFIR and incremental state
         |
         v
 adaptive/agentic application framework
@@ -1275,9 +1275,9 @@ As of the August 2026 backlog, the current items most closely aligned with this 
 - standalone module support,
 - native VM test execution,
 - standalone artifact validation/versioning,
-- provider-neutral ZIR model adapters,
+- provider-neutral HFIR model adapters,
 - semantic patch deltas and bounded repair context,
-- and content-addressed ZIR/incremental compilation.
+- and content-addressed HFIR/incremental compilation.
 
 The tracker numbers and status remain authoritative in `improvements.md`; this blueprint defines the architectural ordering, not daily backlog state.
 
@@ -1296,7 +1296,7 @@ Before adding any new AI-specific primitive or framework feature, answer:
 9. What happens when the model is unavailable?
 10. Can the same application still be understood and controlled without trusting hidden model behavior?
 
-If these questions do not have concrete answers, the feature is not ready to become part of Zero's AI-native core.
+If these questions do not have concrete answers, the feature is not ready to become part of HowlFrame's AI-native core.
 
 ## Standard library direction
 
@@ -1305,8 +1305,8 @@ Avoid indefinitely expanding the compiler with a dedicated AST node for every op
 The desired layering is:
 
 ```text
-core language and ZIR primitives
--> portable Zero standard library
+core language and HFIR primitives
+-> portable HowlFrame standard library
 -> runtime host interfaces
 -> domain libraries
 -> framework libraries
@@ -1353,7 +1353,7 @@ They may be used for:
 - ecosystem access,
 - and differential conformance testing.
 
-They must not silently define the semantics of portable Zero programs.
+They must not silently define the semantics of portable HowlFrame programs.
 
 A construct claimed as portable must either:
 
@@ -1367,7 +1367,7 @@ The standalone runtime must never quietly generate Go because the VM lacks cover
 Standalone runtime work should require:
 
 - unit tests for lowering and VM instructions,
-- parser/checker/ZIR/VM integration tests,
+- parser/checker/HFIR/VM integration tests,
 - real CLI subprocess tests,
 - deterministic artifact tests,
 - capability denial and grant tests,
@@ -1390,7 +1390,7 @@ Recommended release gates:
 
 Track evidence such as:
 
-- percentage of accepted CLI constructs supported by ZIR, bytecode, and VM,
+- percentage of accepted CLI constructs supported by HFIR, bytecode, and VM,
 - number of documented VM/backend semantic mismatches,
 - first-pass success rate for AI-generated standalone programs,
 - average repair rounds,
@@ -1398,16 +1398,16 @@ Track evidence such as:
 - artifact size,
 - deterministic-build rate,
 - test execution time,
-- percentage of runtime errors with accurate Zero source locations,
+- percentage of runtime errors with accurate HowlFrame source locations,
 - and percentage of effectful operations covered by enforced capability policy.
 
 The primary product measure is:
 
-> Can a person or coding agent create, validate, test, package, and run a useful multi-file CLI application using Zero alone, without relying on generated source or another language toolchain?
+> Can a person or coding agent create, validate, test, package, and run a useful multi-file CLI application using HowlFrame alone, without relying on generated source or another language toolchain?
 
 After that milestone is reached, the primary AI-native product measure becomes:
 
-> Can a Zero application use probabilistic reasoning to adapt its behavior or propose semantic changes while the deterministic runtime still enforces capabilities, budgets, tests, invariants, provenance, and rollback?
+> Can a HowlFrame application use probabilistic reasoning to adapt its behavior or propose semantic changes while the deterministic runtime still enforces capabilities, budgets, tests, invariants, provenance, and rollback?
 
 A complementary learning measure is:
 

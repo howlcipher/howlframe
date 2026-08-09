@@ -2,10 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/lexer"
 	"os"
 	"path/filepath"
-	"zero/internal/ast"
-	"zero/internal/lexer"
 )
 
 type Parser struct {

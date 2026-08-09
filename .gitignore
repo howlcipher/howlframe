@@ -1,15 +1,15 @@
 # Generated binaries
 .directory
-server
+/server
 hello
 server.go
 server_test.go
-app.zero
+app.howl
 app.js
 app.test.js
 app.json
 app.wat
-zero
+/howlframe
 servercheck
 build/
 *.db
@@ -28,5 +28,5 @@ __pycache__/
 *.bc.json
 *.bc.gob
 *.bc.bin
-*.zbc
+*.hfbc
 *.ssa.wat

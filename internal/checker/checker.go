@@ -2,8 +2,8 @@ package checker
 
 import (
 	"fmt"
-	"zero/internal/ast"
-	"zero/internal/ir"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 )
 
 func Check(node *ast.Node) *Analysis {

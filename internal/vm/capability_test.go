@@ -1,9 +1,9 @@
 package vm
 
 import (
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"testing"
-	"zero/internal/bytecode"
-	"zero/internal/capability"
 )
 
 // capabilityDenialCode runs a single instruction under the given allow-list

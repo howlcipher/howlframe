@@ -2,11 +2,11 @@ package gogen
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strconv"
 	"strings"
 	"unicode"
-	"zero/internal/ast"
-	"zero/internal/ir"
 )
 
 var CurrentSchemaDDLs []string
@@ -339,14 +339,14 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 			var promptExpr string
 			if len(params) == 0 {
-				prompt := fmt.Sprintf("You are a Zero compiler. Synthesize and directly execute the function %q with parameters []. Docstring: %q. Reply ONLY with the result value, no explanation, no markdown.", name, docstring)
+				prompt := fmt.Sprintf("You are a HowlFrame compiler. Synthesize and directly execute the function %q with parameters []. Docstring: %q. Reply ONLY with the result value, no explanation, no markdown.", name, docstring)
 				promptExpr = fmt.Sprintf("%q", prompt)
 			} else {
 				var inputFmtParts []string
 				for _, p := range params {
 					inputFmtParts = append(inputFmtParts, p+"=%v")
 				}
-				promptTemplate := fmt.Sprintf("You are a Zero compiler. Synthesize and directly execute the function %q with parameters %v. Docstring: %q. Given inputs %s, reply ONLY with the result value, no explanation, no markdown.", name, params, docstring, strings.Join(inputFmtParts, ", "))
+				promptTemplate := fmt.Sprintf("You are a HowlFrame compiler. Synthesize and directly execute the function %q with parameters %v. Docstring: %q. Given inputs %s, reply ONLY with the result value, no explanation, no markdown.", name, params, docstring, strings.Join(inputFmtParts, ", "))
 				promptExpr = fmt.Sprintf("fmt.Sprintf(%q, %s)", promptTemplate, strings.Join(params, ", "))
 			}
 
@@ -469,7 +469,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"zero/observer"
+	"github.com/howlcipher/howlframe/observer"
 `
 	for _, imp := range extraImports {
 		code += fmt.Sprintf("\t%q\n", imp)
@@ -539,7 +539,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"zero/observer"
+	"github.com/howlcipher/howlframe/observer"
 `
 		for _, imp := range extraImports {
 			parts := strings.Split(imp, "/")

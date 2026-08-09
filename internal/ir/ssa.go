@@ -2,12 +2,12 @@ package ir
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
 	"sort"
 	"strconv"
-	"zero/internal/ast"
 )
 
-// ValueID is a graph-wide identifier for one SSA definition. Zero is
+// ValueID is a graph-wide identifier for one SSA definition. The zero value is
 // reserved for terminators and expressions that do not produce a value.
 type ValueID uint64
 

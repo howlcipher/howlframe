@@ -17,14 +17,14 @@ def main():
     print("Initializing Outlines...")
 
     # Using local Ollama via OpenAI compatibility layer
-    # Note: Ensure you have `openai` and `outlines` installed and Ollama running.
+    # Ensure `openai` and `outlines` are installed and Ollama is running.
     # Replace "llama3" with your local model's name (e.g., "phi3").
     try:
         from openai import OpenAI
         client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
         model = models.openai(client, "llama3")
 
-        # Alternatively, if you want guaranteed strict decoding via llama-cpp-python:
+        # For strict decoding via llama-cpp-python, use:
         # model = models.llamacpp("path/to/model.gguf")
     except Exception as e:
         print(f"Failed to load model. Error: {e}")
@@ -33,7 +33,7 @@ def main():
     print("Compiling JSON schema generator...")
     generator = outlines.generate.json(model, BytecodeProgram)
 
-    # Load the Zero AI System Prompt to provide context on the language
+    # Load the HowlFrame AI System Prompt to provide context on the language
     system_context = ""
     try:
         system_context = (
@@ -46,7 +46,10 @@ def main():
             "The model may struggle without language context."
         )
 
-    user_goal = "Calculate the sum of 10 and 20, store it in a variable, and print it."
+    user_goal = (
+        "Calculate the sum of 10 and 20, store it in a variable, "
+        "and print it."
+    )
     prompt = system_context + "Goal:\n" + user_goal
     max_retries = 3
     current_prompt = prompt
@@ -54,7 +57,10 @@ def main():
     for attempt in range(max_retries):
         print(f"\n--- Attempt {attempt + 1} ---")
         print(f"Prompt: {current_prompt}")
-        print("Generating Zero code... (waiting for local model response)")
+        print(
+            "Generating HowlFrame bytecode... "
+            "(waiting for local model response)"
+        )
 
         # Generate JSON bytecode
         code = generator(current_prompt)
@@ -65,7 +71,7 @@ def main():
 
         print("Running VM...")
         result = subprocess.run(
-            ["go", "run", "zero.go", "-run-bc", str(bytecode_file)],
+            ["go", "run", "howlframe.go", "-run-bc", str(bytecode_file)],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -88,13 +94,17 @@ def main():
                     f"{json.dumps(err_data)}\nPlease fix the JSON bytecode."
                 )
             except json.JSONDecodeError:
-                print("Failed to parse JSON error from Go VM. Unexpected output:")
+                print(
+                    "Failed to parse JSON error from Go VM. "
+                    "Unexpected output:"
+                )
                 print(output)
                 break
         else:
             print("Execution successful!")
             print(result.stdout)
             break
+
 
 if __name__ == "__main__":
     main()

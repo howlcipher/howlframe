@@ -3,8 +3,8 @@
 ;; only Go-backend-compatible typing (explicit type_hint on defun params,
 ;; string-only list/dict elements) so this exact script produces
 ;; byte-identical stdout via both execution paths:
-;;   ./zero -run tests/test_interpret_basic.zero
-;;   ./zero tests/test_interpret_basic.zero && go run server.go
+;;   ./howlframe -run tests/test_interpret_basic.howl
+;;   ./howlframe tests/test_interpret_basic.howl && go run server.go
 (cli_app
   (defun add (a b)
     (type_hint a "int")

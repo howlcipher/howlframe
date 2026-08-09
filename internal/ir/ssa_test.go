@@ -1,9 +1,9 @@
 package ir
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
 	"strings"
 	"testing"
-	"zero/internal/ast"
 )
 
 func TestLowerSSAStraightLine(t *testing.T) {
@@ -291,7 +291,7 @@ func ssaList(head string, children ...*ast.Node) *ast.Node {
 		Type:     "List",
 		Line:     1,
 		Column:   1,
-		Filename: "test.zero",
+		Filename: "test.howl",
 		Children: append([]*ast.Node{ssaSymbol(head)}, children...),
 	}
 	switch head {
@@ -308,11 +308,11 @@ func ssaList(head string, children ...*ast.Node) *ast.Node {
 }
 
 func ssaPair(left, right *ast.Node) *ast.Node {
-	return &ast.Node{Type: "List", Line: 1, Column: 1, Filename: "test.zero", Children: []*ast.Node{left, right}}
+	return &ast.Node{Type: "List", Line: 1, Column: 1, Filename: "test.howl", Children: []*ast.Node{left, right}}
 }
 
 func ssaSymbol(value string) *ast.Node {
-	return &ast.Node{Type: "SYMBOL", Value: value, Line: 1, Column: 1, Filename: "test.zero"}
+	return &ast.Node{Type: "SYMBOL", Value: value, Line: 1, Column: 1, Filename: "test.howl"}
 }
 
 func ssaBool(value bool) *ast.Node {
@@ -325,9 +325,9 @@ func ssaBool(value bool) *ast.Node {
 }
 
 func ssaInt(value string) *ast.Node {
-	return &ast.Node{Type: "INT", Value: value, Line: 1, Column: 1, Filename: "test.zero", Inferred: ast.Layout(ast.Int)}
+	return &ast.Node{Type: "INT", Value: value, Line: 1, Column: 1, Filename: "test.howl", Inferred: ast.Layout(ast.Int)}
 }
 
 func ssaString(value string) *ast.Node {
-	return &ast.Node{Type: "STRING", Value: value, Line: 1, Column: 1, Filename: "test.zero", Inferred: ast.Layout(ast.String)}
+	return &ast.Node{Type: "STRING", Value: value, Line: 1, Column: 1, Filename: "test.howl", Inferred: ast.Layout(ast.String)}
 }

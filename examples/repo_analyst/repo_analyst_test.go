@@ -57,15 +57,15 @@ func TestRepoAnalystStandaloneBytecode(t *testing.T) {
 		t.Fatalf("resolve repository root: %v", err)
 	}
 	scratchDir := t.TempDir()
-	compiler := filepath.Join(scratchDir, "zero")
-	artifact := filepath.Join(scratchDir, "repo_analyst.zbc")
+	compiler := filepath.Join(scratchDir, "howlframe")
+	artifact := filepath.Join(scratchDir, "repo_analyst.hfbc")
 	applicationSourceDir := filepath.Join(scratchDir, "repo_analyst_source")
 	for _, name := range []string{
-		"repo_analyst.zero",
-		"discovery.zero",
-		"classification.zero",
-		"text_analysis.zero",
-		"report.zero",
+		"repo_analyst.howl",
+		"discovery.howl",
+		"classification.howl",
+		"text_analysis.howl",
+		"report.howl",
 	} {
 		sourcePath := filepath.Join(repositoryRoot, "examples", "repo_analyst", name)
 		source, readErr := os.ReadFile(sourcePath)
@@ -74,12 +74,12 @@ func TestRepoAnalystStandaloneBytecode(t *testing.T) {
 		}
 		writeFixtureFile(t, filepath.Join(applicationSourceDir, name), source)
 	}
-	applicationSource := filepath.Join(applicationSourceDir, "repo_analyst.zero")
+	applicationSource := filepath.Join(applicationSourceDir, "repo_analyst.howl")
 
-	build := exec.Command("go", "build", "-o", compiler, "zero.go")
+	build := exec.Command("go", "build", "-o", compiler, "howlframe.go")
 	build.Dir = repositoryRoot
 	if output, buildErr := build.CombinedOutput(); buildErr != nil {
-		t.Fatalf("build Zero scratch binary: %v\n%s", buildErr, output)
+		t.Fatalf("build HowlFrame scratch binary: %v\n%s", buildErr, output)
 	}
 
 	compile := exec.Command(compiler, "-compile-bc", applicationSource, "-o", artifact)
@@ -92,7 +92,7 @@ func TestRepoAnalystStandaloneBytecode(t *testing.T) {
 
 	fixture := filepath.Join(scratchDir, "sample_repo")
 	mainContent := []byte(strings.Repeat("reference application content ", 12) + "TODO first TODO second\n")
-	mainPath := filepath.Join(fixture, "main.zero")
+	mainPath := filepath.Join(fixture, "main.howl")
 	writeFixtureFile(t, mainPath, mainContent)
 	writeFixtureFile(t, filepath.Join(fixture, "pkg", "worker.go"), []byte("package worker\n// FIXME: improve\n"))
 	writeFixtureFile(t, filepath.Join(fixture, "pkg", "worker_test.go"), []byte("package worker\n"))
@@ -102,10 +102,10 @@ func TestRepoAnalystStandaloneBytecode(t *testing.T) {
 	writeFixtureFile(t, filepath.Join(fixture, "config.yaml"), []byte("name: sample\n"))
 	writeFixtureFile(t, filepath.Join(fixture, "asset.bin"), []byte{0x00, 0xff})
 
-	wantReport := fmt.Sprintf(`zero_repo_analyst/v1
+	wantReport := fmt.Sprintf(`howlframe.repo_analyst/v1
 repository_path=%s
 total_files=8
-zero_files=1
+howlframe_files=1
 go_files=2
 python_files=1
 javascript_files=1
@@ -147,10 +147,10 @@ largest_text_file_bytes=%d`, fixture, mainPath, len(mainContent))
 		t.Fatalf("default instruction-budget failure = %q", defaultBudgetOutput)
 	}
 
-	wantLargeReport := fmt.Sprintf(`zero_repo_analyst/v1
+	wantLargeReport := fmt.Sprintf(`howlframe.repo_analyst/v1
 repository_path=%s
 total_files=1
-zero_files=0
+howlframe_files=0
 go_files=0
 python_files=0
 javascript_files=0

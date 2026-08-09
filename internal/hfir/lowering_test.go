@@ -1,11 +1,11 @@
-package zir
+package hfir
 
 import (
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 	"testing"
-	"zero/internal/ast"
-	"zero/internal/checker"
-	"zero/internal/lexer"
-	"zero/internal/parser"
 )
 
 func TestASTLowering(t *testing.T) {
@@ -39,7 +39,7 @@ func TestASTLowering(t *testing.T) {
 func TestASTLoweringHandlesIntegerLiterals(t *testing.T) {
 	src := `(cli_app (print 42))`
 	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "int_literal_test.zero")
+	p := parser.NewParser(lx, "int_literal_test.howl")
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
 		t.Fatalf("unexpected tokens after EOF")
@@ -60,7 +60,7 @@ func TestASTLoweringHandlesIntegerLiterals(t *testing.T) {
 func TestASTLoweringOnRealCheckedFixture(t *testing.T) {
 	src := `(cli_app (let (x 1) (print (+ x 2))))`
 	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "checked_fixture_test.zero")
+	p := parser.NewParser(lx, "checked_fixture_test.howl")
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
 		t.Fatalf("unexpected tokens after EOF")
@@ -79,14 +79,14 @@ func TestASTLoweringOnRealCheckedFixture(t *testing.T) {
 
 // TestASTLoweringHandlesEmptyParameterLists is a regression test for a
 // second lowering gap found while validating the production gate against
-// the real tests/*.zero corpus: a zero-argument defun/lambda parameter list
+// the real tests/*.howl corpus: a zero-argument defun/lambda parameter list
 // (e.g. "(defun f () ...)") lowers to an empty ast.Node{Type:"List"} with no
 // children, which previously fell through to LowerAST's unknown-node-type
 // error path since only non-empty Lists were handled.
 func TestASTLoweringHandlesEmptyParameterLists(t *testing.T) {
 	src := `(cli_app (defun f () (return 1)) (print (call f)))`
 	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "empty_params_test.zero")
+	p := parser.NewParser(lx, "empty_params_test.howl")
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
 		t.Fatalf("unexpected tokens after EOF")

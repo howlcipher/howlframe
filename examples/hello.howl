@@ -1,0 +1,10 @@
+(http_server 8080
+  (route "/" (lambda (req)
+    (res 200 "text/plain" "Hello, World! HowlFrame language is alive!")
+  ))
+  (route "/json" (lambda (req)
+    (let (msg (dict ("status" "success") ("message" "Hello from HowlFrame JSON endpoint!")))
+      (res_json 200 msg)
+    )
+  ))
+)

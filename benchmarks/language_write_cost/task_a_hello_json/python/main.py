@@ -7,14 +7,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/json":
             body = json.dumps({
                 "status": "success",
-                "message": "Hello from Zero JSON endpoint!",
+                "message": "Hello from HowlFrame JSON endpoint!",
             }).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = b"Hello, World! Zero language is alive!"
+            body = b"Hello, World! HowlFrame language is alive!"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.end_headers()

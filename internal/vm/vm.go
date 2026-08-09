@@ -6,6 +6,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/ir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
 	"net/http"
 	"os"
@@ -15,12 +21,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"zero/internal/ast"
-	"zero/internal/bytecode"
-	"zero/internal/capability"
-	"zero/internal/ir"
-	"zero/internal/lexer"
-	"zero/internal/parser"
 )
 
 // interpreter.go implements Phase 1 of improvement #49 (Direct Neural
@@ -642,7 +642,7 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 	}
 
 	if fn.lazySynthesize {
-		promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
+		promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
 		reqBody, _ := json.Marshal(map[string]any{
 			"model":  "llama3",
 			"prompt": promptStr,
@@ -1711,7 +1711,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 
 			if fn.LazySynthesize {
-				promptStr := fmt.Sprintf("You are a Zero compiler. Synthesize the Zero Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the Zero Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
+				promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
 				reqBody, _ := json.Marshal(map[string]any{
 					"model":  "llama3",
 					"prompt": promptStr,

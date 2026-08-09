@@ -1,13 +1,13 @@
-# Extreme AI Paradigms for Zero
+# Extreme AI Paradigms for HowlFrame
 
-As Zero evolves as an AI-first language and multi-target toolchain, it can push beyond standard semantic abstractions and rethink the foundation of programming models. Drawing inspiration from machine learning operations (MLOps), systems logic (DAG-based tiering, cyclic dependency resolution), and the probabilistic nature of modern AI, here are four paradigms that frame what an AI-native language can become.
+As HowlFrame evolves as an AI-first language and multi-target toolchain, it can push beyond standard semantic abstractions and rethink the foundation of programming models. Drawing inspiration from machine learning operations (MLOps), systems logic (DAG-based tiering, cyclic dependency resolution), and the probabilistic nature of modern AI, here are four paradigms that frame what an AI-native language can become.
 
 ## 1. Swarm Primitives (Agentic Actor Models)
 **Description:** 
-Instead of traditional threads or goroutines, Zero introduces autonomous subagents as first-class concurrency objects. Using primitives like `(spawn_agent "Researcher" (task "find sources"))`, developers orchestrate a swarm of agents. These agents communicate via typed message-passing channels, autonomously negotiate tasks, perform complex reasoning, and resolve dependencies dynamically based on topological sorting.
+Instead of traditional threads or goroutines, HowlFrame introduces autonomous subagents as first-class concurrency objects. Using primitives like `(spawn_agent "Researcher" (task "find sources"))`, developers orchestrate a swarm of agents. These agents communicate via typed message-passing channels, autonomously negotiate tasks, perform complex reasoning, and resolve dependencies dynamically based on topological sorting.
 
 **Why it breaks conventional rules:** 
-Concurrency shifts from deterministic CPU scheduling to non-deterministic, autonomous orchestration. A "thread" is no longer just a sequence of instructions; it is an intelligent actor that decides *how* to execute a task, can independently retry, and uses Zero Trust principles to explicitly verify the state of upstream agent outputs before proceeding.
+Concurrency shifts from deterministic CPU scheduling to non-deterministic, autonomous orchestration. A "thread" is no longer just a sequence of instructions; it is an intelligent actor that decides *how* to execute a task, can independently retry, and uses HowlFrame Trust principles to explicitly verify the state of upstream agent outputs before proceeding.
 
 ## 2. Teleological Execution (Goal-Driven Syntax)
 **Description:** 
@@ -18,7 +18,7 @@ It abandons imperative control flow entirely. Code becomes a set of constraints 
 
 ## 3. Auto-Mutating Runtime (JIT-LLM Compilation)
 **Description:** 
-Zero includes a self-rewriting primitive, `(optimize_block ...)`, which monitors execution metrics such as latency, memory usage, and drift. Where the selected backend and runtime support it, the runtime can ask an LLM to synthesize an optimized replacement path and load that replacement under controlled conditions.
+HowlFrame includes a self-rewriting primitive, `(optimize_block ...)`, which monitors execution metrics such as latency, memory usage, and drift. Where the selected backend and runtime support it, the runtime can ask an LLM to synthesize an optimized replacement path and load that replacement under controlled conditions.
 
 **Why it breaks conventional rules:** 
 Code is no longer immutable after deployment. The program evolves organically in production, transforming compilation from a static, build-time process into an active, continuous, AI-driven evolutionary cycle. It blurs the line between execution and development, natively incorporating model evaluation and dynamic code generation into the runtime.

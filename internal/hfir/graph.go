@@ -1,9 +1,9 @@
-package zir
+package hfir
 
 import (
 	"encoding/json"
 	"fmt"
-	"zero/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ast"
 )
 
 type NodeID string

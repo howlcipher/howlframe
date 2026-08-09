@@ -1,8 +1,8 @@
 (cli_app
-  (use "discovery.zero" as discovery)
-  (use "classification.zero" as classification)
-  (use "text_analysis.zero" as text_analysis)
-  (use "report.zero" as report)
+  (use "discovery.howl" as discovery)
+  (use "classification.howl" as classification)
+  (use "text_analysis.howl" as text_analysis)
+  (use "report.howl" as report)
 
   (let (repository_path (cli_args 0))
     (if (= repository_path "")
@@ -13,7 +13,7 @@
         (let (files (call discovery/discover_files repository_path))
           (let (statistics (dict
               ("total_files" 0)
-              ("zero_files" 0)
+              ("howlframe_files" 0)
               ("go_files" 0)
               ("python_files" 0)
               ("javascript_files" 0)
@@ -34,9 +34,9 @@
                         (map_set statistics "total_files"
                           (+ (map_get statistics "total_files") 1))
 
-                        (if (call classification/is_zero_file path)
-                          (map_set statistics "zero_files"
-                            (+ (map_get statistics "zero_files") 1)))
+                        (if (call classification/is_howlframe_file path)
+                          (map_set statistics "howlframe_files"
+                            (+ (map_get statistics "howlframe_files") 1)))
                         (if (call classification/is_go_file path)
                           (map_set statistics "go_files"
                             (+ (map_get statistics "go_files") 1)))
@@ -89,7 +89,7 @@
                       (call report/build_report
                         repository_path
                         (map_get statistics "total_files")
-                        (map_get statistics "zero_files")
+                        (map_get statistics "howlframe_files")
                         (map_get statistics "go_files")
                         (map_get statistics "python_files")
                         (map_get statistics "javascript_files")

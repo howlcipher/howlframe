@@ -1,4 +1,4 @@
-package zir
+package hfir
 
 type Severity string
 

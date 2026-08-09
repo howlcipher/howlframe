@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"zero/internal/ast"
-	"zero/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/lexer"
 )
 
 func TestParserCreatesFloatAtom(t *testing.T) {
-	parser := NewParser(lexer.NewLexer("(> score 0.8)"), "float.zero")
+	parser := NewParser(lexer.NewLexer("(> score 0.8)"), "float.howl")
 	root := parser.ParseExpression()
 	if got := root.Children[2]; got.Type != "FLOAT" || got.Value != "0.8" {
 		t.Fatalf("got float node %#v", got)
@@ -28,7 +28,7 @@ func expandWithModule(t *testing.T, src, modName, modSrc string) *ast.Node {
 		t.Fatalf("failed to write module fixture: %v", err)
 	}
 
-	root := NewParser(lexer.NewLexer(src), "main.zero").ParseExpression()
+	root := NewParser(lexer.NewLexer(src), "main.howl").ParseExpression()
 	ExpandIncludes(root, dir, 0)
 	return root
 }
@@ -52,7 +52,7 @@ func heads(nodes []*ast.Node) []string {
 // Slicing the source module at [2:] silently dropped its first statement
 // (bugs.md #43).
 func TestExpandIncludesRetainsModuleStatements(t *testing.T) {
-	root := expandWithModule(t, `(list (use "mod.zero" as m))`, "mod.zero", `(module
+	root := expandWithModule(t, `(list (use "mod.howl" as m))`, "mod.howl", `(module
 		(export (defun first () 1))
 		(defun second () 2)
 	)`)
@@ -71,7 +71,7 @@ func TestExpandIncludesRetainsModuleStatements(t *testing.T) {
 
 // The first statement is retained whether or not it is an export.
 func TestExpandIncludesRetainsModuleFirstStatementNonExport(t *testing.T) {
-	root := expandWithModule(t, `(list (use "mod.zero" as m))`, "mod.zero", `(module
+	root := expandWithModule(t, `(list (use "mod.howl" as m))`, "mod.howl", `(module
 		(defun hidden () 1)
 		(export (defun first () 1))
 	)`)
@@ -89,7 +89,7 @@ func TestExpandIncludesRetainsModuleFirstStatementNonExport(t *testing.T) {
 // into the parent list rather than wrapping them, but must not drop the first
 // one either.
 func TestExpandIncludesIncludeDeprecated(t *testing.T) {
-	root := expandWithModule(t, `(list (include "mod.zero"))`, "mod.zero", `(module
+	root := expandWithModule(t, `(list (include "mod.howl"))`, "mod.howl", `(module
 		(defun hidden () 1)
 		(export (defun first () 1))
 	)`)

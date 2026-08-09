@@ -3,12 +3,12 @@
 package optimization
 
 import (
-	"zero/internal/ast"
-	"zero/internal/checker"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/checker"
 )
 
 // FormatV1 identifies the serialized optimization plan schema.
-const FormatV1 = "zero.optimization_plan/v1"
+const FormatV1 = "howlframe.optimization_plan/v1"
 
 // CandidatePlan is one labeled prompt or program variant.
 type CandidatePlan struct {

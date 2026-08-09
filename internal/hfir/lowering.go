@@ -1,8 +1,8 @@
-package zir
+package hfir
 
 import (
 	"fmt"
-	"zero/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ast"
 )
 
 type LoweringContext struct {

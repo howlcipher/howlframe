@@ -1,7 +1,7 @@
 package bytecode
 
 import (
-	"zero/internal/capability"
+	"github.com/howlcipher/howlframe/internal/capability"
 )
 
 type Opcode uint16

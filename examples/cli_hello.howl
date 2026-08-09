@@ -1,6 +1,6 @@
 (cli_app
 	(print "Hello, World!")
-	(let (name "Zero")
+	(let (name "HowlFrame")
 		(print "Welcome to" name)
 	)
 )

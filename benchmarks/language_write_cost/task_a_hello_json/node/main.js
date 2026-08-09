@@ -5,11 +5,11 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       status: "success",
-      message: "Hello from Zero JSON endpoint!",
+      message: "Hello from HowlFrame JSON endpoint!",
     }));
   } else {
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("Hello, World! Zero language is alive!");
+    res.end("Hello, World! HowlFrame language is alive!");
   }
 });
 

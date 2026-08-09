@@ -3,7 +3,7 @@ package vm
 import (
 	"encoding/json"
 	"fmt"
-	"zero/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/bytecode"
 )
 
 type VMError struct {

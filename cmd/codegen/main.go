@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/bytecode"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"zero/internal/bytecode"
 )
 
 func main() {
@@ -28,6 +28,7 @@ func generatePython(opcodes []bytecode.OpcodeSpec) {
 
 	py.WriteString(`from pydantic import BaseModel, Field
 from typing import List, Dict, Union, Literal, Annotated, Any
+
 
 `)
 
@@ -64,18 +65,19 @@ from typing import List, Dict, Union, Literal, Annotated, Any
 		if len(spec.Operands) == 0 {
 			py.WriteString("    pass\n")
 		}
-		py.WriteString("\n")
+		py.WriteString("\n\n")
 	}
 
 	py.WriteString("Instruction = Annotated[\n    Union[\n")
 	for _, name := range classNames {
 		py.WriteString(fmt.Sprintf("        %s,\n", name))
 	}
-	py.WriteString("    ],\n    Field(discriminator=\"op\")\n]\n\n")
+	py.WriteString("    ],\n    Field(discriminator=\"op\")\n]\n\n\n")
 
 	py.WriteString(`class Function(BaseModel):
     params: List[str]
     instructions: List[Instruction]
+
 
 class BytecodeProgram(BaseModel):
     version: int
@@ -92,7 +94,7 @@ class BytecodeProgram(BaseModel):
 func generateMarkdown(opcodes []bytecode.OpcodeSpec) {
 	var md strings.Builder
 
-	md.WriteString("# Zero Bytecode Instruction Reference\n\n")
+	md.WriteString("# HowlFrame Bytecode Instruction Reference\n\n")
 	md.WriteString("| Opcode | Operands | Pops | Pushes | Capability | Description |\n")
 	md.WriteString("|---|---|---|---|---|---|\n")
 

@@ -2,7 +2,7 @@ package ir
 
 import (
 	"fmt"
-	"zero/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ast"
 )
 
 type IRNode struct {

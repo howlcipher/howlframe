@@ -3,10 +3,10 @@ package wasm
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
 	"strconv"
 	"strings"
-	"zero/internal/ast"
-	"zero/internal/ir"
 )
 
 type wasmGenerator struct {
@@ -482,7 +482,7 @@ func watEncodeBytes(data []byte) string {
 	return encoded.String()
 }
 
-// wasmType consumes the semantic layout selected by the checker. Zero's
+// wasmType consumes the semantic layout selected by the checker. HowlFrame's
 // native int is 64-bit, while boolean control-flow values remain i32 in Wasm.
 func wasmType(info ast.TypeInfo) string {
 	return describeLayout(info).ValueType

@@ -1,8 +1,8 @@
-package zir
+package hfir
 
 import (
-	"zero/internal/ast"
-	"zero/internal/capability"
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/capability"
 )
 
 type Verifier struct {
@@ -62,33 +62,33 @@ func (v *Verifier) Verify() []Diagnostic {
 		// checker allows without a diagnostic. The checked AST's TypeInfo
 		// does not preserve which case produced Unknown, so on real programs
 		// this diagnostic has no reachable true positive today (case one
-		// never reaches ZIR) and case two is common - confirmed empirically
-		// by running this check against the full tests/*.zero corpus, where
+		// never reaches HFIR) and case two is common - confirmed empirically
+		// by running this check against the full tests/*.howl corpus, where
 		// it false-positived on 12 of ~90 fixtures (bugs.md #42). The
-		// production gate (zero.go's runZirGate) therefore does NOT treat
+		// production gate (howlframe.go's runHFIRGate) therefore does NOT treat
 		// this code as blocking; it is still computed and returned here
 		// unchanged so any future consumer with better information can use
-		// it, but do not add it to zero.go's zirBlockingCodes without first
-		// fixing the underlying checker/ZIR information gap in #41.
+		// it, but do not add it to howlframe.go's hfirBlockingCodes without first
+		// fixing the underlying checker/HFIR information gap in #41.
 		if node.Kind == "symbol" && node.Type.Kind == ast.Unknown {
-			v.addDiagnostic("ZIR_UNBOUND_REF", SeverityError, "Unbound variable or function reference: "+node.Value, node.Provenance, node.ID)
+			v.addDiagnostic("HFIR_UNBOUND_REF", SeverityError, "Unbound variable or function reference: "+node.Value, node.Provenance, node.ID)
 		}
 
 		// 3. Cycle & Reference Validation
 		for _, dataEdge := range node.DataInputs {
 			if _, exists := v.Graph.nodeMap[dataEdge.SourceNode]; !exists {
-				v.addDiagnostic("ZIR_INVALID_REF", SeverityError, "Invalid data input reference to missing node", node.Provenance, node.ID)
+				v.addDiagnostic("HFIR_INVALID_REF", SeverityError, "Invalid data input reference to missing node", node.Provenance, node.ID)
 			}
 		}
 		for _, ctrlEdge := range node.ControlEdges {
 			if _, exists := v.Graph.nodeMap[ctrlEdge]; !exists {
-				v.addDiagnostic("ZIR_INVALID_REF", SeverityError, "Invalid control edge reference to missing node", node.Provenance, node.ID)
+				v.addDiagnostic("HFIR_INVALID_REF", SeverityError, "Invalid control edge reference to missing node", node.Provenance, node.ID)
 			}
 		}
 
 		// 4. Target Feasibility
 		if v.Target != "" && !isFeasible(node.Kind, v.Target) {
-			v.addDiagnostic("ZIR_TARGET_INFEASIBLE", SeverityError, "Node kind '"+node.Kind+"' is not feasible for target '"+v.Target+"'", node.Provenance, node.ID)
+			v.addDiagnostic("HFIR_TARGET_INFEASIBLE", SeverityError, "Node kind '"+node.Kind+"' is not feasible for target '"+v.Target+"'", node.Provenance, node.ID)
 		}
 	}
 
@@ -96,7 +96,7 @@ func (v *Verifier) Verify() []Diagnostic {
 }
 
 // isFeasible has real rejection rules only for target == "wasm" today. Every
-// other target identity (including ones introduced by zero.go's production
+// other target identity (including ones introduced by howlframe.go's production
 // wiring in improvement #87 Phase 2, e.g. "bytecode"/"interpreter"/"go"/
 // "javascript") is permissive by default - a passing result for those
 // targets does not mean real per-target feasibility coverage exists yet.

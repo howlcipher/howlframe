@@ -23,7 +23,7 @@ func All() []Capability {
 	}
 }
 
-// ForConstruct returns the capability required by a canonical Zero operation or construct name.
+// ForConstruct returns the capability required by a canonical HowlFrame operation or construct name.
 // If the construct does not require a capability, it returns None.
 func ForConstruct(name string) Capability {
 	switch name {
