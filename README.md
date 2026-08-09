@@ -188,6 +188,10 @@ node --test app.test.js
 go run zero.go -o build examples/wasm_math.zero
 ```
 
+### Reference Application
+
+[Zero Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to Zero bytecode and analyzes bounded repository fixtures without generated Go or JavaScript. Its dogfooding journal records the fixed instruction budget that currently prevents larger repository scans.
+
 ## Common Language Features
 
 Zero supports the core control-flow and data primitives expected by the shipped backends:
@@ -305,7 +309,7 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 | `zero.go` | Main CLI entry point for parsing, checking, code generation, direct execution, bytecode, mask plans, and optimization plans. |
 | `internal/` | Go packages for AST, parser, checker, IR, backends, bytecode, VM, masking, and optimization internals. |
 | `cmd/` | Developer commands such as generated reference and schema output. |
-| `examples/` | Small user-facing `.zero` programs. |
+| `examples/` | User-facing `.zero` programs and reference applications. |
 | `tests/` | Zero fixtures plus Python and Go regression tests. |
 | `docs/` | GitHub Pages site, design notes, journals, archived historical source, and generated reference material. |
 | `benchmarks/` | Checked-in benchmark programs and result data. |

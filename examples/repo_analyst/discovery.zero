@@ -1,0 +1,14 @@
+(module
+  (export (defun discover_files (repository_path)
+    (type_hint repository_path "string")
+    (type_hint return "any")
+    (try_let (command_output
+        (exec "find" repository_path "-type" "f" "-not" "-path" "*/.git/*" "-print"))
+      (catch err
+        (do
+          (stderr (str_join
+            (list "repo_analyst: repository discovery failed:" (to_string err))
+            " "))
+          (exit 3)))
+      (return (str_split (bytes_to_string command_output) "\n")))))
+)

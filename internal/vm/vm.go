@@ -1194,7 +1194,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				env.vars[varName] = vm.pop(inst.Op)
 				vm.run(successInsts, env)
 			}
-			ip += valLen + catchLen + successLen
+			ip += 1 + valLen + catchLen + successLen
 			continue
 		case bytecode.OpDbConnect:
 			varName := inst.StringOperand

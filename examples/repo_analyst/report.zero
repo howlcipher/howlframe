@@ -1,0 +1,57 @@
+(module
+  (export (defun build_report (
+      repository_path
+      total_files
+      zero_files
+      go_files
+      python_files
+      javascript_files
+      typescript_files
+      configuration_files
+      test_files
+      likely_entry_points
+      text_files
+      unreadable_text_files
+      todo_markers
+      fixme_markers
+      largest_text_file
+      largest_text_file_bytes)
+    (type_hints
+      (repository_path string)
+      (total_files int)
+      (zero_files int)
+      (go_files int)
+      (python_files int)
+      (javascript_files int)
+      (typescript_files int)
+      (configuration_files int)
+      (test_files int)
+      (likely_entry_points int)
+      (text_files int)
+      (unreadable_text_files int)
+      (todo_markers int)
+      (fixme_markers int)
+      (largest_text_file string)
+      (largest_text_file_bytes int)
+      (return string))
+    (return (str_join
+      (list
+        "zero_repo_analyst/v1\n"
+        "repository_path=" repository_path "\n"
+        "total_files=" (to_string total_files) "\n"
+        "zero_files=" (to_string zero_files) "\n"
+        "go_files=" (to_string go_files) "\n"
+        "python_files=" (to_string python_files) "\n"
+        "javascript_files=" (to_string javascript_files) "\n"
+        "typescript_files=" (to_string typescript_files) "\n"
+        "configuration_files=" (to_string configuration_files) "\n"
+        "test_files=" (to_string test_files) "\n"
+        "likely_entry_points=" (to_string likely_entry_points) "\n"
+        "text_files=" (to_string text_files) "\n"
+        "unreadable_text_files=" (to_string unreadable_text_files) "\n"
+        "todo_markers=" (to_string todo_markers) "\n"
+        "fixme_markers=" (to_string fixme_markers) "\n"
+        "largest_text_file=" largest_text_file "\n"
+        "largest_text_file_bytes=" (to_string largest_text_file_bytes))
+      ""))))
+)
