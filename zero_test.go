@@ -196,6 +196,12 @@ func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
 		t.Fatalf("expected CAPABILITY_DENIED in output, got: %v\n%s", err, output)
 	}
 
+	if output, err := runWithEnv(os.Environ(), "-run-bc", "--max-instructions", "1000000", bytecodeFile); err == nil {
+		t.Fatalf("expected denial with a large instruction budget but no capability, command succeeded:\n%s", output)
+	} else if !strings.Contains(string(output), "CAPABILITY_DENIED") {
+		t.Fatalf("expected CAPABILITY_DENIED under a custom instruction budget, got: %v\n%s", err, output)
+	}
+
 	allowedEnv := append(os.Environ(), "ZERO_TEST_ALLOW_CAPS_VAR=granted")
 	if output, err := runWithEnv(allowedEnv, "-run-bc", "-allow-caps", "environment", bytecodeFile); err != nil {
 		t.Fatalf("expected success with -allow-caps environment: %v\n%s", err, output)
@@ -205,6 +211,91 @@ func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
 
 	if output, err := runWithEnv(os.Environ(), "-run-bc", "-allow-caps", "not-a-real-capability", bytecodeFile); err == nil {
 		t.Fatalf("expected rejection of an unknown -allow-caps value, but command succeeded:\n%s", output)
+	}
+}
+
+func TestRunBytecodeMaxInstructionsFlag(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+	tempDir := t.TempDir()
+	inputFile := filepath.Join(tempDir, "print.zero")
+	bytecodeFile := filepath.Join(tempDir, "print.zbc")
+	if err := os.WriteFile(inputFile, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
+		t.Fatalf("write bytecode input: %v", err)
+	}
+	if output, err := exec.Command(zeroBinary, "-compile-bc", inputFile, "-o", bytecodeFile).CombinedOutput(); err != nil {
+		t.Fatalf("compile bytecode: %v\n%s", err, output)
+	}
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantOutput string
+		wantError  string
+	}{
+		{
+			name:       "omitted preserves default",
+			args:       []string{"-run-bc", bytecodeFile},
+			wantOutput: "ok\n",
+		},
+		{
+			name:      "explicit smaller limit",
+			args:      []string{"-run-bc", "--max-instructions", "1", bytecodeFile},
+			wantError: `"code":"LIMIT_EXCEEDED"`,
+		},
+		{
+			name:       "exact required limit",
+			args:       []string{"-run-bc", "--max-instructions", "2", bytecodeFile},
+			wantOutput: "ok\n",
+		},
+		{
+			name:       "greater limit",
+			args:       []string{"-run-bc", "--max-instructions", "3", bytecodeFile},
+			wantOutput: "ok\n",
+		},
+		{
+			name:      "zero rejected",
+			args:      []string{"-run-bc", "--max-instructions", "0", bytecodeFile},
+			wantError: "-max-instructions must be greater than zero",
+		},
+		{
+			name:      "negative rejected",
+			args:      []string{"-run-bc", "--max-instructions", "-1", bytecodeFile},
+			wantError: "-max-instructions must be greater than zero",
+		},
+		{
+			name:      "malformed rejected",
+			args:      []string{"-run-bc", "--max-instructions", "invalid", bytecodeFile},
+			wantError: "invalid value",
+		},
+		{
+			name:      "overflow rejected",
+			args:      []string{"-run-bc", "--max-instructions", "999999999999999999999999999999", bytecodeFile},
+			wantError: "value out of range",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := exec.Command(zeroBinary, test.args...).CombinedOutput()
+			if test.wantError == "" {
+				if err != nil {
+					t.Fatalf("command failed: %v\n%s", err, output)
+				}
+				if string(output) != test.wantOutput {
+					t.Fatalf("output = %q, want %q", output, test.wantOutput)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("command succeeded, want error containing %q; output: %s", test.wantError, output)
+			}
+			if !strings.Contains(string(output), test.wantError) {
+				t.Fatalf("error output = %q, want substring %q", output, test.wantError)
+			}
+			if strings.Contains(string(output), "ok\n") {
+				t.Fatalf("application executed before invalid/insufficient policy failed: %s", output)
+			}
+		})
 	}
 }
 

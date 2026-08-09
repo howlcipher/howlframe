@@ -41,8 +41,20 @@ type VMLimits struct {
 	MaxCallDepth    int
 }
 
+// ExecutionPolicy is authority supplied by the trusted bytecode runner. It
+// may constrain an application, but application code cannot inspect or widen
+// it. The zero value is fail-closed and permits no instruction execution.
+type ExecutionPolicy struct {
+	Limits VMLimits
+}
+
 var DefaultLimits = VMLimits{
 	MaxInstructions: 100000,
 	MaxMemoryBytes:  67108864,
 	MaxCallDepth:    128,
+}
+
+// DefaultExecutionPolicy returns a copy of the standalone VM's safe defaults.
+func DefaultExecutionPolicy() ExecutionPolicy {
+	return ExecutionPolicy{Limits: DefaultLimits}
 }

@@ -77,6 +77,7 @@ go run zero.go -compile-bc examples/cli_hello.zero
 go run zero.go -run-bc examples/cli_hello.zero.bc.bin
 go run zero.go -compile-bc tests/test_store_bytecode.zero -o /tmp/test_store_bytecode.zbc
 go run zero.go -run-bc /tmp/test_store_bytecode.zbc
+go run zero.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.zbc
 ```
 
 For WebAssembly Text:
@@ -190,7 +191,7 @@ go run zero.go -o build examples/wasm_math.zero
 
 ### Reference Application
 
-[Zero Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to Zero bytecode and analyzes bounded repository fixtures without generated Go or JavaScript. Its dogfooding journal records the fixed instruction budget that currently prevents larger repository scans.
+[Zero Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to Zero bytecode and analyzes repositories without generated Go or JavaScript. Its dogfooding tests prove both the unchanged default instruction ceiling and a larger finite budget explicitly authorized by the trusted runner.
 
 ## Common Language Features
 
@@ -281,6 +282,18 @@ The same exact-output handling applies to SSA WebAssembly compilation when
 ```bash
 go run zero.go -compile-wasm examples/native_math.zero -o build/native_math.wat
 ```
+
+## Execution Policy
+
+Every `-run-bc` execution uses a runner-owned execution policy. The default remains 100,000 instructions. A trusted runner may select another positive, finite ceiling by placing `--max-instructions` before the bytecode artifact:
+
+```bash
+go run zero.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.zbc
+```
+
+The ceiling is the maximum number of VM instructions allowed. A program that needs exactly the configured count succeeds; the next attempted instruction fails before dispatch with structured `LIMIT_EXCEEDED`. Zero, negative, malformed, and overflowed values are rejected before bytecode execution. There is no unlimited value.
+
+Execution policy is not Zero source syntax and is not stored in ZIR or the bytecode artifact. Application code cannot raise its own budget. Instruction budget and capabilities are independent: more instructions never grant access to external resources.
 
 ## Capability Security
 

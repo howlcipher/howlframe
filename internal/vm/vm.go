@@ -1029,13 +1029,20 @@ type VmReturn struct {
 }
 
 func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
+	return RunBytecodeWithPolicy(prog, cliArgs, DefaultExecutionPolicy(), allowedCaps, in, out, errOut)
+}
+
+// RunBytecodeWithPolicy executes bytecode under authority selected by the
+// trusted runner. Capabilities remain an independent grant: increasing a
+// resource limit does not authorize any external effect.
+func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
 	vm := &BCVM{
 		prog:        prog,
 		env:         NewBcEnv(nil),
 		insts:       prog.Main,
 		args:        cliArgs,
 		stores:      newBCStoreRegistry(),
-		Limits:      DefaultLimits,
+		Limits:      policy.Limits,
 		AllowedCaps: allowedCaps,
 		In:          in,
 		Out:         out,
@@ -1140,12 +1147,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 	ip := 0
 	for ip < len(insts) {
-		vm.executed++
-		if vm.executed > vm.Limits.MaxInstructions {
-			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, insts[vm.ip].Op, "instruction limit exceeded"))
-		}
 		vm.ip = ip
 		inst := insts[ip]
+		// MaxInstructions is the maximum number of instructions allowed. Check
+		// before incrementing so an exact budget succeeds and even MaxInt cannot
+		// overflow into effectively unlimited execution.
+		if vm.Limits.MaxInstructions <= 0 || vm.executed >= vm.Limits.MaxInstructions {
+			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
+		}
+		vm.executed++
 
 		spec := bytecode.Registry[inst.Op]
 		if spec.Capability != capability.None {
