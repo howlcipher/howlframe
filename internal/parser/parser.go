@@ -58,6 +58,9 @@ func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 				ast.ReportError("use expects a string filename", child.Line, child.Column)
 			}
 			filename := filenameNode.Value
+			if depth > 0 {
+				ast.ReportError(fmt.Sprintf("nested module import: %q uses %q, but only a program's top-level file may declare (use ...); flatten the import chain so the top-level file uses %q directly (real transitive module linking is not yet supported)", child.Filename, filename, filename), child.Line, child.Column)
+			}
 			aliasNode := child.Children[3]
 			if aliasNode.Type != "SYMBOL" {
 				ast.ReportError("use expects a symbol alias", child.Line, child.Column)

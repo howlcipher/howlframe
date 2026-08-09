@@ -67,10 +67,7 @@ func TestEveryEntryHasEvidence(t *testing.T) {
 // error message can point at it.
 func TestUnsupportedConstructsWithOwnersCiteThem(t *testing.T) {
 	expected := map[string]string{
-		"use":    "improvements.md #95",
-		"export": "improvements.md #95",
-		"module": "improvements.md #95",
-		"test":   "improvements.md #96",
+		"test": "improvements.md #96",
 	}
 	for name, tracker := range expected {
 		entry, ok := Lookup(name)
@@ -83,6 +80,23 @@ func TestUnsupportedConstructsWithOwnersCiteThem(t *testing.T) {
 		}
 		if entry.Tracker != tracker {
 			t.Errorf("construct %q Tracker = %q, want %q", name, entry.Tracker, tracker)
+		}
+	}
+}
+
+// TestModuleConstructsAreCompileTimeOnly locks in improvements.md #95's
+// classification: parser.ExpandIncludes and ast.ResolveModules fully consume
+// use/export/module before checker.Check or the ZIR gate ever run
+// (zero.go:74-75), so the bytecode target never needs a lowering for them.
+func TestModuleConstructsAreCompileTimeOnly(t *testing.T) {
+	for _, name := range []string{"use", "export", "module"} {
+		entry, ok := Lookup(name)
+		if !ok {
+			t.Errorf("construct %q is missing from the registry", name)
+			continue
+		}
+		if entry.Support != CompileTimeOnly {
+			t.Errorf("construct %q = %v, want CompileTimeOnly", name, entry.Support)
 		}
 	}
 }
