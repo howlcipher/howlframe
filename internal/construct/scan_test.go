@@ -1,11 +1,21 @@
 package construct
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"zero/internal/ast"
 	"zero/internal/lexer"
 	"zero/internal/parser"
 )
+
+func writeFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write %s: %v", name, err)
+	}
+}
 
 func parse(t *testing.T, source string) *parser.Parser {
 	t.Helper()
@@ -102,10 +112,46 @@ func TestScanAcceptsStructuralListsThatAreNotConstructs(t *testing.T) {
 			"ephemeral_circuit argument list",
 			`(cli_app (let (r (ephemeral_circuit (2 3) "multiply")) (print r)))`,
 		},
+		{
+			// improvements.md #95: use/export/module are CompileTimeOnly -
+			// parser.ExpandIncludes/ast.ResolveModules always resolve them
+			// before checker.Check or the ZIR gate run (zero.go:74-75), so a
+			// raw, unresolved (use ...) node scans clean here. Its children
+			// are a string and symbols, not lists, so there is nothing for
+			// Scan to descend into either.
+			"raw unresolved use node",
+			`(http_server 8081 (use "routes.zero" as routes))`,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) { assertClean(t, tc.name, tc.source) })
+	}
+}
+
+// TestScanAcceptsResolvedModuleProgram proves the real invariant behind
+// use/export/module's CompileTimeOnly classification (improvements.md #95):
+// a program that has actually been through parser.ExpandIncludes and
+// ast.ResolveModules - the same steps zero.go runs before the ZIR gate -
+// scans clean, because those passes fully consume every module/use/export
+// node before Scan (and the bytecode compiler) ever see the tree.
+func TestScanAcceptsResolvedModuleProgram(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "math.zero", `(module
+		(export (defun add_one (n)
+			(type_hint n "int")
+			(type_hint return "int")
+			(return (+ n 1))))
+		(defun hidden ()
+			(type_hint return "int")
+			(return 99)))`)
+
+	root := parse(t, `(cli_app (use "math.zero" as math) (print (call math/add_one 41)))`).ParseExpression()
+	parser.ExpandIncludes(root, dir, 0)
+	ast.ResolveModules(root)
+
+	if got := Scan(root); len(got) != 0 {
+		t.Errorf("resolved module program: expected no violations, got %+v", got)
 	}
 }
 
@@ -126,12 +172,6 @@ func TestScanRejectsUnsupportedConstructs(t *testing.T) {
 			source:  `(cli_app (defun f (a) (print a)) (test "void" (call f "hi")))`,
 			want:    "test",
 			tracker: "improvements.md #96",
-		},
-		{
-			name:    "module import",
-			source:  `(http_server 8081 (use "routes.zero" as routes))`,
-			want:    "use",
-			tracker: "improvements.md #95",
 		},
 		{
 			name:   "struct declaration",

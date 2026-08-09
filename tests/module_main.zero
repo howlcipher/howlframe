@@ -1,0 +1,5 @@
+(cli_app
+	(use "module_math.zero" as math)
+	(print (call math/add_one 41))
+	(print (call math/double 10))
+)

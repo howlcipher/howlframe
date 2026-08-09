@@ -112,6 +112,9 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"patch":        true, // ast.ApplyPatches
 		"with_context": true, // ast.ApplyWithContext
 		"include":      true, // parser.ExpandIncludes
+		"use":          true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"export":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"module":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
 	}
 
 	for _, entry := range construct.Table() {

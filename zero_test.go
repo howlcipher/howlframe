@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"zero/internal/ast"
 	"zero/internal/construct"
@@ -923,6 +924,10 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 // include-only fragment with no standalone root, so it is only ever valid
 // when pulled in by an importer. tests/test_include.zero was skipped here
 // too until bugs.md #43 was fixed; it now passes the sweep unexempted.
+// tests/module_math.zero (improvements.md #95) is skipped for the identical
+// reason as routes.zero: it is a bare (module ...) file with no importer, so
+// it is only ever valid when pulled in via tests/module_main.zero's (use
+// ...), which itself is a real cli_app root and passes the sweep unexempted.
 func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
 	zeroBinary := filepath.Join(t.TempDir(), "zero")
 	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
@@ -930,7 +935,8 @@ func TestZirGateAcceptsAllExistingFixtures(t *testing.T) {
 	}
 
 	skip := map[string]bool{
-		"routes.zero": true,
+		"routes.zero":      true,
+		"module_math.zero": true,
 	}
 
 	fixtures, err := filepath.Glob("tests/*.zero")
@@ -1263,9 +1269,12 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 	// routes.zero is an include-only fragment with no standalone root, so it
 	// fails earlier, in checker.Check, for reasons unrelated to construct
 	// support. (tests/test_include.zero was skipped here too until bugs.md
-	// #43 was fixed.)
+	// #43 was fixed.) module_math.zero (improvements.md #95) is the same
+	// shape: a bare (module ...) file with no importer, valid only via
+	// module_main.zero's (use ...).
 	skip := map[string]bool{
-		"routes.zero": true,
+		"routes.zero":      true,
+		"module_math.zero": true,
 	}
 
 	fixtures, err := filepath.Glob("tests/*.zero")
@@ -1321,4 +1330,294 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The tests below cover improvements.md #95's remaining acceptance criteria
+// beyond the corpus sweeps above: negative paths (private access, missing
+// module, nested/circular imports), the compile-time-linking proof (bytecode
+// runs after the source module disappears), interpreter/bytecode parity, and
+// ZIR provenance. tests/module_math.zero and tests/module_main.zero already
+// prove the happy path through every real sweep (-validate, -compile-bc,
+// construct.Scan, tools/difftest); these are the shapes that must not become
+// permanent corpus fixtures, so they use scratch t.TempDir() files instead.
+
+func buildZeroBinaryForTest(t *testing.T) string {
+	t.Helper()
+	zeroBinary := filepath.Join(t.TempDir(), "zero")
+	if output, err := exec.Command("go", "build", "-o", zeroBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build zero binary: %v\n%s", output, err)
+	}
+	return zeroBinary
+}
+
+// TestModuleInterpreterAndBytecodeParity proves -run and -compile-bc+-run-bc
+// agree on the same multi-file module program, using the checked-in fixture
+// through the real pipeline (not a hand-built AST).
+func TestModuleInterpreterAndBytecodeParity(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	runOut, err := exec.Command(zeroBinary, "-run", "tests/module_main.zero").CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run failed: %v\n%s", err, runOut)
+	}
+
+	bcFile := filepath.Join(t.TempDir(), "module_main.bc.bin")
+	if output, err := exec.Command(zeroBinary, "-compile-bc", "tests/module_main.zero", "-o", bcFile).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc failed: %v\n%s", err, output)
+	}
+	runBcOut, err := exec.Command(zeroBinary, "-run-bc", bcFile).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc failed: %v\n%s", err, runBcOut)
+	}
+
+	const want = "42\n20\n"
+	if string(runOut) != want {
+		t.Errorf("-run output = %q, want %q", runOut, want)
+	}
+	if string(runBcOut) != want {
+		t.Errorf("-run-bc output = %q, want %q", runBcOut, want)
+	}
+}
+
+// TestModuleBytecodeRunsWithoutSourceModule is the direct proof that module
+// linking is compile-time, not an accidental runtime dependency on the
+// original .zero source: compile to bytecode, then make the imported module
+// file unavailable, then run the bytecode.
+func TestModuleBytecodeRunsWithoutSourceModule(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	scratch := t.TempDir()
+	mathSrc, err := os.ReadFile("tests/module_math.zero")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+	mainSrc, err := os.ReadFile("tests/module_main.zero")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+	mathPath := filepath.Join(scratch, "module_math.zero")
+	mainPath := filepath.Join(scratch, "module_main.zero")
+	if err := os.WriteFile(mathPath, mathSrc, 0o644); err != nil {
+		t.Fatalf("failed to write module_math.zero: %v", err)
+	}
+	if err := os.WriteFile(mainPath, mainSrc, 0o644); err != nil {
+		t.Fatalf("failed to write module_main.zero: %v", err)
+	}
+
+	bcFile := filepath.Join(scratch, "module_main.bc.bin")
+	if output, err := exec.Command(zeroBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc failed: %v\n%s", err, output)
+	}
+
+	if err := os.Remove(mathPath); err != nil {
+		t.Fatalf("failed to remove module source: %v", err)
+	}
+
+	output, err := exec.Command(zeroBinary, "-run-bc", bcFile).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc failed after the source module was removed: %v\n%s", err, output)
+	}
+	if string(output) != "42\n20\n" {
+		t.Errorf("-run-bc output = %q, want %q", output, "42\n20\n")
+	}
+}
+
+// TestModulePrivateSymbolIsNotReachable tests the actual namespace contract,
+// not obscurity: calling a non-exported symbol through its module's alias
+// must fail closed with a structured diagnostic, before execution.
+func TestModulePrivateSymbolIsNotReachable(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "priv_math.zero", `(module
+	(export (defun add_one (n)
+		(type_hint n "int")
+		(type_hint return "int")
+		(return (+ n 1))
+	))
+	(defun hidden ()
+		(type_hint return "int")
+		(return 99)
+	)
+)`)
+	mainPath := mustWriteFile(t, dir, "priv_main.zero", `(cli_app
+	(use "priv_math.zero" as math)
+	(print (call math/hidden))
+)`)
+
+	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -validate to reject a call to a private symbol, got success:\n%s", output)
+	}
+	if !strings.Contains(string(output), "math/hidden") {
+		t.Errorf("expected the diagnostic to name the unreachable symbol, got: %s", output)
+	}
+
+	bcFile := filepath.Join(dir, "priv_main.bc.bin")
+	if output, err := exec.Command(zeroBinary, "-compile-bc", mainPath, "-o", bcFile).CombinedOutput(); err == nil {
+		t.Fatalf("expected -compile-bc to reject a call to a private symbol, got success:\n%s", output)
+	}
+	if _, statErr := os.Stat(bcFile); !os.IsNotExist(statErr) {
+		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
+	}
+}
+
+// TestModuleMissingImportFailsClosed proves a missing use target fails
+// closed with source location, rather than a confusing downstream error.
+func TestModuleMissingImportFailsClosed(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	dir := t.TempDir()
+	mainPath := mustWriteFile(t, dir, "missing_main.zero", `(cli_app
+	(use "does_not_exist.zero" as nope)
+	(print (call nope/foo))
+)`)
+
+	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -validate to reject a missing module, got success:\n%s", output)
+	}
+	var diag struct {
+		Reason string `json:"reason"`
+		Line   int    `json:"line"`
+		Column int    `json:"column"`
+	}
+	if jsonErr := json.Unmarshal(output, &diag); jsonErr != nil {
+		t.Fatalf("expected a structured JSON diagnostic, got: %s", output)
+	}
+	if !strings.Contains(diag.Reason, "does_not_exist.zero") {
+		t.Errorf("expected the diagnostic to name the missing module, got: %q", diag.Reason)
+	}
+	if diag.Line == 0 {
+		t.Errorf("expected a nonzero source line in the diagnostic, got: %+v", diag)
+	}
+}
+
+// TestModuleNestedImportFailsClosed proves that a module importing another
+// module (main uses A, A uses B) is rejected with a dedicated diagnostic
+// naming both files, rather than the confusing "undefined reference" symptom
+// that mis-linking produced before this change. Real transitive module
+// linking is deliberately deferred (see the #95 journal); this is the
+// documented scope boundary, not a bug.
+func TestModuleNestedImportFailsClosed(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "nest_b.zero", `(module
+	(export (defun b_fn () (type_hint return "int") (return 5)))
+)`)
+	mustWriteFile(t, dir, "nest_a.zero", `(module
+	(use "nest_b.zero" as b)
+	(export (defun a_fn () (type_hint return "int") (return (call b/b_fn))))
+)`)
+	mainPath := mustWriteFile(t, dir, "nest_main.zero", `(cli_app
+	(use "nest_a.zero" as a)
+	(print (call a/a_fn))
+)`)
+
+	output, err := exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected -validate to reject a nested module import, got success:\n%s", output)
+	}
+	for _, want := range []string{"nested module import", "nest_a.zero", "nest_b.zero"} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("expected %q in output, got: %s", want, output)
+		}
+	}
+}
+
+// TestModuleCircularImportFailsClosed proves a circular module dependency is
+// rejected deterministically, and fast - not via the generic depth>100
+// include guard. A cycle requires at least one module-to-module use, which
+// TestModuleNestedImportFailsClosed's boundary already forbids outright, so
+// no cycle can be constructed at all; this test locks that guarantee in.
+func TestModuleCircularImportFailsClosed(t *testing.T) {
+	zeroBinary := buildZeroBinaryForTest(t)
+
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "circ_a.zero", `(module
+	(use "circ_b.zero" as b)
+	(export (defun a_fn (n) (type_hint n "int") (type_hint return "int") (return (call b/b_fn n))))
+)`)
+	mustWriteFile(t, dir, "circ_b.zero", `(module
+	(use "circ_a.zero" as a)
+	(export (defun b_fn (n) (type_hint n "int") (type_hint return "int") (return (call a/a_fn n))))
+)`)
+	mainPath := mustWriteFile(t, dir, "circ_main.zero", `(cli_app
+	(use "circ_a.zero" as a)
+	(print (call a/a_fn 1))
+)`)
+
+	done := make(chan struct{})
+	var output []byte
+	var cmdErr error
+	go func() {
+		output, cmdErr = exec.Command(zeroBinary, "-validate", mainPath).CombinedOutput()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("circular import was not rejected within 10s; the nested-use boundary may have regressed to depth-based recursion")
+	}
+
+	if cmdErr == nil {
+		t.Fatalf("expected -validate to reject a circular module dependency, got success:\n%s", output)
+	}
+	if !strings.Contains(string(output), "nested module import") {
+		t.Errorf("expected the circular case to hit the nested-import boundary, got: %s", output)
+	}
+}
+
+// TestModuleZirProvenanceSurvivesResolution proves that after module
+// resolution, ZIR nodes still carry source provenance pointing at the
+// originating file: an imported function's nodes are attributed to the
+// module file, and the importer's own statements to the importer file - with
+// no ZIR code changes needed, since ast.Node.Filename is set once at parse
+// time and ast.ResolveModules only ever rewrites .Value, never .Filename.
+func TestModuleZirProvenanceSurvivesResolution(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, dir, "prov_math.zero", `(module
+	(export (defun add_one (n)
+		(type_hint n "int")
+		(type_hint return "int")
+		(return (+ n 1))
+	))
+)`)
+
+	source := `(cli_app (use "prov_math.zero" as math) (print (call math/add_one 41)))`
+	root := parser.NewParser(lexer.NewLexer(source), "prov_main.zero").ParseExpression()
+	parser.ExpandIncludes(root, dir, 0)
+	ast.ResolveModules(root)
+
+	graph, err := zir.LowerAST(root, "prov_main.zero")
+	if err != nil {
+		t.Fatalf("zir.LowerAST failed: %v", err)
+	}
+
+	var sawImported, sawImporter bool
+	for _, node := range graph.Nodes {
+		switch node.Provenance.Filename {
+		case "prov_math.zero":
+			sawImported = true
+		case "prov_main.zero":
+			sawImporter = true
+		}
+	}
+	if !sawImported {
+		t.Error("expected at least one ZIR node with Filename \"prov_math.zero\" from the imported module")
+	}
+	if !sawImporter {
+		t.Error("expected at least one ZIR node with Filename \"prov_main.zero\" from the importer")
+	}
+}
+
+// mustWriteFile writes content to dir/name and returns the full path.
+func mustWriteFile(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write %s: %v", name, err)
+	}
+	return path
 }
