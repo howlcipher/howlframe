@@ -17,6 +17,12 @@ go build -o /tmp/zero-repo-analyst zero.go
 /tmp/zero-repo-analyst -run-bc -allow-caps process,filesystem /tmp/repo_analyst.zbc <repository-path>
 ```
 
+The default runner policy permits 100,000 instructions. For a larger legitimate workload, the trusted runner can authorize a higher finite ceiling without changing the application or artifact:
+
+```bash
+/tmp/zero-repo-analyst -run-bc -allow-caps process,filesystem --max-instructions 1000000 /tmp/repo_analyst.zbc <repository-path>
+```
+
 Pass a second application argument to write the report instead of printing it:
 
 ```bash
@@ -30,9 +36,11 @@ The runtime policy grants exactly the effects used by the application:
 
 No network, environment, database, model, or agent capability is used. Host `find` is an intentional composition of today's primitives, not a Repo Analyst-specific runtime operation.
 
-## Current boundary
+## Execution policy boundary
 
-The VM currently fixes every `-run-bc` execution to 100,000 instructions. The checked-in bounded fixture passes, but Repo Analyst exhausts that budget when pointed at its own 20,149-byte directory. The dogfooding journal records a runner-controlled instruction budget as the next blocker; the application cannot and should not raise its own safety policy. This limitation is intentionally left unresolved in the session that discovered it.
+Omitting `--max-instructions` preserves the 100,000-instruction safe default. Repo Analyst's own directory intentionally exceeds that ceiling and returns structured `LIMIT_EXCEEDED`; the same bytecode artifact completes when the runner supplies the explicit 1,000,000-instruction policy above. The value must be a positive finite integer. Zero, negative, malformed, and overflowed values fail before execution, and no unlimited sentinel exists.
+
+This option belongs to the trusted runner, not the Zero program. Repo Analyst cannot modify it through source, ZIR, bytecode, or application arguments. A larger instruction budget also grants no external capability: `process` and `filesystem` remain separately required and independently enforced.
 
 ## Modules
 
@@ -49,4 +57,4 @@ The VM currently fixes every `-run-bc` execution to 100,000 instructions. The ch
 - `3`: recursive repository discovery failed.
 - `1`: the compiler or VM rejected the program, artifact, capability policy, or another unhandled runtime operation.
 
-The Go integration test builds the Zero tool into a temporary directory, copies and compiles all five modules only to Zero bytecode, deletes the copied `.zero` sources, and then runs the bytecode VM against a temporary repository fixture. It verifies the exact report, repeated-run determinism, deterministic largest-file tie handling, optional file output, capability denial, and application exit codes.
+The Go integration test builds the Zero tool into a temporary directory, copies and compiles all five modules only to Zero bytecode, deletes the copied `.zero` sources, and then runs the bytecode VM against temporary repository fixtures. It verifies the exact report, repeated-run determinism, deterministic largest-file tie handling, optional file output, application exit codes, default `LIMIT_EXCEEDED`, larger-budget success with the same artifact, and capability denial even under that larger budget.

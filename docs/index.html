@@ -105,7 +105,9 @@ go run server.go</code></pre>
                 <pre><code>go run zero.go -compile-bc examples/cli_hello.zero
 go run zero.go -run-bc examples/cli_hello.zero.bc.bin
 go run zero.go -compile-bc tests/test_store_bytecode.zero -o /tmp/test_store_bytecode.zbc
-go run zero.go -run-bc /tmp/test_store_bytecode.zbc</code></pre>
+go run zero.go -run-bc /tmp/test_store_bytecode.zbc
+go run zero.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.zbc</code></pre>
+                <p>Bytecode execution defaults to 100,000 instructions. Only the trusted runner may select another positive, finite ceiling; invalid values fail before execution, there is no unlimited sentinel, and instruction budgets never grant capabilities.</p>
 
                 <h3>WebAssembly Text</h3>
                 <pre><code>go run zero.go -o build examples/wasm_math.zero</code></pre>

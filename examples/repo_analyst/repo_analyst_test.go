@@ -21,12 +21,19 @@ func writeFixtureFile(t *testing.T, path string, content []byte) {
 }
 
 func runRepoAnalyst(t *testing.T, compiler, artifact string, args ...string) (string, error) {
+	return runRepoAnalystWithBudget(t, compiler, artifact, 0, args...)
+}
+
+func runRepoAnalystWithBudget(t *testing.T, compiler, artifact string, maxInstructions int, args ...string) (string, error) {
 	t.Helper()
 	commandArgs := []string{
 		"-run-bc",
 		"-allow-caps", "process,filesystem",
-		artifact,
 	}
+	if maxInstructions > 0 {
+		commandArgs = append(commandArgs, "--max-instructions", fmt.Sprint(maxInstructions))
+	}
+	commandArgs = append(commandArgs, artifact)
 	commandArgs = append(commandArgs, args...)
 	command := exec.Command(compiler, commandArgs...)
 	output, err := command.CombinedOutput()
@@ -129,6 +136,42 @@ largest_text_file_bytes=%d`, fixture, mainPath, len(mainContent))
 		t.Fatalf("repeated run was not deterministic\nfirst:\n%s\nsecond:\n%s", firstOutput, secondOutput)
 	}
 
+	budgetFixture := filepath.Join(scratchDir, "instruction_budget_repo")
+	largeContent := []byte(strings.Repeat("x", 20000))
+	largePath := filepath.Join(budgetFixture, "large.txt")
+	writeFixtureFile(t, largePath, largeContent)
+	defaultBudgetOutput, defaultBudgetErr := runRepoAnalyst(t, compiler, artifact, budgetFixture)
+	requireExitCode(t, defaultBudgetErr, 1)
+	if !strings.Contains(defaultBudgetOutput, `"code":"LIMIT_EXCEEDED"`) ||
+		!strings.Contains(defaultBudgetOutput, `"message":"instruction limit exceeded"`) {
+		t.Fatalf("default instruction-budget failure = %q", defaultBudgetOutput)
+	}
+
+	wantLargeReport := fmt.Sprintf(`zero_repo_analyst/v1
+repository_path=%s
+total_files=1
+zero_files=0
+go_files=0
+python_files=0
+javascript_files=0
+typescript_files=0
+configuration_files=0
+test_files=0
+likely_entry_points=0
+text_files=1
+unreadable_text_files=0
+todo_markers=0
+fixme_markers=0
+largest_text_file=%s
+largest_text_file_bytes=%d`, budgetFixture, largePath, len(largeContent))
+	largeBudgetOutput, largeBudgetErr := runRepoAnalystWithBudget(t, compiler, artifact, 1000000, budgetFixture)
+	if largeBudgetErr != nil {
+		t.Fatalf("run Repo Analyst with explicit instruction budget: %v\n%s", largeBudgetErr, largeBudgetOutput)
+	}
+	if largeBudgetOutput != wantLargeReport+"\n" {
+		t.Fatalf("large-budget report mismatch\ngot:\n%s\nwant:\n%s", largeBudgetOutput, wantLargeReport+"\n")
+	}
+
 	reportPath := filepath.Join(scratchDir, "report.txt")
 	fileOutput, runErr := runRepoAnalyst(t, compiler, artifact, fixture, reportPath)
 	if runErr != nil {
@@ -171,7 +214,7 @@ largest_text_file_bytes=%d`, fixture, mainPath, len(mainContent))
 		t.Fatalf("discovery error = %q", discoveryOutput)
 	}
 
-	denied := exec.Command(compiler, "-run-bc", artifact, fixture)
+	denied := exec.Command(compiler, "-run-bc", "--max-instructions", "1000000", artifact, fixture)
 	deniedOutput, deniedErr := denied.CombinedOutput()
 	requireExitCode(t, deniedErr, 3)
 	if !strings.Contains(string(deniedOutput), `"code":"CAPABILITY_DENIED"`) ||

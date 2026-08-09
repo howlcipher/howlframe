@@ -37,10 +37,14 @@ func main() {
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
+	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
+	if *runBc && *maxInstructions <= 0 {
+		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
+	}
 
 	if flag.NArg() < 1 {
 		ast.ReportError("Missing file argument", 0, 0)
@@ -60,7 +64,9 @@ func main() {
 		if err := dec.Decode(&prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		os.Exit(vm.RunBytecode(&prog, flag.Args()[1:], parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+		executionPolicy := vm.DefaultExecutionPolicy()
+		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		os.Exit(vm.RunBytecodeWithPolicy(&prog, flag.Args()[1:], executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	lx := lexer.NewLexer(string(content))
