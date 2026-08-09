@@ -1,0 +1,111 @@
+(cli_app
+  (use "discovery.zero" as discovery)
+  (use "classification.zero" as classification)
+  (use "text_analysis.zero" as text_analysis)
+  (use "report.zero" as report)
+
+  (let (repository_path (cli_args 0))
+    (if (= repository_path "")
+      (do
+        (stderr "usage: repo_analyst <repository-path> [output-file]")
+        (exit 2))
+      (let (output_path (cli_args 1))
+        (let (files (call discovery/discover_files repository_path))
+          (let (statistics (dict
+              ("total_files" 0)
+              ("zero_files" 0)
+              ("go_files" 0)
+              ("python_files" 0)
+              ("javascript_files" 0)
+              ("typescript_files" 0)
+              ("configuration_files" 0)
+              ("test_files" 0)
+              ("likely_entry_points" 0)
+              ("text_files" 0)
+              ("unreadable_text_files" 0)
+              ("todo_markers" 0)
+              ("fixme_markers" 0)))
+            (let (largest_text_file "")
+              (let (largest_text_file_bytes 0)
+                (do
+                  (for path files
+                    (if (!= path "")
+                      (do
+                        (map_set statistics "total_files"
+                          (+ (map_get statistics "total_files") 1))
+
+                        (if (call classification/is_zero_file path)
+                          (map_set statistics "zero_files"
+                            (+ (map_get statistics "zero_files") 1)))
+                        (if (call classification/is_go_file path)
+                          (map_set statistics "go_files"
+                            (+ (map_get statistics "go_files") 1)))
+                        (if (call classification/is_python_file path)
+                          (map_set statistics "python_files"
+                            (+ (map_get statistics "python_files") 1)))
+                        (if (call classification/is_javascript_file path)
+                          (map_set statistics "javascript_files"
+                            (+ (map_get statistics "javascript_files") 1)))
+                        (if (call classification/is_typescript_file path)
+                          (map_set statistics "typescript_files"
+                            (+ (map_get statistics "typescript_files") 1)))
+                        (if (call classification/is_configuration_file path)
+                          (map_set statistics "configuration_files"
+                            (+ (map_get statistics "configuration_files") 1)))
+                        (if (call classification/is_test_file path)
+                          (map_set statistics "test_files"
+                            (+ (map_get statistics "test_files") 1)))
+                        (if (call classification/is_likely_entry_point path)
+                          (map_set statistics "likely_entry_points"
+                            (+ (map_get statistics "likely_entry_points") 1)))
+
+                        (if (call classification/is_text_file path)
+                          (do
+                            (map_set statistics "text_files"
+                              (+ (map_get statistics "text_files") 1))
+                            (try_let (content (read_file path))
+                              (catch err
+                                (map_set statistics "unreadable_text_files"
+                                  (+ (map_get statistics "unreadable_text_files") 1)))
+                              (let (text (bytes_to_string content))
+                                (let (file_bytes (call text_analysis/byte_count content))
+                                  (do
+                                    (map_set statistics "todo_markers"
+                                      (+
+                                        (map_get statistics "todo_markers")
+                                        (call text_analysis/count_occurrences text "TODO")))
+                                    (map_set statistics "fixme_markers"
+                                      (+
+                                        (map_get statistics "fixme_markers")
+                                        (call text_analysis/count_occurrences text "FIXME")))
+                                    (if (> file_bytes largest_text_file_bytes)
+                                      (do
+                                        (set largest_text_file path)
+                                        (set largest_text_file_bytes file_bytes))
+                                      (if (= file_bytes largest_text_file_bytes)
+                                        (set largest_text_file ""))))))))))))
+
+                  (let (analysis_report
+                      (call report/build_report
+                        repository_path
+                        (map_get statistics "total_files")
+                        (map_get statistics "zero_files")
+                        (map_get statistics "go_files")
+                        (map_get statistics "python_files")
+                        (map_get statistics "javascript_files")
+                        (map_get statistics "typescript_files")
+                        (map_get statistics "configuration_files")
+                        (map_get statistics "test_files")
+                        (map_get statistics "likely_entry_points")
+                        (map_get statistics "text_files")
+                        (map_get statistics "unreadable_text_files")
+                        (map_get statistics "todo_markers")
+                        (map_get statistics "fixme_markers")
+                        largest_text_file
+                        largest_text_file_bytes))
+                    (do
+                      (if (= output_path "")
+                        (print analysis_report)
+                        (write_file output_path analysis_report))
+                      (exit 0)))))))))))
+)

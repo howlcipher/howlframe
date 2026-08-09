@@ -4,6 +4,10 @@
 
 ### Added
 
+* Zero Repo Analyst, a deterministic five-module standalone application that
+  discovers and classifies repository files, counts tests, configuration,
+  entry points, and TODO/FIXME markers, emits or writes a versioned report, and
+  proves its bytecode artifact runs after imported `.zero` sources are removed.
 * A typed flat SSA/CFG lowering layer in `internal/ir`, with ordered basic
   blocks, explicit branch/jump/return terminators, phi nodes for control-flow
   joins and loop-carried values, source locations, and graph validation.
@@ -75,6 +79,9 @@
 
 ### Fixed
 
+* Bytecode `try_let` now resumes after its complete embedded instruction region
+  instead of re-executing the final branch instruction and corrupting an
+  enclosing `for` loop's operand stack.
 * `-compile-bc` silently dropped every construct the bytecode compiler did not
   recognize. `compileNode`'s head switch had no `default` case, so unknown
   heads compiled to zero instructions and the resulting program ran to exit 0

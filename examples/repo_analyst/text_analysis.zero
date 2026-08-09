@@ -1,0 +1,17 @@
+(module
+  (export (defun count_occurrences (text marker)
+    (type_hints (text string) (marker string) (return int))
+    (let (count (- 0 1))
+      (do
+        (for part (str_split text marker)
+          (set count (+ count 1)))
+        (return count)))))
+
+  (export (defun byte_count (content)
+    (type_hints (content any) (return int))
+    (let (count 0)
+      (do
+        (for byte content
+          (set count (+ count 1)))
+        (return count)))))
+)
