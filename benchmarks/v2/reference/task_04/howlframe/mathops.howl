@@ -1,0 +1,8 @@
+(module
+  (export
+    (defun Multiply (a b)
+      (type_hints (a "int") (b "int") (return "int"))
+      (return (* a b))
+    )
+  )
+)

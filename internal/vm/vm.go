@@ -1412,11 +1412,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits}
+				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
-			continue
 		case bytecode.OpRes:
 			bodyAny := vm.pop(inst.Op)
 			contentType := vm.pop(inst.Op).(string)
@@ -1476,21 +1475,24 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = w
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits}
+				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps}
 				func() {
-					defer func() { recover() }()
+					defer func() { 
+						if r := recover(); r != nil {
+							fmt.Println("HTTP Handler Panic:", r)
+						}
+					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
 			})
 			ip += bodyLen
-			continue
 		case bytecode.OpHttpServerServe:
 			muxAny, _ := env.get("__http_mux")
 			mux := muxAny.(*http.ServeMux)
 			portAny, _ := env.get("__http_port")
 			port := portAny.(string)
 			fmt.Println("Listening on " + port)
-			err := http.ListenAndServe(port, mux)
+			err := http.ListenAndServe(":"+port, mux)
 			if err != nil {
 				panic(err)
 			}

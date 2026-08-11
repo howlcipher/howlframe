@@ -1,3 +1,8 @@
+---
+support: supported
+reason: "store_open, store_get, and store_put are fully supported natively."
+---
+
 # Task 07: Native Store
 
 Write a simple application that uses the language's native stateful key-value store capabilities (if using HowlFrame, use native stores).

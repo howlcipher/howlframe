@@ -1,0 +1,5 @@
+(cli_app
+  (let (arg (cli_args 1))
+    (print "Arg:" arg)
+  )
+)

@@ -1,0 +1,21 @@
+{
+  "task": "task_04_multi_module_cli",
+  "language": "howlframe",
+  "track": "A",
+  "model": "none",
+  "timestamp": "2026-08-11T19:16:08.921496+00:00",
+  "metrics": {
+    "first_pass_success": true,
+    "eventual_success": true,
+    "repair_attempts": 0,
+    "total_generated_tokens": null,
+    "final_source_tokens": 54,
+    "elapsed_time_seconds": 0.01,
+    "verification_commands_run": 2,
+    "code_churn_lines": null,
+    "verification_result": "pass",
+    "runtime_backend": "HowlFrame VM",
+    "capability_denial_behavior": null,
+    "deterministic_repeatability": null
+  }
+}

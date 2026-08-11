@@ -1,3 +1,8 @@
+---
+support: partially_supported
+reason: "The standalone VM does not support inline `test` blocks. Testing requires Go transpilation or a manual cli_app."
+---
+
 # Task 01: Typed Function
 
 Write a function named `add` that takes two 64-bit integer arguments `a` and `b` and returns their sum as a 64-bit integer. 

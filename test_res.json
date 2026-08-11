@@ -1,0 +1,21 @@
+{
+  "task": "task_02_cli_file_processing",
+  "language": "howlframe",
+  "track": "A",
+  "model": "none",
+  "timestamp": "2026-08-11T19:09:59.177523+00:00",
+  "metrics": {
+    "first_pass_success": true,
+    "eventual_success": true,
+    "repair_attempts": 0,
+    "total_generated_tokens": null,
+    "final_source_tokens": 121,
+    "elapsed_time_seconds": 0.02,
+    "verification_commands_run": 2,
+    "code_churn_lines": null,
+    "verification_result": "pass",
+    "runtime_backend": "HowlFrame VM",
+    "capability_denial_behavior": null,
+    "deterministic_repeatability": null
+  }
+}

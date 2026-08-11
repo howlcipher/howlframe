@@ -1,3 +1,8 @@
+---
+support: supported
+reason: "http_server, route, res, and res_json are supported in the standalone VM."
+---
+
 # Task 03: HTTP JSON Endpoint
 
 Write an HTTP web server that listens on port 8080.

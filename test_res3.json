@@ -1,0 +1,21 @@
+{
+  "task": "task_03_http_json_endpoint",
+  "language": "howlframe",
+  "track": "A",
+  "model": "none",
+  "timestamp": "2026-08-11T19:14:45.754572+00:00",
+  "metrics": {
+    "first_pass_success": true,
+    "eventual_success": true,
+    "repair_attempts": 0,
+    "total_generated_tokens": null,
+    "final_source_tokens": 50,
+    "elapsed_time_seconds": 1.05,
+    "verification_commands_run": 2,
+    "code_churn_lines": null,
+    "verification_result": "pass",
+    "runtime_backend": "HowlFrame VM",
+    "capability_denial_behavior": null,
+    "deterministic_repeatability": null
+  }
+}

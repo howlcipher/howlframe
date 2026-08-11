@@ -1,3 +1,8 @@
+---
+support: unsupported
+reason: "HowlFrame lacks list_len and sort constructs, making list iteration and sorting virtually impossible."
+---
+
 # Task 05: List/Dictionary Transformation
 
 Write a function named `transform` that takes a list of dictionary-like objects (or equivalent records/structs).
