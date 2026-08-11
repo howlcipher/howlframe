@@ -49,7 +49,7 @@ func TestHttpRouteInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 	go func() {
 		RunBytecode(prog, nil, caps, strings.NewReader(""), &out, &errOut)
 	}()
-    time.Sleep(100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	outStr := out.String()
 	if !strings.Contains(outStr, "Listening on 8090") {
