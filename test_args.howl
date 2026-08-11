@@ -1,9 +1,0 @@
-(cli_app
-  (let (arg0 (cli_args 0))
-    (let (arg1 (cli_args 1))
-      (let (arg2 (cli_args 2))
-        (print "Args:" arg0 arg1 arg2)
-      )
-    )
-  )
-)
