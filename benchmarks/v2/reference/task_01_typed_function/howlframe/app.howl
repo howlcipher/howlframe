@@ -1,0 +1,15 @@
+(cli_app
+  (defun add (a b)
+    (type_hints (a "int") (b "int") (return "int"))
+    (return (+ a b))
+  )
+  (let (result (call add 2 3))
+    (if (!= result 5)
+      (do
+        (stderr "Failed")
+        (exit 1)
+      )
+      (print "Pass")
+    )
+  )
+)

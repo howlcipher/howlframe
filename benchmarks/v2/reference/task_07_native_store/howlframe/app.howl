@@ -1,0 +1,38 @@
+(cli_app
+  (defun increment_counter (key)
+    (type_hints (key "string") (return "int"))
+    (do
+      (store_open counter_store "memory://counter")
+      (let (val (store_get counter_store key))
+        (try_let (count (map_get val "count"))
+          (catch err
+            (do
+              (store_put counter_store key (dict ("count" 1)))
+              (return 1)
+            )
+          )
+          (do
+            (let (newval (+ count 1))
+              (do
+                (store_put counter_store key (dict ("count" newval)))
+                (return newval)
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  (let (first (call increment_counter "visits"))
+    (let (second (call increment_counter "visits"))
+      (if (!= second 2)
+        (do
+          (stderr "Failed")
+          (exit 1)
+        )
+        (print "Pass")
+      )
+    )
+  )
+)

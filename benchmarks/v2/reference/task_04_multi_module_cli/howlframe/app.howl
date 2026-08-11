@@ -1,0 +1,4 @@
+(cli_app
+  (use "mathops.howl" as mathops)
+  (print (call mathops/Multiply 4 5))
+)
