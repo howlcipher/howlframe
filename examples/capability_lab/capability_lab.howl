@@ -1,0 +1,8 @@
+(cli_app
+  (let (target_file "sensitive_data.txt")
+    (do
+      (print "Attempting to write to filesystem...")
+      (write_file target_file "Confidential info")
+      (print "Write succeeded!")
+      (exit 0)))
+)

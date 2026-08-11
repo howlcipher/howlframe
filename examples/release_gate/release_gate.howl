@@ -1,0 +1,41 @@
+(cli_app
+  (let (config_path (cli_args 0))
+    (if (= config_path "")
+      (do
+        (stderr "usage: release_gate <config_file>")
+        (exit 2))
+      (try_let (content_bytes (read_file config_path))
+        (catch err
+          (do
+            (stderr "Failed to read config file")
+            (exit 3)))
+        (let (content (bytes_to_string content_bytes))
+          (let (lines (str_split content "\n"))
+            (let (config_dict (dict))
+              (do
+                (for line lines
+                  (if (!= line "")
+                    (let (parts (str_split line "="))
+                      (let (key "")
+                        (let (val "")
+                          (let (i 0)
+                            (do
+                              (for p parts
+                                (do
+                                  (if (= i 0) (set key p))
+                                  (if (= i 1) (set val p))
+                                  (set i (+ i 1))))
+                              (if (!= key "")
+                                (map_set config_dict key val)))))))))
+                (let (tests (map_get config_dict "tests"))
+                  (let (security (map_get config_dict "security"))
+                    (let (score 0)
+                      (do
+                        (if (= tests "PASS") (set score (+ score 50)))
+                        (if (= security "PASS") (set score (+ score 50)))
+                        (print "RELEASE READINESS")
+                        (print (str_join (list "Score: " (to_string score)) ""))
+                        (if (and (= tests "PASS") (= security "PASS"))
+                          (print "Decision: DEPLOY")
+                          (print "Decision: BLOCK"))
+                        (exit 0)))))))))))))

@@ -1,0 +1,20 @@
+(cli_app
+  (use "evaluator.howl" as eval)
+  (let (project_name (cli_args 0))
+    (if (= project_name "")
+      (do
+        (stderr "usage: language_tour <project> <tests> <security> <docs>")
+        (exit 2))
+      (let (tests_result (cli_args 1))
+        (let (security_result (cli_args 2))
+          (let (docs_result (cli_args 3))
+            (let (score (call eval/calculate_score tests_result security_result docs_result))
+              (let (decision (call eval/make_decision score security_result))
+                (do
+                  (print "RELEASE READINESS")
+                  (print (str_join (list "Project: " project_name) ""))
+                  (print (str_join (list "Score:   " (to_string score)) ""))
+                  (print (str_join (list "Decision: " decision) ""))
+                  (if (= decision "FAIL")
+                    (exit 1)
+                    (exit 0)))))))))))

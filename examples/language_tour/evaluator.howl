@@ -1,0 +1,18 @@
+(module
+  (export (defun calculate_score (tests security docs)
+    (type_hints (tests string) (security string) (docs string) (return int))
+    (let (score 0)
+      (do
+        (if (= tests "PASS") (set score (+ score 40)))
+        (if (= security "PASS") (set score (+ score 40)))
+        (if (= docs "PASS") (set score (+ score 20)))
+        (return score)))))
+
+  (export (defun make_decision (score security)
+    (type_hints (score int) (security string) (return string))
+    (if (= security "FAIL")
+      (return "FAIL")
+      (if (>= score 80)
+        (return "PASS")
+        (return "REVIEW")))))
+)

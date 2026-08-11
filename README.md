@@ -27,6 +27,15 @@ Key design points:
 - **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. Coverage differs by target: the standalone bytecode target enforces this against an authoritative construct-support registry (`internal/construct`), so anything it cannot lower fails before an artifact is written rather than being silently dropped.
 - **Multiple execution paths:** The same front end can feed Go, JavaScript, WAT, direct interpretation, or bytecode depending on the root node and flags.
 
+## Showcase / Examples
+
+Explore these practical examples under the `examples/` directory to see HowlFrame in action:
+
+1. [Language Tour](examples/language_tour/README.md) — Learn the syntax by reading a simple release-readiness evaluator.
+2. [Capability Lab](examples/capability_lab/README.md) — Understand the execution boundary and how capabilities (like filesystem access) are deterministically enforced.
+3. [Release Gate](examples/release_gate/README.md) — A realistic DevOps CLI application that parses signals and recommends deployment actions.
+4. [Repo Analyst](examples/repo_analyst/README.md) — A larger, multi-module reference application that analyzes codebase statistics entirely in HowlFrame.
+
 ## Current State
 
 HowlFrame is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
