@@ -1412,7 +1412,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps}
+				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
@@ -1475,7 +1475,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = w
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps}
+				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
@@ -1491,7 +1491,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			mux := muxAny.(*http.ServeMux)
 			portAny, _ := env.get("__http_port")
 			port := portAny.(string)
-			fmt.Println("Listening on " + port)
+			fmt.Fprintln(vm.Out, "Listening on "+port)
 			err := http.ListenAndServe(":"+port, mux)
 			if err != nil {
 				panic(err)
