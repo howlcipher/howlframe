@@ -37,7 +37,8 @@ See:
 
 - [Direct execution design](docs/direct_execution_design.md)
 - [HowlFrame native store design](docs/howlframe_native_store_design.md)
-- [Language write-cost benchmark](docs/language_write_cost_benchmark.md)
+- [Language write-cost benchmark (v1)](docs/language_write_cost_benchmark.md)
+- [Benchmark v2](benchmarks/v2/README.md)
 - [Architecture roadmap](docs/architecture_roadmap.md)
 - [Bytecode reference](docs/reference/bytecode_reference.md)
 - [Improvement backlog](improvements.md)
