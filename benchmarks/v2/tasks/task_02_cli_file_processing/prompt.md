@@ -1,3 +1,8 @@
+---
+support: supported
+reason: "read_line, print, stderr, and exit are all supported in the standalone VM."
+---
+
 # Task 02: CLI File Processing
 
 Write a command-line application that takes a file path as an argument.

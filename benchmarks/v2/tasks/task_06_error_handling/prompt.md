@@ -1,3 +1,8 @@
+---
+support: partially_supported
+reason: "HowlFrame lacks structs or match statements (unsupported in standalone VM). Structured errors require returning dictionaries or lists."
+---
+
 # Task 06: Structured Error Handling
 
 Write a function named `divide` that takes two integers `a` and `b`.

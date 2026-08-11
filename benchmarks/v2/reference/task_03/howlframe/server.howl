@@ -1,0 +1,12 @@
+(http_server 8080
+  (route "/"
+    (lambda (req)
+      (res 200 "text/plain" "Hello World")
+    )
+  )
+  (route "/json"
+    (lambda (req)
+      (res_json 200 (dict ("message" "Hello JSON")))
+    )
+  )
+)
