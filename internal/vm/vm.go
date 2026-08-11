@@ -1477,7 +1477,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["req"] = r
 				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps}
 				func() {
-					defer func() { 
+					defer func() {
 						if r := recover(); r != nil {
 							fmt.Println("HTTP Handler Panic:", r)
 						}
