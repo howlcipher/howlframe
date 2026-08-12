@@ -1,4 +1,4 @@
-# Development Notes: Sandboxed Action Executor (Phase 5)
+# Development Notes: Bounded Action Executor (Phase 5)
 
 ## Architecture
 The application separates authorization from execution using a conceptual split. The first half evaluates untrusted JSON proposal inputs against trusted state to produce a normalized execution plan (decision, action_id, normalized_target). The second half takes this execution plan and applies fixed local side effects using HowlFrame's native capabilities.

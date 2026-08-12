@@ -21,6 +21,11 @@ func main() {
 
 	generatePython(opcodes)
 	generateMarkdown(opcodes)
+	coverage := generateCoverageMatrix()
+	writeGeneratedFile(
+		filepath.Join("docs", "reference", "construct_coverage.md"),
+		[]byte(coverage),
+	)
 }
 
 func generatePython(opcodes []bytecode.OpcodeSpec) {

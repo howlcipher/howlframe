@@ -1,6 +1,6 @@
 # Action Executor
 
-Sandboxed Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives.
+Bounded Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives.
 
 ## Architecture
 
