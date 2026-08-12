@@ -105,4 +105,3 @@ func TestTodoCLI(t *testing.T) {
 	// Cleanup
 	os.Remove("todo_cli.howl.bc.bin")
 }
-
