@@ -36,6 +36,13 @@ Explore these practical examples under the `examples/` directory to see HowlFram
 3. [Release Gate](examples/release_gate/README.md) — A realistic DevOps CLI application that parses signals and recommends deployment actions.
 4. [Repo Analyst](examples/repo_analyst/README.md) — A larger, multi-module reference application that analyzes codebase statistics entirely in HowlFrame.
 
+## Applications Built With HowlFrame
+
+* [Status API](apps/status_api/README.md) — Proves HTTP serving, deterministic routing, and environment inspection.
+* [Log Analyzer](apps/log_analyzer/README.md) — Proves file parsing, deterministic string logic, and graceful capability denial.
+* [KV CLI](apps/kv_cli/README.md) — Proves in-memory store functionality and sequential deterministic state.
+* [Repo Analyst](examples/repo_analyst/README.md) — Proves larger multi-module applications and finite instruction budgets.
+
 ## Current State
 
 HowlFrame is a working experimental language toolchain. The Go backend is the most complete target and supports HTTP servers, CLI apps, tests, structs, JSON parsing, file and process primitives, database calls, middleware, imports, includes, observability hooks, and AI-oriented primitives.
