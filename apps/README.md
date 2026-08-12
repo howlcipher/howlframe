@@ -10,4 +10,4 @@
 * **[Todo CLI](./todo_cli)**: Proves stateful task management, CLI CRUD logic, and persistent storage interaction. (Backend: Bytecode)
 * **[Task API](./task_api)**: Proves HTTP CRUD, native-store state shared correctly across independent requests, and capability enforcement inside HTTP handlers. (Backend: Bytecode)
 * **[Release Authority](./release_authority)**: Demonstrates an untrusted AI proposing deployment actions while standalone HowlFrame independently enforces evidence, approval, capability, and state-transition policy. (Backend: Bytecode)
-* **[Action Executor](./action_executor)**: Sandboxed Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives. (Backend: Bytecode)
+* **[Action Executor](./action_executor)**: Bounded Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives. (Backend: Bytecode)

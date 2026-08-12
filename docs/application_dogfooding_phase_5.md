@@ -1,6 +1,6 @@
 # Application Dogfooding Phase 5
 
-This phase implements the Sandboxed Action Executor. It demonstrates that HowlFrame can safely translate an AI-proposed high-level action into one of a finite number of trusted, capability-bounded effects without giving the proposer arbitrary execution authority.
+This phase implements the Bounded Action Executor. It demonstrates that HowlFrame can safely translate an AI-proposed high-level action into one of a finite number of trusted, capability-bounded effects without giving the proposer arbitrary execution authority.
 
 ## Could the proposer execute arbitrary commands?
 **No.** The application evaluates the request and maps it exclusively to a set of predefined deterministic handlers. Unknown actions or explicit `exec` attempts fail closed during authorization.
