@@ -44,6 +44,7 @@ Explore these practical examples under the `examples/` directory to see HowlFram
 * [Todo CLI](apps/todo_cli/README.md) — Dogfooding Phase 2 task manager proving stateful CRUD logic atop the native store.
 * [Task API](apps/task_api/README.md) — Dogfooding Phase 3 HTTP task service proving native-store state shared across independent requests.
 * [Release Authority](apps/release_authority/README.md) — Demonstrates an untrusted AI proposing deployment actions while standalone HowlFrame independently enforces evidence, approval, capability, and state-transition policy.
+* [Action Executor](apps/action_executor/README.md) — Sandboxed Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives.
 * [Repo Analyst](examples/repo_analyst/README.md) — Proves larger multi-module applications and finite instruction budgets.
 
 ## Current State
