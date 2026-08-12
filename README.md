@@ -42,6 +42,7 @@ Explore these practical examples under the `examples/` directory to see HowlFram
 * [Log Analyzer](apps/log_analyzer/README.md) — Proves file parsing, deterministic string logic, and graceful capability denial.
 * [KV CLI](apps/kv_cli/README.md) — Proves in-memory store functionality and sequential deterministic state.
 * [Todo CLI](apps/todo_cli/README.md) — Dogfooding Phase 2 task manager proving stateful CRUD logic atop the native store.
+* [Task API](apps/task_api/README.md) — Dogfooding Phase 3 HTTP task service proving native-store state shared across independent requests.
 * [Repo Analyst](examples/repo_analyst/README.md) — Proves larger multi-module applications and finite instruction budgets.
 
 ## Current State

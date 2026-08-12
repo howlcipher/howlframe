@@ -8,3 +8,4 @@
 * **[Log Analyzer](./log_analyzer)**: Proves file reading, deterministic string manipulation, regex matching, and graceful capability denial handling. (Backend: Bytecode)
 * **[KV CLI](./kv_cli)**: Proves native in-memory store functionality, sequential state manipulation, and capability-gated database actions. (Backend: Bytecode)
 * **[Todo CLI](./todo_cli)**: Proves stateful task management, CLI CRUD logic, and persistent storage interaction. (Backend: Bytecode)
+* **[Task API](./task_api)**: Proves HTTP CRUD, native-store state shared correctly across independent requests, and capability enforcement inside HTTP handlers. (Backend: Bytecode)
