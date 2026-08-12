@@ -3,11 +3,29 @@ package vm
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/howlcipher/howlframe/internal/capability"
 )
+
+type safeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *safeBuffer) Write(p []byte) (n int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
 
 func TestSpawnInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 	// This tests the bug fix where `OpSpawn` failed to pass AllowedCaps to child VM
@@ -18,7 +36,7 @@ func TestSpawnInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 )`
 	_, prog := parseAndCompile(t, src)
 
-	var out, errOut bytes.Buffer
+	var out, errOut safeBuffer
 	caps := []capability.Capability{capability.Process}
 
 	go func() {
@@ -43,7 +61,7 @@ func TestHttpRouteInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 )`
 	_, prog := parseAndCompile(t, src)
 
-	var out, errOut bytes.Buffer
+	var out, errOut safeBuffer
 	caps := []capability.Capability{capability.Network}
 
 	go func() {
