@@ -28,27 +28,6 @@ func TestVerifier(t *testing.T) {
 		}
 	})
 
-	t.Run("Unbound reference", func(t *testing.T) {
-		g := NewGraph()
-		g.AddNode(&Node{
-			Kind:  "symbol",
-			Type:  ast.TypeInfo{Kind: ast.Unknown},
-			Value: "my_var",
-		})
-
-		verifier := NewVerifier(g, "go")
-		diags := verifier.Verify()
-		if len(diags) != 1 || diags[0].Code != "HFIR_UNBOUND_REF" {
-			t.Fatalf("Expected HFIR_UNBOUND_REF, got %v", diags)
-		}
-		if diags[0].ContractVersion != DiagnosticContractVersion {
-			t.Errorf("expected ContractVersion %q, got %q", DiagnosticContractVersion, diags[0].ContractVersion)
-		}
-		if diags[0].Target != "go" {
-			t.Errorf("expected Target %q, got %q", "go", diags[0].Target)
-		}
-	})
-
 	t.Run("Invalid reference", func(t *testing.T) {
 		g := NewGraph()
 		g.AddNode(&Node{
@@ -109,11 +88,6 @@ func TestVerifier(t *testing.T) {
 func TestVerifierIsIdempotent(t *testing.T) {
 	g := NewGraph()
 	g.AddNode(&Node{
-		Kind:  "symbol",
-		Type:  ast.TypeInfo{Kind: ast.Unknown},
-		Value: "my_var",
-	})
-	g.AddNode(&Node{
 		Kind: "read_file",
 	})
 	g.AddNode(&Node{
@@ -147,17 +121,14 @@ func TestVerifierIsIdempotent(t *testing.T) {
 // ordered by Graph.Nodes slice order, repeatably across calls.
 func TestVerifierDiagnosticOrderIsDeterministic(t *testing.T) {
 	g := NewGraph()
-	g.AddNode(&Node{Kind: "symbol", Type: ast.TypeInfo{Kind: ast.Unknown}, Value: "first_unbound"})
 	g.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{SourceNode: NodeID("missing")}}})
-	g.AddNode(&Node{Kind: "symbol", Type: ast.TypeInfo{Kind: ast.Unknown}, Value: "second_unbound"})
-
 	verifier := NewVerifier(g, "go")
 	for i := 0; i < 3; i++ {
 		diags := verifier.Verify()
-		if len(diags) != 3 {
-			t.Fatalf("run %d: expected 3 diagnostics, got %d: %v", i, len(diags), diags)
+		if len(diags) != 1 {
+			t.Fatalf("run %d: expected 1 diagnostics, got %d: %v", i, len(diags), diags)
 		}
-		wantCodes := []string{"HFIR_UNBOUND_REF", "HFIR_INVALID_REF", "HFIR_UNBOUND_REF"}
+		wantCodes := []string{"HFIR_INVALID_REF"}
 		for j, want := range wantCodes {
 			if diags[j].Code != want {
 				t.Fatalf("run %d: diagnostic %d: expected code %q, got %q", i, j, want, diags[j].Code)

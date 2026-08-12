@@ -58,15 +58,13 @@ func main() {
 	}
 
 	if *runBc {
-		var prog bytecode.BCProgram
-		buf := bytes.NewReader(content)
-		dec := gob.NewDecoder(buf)
-		if err := dec.Decode(&prog); err != nil {
+		prog, err := bytecode.ReadArtifact(bytes.NewReader(content))
+		if err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
 		executionPolicy := vm.DefaultExecutionPolicy()
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
-		os.Exit(vm.RunBytecodeWithPolicy(&prog, flag.Args()[1:], executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(vm.RunBytecodeWithPolicy(prog, flag.Args()[1:], executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	lx := lexer.NewLexer(string(content))
@@ -112,8 +110,7 @@ func main() {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
-		if err := enc.Encode(prog); err != nil {
+		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := inputFile + ".bc.bin"

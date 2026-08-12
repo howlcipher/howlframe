@@ -21,9 +21,11 @@
 | `HTTP_ROUTE` | string, string, int64 | 0 | 0 | network | Registers an HTTP route |
 | `HTTP_SERVER_SERVE` |  | 0 | 0 | network | Serves HTTP requests |
 | `HTTP_SERVER_START` | string | 0 | 0 | network | Starts an HTTP server |
+| `IS_NIL` |  | 1 | 1 |  | Checks if a value is nil |
 | `JUMP` | int64 | 0 | 0 |  | Unconditional jump |
 | `JUMP_IF_FALSE` | int64 | 1 | 0 |  | Jumps if top of stack is false |
 | `LIST_GET` | string | 1 | 1 |  | Gets a value from a list |
+| `LIST_LEN` |  | 1 | 1 |  | Returns the length of a list |
 | `LLM_GENERATE` | string | 1 | 1 | network | Generates text using an LLM |
 | `LOAD_CONST` | value | 0 | 1 |  | Loads a constant value onto the stack |
 | `LOAD_VAR` | string | 0 | 1 |  | Loads a variable onto the stack |

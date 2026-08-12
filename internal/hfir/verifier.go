@@ -1,7 +1,6 @@
 package hfir
 
 import (
-	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/capability"
 )
 
@@ -48,30 +47,6 @@ func (v *Verifier) Verify() []Diagnostic {
 			if !hasCap {
 				node.Effects = append(node.Effects, Effect{Type: "capability", Capability: string(capReq)})
 			}
-		}
-
-		// 2. Unbound Reference Check (#77)
-		//
-		// checker.Analysis.infer (internal/checker/types.go) sets a bare
-		// SYMBOL's Inferred type to ast.Unknown for two different reasons: a
-		// genuinely undefined identifier (which already fails checker.Check
-		// with its own diagnostic before this ever runs), and a variable
-		// legitimately bound via try_let/catch or bound to the result of a
-		// dynamically-typed primitive (llm_generate, generics, an HTTP lambda
-		// parameter's field access, etc.) - a common, intentional pattern the
-		// checker allows without a diagnostic. The checked AST's TypeInfo
-		// does not preserve which case produced Unknown, so on real programs
-		// this diagnostic has no reachable true positive today (case one
-		// never reaches HFIR) and case two is common - confirmed empirically
-		// by running this check against the full tests/*.howl corpus, where
-		// it false-positived on 12 of ~90 fixtures (bugs.md #42). The
-		// production gate (howlframe.go's runHFIRGate) therefore does NOT treat
-		// this code as blocking; it is still computed and returned here
-		// unchanged so any future consumer with better information can use
-		// it, but do not add it to howlframe.go's hfirBlockingCodes without first
-		// fixing the underlying checker/HFIR information gap in #41.
-		if node.Kind == "symbol" && node.Type.Kind == ast.Unknown {
-			v.addDiagnostic("HFIR_UNBOUND_REF", SeverityError, "Unbound variable or function reference: "+node.Value, node.Provenance, node.ID)
 		}
 
 		// 3. Cycle & Reference Validation

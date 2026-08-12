@@ -103,6 +103,11 @@ class HttpServerStartInstruction(BaseModel):
     string_operand: str
 
 
+class IsNilInstruction(BaseModel):
+    op: Literal["IS_NIL"]
+    pass
+
+
 class JumpInstruction(BaseModel):
     op: Literal["JUMP"]
     int_operand: int
@@ -116,6 +121,11 @@ class JumpIfFalseInstruction(BaseModel):
 class ListGetInstruction(BaseModel):
     op: Literal["LIST_GET"]
     string_operand: str
+
+
+class ListLenInstruction(BaseModel):
+    op: Literal["LIST_LEN"]
+    pass
 
 
 class LlmGenerateInstruction(BaseModel):
@@ -313,9 +323,11 @@ Instruction = Annotated[
         HttpRouteInstruction,
         HttpServerServeInstruction,
         HttpServerStartInstruction,
+        IsNilInstruction,
         JumpInstruction,
         JumpIfFalseInstruction,
         ListGetInstruction,
+        ListLenInstruction,
         LlmGenerateInstruction,
         LoadConstInstruction,
         LoadVarInstruction,
