@@ -148,7 +148,7 @@ against a running compiled server:
   JSON payload, even `list` and `get` (which would conventionally be `GET`
   with a path/query parameter).
 * **Method is never read or enforced.** Confirmed with `curl -X GET
-  http://localhost:8080/tasks/list -d '{}'` returning the identical `200`
+  http://localhost:8081/tasks/list -d '{}'` returning the identical `200`
   response as the equivalent `POST` — a real, deliberate deviation from
   REST semantics, not an oversight.
 * **Unmatched routes fall through to Go's stock `http.ServeMux` 404**

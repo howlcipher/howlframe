@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const baseURL = "http://localhost:8080"
+const baseURL = "http://localhost:8081"
 
 func compileBytecode(t *testing.T, srcDir, outPath string) {
 	t.Helper()
@@ -47,21 +47,33 @@ func startServer(t *testing.T, workDir, bcAbsPath, caps string) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start server: %v", err)
 	}
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- cmd.Wait()
+	}()
+
 	t.Cleanup(func() {
 		if cmd.Process != nil {
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			cmd.Wait()
+			<-errc
 		}
 	})
-	if !waitForServer(baseURL+"/tasks/list", 5*time.Second) {
+	if !waitForServer(t, baseURL+"/tasks/list", 5*time.Second, errc) {
 		t.Fatalf("server did not become ready; log: %s", logBuf.String())
 	}
 	return cmd
 }
 
-func waitForServer(url string, timeout time.Duration) bool {
+func waitForServer(t *testing.T, url string, timeout time.Duration, errc <-chan error) bool {
+	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
+		select {
+		case err := <-errc:
+			t.Fatalf("server process exited prematurely: %v", err)
+		default:
+		}
 		resp, err := http.Post(url, "application/json", strings.NewReader("{}"))
 		if err == nil {
 			resp.Body.Close()
@@ -465,14 +477,20 @@ func TestTaskAPIStandaloneBytecode(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start standalone server: %v", err)
 	}
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- cmd.Wait()
+	}()
+
 	defer func() {
 		if cmd.Process != nil {
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			cmd.Wait()
+			<-errc
 		}
 	}()
 
-	if !waitForServer(baseURL+"/tasks/list", 5*time.Second) {
+	if !waitForServer(t, baseURL+"/tasks/list", 5*time.Second, errc) {
 		t.Fatalf("standalone server did not become ready; log: %s", logBuf.String())
 	}
 
