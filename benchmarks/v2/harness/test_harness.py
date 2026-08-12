@@ -3,13 +3,17 @@ import os
 import tempfile
 import subprocess
 import json
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
 import run_track_a
 import aggregate
 
 class TestHarness(unittest.TestCase):
     def setUp(self):
-        subprocess.run(["go", "build", "-o", "howlframe", "."], cwd="../../../", check=True)
-        os.environ["PATH"] = os.path.abspath("../../../") + os.pathsep + os.environ.get("PATH", "")
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        subprocess.run(["go", "build", "-o", "howlframe", "."], cwd=root_dir, check=True)
+        os.environ["PATH"] = root_dir + os.pathsep + os.environ.get("PATH", "")
         self.temp_dir = tempfile.TemporaryDirectory()
         self.results_dir = os.path.join(self.temp_dir.name, "results")
         os.makedirs(self.results_dir)

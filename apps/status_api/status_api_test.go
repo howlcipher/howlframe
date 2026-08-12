@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -22,12 +23,13 @@ func TestStatusAPI(t *testing.T) {
 	cmd.Dir = "."
 	cmd.Env = append(cmd.Environ(), "REQUIRED_ENV=yes", "PUBLIC_CONFIG=foo")
 
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	errPipe, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start: %v", err)
 	}
 	defer func() {
-		cmd.Process.Kill()
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		cmd.Wait()
 	}()
 
