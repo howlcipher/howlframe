@@ -28,13 +28,24 @@ func TestStatusAPI(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start: %v", err)
 	}
-	defer func() {
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		cmd.Wait()
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- cmd.Wait()
 	}()
 
-	// Wait for start
-	time.Sleep(2 * time.Second)
+	defer func() {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-errc
+	}()
+
+	// Wait for start, but fail fast if it exits
+	timeout := time.After(2 * time.Second)
+	select {
+	case err := <-errc:
+		t.Fatalf("server process exited prematurely: %v", err)
+	case <-timeout:
+	}
 
 	// Test endpoints
 	resp, err := http.Get("http://localhost:8080/health")
