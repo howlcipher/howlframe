@@ -52,7 +52,8 @@
                           (let (record (store_get kv k))
                             (let (current 0)
                               (do
-                                (if (= (is_nil record) false)
+                                (if (is_nil record)
+                                  (set current current)
                                   (let (val_str (map_get record "val"))
                                     (set current (to_int val_str))
                                   )
