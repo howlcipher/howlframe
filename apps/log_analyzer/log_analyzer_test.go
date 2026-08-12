@@ -58,7 +58,30 @@ func TestLogAnalyzer(t *testing.T) {
 		t.Errorf("expected filesystem capability denied, got: %s", out)
 	}
 
+	// Type error test
+	badScript := `(cli_app
+		(let (content (read_file "clean.log"))
+			(let (lines (str_split content "\n"))
+				(print "should fail")
+			)
+		)
+	)`
+	os.WriteFile("bad.howl", []byte(badScript), 0644)
+	exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "bad.howl").Run()
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "bad.howl.bc.bin")
+	cmd.Dir = "."
+	out, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Errorf("expected type error to fail")
+	}
+	if !strings.Contains(string(out), "TYPE_ERROR") || strings.Contains(string(out), "interface {} is []interface {}, not string") {
+		t.Errorf("expected structured TYPE_ERROR without Go panic text, got: %s", out)
+	}
+
 	// Cleanup
 	os.Remove("clean.log")
+	os.Remove("err.log")
+	os.Remove("bad.howl")
+	os.Remove("bad.howl.bc.bin")
 	os.Remove("err.log")
 }

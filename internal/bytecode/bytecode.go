@@ -421,6 +421,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, c.compileNode(node.Children[1])...) // regex
 			insts = append(insts, c.compileNode(node.Children[2])...) // string
 			insts = append(insts, BCInstruction{OpString: "REGEX_MATCH", Op: OpRegexMatch})
+		case "list_len":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "LIST_LEN", Op: OpListLen})
+		case "is_nil":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "IS_NIL", Op: OpIsNil})
 		case "list":
 			for _, child := range node.Children[1:] {
 				insts = append(insts, c.compileNode(child)...)

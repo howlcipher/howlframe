@@ -12,16 +12,24 @@
 
 ## Repeated friction
 - **Deep Nesting in let**: Because `let` requires exactly a `(var expr) body` and the `body` only accepts a single AST node, sequentially binding variables or executing multiple side-effects mandates deep, rightward-drifting `do` block nesting. This appeared across all applications.
+  - **Status**: Still unresolved
 - **Type Friction**: `read_file` returns raw bytes which caused an unexpected `[]interface{}` internal panic when blindly fed into string operations like `str_split`. It required explicit discovery and usage of `bytes_to_string`.
+  - **Status**: Addressed after Phase 1 dogfooding (VM now emits structured `TYPE_ERROR`)
 - **Missing list_len**: There is no bytecode equivalent for measuring array sizes. Both Log Analyzer and KV CLI had to write manual `while` loops or manual counters in `for` loops to process lists and arguments. 
+  - **Status**: Addressed after Phase 1 dogfooding
+  - **Evidence**: Log Analyzer + KV CLI + earlier showcase work
 
 ## Missing primitives
 - **HIGH**: `list_len` in bytecode. Attempting to use `list_len` in `-compile-bc` fails entirely.
+  - **Status**: Addressed after Phase 1 dogfooding
 - **HIGH**: Explicit `nil` checks. Checking if a store key exists required formatting the response to a string and comparing against `"<nil>"`.
+  - **Status**: Addressed after Phase 1 dogfooding (via `is_nil` intrinsic)
 - **MEDIUM**: Improved `let` body semantics to accept implicit `do` block execution rather than forcing explicit `(do ...)` wrappers for multiple expressions.
+  - **Status**: Still unresolved
 
 ## Bugs exposed by applications
 - **Type Panic in VM**: While not a strict compiler bug, the bytecode VM `str_split` instruction panics with an internal Go slice conversion error when passed `read_file` bytes instead of a string. An explicit type cast requirement or cleaner VM runtime failure should be implemented.
+  - **Status**: Addressed after Phase 1 dogfooding. Fixed evidence-backed unsafe VM operand type assertions to produce structured `TYPE_ERROR` runtime errors.
 
 ## Capability model findings
 - Minimum-authority execution worked naturally.
@@ -44,12 +52,12 @@
 - **diagnostics**: Reasonable (compiler errors are very clear, VM panics slightly opaque)
 
 ## Suggested next improvements
-1. **Bytecode `list_len`**: Add the `list_len` opcode to `-compile-bc` to allow normal array bounds checking.
-2. **Native `nil` primitive**: Introduce an explicit `nil` literal or `is_nil` intrinsic to handle absent data natively.
-3. **Ergonomic `let` evaluation**: Allow `let` to accept multiple body expressions (implicit `do`).
-4. **Bytecode type assertions**: Protect string operations in `internal/vm/vm.go` from panicking internally when receiving `[]interface{}`.
+1. **Bytecode `list_len`**: Add the `list_len` opcode to `-compile-bc` to allow normal array bounds checking. *(Addressed)*
+2. **Native `nil` primitive**: Introduce an explicit `nil` literal or `is_nil` intrinsic to handle absent data natively. *(Addressed)*
+3. **Ergonomic `let` evaluation**: Allow `let` to accept multiple body expressions (implicit `do`). *(Still unresolved)*
+4. **Bytecode type assertions**: Protect string operations in `internal/vm/vm.go` from panicking internally when receiving `[]interface{}`. *(Addressed)*
 
 ## Recommended next application
-**NEEDS CORE IMPROVEMENTS FIRST**
+**READY FOR TODO CLI**
 
-While HowlFrame successfully built these three initial applications, the friction around list processing (`list_len`), nil detection (`nil`), and block nesting (`do` in `let`) makes a larger application highly awkward to author. A data-heavy program like `apps/todo_cli` or `apps/task_api` will require significantly more array iteration and missing-key checks. These primitive capabilities should be addressed before attempting to build them.
+HowlFrame successfully built these three initial applications, and the friction around list processing (`list_len`), nil detection (`is_nil`), and VM type-safety has been successfully addressed. A data-heavy program like `apps/todo_cli` can now be built comfortably relying on the new list and nil primitives. The `let` ergonomic issue remains, but is no longer a critical blocker.

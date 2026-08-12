@@ -20,11 +20,10 @@
             (let (errors 0)
               (let (warnings 0)
                 (let (todos 0)
-                  (let (line_count 0)
+                  (let (line_count (list_len lines))
                     (do
                       (for line lines
                         (do
-                          (set line_count (+ line_count 1))
                           (if (regex_match "ERROR|FATAL" line)
                             (set errors (+ errors 1))
                             (do

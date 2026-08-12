@@ -3,7 +3,8 @@
 ## Unreleased
 
 ### Added
-
+* `list_len` construct and bytecode instruction `OpListLen` to measure list lengths without manual loops.
+* `is_nil` intrinsic to natively detect the absence of a value (e.g., a missing key in a dict) instead of string formatting checks.
 * HowlFrame Repo Analyst, a deterministic five-module standalone application that
   discovers and classifies repository files, counts tests, configuration,
   entry points, and TODO/FIXME markers, emits or writes a versioned report, and
@@ -82,6 +83,7 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* Fixed a severe issue where `str_split`, `str_join`, `regex_match`, `append`, `map_set`, `map_delete`, `map_get`, `list_get`, and `list_len` bytecode VM instructions relied on unsafe Go type assertions, which caused immediate uncatchable internal panics (`interface {} is ...`) instead of deterministic script errors. The VM now performs safe checks and produces structured `TYPE_ERROR` runtime errors when given unexpected types, enabling correct `try_let` interception.
 
 * Bytecode `try_let` now resumes after its complete embedded instruction region
   instead of re-executing the final branch instruction and corrupting an

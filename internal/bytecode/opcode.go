@@ -64,6 +64,8 @@ const (
 	OpReadLine
 	OpStderr
 	OpExit
+	OpListLen
+	OpIsNil
 )
 
 type OperandType string
@@ -141,6 +143,8 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
+	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list"},
+	OpIsNil:            {Code: OpIsNil, Name: "IS_NIL", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Checks if a value is nil"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

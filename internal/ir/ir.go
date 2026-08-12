@@ -58,7 +58,7 @@ func ValidateShared(node *ast.Node) (string, bool) {
 		return requireArguments(node, 2), true
 	}
 	switch head {
-	case "return", "sleep", "to_int", "to_float", "to_string", "bytes_to_string":
+	case "return", "sleep", "to_int", "to_float", "to_string", "bytes_to_string", "list_len", "is_nil":
 		return requireArguments(node, 1), true
 	case "if":
 		arguments := len(node.Children) - 1
@@ -196,7 +196,7 @@ func lowerShared(node *ast.Node) (*IRNode, bool) {
 		return &IRNode{Kind: "map_get", Kids: node.Children[1:]}, true
 	case "list_get":
 		return &IRNode{Kind: "list_get", Kids: node.Children[1:]}, true
-	case "call", "let", "try_let", "spawn", "for", "list", "dict", "print", "do":
+	case "call", "let", "try_let", "spawn", "for", "list", "dict", "print", "do", "list_len", "is_nil":
 		return &IRNode{Kind: head, Kids: node.Children[1:]}, true
 	}
 	return nil, false

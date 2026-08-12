@@ -1,6 +1,6 @@
 ---
 support: unsupported
-reason: "HowlFrame lacks list_len and sort constructs, making list iteration and sorting virtually impossible."
+reason: "HowlFrame lacks a sort construct, making list sorting impossible."
 ---
 
 # Task 05: List/Dictionary Transformation

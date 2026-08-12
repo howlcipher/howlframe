@@ -490,6 +490,22 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			return string(b)
 		}
 		return fmt.Sprint(val)
+	case "list_len":
+		if len(node.Children) != 2 {
+			InterpErr("list_len expects (list_len list)", node)
+		}
+		val := interp.eval(node.Children[1], env)
+		if lst, ok := val.([]any); ok {
+			return int64(len(lst))
+		}
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, got %T", val), node.Children[1])
+		return int64(0)
+	case "is_nil":
+		if len(node.Children) != 2 {
+			InterpErr("is_nil expects (is_nil val)", node)
+		}
+		val := interp.eval(node.Children[1], env)
+		return val == nil
 	case "str_split":
 		if len(node.Children) != 3 {
 			InterpErr("str_split expects (str_split s sep)", node)
@@ -1823,23 +1839,38 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			target := inst.StringOperand
 			vm.push(BcConvert(target, a))
 		case bytecode.OpStrSplit:
-			sep := vm.pop(inst.Op).(string)
-			s := vm.pop(inst.Op).(string)
+			sepVal := vm.pop(inst.Op)
+			sVal := vm.pop(inst.Op)
+			sep, ok1 := sepVal.(string)
+			s, ok2 := sVal.(string)
+			if !ok1 || !ok2 {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_split expected string, got %T and %T", sVal, sepVal))
+			}
 			vm.push(BcSliceToAny(strings.Split(s, sep)))
 		case bytecode.OpStrJoin:
-			sep := vm.pop(inst.Op).(string)
-			list := vm.pop(inst.Op).([]any)
+			sepVal := vm.pop(inst.Op)
+			listVal := vm.pop(inst.Op)
+			sep, ok1 := sepVal.(string)
+			list, ok2 := listVal.([]any)
+			if !ok1 || !ok2 {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_join expected list and string, got %T and %T", listVal, sepVal))
+			}
 			var strs []string
 			for _, item := range list {
 				strs = append(strs, fmt.Sprint(item))
 			}
 			vm.push(strings.Join(strs, sep))
 		case bytecode.OpRegexMatch:
-			s := vm.pop(inst.Op).(string)
-			pattern := vm.pop(inst.Op).(string)
+			sVal := vm.pop(inst.Op)
+			patternVal := vm.pop(inst.Op)
+			s, ok1 := sVal.(string)
+			pattern, ok2 := patternVal.(string)
+			if !ok1 || !ok2 {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "regex_match expected string pattern and string, got %T and %T", patternVal, sVal))
+			}
 			matched, err := regexp.MatchString(pattern, s)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("INVALID_REGEX", "main", ip, inst.Op, "invalid regex: %v", err))
 			}
 			vm.push(matched)
 		case bytecode.OpMakeList:
@@ -1868,9 +1899,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			current, ok := env.get(varName)
 			if !ok {
-				panic("undefined variable: " + varName)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			items := current.([]any)
+			items, ok := current.([]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %T", current))
+			}
 			newItems := append(append([]any{}, items...), item)
 			env.set(varName, newItems)
 		case bytecode.OpMapSet:
@@ -1880,9 +1914,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			current, ok := env.get(varName)
 			if !ok {
-				panic("undefined variable: " + varName)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			dict := current.(map[string]any)
+			dict, ok := current.(map[string]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_set expected dict, got %T", current))
+			}
 			dict[key] = val
 		case bytecode.OpMapDelete:
 			varName := inst.StringOperand
@@ -1890,9 +1927,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			current, ok := env.get(varName)
 			if !ok {
-				panic("undefined variable: " + varName)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			dict := current.(map[string]any)
+			dict, ok := current.(map[string]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_delete expected dict, got %T", current))
+			}
 			delete(dict, key)
 		case bytecode.OpMapGet:
 			varName := inst.StringOperand
@@ -1900,9 +1940,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			current, ok := env.get(varName)
 			if !ok {
-				panic("undefined variable: " + varName)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			dict := current.(map[string]any)
+			dict, ok := current.(map[string]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
+			}
 			if val, ok := dict[key]; ok {
 				vm.push(val)
 			} else {
@@ -1915,19 +1958,32 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxStr := strings.TrimSpace(fmt.Sprint(idxAny))
 			idx, err := strconv.Atoi(idxStr)
 			if err != nil {
-				panic("list_get index must be a number")
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get index must be a number, got %T", idxAny))
 			}
 
 			current, ok := env.get(varName)
 			if !ok {
-				panic("undefined variable: " + varName)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			items := current.([]any)
+			items, ok := current.([]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get expected list, got %T", current))
+			}
 			if idx < 0 || idx >= len(items) {
 				vm.push("")
 			} else {
 				vm.push(items[idx])
 			}
+		case bytecode.OpListLen:
+			val := vm.pop(inst.Op)
+			items, ok := val.([]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, got %T", val))
+			}
+			vm.push(int64(len(items)))
+		case bytecode.OpIsNil:
+			val := vm.pop(inst.Op)
+			vm.push(val == nil)
 		case bytecode.OpCliArgs:
 			var argsAny []any
 			for _, arg := range vm.args {
