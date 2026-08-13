@@ -264,6 +264,18 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("on_event expects a lambda", lambda.Line, lambda.Column)
 		}
 		checkJSStatement(lambda.Children[2], depth+1)
+	} else if head == "set_html" {
+		if len(node.Children) != 3 {
+			ast.ReportError("set_html expects (set_html el val)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+		checkJSStatement(node.Children[2], depth+1)
+	} else if head == "toggle_class" {
+		if len(node.Children) != 3 {
+			ast.ReportError("toggle_class expects (toggle_class el class)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+		checkJSStatement(node.Children[2], depth+1)
 	} else if head == "set_text" {
 		if len(node.Children) != 3 {
 			ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)

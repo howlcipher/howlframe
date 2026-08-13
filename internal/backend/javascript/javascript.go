@@ -433,6 +433,20 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		body := generateJSStatement(lambda.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("%s.addEventListener(%s, async (%s) => {\n%s\n})", el, event, argName, body)
+	} else if head == "set_html" {
+		if len(node.Children) != 3 {
+			// ast.ReportError("set_html expects (set_html el val)", node.Line, node.Column)
+		}
+		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		val := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf("%s.innerHTML = %s", el, val)
+	} else if head == "toggle_class" {
+		if len(node.Children) != 3 {
+			// ast.ReportError("toggle_class expects (toggle_class el class)", node.Line, node.Column)
+		}
+		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		cls := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf("%s.classList.toggle(%s)", el, cls)
 	} else if head == "set_text" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)
