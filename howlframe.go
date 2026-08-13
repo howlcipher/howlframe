@@ -519,7 +519,7 @@ Commands:
   help      Print this help message.
 
 Capabilities are denied by default and must be granted by the runner with --allow-caps.
-Example: howlframe run app.hfbc --allow-caps filesystem,network -- arg1 arg2`)
+Example: howlframe run --allow-caps filesystem,network app.hfbc arg1 arg2`)
 }
 
 func checkSource() {

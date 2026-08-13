@@ -113,3 +113,74 @@ Date: 2026-08-12
 
 ### Next step
 - Test the release like an outsider in a clean temporary directory.
+
+## Phase 6 & 7 - Test the release and differentiator as an outsider
+
+### What I inspected
+- Created a clean temporary directory.
+- Extracted the published Linux AMD64 artifact (`howlframe_v0.1.0_linux_amd64.tar.gz`).
+- Executed `howlframe version` and `howlframe help` directly from the binary.
+- Created a minimal `hello.howl` and verified `check`, `build`, and `run` workflows without the source tree context.
+- Copied `release_authority.howl` to validate an existing authority demo with its required JSON and command line arguments.
+
+### What I found
+- The artifact works cleanly as a standalone CLI.
+- The `release_authority` demo succeeds and properly applies bounded evaluation given `--allow-caps filesystem,database` flag passed *before* the artifact path.
+- Encountered a minor friction point: `howlframe help` suggests `howlframe run app.hfbc --allow-caps filesystem,network -- arg1 arg2`, but the actual Go `flag` library parser requires `--allow-caps` to be *before* the positional `app.hfbc` artifact, otherwise it fails to parse the flag. Also, putting `--` before application args passes `--` as the first application argument (`cli_args 0`).
+
+### Decision made
+- Update `howlframe help` and relevant docs (like `docs/cli.md` and `README.md`) to show the correct flag position: `howlframe run --allow-caps <caps> app.hfbc arg1 arg2`.
+- Otherwise, the application and artifact are working correctly.
+
+### Why
+- New users copy-pasting the CLI help examples must have a working experience.
+
+### Files changed
+- `docs/journals/2026-08-12_v01_release_completion.md`
+- `howlframe.go` (help text to be updated)
+
+### Validation performed
+- Outsider environment tests: verified the compiled binary has zero dependencies on local source code.
+- Tested `release_authority.hfbc` with valid proposals and saw `ALLOW` policy decision.
+
+### Result
+- Confirmed the release is viable for end users. The CLI friction must be fixed in docs/help output.
+
+### Next step
+- Update CLI help and audit user-facing documentation (Phase 8).
+
+## Phase 8 & 10 - Documentation Audit and Repository Health
+
+### What I inspected
+- `docs/cli.md`, `README.md`, `howlframe.go` (CLI help text).
+- `CONTRIBUTING.md` and `SECURITY.md` (which did not exist).
+
+### What I found
+- The documentation in `docs/cli.md` and the `howlframe.go` help text showed an incorrect flag position for `--allow-caps` when running artifacts (`howlframe run app.hfbc --allow-caps ...`).
+- The project lacked basic, concise repository health documents.
+
+### Decision made
+- Corrected the `howlframe run` usage syntax in `howlframe.go` and `docs/cli.md` to reflect that options must precede the artifact file.
+- Created a concise `CONTRIBUTING.md` establishing the post-v0.1 evidence-based development principle.
+- Created a `SECURITY.md` to explicitly state the experimental boundaries (no OS-level sandboxing, no formal verification) and provide a reporting process.
+
+### Why
+- Aligning documentation with reality removes friction for new users.
+- Repository health files make it clear to contributors how to participate and frame the project accurately without bureaucratic overhead.
+
+### Files changed
+- `howlframe.go`
+- `docs/cli.md`
+- `CONTRIBUTING.md` (new)
+- `SECURITY.md` (new)
+- `docs/journals/2026-08-12_v01_release_completion.md`
+
+### Validation performed
+- Verified `CONTRIBUTING.md` accurately reflects the post-v0.1 development principle.
+- Verified `SECURITY.md` explicitly denies production-ready sandbox guarantees.
+
+### Result
+- Documentation matches actual CLI behavior. The project has an established baseline for contributions and security expectations.
+
+### Next step
+- Reprioritize the backlog (`improvements.md`), establish a post-v0.1 decision rule in the architecture roadmap (Phase 11 and 12).

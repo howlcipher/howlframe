@@ -15,7 +15,7 @@ Usage: `howlframe build <source.howl> [-o <output.hfbc>]`
 Compiles a `.howl` source file to a standalone HowlFrame bytecode artifact (`.hfbc`). By default, it outputs to a file with the same basename and the `.hfbc` extension.
 
 ## `howlframe run`
-Usage: `howlframe run <artifact.hfbc> [options] [-- arguments...]`
+Usage: `howlframe run [options] <artifact.hfbc> [arguments...]`
 
 Executes a compiled HowlFrame bytecode artifact.
 
