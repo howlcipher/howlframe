@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -185,6 +186,76 @@ func TestAdapterInterfaceMetadataIsNotProgramSemantics(t *testing.T) {
 	second := mustDecode(t, response.Transport)
 	if first.Hash != second.Hash {
 		t.Fatalf("metadata changed program hash: %s != %s", first.Hash, second.Hash)
+	}
+}
+
+// TestBlackBoxSynthesisBenchmark executes the stored response from the
+// intentionally restricted author role. It contains no source or AST fixture.
+func TestBlackBoxSynthesisBenchmark(t *testing.T) {
+	data, err := os.ReadFile("../../docs/fixtures/hfir_model_adapter_black_box_phase1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixtures map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]struct {
+		stdout, stderr string
+		exit           int
+		caps           []capability.Capability
+	}{
+		"arithmetic": {stdout: "42\n"}, "classify": {stdout: "positive\n"}, "list-transform": {stdout: "a,b,c\n"},
+		"dictionary": {stdout: "new\n"}, "split-join": {stdout: "a-b-c\n"}, "env-branch": {stdout: "configured\n", caps: []capability.Capability{capability.Environment}},
+		"exit-status": {stderr: "bad input", exit: 7}, "nested-if": {stdout: "A\n"}, "list-length": {stdout: "3\n"},
+		"dictionary-delete": {stdout: "yes\n"}, "repair-greeting": {stdout: "hello\n"},
+	}
+	t.Setenv("HFIR_TEST_MODE", "on")
+	for name, want := range expected {
+		t.Run(name, func(t *testing.T) {
+			candidate, diagnostics := DecodeCandidate(fixtures[name])
+			if len(diagnostics) != 0 {
+				t.Fatalf("schema/integrity diagnostics = %#v", diagnostics)
+			}
+			program, diagnostics := CompileCandidate(candidate)
+			if len(diagnostics) != 0 {
+				t.Fatalf("compile diagnostics = %#v", diagnostics)
+			}
+			stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+			exit := vm.RunBytecode(program, nil, want.caps, strings.NewReader(""), stdout, stderr)
+			if name == "repair-greeting" {
+				if got := stdout.String(); got != "helo\n" {
+					t.Fatalf("initial stdout = %q", got)
+				}
+				context, err := NewRepairContext(candidate, "greeting")
+				if err != nil {
+					t.Fatal(err)
+				}
+				delta, err := json.Marshal(repairTransport{SchemaVersion: ModelRepairSchemaVersion, ExpectedGraphHash: candidate.Hash, Operations: []repairOperation{{Operation: "replace_node", TargetNodeID: "greeting", ExpectedNodeHash: NodeHash(candidate.Graph.NodeByID("greeting")), Replacement: testNode("greeting", "const", "hello", "STRING", nil)}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				candidate, diagnostics = ApplyRepair(candidate, context, delta)
+				if len(diagnostics) != 0 {
+					t.Fatalf("repair diagnostics = %#v", diagnostics)
+				}
+				program, diagnostics = CompileCandidate(candidate)
+				if len(diagnostics) != 0 {
+					t.Fatalf("recompile diagnostics = %#v", diagnostics)
+				}
+				stdout, stderr = new(bytes.Buffer), new(bytes.Buffer)
+				exit = vm.RunBytecode(program, nil, nil, strings.NewReader(""), stdout, stderr)
+			}
+			if got := stdout.String(); got != want.stdout {
+				t.Fatalf("stdout = %q, want %q", got, want.stdout)
+			}
+			if got := stderr.String(); got != want.stderr {
+				t.Fatalf("stderr = %q, want %q", got, want.stderr)
+			}
+			if exit != want.exit {
+				t.Fatalf("exit = %d, want %d", exit, want.exit)
+			}
+		})
 	}
 }
 
