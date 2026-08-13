@@ -1,0 +1,18 @@
+{
+  "schema_version": "hfir-semantic-repair-corpus/v1",
+  "scope": "Phase-1 executable HFIR only",
+  "scenarios": [
+    {"id": "dangling-reference", "class": "verifier", "edits": 1},
+    {"id": "invalid-binary-operator", "class": "verifier", "edits": 1},
+    {"id": "invalid-dictionary-role", "class": "verifier", "edits": 1},
+    {"id": "wrong-output-constant", "class": "behavioral", "edits": 1},
+    {"id": "wrong-comparison-operator", "class": "behavioral", "edits": 1},
+    {"id": "wrong-branch-result", "class": "behavioral", "edits": 2},
+    {"id": "dictionary-key-and-value", "class": "behavioral", "edits": 2},
+    {"id": "list-item-and-join-separator", "class": "behavioral", "edits": 2},
+    {"id": "missing-sequence-operation", "class": "lowerer-runtime", "edits": 2},
+    {"id": "output-and-exit-disagree", "class": "behavioral", "edits": 2},
+    {"id": "dictionary-update-pair", "class": "behavioral", "edits": 2, "executed_phase2": true},
+    {"id": "branch-condition-and-output", "class": "behavioral", "edits": 2}
+  ]
+}
