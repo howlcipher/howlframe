@@ -8,6 +8,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 
 | # | Bug | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 48 | [`parse_json req.body` reads unbounded request data and ignores read errors](#48-parse_json-reqbody-reads-unbounded-request-data-and-ignores-read-errors) | Pending | 2.0 (8×1÷4) | Sonnet 5 | Gemini 3.1 Pro | gpt-5.6-terra | The standalone HTTP bytecode VM accepts unbounded request bodies and can silently parse partial data after a read failure. This is a security and reliability boundary, but is separate from HFIR semantic repair. |
 | 40 | [Missing `.agents/prompts/work_next_item.md` file](#40-missing-agentspromptswork_next_itemmd-file) | Done (2026-08-04) | 3.0 (3×1÷1) | — | Gemini 3.1 Pro | — | The `work_next_item` skill expects a prompt file `.agents/prompts/work_next_item.md` which does not exist in the repository, making the skill fail to load its prompt. |
 | 41 | [`hfir.LowerAST` cannot lower integer literals or zero-argument parameter lists](#41-hfirlowerast-cannot-lower-integer-literals-or-zero-argument-parameter-lists) | Done (2026-08-05) | 6.0 (6×1÷1) | Sonnet 5 | — | — | Blocked virtually every real `.howl` program from lowering to HFIR at all — a hard prerequisite for improvement #87 Phase 2's production integration. |
 | 42 | [`HFIR_UNBOUND_REF` false-positives on legitimately dynamically-typed bound variables](#42-hfir_unbound_ref-false-positives-on-legitimately-dynamically-typed-bound-variables) | Done (2026-08-12) | 2.33 (7×1÷3) | Sonnet 5 | — | — | The checker's `Analysis.infer` cannot distinguish "never resolved" from "resolved, dynamically typed" once both collapse to `ast.Unknown` — false-positived on 12 of ~40 real fixtures during the #87 Phase 2 fixture sweep. Fixed by removing the diagnostic code entirely, since genuinely unbound variables fail checker.Check before HFIR lowering, meaning the diagnostic had zero reachable true positives. |
@@ -460,3 +461,18 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
   * **Verification:** `go test ./internal/vm -run '^TestBytecodeTryLetResumesAfterEmbeddedInstructionsInFor$' -count=1`; `go test ./internal/bytecode ./internal/vm`; `go test ./examples/repo_analyst -run '^TestRepoAnalystStandaloneBytecode$' -count=1 -v`; `go test ./...`; `go vet ./...`; `go build -o /tmp/howlframe-dogfood-final howlframe.go`; difftest 17 passed / 27 skipped / 0 failed; `gofmt -l .`; `git diff --check`.
   * **Benchmark gate:** Not applicable. The production diff changes only bytecode-VM instruction-pointer control flow for `try_let`; it does not touch the `defun`/`type_hint`, `read_file`, `str_split`, or `test` writing surfaces and cannot change transpiler output.
   * **Next boundary:** Repo Analyst's own 20,149-byte directory now reaches the separate fixed-budget limit. The dogfooding journal records that tooling gap as the next blocker; no second numbered tracker item or HowlFrame change was added in this one-blocker session.
+
+### 48. `parse_json req.body` reads unbounded request data and ignores read errors
+
+* **Problem:** The standalone bytecode VM's `OpParseJson` special case for
+  `req.body` calls `io.ReadAll(req.Body)` with no size limit and discards the
+  returned error before parsing and restoring the body.
+* **Evidence:** `internal/vm/vm.go` performs the read in the request-body
+  branch. The limitation was independently recorded in
+  `docs/journals/2026-08-13_external_consumer_v011.md`.
+* **Risk:** A remote request can consume unbounded memory. A partial or failed
+  read can be interpreted as normal input, giving callers an unreliable error
+  boundary.
+* **Scope:** Add an explicit bounded body-size policy and deterministic
+  read-error handling with focused VM request-body tests. This must be a
+  separate change from HFIR semantic repair.
