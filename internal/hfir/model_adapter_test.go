@@ -83,6 +83,57 @@ func TestDecodeCandidateFailsClosedForAdversarialOutput(t *testing.T) {
 	}
 }
 
+func TestModelAdapterAdversarialMatrixFailsBeforeLowering(t *testing.T) {
+	base := candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: []transportNode{
+		testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
+		testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "value"}}),
+		testNode("value", "const", "ok", "STRING", nil),
+	}}
+	encode := func(value any) []byte {
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	withKind := func(kind string) []byte {
+		candidate := base
+		candidate.Nodes = append([]transportNode(nil), base.Nodes...)
+		candidate.Nodes[1].Kind = kind
+		return encode(candidate)
+	}
+	withInput := func(input NodeID) []byte {
+		candidate := base
+		candidate.Nodes = append([]transportNode(nil), base.Nodes...)
+		candidate.Nodes[1].Inputs = []transportEdge{{Role: "value", NodeID: input}}
+		return encode(candidate)
+	}
+	duplicate := base
+	duplicate.Nodes = append(duplicate.Nodes, testNode("value", "const", "again", "STRING", nil))
+	cases := []struct {
+		name, code string
+		payload    []byte
+	}{
+		{"dangling reference", "HFIR_INVALID_REF", withInput("missing")},
+		{"duplicate node ID", "HFIR_TRANSPORT_ID", encode(duplicate)},
+		{"function", "HFIR_TRANSPORT_KIND", withKind("defun")},
+		{"loop", "HFIR_TRANSPORT_KIND", withKind("while")},
+		{"HTTP", "HFIR_TRANSPORT_KIND", withKind("http_server_start")},
+		{"cycle", "HFIR_TRANSPORT_CYCLE", withInput("program")},
+		{"raw opcode", "HFIR_TRANSPORT_INVALID", []byte(`{"schema_version":"hfir-model-adapter/v1","graph_version":"v1","entry_node":"program","bytecode":"LOAD_CONST","nodes":[]}`)},
+		{"raw JavaScript", "HFIR_TRANSPORT_INVALID", []byte(`{"schema_version":"hfir-model-adapter/v1","graph_version":"v1","entry_node":"program","js_source":"alert(1)","nodes":[]}`)},
+		{"raw Wasm", "HFIR_TRANSPORT_INVALID", []byte(`{"schema_version":"hfir-model-adapter/v1","graph_version":"v1","entry_node":"program","wasm":"(module)","nodes":[]}`)},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			candidate, diagnostics := DecodeCandidate(test.payload)
+			if candidate.Graph != nil || len(diagnostics) != 1 || diagnostics[0].Code != test.code {
+				t.Fatalf("DecodeCandidate() = (%#v, %#v), want fail-closed %s", candidate, diagnostics, test.code)
+			}
+		})
+	}
+}
+
 func TestCandidateCannotGrantEnvironmentCapability(t *testing.T) {
 	candidate := mustCandidate(t, candidateTransport{
 		SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program",

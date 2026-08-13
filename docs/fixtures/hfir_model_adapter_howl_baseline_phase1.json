@@ -1,0 +1,12 @@
+{
+  "arithmetic_print": "(print (* 7 6))",
+  "classify_positive": "(let ((n 5)) (if (> n 0) (print \"positive\") (print \"not-positive\")))",
+  "list_transform_append_join": "(let ((items (list \"red\" \"green\"))) (print (join (append items \"blue\") \",\")))",
+  "dictionary_update_get": "(let ((profile (dict \"name\" \"Ada\"))) (set profile \"name\" \"Grace\") (print (get profile \"name\")))",
+  "split_join": "(print (join (split \"red,green,blue\" \",\") \" | \"))",
+  "env_branch": "(if (= (env \"HOWL_MODE\") \"debug\") (print \"debug\") (print \"default\"))",
+  "exit_status": "(exit 7)",
+  "nested_condition": "(let ((n 12)) (if (> n 0) (if (> n 10) (print \"large-positive\") (print \"small-positive\")) (print \"not-positive\")))",
+  "list_length": "(print (length (list \"a\" \"b\" \"c\")))",
+  "dictionary_delete": "(let ((profile (dict \"name\" \"Ada\" \"role\" \"admin\"))) (delete profile \"role\") (print (get profile \"name\")))"
+}
