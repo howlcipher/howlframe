@@ -54,7 +54,7 @@ Hello from HowlFrame
 
 The compiler pipeline provides semantic feedback. Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted. The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. 
 
-The standalone bytecode target enforces this against an authoritative construct-support registry, so anything it cannot lower fails before an artifact is written rather than being silently dropped. The repository also has an internal, directly executable HFIR Phase-1 subset used for differential conformance evidence; public builds still use the AST bytecode compiler. See [HFIR execution status](docs/hfir_execution_status.md).
+The standalone bytecode target enforces this against an authoritative construct-support registry, so anything it cannot lower fails before an artifact is written rather than being silently dropped. The repository also has an internal, directly executable HFIR Phase-1 subset used for differential conformance evidence and bounded failure-localization experiments; public builds still use the AST bytecode compiler. See [HFIR execution status](docs/hfir_execution_status.md) and [HFIR failure-localization status](docs/hfir_failure_localization_status.md).
 
 ## Security / authority model
 

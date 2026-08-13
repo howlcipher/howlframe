@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+* Internal HFIR failure-localization evidence: direct-lowering instruction
+  provenance, a runner-bounded execution trace, fail-closed behavioral and
+  runtime localization, and an automatically derived repair context for the
+  bounded semantic-repair experiment. Durable HFBC artifacts and public
+  AST-backed builds remain unchanged.
 * An internal Phase-1 `HFIR -> BCProgram` lowering path that consumes semantic
   HFIR directly, with explicit operand-role normalization, deterministic
   differential artifact/VM evidence, capability consistency checks, preserved

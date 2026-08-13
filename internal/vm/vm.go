@@ -982,6 +982,36 @@ type BCVM struct {
 	Out         io.Writer
 	ErrOut      io.Writer
 	lineReader  *bufio.Reader
+	trace       *boundedTrace
+}
+
+type boundedTrace struct {
+	limit     int
+	events    []bytecode.ExecutionTraceEvent
+	truncated bool
+}
+
+func (trace *boundedTrace) record(ip int, inst bytecode.BCInstruction, prog *bytecode.BCProgram) {
+	if trace == nil {
+		return
+	}
+	if trace.limit <= 0 || len(trace.events) >= trace.limit {
+		trace.truncated = true
+		return
+	}
+	opcode := inst.OpString
+	if spec, ok := bytecode.Registry[inst.Op]; ok {
+		opcode = spec.Name
+	}
+	nodeID, _ := prog.TrustedMainOriginAt(ip)
+	trace.events = append(trace.events, bytecode.ExecutionTraceEvent{Instruction: ip, Opcode: opcode, NodeID: nodeID})
+}
+
+func (trace *boundedTrace) branch(taken bool) {
+	if trace == nil || len(trace.events) == 0 {
+		return
+	}
+	trace.events[len(trace.events)-1].BranchTaken = &taken
 }
 
 type bcStoreRegistry struct {
@@ -1052,6 +1082,21 @@ func RunBytecode(prog *bytecode.BCProgram, cliArgs []string, allowedCaps []capab
 // trusted runner. Capabilities remain an independent grant: increasing a
 // resource limit does not authorize any external effect.
 func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
+	evidence := RunBytecodeWithEvidence(prog, cliArgs, policy, allowedCaps, in, out, errOut, 0)
+	if evidence.RuntimeFailure != nil {
+		if errOut == nil {
+			errOut = os.Stderr
+		}
+		fmt.Fprintln(errOut, mustVMErrorString(evidence.RuntimeFailure))
+		os.Exit(1)
+	}
+	return evidence.ExitCode
+}
+
+// RunBytecodeWithEvidence executes bytecode without process termination and
+// returns a bounded runner-owned trace for trusted consumers such as HFIR
+// failure localization. traceLimit is a runner policy, never program input.
+func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer, traceLimit int) (evidence bytecode.ExecutionEvidence) {
 	vm := &BCVM{
 		prog:        prog,
 		env:         NewBcEnv(nil),
@@ -1063,6 +1108,7 @@ func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy Ex
 		In:          in,
 		Out:         out,
 		ErrOut:      errOut,
+		trace:       &boundedTrace{limit: traceLimit},
 	}
 	if vm.In == nil {
 		vm.In = os.Stdin
@@ -1076,22 +1122,30 @@ func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy Ex
 	vm.lineReader = bufio.NewReader(vm.In)
 
 	defer func() {
+		evidence.Trace = append([]bytecode.ExecutionTraceEvent(nil), vm.trace.events...)
+		evidence.TraceTruncated = vm.trace.truncated
 		if r := recover(); r != nil {
 			if exit, ok := r.(VmExit); ok {
-				exitCode = exit.code
+				evidence.ExitCode = exit.code
 				return
 			}
 			if vmerr, ok := r.(*VMError); ok {
-				fmt.Fprintln(vm.ErrOut, vmerr.Error())
-				os.Exit(1)
+				if nodeID, ok := prog.TrustedMainOriginAt(vmerr.Instruction); ok {
+					vmerr.NodeID = nodeID
+				}
+				evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: vmerr.Code, Instruction: vmerr.Instruction, Opcode: vmerr.Opcode, NodeID: vmerr.NodeID, Message: vmerr.Message}
+				return
 			}
-			fmt.Fprintf(vm.ErrOut, "VM internal panic: %v\n", r)
-			os.Exit(1)
+			evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: "VM_INTERNAL", Instruction: vm.ip, Message: fmt.Sprintf("%v", r)}
 		}
 	}()
 
 	vm.run(vm.insts, vm.env)
-	return 0
+	return evidence
+}
+
+func mustVMErrorString(failure *bytecode.RuntimeFailure) string {
+	return (&VMError{Phase: "runtime", Code: failure.Code, Function: "main", Instruction: failure.Instruction, Opcode: failure.Opcode, NodeID: failure.NodeID, Message: failure.Message}).Error()
 }
 
 func (vm *BCVM) push(v any) {
@@ -1165,6 +1219,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 	for ip < len(insts) {
 		vm.ip = ip
 		inst := insts[ip]
+		vm.trace.record(ip, inst, vm.prog)
 		// MaxInstructions is the maximum number of instructions allowed. Check
 		// before incrementing so an exact budget succeeds and even MaxInt cannot
 		// overflow into effectively unlimited execution.
@@ -1703,9 +1758,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpJumpIfFalse:
 			cond := vm.pop(inst.Op)
 			if !BcToBool(cond) {
+				vm.trace.branch(true)
 				ip += int(inst.IntOperand)
 				continue
 			}
+			vm.trace.branch(false)
 		case bytecode.OpJump:
 			ip += int(inst.IntOperand)
 			continue

@@ -12,6 +12,7 @@ type VMError struct {
 	Function    string `json:"function"`
 	Instruction int    `json:"instruction"`
 	Opcode      string `json:"opcode,omitempty"`
+	NodeID      string `json:"node_id,omitempty"`
 	Message     string `json:"message"`
 }
 

@@ -36,6 +36,9 @@ func LowerToBytecode(graph *Graph) (*bytecode.BCProgram, []Diagnostic) {
 		return nil, []Diagnostic{*diagnostic}
 	}
 	compiler.prog.Main = insts
+	if !compiler.prog.AttachTrustedMainOrigins() {
+		return nil, []Diagnostic{compiler.diagnostic(entry, "direct HFIR lowering produced incomplete instruction provenance")}
+	}
 	return compiler.prog, nil
 }
 
@@ -45,14 +48,29 @@ type bytecodeLowerer struct {
 	compiling map[NodeID]bool
 }
 
-func (c *bytecodeLowerer) compile(node *Node) ([]bytecode.BCInstruction, *Diagnostic) {
+func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruction, diagnostic *Diagnostic) {
 	if node == nil {
-		diagnostic := c.diagnostic(nil, "HFIR node is missing")
-		return nil, &diagnostic
+		value := c.diagnostic(nil, "HFIR node is missing")
+		return nil, &value
 	}
+	defer func() {
+		if diagnostic != nil {
+			return
+		}
+		for index := range instructions {
+			if instructions[index].OpString == "" {
+				continue
+			}
+			// Children return with their own marker. Instructions emitted by this
+			// node receive its canonical semantic identity here.
+			if !bytecode.HasSemanticOrigin(instructions[index]) {
+				bytecode.SetSemanticOrigin(&instructions[index], string(node.ID))
+			}
+		}
+	}()
 	if c.compiling[node.ID] {
-		diagnostic := c.diagnostic(node, "cyclic data dependency cannot be lowered to bytecode")
-		return nil, &diagnostic
+		value := c.diagnostic(node, "cyclic data dependency cannot be lowered to bytecode")
+		return nil, &value
 	}
 	c.compiling[node.ID] = true
 	defer delete(c.compiling, node.ID)
