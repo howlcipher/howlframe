@@ -80,3 +80,36 @@ Date: 2026-08-12
 
 ### Next step
 - Handle the EXISTING `v0.1.0` tag by downloading its previously built workflow artifacts and publishing them manually using `gh release create`.
+
+## Phase 5 - Handle EXISTING v0.1.0 safely
+
+### What I inspected
+- The `v0.1.0` tag GitHub Action run ID.
+- The workflow artifacts containing binaries and `.sha256` files.
+
+### What I found
+- The binaries produced by the `v0.1.0` tag run were intact and downloadable via `gh run download`.
+- `howlframe version` of the downloaded Linux AMD64 artifact correctly reported `0.1.0`.
+
+### Decision made
+- Download the original workflow artifacts for `v0.1.0`.
+- Consolidate them into a single `SHA256SUMS` file as the new pipeline would do.
+- Publish a real GitHub Release for `v0.1.0` using `gh release create v0.1.0` pointing to the downloaded artifacts and `docs/releases/v0.1.0.md`.
+- No new Git tag (like `v0.1.1`) is needed because `v0.1.0` code and generated artifacts are perfectly fine.
+
+### Why
+- The invariant states that assets published as `v0.1.0` must correspond to the existing `v0.1.0` source tag. We strictly used the artifacts produced by the tag commit run.
+- It prevents dirtying the version history unnecessarily.
+
+### Files changed
+- `docs/journals/2026-08-12_v01_release_completion.md`
+
+### Validation performed
+- Ran `./howlframe version` from the extracted downloaded artifact before publishing.
+- Confirmed `gh release view v0.1.0` online state.
+
+### Result
+- `v0.1.0` is now a fully published GitHub Release with assets and checksums attached.
+
+### Next step
+- Test the release like an outsider in a clean temporary directory.
