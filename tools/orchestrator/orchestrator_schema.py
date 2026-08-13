@@ -86,6 +86,16 @@ class ForNextInstruction(BaseModel):
     int_operand: int
 
 
+class HttpReqMethodInstruction(BaseModel):
+    op: Literal["HTTP_REQ_METHOD"]
+    pass
+
+
+class HttpResHeaderInstruction(BaseModel):
+    op: Literal["HTTP_RES_HEADER"]
+    pass
+
+
 class HttpRouteInstruction(BaseModel):
     op: Literal["HTTP_ROUTE"]
     string_operand: str
@@ -320,6 +330,8 @@ Instruction = Annotated[
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
+        HttpReqMethodInstruction,
+        HttpResHeaderInstruction,
         HttpRouteInstruction,
         HttpServerServeInstruction,
         HttpServerStartInstruction,

@@ -27,6 +27,8 @@ const (
 	OpHttpServerStart
 	OpHttpRoute
 	OpHttpServerServe
+	OpHttpReqMethod
+	OpHttpResHeader
 	OpConfidence
 	OpLlmGenerate
 	OpJumpIfFalse
@@ -106,6 +108,8 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpHttpServerStart:  {Code: OpHttpServerStart, Name: "HTTP_SERVER_START", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Starts an HTTP server"},
 	OpHttpRoute:        {Code: OpHttpRoute, Name: "HTTP_ROUTE", Operands: []OperandType{OperandString, OperandString, OperandInt}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Registers an HTTP route"},
 	OpHttpServerServe:  {Code: OpHttpServerServe, Name: "HTTP_SERVER_SERVE", Operands: []OperandType{}, Pops: 0, Pushes: 0, Capability: capability.Network, Description: "Serves HTTP requests"},
+	OpHttpReqMethod:    {Code: OpHttpReqMethod, Name: "HTTP_REQ_METHOD", Operands: []OperandType{}, Pops: 0, Pushes: 1, Capability: capability.Network, Description: "Reads HTTP request method"},
+	OpHttpResHeader:    {Code: OpHttpResHeader, Name: "HTTP_RES_HEADER", Operands: []OperandType{}, Pops: 2, Pushes: 0, Capability: capability.Network, Description: "Sets HTTP response header"},
 	OpConfidence:       {Code: OpConfidence, Name: "CONFIDENCE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns confidence score for LLM generate"},
 	OpLlmGenerate:      {Code: OpLlmGenerate, Name: "LLM_GENERATE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: capability.Network, Description: "Generates text using an LLM"},
 	OpJumpIfFalse:      {Code: OpJumpIfFalse, Name: "JUMP_IF_FALSE", Operands: []OperandType{OperandInt}, Pops: 1, Pushes: 0, Description: "Jumps if top of stack is false"},

@@ -18,6 +18,8 @@
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
 | `FOR_NEXT` | string, int64 | 0 | 0 |  | Next iteration of a for loop |
+| `HTTP_REQ_METHOD` |  | 0 | 1 | network | Reads HTTP request method |
+| `HTTP_RES_HEADER` |  | 2 | 0 | network | Sets HTTP response header |
 | `HTTP_ROUTE` | string, string, int64 | 0 | 0 | network | Registers an HTTP route |
 | `HTTP_SERVER_SERVE` |  | 0 | 0 | network | Serves HTTP requests |
 | `HTTP_SERVER_START` | string | 0 | 0 | network | Starts an HTTP server |

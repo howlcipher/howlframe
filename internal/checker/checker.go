@@ -220,6 +220,14 @@ func checkJSStatement(node *ast.Node, depth int) {
 		case "binop":
 			checkJSStatement(irNode.Kids[0], depth+1)
 			checkJSStatement(irNode.Kids[1], depth+1)
+		case "try_let":
+			binds := node.Children[1]
+			valNode := binds.Children[1]
+			checkJSStatement(valNode, depth+1)
+			catchNode := node.Children[2]
+			checkJSStatement(catchNode.Children[2], depth+1)
+			successBodyCode := node.Children[3]
+			checkJSStatement(successBodyCode, depth+1)
 		case "dict":
 			for _, kid := range irNode.Kids {
 				if kid.Type != "List" || len(kid.Children) != 2 {
@@ -269,12 +277,25 @@ func checkJSStatement(node *ast.Node, depth int) {
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
 		checkJSStatement(node.Children[3], depth+1)
-	} else if head == "fetch" {
+	} else if head == "dom_value" {
+		if len(node.Children) != 2 {
+			ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "parse_json" {
 		if len(node.Children) != 3 {
-			ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
+			ast.ReportError("parse_json expects (parse_json type body)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[2], depth+1)
+	} else if head == "fetch" {
+		if len(node.Children) != 3 && len(node.Children) != 4 {
+			ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
+		if len(node.Children) == 4 {
+			checkJSStatement(node.Children[3], depth+1)
+		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
 			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
@@ -521,6 +542,16 @@ func checkGoStatement(node *ast.Node, depth int) {
 			for j := 1; j < len(node.Children); j++ {
 				checkGoStatement(node.Children[j], depth+1)
 			}
+		case "req_method":
+			if len(node.Children) != 2 {
+				ast.ReportError("req_method expects (req_method req)", node.Line, node.Column)
+			}
+		case "res_header":
+			if len(node.Children) != 3 {
+				ast.ReportError("res_header expects (res_header name value)", node.Line, node.Column)
+			}
+			checkGoStatement(node.Children[1], depth+1)
+			checkGoStatement(node.Children[2], depth+1)
 		default:
 			for j := 1; j < len(node.Children); j++ {
 				checkGoStatement(node.Children[j], depth+1)

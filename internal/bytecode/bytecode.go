@@ -253,6 +253,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			insts = append(insts, BCInstruction{OpString: "RES_JSON", Op: OpResJson})
+		case "res_header":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "HTTP_RES_HEADER", Op: OpHttpResHeader})
+		case "req_method":
+			insts = append(insts, BCInstruction{OpString: "HTTP_REQ_METHOD", Op: OpHttpReqMethod})
 		case "http_server":
 			portNode := node.Children[1]
 			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})

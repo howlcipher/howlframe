@@ -141,7 +141,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-			bodyVar := valNode.Children[2].Value
+			bodyVar := generateJSStatementRaw(valNode.Children[2], reqVar, depth+1)
 			valStr = fmt.Sprintf("JSON.parse(%s)", bodyVar)
 		} else {
 			valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
@@ -448,12 +448,22 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		attr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 		val := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
 		return fmt.Sprintf("%s.setAttribute(%s, %s)", el, attr, val)
+	} else if head == "dom_value" {
+		if len(node.Children) != 2 {
+			// ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
+		}
+		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("%s.value", el)
 	} else if head == "fetch" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
+		if len(node.Children) != 3 && len(node.Children) != 4 {
+			// ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
 		}
 		urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		if len(node.Children) == 4 {
+			bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+			return fmt.Sprintf("(await fetch(%s, { method: %s, body: %s }).then(r => r.text()))", urlStr, methodStr, bodyStr)
+		}
 		return fmt.Sprintf("(await fetch(%s, { method: %s }).then(r => r.text()))", urlStr, methodStr)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {

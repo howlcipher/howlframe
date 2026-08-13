@@ -1106,11 +1106,23 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			%s
 		}`, timesStr, bodyCode)
 	} else if head == "fetch" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("fetch expects (fetch url method)", node.Line, node.Column)
+		if len(node.Children) != 3 && len(node.Children) != 4 {
+			// ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
 		}
 		urlStr := generateStatement(node.Children[1], reqVar, depth+1)
 		methodStr := generateStatement(node.Children[2], reqVar, depth+1)
+		
+		if len(node.Children) == 4 {
+			bodyCode := generateStatement(node.Children[3], reqVar, depth+1)
+			return fmt.Sprintf(`func() ([]byte, error) {
+			req, err := http.NewRequest(%s, %s, strings.NewReader(%s))
+			if err != nil { return nil, err }
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil { return nil, err }
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}()`, methodStr, urlStr, bodyCode)
+		}
 
 		return fmt.Sprintf(`func() ([]byte, error) {
 			req, err := http.NewRequest(%s, %s, nil)
@@ -1225,6 +1237,19 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
 			return res.Response
 		}()`, promptVar)
+	} else if head == "req_method" {
+		if len(node.Children) != 2 {
+			// ast.ReportError("req_method expects (req_method req)", node.Line, node.Column)
+		}
+		reqVarName := node.Children[1].Value
+		return fmt.Sprintf("%s.Method", reqVarName)
+	} else if head == "res_header" {
+		if len(node.Children) != 3 {
+			// ast.ReportError("res_header expects (res_header name value)", node.Line, node.Column)
+		}
+		name := generateStatement(node.Children[1], reqVar, depth+1)
+		value := generateStatement(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf("w.Header().Set(%s, %s)", name, value)
 	} else if head == "optimize_block" {
 		if len(node.Children) < 4 {
 			// ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)

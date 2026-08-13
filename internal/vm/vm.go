@@ -1512,6 +1512,22 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
+		case bytecode.OpHttpReqMethod:
+			reqAny, ok := env.get("req")
+			if !ok {
+				panic("no request context")
+			}
+			req := reqAny.(*http.Request)
+			vm.push(req.Method)
+		case bytecode.OpHttpResHeader:
+			value := vm.pop(inst.Op)
+			name := vm.pop(inst.Op)
+			wAny, ok := env.get("w")
+			if !ok {
+				panic("no response writer")
+			}
+			w := wAny.(http.ResponseWriter)
+			w.Header().Set(fmt.Sprint(name), fmt.Sprint(value))
 		case bytecode.OpNeuralCircuit:
 			numInputs := int(inst.IntOperand)
 			inputs := make([]any, numInputs)

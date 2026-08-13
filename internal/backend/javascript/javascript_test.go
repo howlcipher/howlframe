@@ -16,3 +16,12 @@ func TestGenerateJSCodePreservesFloatComparison(t *testing.T) {
 		t.Fatalf("generated code did not preserve float comparison:\n%s", appCode)
 	}
 }
+
+func TestGenerateJSTryLetParseJson(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(web_app (try_let (data (parse_json Map "{}")) (catch err (print err)) (print data)))`), "test.howl").ParseExpression()
+	checker.Check(root)
+	appCode, _ := GenerateJSCode(root)
+	if !strings.Contains(appCode, `JSON.parse("{}")`) {
+		t.Fatalf("generated code did not compile parse_json correctly:\n%s", appCode)
+	}
+}

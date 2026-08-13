@@ -954,7 +954,7 @@ func isKeyword(name string) bool {
 	switch name {
 	case "if", "let", "defun", "struct", "schema", "column", "import", "test",
 		"cli_app", "http_server", "web_app", "wasm_app", "module", "route",
-		"lambda", "parse_json", "res_json", "spawn", "catch", "try_let",
+		"lambda", "parse_json", "res_json", "res_header", "req_method", "spawn", "catch", "try_let",
 		"print", "env", "read_file", "write_file", "mkdir", "exec", "call",
 		"return", "do", "while", "for", "match", "default", "set", "list",
 		"dict", "list_get", "map_get", "map_set", "map_delete", "append",

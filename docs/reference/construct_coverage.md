@@ -65,7 +65,9 @@
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
+| `req_method` | Yes | network | No | No | - | AUTHORITATIVE |
 | `res` | Yes | network | No | No | - | AUTHORITATIVE |
+| `res_header` | Yes | network | No | No | - | AUTHORITATIVE |
 | `res_json` | Yes | network | No | No | - | AUTHORITATIVE |
 | `return` | Yes | None | No | No | - | AUTHORITATIVE |
 | `schema` | No | None | No | Yes | - | AUTHORITATIVE |
