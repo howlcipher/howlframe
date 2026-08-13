@@ -1,4 +1,4 @@
-(http_server 8080
+(http_server 8090
   (route "/health" (lambda (req)
     (res_json 200 (dict ("status" "ok")))
   ))

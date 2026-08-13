@@ -48,7 +48,7 @@ func TestStatusAPI(t *testing.T) {
 	}
 
 	// Test endpoints
-	resp, err := http.Get("http://localhost:8080/health")
+	resp, err := http.Get("http://localhost:8090/health")
 	if err != nil {
 		t.Fatalf("health request failed: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestStatusAPI(t *testing.T) {
 		t.Errorf("health unexpected: %s", b)
 	}
 
-	resp, err = http.Get("http://localhost:8080/ready")
+	resp, err = http.Get("http://localhost:8090/ready")
 	if err != nil {
 		t.Fatalf("ready request failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestStatusAPI(t *testing.T) {
 		t.Errorf("ready unexpected: %s", b)
 	}
 
-	resp, err = http.Get("http://localhost:8080/config")
+	resp, err = http.Get("http://localhost:8090/config")
 	if err != nil {
 		t.Fatalf("config request failed: %v", err)
 	}

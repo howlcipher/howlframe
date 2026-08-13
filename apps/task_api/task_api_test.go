@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const baseURL = "http://localhost:8081"
+const baseURL = "http://localhost:8091"
 
 func compileBytecode(t *testing.T, srcDir, outPath string) {
 	t.Helper()

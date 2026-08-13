@@ -1,40 +1,75 @@
 # HowlFrame
 
-HowlFrame is an AI-native programming language and verified execution platform for adaptive software, designed so probabilistic reasoning can operate inside explicit deterministic boundaries.
+## What is HowlFrame?
 
-The governing principle is simple: **intent is not authority**. Adaptive operations may reason, classify, generate, rank, plan, and propose. Deterministic machinery continues to own permissions, capability grants, persistent state, irreversible mutations, invariant enforcement, verification, and approval.
+HowlFrame is an experimental AI-native language and capability-bounded execution runtime.
 
-The current toolchain includes:
+`.howl` source can compile to standalone `.hfbc` bytecode executed by the HowlFrame VM.
 
-- A lexer, parser, AST layer, semantic checker, HowlFrame Intermediate Representation (HFIR) verification gate, and flat SSA/CFG lowering pipeline.
-- Go code generation for `http_server` and `cli_app` programs.
-- JavaScript generation for `web_app` programs.
-- A WebAssembly Text prototype for `wasm_app` programs.
-- Typed SSA/CFG to WebAssembly Text serialization with `-compile-wasm`.
-- Direct AST execution for a bounded `cli_app` subset with `-run`.
-- Binary bytecode generation and VM execution with `-compile-bc` and `-run-bc`, including VM-local native stores.
+The VM enforces runner-owned capability grants and finite instruction budgets.
 
-HowlFrame still uses generated Go as its broadest backend, but the project now spans several output and execution paths. The compiler also exposes a typed SSA control-flow graph layer for future native backends, reducing dependence on human-readable intermediate code where direct execution, bytecode, or lower-level targets are a better fit. HowlFrame is experimental; target coverage is deliberately explicit, and unfinished roadmap work is documented as such.
+## Why does it exist?
 
-## Why HowlFrame?
+The governing principle is simple: **intent is not authority**.
+
+Adaptive operations may reason, classify, generate, rank, plan, and propose. Deterministic machinery continues to own permissions, capability grants, persistent state, irreversible mutations, invariant enforcement, verification, and approval.
 
 LLMs are good at producing structure, but they often lose time on syntax details, invalid APIs, and large rewrites. HowlFrame keeps the source grammar small and uniform so generation can be constrained and validated before runtime.
 
-Key design points:
+## Install
 
-- **Uniform syntax:** HowlFrame source is built from balanced S-expressions, which are easier to grammar-constrain than full-size general-purpose languages.
-- **Semantic feedback:** Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted.
-- **Explicit surface area:** The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. Coverage differs by target: the standalone bytecode target enforces this against an authoritative construct-support registry (`internal/construct`), so anything it cannot lower fails before an artifact is written rather than being silently dropped.
-- **Multiple execution paths:** The same front end can feed Go, JavaScript, WAT, direct interpretation, or bytecode depending on the root node and flags.
+### Release binaries
+Download the latest release binary for your platform from the GitHub Releases page. Extract the archive and place `howlframe` in your PATH.
 
-## Showcase / Examples
+### Build from source
+```bash
+git clone https://github.com/howlcipher/howlframe.git
+cd howlframe
+go build -o howlframe howlframe.go
+```
 
-Explore these practical examples under the `examples/` directory to see HowlFrame in action:
+## 60-second example
 
-1. [Language Tour](examples/language_tour/README.md) — Learn the syntax by reading a simple release-readiness evaluator.
-2. [Capability Lab](examples/capability_lab/README.md) — Understand the execution boundary and how capabilities (like filesystem access) are deterministically enforced.
-3. [Release Gate](examples/release_gate/README.md) — A realistic DevOps CLI application that parses signals and recommends deployment actions.
-4. [Repo Analyst](examples/repo_analyst/README.md) — A larger, multi-module reference application that analyzes codebase statistics entirely in HowlFrame.
+Write a simple program `hello.howl`:
+```lisp
+(cli_app
+  (print "Hello from HowlFrame")
+)
+```
+
+Then check, build, and run:
+
+```bash
+howlframe check hello.howl
+howlframe build hello.howl
+howlframe run hello.hfbc
+```
+
+Output:
+```
+Hello from HowlFrame
+```
+
+## How it works
+
+The compiler pipeline provides semantic feedback. Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted. The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. 
+
+The standalone bytecode target enforces this against an authoritative construct-support registry, so anything it cannot lower fails before an artifact is written rather than being silently dropped.
+
+## Security / authority model
+
+Intent is not authority.
+
+HowlFrame demonstrates an untrusted AI proposing deployment actions while standalone HowlFrame independently enforces evidence, approval, capability, and state-transition policy. 
+
+**Demo: Release Authority / Action Executor**
+AI/user proposal
+↓
+HowlFrame authority
+↓
+ALLOW / DENY / REQUIRE_APPROVAL
+↓
+bounded effect
 
 ## Applications Built With HowlFrame
 

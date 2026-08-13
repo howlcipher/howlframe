@@ -1,0 +1,1 @@
+(cli_app (let (x (dict)) (let (y (map_get x "key")) (print y))))

@@ -25,12 +25,27 @@ import (
 	"strings"
 )
 
+const Version = "0.1.0"
+const HFBCFormatVersion = "1"
+
 func init() {
 	gob.Register(float64(0))
 	gob.Register("")
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		if !strings.HasPrefix(cmd, "-") && (cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help") {
+			runSubcommand()
+			return
+		}
+		if cmd == "--version" {
+			fmt.Printf("HowlFrame %s\nHFBC format: %s\n", Version, HFBCFormatVersion)
+			return
+		}
+	}
+
 	outDir := flag.String("o", "", "output directory, or exact artifact file after input with -compile-bc or -compile-wasm")
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
@@ -453,4 +468,205 @@ func writeArtifact(path string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(path, content, 0o644)
+}
+
+func runSubcommand() {
+	if len(os.Args) < 2 {
+		printHelp()
+		os.Exit(1)
+	}
+	cmd := os.Args[1]
+
+	switch cmd {
+	case "help":
+		if len(os.Args) > 2 {
+			sub := os.Args[2]
+			switch sub {
+			case "check", "build", "run", "version", "help":
+				// Could implement specific help for subcommands, but generic help is requested
+				printHelp()
+			default:
+				printHelp()
+			}
+		} else {
+			printHelp()
+		}
+	case "version":
+		fmt.Printf("HowlFrame %s\nHFBC format: %s\n", Version, HFBCFormatVersion)
+	case "check":
+		checkSource()
+	case "build":
+		buildSource()
+	case "run":
+		runArtifact()
+	default:
+		printHelp()
+		os.Exit(1)
+	}
+}
+
+func printHelp() {
+	fmt.Println(`HowlFrame v0.1 CLI
+
+Usage:
+  howlframe <command> [arguments]
+
+Commands:
+  check     Parse, type-check, and verify a .howl file without emitting an artifact.
+  build     Compile a .howl file to a standalone .hfbc bytecode artifact.
+  run       Execute a .hfbc bytecode artifact.
+  version   Print version information.
+  help      Print this help message.
+
+Capabilities are denied by default and must be granted by the runner with --allow-caps.
+Example: howlframe run app.hfbc --allow-caps filesystem,network -- arg1 arg2`)
+}
+
+func checkSource() {
+	checkFlags := flag.NewFlagSet("check", flag.ExitOnError)
+	checkFlags.Usage = func() {
+		fmt.Println("Usage: howlframe check <source.howl>")
+	}
+	checkFlags.Parse(os.Args[2:])
+
+	if checkFlags.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "Missing source file")
+		checkFlags.Usage()
+		os.Exit(1)
+	}
+
+	inputFile := checkFlags.Arg(0)
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	lx := lexer.NewLexer(string(content))
+	p := parser.NewParser(lx, filepath.Base(inputFile))
+	root := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+	}
+
+	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+	ast.ResolveModules(root)
+	ast.ApplyPatches(root)
+	root = ast.ApplyWithContext(root, nil)
+	root = ast.ApplyWithContext(root, nil)
+	_ = checker.Check(root)
+
+	hfirModule := filepath.Base(inputFile)
+	runHFIRGate(root, hfirModule, hfirTargetNone)
+
+	fmt.Printf("OK: %s\n", inputFile)
+}
+
+func buildSource() {
+	buildFlags := flag.NewFlagSet("build", flag.ExitOnError)
+	outPath := buildFlags.String("o", "", "output artifact file path")
+
+	buildFlags.Usage = func() {
+		fmt.Println("Usage: howlframe build <source.howl> [-o <output.hfbc>]")
+		buildFlags.PrintDefaults()
+	}
+	buildFlags.Parse(os.Args[2:])
+
+	if buildFlags.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "Missing source file")
+		buildFlags.Usage()
+		os.Exit(1)
+	}
+
+	inputFile := buildFlags.Arg(0)
+	outFile := *outPath
+	if outFile == "" {
+		if output := outputFlagAfterInput(os.Args[2:], inputFile); output != "" {
+			outFile = output
+		} else {
+			outFile = strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile)) + ".hfbc"
+		}
+	}
+
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	lx := lexer.NewLexer(string(content))
+	p := parser.NewParser(lx, filepath.Base(inputFile))
+	root := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+	}
+
+	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+	ast.ResolveModules(root)
+	ast.ApplyPatches(root)
+	root = ast.ApplyWithContext(root, nil)
+	root = ast.ApplyWithContext(root, nil)
+	_ = checker.Check(root)
+
+	hfirModule := filepath.Base(inputFile)
+	runHFIRGate(root, hfirModule, hfirTargetBytecode)
+
+	prog := bytecode.CompileToBytecode(root)
+	var buf bytes.Buffer
+	if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to encode bytecode: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeArtifact(outFile, buf.Bytes()); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Built %s\n", outFile)
+}
+
+func runArtifact() {
+	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
+	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,process,environment,database)")
+	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
+
+	runFlags.Usage = func() {
+		fmt.Println("Usage: howlframe run <artifact.hfbc> [options] [-- arguments...]")
+		runFlags.PrintDefaults()
+	}
+	runFlags.Parse(os.Args[2:])
+
+	if runFlags.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "Missing artifact file")
+		runFlags.Usage()
+		os.Exit(1)
+	}
+
+	inputFile := runFlags.Arg(0)
+	var programArgs []string
+	if runFlags.NArg() > 1 {
+		programArgs = runFlags.Args()[1:]
+	}
+
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	prog, err := bytecode.ReadArtifact(bytes.NewReader(content))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot parse bytecode: %v\n", err)
+		os.Exit(1)
+	}
+
+	executionPolicy := vm.DefaultExecutionPolicy()
+	if *maxInst <= 0 {
+		fmt.Fprintln(os.Stderr, "-max-instructions must be greater than zero")
+		os.Exit(1)
+	}
+	executionPolicy.Limits.MaxInstructions = *maxInst
+
+	os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 }
