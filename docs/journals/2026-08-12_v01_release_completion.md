@@ -219,3 +219,33 @@ Date: 2026-08-12
 
 ### Next step
 - Create the `v0.1` status report.
+
+## Phase 13 & 14 - Project Status Report and Feature Decision
+
+### What I inspected
+- The current state of `v0.1`.
+- The documented user experience, missing parts, and backlog.
+
+### What I found
+- A comprehensive project status report is needed to summarize the baseline.
+- No concrete code blockers were discovered during the clean outsider tests or documentation audit, apart from the CLI help text which was already fixed.
+
+### Decision made
+- Created `docs/v0.1_project_status.md` outlining what v0.1 proves, what it does not prove, and the criteria for v0.2.
+- Decided to add NO speculative code features in this task.
+
+### Why
+- The core goal of this task was establishing the evidence-based project baseline and finishing the release publication, not adding new capabilities.
+
+### Files changed
+- `docs/v0.1_project_status.md` (new)
+- `docs/journals/2026-08-12_v01_release_completion.md`
+
+### Validation performed
+- Verified report covers all requested headings concisely.
+
+### Result
+- The project status is cleanly documented.
+
+### Next step
+- Full final validation run and PR creation.
