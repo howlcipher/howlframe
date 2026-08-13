@@ -50,8 +50,12 @@ func TestPhase3CLargeSemanticCorpusExecutes(t *testing.T) {
 				GraphHash: scenario.candidate.Hash, GraphVersion: scenario.candidate.Graph.Version,
 				Execution: &evidence, ExpectedOutcome: scenario.expected, ActualOutcome: stdout.String(),
 			})
-			if len(diagnostics) != 0 {
+			ambiguous := len(diagnostics) == 1 && diagnostics[0].Code == "HFIR_LOCALIZATION_AMBIGUOUS_STATE_CAUSE"
+			if len(diagnostics) != 0 && !ambiguous {
 				t.Fatalf("LocalizeFailure() diagnostics = %#v", diagnostics)
+			}
+			if ambiguous && (region.NegativeState == nil || len(region.NegativeState.CandidateNodeIDs) != 2) {
+				t.Fatalf("ambiguous state result = %#v", region.NegativeState)
 			}
 
 			// Read test-only truth only after production localization completes.
@@ -86,7 +90,11 @@ func TestPhase3CLargeSemanticCorpusExecutes(t *testing.T) {
 				assertCandidateOutput(t, updated, scenario.expected)
 				repaired = true
 			}
-			t.Logf("nodes=%d truth=%v editable=%v precision=%.3f recall=%.3f full_graph_bytes=%d context_bytes=%d core_bytes=%d delta_bytes=%d closure=%d/%d repaired=%t", len(scenario.candidate.Graph.Nodes), scenario.groundTruth, region.Context.EditableNodeIDs, float64(matched)/float64(len(region.Context.EditableNodeIDs)), float64(matched)/float64(len(scenario.groundTruth)), len(fullGraph), len(contextBytes), len(coreBytes), deltaBytes, len(closure), len(scenario.candidate.Graph.Nodes), repaired)
+			precision := 0.0
+			if len(region.Context.EditableNodeIDs) > 0 {
+				precision = float64(matched) / float64(len(region.Context.EditableNodeIDs))
+			}
+			t.Logf("nodes=%d truth=%v editable=%v precision=%.3f recall=%.3f ambiguous=%t full_graph_bytes=%d context_bytes=%d core_bytes=%d delta_bytes=%d closure=%d/%d repaired=%t", len(scenario.candidate.Graph.Nodes), scenario.groundTruth, region.Context.EditableNodeIDs, precision, float64(matched)/float64(len(scenario.groundTruth)), ambiguous, len(fullGraph), len(contextBytes), len(coreBytes), deltaBytes, len(closure), len(scenario.candidate.Graph.Nodes), repaired)
 		})
 	}
 }

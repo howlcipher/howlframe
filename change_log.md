@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+* Runner-sealed, bounded negative map-state provenance for the internal direct
+  HFIR experiment. It records completed map mutations and reads by backing-map
+  identity, proves never-present versus effectively deleted keys, and fails
+  closed on ambiguous wrong-key writers, forged evidence, or bounded-history
+  overflow. Durable HFBC and public AST-backed execution remain unchanged.
 * Internal HFIR failure-localization evidence: direct-lowering instruction
   provenance, a runner-bounded execution trace, fail-closed behavioral and
   runtime localization, and an automatically derived repair context for the

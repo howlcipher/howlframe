@@ -768,6 +768,7 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 * **Required tests:** schema conformance, malformed-output rejection, deterministic adapter fixtures, and context accounting.
 
 ### 89. Add content-addressed HFIR storage and incremental compilation
+* **Current reality (recorded 2026-08-13):** Phase 3D now provides bounded negative map-state provenance and explicit safe ambiguity for absent reads. It did not implement content-addressed storage or incremental compilation. The measured protected-hash context plus delta still exceeds full graph transport in the Phase 3C repairs, so compact authenticated repair context is the next narrow architecture problem.
 * **Description:** Store canonical nodes, modules, verification evidence, and lowered artifacts by content hash, with forward/reverse dependency indexes and reproducible artifact manifests.
 * **Why:** This is the mechanism for small repairs, bounded context, dependency-closure recompilation, and deterministic regeneration.
 * **Dependencies:** #86 and #87.

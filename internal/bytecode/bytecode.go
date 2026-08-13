@@ -51,8 +51,9 @@ type BCProgram struct {
 	// mainOrigins is an ephemeral direct-lowering sidecar. It is deliberately
 	// unexported: provenance is useful only while the trusted lowerer program
 	// remains in memory and is not a change to the HFBC artifact contract.
-	mainOrigins    []string
-	mainOriginHash [32]byte
+	mainOrigins              []string
+	mainOriginHash           [32]byte
+	mainLocalizationIdentity string
 }
 
 // ExecutionTraceEvent is runner-created execution evidence. Program code and
@@ -64,6 +65,31 @@ type ExecutionTraceEvent struct {
 	BranchTaken *bool  `json:"branch_taken,omitempty"`
 	Resource    string `json:"resource,omitempty"`
 	StateKey    string `json:"state_key,omitempty"`
+}
+
+// MapStateEvent is an ephemeral, runner-created account of completed map
+// operations. It never enters HFBC: it exists only inside sealed execution
+// evidence for bounded HFIR localization.
+type MapStateEvent struct {
+	Sequence         uint64 `json:"sequence"`
+	ResourceID       uint64 `json:"resource_id"`
+	Instruction      int    `json:"instruction"`
+	NodeID           string `json:"node_id"`
+	Operation        string `json:"operation"`
+	KeyFingerprint   string `json:"key_fingerprint,omitempty"`
+	ValueFingerprint string `json:"value_fingerprint,omitempty"`
+	VersionBefore    uint64 `json:"version_before"`
+	VersionAfter     uint64 `json:"version_after"`
+	Hit              bool   `json:"hit,omitempty"`
+	DeletedExisting  bool   `json:"deleted_existing,omitempty"`
+}
+
+// ExpectedValueObservation is an opaque host-owned oracle token. Its private
+// seal prevents JSON/model transport from inventing a value fingerprint.
+type ExpectedValueObservation struct {
+	Fingerprint string `json:"fingerprint"`
+	Value       string `json:"value"`
+	seal        [32]byte
 }
 
 // RuntimeFailure is a serializable projection of a VM failure for consumers
@@ -79,10 +105,12 @@ type RuntimeFailure struct {
 // ExecutionEvidence is bounded trusted runner output. Trace limits are set by
 // the caller, never by the program.
 type ExecutionEvidence struct {
-	ExitCode       int                   `json:"exit_code"`
-	Trace          []ExecutionTraceEvent `json:"trace"`
-	TraceTruncated bool                  `json:"trace_truncated,omitempty"`
-	RuntimeFailure *RuntimeFailure       `json:"runtime_failure,omitempty"`
+	ExitCode          int                   `json:"exit_code"`
+	Trace             []ExecutionTraceEvent `json:"trace"`
+	TraceTruncated    bool                  `json:"trace_truncated,omitempty"`
+	RuntimeFailure    *RuntimeFailure       `json:"runtime_failure,omitempty"`
+	MapStateEvents    []MapStateEvent       `json:"map_state_events,omitempty"`
+	MapLedgerComplete bool                  `json:"map_ledger_complete,omitempty"`
 
 	// seal is intentionally private. Only the VM can mint evidence accepted by
 	// the localizer; copied, JSON-decoded, or changed evidence fails closed.
@@ -90,6 +118,62 @@ type ExecutionEvidence struct {
 }
 
 var executionEvidenceKey = newExecutionEvidenceKey()
+var expectedValueKey = newExecutionEvidenceKey()
+
+// NewExpectedValueObservation mints an opaque token for a host-owned expected
+// scalar. It is intentionally useful only to in-process trusted integrations;
+// JSON-decoded or modified observations fail verification.
+func NewExpectedValueObservation(value string) ExpectedValueObservation {
+	fingerprint, _ := RuntimeValueFingerprint(value)
+	observation := ExpectedValueObservation{Fingerprint: fingerprint, Value: value}
+	observation.seal = expectedValueMAC(observation.Fingerprint + "\x00" + observation.Value)
+	return observation
+}
+
+func TrustedExpectedValueObservation(observation ExpectedValueObservation) bool {
+	expected := expectedValueMAC(observation.Fingerprint + "\x00" + observation.Value)
+	return observation.Fingerprint != "" && hmac.Equal(observation.seal[:], expected[:])
+}
+
+// RuntimeKeyFingerprint mirrors map addressing, which coerces keys through
+// fmt.Sprint before accessing map[string]any.
+func RuntimeKeyFingerprint(key string) string {
+	return runtimeFingerprint("map-key", key)
+}
+
+// RuntimeValueFingerprint admits only scalars whose runtime representation is
+// stable enough for a bounded oracle comparison.
+func RuntimeValueFingerprint(value any) (string, bool) {
+	switch typed := value.(type) {
+	case string:
+		return runtimeFingerprint("string", typed), true
+	case int:
+		return runtimeFingerprint("int", fmt.Sprint(typed)), true
+	case int64:
+		return runtimeFingerprint("int64", fmt.Sprint(typed)), true
+	case float64:
+		return runtimeFingerprint("float64", fmt.Sprint(typed)), true
+	case bool:
+		return runtimeFingerprint("bool", fmt.Sprint(typed)), true
+	case nil:
+		return runtimeFingerprint("nil", ""), true
+	default:
+		return "", false
+	}
+}
+
+func runtimeFingerprint(domain, value string) string {
+	digest := sha256.Sum256([]byte(domain + ":" + value))
+	return fmt.Sprintf("sha256:%x", digest[:])
+}
+
+func expectedValueMAC(fingerprint string) [32]byte {
+	mac := hmac.New(sha256.New, expectedValueKey[:])
+	_, _ = mac.Write([]byte(fingerprint))
+	var result [32]byte
+	copy(result[:], mac.Sum(nil))
+	return result
+}
 
 func newExecutionEvidenceKey() [32]byte {
 	var key [32]byte
@@ -119,23 +203,35 @@ func TrustedExecutionEvidence(prog *BCProgram, evidence *ExecutionEvidence) bool
 }
 
 func hasTrustedMainOrigins(prog *BCProgram) bool {
-	return prog != nil && len(prog.Main) > 0 && len(prog.mainOrigins) == len(prog.Main) && prog.mainOriginHash == mainInstructionHash(prog.Main)
+	return prog != nil && len(prog.Main) > 0 && len(prog.mainOrigins) == len(prog.Main) && prog.mainOriginHash == mainInstructionHash(prog.Main) && prog.mainLocalizationIdentity != ""
 }
 
 func executionEvidenceMAC(prog *BCProgram, evidence ExecutionEvidence) [32]byte {
 	payload := struct {
-		ProgramHash    [32]byte
-		ExitCode       int
-		Trace          []ExecutionTraceEvent
-		TraceTruncated bool
-		RuntimeFailure *RuntimeFailure
-	}{mainInstructionHash(prog.Main), evidence.ExitCode, evidence.Trace, evidence.TraceTruncated, evidence.RuntimeFailure}
+		ProgramHash       [32]byte
+		ExitCode          int
+		Trace             []ExecutionTraceEvent
+		TraceTruncated    bool
+		RuntimeFailure    *RuntimeFailure
+		MapStateEvents    []MapStateEvent
+		MapLedgerComplete bool
+	}{mainEvidenceHash(prog), evidence.ExitCode, evidence.Trace, evidence.TraceTruncated, evidence.RuntimeFailure, evidence.MapStateEvents, evidence.MapLedgerComplete}
 	encoded, _ := json.Marshal(payload)
 	mac := hmac.New(sha256.New, executionEvidenceKey[:])
 	_, _ = mac.Write(encoded)
 	var result [32]byte
 	copy(result[:], mac.Sum(nil))
 	return result
+}
+
+func mainEvidenceHash(prog *BCProgram) [32]byte {
+	payload := struct {
+		Instructions [32]byte
+		Origins      []string
+		Identity     string
+	}{mainInstructionHash(prog.Main), prog.mainOrigins, prog.mainLocalizationIdentity}
+	encoded, _ := json.Marshal(payload)
+	return sha256.Sum256(encoded)
 }
 
 // SetSemanticOrigin marks an instruction while direct HFIR lowering is in
@@ -168,6 +264,17 @@ func (prog *BCProgram) AttachTrustedMainOrigins() bool {
 	}
 	prog.mainOrigins = origins
 	prog.mainOriginHash = mainInstructionHash(prog.Main)
+	return true
+}
+
+// BindLocalizationIdentity attaches the canonical HFIR graph hash after
+// direct lowering. It is ephemeral and makes bytecode-identical graphs with
+// different semantics/provenance reject each other's execution evidence.
+func (prog *BCProgram) BindLocalizationIdentity(graphHash string) bool {
+	if prog == nil || graphHash == "" || !prog.AttachTrustedMainOrigins() {
+		return false
+	}
+	prog.mainLocalizationIdentity = graphHash
 	return true
 }
 

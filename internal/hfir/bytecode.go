@@ -36,7 +36,7 @@ func LowerToBytecode(graph *Graph) (*bytecode.BCProgram, []Diagnostic) {
 		return nil, []Diagnostic{*diagnostic}
 	}
 	compiler.prog.Main = insts
-	if !compiler.prog.AttachTrustedMainOrigins() {
+	if !compiler.prog.AttachTrustedMainOrigins() || !compiler.prog.BindLocalizationIdentity(GraphHash(graph)) {
 		return nil, []Diagnostic{compiler.diagnostic(entry, "direct HFIR lowering produced incomplete instruction provenance")}
 	}
 	return compiler.prog, nil

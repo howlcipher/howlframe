@@ -189,3 +189,15 @@ bounded diagnostic that represents the ambiguity without granting an unrelated
 writer edit authority. Do not use content addressing to conceal this failure.
 See `docs/journals/2026-08-13_hfir_localization_phase3c_decision_gate.md` for
 the full measurements and consumer evidence.
+
+# Phase 3D negative state provenance
+
+Phase 3D adds a bounded, runner-sealed map-state ledger for the direct
+execution experiment. It distinguishes a proven `NEVER_PRESENT` key from an
+effective requested-key `DELETED` state, uses backing-map identity instead of
+binding names, and records only completed operations. A uniquely matching
+host-sealed expected scalar can make one active wrong-key writer editable;
+multiple or insufficient candidates return
+`HFIR_LOCALIZATION_AMBIGUOUS_STATE_CAUSE` with read-only evidence and no
+repair context. The 53-node Phase 3C case is now explicit two-writer ambiguity,
+not an unexplained miss. See `docs/hfir_negative_state_provenance_status.md`.
