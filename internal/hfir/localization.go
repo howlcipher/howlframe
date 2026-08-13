@@ -24,12 +24,12 @@ type LocalizationEvidence struct {
 type SelectionReason string
 
 const (
-	SelectionDiagnostic    SelectionReason = "diagnostic"
-	SelectionRuntime       SelectionReason = "runtime_origin"
-	SelectionBehavioral    SelectionReason = "behavioral_output"
-	SelectionDependency    SelectionReason = "behavioral_dependency"
-	SelectionLastWriter    SelectionReason = "behavioral_last_writer"
-	SelectionBranchControl SelectionReason = "executed_branch_control"
+	SelectionRuntime          SelectionReason = "RUNTIME_ERROR_ORIGIN"
+	SelectionBehavioral       SelectionReason = "OUTPUT_ANCHOR"
+	SelectionDependency       SelectionReason = "DIRECT_DATA_DEPENDENCY"
+	SelectionExecutedProducer SelectionReason = "EXECUTED_VALUE_PRODUCER"
+	SelectionLastWriter       SelectionReason = "LAST_STATE_WRITER"
+	SelectionBranchControl    SelectionReason = "EXECUTED_BRANCH_CONDITION"
 )
 
 // CandidateSelection is deterministic explanatory evidence, not an editable
@@ -111,8 +111,15 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 	if candidate.Graph == nil || candidate.Hash == "" || GraphHash(candidate.Graph) != candidate.Hash || evidence.GraphHash != candidate.Hash || evidence.GraphVersion != candidate.Graph.Version {
 		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_STALE", "localization evidence does not match the canonical graph")}
 	}
+	program, compileDiagnostics := CompileCandidate(candidate)
+	if len(compileDiagnostics) != 0 {
+		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "current graph cannot reproduce trusted direct lowering")}
+	}
+	if evidence.Execution != nil && !bytecode.TrustedExecutionEvidence(program, evidence.Execution) {
+		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "execution evidence was not minted for the current direct-lowered graph")}
+	}
 	selections := make(map[NodeID]SelectionReason)
-	repairSeeds := make(map[NodeID]bool)
+	core := make(map[NodeID]bool)
 	add := func(id NodeID, reason SelectionReason) {
 		if id != "" && candidate.Graph.NodeByID(id) != nil {
 			if _, exists := selections[id]; !exists {
@@ -120,12 +127,9 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 			}
 		}
 	}
-	for _, diagnostic := range evidence.Diagnostics {
-		add(diagnostic.RelatedNode, SelectionDiagnostic)
-		if diagnostic.RelatedNode != "" {
-			repairSeeds[diagnostic.RelatedNode] = true
-		}
-	}
+	// Diagnostics are intentionally not localization seeds. They are exported
+	// transport data and have no runner seal; accepting them would let a model
+	// name any canonical node. Runtime evidence is the trusted semantic path.
 	if evidence.Execution != nil && evidence.Execution.RuntimeFailure != nil {
 		failure := evidence.Execution.RuntimeFailure
 		if failure.Code == "CAPABILITY_DENIED" || failure.Code == "LIMIT_EXCEEDED" {
@@ -135,7 +139,7 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 			return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "runtime failure has no verified HFIR origin")}
 		}
 		add(NodeID(failure.NodeID), SelectionRuntime)
-		repairSeeds[NodeID(failure.NodeID)] = true
+		core[NodeID(failure.NodeID)] = true
 	}
 	if evidence.ExpectedOutcome != evidence.ActualOutcome {
 		if evidence.Execution == nil || evidence.Execution.TraceTruncated {
@@ -146,38 +150,40 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 			return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_BEHAVIOR", "behavioral mismatch has no traced output or exit origin")}
 		}
 		add(anchor, SelectionBehavioral)
-		dependencies := dataClosure(candidate.Graph, anchor, 2)
+		executed := executedNodeIDs(evidence.Execution.Trace)
+		dependencies := executedDataClosure(candidate.Graph, anchor, executed)
 		for _, dependency := range dependencies {
-			add(dependency, SelectionDependency)
+			add(dependency, SelectionExecutedProducer)
 		}
 		writers := lastWriters(candidate.Graph, evidence.Execution.Trace, anchor)
 		for _, writer := range writers {
 			add(writer, SelectionLastWriter)
-			repairSeeds[writer] = true
-			for _, dependency := range dataClosure(candidate.Graph, writer, 1) {
+			for _, dependency := range executedDataClosure(candidate.Graph, writer, executed) {
 				add(dependency, SelectionDependency)
-				repairSeeds[dependency] = true
+				if isLeaf(candidate.Graph, dependency) {
+					core[dependency] = true
+				}
 			}
 		}
 		if len(writers) == 0 {
-			repairSeeds[anchor] = true
 			for _, dependency := range dependencies {
-				repairSeeds[dependency] = true
+				if isLeaf(candidate.Graph, dependency) {
+					core[dependency] = true
+				}
 			}
 		}
 		for _, condition := range executedBranchConditions(candidate.Graph, evidence.Execution.Trace, anchor) {
 			add(condition, SelectionBranchControl)
-			repairSeeds[condition] = true
 		}
 	}
 	if len(selections) == 0 {
 		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_UNAVAILABLE", "failure evidence does not identify a semantic node")}
 	}
-	targets := sortedNodeIDs(repairSeeds)
+	targets := sortedNodeIDs(core)
 	if len(targets) == 0 {
 		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_UNAVAILABLE", "failure evidence did not yield repair seeds")}
 	}
-	context, err := NewSemanticRepairContext(candidate, targets)
+	context, err := NewLocalizedRepairContext(candidate, targets)
 	if err != nil {
 		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_BOUNDS", err.Error())}
 	}
@@ -227,12 +233,46 @@ func dataClosure(graph *Graph, start NodeID, depth int) []NodeID {
 	return sortedNodeIDs(seen)
 }
 
+func executedNodeIDs(trace []bytecode.ExecutionTraceEvent) map[NodeID]bool {
+	result := make(map[NodeID]bool, len(trace))
+	for _, event := range trace {
+		if event.NodeID != "" {
+			result[NodeID(event.NodeID)] = true
+		}
+	}
+	return result
+}
+
+func executedDataClosure(graph *Graph, start NodeID, executed map[NodeID]bool) []NodeID {
+	seen := make(map[NodeID]bool)
+	var visit func(NodeID)
+	visit = func(id NodeID) {
+		node := graph.NodeByID(id)
+		if node == nil {
+			return
+		}
+		for _, input := range node.DataInputs {
+			if !seen[input.SourceNode] && executed[input.SourceNode] {
+				seen[input.SourceNode] = true
+				visit(input.SourceNode)
+			}
+		}
+	}
+	visit(start)
+	return sortedNodeIDs(seen)
+}
+
+func isLeaf(graph *Graph, id NodeID) bool {
+	node := graph.NodeByID(id)
+	return node != nil && len(node.DataInputs) == 0
+}
+
 func lastWriters(graph *Graph, trace []bytecode.ExecutionTraceEvent, anchor NodeID) []NodeID {
 	anchorNode := graph.NodeByID(anchor)
 	if anchorNode == nil {
 		return nil
 	}
-	var resource string
+	var resource, key string
 	if anchorNode.Kind == "print" && len(anchorNode.DataInputs) == 1 {
 		value := graph.NodeByID(anchorNode.DataInputs[0].SourceNode)
 		if value != nil && value.Kind == "map_get" {
@@ -242,11 +282,32 @@ func lastWriters(graph *Graph, trace []bytecode.ExecutionTraceEvent, anchor Node
 	if resource == "" {
 		return nil
 	}
-	for index := len(trace) - 1; index >= 0; index-- {
-		node := graph.NodeByID(NodeID(trace[index].NodeID))
-		if node != nil && (node.Kind == "map_set" || node.Kind == "map_delete") && node.Value == resource {
-			return []NodeID{node.ID}
+	for _, event := range trace {
+		if event.NodeID != "" && graph.NodeByID(NodeID(event.NodeID)) != nil && graph.NodeByID(NodeID(event.NodeID)).Kind == "map_get" && event.Resource == resource {
+			key = event.StateKey
 		}
+	}
+	if key == "" {
+		return nil
+	}
+	var fallback NodeID
+	for index := len(trace) - 1; index >= 0; index-- {
+		event := trace[index]
+		node := graph.NodeByID(NodeID(event.NodeID))
+		if node != nil && (node.Kind == "map_set" || node.Kind == "map_delete") && event.Resource == resource {
+			if fallback == "" {
+				fallback = node.ID
+			}
+			if event.StateKey == key {
+				return []NodeID{node.ID}
+			}
+		}
+	}
+	// A failed lookup has no matching writer. The final writer for the same
+	// resource is the bounded fallback for a likely wrong-key mutation; a
+	// matching-key writer always wins over later unrelated-key mutations.
+	if fallback != "" {
+		return []NodeID{fallback}
 	}
 	return nil
 }

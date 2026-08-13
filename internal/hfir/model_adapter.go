@@ -89,9 +89,13 @@ type Candidate struct {
 // RepairContext names the only graph region a repair may modify. It is made by
 // trusted machinery after a diagnostic; models do not choose its hash or set.
 type RepairContext struct {
-	GraphHash               string            `json:"graph_hash"`
-	ExpectedGraphVersion    string            `json:"expected_graph_version,omitempty"`
-	TargetNodeIDs           []NodeID          `json:"target_node_ids"`
+	GraphHash            string   `json:"graph_hash"`
+	ExpectedGraphVersion string   `json:"expected_graph_version,omitempty"`
+	TargetNodeIDs        []NodeID `json:"target_node_ids"`
+	// CoreNodeIDs are the only nodes a localized behavioral repair may edit.
+	// Neighborhood can carry read-only semantic evidence without widening
+	// authority to replace it.
+	CoreNodeIDs             []NodeID          `json:"core_node_ids,omitempty"`
 	EditableNodeIDs         []NodeID          `json:"editable_node_ids,omitempty"`
 	Neighborhood            []NodeID          `json:"neighborhood"`
 	Nodes                   []RepairNodeView  `json:"nodes"`
@@ -309,12 +313,54 @@ func NewSemanticRepairContext(candidate Candidate, targets []NodeID) (RepairCont
 		GraphHash:               candidate.Hash,
 		ExpectedGraphVersion:    candidate.Graph.Version,
 		TargetNodeIDs:           targetIDs,
+		CoreNodeIDs:             regionIDs,
 		EditableNodeIDs:         regionIDs,
 		Neighborhood:            regionIDs,
 		Nodes:                   views,
 		AllowedReferenceNodeIDs: regionIDs,
 		ProtectedNodeHashes:     protected,
 		MaxOperations:           maxRepairOperations,
+	}
+	context.integrityHash = semanticRepairContextHash(context)
+	return context, nil
+}
+
+// NewLocalizedRepairContext creates a strict executed-path repair boundary.
+// Unlike Phase 2's diagnostic context, it never adds static consumers or
+// producers: the supplied core is already derived from trusted execution
+// evidence. Nodes outside it remain hash protected, including explanatory
+// context carried in CandidateRepairRegion.Selections.
+func NewLocalizedRepairContext(candidate Candidate, core []NodeID) (RepairContext, error) {
+	if candidate.Graph == nil || candidate.Hash == "" || GraphHash(candidate.Graph) != candidate.Hash {
+		return RepairContext{}, fmt.Errorf("current canonical candidate graph is required")
+	}
+	if len(core) == 0 || len(core) > maxRepairRegionNodes {
+		return RepairContext{}, fmt.Errorf("localized repair core is outside the %d-node limit", maxRepairRegionNodes)
+	}
+	coreSet := make(map[NodeID]bool, len(core))
+	for _, id := range core {
+		if id == "" || candidate.Graph.NodeByID(id) == nil || coreSet[id] {
+			return RepairContext{}, fmt.Errorf("localized repair core is invalid")
+		}
+		coreSet[id] = true
+	}
+	ids := sortedNodeIDs(coreSet)
+	protected := make(map[NodeID]string, len(candidate.Graph.Nodes)-len(ids))
+	for _, node := range candidate.Graph.Nodes {
+		if !coreSet[node.ID] {
+			protected[node.ID] = NodeHash(node)
+		}
+	}
+	views := make([]RepairNodeView, 0, len(ids))
+	for _, id := range ids {
+		node := candidate.Graph.NodeByID(id)
+		views = append(views, RepairNodeView{ID: node.ID, Kind: node.Kind, Value: node.Value, Inputs: append([]DataEdge(nil), node.DataInputs...)})
+	}
+	context := RepairContext{
+		GraphHash: candidate.Hash, ExpectedGraphVersion: candidate.Graph.Version,
+		TargetNodeIDs: ids, CoreNodeIDs: ids, EditableNodeIDs: ids,
+		Neighborhood: ids, Nodes: views, AllowedReferenceNodeIDs: ids,
+		ProtectedNodeHashes: protected, MaxOperations: maxRepairOperations,
 	}
 	context.integrityHash = semanticRepairContextHash(context)
 	return context, nil
@@ -341,7 +387,16 @@ func ApplyRepair(candidate Candidate, context RepairContext, data []byte) (Candi
 		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair graph precondition does not match", "")}
 	}
 	if phaseTwo {
-		expected, err := NewSemanticRepairContext(candidate, context.TargetNodeIDs)
+		var expected RepairContext
+		var err error
+		if len(context.CoreNodeIDs) > 0 && !sameNodeIDSlice(context.CoreNodeIDs, context.EditableNodeIDs) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "localized repair context has inconsistent editable core", "")}
+		}
+		if len(context.CoreNodeIDs) > 0 && sameNodeIDSlice(context.TargetNodeIDs, context.CoreNodeIDs) {
+			expected, err = NewLocalizedRepairContext(candidate, context.CoreNodeIDs)
+		} else {
+			expected, err = NewSemanticRepairContext(candidate, context.TargetNodeIDs)
+		}
 		if err != nil || context.integrityHash == "" || context.integrityHash != semanticRepairContextHash(context) || !sameSemanticRepairContext(context, expected) {
 			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair context is not the trusted derived region", "")}
 		}
@@ -454,6 +509,7 @@ func sameSemanticRepairContext(actual, expected RepairContext) bool {
 	return actual.GraphHash == expected.GraphHash &&
 		actual.ExpectedGraphVersion == expected.ExpectedGraphVersion &&
 		sameNodeIDSlice(actual.TargetNodeIDs, expected.TargetNodeIDs) &&
+		sameNodeIDSlice(actual.CoreNodeIDs, expected.CoreNodeIDs) &&
 		sameNodeIDSlice(actual.EditableNodeIDs, expected.EditableNodeIDs) &&
 		sameNodeIDSlice(actual.Neighborhood, expected.Neighborhood) &&
 		sameNodeIDSlice(actual.AllowedReferenceNodeIDs, expected.AllowedReferenceNodeIDs) &&
@@ -467,6 +523,7 @@ func semanticRepairContextHash(context RepairContext) string {
 		GraphHash               string
 		ExpectedGraphVersion    string
 		TargetNodeIDs           []NodeID
+		CoreNodeIDs             []NodeID
 		EditableNodeIDs         []NodeID
 		Neighborhood            []NodeID
 		Nodes                   []RepairNodeView
@@ -475,7 +532,7 @@ func semanticRepairContextHash(context RepairContext) string {
 		MaxOperations           int
 	}{
 		GraphHash: context.GraphHash, ExpectedGraphVersion: context.ExpectedGraphVersion,
-		TargetNodeIDs: context.TargetNodeIDs, EditableNodeIDs: context.EditableNodeIDs,
+		TargetNodeIDs: context.TargetNodeIDs, CoreNodeIDs: context.CoreNodeIDs, EditableNodeIDs: context.EditableNodeIDs,
 		Neighborhood: context.Neighborhood, Nodes: context.Nodes,
 		AllowedReferenceNodeIDs: context.AllowedReferenceNodeIDs, ProtectedNodeHashes: context.ProtectedNodeHashes,
 		MaxOperations: context.MaxOperations,
