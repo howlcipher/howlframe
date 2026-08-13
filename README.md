@@ -220,6 +220,23 @@ go run howlframe.go examples/hello.howl
 go run server.go
 ```
 
+For a standalone HTTP server that accepts JSON request data, compose the
+existing JSON parser with the route request value:
+
+```lisp
+(try_let (body (parse_json Any req.body))
+  (catch err (res_json 400 (dict ("error" "invalid_json"))))
+  (res_json 200 (dict ("title" (map_get body "title"))))
+)
+```
+
+In the standalone bytecode VM, `req.body` is valid only as the input to
+`parse_json` in an HTTP route. `try_let` can turn malformed JSON into an
+application response. This is a JSON-only route-input path; it does not
+provide a general request-body value, streaming input, or a configurable
+body-size limit. Request bodies are untrusted input, so applications should
+keep payloads small and validate their decoded fields.
+
 ### Web App Logic
 
 ```lisp

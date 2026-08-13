@@ -50,6 +50,11 @@
 
 ### Changed
 
+* Documented the existing standalone HTTP JSON request composition
+  (`parse_json ... req.body` with `try_let`), its bounded scope, and the
+  JavaScript `web_app` compatibility-generation command. Added focused
+  bytecode and JavaScript-generator conformance coverage for the external
+  consumer request/response flow.
 * Completed the HowlFrame identity cutover across the repository, compiler,
   canonical Go module, `.howl` source corpus, `.hfbc` bytecode examples, HFIR
   packages and diagnostics, machine-readable namespaces, documentation,
