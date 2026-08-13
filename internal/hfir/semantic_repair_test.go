@@ -78,6 +78,71 @@ func TestSemanticRepairTransactionIsAtomicWhenLaterPreconditionFails(t *testing.
 	}
 }
 
+func TestSemanticRepairTransactionFailsClosedForBoundaryAttacks(t *testing.T) {
+	candidate := mustCandidate(t, candidateTransport{
+		SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program",
+		Nodes: []transportNode{
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
+			testNode("message", "const", "wrong", "STRING", nil),
+			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "message"}}),
+		},
+	})
+	context, err := NewSemanticRepairContext(candidate, []NodeID{"message"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validOperation := repairOperation{Operation: "replace_node", TargetNodeID: "message", ExpectedNodeHash: NodeHash(candidate.Graph.NodeByID("message")), Replacement: testNode("message", "const", "fixed", "STRING", nil)}
+	valid := mustSemanticRepairDelta(t, candidate, context, []repairOperation{validOperation})
+	protected := make(map[NodeID]string, len(context.ProtectedNodeHashes))
+	for id, hash := range context.ProtectedNodeHashes {
+		protected[id] = hash
+	}
+	protected["program"] = "stale"
+	staleGraph, err := json.Marshal(repairTransport{SchemaVersion: SemanticRepairSchemaVersion, ExpectedGraphHash: "stale", ExpectedGraphVersion: "v1", ProtectedNodeHashes: context.ProtectedNodeHashes, Operations: []repairOperation{validOperation}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	protectedMismatch, err := json.Marshal(repairTransport{SchemaVersion: SemanticRepairSchemaVersion, ExpectedGraphHash: candidate.Hash, ExpectedGraphVersion: "v1", ProtectedNodeHashes: protected, Operations: []repairOperation{validOperation}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := validOperation
+	outside.TargetNodeID = "program"
+	outside.ExpectedNodeHash = NodeHash(candidate.Graph.NodeByID("program"))
+	outside.Replacement = testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}})
+	identity := validOperation
+	identity.Replacement.ID = "program"
+	authority := validOperation
+	authority.Replacement = testNode("message", "env", "", "", []transportEdge{{Role: "value", NodeID: "message"}})
+	widenedContext := context
+	widenedContext.EditableNodeIDs = append(append([]NodeID(nil), context.EditableNodeIDs...), "program")
+	cases := []struct {
+		name     string
+		context  RepairContext
+		payload  []byte
+		wantCode string
+	}{
+		{"stale graph", context, staleGraph, "HFIR_REPAIR_STALE"},
+		{"protected hash changed", context, protectedMismatch, "HFIR_REPAIR_PROTECTED"},
+		{"outside derived region", context, mustSemanticRepairDelta(t, candidate, context, []repairOperation{outside}), "HFIR_REPAIR_SCOPE"},
+		{"context widens itself", widenedContext, valid, "HFIR_REPAIR_SCOPE"},
+		{"node identity collision", context, mustSemanticRepairDelta(t, candidate, context, []repairOperation{identity}), "HFIR_REPAIR_IMMUTABLE"},
+		{"capability self grant", context, mustSemanticRepairDelta(t, candidate, context, []repairOperation{authority}), "HFIR_REPAIR_IMMUTABLE"},
+		{"backend injection", context, []byte(strings.Replace(string(valid), `"operations":`, `"opcode":"LOAD_CONST","operations":`, 1)), "HFIR_TRANSPORT_INVALID"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			updated, diagnostics := ApplyRepair(candidate, test.context, test.payload)
+			if updated.Graph != nil || len(diagnostics) != 1 || diagnostics[0].Code != test.wantCode {
+				t.Fatalf("ApplyRepair() = (%#v, %#v), want fail-closed %s", updated, diagnostics, test.wantCode)
+			}
+			if candidate.Graph.NodeByID("message").Value != "wrong" {
+				t.Fatal("rejected repair mutated the original candidate")
+			}
+		})
+	}
+}
+
 func mustSemanticRepairDelta(t *testing.T, candidate Candidate, context RepairContext, operations []repairOperation) []byte {
 	t.Helper()
 	data, err := json.Marshal(repairTransport{
