@@ -202,3 +202,25 @@ For this restricted author and compact subset, explicit semantic roles and
 schema produced a stronger first-pass result than public source syntax. The
 sample is too small and source-documentation-sensitive to establish a general
 provider-quality claim.
+
+## Consumer regression evidence
+
+ChangeOps' current `src/changeops.howl` compiled through HowlFrame's unchanged
+public AST bytecode path into a temporary artifact successfully. No ChangeOps
+file or consumer contract changed.
+
+The local HowlBoard checkout is already two commits ahead of its remote and
+its committed generated `backend/server.go` fails `go test ./...` with
+`server.howl` source-mapped Go syntax errors (for example unresolved generated
+`if` conditions). This was reproduced without changing HowlFrame and is not
+an adapter regression. HowlFrame's own full test suite, including its
+consumer-related conformance coverage, passed. The untracked
+`howlboard/server.hfbc` was pre-existing and untouched.
+
+## Final validation
+
+Passed on the adapter branch: `gofmt -l .`, `go build ./...`, `go vet ./...`,
+`go test ./...`, `go test -race ./...`,
+`python3 -m unittest benchmarks/v2/harness/test_harness.py`,
+`go run tools/difftest/main.go`, `go run ./cmd/codegen`, `git diff --check`,
+and direct HFIR adapter/VM tests. No generated drift was observed.
