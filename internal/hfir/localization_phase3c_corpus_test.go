@@ -2,6 +2,7 @@ package hfir
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -14,12 +15,13 @@ import (
 // author. They make the scale corpus auditable without turning test labels into
 // provenance inputs.
 type phase3CScenario struct {
-	name        string
-	candidate   Candidate
-	expected    string
-	actual      string
-	groundTruth []NodeID
-	multiNode   bool
+	name         string
+	candidate    Candidate
+	expected     string
+	actual       string
+	groundTruth  []NodeID
+	replacements map[string]string
+	multiNode    bool
 }
 
 // TestPhase3CLargeSemanticCorpusExecutes is a corpus gate, not a localization
@@ -59,7 +61,32 @@ func TestPhase3CLargeSemanticCorpusExecutes(t *testing.T) {
 					matched++
 				}
 			}
-			t.Logf("nodes=%d truth=%v editable=%v precision=%.3f recall=%.3f", len(scenario.candidate.Graph.Nodes), scenario.groundTruth, region.Context.EditableNodeIDs, float64(matched)/float64(len(region.Context.EditableNodeIDs)), float64(matched)/float64(len(scenario.groundTruth)))
+			fullGraph, err := json.Marshal(transportFromGraph(scenario.candidate.Graph))
+			if err != nil {
+				t.Fatal(err)
+			}
+			contextBytes, err := json.Marshal(region.Context)
+			if err != nil {
+				t.Fatal(err)
+			}
+			coreBytes, err := json.Marshal(region.Context.Nodes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			closure := phase3CReverseDependencyClosure(scenario.candidate.Graph, scenario.groundTruth)
+			deltaBytes := 0
+			repaired := false
+			if matched == len(scenario.groundTruth) {
+				delta := restrictedAuthorDelta(t, scenario.candidate, region.Context, scenario.replacements)
+				deltaBytes = len(delta)
+				updated, diagnostics := ApplyRepair(scenario.candidate, region.Context, delta)
+				if len(diagnostics) != 0 {
+					t.Fatalf("ApplyRepair() diagnostics = %#v", diagnostics)
+				}
+				assertCandidateOutput(t, updated, scenario.expected)
+				repaired = true
+			}
+			t.Logf("nodes=%d truth=%v editable=%v precision=%.3f recall=%.3f full_graph_bytes=%d context_bytes=%d core_bytes=%d delta_bytes=%d closure=%d/%d repaired=%t", len(scenario.candidate.Graph.Nodes), scenario.groundTruth, region.Context.EditableNodeIDs, float64(matched)/float64(len(region.Context.EditableNodeIDs)), float64(matched)/float64(len(scenario.groundTruth)), len(fullGraph), len(contextBytes), len(coreBytes), deltaBytes, len(closure), len(scenario.candidate.Graph.Nodes), repaired)
 		})
 	}
 }
@@ -89,7 +116,7 @@ func phase3C25NodeStateAndListScenario(t *testing.T) phase3CScenario {
 	}
 	return phase3CScenario{
 		name: "26 nodes: independent arithmetic, map, list, and multi-output defect", candidate: candidate,
-		expected: "5\nready\nb\n5\n", actual: "5\nready\nb\n3\n", groundTruth: []NodeID{"region_c_left", "region_c_right"}, multiNode: true,
+		expected: "5\nready\nb\n5\n", actual: "5\nready\nb\n3\n", groundTruth: []NodeID{"region_c_left", "region_c_right"}, replacements: map[string]string{"1": "2", "2": "3"}, multiNode: true,
 	}
 }
 
@@ -111,7 +138,7 @@ func phase3C52NodeControlAndMapScenario(t *testing.T) phase3CScenario {
 	}
 	return phase3CScenario{
 		name: "~50 nodes: nested control, state mutation, multiple writers, and multi-output defect", candidate: candidate,
-		expected: "next\nright\nnested\n15\na-b\nready\n", actual: "next\nright\nnested\n15\na-b\n\n", groundTruth: []NodeID{"region_c_update_key", "region_c_update_value"}, multiNode: true,
+		expected: "next\nright\nnested\n15\na-b\nready\n", actual: "next\nright\nnested\n15\na-b\n\n", groundTruth: []NodeID{"region_c_update_key", "region_c_update_value"}, replacements: map[string]string{"wrong-key": "result", "wrong-value": "ready"}, multiNode: true,
 	}
 }
 
@@ -162,8 +189,35 @@ func phase3C101NodeIndependentRegionsScenario(t *testing.T) phase3CScenario {
 	}
 	return phase3CScenario{
 		name: "~100 nodes: independent regions, shared binding, and nested multi-node defect", candidate: candidate,
-		expected: expected.String(), actual: actual.String(), groundTruth: []NodeID{"region_c_left", "region_c_right"}, multiNode: true,
+		expected: expected.String(), actual: actual.String(), groundTruth: []NodeID{"region_c_left", "region_c_right"}, replacements: map[string]string{"1": "2", "2": "3"}, multiNode: true,
 	}
+}
+
+// phase3CReverseDependencyClosure is a test-only conservative work proxy. It
+// follows canonical data-input consumers only and does not assert that current
+// verification or lowering reuse any result; ApplyRepair still runs both in
+// full. The test reads groundTruth only after localization, so this cannot
+// influence the production repair region.
+func phase3CReverseDependencyClosure(graph *Graph, changed []NodeID) map[NodeID]bool {
+	closure := make(map[NodeID]bool, len(changed))
+	queue := append([]NodeID(nil), changed...)
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if closure[current] {
+			continue
+		}
+		closure[current] = true
+		for _, node := range graph.Nodes {
+			for _, input := range node.DataInputs {
+				if input.SourceNode == current {
+					queue = append(queue, node.ID)
+					break
+				}
+			}
+		}
+	}
+	return closure
 }
 
 type phase3CBuilder struct{ nodes []transportNode }

@@ -761,6 +761,7 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 
 ### 88. Define a provider-neutral HFIR model-adapter protocol
 * **Description:** Define schemas and adapter interfaces for complete HFIR, minimal verified deltas, constrained decoding, repair feedback, token accounting, and model metadata. Reuse #68 mask plans and #70 schema bridges without binding HFIR to provider token IDs.
+* **Current reality (recorded 2026-08-13):** Phase 1's deliberately bounded adapter, schema, deterministic test doubles, direct verified execution path, and repair request protocol are implemented. Broader provider integration, complete-HFIR coverage, constrained decoding integration, and provider token accounting remain pending.
 * **Why:** The orchestrator is an OpenAI-compatible local experiment. A model-agnostic platform requires providers to produce the same verified graph.
 * **Dependencies:** #86 and #87.
 * **Acceptance criteria:** valid fixture graphs pass through two adapter test doubles, invalid model output never executes, and repair requests carry bounded graph context plus stable diagnostics.
@@ -783,6 +784,7 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 
 ### 91. Add semantic patch deltas and bounded repair context
 * **Description:** Make autonomous repair operate on HFIR deltas addressed to stable IDs. Require preconditions, touched dependencies, expected invariants, and regression evidence, with compact context extracted from graph neighborhoods and diagnostics.
+* **Current reality (recorded 2026-08-13):** Bounded experimental single-kind replacement transactions, stale preconditions, protected regions, and executed-path localization are implemented for the direct Phase-1 subset. General semantic patches, stable content identities, dependency-local recomputation, and broader construct coverage remain pending.
 * **Why:** Source replacement patching is coarse. Verified graph deltas are safer, smaller, reviewable, and conflict-detectable.
 * **Dependencies:** #86, #87, and #89.
 * **Acceptance criteria:** unrelated graph regions remain byte-identical; conflicting edits fail deterministically; accepted deltas rerun affected verification and tests.
