@@ -404,3 +404,7 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 The write-cost benchmark compares the time and token cost of having an LLM produce working programs in HowlFrame, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
 
 See [docs/language_write_cost_benchmark.md](docs/language_write_cost_benchmark.md) for methodology, raw result links, limitations, and current results.
+
+## License
+
+HowlFrame is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
