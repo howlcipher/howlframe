@@ -158,7 +158,7 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 		writers := lastWriters(candidate.Graph, evidence.Execution.Trace, anchor)
 		for _, writer := range writers {
 			add(writer, SelectionLastWriter)
-			for _, dependency := range executedDataClosure(candidate.Graph, writer, executed) {
+			for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
 				add(dependency, SelectionDependency)
 				if isLeaf(candidate.Graph, dependency) {
 					core[dependency] = true
@@ -267,49 +267,111 @@ func isLeaf(graph *Graph, id NodeID) bool {
 	return node != nil && len(node.DataInputs) == 0
 }
 
+// lastWriters finds the last executed mutation that produced the state read by
+// an observed output. It intentionally derives the resource and opaque key
+// from runner-sealed trace events, never from node labels or model transport.
+// Only the executable state forms with a matching runtime observation are
+// considered; this is bounded provenance, not a dynamic taint engine.
 func lastWriters(graph *Graph, trace []bytecode.ExecutionTraceEvent, anchor NodeID) []NodeID {
 	anchorNode := graph.NodeByID(anchor)
-	if anchorNode == nil {
+	if anchorNode == nil || len(anchorNode.DataInputs) != 1 || anchorNode.DataInputs[0].Name != "value" {
 		return nil
 	}
-	var resource, key string
-	if anchorNode.Kind == "print" && len(anchorNode.DataInputs) == 1 {
-		value := graph.NodeByID(anchorNode.DataInputs[0].SourceNode)
-		if value != nil && value.Kind == "map_get" {
-			resource = value.Value
-		}
-	}
-	if resource == "" {
+	value := graph.NodeByID(anchorNode.DataInputs[0].SourceNode)
+	if value == nil {
 		return nil
 	}
-	for _, event := range trace {
-		if event.NodeID != "" && graph.NodeByID(NodeID(event.NodeID)) != nil && graph.NodeByID(NodeID(event.NodeID)).Kind == "map_get" && event.Resource == resource {
-			key = event.StateKey
-		}
-	}
-	if key == "" {
+	resource, writerKinds, ok := observedStateResource(value)
+	if !ok {
 		return nil
 	}
-	var fallback NodeID
+	anchorIndex := -1
 	for index := len(trace) - 1; index >= 0; index-- {
+		if NodeID(trace[index].NodeID) == anchor {
+			anchorIndex = index
+			break
+		}
+	}
+	if anchorIndex < 0 {
+		return nil
+	}
+	readIndex := -1
+	for index := anchorIndex - 1; index >= 0; index-- {
+		event := trace[index]
+		if NodeID(event.NodeID) == value.ID && event.Resource == resource && event.StateKey != "" {
+			readIndex = index
+			break
+		}
+	}
+	if readIndex < 0 {
+		return nil
+	}
+	key := trace[readIndex].StateKey
+	var fallback NodeID
+	fallbackAmbiguous := false
+	for index := readIndex - 1; index >= 0; index-- {
 		event := trace[index]
 		node := graph.NodeByID(NodeID(event.NodeID))
-		if node != nil && (node.Kind == "map_set" || node.Kind == "map_delete") && event.Resource == resource {
-			if fallback == "" {
-				fallback = node.ID
+		if node != nil && writerKinds[node.Kind] && event.Resource == resource {
+			if node.Kind == "map_set" || node.Kind == "map_delete" {
+				if fallback == "" {
+					fallback = node.ID
+				} else if fallback != node.ID {
+					fallbackAmbiguous = true
+				}
 			}
 			if event.StateKey == key {
 				return []NodeID{node.ID}
 			}
 		}
 	}
-	// A failed lookup has no matching writer. The final writer for the same
-	// resource is the bounded fallback for a likely wrong-key mutation; a
-	// matching-key writer always wins over later unrelated-key mutations.
-	if fallback != "" {
+	// A failed map lookup has no matching writer. A single preceding map
+	// mutation is a bounded fallback for a likely wrong-key mutation. Several
+	// possible writers are deliberately left unselected rather than guessing;
+	// matching keys always win and later writes after the read are never
+	// considered.
+	if fallback != "" && !fallbackAmbiguous {
 		return []NodeID{fallback}
 	}
 	return nil
+}
+
+func observedStateResource(node *Node) (string, map[string]bool, bool) {
+	switch node.Kind {
+	case "map_get":
+		return "map:" + node.Value, map[string]bool{"map_set": true, "map_delete": true}, node.Value != ""
+	case "symbol":
+		return "var:" + node.Value, map[string]bool{"set": true, "let": true}, node.Value != ""
+	case "list_get":
+		return "list:" + node.Value, map[string]bool{"append": true}, node.Value != ""
+	default:
+		return "", nil, false
+	}
+}
+
+// executedWriterDependencies returns only the inputs that contribute to the
+// state mutation. In particular, a let body is not a producer of the binding;
+// including it would turn a state observation into a whole-body repair region.
+func executedWriterDependencies(graph *Graph, writer NodeID, executed map[NodeID]bool) []NodeID {
+	node := graph.NodeByID(writer)
+	if node == nil {
+		return nil
+	}
+	inputs := make(map[NodeID]bool)
+	for _, input := range node.DataInputs {
+		if (node.Kind == "let" && input.Name != "value") || !executed[input.SourceNode] {
+			continue
+		}
+		inputs[input.SourceNode] = true
+	}
+	result := make(map[NodeID]bool)
+	for input := range inputs {
+		result[input] = true
+		for _, dependency := range executedDataClosure(graph, input, executed) {
+			result[dependency] = true
+		}
+	}
+	return sortedNodeIDs(result)
 }
 
 func executedBranchConditions(graph *Graph, trace []bytecode.ExecutionTraceEvent, anchor NodeID) []NodeID {

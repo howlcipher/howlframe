@@ -180,6 +180,102 @@ func TestLocalizationPrunesUnexecutedBranchAndUsesReadKeyLastWriter(t *testing.T
 	})
 }
 
+func TestLocalizationUsesSealedStateProvenanceBeyondMapKeys(t *testing.T) {
+	t.Run("set then symbol read ignores later set", func(t *testing.T) {
+		candidate := scalarStateCandidate(t, "print", true)
+		region := localizeBehavior(t, candidate, "fixed\n")
+		if !containsNodeID(region.Context.EditableNodeIDs, "defect") {
+			t.Fatalf("set producer missing from editable core %#v", region.Context.EditableNodeIDs)
+		}
+		if containsNodeID(region.Context.EditableNodeIDs, "later") {
+			t.Fatalf("later set leaked into editable core %#v", region.Context.EditableNodeIDs)
+		}
+	})
+
+	t.Run("append then list observation ignores later append", func(t *testing.T) {
+		candidate := mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: []transportNode{
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "bind"}}),
+			testNode("empty", "list", "", "", nil),
+			testNode("item", "const", "wrong", "STRING", nil), testNode("later_item", "const", "later", "STRING", nil),
+			testNode("append", "append", "items", "", []transportEdge{{Role: "item", NodeID: "item"}}),
+			testNode("index", "const", "0", "INT", nil), testNode("read", "list_get", "items", "", []transportEdge{{Role: "index", NodeID: "index"}}),
+			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "read"}}),
+			testNode("later_append", "append", "items", "", []transportEdge{{Role: "item", NodeID: "later_item"}}),
+			testNode("body", "sequence", "", "", []transportEdge{{Role: "body", NodeID: "append"}, {Role: "body", NodeID: "print"}, {Role: "body", NodeID: "later_append"}}),
+			testNode("bind", "let", "items", "", []transportEdge{{Role: "value", NodeID: "empty"}, {Role: "body", NodeID: "body"}}),
+		}})
+		region := localizeBehavior(t, candidate, "fixed\n")
+		if !containsNodeID(region.Context.EditableNodeIDs, "item") {
+			t.Fatalf("append producer missing from editable core %#v", region.Context.EditableNodeIDs)
+		}
+		if containsNodeID(region.Context.EditableNodeIDs, "later_item") {
+			t.Fatalf("later append leaked into editable core %#v", region.Context.EditableNodeIDs)
+		}
+	})
+
+	t.Run("map delete is the last matching mutation", func(t *testing.T) {
+		candidate := mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: []transportNode{
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "bind"}}), testNode("dict", "dict", "", "", nil),
+			testNode("write_key", "const", "key", "STRING", nil), testNode("delete_key", "const", "key", "STRING", nil), testNode("value", "const", "fixed", "STRING", nil),
+			testNode("write", "map_set", "record", "", []transportEdge{{Role: "key", NodeID: "write_key"}, {Role: "value", NodeID: "value"}}),
+			testNode("delete", "map_delete", "record", "", []transportEdge{{Role: "key", NodeID: "delete_key"}}), testNode("read", "map_get", "record", "", []transportEdge{{Role: "key", NodeID: "write_key"}}),
+			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "read"}}),
+			testNode("body", "sequence", "", "", []transportEdge{{Role: "body", NodeID: "write"}, {Role: "body", NodeID: "delete"}, {Role: "body", NodeID: "print"}}),
+			testNode("bind", "let", "record", "", []transportEdge{{Role: "value", NodeID: "dict"}, {Role: "body", NodeID: "body"}}),
+		}})
+		region := localizeBehavior(t, candidate, "fixed\n")
+		if !containsNodeID(region.Context.EditableNodeIDs, "delete_key") {
+			t.Fatalf("map_delete producer missing from editable core %#v", region.Context.EditableNodeIDs)
+		}
+		if containsNodeID(region.Context.EditableNodeIDs, "value") {
+			t.Fatalf("overwritten map value leaked into editable core %#v", region.Context.EditableNodeIDs)
+		}
+	})
+
+	for _, anchor := range []string{"print", "stderr", "exit"} {
+		t.Run(anchor+" anchor observes symbol state", func(t *testing.T) {
+			candidate := scalarStateCandidate(t, anchor, false)
+			program, diagnostics := CompileCandidate(candidate)
+			if len(diagnostics) != 0 {
+				t.Fatal(diagnostics)
+			}
+			evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), 64)
+			region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "expected", ActualOutcome: "actual"})
+			if len(diagnostics) != 0 {
+				t.Fatal(diagnostics)
+			}
+			if !containsNodeID(region.Context.EditableNodeIDs, "defect") {
+				t.Fatalf("%s anchor omitted set producer from %#v", anchor, region.Context.EditableNodeIDs)
+			}
+		})
+	}
+}
+
+func TestLocalizationRejectsModifiedSealedStateProvenance(t *testing.T) {
+	candidate := scalarStateCandidate(t, "print", false)
+	program, diagnostics := CompileCandidate(candidate)
+	if len(diagnostics) != 0 {
+		t.Fatal(diagnostics)
+	}
+	var stdout bytes.Buffer
+	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 64)
+	changed := false
+	for index := range evidence.Trace {
+		if evidence.Trace[index].Resource != "" {
+			evidence.Trace[index].Resource = "var:forged"
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		t.Fatal("runner did not emit state provenance")
+	}
+	_, diagnostics = LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "fixed\n", ActualOutcome: stdout.String()})
+	if len(diagnostics) != 1 || diagnostics[0].Code != "HFIR_LOCALIZATION_PROVENANCE" {
+		t.Fatalf("modified state provenance diagnostics = %#v", diagnostics)
+	}
+}
+
 func TestLocalizationRejectsForgedCanonicalEvidenceAndLimitFailures(t *testing.T) {
 	candidate := scaledBehavioralCandidate(t, 10)
 	for _, evidence := range []LocalizationEvidence{
@@ -323,6 +419,22 @@ func nestedBinaryCandidate(t *testing.T) Candidate {
 		testNode("left", "const", "1", "INT", nil), testNode("right", "const", "2", "INT", nil), testNode("tail", "const", "5", "INT", nil),
 		testNode("inner", "binary", "+", "", []transportEdge{{Role: "left", NodeID: "left"}, {Role: "right", NodeID: "right"}}), testNode("value", "binary", "+", "", []transportEdge{{Role: "left", NodeID: "inner"}, {Role: "right", NodeID: "tail"}}), testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "value"}}), testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
 	}})
+}
+
+func scalarStateCandidate(t *testing.T, anchor string, later bool) Candidate {
+	t.Helper()
+	nodes := []transportNode{
+		testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "bind"}}), testNode("initial", "const", "initial", "STRING", nil),
+		testNode("defect", "const", "wrong", "STRING", nil), testNode("set", "set", "value", "", []transportEdge{{Role: "value", NodeID: "defect"}}),
+		testNode("read", "symbol", "value", "", nil), testNode("observe", anchor, "", "", []transportEdge{{Role: "value", NodeID: "read"}}),
+	}
+	body := []transportEdge{{Role: "body", NodeID: "set"}, {Role: "body", NodeID: "observe"}}
+	if later {
+		nodes = append(nodes, testNode("later", "const", "later", "STRING", nil), testNode("later_set", "set", "value", "", []transportEdge{{Role: "value", NodeID: "later"}}))
+		body = append(body, transportEdge{Role: "body", NodeID: "later_set"})
+	}
+	nodes = append(nodes, testNode("body", "sequence", "", "", body), testNode("bind", "let", "value", "", []transportEdge{{Role: "value", NodeID: "initial"}, {Role: "body", NodeID: "body"}}))
+	return mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: nodes})
 }
 
 func mapWriterCandidate(t *testing.T) Candidate {

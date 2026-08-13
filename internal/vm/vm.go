@@ -1754,6 +1754,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(inst.ValueOperand)
 		case bytecode.OpLoadVar:
 			name := inst.StringOperand
+			vm.trace.state("var:"+name, "value")
 			if val, ok := env.get(name); ok {
 				vm.push(val)
 			} else {
@@ -1761,9 +1762,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpStoreVar:
 			name := inst.StringOperand
+			vm.trace.state("var:"+name, "value")
 			env.vars[name] = vm.pop(inst.Op)
 		case bytecode.OpSetVar:
 			name := inst.StringOperand
+			vm.trace.state("var:"+name, "value")
 			if !env.set(name, vm.pop(inst.Op)) {
 				panic("undefined variable: " + name)
 			}
@@ -1990,6 +1993,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %T", current))
 			}
+			vm.trace.state("list:"+varName, len(items))
 			newItems := append(append([]any{}, items...), item)
 			env.set(varName, newItems)
 		case bytecode.OpMapSet:
@@ -1997,7 +2001,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			val := vm.pop(inst.Op)
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state(varName, keyAny)
+			vm.trace.state("map:"+varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
@@ -2012,7 +2016,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			varName := inst.StringOperand
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state(varName, keyAny)
+			vm.trace.state("map:"+varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
@@ -2027,7 +2031,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			varName := inst.StringOperand
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state(varName, keyAny)
+			vm.trace.state("map:"+varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
@@ -2051,6 +2055,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get index must be a number, got %T", idxAny))
 			}
+			vm.trace.state("list:"+varName, idx)
 
 			current, ok := env.get(varName)
 			if !ok {
