@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://howlframe.dev/schema/hfir-model-adapter/v1.json",
+  "title": "HowlFrame HFIR Model Adapter Phase-1 Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "graph_version", "entry_node", "nodes"],
+  "properties": {
+    "schema_version": { "const": "hfir-model-adapter/v1" },
+    "graph_version": { "const": "v1" },
+    "entry_node": { "$ref": "#/$defs/node_id" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "node_id"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "node_id": { "$ref": "#/$defs/node_id" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": { "label": { "type": "string", "maxLength": 80 } }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/node_id" },
+        "kind": {
+          "enum": ["program", "sequence", "const", "symbol", "let", "set", "if", "binary", "list", "dict", "dict_entry", "print", "stderr", "exit", "convert", "list_len", "env", "str_split", "str_join", "map_get", "map_delete", "list_get", "append", "map_set"]
+        },
+        "value": { "type": "string", "maxLength": 4096 },
+        "literal_kind": { "enum": ["INT", "FLOAT", "STRING"] },
+        "inputs": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/input" } },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "const" } } }, "then": { "required": ["value", "literal_kind"], "properties": { "inputs": { "maxItems": 0 } } } },
+        { "if": { "properties": { "kind": { "const": "symbol" } } }, "then": { "required": ["value"], "properties": { "inputs": { "maxItems": 0 } } } },
+        { "if": { "properties": { "kind": { "enum": ["program", "sequence"] } } }, "then": { "properties": { "inputs": { "items": { "properties": { "role": { "const": "body" } } } } } } },
+        { "if": { "properties": { "kind": { "const": "let" } } }, "then": { "required": ["value", "inputs"], "properties": { "inputs": { "minItems": 2, "maxItems": 2, "prefixItems": [{ "properties": { "role": { "const": "value" } } }, { "properties": { "role": { "const": "body" } } }] } } } },
+        { "if": { "properties": { "kind": { "enum": ["set", "stderr", "exit", "convert", "list_len", "env"] } } }, "then": { "required": ["inputs"], "properties": { "inputs": { "minItems": 1, "maxItems": 1, "prefixItems": [{ "properties": { "role": { "const": "value" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "set" } } }, "then": { "required": ["value"] } },
+        { "if": { "properties": { "kind": { "const": "if" } } }, "then": { "required": ["inputs"], "properties": { "inputs": { "minItems": 2, "maxItems": 3, "prefixItems": [{ "properties": { "role": { "const": "condition" } } }, { "properties": { "role": { "const": "then" } } }, { "properties": { "role": { "const": "else" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "binary" } } }, "then": { "required": ["value", "inputs"], "properties": { "value": { "enum": ["+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "and", "or"] }, "inputs": { "minItems": 2, "maxItems": 2, "prefixItems": [{ "properties": { "role": { "const": "left" } } }, { "properties": { "role": { "const": "right" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "list" } } }, "then": { "properties": { "inputs": { "items": { "properties": { "role": { "const": "item" } } } } } } },
+        { "if": { "properties": { "kind": { "const": "print" } } }, "then": { "properties": { "inputs": { "items": { "properties": { "role": { "const": "value" } } } } } } },
+        { "if": { "properties": { "kind": { "const": "dict" } } }, "then": { "properties": { "inputs": { "items": { "properties": { "role": { "const": "entry" } } } } } } },
+        { "if": { "properties": { "kind": { "const": "dict_entry" } } }, "then": { "required": ["inputs"], "properties": { "inputs": { "minItems": 2, "maxItems": 2, "prefixItems": [{ "properties": { "role": { "const": "key" } } }, { "properties": { "role": { "const": "value" } } }] } } } },
+        { "if": { "properties": { "kind": { "enum": ["str_split", "str_join"] } } }, "then": { "required": ["inputs"], "properties": { "inputs": { "minItems": 2, "maxItems": 2, "prefixItems": [{ "properties": { "role": { "const": "value" } } }, { "properties": { "role": { "const": "separator" } } }] } } } },
+        { "if": { "properties": { "kind": { "enum": ["map_get", "map_delete"] } } }, "then": { "required": ["value", "inputs"], "properties": { "inputs": { "minItems": 1, "maxItems": 1, "prefixItems": [{ "properties": { "role": { "const": "key" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "list_get" } } }, "then": { "required": ["value", "inputs"], "properties": { "inputs": { "minItems": 1, "maxItems": 1, "prefixItems": [{ "properties": { "role": { "const": "index" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "append" } } }, "then": { "required": ["value", "inputs"], "properties": { "inputs": { "minItems": 1, "maxItems": 1, "prefixItems": [{ "properties": { "role": { "const": "item" } } }] } } } },
+        { "if": { "properties": { "kind": { "const": "map_set" } } }, "then": { "required": ["value", "inputs"], "properties": { "inputs": { "minItems": 2, "maxItems": 2, "prefixItems": [{ "properties": { "role": { "const": "key" } } }, { "properties": { "role": { "const": "value" } } }] } } } }
+      ]
+    }
+  }
+}

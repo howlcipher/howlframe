@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://howlframe.dev/schema/hfir-model-repair/v1.json",
+  "title": "HowlFrame HFIR Model Adapter Phase-1 Repair",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "expected_graph_hash", "operations"],
+  "properties": {
+    "schema_version": { "const": "hfir-model-repair/v1" },
+    "expected_graph_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "operations": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["operation", "target_node_id", "expected_node_hash", "replacement"],
+        "properties": {
+          "operation": { "const": "replace_node" },
+          "target_node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "expected_node_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "replacement": { "$ref": "hfir_model_adapter_phase1.schema.json#/$defs/node" }
+        }
+      }
+    }
+  }
+}
