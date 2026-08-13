@@ -19,6 +19,7 @@ type LocalizationEvidence struct {
 	Execution       *bytecode.ExecutionEvidence
 	ExpectedOutcome string
 	ActualOutcome   string
+	ExpectedValue   *bytecode.ExpectedValueObservation
 }
 
 type SelectionReason string
@@ -30,7 +31,22 @@ const (
 	SelectionExecutedProducer SelectionReason = "EXECUTED_VALUE_PRODUCER"
 	SelectionLastWriter       SelectionReason = "LAST_STATE_WRITER"
 	SelectionBranchControl    SelectionReason = "EXECUTED_BRANCH_CONDITION"
+	SelectionNegativeDelete   SelectionReason = "NEGATIVE_STATE_EFFECTIVE_DELETE"
+	SelectionNegativeValue    SelectionReason = "NEGATIVE_STATE_VALUE_MATCH"
 )
+
+const maxNegativeStateCandidates = 4
+
+// NegativeStateEvidence is runner-derived, read-only explanation for a map
+// miss. Candidate node IDs never grant authority by themselves.
+type NegativeStateEvidence struct {
+	ReaderNodeID     NodeID   `json:"reader_node_id"`
+	ResourceID       uint64   `json:"resource_id"`
+	ReadSequence     uint64   `json:"read_sequence"`
+	RequestedKey     string   `json:"requested_key_fingerprint"`
+	Cause            string   `json:"cause"`
+	CandidateNodeIDs []NodeID `json:"candidate_node_ids,omitempty"`
+}
 
 // CandidateSelection is deterministic explanatory evidence, not an editable
 // field. Rank is stable only within a single localized result.
@@ -44,12 +60,13 @@ type CandidateSelection struct {
 // supplied Phase-2 target IDs. Context retains the existing fail-closed
 // transaction contract and is recomputed by ApplyRepair.
 type CandidateRepairRegion struct {
-	GraphHash      string               `json:"graph_hash"`
-	GraphVersion   string               `json:"graph_version"`
-	RegionHash     string               `json:"region_hash"`
-	Selections     []CandidateSelection `json:"selections"`
-	Context        RepairContext        `json:"context"`
-	MaxRegionNodes int                  `json:"max_region_nodes"`
+	GraphHash      string                 `json:"graph_hash"`
+	GraphVersion   string                 `json:"graph_version"`
+	RegionHash     string                 `json:"region_hash"`
+	Selections     []CandidateSelection   `json:"selections"`
+	Context        RepairContext          `json:"context"`
+	MaxRegionNodes int                    `json:"max_region_nodes"`
+	NegativeState  *NegativeStateEvidence `json:"negative_state,omitempty"`
 }
 
 // DerivedControlRelation is an internal semantic view derived from validated
@@ -120,6 +137,7 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 	}
 	selections := make(map[NodeID]SelectionReason)
 	core := make(map[NodeID]bool)
+	var negativeState *NegativeStateEvidence
 	add := func(id NodeID, reason SelectionReason) {
 		if id != "" && candidate.Graph.NodeByID(id) != nil {
 			if _, exists := selections[id]; !exists {
@@ -152,10 +170,45 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 		add(anchor, SelectionBehavioral)
 		executed := executedNodeIDs(evidence.Execution.Trace)
 		dependencies := executedDataClosure(candidate.Graph, anchor, executed)
+		negative, negativeDiagnostic := negativeStateCandidates(candidate.Graph, evidence, anchor)
+		negativeState = negative
+		if negativeDiagnostic != nil {
+			return CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, NegativeState: negative}, []Diagnostic{*negativeDiagnostic}
+		}
+		if negative != nil {
+			// A direct absent map read is not independently editable. Its key
+			// producer is only context until an effective delete or uniquely
+			// value-correlated live writer proves a causal mutation.
+			dependencies = nil
+			if negative.Cause == "DELETED" && len(negative.CandidateNodeIDs) == 1 {
+				writer := negative.CandidateNodeIDs[0]
+				add(writer, SelectionNegativeDelete)
+				for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
+					add(dependency, SelectionDependency)
+					if isLeaf(candidate.Graph, dependency) {
+						core[dependency] = true
+					}
+				}
+			} else if negative.Cause == "VALUE_MATCH" && len(negative.CandidateNodeIDs) == 1 {
+				writer := negative.CandidateNodeIDs[0]
+				add(writer, SelectionNegativeValue)
+				for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
+					add(dependency, SelectionDependency)
+					if isLeaf(candidate.Graph, dependency) {
+						core[dependency] = true
+					}
+				}
+			} else {
+				return CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, NegativeState: negative}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_AMBIGUOUS_STATE_CAUSE", "absent map key has no uniquely proven causal writer")}
+			}
+		}
 		for _, dependency := range dependencies {
 			add(dependency, SelectionExecutedProducer)
 		}
 		writers := lastWriters(candidate.Graph, evidence.Execution.Trace, anchor)
+		if negative != nil {
+			writers = nil
+		}
 		for _, writer := range writers {
 			add(writer, SelectionLastWriter)
 			for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
@@ -187,7 +240,7 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 	if err != nil {
 		return CandidateRepairRegion{}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_BOUNDS", err.Error())}
 	}
-	result := CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Context: context, MaxRegionNodes: maxRepairRegionNodes}
+	result := CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Context: context, MaxRegionNodes: maxRepairRegionNodes, NegativeState: negativeState}
 	for index, id := range targets {
 		result.Selections = append(result.Selections, CandidateSelection{NodeID: id, Reason: selections[id], Rank: index + 1})
 	}
@@ -334,6 +387,143 @@ func lastWriters(graph *Graph, trace []bytecode.ExecutionTraceEvent, anchor Node
 		return []NodeID{fallback}
 	}
 	return nil
+}
+
+type replayedMapState struct {
+	initialized          bool
+	version              uint64
+	active               map[string]bytecode.MapStateEvent
+	lastEffectiveDeletes map[string]bytecode.MapStateEvent
+}
+
+// negativeStateCandidates replays runner-sealed completed map operations to
+// prove an observed direct map_get miss. It never interprets labels, source
+// names, or event recency as causal authority.
+func negativeStateCandidates(graph *Graph, evidence LocalizationEvidence, anchor NodeID) (*NegativeStateEvidence, *Diagnostic) {
+	reader := directMapRead(graph, anchor)
+	if reader == "" {
+		return nil, nil
+	}
+	if evidence.Execution == nil || evidence.Execution.TraceTruncated || !evidence.Execution.MapLedgerComplete {
+		diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "negative state localization requires complete sealed map history")
+		return nil, &diagnostic
+	}
+	states := make(map[uint64]*replayedMapState)
+	var previous uint64
+	for _, event := range evidence.Execution.MapStateEvents {
+		if event.Sequence != previous+1 || event.ResourceID == 0 || event.NodeID == "" {
+			diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map state ledger is not a valid monotonic runner history")
+			return nil, &diagnostic
+		}
+		previous = event.Sequence
+		state := states[event.ResourceID]
+		if state == nil {
+			state = &replayedMapState{active: make(map[string]bytecode.MapStateEvent), lastEffectiveDeletes: make(map[string]bytecode.MapStateEvent)}
+			states[event.ResourceID] = state
+		}
+		switch event.Operation {
+		case "INIT":
+			if state.initialized && state.version != 0 {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map ledger reinitializes an active resource")
+				return nil, &diagnostic
+			}
+			state.initialized = true
+			if event.KeyFingerprint != "" {
+				state.active[event.KeyFingerprint] = event
+			}
+		case "SET":
+			if !state.initialized || event.KeyFingerprint == "" || event.VersionBefore != state.version || event.VersionAfter != state.version+1 {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map set ledger version is invalid")
+				return nil, &diagnostic
+			}
+			state.version = event.VersionAfter
+			state.active[event.KeyFingerprint] = event
+			delete(state.lastEffectiveDeletes, event.KeyFingerprint)
+		case "DELETE":
+			if !state.initialized || event.KeyFingerprint == "" || event.VersionBefore != state.version || event.VersionAfter != state.version+1 {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map delete ledger version is invalid")
+				return nil, &diagnostic
+			}
+			_, existed := state.active[event.KeyFingerprint]
+			if existed != event.DeletedExisting {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map delete ledger does not match replayed state")
+				return nil, &diagnostic
+			}
+			state.version = event.VersionAfter
+			delete(state.active, event.KeyFingerprint)
+			if existed {
+				state.lastEffectiveDeletes[event.KeyFingerprint] = event
+			}
+		case "GET":
+			if !state.initialized || event.KeyFingerprint == "" || event.VersionBefore != state.version || event.VersionAfter != state.version {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map get ledger version is invalid")
+				return nil, &diagnostic
+			}
+			_, hit := state.active[event.KeyFingerprint]
+			if hit != event.Hit {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map get ledger hit result does not match replayed state")
+				return nil, &diagnostic
+			}
+			if NodeID(event.NodeID) != reader || event.Hit {
+				continue
+			}
+			result := &NegativeStateEvidence{ReaderNodeID: reader, ResourceID: event.ResourceID, ReadSequence: event.Sequence, RequestedKey: event.KeyFingerprint, Cause: "NEVER_PRESENT"}
+			if deletion, ok := state.lastEffectiveDeletes[event.KeyFingerprint]; ok {
+				result.Cause = "DELETED"
+				result.CandidateNodeIDs = []NodeID{NodeID(deletion.NodeID)}
+				return result, nil
+			}
+			var candidates []bytecode.MapStateEvent
+			for key, writer := range state.active {
+				if key != event.KeyFingerprint && writer.Operation == "SET" && writer.Sequence < event.Sequence {
+					candidates = append(candidates, writer)
+				}
+			}
+			sort.Slice(candidates, func(i, j int) bool { return candidates[i].Sequence < candidates[j].Sequence })
+			if len(candidates) > maxNegativeStateCandidates {
+				diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_BOUNDS", "negative state candidate set exceeds the safe ceiling")
+				return result, &diagnostic
+			}
+			if canUseExpectedMapValue(evidence, graph, anchor) {
+				for _, writer := range candidates {
+					if writer.ValueFingerprint == evidence.ExpectedValue.Fingerprint {
+						result.CandidateNodeIDs = append(result.CandidateNodeIDs, NodeID(writer.NodeID))
+					}
+				}
+				if len(result.CandidateNodeIDs) > 0 {
+					result.Cause = "VALUE_MATCH"
+					return result, nil
+				}
+			}
+			for _, writer := range candidates {
+				result.CandidateNodeIDs = append(result.CandidateNodeIDs, NodeID(writer.NodeID))
+			}
+			return result, nil
+		default:
+			diagnostic := localizationDiagnostic("HFIR_LOCALIZATION_PROVENANCE", "map ledger contains an unknown operation")
+			return nil, &diagnostic
+		}
+	}
+	return nil, nil
+}
+
+func directMapRead(graph *Graph, anchor NodeID) NodeID {
+	anchorNode := graph.NodeByID(anchor)
+	if anchorNode == nil || anchorNode.Kind != "print" || len(anchorNode.DataInputs) != 1 || anchorNode.DataInputs[0].Name != "value" {
+		return ""
+	}
+	value := graph.NodeByID(anchorNode.DataInputs[0].SourceNode)
+	if value == nil || value.Kind != "map_get" {
+		return ""
+	}
+	return value.ID
+}
+
+func canUseExpectedMapValue(evidence LocalizationEvidence, graph *Graph, anchor NodeID) bool {
+	if evidence.ExpectedValue == nil || !bytecode.TrustedExpectedValueObservation(*evidence.ExpectedValue) || evidence.ActualOutcome != "\n" || evidence.ExpectedOutcome != evidence.ExpectedValue.Value+"\n" {
+		return false
+	}
+	return directMapRead(graph, anchor) != ""
 }
 
 func observedStateResource(node *Node) (string, map[string]bool, bool) {

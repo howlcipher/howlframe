@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -985,6 +986,94 @@ type BCVM struct {
 	ErrOut      io.Writer
 	lineReader  *bufio.Reader
 	trace       *boundedTrace
+	mapLedger   *mapStateLedger
+}
+
+const (
+	maxMapLedgerEvents    = 256
+	maxMapLedgerResources = 64
+)
+
+// mapStateLedger is VM-private execution history. It tracks backing-map
+// identity rather than binding names so aliases join and rebindings separate.
+type mapStateLedger struct {
+	events    []bytecode.MapStateEvent
+	complete  bool
+	nextSeq   uint64
+	nextID    uint64
+	resources map[uintptr]uint64
+	retained  map[uintptr]map[string]any
+	versions  map[uint64]uint64
+}
+
+func newMapStateLedger() *mapStateLedger {
+	return &mapStateLedger{complete: true, resources: make(map[uintptr]uint64), retained: make(map[uintptr]map[string]any), versions: make(map[uint64]uint64)}
+}
+
+func (ledger *mapStateLedger) resourceID(dict map[string]any) (uint64, bool) {
+	if ledger == nil || !ledger.complete {
+		return 0, false
+	}
+	pointer := reflect.ValueOf(dict).Pointer()
+	if id, ok := ledger.resources[pointer]; ok {
+		return id, true
+	}
+	if len(ledger.resources) >= maxMapLedgerResources {
+		ledger.complete = false
+		return 0, false
+	}
+	ledger.nextID++
+	id := ledger.nextID
+	ledger.resources[pointer] = id
+	// Retain every registered map until the run ends, preventing pointer reuse.
+	ledger.retained[pointer] = dict
+	ledger.versions[id] = 0
+	return id, true
+}
+
+func (ledger *mapStateLedger) record(event bytecode.MapStateEvent) {
+	if ledger == nil || !ledger.complete {
+		return
+	}
+	if len(ledger.events) >= maxMapLedgerEvents {
+		ledger.complete = false
+		ledger.events = nil
+		return
+	}
+	ledger.nextSeq++
+	event.Sequence = ledger.nextSeq
+	ledger.events = append(ledger.events, event)
+}
+
+func (ledger *mapStateLedger) init(dict map[string]any, instruction int, nodeID string) {
+	id, ok := ledger.resourceID(dict)
+	if !ok {
+		return
+	}
+	ledger.record(bytecode.MapStateEvent{ResourceID: id, Instruction: instruction, NodeID: nodeID, Operation: "INIT"})
+	for key := range dict {
+		ledger.record(bytecode.MapStateEvent{ResourceID: id, Instruction: instruction, NodeID: nodeID, Operation: "INIT", KeyFingerprint: bytecode.RuntimeKeyFingerprint(key)})
+	}
+}
+
+func (ledger *mapStateLedger) mutation(dict map[string]any, instruction int, nodeID, operation, key string, value any, deleted bool) {
+	id, ok := ledger.resourceID(dict)
+	if !ok {
+		return
+	}
+	before := ledger.versions[id]
+	ledger.versions[id]++
+	fingerprint, _ := bytecode.RuntimeValueFingerprint(value)
+	ledger.record(bytecode.MapStateEvent{ResourceID: id, Instruction: instruction, NodeID: nodeID, Operation: operation, KeyFingerprint: bytecode.RuntimeKeyFingerprint(key), ValueFingerprint: fingerprint, VersionBefore: before, VersionAfter: ledger.versions[id], DeletedExisting: deleted})
+}
+
+func (ledger *mapStateLedger) read(dict map[string]any, instruction int, nodeID, key string, hit bool, value any) {
+	id, ok := ledger.resourceID(dict)
+	if !ok {
+		return
+	}
+	fingerprint, _ := bytecode.RuntimeValueFingerprint(value)
+	ledger.record(bytecode.MapStateEvent{ResourceID: id, Instruction: instruction, NodeID: nodeID, Operation: "GET", KeyFingerprint: bytecode.RuntimeKeyFingerprint(key), ValueFingerprint: fingerprint, VersionBefore: ledger.versions[id], VersionAfter: ledger.versions[id], Hit: hit})
 }
 
 type boundedTrace struct {
@@ -1122,6 +1211,7 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 		Out:         out,
 		ErrOut:      errOut,
 		trace:       &boundedTrace{limit: traceLimit},
+		mapLedger:   newMapStateLedger(),
 	}
 	if vm.In == nil {
 		vm.In = os.Stdin
@@ -1137,6 +1227,10 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 	defer func() {
 		evidence.Trace = append([]bytecode.ExecutionTraceEvent(nil), vm.trace.events...)
 		evidence.TraceTruncated = vm.trace.truncated
+		evidence.MapLedgerComplete = vm.mapLedger.complete
+		if vm.mapLedger.complete {
+			evidence.MapStateEvents = append([]bytecode.MapStateEvent(nil), vm.mapLedger.events...)
+		}
 		if r := recover(); r != nil {
 			if exit, ok := r.(VmExit); ok {
 				evidence.ExitCode = exit.code
@@ -1980,6 +2074,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				key := fmt.Sprint(pairs[i])
 				dict[key] = pairs[i+1]
 			}
+			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
+			vm.mapLedger.init(dict, ip, nodeID)
 			vm.push(dict)
 		case bytecode.OpAppend:
 			varName := inst.StringOperand
@@ -2001,8 +2097,6 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			val := vm.pop(inst.Op)
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state("map:"+varName, keyAny)
-
 			current, ok := env.get(varName)
 			if !ok {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
@@ -2012,12 +2106,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_set expected dict, got %T", current))
 			}
 			dict[key] = val
+			vm.trace.state("map:"+varName, key)
+			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
+			vm.mapLedger.mutation(dict, ip, nodeID, "SET", key, val, false)
 		case bytecode.OpMapDelete:
 			varName := inst.StringOperand
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state("map:"+varName, keyAny)
-
 			current, ok := env.get(varName)
 			if !ok {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
@@ -2026,13 +2121,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_delete expected dict, got %T", current))
 			}
+			_, deleted := dict[key]
 			delete(dict, key)
+			vm.trace.state("map:"+varName, key)
+			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
+			vm.mapLedger.mutation(dict, ip, nodeID, "DELETE", key, nil, deleted)
 		case bytecode.OpMapGet:
 			varName := inst.StringOperand
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			vm.trace.state("map:"+varName, keyAny)
-
 			current, ok := env.get(varName)
 			if !ok {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
@@ -2042,8 +2139,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
 			}
 			if val, ok := dict[key]; ok {
+				vm.trace.state("map:"+varName, key)
+				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
+				vm.mapLedger.read(dict, ip, nodeID, key, true, val)
 				vm.push(val)
 			} else {
+				vm.trace.state("map:"+varName, key)
+				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
+				vm.mapLedger.read(dict, ip, nodeID, key, false, nil)
 				vm.push("")
 			}
 		case bytecode.OpListGet:
