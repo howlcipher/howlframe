@@ -1,6 +1,7 @@
 package hfir
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -28,6 +29,26 @@ func TestLowerToBytecodeBuildsValidatedProgramFromSemanticHFIR(t *testing.T) {
 	}
 	if len(program.Main) == 0 {
 		t.Fatal("LowerToBytecode() emitted no instructions")
+	}
+	for index := range program.Main {
+		if origin, ok := program.TrustedMainOriginAt(index); !ok || graph.NodeByID(NodeID(origin)) == nil {
+			t.Fatalf("instruction %d origin = (%q, %v), want canonical HFIR node", index, origin, ok)
+		}
+	}
+	var artifact bytes.Buffer
+	if err := bytecode.WriteArtifact(&artifact, program); err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := bytecode.ReadArtifact(&artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := decoded.TrustedMainOriginAt(0); ok {
+		t.Fatal("durable HFBC artifact unexpectedly retained ephemeral HFIR provenance")
+	}
+	program.Main[0].StringOperand = "mutated-after-lowering"
+	if _, ok := program.TrustedMainOriginAt(0); ok {
+		t.Fatal("mutated bytecode retained trusted HFIR provenance")
 	}
 }
 

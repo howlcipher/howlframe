@@ -1,6 +1,7 @@
 package bytecode
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 
@@ -19,6 +20,11 @@ type BCInstruction struct {
 	IntOperand2    int64  `json:"int_operand_2,omitempty"`
 	IntOperand3    int64  `json:"int_operand_3,omitempty"`
 	ValueOperand   any    `json:"value_operand,omitempty"`
+
+	// semanticOrigin is attached only by the direct HFIR lowerer. It is kept
+	// private so it cannot alter the durable HFBC encoding or be supplied by a
+	// bytecode artifact consumer.
+	semanticOrigin string
 }
 
 func (inst *BCInstruction) UnmarshalJSON(data []byte) error {
@@ -39,6 +45,88 @@ type BCProgram struct {
 	Version   int                    `json:"version"`
 	Functions map[string]*BCFunction `json:"functions"`
 	Main      []BCInstruction        `json:"main"`
+
+	// mainOrigins is an ephemeral direct-lowering sidecar. It is deliberately
+	// unexported: provenance is useful only while the trusted lowerer program
+	// remains in memory and is not a change to the HFBC artifact contract.
+	mainOrigins    []string
+	mainOriginHash [32]byte
+}
+
+// ExecutionTraceEvent is runner-created execution evidence. Program code and
+// model transport have no way to supply or widen it.
+type ExecutionTraceEvent struct {
+	Instruction int    `json:"instruction"`
+	Opcode      string `json:"opcode"`
+	NodeID      string `json:"node_id,omitempty"`
+	BranchTaken *bool  `json:"branch_taken,omitempty"`
+}
+
+// RuntimeFailure is a serializable projection of a VM failure for consumers
+// that must not depend on the VM package.
+type RuntimeFailure struct {
+	Code        string `json:"code"`
+	Instruction int    `json:"instruction"`
+	Opcode      string `json:"opcode,omitempty"`
+	NodeID      string `json:"node_id,omitempty"`
+	Message     string `json:"message"`
+}
+
+// ExecutionEvidence is bounded trusted runner output. Trace limits are set by
+// the caller, never by the program.
+type ExecutionEvidence struct {
+	ExitCode       int                   `json:"exit_code"`
+	Trace          []ExecutionTraceEvent `json:"trace"`
+	TraceTruncated bool                  `json:"trace_truncated,omitempty"`
+	RuntimeFailure *RuntimeFailure       `json:"runtime_failure,omitempty"`
+}
+
+// SetSemanticOrigin marks an instruction while direct HFIR lowering is in
+// progress. The marker remains private to bytecode serialization.
+func SetSemanticOrigin(inst *BCInstruction, nodeID string) {
+	if inst != nil {
+		inst.semanticOrigin = nodeID
+	}
+}
+
+// HasSemanticOrigin reports whether a lowerer has already marked an
+// instruction. It does not reveal or permit artifact-supplied provenance.
+func HasSemanticOrigin(inst BCInstruction) bool {
+	return inst.semanticOrigin != ""
+}
+
+// AttachTrustedMainOrigins derives and attaches a verified source map from
+// lowerer-marked instructions. It rejects incomplete input rather than
+// creating a partially trustworthy map.
+func (prog *BCProgram) AttachTrustedMainOrigins() bool {
+	if prog == nil || len(prog.Main) == 0 {
+		return false
+	}
+	origins := make([]string, len(prog.Main))
+	for index := range prog.Main {
+		if prog.Main[index].semanticOrigin == "" {
+			return false
+		}
+		origins[index] = prog.Main[index].semanticOrigin
+	}
+	prog.mainOrigins = origins
+	prog.mainOriginHash = mainInstructionHash(prog.Main)
+	return true
+}
+
+// TrustedMainOriginAt returns provenance only while the exact bytecode Main
+// slice produced by the trusted lowerer remains intact.
+func (prog *BCProgram) TrustedMainOriginAt(offset int) (string, bool) {
+	if prog == nil || offset < 0 || offset >= len(prog.Main) || len(prog.mainOrigins) != len(prog.Main) || prog.mainOriginHash != mainInstructionHash(prog.Main) {
+		return "", false
+	}
+	origin := prog.mainOrigins[offset]
+	return origin, origin != ""
+}
+
+func mainInstructionHash(instructions []BCInstruction) [32]byte {
+	encoded, _ := json.Marshal(instructions)
+	return sha256.Sum256(encoded)
 }
 
 type BCFunction struct {
