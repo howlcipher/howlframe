@@ -148,3 +148,44 @@ origins; unexecuted branches, mismatched map writers, authority denial, and
 instruction-limit denial are bounded or rejected. The recommended next
 milestone is **Localization Phase 3C**, not #89. See
 `docs/journals/2026-08-13_hfir_failure_localization_phase3b.md`.
+
+# Phase 3C decision gate
+
+Phase 3C exercised three executable semantic graphs with 26, 53, and 109
+nodes. They contain real independent arithmetic, map, list, and scalar-state
+regions, multiple outputs, shared producers, nested executed conditionals, and
+three coordinated two-node defects. This replaces the earlier sequence-wrapper
+scale probe as decision evidence.
+
+Runner-sealed state provenance now covers `set` and `let` writes observed by a
+symbol read, `append` observed by `list_get`, and `map_set` or `map_delete`
+observed by `map_get`. It is namespaced by state kind and resource, carries an
+opaque runner-created fingerprint, and remains inside the execution-evidence
+seal. Selection considers only a write before the concrete observed read. A
+later unrelated write is excluded. Ambiguous absent-key maps intentionally do
+not guess a writer.
+
+That final condition exposed the current blocker: in the 53-node graph, an
+absent target key has two earlier map writers. The output's explicit key input
+is selected, but neither writer can be safely attributed to the read. The
+actual faulty key and value are therefore absent from the editable core: 0%/0%
+precision/recall for that scenario and no automatic repair. This is a
+generalized wrong-state-writer gap, not a fixture-name rule.
+
+The 26-node and 109-node independent-output defects localize to their two
+true constants and repair automatically. Their conservative reverse
+data-dependency closure is respectively 5/26 and 9/109 nodes. However, the
+actual repair transport includes protected hashes for every unchanged node:
+the complete context plus accepted delta is 5,162 bytes versus a 3,743-byte
+full graph at 26 nodes, and 19,576 versus 16,486 bytes at 109 nodes. This is
+not a provider-token measurement. It is sufficient to show that the present
+transport and full `ApplyRepair` re-verification/lowering path do not yet show
+an incremental-storage economic win.
+
+**Decision:** Localization remains the bottleneck. Improvement #89 is
+deferred. The next focused gap is deterministic, runner-sealed attribution for
+an absent map-key observation with multiple preceding writers, or a deliberately
+bounded diagnostic that represents the ambiguity without granting an unrelated
+writer edit authority. Do not use content addressing to conceal this failure.
+See `docs/journals/2026-08-13_hfir_localization_phase3c_decision_gate.md` for
+the full measurements and consumer evidence.
