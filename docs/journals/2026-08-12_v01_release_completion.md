@@ -48,3 +48,35 @@ Date: 2026-08-12
 
 ### Next step
 - Inspect the current `.github/workflows/release.yml` to confirm it doesn't publish to GitHub Releases and fix it so future tags create releases.
+
+## Phase 3 & 4 - Fix the release pipeline
+
+### What I inspected
+- `.github/workflows/release.yml`
+
+### What I found
+- The workflow correctly built the artifacts and used `actions/upload-artifact` to attach them to the workflow run.
+- However, it did NOT use any GitHub Release publishing mechanism (e.g., `gh release create`).
+- It also did not fail if release notes were missing.
+
+### Decision made
+- Rewrite `.github/workflows/release.yml` into a two-job structure: `build` (matrix builds) and `publish` (depends on `build`).
+- The `publish` job downloads all artifacts, generates a unified `SHA256SUMS` file, verifies that `docs/releases/${VERSION}.md` exists (failing if not), and publishes the release using `gh release create`.
+
+### Why
+- We need future tags to actually produce GitHub Releases automatically.
+- Consolidating checksums into one file makes it easier for users to verify.
+- Missing release notes for a tagged release should be a hard failure.
+
+### Files changed
+- `.github/workflows/release.yml`
+- `docs/journals/2026-08-12_v01_release_completion.md`
+
+### Validation performed
+- Verified syntax of the new GitHub Actions workflow file.
+
+### Result
+- Release workflow is ready for future tags (`v0.1.1`, etc.).
+
+### Next step
+- Handle the EXISTING `v0.1.0` tag by downloading its previously built workflow artifacts and publishing them manually using `gh release create`.

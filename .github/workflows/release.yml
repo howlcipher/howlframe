@@ -6,8 +6,8 @@ on:
       - 'v*'
 
 jobs:
-  release:
-    name: Build and Release
+  build:
+    name: Build
     runs-on: ubuntu-latest
     
     strategy:
@@ -59,23 +59,53 @@ jobs:
             tar -czf ${ARCHIVE_NAME}.tar.gz $BINARY_NAME
           fi
           
-          # Generate checksum
-          sha256sum ${ARCHIVE_NAME}.${{ matrix.ext }} > ${ARCHIVE_NAME}.${{ matrix.ext }}.sha256
-
-      - name: Release Note Check
-        run: |
-          # The release notes should be present
-          if [ -f "docs/releases/${GITHUB_REF#refs/tags/}.md" ]; then
-            echo "Release notes found."
-          else
-            echo "Release notes not found, but continuing."
-          fi
-
-      - name: Upload Artifacts
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: build-artifact-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             *.tar.gz
             *.zip
-            *.sha256
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: build-artifact-*
+          merge-multiple: true
+
+      - name: Check Release Notes and Generate Checksums
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          NOTES_FILE="docs/releases/${VERSION}.md"
+          
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "::error::Release notes not found at $NOTES_FILE. Aborting release."
+            exit 1
+          fi
+          
+          cd artifacts
+          sha256sum * > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          NOTES_FILE="docs/releases/${VERSION}.md"
+          
+          gh release create $VERSION \
+            artifacts/* \
+            --title "HowlFrame $VERSION" \
+            --notes-file $NOTES_FILE
+
