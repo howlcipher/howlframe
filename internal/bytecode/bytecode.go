@@ -1,6 +1,8 @@
 package bytecode
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -60,6 +62,8 @@ type ExecutionTraceEvent struct {
 	Opcode      string `json:"opcode"`
 	NodeID      string `json:"node_id,omitempty"`
 	BranchTaken *bool  `json:"branch_taken,omitempty"`
+	Resource    string `json:"resource,omitempty"`
+	StateKey    string `json:"state_key,omitempty"`
 }
 
 // RuntimeFailure is a serializable projection of a VM failure for consumers
@@ -79,6 +83,59 @@ type ExecutionEvidence struct {
 	Trace          []ExecutionTraceEvent `json:"trace"`
 	TraceTruncated bool                  `json:"trace_truncated,omitempty"`
 	RuntimeFailure *RuntimeFailure       `json:"runtime_failure,omitempty"`
+
+	// seal is intentionally private. Only the VM can mint evidence accepted by
+	// the localizer; copied, JSON-decoded, or changed evidence fails closed.
+	seal [32]byte
+}
+
+var executionEvidenceKey = newExecutionEvidenceKey()
+
+func newExecutionEvidenceKey() [32]byte {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		panic("bytecode execution evidence key: " + err.Error())
+	}
+	return key
+}
+
+// SealExecutionEvidence marks runner-created evidence as bound to the exact
+// direct-lowered main program. It is not a durable artifact feature.
+func SealExecutionEvidence(prog *BCProgram, evidence *ExecutionEvidence) {
+	if prog == nil || evidence == nil || !hasTrustedMainOrigins(prog) {
+		return
+	}
+	evidence.seal = executionEvidenceMAC(prog, *evidence)
+}
+
+// TrustedExecutionEvidence reports whether evidence was minted by this
+// process's runner for an unmodified direct-lowered main program.
+func TrustedExecutionEvidence(prog *BCProgram, evidence *ExecutionEvidence) bool {
+	if prog == nil || evidence == nil || !hasTrustedMainOrigins(prog) {
+		return false
+	}
+	expected := executionEvidenceMAC(prog, *evidence)
+	return hmac.Equal(evidence.seal[:], expected[:])
+}
+
+func hasTrustedMainOrigins(prog *BCProgram) bool {
+	return prog != nil && len(prog.Main) > 0 && len(prog.mainOrigins) == len(prog.Main) && prog.mainOriginHash == mainInstructionHash(prog.Main)
+}
+
+func executionEvidenceMAC(prog *BCProgram, evidence ExecutionEvidence) [32]byte {
+	payload := struct {
+		ProgramHash    [32]byte
+		ExitCode       int
+		Trace          []ExecutionTraceEvent
+		TraceTruncated bool
+		RuntimeFailure *RuntimeFailure
+	}{mainInstructionHash(prog.Main), evidence.ExitCode, evidence.Trace, evidence.TraceTruncated, evidence.RuntimeFailure}
+	encoded, _ := json.Marshal(payload)
+	mac := hmac.New(sha256.New, executionEvidenceKey[:])
+	_, _ = mac.Write(encoded)
+	var result [32]byte
+	copy(result[:], mac.Sum(nil))
+	return result
 }
 
 // SetSemanticOrigin marks an instruction while direct HFIR lowering is in

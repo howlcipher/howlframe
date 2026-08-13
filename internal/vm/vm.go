@@ -3,7 +3,9 @@ package vm
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
@@ -1014,6 +1016,17 @@ func (trace *boundedTrace) branch(taken bool) {
 	trace.events[len(trace.events)-1].BranchTaken = &taken
 }
 
+// state records an opaque state-key fingerprint after the VM has consumed the
+// actual key. It is runner-owned evidence, not a program-visible value.
+func (trace *boundedTrace) state(resource string, key any) {
+	if trace == nil || len(trace.events) == 0 {
+		return
+	}
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%T:%#v", key, key)))
+	trace.events[len(trace.events)-1].Resource = resource
+	trace.events[len(trace.events)-1].StateKey = hex.EncodeToString(digest[:])
+}
+
 type bcStoreRegistry struct {
 	mu     sync.Mutex
 	stores map[string]*bcMemoryStore
@@ -1127,17 +1140,16 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 		if r := recover(); r != nil {
 			if exit, ok := r.(VmExit); ok {
 				evidence.ExitCode = exit.code
-				return
-			}
-			if vmerr, ok := r.(*VMError); ok {
+			} else if vmerr, ok := r.(*VMError); ok {
 				if nodeID, ok := prog.TrustedMainOriginAt(vmerr.Instruction); ok {
 					vmerr.NodeID = nodeID
 				}
 				evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: vmerr.Code, Instruction: vmerr.Instruction, Opcode: vmerr.Opcode, NodeID: vmerr.NodeID, Message: vmerr.Message}
-				return
+			} else {
+				evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: "VM_INTERNAL", Instruction: vm.ip, Message: fmt.Sprintf("%v", r)}
 			}
-			evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: "VM_INTERNAL", Instruction: vm.ip, Message: fmt.Sprintf("%v", r)}
 		}
+		bytecode.SealExecutionEvidence(prog, &evidence)
 	}()
 
 	vm.run(vm.insts, vm.env)
@@ -1983,7 +1995,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpMapSet:
 			varName := inst.StringOperand
 			val := vm.pop(inst.Op)
-			key := fmt.Sprint(vm.pop(inst.Op))
+			keyAny := vm.pop(inst.Op)
+			key := fmt.Sprint(keyAny)
+			vm.trace.state(varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
@@ -1996,7 +2010,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			dict[key] = val
 		case bytecode.OpMapDelete:
 			varName := inst.StringOperand
-			key := fmt.Sprint(vm.pop(inst.Op))
+			keyAny := vm.pop(inst.Op)
+			key := fmt.Sprint(keyAny)
+			vm.trace.state(varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
@@ -2009,7 +2025,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			delete(dict, key)
 		case bytecode.OpMapGet:
 			varName := inst.StringOperand
-			key := fmt.Sprint(vm.pop(inst.Op))
+			keyAny := vm.pop(inst.Op)
+			key := fmt.Sprint(keyAny)
+			vm.trace.state(varName, keyAny)
 
 			current, ok := env.get(varName)
 			if !ok {
