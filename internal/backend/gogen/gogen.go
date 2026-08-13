@@ -1111,7 +1111,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		urlStr := generateStatement(node.Children[1], reqVar, depth+1)
 		methodStr := generateStatement(node.Children[2], reqVar, depth+1)
-		
+
 		if len(node.Children) == 4 {
 			bodyCode := generateStatement(node.Children[3], reqVar, depth+1)
 			return fmt.Sprintf(`func() ([]byte, error) {
