@@ -130,3 +130,21 @@ It does not prove reliable broad behavioral localization, five coordinated
 multi-node cases, high precision, provider success, a full debugger, durable
 artifact provenance, content-addressed cache value, or a repair success rate
 comparable with manual Phase-2 targeting.
+
+# Phase 3B — executed-path precision experiment
+
+Phase 3B added runner-sealed evidence, runtime map-key fingerprints,
+executed-only producer closure, and core-only edit authority. Eight varied
+behavioral scenarios now have executable metric assertions; five are
+coordinated multi-node automatic repairs, and all five repair flows pass with
+no manual target IDs. Pooled precision improved from 35.3% to 72.2%, macro
+precision is 77.1%, and recall remains 100%. Median editable core size is 2
+and p95 is 3.
+
+The result is encouraging but not a cache justification. Small diverse graphs
+still expose a median 31% of nodes, and only the direct-output 10/25/50/100
+probe establishes scale locality. Sealed evidence rejects forged existing-node
+origins; unexecuted branches, mismatched map writers, authority denial, and
+instruction-limit denial are bounded or rejected. The recommended next
+milestone is **Localization Phase 3C**, not #89. See
+`docs/journals/2026-08-13_hfir_failure_localization_phase3b.md`.
