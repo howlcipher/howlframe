@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://howlframe.dev/schema/hfir-semantic-repair/v2.json",
+  "title": "HowlFrame HFIR Semantic Repair Phase-2 Transaction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "expected_graph_hash", "expected_graph_version", "protected_node_hashes", "operations"],
+  "properties": {
+    "schema_version": { "const": "hfir-semantic-repair/v2" },
+    "expected_graph_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "expected_graph_version": { "const": "v1" },
+    "protected_node_hashes": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 64, "maxLength": 64 }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation", "target_node_id", "expected_node_hash", "replacement"],
+        "properties": {
+          "operation": { "const": "replace_node" },
+          "target_node_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "expected_node_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "replacement": { "$ref": "hfir_model_adapter_phase1.schema.json#/$defs/node" }
+        }
+      }
+    }
+  }
+}

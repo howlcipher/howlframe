@@ -24,12 +24,19 @@ const ModelAdapterSchemaVersion = "hfir-model-adapter/v1"
 // transport. It is not the full semantic patch protocol tracked by #91.
 const ModelRepairSchemaVersion = "hfir-model-repair/v1"
 
+// SemanticRepairSchemaVersion identifies the bounded multi-node repair
+// transaction used by the Phase-2 experiment. It deliberately keeps the only
+// proven operation, replacing an existing same-kind node.
+const SemanticRepairSchemaVersion = "hfir-semantic-repair/v2"
+
 const (
-	modelAdapterTarget = "model-adapter"
-	maxCandidateNodes  = 128
-	maxNodeInputs      = 32
-	maxTransportBytes  = 64 * 1024
-	maxValueBytes      = 4 * 1024
+	modelAdapterTarget   = "model-adapter"
+	maxCandidateNodes    = 128
+	maxNodeInputs        = 32
+	maxTransportBytes    = 64 * 1024
+	maxValueBytes        = 4 * 1024
+	maxRepairOperations  = 5
+	maxRepairRegionNodes = 16
 )
 
 // Adapter is a provider-neutral boundary. Implementations may call any model,
@@ -82,12 +89,16 @@ type Candidate struct {
 // RepairContext names the only graph region a repair may modify. It is made by
 // trusted machinery after a diagnostic; models do not choose its hash or set.
 type RepairContext struct {
-	GraphHash               string           `json:"graph_hash"`
-	TargetNodeIDs           []NodeID         `json:"target_node_ids"`
-	Neighborhood            []NodeID         `json:"neighborhood"`
-	Nodes                   []RepairNodeView `json:"nodes"`
-	AllowedReferenceNodeIDs []NodeID         `json:"allowed_reference_node_ids"`
-	MaxOperations           int              `json:"max_operations"`
+	GraphHash               string            `json:"graph_hash"`
+	ExpectedGraphVersion    string            `json:"expected_graph_version,omitempty"`
+	TargetNodeIDs           []NodeID          `json:"target_node_ids"`
+	EditableNodeIDs         []NodeID          `json:"editable_node_ids,omitempty"`
+	Neighborhood            []NodeID          `json:"neighborhood"`
+	Nodes                   []RepairNodeView  `json:"nodes"`
+	AllowedReferenceNodeIDs []NodeID          `json:"allowed_reference_node_ids"`
+	ProtectedNodeHashes     map[NodeID]string `json:"protected_node_hashes,omitempty"`
+	MaxOperations           int               `json:"max_operations"`
+	integrityHash           string
 }
 
 // RepairNodeView is the deterministic, bounded semantic neighborhood sent to
@@ -127,9 +138,11 @@ type transportOrigin struct {
 }
 
 type repairTransport struct {
-	SchemaVersion     string            `json:"schema_version"`
-	ExpectedGraphHash string            `json:"expected_graph_hash"`
-	Operations        []repairOperation `json:"operations"`
+	SchemaVersion        string            `json:"schema_version"`
+	ExpectedGraphHash    string            `json:"expected_graph_hash"`
+	ExpectedGraphVersion string            `json:"expected_graph_version,omitempty"`
+	ProtectedNodeHashes  map[NodeID]string `json:"protected_node_hashes,omitempty"`
+	Operations           []repairOperation `json:"operations"`
 }
 
 type repairOperation struct {
@@ -217,8 +230,8 @@ func NodeHash(node *Node) string {
 	return hex.EncodeToString(digest[:])
 }
 
-// NewRepairContext returns a bounded trusted context for a diagnostic target.
-// Phase 1 only authorizes replacing an existing target node.
+// NewRepairContext returns the Phase-1 context for one diagnostic target.
+// NewSemanticRepairContext is the Phase-2 multi-node API.
 func NewRepairContext(candidate Candidate, target NodeID) (RepairContext, error) {
 	if candidate.Graph == nil || candidate.Graph.NodeByID(target) == nil {
 		return RepairContext{}, fmt.Errorf("repair target %q does not exist", target)
@@ -240,44 +253,147 @@ func NewRepairContext(candidate Candidate, target NodeID) (RepairContext, error)
 	return RepairContext{GraphHash: candidate.Hash, TargetNodeIDs: []NodeID{target}, Neighborhood: neighborhood, Nodes: views, AllowedReferenceNodeIDs: allowedReferences, MaxOperations: 1}, nil
 }
 
-// ApplyRepair applies exactly one replacement to an authorized existing node.
-// It cannot alter entry/version, add nodes, grant capabilities, or rewrite
-// unrelated regions. The caller must re-run verification and lowering.
+// NewSemanticRepairContext derives a finite edit region from trusted
+// diagnostic targets. The region is the targets plus their one-hop data-flow
+// producers and consumers. This subset has no complete control-flow edges, so
+// the algorithm deliberately does not claim control-flow reachability.
+func NewSemanticRepairContext(candidate Candidate, targets []NodeID) (RepairContext, error) {
+	if candidate.Graph == nil || candidate.Hash == "" || GraphHash(candidate.Graph) != candidate.Hash {
+		return RepairContext{}, fmt.Errorf("current canonical candidate graph is required")
+	}
+	if len(targets) == 0 {
+		return RepairContext{}, fmt.Errorf("at least one repair target is required")
+	}
+	targetSet := make(map[NodeID]bool, len(targets))
+	for _, target := range targets {
+		if target == "" || candidate.Graph.NodeByID(target) == nil {
+			return RepairContext{}, fmt.Errorf("repair target %q does not exist", target)
+		}
+		if targetSet[target] {
+			return RepairContext{}, fmt.Errorf("repair target %q is duplicated", target)
+		}
+		targetSet[target] = true
+	}
+	region := make(map[NodeID]bool, len(targets)*3)
+	for target := range targetSet {
+		region[target] = true
+		node := candidate.Graph.NodeByID(target)
+		for _, input := range node.DataInputs {
+			region[input.SourceNode] = true
+		}
+		for _, node := range candidate.Graph.Nodes {
+			for _, input := range node.DataInputs {
+				if input.SourceNode == target {
+					region[node.ID] = true
+				}
+			}
+		}
+	}
+	if len(region) > maxRepairRegionNodes {
+		return RepairContext{}, fmt.Errorf("derived repair region has %d nodes, exceeding the %d-node limit", len(region), maxRepairRegionNodes)
+	}
+	regionIDs := sortedNodeIDs(region)
+	targetIDs := sortedNodeIDs(targetSet)
+	protected := make(map[NodeID]string, len(candidate.Graph.Nodes)-len(region))
+	for _, node := range candidate.Graph.Nodes {
+		if !region[node.ID] {
+			protected[node.ID] = NodeHash(node)
+		}
+	}
+	views := make([]RepairNodeView, 0, len(regionIDs))
+	for _, id := range regionIDs {
+		node := candidate.Graph.NodeByID(id)
+		views = append(views, RepairNodeView{ID: node.ID, Kind: node.Kind, Value: node.Value, Inputs: append([]DataEdge(nil), node.DataInputs...)})
+	}
+	context := RepairContext{
+		GraphHash:               candidate.Hash,
+		ExpectedGraphVersion:    candidate.Graph.Version,
+		TargetNodeIDs:           targetIDs,
+		EditableNodeIDs:         regionIDs,
+		Neighborhood:            regionIDs,
+		Nodes:                   views,
+		AllowedReferenceNodeIDs: regionIDs,
+		ProtectedNodeHashes:     protected,
+		MaxOperations:           maxRepairOperations,
+	}
+	context.integrityHash = semanticRepairContextHash(context)
+	return context, nil
+}
+
+// ApplyRepair atomically applies a Phase-1 or Phase-2 delta. A Phase-2
+// transaction may replace up to five existing same-kind nodes in its trusted
+// derived region. It never mutates the input candidate: every operation is
+// validated first, a fresh candidate is decoded, protected hashes are checked,
+// and the complete verifier/lowerer/artifact gate must accept the result.
 func ApplyRepair(candidate Candidate, context RepairContext, data []byte) (Candidate, []Diagnostic) {
-	if candidate.Graph == nil || candidate.Hash == "" || context.GraphHash != candidate.Hash {
+	if candidate.Graph == nil || candidate.Hash == "" || GraphHash(candidate.Graph) != candidate.Hash || context.GraphHash != candidate.Hash {
 		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair context does not match the current graph", "")}
 	}
 	var delta repairTransport
 	if diagnostic := strictDecode(data, &delta); diagnostic != nil {
 		return Candidate{}, []Diagnostic{*diagnostic}
 	}
-	if delta.SchemaVersion != ModelRepairSchemaVersion || delta.ExpectedGraphHash != candidate.Hash || len(delta.Operations) != 1 || context.MaxOperations != 1 {
-		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_INVALID", "repair must contain one operation against the current graph hash", "")}
+	phaseTwo := delta.SchemaVersion == SemanticRepairSchemaVersion
+	if !phaseTwo && delta.SchemaVersion != ModelRepairSchemaVersion {
+		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_INVALID", "unsupported repair schema version", "")}
 	}
-	op := delta.Operations[0]
-	if op.Operation != "replace_node" || !containsNodeID(context.TargetNodeIDs, op.TargetNodeID) {
-		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair operation is outside the authorized target node", op.TargetNodeID)}
+	if delta.ExpectedGraphHash != candidate.Hash {
+		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair graph precondition does not match", "")}
 	}
-	target := candidate.Graph.NodeByID(op.TargetNodeID)
-	if target == nil || op.ExpectedNodeHash != NodeHash(target) {
-		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair node precondition does not match", op.TargetNodeID)}
+	if phaseTwo {
+		expected, err := NewSemanticRepairContext(candidate, context.TargetNodeIDs)
+		if err != nil || context.integrityHash == "" || context.integrityHash != semanticRepairContextHash(context) || !sameSemanticRepairContext(context, expected) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair context is not the trusted derived region", "")}
+		}
+		if delta.ExpectedGraphVersion != candidate.Graph.Version {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair graph version precondition does not match", "")}
+		}
+		if !sameNodeHashMap(delta.ProtectedNodeHashes, expected.ProtectedNodeHashes) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_PROTECTED", "repair protected-node preconditions do not match", "")}
+		}
+		if len(delta.Operations) == 0 || len(delta.Operations) > expected.MaxOperations {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_INVALID", "repair operation count is outside the transaction limit", "")}
+		}
+		context = expected
+	} else if delta.ExpectedGraphVersion != "" || len(delta.ProtectedNodeHashes) != 0 || len(delta.Operations) != 1 || context.MaxOperations != 1 {
+		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_INVALID", "repair must contain one Phase-1 operation against the current graph hash", "")}
 	}
-	if op.Replacement.ID != op.TargetNodeID {
-		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_IMMUTABLE", "repair cannot change node identity", op.TargetNodeID)}
+	seenTargets := make(map[NodeID]bool, len(delta.Operations))
+	editable := context.TargetNodeIDs
+	if phaseTwo {
+		editable = context.EditableNodeIDs
 	}
-	if op.Replacement.Kind != target.Kind || capability.ForConstruct(op.Replacement.Kind) != capability.ForConstruct(target.Kind) {
-		return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_IMMUTABLE", "repair cannot change node kind or introduce a capability effect", op.TargetNodeID)}
-	}
-	for _, input := range op.Replacement.Inputs {
-		if !containsNodeID(context.AllowedReferenceNodeIDs, input.NodeID) {
-			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair input references a node outside the authorized neighborhood", op.TargetNodeID)}
+	for _, op := range delta.Operations {
+		if op.Operation != "replace_node" || !containsNodeID(editable, op.TargetNodeID) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair operation is outside the authorized region", op.TargetNodeID)}
+		}
+		if seenTargets[op.TargetNodeID] {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_INVALID", "repair may replace each node at most once", op.TargetNodeID)}
+		}
+		seenTargets[op.TargetNodeID] = true
+		target := candidate.Graph.NodeByID(op.TargetNodeID)
+		if target == nil || op.ExpectedNodeHash != NodeHash(target) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_STALE", "repair node precondition does not match", op.TargetNodeID)}
+		}
+		if op.Replacement.ID != op.TargetNodeID {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_IMMUTABLE", "repair cannot change node identity", op.TargetNodeID)}
+		}
+		if op.Replacement.Kind != target.Kind || capability.ForConstruct(op.Replacement.Kind) != capability.ForConstruct(target.Kind) {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_IMMUTABLE", "repair cannot change node kind or introduce a capability effect", op.TargetNodeID)}
+		}
+		for _, input := range op.Replacement.Inputs {
+			if !containsNodeID(context.AllowedReferenceNodeIDs, input.NodeID) {
+				return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_SCOPE", "repair input references a node outside the authorized neighborhood", op.TargetNodeID)}
+			}
 		}
 	}
 	transport := transportFromGraph(candidate.Graph)
-	for index := range transport.Nodes {
-		if transport.Nodes[index].ID == op.TargetNodeID {
-			transport.Nodes[index] = op.Replacement
-			break
+	for _, op := range delta.Operations {
+		for index := range transport.Nodes {
+			if transport.Nodes[index].ID == op.TargetNodeID {
+				transport.Nodes[index] = op.Replacement
+				break
+			}
 		}
 	}
 	encoded, _ := json.Marshal(transport)
@@ -285,7 +401,88 @@ func ApplyRepair(candidate Candidate, context RepairContext, data []byte) (Candi
 	if len(diagnostics) != 0 {
 		return Candidate{}, diagnostics
 	}
+	if phaseTwo {
+		if updated.Graph.Version != candidate.Graph.Version || updated.Graph.EntryNode != candidate.Graph.EntryNode {
+			return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_IMMUTABLE", "repair cannot change graph version or entry node", "")}
+		}
+		for id, hash := range context.ProtectedNodeHashes {
+			if node := updated.Graph.NodeByID(id); node == nil || NodeHash(node) != hash {
+				return Candidate{}, []Diagnostic{adapterDiagnostic("HFIR_REPAIR_PROTECTED", "repair changed a protected node", id)}
+			}
+		}
+	}
+	if _, diagnostics := CompileCandidate(updated); len(diagnostics) != 0 {
+		return Candidate{}, diagnostics
+	}
 	return updated, nil
+}
+
+func sortedNodeIDs(values map[NodeID]bool) []NodeID {
+	result := make([]NodeID, 0, len(values))
+	for id := range values {
+		result = append(result, id)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result
+}
+
+func sameNodeHashMap(left, right map[NodeID]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for id, hash := range left {
+		if right[id] != hash {
+			return false
+		}
+	}
+	return true
+}
+
+func sameNodeIDSlice(left, right []NodeID) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameSemanticRepairContext(actual, expected RepairContext) bool {
+	return actual.GraphHash == expected.GraphHash &&
+		actual.ExpectedGraphVersion == expected.ExpectedGraphVersion &&
+		sameNodeIDSlice(actual.TargetNodeIDs, expected.TargetNodeIDs) &&
+		sameNodeIDSlice(actual.EditableNodeIDs, expected.EditableNodeIDs) &&
+		sameNodeIDSlice(actual.Neighborhood, expected.Neighborhood) &&
+		sameNodeIDSlice(actual.AllowedReferenceNodeIDs, expected.AllowedReferenceNodeIDs) &&
+		sameNodeHashMap(actual.ProtectedNodeHashes, expected.ProtectedNodeHashes) &&
+		actual.MaxOperations == expected.MaxOperations &&
+		actual.integrityHash == expected.integrityHash
+}
+
+func semanticRepairContextHash(context RepairContext) string {
+	payload := struct {
+		GraphHash               string
+		ExpectedGraphVersion    string
+		TargetNodeIDs           []NodeID
+		EditableNodeIDs         []NodeID
+		Neighborhood            []NodeID
+		Nodes                   []RepairNodeView
+		AllowedReferenceNodeIDs []NodeID
+		ProtectedNodeHashes     map[NodeID]string
+		MaxOperations           int
+	}{
+		GraphHash: context.GraphHash, ExpectedGraphVersion: context.ExpectedGraphVersion,
+		TargetNodeIDs: context.TargetNodeIDs, EditableNodeIDs: context.EditableNodeIDs,
+		Neighborhood: context.Neighborhood, Nodes: context.Nodes,
+		AllowedReferenceNodeIDs: context.AllowedReferenceNodeIDs, ProtectedNodeHashes: context.ProtectedNodeHashes,
+		MaxOperations: context.MaxOperations,
+	}
+	encoded, _ := json.Marshal(payload)
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
 }
 
 func strictDecode(data []byte, target any) *Diagnostic {
