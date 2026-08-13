@@ -1,0 +1,37 @@
+{
+  "task": "Update the existing dictionary write so the CLI prints ready instead of empty.",
+  "attempts": [
+    {
+      "attempt": 1,
+      "result": "rejected",
+      "diagnostic": "schema_version was missing and replacement inputs used an object rather than an array"
+    },
+    {
+      "attempt": 2,
+      "result": "rejected",
+      "diagnostic": "schema_version must equal hfir-semantic-repair/v2"
+    },
+    {
+      "attempt": 3,
+      "result": "accepted",
+      "delta": {
+        "schema_version": "hfir-semantic-repair/v2",
+        "expected_graph_hash": "fixture-derived-at-test-time",
+        "expected_graph_version": "v1",
+        "protected_node_hashes": "fixture-derived-at-test-time",
+        "operations": [
+          {
+            "operation": "replace_node",
+            "target_node_id": "update_key",
+            "replacement": {"id": "update_key", "kind": "const", "value": "result", "literal_kind": "STRING", "inputs": [], "provenance": {"label": "update_key"}}
+          },
+          {
+            "operation": "replace_node",
+            "target_node_id": "update_value",
+            "replacement": {"id": "update_value", "kind": "const", "value": "ready", "literal_kind": "STRING", "inputs": [], "provenance": {"label": "update_value"}}
+          }
+        ]
+      }
+    }
+  ]
+}

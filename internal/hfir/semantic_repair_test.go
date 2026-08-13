@@ -3,6 +3,8 @@ package hfir
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -76,6 +78,102 @@ func TestSemanticRepairTransactionIsAtomicWhenLaterPreconditionFails(t *testing.
 	if value := candidate.Graph.NodeByID("left").Value; value != "wrong" {
 		t.Fatalf("failed transaction mutated original left node to %q", value)
 	}
+}
+
+func TestSemanticRepairRegionStaysBoundedAcrossGraphSizes(t *testing.T) {
+	for _, size := range []int{10, 25, 50, 100} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			candidate := scaledRepairCandidate(t, size)
+			context, err := NewSemanticRepairContext(candidate, []NodeID{"defect"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := len(candidate.Graph.Nodes), size; got != want {
+				t.Fatalf("graph nodes = %d, want %d", got, want)
+			}
+			if got := len(context.EditableNodeIDs); got != 2 {
+				t.Fatalf("repair region nodes = %d, want 2", got)
+			}
+			if got := len(context.ProtectedNodeHashes); got != size-2 {
+				t.Fatalf("protected nodes = %d, want %d", got, size-2)
+			}
+		})
+	}
+}
+
+func TestBlackBoxSemanticRepairTranscriptReplaysOffline(t *testing.T) {
+	data, err := os.ReadFile("../../docs/fixtures/hfir_semantic_repair_black_box_phase2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Attempts []struct {
+			Attempt int    `json:"attempt"`
+			Result  string `json:"result"`
+			Delta   struct {
+				Operations []struct {
+					TargetNodeID string        `json:"target_node_id"`
+					Replacement  transportNode `json:"replacement"`
+				} `json:"operations"`
+			} `json:"delta"`
+		} `json:"attempts"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if len(fixture.Attempts) != 3 || fixture.Attempts[0].Result != "rejected" || fixture.Attempts[1].Result != "rejected" || fixture.Attempts[2].Result != "accepted" {
+		t.Fatalf("unexpected black-box attempt history: %#v", fixture.Attempts)
+	}
+	candidate := semanticRepairDictionaryCandidate(t)
+	context, err := NewSemanticRepairContext(candidate, []NodeID{"update_key", "update_value"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operations := make([]repairOperation, 0, len(fixture.Attempts[2].Delta.Operations))
+	for _, operation := range fixture.Attempts[2].Delta.Operations {
+		operations = append(operations, repairOperation{
+			Operation: "replace_node", TargetNodeID: NodeID(operation.TargetNodeID),
+			ExpectedNodeHash: NodeHash(candidate.Graph.NodeByID(NodeID(operation.TargetNodeID))),
+			Replacement:      operation.Replacement,
+		})
+	}
+	updated, diagnostics := ApplyRepair(candidate, context, mustSemanticRepairDelta(t, candidate, context, operations))
+	if len(diagnostics) != 0 {
+		t.Fatalf("ApplyRepair() diagnostics = %#v", diagnostics)
+	}
+	assertCandidateOutput(t, updated, "ready\n")
+}
+
+func semanticRepairDictionaryCandidate(t *testing.T) Candidate {
+	t.Helper()
+	return mustCandidate(t, candidateTransport{
+		SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program",
+		Nodes: []transportNode{
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "bind_record"}}),
+			testNode("result_key", "const", "result", "STRING", nil), testNode("empty", "const", "empty", "STRING", nil),
+			testNode("initial_entry", "dict_entry", "", "", []transportEdge{{Role: "key", NodeID: "result_key"}, {Role: "value", NodeID: "empty"}}),
+			testNode("record", "dict", "", "", []transportEdge{{Role: "entry", NodeID: "initial_entry"}}),
+			testNode("update_key", "const", "wrong", "STRING", nil), testNode("update_value", "const", "nope", "STRING", nil),
+			testNode("write_result", "map_set", "record", "", []transportEdge{{Role: "key", NodeID: "update_key"}, {Role: "value", NodeID: "update_value"}}),
+			testNode("read_result", "map_get", "record", "", []transportEdge{{Role: "key", NodeID: "result_key"}}),
+			testNode("print_result", "print", "", "", []transportEdge{{Role: "value", NodeID: "read_result"}}),
+			testNode("body", "sequence", "", "", []transportEdge{{Role: "body", NodeID: "write_result"}, {Role: "body", NodeID: "print_result"}}),
+			testNode("bind_record", "let", "record", "", []transportEdge{{Role: "value", NodeID: "record"}, {Role: "body", NodeID: "body"}}),
+		},
+	})
+}
+
+func scaledRepairCandidate(t *testing.T, size int) Candidate {
+	t.Helper()
+	nodes := []transportNode{testNode("defect", "const", "wrong", "STRING", nil)}
+	previous := NodeID("defect")
+	for index := 1; index < size-1; index++ {
+		id := NodeID("sequence_" + strconv.Itoa(index))
+		nodes = append(nodes, testNode(id, "sequence", "", "", []transportEdge{{Role: "body", NodeID: previous}}))
+		previous = id
+	}
+	nodes = append(nodes, testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: previous}}))
+	return mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: nodes})
 }
 
 func TestSemanticRepairTransactionFailsClosedForBoundaryAttacks(t *testing.T) {

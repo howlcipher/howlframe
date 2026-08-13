@@ -66,3 +66,64 @@ already uses `CompileCandidate`, which verifies, lowers directly to bytecode,
 and validates the artifact. Phase-1 `ApplyRepair` itself only reconstructs and
 decodes the candidate, so Phase 2 must make acceptance transactionally require
 the full compile gate.
+
+# Failure corpus and execution proof
+
+`docs/fixtures/hfir_semantic_repair_failure_corpus_phase2.json` records twelve
+near-valid Phase-1 scenarios: three verifier-detectable shapes, one
+lowerer/runtime boundary, and eight behavioral candidates. Six are coordinated
+two-node defects. This is a catalog, not a claim that all twelve have
+completed black-box repair.
+
+The executed 12-node dictionary case initializes `result` to `empty`, then
+writes wrong key/value constants. Expected `ready\n`, actual `empty\n`.
+Either independent repair still fails. Trusted targets `update_key` and
+`update_value` derive a three-node data-flow region with `write_result`.
+The accepted v2 transaction replaces just the two constants, guarding the
+canonical graph hash, v1 graph version, both old hashes, and every outside-node
+hash. Decode, region re-derivation, hash proof, verifier, direct lowering,
+artifact validation, and VM execution pass; output becomes `ready\n`. Ten of
+twelve nodes remain unchanged. No insert/remove/edge operation has evidence.
+
+# Black-box and adversarial evidence
+
+An isolated author received only task, behavior, editable/immutable graph
+views, hashes, and schema. It received no implementation, source, AST,
+bytecode, oracle, or golden answer. Attempt one omitted schema version and used
+an object for inputs; attempt two used `v2` rather than the full version; stable
+diagnostics enabled a correct final two-node transaction on attempt three. The
+offline transcript is `docs/fixtures/hfir_semantic_repair_black_box_phase2.json`.
+
+Focused tests reject stale graph/node preconditions, region escape,
+self-widened context, altered protected hashes, identity/kind changes,
+capability self-grant, undeclared references, backend/opcode injection,
+entry/version substitution, and a later invalid operation in an otherwise
+valid transaction. No invalid repair returns a candidate; authority bypasses: 0.
+
+# Graph-size experiment and metrics
+
+Valid 10, 25, 50, and 100-node graphs each have one localized defect. Their
+derived regions have two nodes, leaving 8, 23, 48, and 98 protected nodes:
+20%, 8%, 4%, and 2% repair surfaces. This is node/byte surface evidence, not
+token or cache savings.
+
+| Metric | Evidence |
+| --- | --- |
+| Scenario count | 12 cataloged, 1 full execution proof |
+| Multi-node scenarios | 6 cataloged, 1 full execution proof |
+| First-repair success | 0/1 black-box transcript |
+| Success within 3 attempts | 1/1 black-box transcript |
+| Nodes changed | 2 |
+| Repair region / graph | 3 / 12 |
+| Unchanged graph | 83.3% |
+| Stale rejection | 2/2 focused cases |
+| Adversarial rejection | 14/14 focused cases |
+| Authority bypasses | 0 |
+
+# Decision
+
+Choose **C. Repair Phase 3**. The bounded transaction works, but behavioral
+targeting is still trusted/manual and transport lacks rich control-flow edges.
+At a 12-node graph full regeneration is simpler, so no cost crossover is
+proven. Improve diagnostic-to-region derivation and conflict handling before
+content-addressed storage or provider expansion.
