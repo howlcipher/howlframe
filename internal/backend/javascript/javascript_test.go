@@ -25,3 +25,26 @@ func TestGenerateJSTryLetParseJson(t *testing.T) {
 		t.Fatalf("generated code did not compile parse_json correctly:\n%s", appCode)
 	}
 }
+
+// TestGenerateJSFetchWithBody covers the exact fetch composition used by the
+// external board: a POST body is returned as text and can then be supplied to
+// parse_json inside try_let. Browser execution remains an application-level
+// concern; this test keeps the generator contract explicit.
+func TestGenerateJSFetchWithBody(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(web_app
+  (try_let (response (fetch "http://example.test/tasks" "POST" "{\"title\":\"Ship\"}"))
+    (catch fetch_err (print fetch_err))
+    (try_let (task (parse_json Task response))
+      (catch parse_err (print parse_err))
+      (print (map_get task "title")))))`), "fetch.howl").ParseExpression()
+	checker.Check(root)
+	appCode, _ := GenerateJSCode(root)
+	for _, want := range []string{
+		`await fetch("http://example.test/tasks", { method: "POST", body: "{\"title\":\"Ship\"}" })`,
+		`JSON.parse(response)`,
+	} {
+		if !strings.Contains(appCode, want) {
+			t.Fatalf("generated code is missing %q:\n%s", want, appCode)
+		}
+	}
+}
