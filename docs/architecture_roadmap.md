@@ -140,3 +140,12 @@ Bug #39 aligns directly with the long-term vision: deterministic, isolated artif
 3. Backends pass the same deterministic conformance cases or explicitly reject unsupported effects before emission.
 4. Model adapters can exchange valid HFIR without provider-specific source syntax.
 5. A Wasm binary runs without Go, Node, or a model service unless its verified capability policy explicitly requests one.
+
+## Post-v0.1 Development Principle
+
+> After v0.1, HowlFrame prioritizes correctness, user-reported friction, real use cases, and evidence from dogfooding before expanding the language or runtime surface.
+
+Every new architectural feature must answer:
+1. What actual problem does this solve?
+2. Who needs it?
+3. What evidence says it is the bottleneck?

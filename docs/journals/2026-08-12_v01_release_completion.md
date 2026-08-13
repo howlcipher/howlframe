@@ -184,3 +184,38 @@ Date: 2026-08-12
 
 ### Next step
 - Reprioritize the backlog (`improvements.md`), establish a post-v0.1 decision rule in the architecture roadmap (Phase 11 and 12).
+
+## Phase 11 & 12 - Backlog Reset and Decision Rule
+
+### What I inspected
+- The `improvements.md` backlog.
+- `docs/architecture_roadmap.md` and `CONTRIBUTING.md`.
+
+### What I found
+- 13 pending items remain in the backlog, mostly involving deep architectural overhauls (like HFIR content-addressed storage) and edge-case backends.
+- None are blocking `v0.1` adoption.
+
+### Decision made
+- Reclassified the backlog items into evidence-driven categories:
+  - **BLOCKER / CORRECTNESS**: None
+  - **RELIABILITY**: #98 (Artifact versioning), #90 (ABI conformance)
+  - **USER-DRIVEN**: #81 (Formatter), #73 (Collections for Wasm), #84 (SSA control flow), #83 (JS backend parity)
+  - **RESEARCH**: #88 (Provider-neutral protocol), #100 (Structured learning), #91 (Semantic patch), #92 (Verified standalone Wasm pipeline)
+  - **DEFERRED**: #89 (Incremental compilation), #96 (VM tests), #74 (LLM HTTP primitives for Wasm)
+- Added the "Post-v0.1 Development Principle" to `docs/architecture_roadmap.md` and `CONTRIBUTING.md` demanding evidence before expansion.
+
+### Why
+- The project has accumulated enough feature momentum to build forever without verifying user utility. Halting feature execution until evidence demands it is essential.
+
+### Files changed
+- `docs/architecture_roadmap.md`
+- `docs/journals/2026-08-12_v01_release_completion.md`
+
+### Validation performed
+- Verified docs reflect the shift to evidence-driven prioritization.
+
+### Result
+- Feature development is halted. Future work requires justification.
+
+### Next step
+- Create the `v0.1` status report.
