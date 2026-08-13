@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+* An internal Phase-1 `HFIR -> BCProgram` lowering path that consumes semantic
+  HFIR directly, with explicit operand-role normalization, deterministic
+  differential artifact/VM evidence, capability consistency checks, preserved
+  compile diagnostic provenance, and fail-closed
+  `HFIR_BYTECODE_UNSUPPORTED` diagnostics. Public bytecode builds continue to
+  use the AST compiler while the subset expands.
 * `list_len` construct and bytecode instruction `OpListLen` to measure list lengths without manual loops.
 * `is_nil` intrinsic to natively detect the absence of a value (e.g., a missing key in a dict) instead of string formatting checks.
 * HowlFrame Repo Analyst, a deterministic five-module standalone application that

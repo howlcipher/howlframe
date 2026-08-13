@@ -26,6 +26,7 @@ type Node struct {
 	Effects      []Effect     `json:"effects,omitempty"`
 	Type         ast.TypeInfo `json:"type"`
 	Value        string       `json:"value,omitempty"`
+	LiteralKind  string       `json:"literal_kind,omitempty"`
 }
 
 type Provenance struct {
@@ -62,6 +63,23 @@ func (g *Graph) AddNode(n *Node) NodeID {
 	g.Nodes = append(g.Nodes, n)
 	g.nodeMap[n.ID] = n
 	return n.ID
+}
+
+// NodeByID returns the semantic node identified by id. It also works for a
+// graph that was decoded from JSON, where nodeMap is intentionally omitted.
+func (g *Graph) NodeByID(id NodeID) *Node {
+	if g == nil {
+		return nil
+	}
+	if node, ok := g.nodeMap[id]; ok {
+		return node
+	}
+	for _, node := range g.Nodes {
+		if node.ID == id {
+			return node
+		}
+	}
+	return nil
 }
 
 func (g *Graph) Serialize() ([]byte, error) {

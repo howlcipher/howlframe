@@ -48,6 +48,7 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 			node.Kind = "symbol"
 		}
 		node.Value = astNode.Value
+		node.LiteralKind = astNode.Type
 		return ctx.Graph.AddNode(node), nil
 	}
 
@@ -63,6 +64,11 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 
 	if astNode.Type == "List" && len(astNode.Children) > 0 {
 		head := astNode.Children[0]
+		if head.Type == "SYMBOL" {
+			if id, handled, err := ctx.lowerSemanticList(node, astNode, head.Value); handled {
+				return id, err
+			}
+		}
 		node.Kind = head.Value
 		if head.Type != "SYMBOL" {
 			node.Kind = "call"
@@ -89,4 +95,178 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 	}
 
 	return "", fmt.Errorf("unknown AST node type: %s", astNode.Type)
+}
+
+// lowerSemanticList gives the executable HFIR subset explicit semantic shape.
+// The generic fallback above remains intentionally available to the verifier
+// for constructs outside that subset; it is never consumed by the direct
+// bytecode lowerer.
+func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, head string) (NodeID, bool, error) {
+	addChildren := func(start int, edgeName string) (NodeID, error) {
+		id := ctx.Graph.AddNode(node)
+		for _, child := range astNode.Children[start:] {
+			childID, err := ctx.lowerNode(child)
+			if err != nil {
+				return "", err
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: edgeName, SourceNode: childID})
+		}
+		return id, nil
+	}
+	addNamed := func(parts []struct {
+		name  string
+		child *ast.Node
+	}) (NodeID, error) {
+		id := ctx.Graph.AddNode(node)
+		for _, part := range parts {
+			childID, err := ctx.lowerNode(part.child)
+			if err != nil {
+				return "", err
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: part.name, SourceNode: childID})
+		}
+		return id, nil
+	}
+
+	switch head {
+	case "cli_app":
+		node.Kind = "program"
+		id, err := addChildren(1, "body")
+		return id, true, err
+	case "do":
+		node.Kind = "sequence"
+		id, err := addChildren(1, "body")
+		return id, true, err
+	case "let":
+		if len(astNode.Children) != 3 || astNode.Children[1].Type != "List" || len(astNode.Children[1].Children) != 2 || astNode.Children[1].Children[0].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = "let"
+		node.Value = astNode.Children[1].Children[0].Value
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[1].Children[1]}, {"body", astNode.Children[2]}})
+		return id, true, err
+	case "set":
+		if len(astNode.Children) != 3 || astNode.Children[1].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = "set"
+		node.Value = astNode.Children[1].Value
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[2]}})
+		return id, true, err
+	case "if":
+		if len(astNode.Children) != 3 && len(astNode.Children) != 4 {
+			return "", false, nil
+		}
+		node.Kind = "if"
+		parts := []struct {
+			name  string
+			child *ast.Node
+		}{{"condition", astNode.Children[1]}, {"then", astNode.Children[2]}}
+		if len(astNode.Children) == 4 {
+			parts = append(parts, struct {
+				name  string
+				child *ast.Node
+			}{"else", astNode.Children[3]})
+		}
+		id, err := addNamed(parts)
+		return id, true, err
+	case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=", "and", "or":
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = "binary"
+		node.Value = head
+		if node.Value == "=" {
+			node.Value = "=="
+		}
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"left", astNode.Children[1]}, {"right", astNode.Children[2]}})
+		return id, true, err
+	case "list":
+		node.Kind = "list"
+		id, err := addChildren(1, "item")
+		return id, true, err
+	case "dict":
+		node.Kind = "dict"
+		id := ctx.Graph.AddNode(node)
+		for _, entry := range astNode.Children[1:] {
+			if entry.Type != "List" || len(entry.Children) != 2 {
+				return "", true, fmt.Errorf("dict entry must contain a key and value")
+			}
+			entryNode := &Node{Kind: "dict_entry", Module: ctx.Module, Provenance: node.Provenance}
+			entryID := ctx.Graph.AddNode(entryNode)
+			for index, name := range []string{"key", "value"} {
+				childID, err := ctx.lowerNode(entry.Children[index])
+				if err != nil {
+					return "", true, err
+				}
+				entryNode.DataInputs = append(entryNode.DataInputs, DataEdge{Name: name, SourceNode: childID})
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: "entry", SourceNode: entryID})
+		}
+		return id, true, nil
+	case "print", "stderr", "exit":
+		node.Kind = head
+		id, err := addChildren(1, "value")
+		return id, true, err
+	case "to_int", "to_float", "to_string", "bytes_to_string":
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = "convert"
+		node.Value = head
+		id, err := addChildren(1, "value")
+		return id, true, err
+	case "str_split", "str_join":
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[1]}, {"separator", astNode.Children[2]}})
+		return id, true, err
+	case "list_len", "env":
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addChildren(1, "value")
+		return id, true, err
+	case "map_get", "map_delete", "list_get", "append":
+		if len(astNode.Children) < 3 || astNode.Children[1].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = head
+		node.Value = astNode.Children[1].Value
+		edgeName := "key"
+		if head == "list_get" {
+			edgeName = "index"
+		} else if head == "append" {
+			edgeName = "item"
+		}
+		id, err := addChildren(2, edgeName)
+		return id, true, err
+	case "map_set":
+		if len(astNode.Children) != 4 || astNode.Children[1].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = head
+		node.Value = astNode.Children[1].Value
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"key", astNode.Children[2]}, {"value", astNode.Children[3]}})
+		return id, true, err
+	}
+	return "", false, nil
 }
