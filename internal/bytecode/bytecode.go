@@ -344,6 +344,10 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		return insts
 	}
 	if node.Type == "SYMBOL" {
+		if node.Value == "true" || node.Value == "false" {
+			insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: node.Value == "true"})
+			return insts
+		}
 		insts = append(insts, BCInstruction{OpString: "LOAD_VAR", Op: OpLoadVar, StringOperand: node.Value})
 		return insts
 	}

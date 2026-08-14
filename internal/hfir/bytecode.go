@@ -450,6 +450,11 @@ func instruction(op bytecode.Opcode, name string, apply func(*bytecode.BCInstruc
 
 func literalValue(node *Node) (any, error) {
 	switch node.LiteralKind {
+	case "BOOL":
+		if node.Value != "true" && node.Value != "false" {
+			return nil, fmt.Errorf("invalid boolean literal %q", node.Value)
+		}
+		return node.Value == "true", nil
 	case "INT":
 		value, err := strconv.ParseInt(node.Value, 10, 64)
 		if err != nil {

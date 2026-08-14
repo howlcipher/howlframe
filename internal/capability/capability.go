@@ -1,5 +1,7 @@
 package capability
 
+import "strings"
+
 // Capability represents an explicitly granted permission to perform a class of effects.
 type Capability string
 
@@ -39,4 +41,19 @@ func ForConstruct(name string) Capability {
 		return Environment
 	}
 	return None
+}
+
+// StoreRequirements returns the runner capabilities required by a store URI.
+// Database semantics are required by every native store. A file-backed store
+// additionally performs physical filesystem I/O and therefore requires an
+// explicit filesystem grant.
+func StoreRequirements(uri string) ([]Capability, bool) {
+	switch {
+	case strings.HasPrefix(uri, "memory://") && len(uri) > len("memory://"):
+		return []Capability{Database}, true
+	case strings.HasPrefix(uri, "file://") && len(uri) > len("file://"):
+		return []Capability{Database, Filesystem}, true
+	default:
+		return nil, false
+	}
 }

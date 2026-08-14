@@ -646,8 +646,12 @@ func validateNode(node transportNode) *Diagnostic {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_VALUE", "node requires a non-empty semantic value", node.ID)
 		return &diagnostic
 	}
-	if node.Kind == "const" && (node.LiteralKind != "INT" && node.LiteralKind != "FLOAT" && node.LiteralKind != "STRING") {
+	if node.Kind == "const" && (node.LiteralKind != "INT" && node.LiteralKind != "FLOAT" && node.LiteralKind != "STRING" && node.LiteralKind != "BOOL") {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_LITERAL", "const node has an unsupported literal_kind", node.ID)
+		return &diagnostic
+	}
+	if node.Kind == "const" && node.LiteralKind == "BOOL" && node.Value != "true" && node.Value != "false" {
+		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_LITERAL", "BOOL const value must be true or false", node.ID)
 		return &diagnostic
 	}
 	if node.Kind == "const" {

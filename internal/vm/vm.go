@@ -207,6 +207,12 @@ func (interp *Interpreter) eval(node *ast.Node, env *InterpEnv) any {
 		}
 		return v
 	case "SYMBOL":
+		if node.Value == "true" {
+			return true
+		}
+		if node.Value == "false" {
+			return false
+		}
 		if v, ok := env.get(node.Value); ok {
 			return v
 		}
@@ -441,7 +447,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 		return val
 	case "list":
-		var items []any
+		items := make([]any, 0, len(node.Children)-1)
 		for _, kid := range node.Children[1:] {
 			items = append(items, interp.eval(kid, env))
 		}
@@ -1131,7 +1137,7 @@ func newBCStoreRegistry() *bcStoreRegistry {
 	return &bcStoreRegistry{stores: make(map[string]*bcMemoryStore)}
 }
 
-func (registry *bcStoreRegistry) open(uri string) *bcMemoryStore {
+func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 
@@ -1141,20 +1147,35 @@ func (registry *bcStoreRegistry) open(uri string) *bcMemoryStore {
 		if strings.HasPrefix(uri, "file://") {
 			store.file = strings.TrimPrefix(uri, "file://")
 			data, err := os.ReadFile(store.file)
+			if err != nil && !os.IsNotExist(err) {
+				return nil, fmt.Errorf("read persisted store %q: %w", store.file, err)
+			}
 			if err == nil {
-				json.Unmarshal(data, &store.records)
+				if unmarshalErr := json.Unmarshal(data, &store.records); unmarshalErr != nil {
+					return nil, fmt.Errorf("decode persisted store %q: %w", store.file, unmarshalErr)
+				}
+				if store.records == nil {
+					store.records = make(map[string]map[string]any)
+				}
 			}
 		}
 		registry.stores[uri] = store
 	}
-	return store
+	return store, nil
 }
 
-func (s *bcMemoryStore) syncToFile() {
-	if s.file != "" {
-		data, _ := json.MarshalIndent(s.records, "", "  ")
-		os.WriteFile(s.file, data, 0644)
+func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
+	if s.file == "" {
+		return nil
 	}
+	data, err := json.MarshalIndent(records, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
+	}
+	if err := os.WriteFile(s.file, data, 0644); err != nil {
+		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	return nil
 }
 
 type BcEnv struct {
@@ -1308,10 +1329,44 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 	return store
 }
 
+func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
+	for _, allowed := range vm.AllowedCaps {
+		if allowed == cap {
+			return
+		}
+	}
+	panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", cap))
+}
+
+func (vm *BCVM) requireStoreCapabilities(uri string, op bytecode.Opcode) {
+	required, valid := capability.StoreRequirements(uri)
+	if !valid {
+		panic(NewRuntimeError("INVALID_STORE_URI", "main", vm.ip, op, "store URI must use memory:// or file:// with a non-empty name"))
+	}
+	for _, requiredCap := range required {
+		vm.requireCapability(requiredCap, op)
+	}
+}
+
+func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string]any, op bytecode.Opcode) {
+	if err := store.syncToFile(records); err != nil {
+		panic(NewRuntimeError("STORE_PERSISTENCE_WRITE_FAILED", "main", vm.ip, op, "%v", err))
+	}
+	store.records = records
+}
+
 func cloneStoreRecord(record map[string]any) map[string]any {
 	clone := make(map[string]any, len(record))
 	for key, value := range record {
 		clone[key] = cloneStoreValue(value)
+	}
+	return clone
+}
+
+func cloneStoreRecords(records map[string]map[string]any) map[string]map[string]any {
+	clone := make(map[string]map[string]any, len(records))
+	for key, record := range records {
+		clone[key] = cloneStoreRecord(record)
 	}
 	return clone
 }
@@ -1351,16 +1406,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 		spec := bytecode.Registry[inst.Op]
 		if spec.Capability != capability.None {
-			allowed := false
-			for _, cap := range vm.AllowedCaps {
-				if cap == spec.Capability {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, inst.Op, "capability denied: %s", spec.Capability))
-			}
+			vm.requireCapability(spec.Capability, inst.Op)
 		}
 
 		switch inst.Op {
@@ -1441,16 +1487,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(results)
 		case bytecode.OpStoreOpen:
 			uri := inst.StringOperand2
-			if (!strings.HasPrefix(uri, "memory://") && !strings.HasPrefix(uri, "file://")) || len(uri) <= len("file://") {
-				panic(NewRuntimeError(
-					"INVALID_STORE_URI",
-					"main",
-					vm.ip,
-					inst.Op,
-					"store URI must use memory:// or file:// with a non-empty name",
-				))
+			vm.requireStoreCapabilities(uri, inst.Op)
+			store, err := vm.stores.open(uri)
+			if err != nil {
+				code := "STORE_PERSISTENCE_READ_FAILED"
+				if strings.Contains(err.Error(), "decode persisted store") {
+					code = "STORE_INVALID_PERSISTED_JSON"
+				}
+				panic(NewRuntimeError(code, "main", vm.ip, inst.Op, "%v", err))
 			}
-			env.vars[inst.StringOperand] = vm.stores.open(uri)
+			env.vars[inst.StringOperand] = store
 		case bytecode.OpStorePut:
 			recordAny := vm.pop(inst.Op)
 			key := fmt.Sprint(vm.pop(inst.Op))
@@ -1466,13 +1512,20 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				))
 			}
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			if store.file != "" {
+				vm.requireCapability(capability.Filesystem, inst.Op)
+			}
 			store.mu.Lock()
-			store.records[key] = cloneStoreRecord(record)
-			store.syncToFile()
+			records := cloneStoreRecords(store.records)
+			records[key] = cloneStoreRecord(record)
+			vm.persistStore(store, records, inst.Op)
 			store.mu.Unlock()
 		case bytecode.OpStoreGet:
 			key := fmt.Sprint(vm.pop(inst.Op))
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			if store.file != "" {
+				vm.requireCapability(capability.Filesystem, inst.Op)
+			}
 			store.mu.RLock()
 			record, ok := store.records[key]
 			if ok {
@@ -1489,9 +1542,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpStoreDelete:
 			key := fmt.Sprint(vm.pop(inst.Op))
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			if store.file != "" {
+				vm.requireCapability(capability.Filesystem, inst.Op)
+			}
 			store.mu.Lock()
-			delete(store.records, key)
-			store.syncToFile()
+			records := cloneStoreRecords(store.records)
+			delete(records, key)
+			vm.persistStore(store, records, inst.Op)
 			store.mu.Unlock()
 		case bytecode.OpFetch:
 			method := vm.pop(inst.Op).(string)
@@ -1969,7 +2026,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				argVals = append([]any{vm.pop(inst.Op)}, argVals...)
 			}
 
-			callEnv := NewBcEnv(nil)
+			callEnv := NewBcEnv(env)
 			for i, p := range fn.Params {
 				callEnv.vars[p] = argVals[i]
 			}
@@ -2074,7 +2131,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(matched)
 		case bytecode.OpMakeList:
 			num := int(inst.IntOperand)
-			var items []any
+			items := make([]any, 0, num)
 			for i := 0; i < num; i++ {
 				items = append([]any{vm.pop(inst.Op)}, items...)
 			}
