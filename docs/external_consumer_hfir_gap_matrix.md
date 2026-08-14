@@ -1,28 +1,32 @@
 # External Consumer HFIR Gap Matrix
 
-This matrix compares the exact current usage of HowlFrame constructs across our two external consumers (ChangeOps and HowlBoard) against the direct HFIR execution support after Phase 2.
+This matrix reflects the clean consumer checkouts used by the 2026-08-14 runtime integrity gate. “Direct HFIR proven” means the current consumer policy was compiled with `compile-hfir-bc` and exercised through `run-bc`; it does not imply that every consumer feature is in HFIR.
 
-| Category | Constructs | ChangeOps | HowlBoard Backend | HowlBoard Frontend | Direct HFIR Support |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Core Values/Logic** | `let`, `set`, `if`, `=`, `+`, `<`, `and`, `is_nil`, `to_int`, `to_string` | Yes | Yes | Yes | **Supported** |
-| **JSON** | `parse_json` | Yes | Yes | Yes | **Supported** |
-| **Recovery** | `try_let`, `catch` | Yes | Yes | Yes | **Supported** |
-| **Iteration** | `for`, `while` | `for` | `while` | `for` | `for` only |
-| **Functions** | `defun` | No | Yes | Yes | Missing |
-| **Call/Return** | `call`, `return` | No | Yes | Yes | Missing |
-| **HTTP** | `http_server` | No | Yes | No | Missing |
-| **Route/Lambda** | `route`, `lambda` | No | Yes | `lambda` | Missing |
-| **Request API** | `req_method`, `req.body` | No | Yes | No | Missing |
-| **Response API** | `res_json`, `res_header` | No | Yes | No | Missing |
-| **Stores** | `store_open`, `store_get`, `store_put`, `store_delete` | No | Yes | No | Missing |
-| **Fetch** | `fetch` | No | No | Yes | Missing |
-| **DOM** | `dom_query`, `dom_value`, `set_html`, `set_text`, `toggle_class` | No | No | Yes | Missing |
-| **Events** | `on_event` | No | No | Yes | Missing |
-| **JS Backend** | `web_app`, `export` | No | No | Yes | Missing |
+| Category | Current constructs | ChangeOps | HowlBot | HowlBoard backend | HowlBoard frontend |
+| --- | --- | --- | --- | --- | --- |
+| Core logic | `let`, `set`, `if`, `do`, equality, `and`, `or`, conversions | Direct HFIR proven | Direct HFIR proven | Legacy bytecode | JS-only |
+| CLI args | `cli_app`, `cli_args` | Direct HFIR proven | Direct HFIR proven | Missing | Missing |
+| JSON | `parse_json`, `dict`, `map_get` | Direct HFIR proven | Missing | Legacy bytecode | JS-only |
+| Recovery | `try_let`, `catch` | Direct HFIR proven; interpreter path unsupported | Missing | Legacy bytecode | JS-only |
+| Iteration | `for` | Direct HFIR proven | Direct HFIR proven | Legacy bytecode | JS-only |
+| Functions | `defun` | Missing | Missing | Legacy bytecode | JS-only |
+| Call/return | `call`, `return` | Missing | Missing | Legacy bytecode | JS-only |
+| HTTP | `http_server` | Missing | Missing | Legacy bytecode | Missing |
+| Route/lambda | `route`, `lambda` | Missing | Missing | Legacy bytecode | JS-only |
+| Request/response | `req_method`, `res_json`, `res_header` | Missing | Missing | Legacy bytecode | Missing |
+| Stores | `store_open`, `store_get`, `store_put`, `store_delete` | Missing | Missing | Legacy bytecode | Missing |
+| Filesystem | `read_file`, `bytes_to_string` | Direct HFIR proven | Missing | Legacy bytecode | Missing |
+| Fetch | `fetch` | Missing | Missing | Missing | JS-only |
+| DOM | `dom_query`, `dom_value`, `set_html`, `set_text`, `toggle_class` | Missing | Missing | Missing | JS-only |
+| Events | `on_event` | Missing | Missing | Missing | JS-only |
+| JS backend | `web_app`, `export` | Missing | Missing | Missing | JS-only |
 
-## Conclusion
+## Evidence and interpretation
 
-ChangeOps now runs fully on direct HFIR execution.
-HowlBoard uses a significantly larger subset of the language, particularly revolving around persistent state (`stores`), HTTP routing (`route`, `res_json`), function definitions (`defun`, `call`, `return`), and web application frontend logic (`web_app`, `dom_query`, `set_html`, `fetch`, `on_event`).
+ChangeOps and HowlBot are the two direct-HFIR policy consumers. Their current policy artifacts produced matching decisions on their tested normalized inputs. HowlBoard remains a legacy-bytecode application and was used here as a runtime stress consumer; it was not migrated.
 
-**Phase 2B Recommendation**: The next consumer-driven HFIR phase must target HowlBoard. This will require extending semantic HFIR, the verifier, and the lowerer to support `defun`/`call`/`return` as well as the HTTP routing, store primitives, and DOM interaction constructs.
+HowlBot’s role/set and JSON-array ergonomics were not execution blockers. They remain ergonomic backlog items rather than new language surface for this milestone.
+
+HowlBoard’s `set_html` path still maps to raw `innerHTML`; the existing XSS concern remains tracked in `docs/howlboard_xss_set_html_issue.md`.
+
+The next HFIR expansion, if the final gate remains green, should target the HowlBoard backend in consumer-driven phases: function call/return semantics, stores, and then HTTP request/response behavior.

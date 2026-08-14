@@ -2,6 +2,8 @@ package vm
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -56,21 +58,23 @@ func TestSpawnInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 func TestHttpRouteInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 	// This tests the bug fix where `OpHttpRoute` failed to pass AllowedCaps to child VM
 	// and skipped the instruction after the route block due to an errant `continue`.
-	src := `(http_server 8090
+	src := `(http_server 0
     (route "/" (lambda (req) (print "Routed")))
 )`
 	_, prog := parseAndCompile(t, src)
 
 	var out, errOut safeBuffer
 	caps := []capability.Capability{capability.Network}
-
-	go func() {
-		RunBytecode(prog, nil, caps, strings.NewReader(""), &out, &errOut)
-	}()
-	time.Sleep(100 * time.Millisecond)
+	env := NewBcEnv(nil)
+	machine := &BCVM{prog: prog, env: env, insts: prog.Main, stores: newBCStoreRegistry(), Limits: DefaultLimits, AllowedCaps: caps, Out: &out, ErrOut: &errOut}
+	route := prog.Main[1]
+	machine.run(prog.Main[:2+int(route.IntOperand)], env)
+	mux := env.vars["__http_mux"].(*http.ServeMux)
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest("GET", "/", nil))
 
 	outStr := out.String()
-	if !strings.Contains(outStr, "Listening on 8090") {
-		t.Errorf("Parent VM did not execute http_server correctly, output: %s", outStr)
+	if !strings.Contains(outStr, "Routed") {
+		t.Errorf("route handler did not execute, output: %s", outStr)
 	}
 }

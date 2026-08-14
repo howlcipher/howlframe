@@ -44,11 +44,15 @@ func (ctx *LoweringContext) lowerNode(astNode *ast.Node) (NodeID, error) {
 	// constants exactly (integers lex as "INT", never "NUMBER").
 	if astNode.Type == "STRING" || astNode.Type == "INT" || astNode.Type == "SYMBOL" || astNode.Type == "FLOAT" {
 		node.Kind = "const"
+		node.LiteralKind = astNode.Type
 		if astNode.Type == "SYMBOL" {
-			node.Kind = "symbol"
+			if astNode.Value != "true" && astNode.Value != "false" {
+				node.Kind = "symbol"
+			} else {
+				node.LiteralKind = "BOOL"
+			}
 		}
 		node.Value = astNode.Value
-		node.LiteralKind = astNode.Type
 		return ctx.Graph.AddNode(node), nil
 	}
 
@@ -252,6 +256,9 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Kind = head
 		if head == "map_get" || head == "map_delete" || head == "list_get" || head == "append" || head == "parse_json" {
 			node.Value = astNode.Children[1].Value
+		}
+		if head == "parse_json" && len(astNode.Children) == 3 {
+			node.Value = astNode.Children[2].Value
 		}
 
 		if head == "cli_args" {
