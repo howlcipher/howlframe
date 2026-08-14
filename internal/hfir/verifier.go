@@ -49,6 +49,50 @@ func (v *Verifier) Verify() []Diagnostic {
 			}
 		}
 
+		// 2. Semantic Role Validation
+		edgeCounts := make(map[string]int)
+		for _, edge := range node.DataInputs {
+			edgeCounts[edge.Name]++
+		}
+
+		checkRole := func(role string, required bool) {
+			count := edgeCounts[role]
+			if required && count == 0 {
+				v.addDiagnostic("HFIR_MISSING_ROLE", SeverityError, "Missing required semantic role: "+role, node.Provenance, node.ID)
+			} else if count > 1 {
+				v.addDiagnostic("HFIR_DUPLICATE_ROLE", SeverityError, "Duplicate semantic role: "+role, node.Provenance, node.ID)
+			}
+		}
+
+		switch node.Kind {
+		case "try":
+			if node.Value == "" {
+				v.addDiagnostic("HFIR_BAD_BINDING", SeverityError, "try requires a success binding", node.Provenance, node.ID)
+			}
+			checkRole("expression", true)
+			checkRole("success_body", true)
+			checkRole("catch", true)
+		case "catch":
+			if node.Value == "" {
+				v.addDiagnostic("HFIR_BAD_BINDING", SeverityError, "catch requires an error binding", node.Provenance, node.ID)
+			}
+			checkRole("body", true)
+		case "for":
+			if node.Value == "" {
+				v.addDiagnostic("HFIR_BAD_BINDING", SeverityError, "for requires an iterator binding", node.Provenance, node.ID)
+			}
+			checkRole("iterable", true)
+			checkRole("body", true)
+		case "read_file":
+			checkRole("path", true)
+		case "parse_json":
+			checkRole("content", true)
+		case "is_nil":
+			checkRole("value", true)
+		case "cli_args":
+			checkRole("index", false)
+		}
+
 		// 3. Cycle & Reference Validation
 		for _, dataEdge := range node.DataInputs {
 			if _, exists := v.Graph.nodeMap[dataEdge.SourceNode]; !exists {

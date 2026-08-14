@@ -242,12 +242,58 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Kind = head
 		id, err := addChildren(1, "value")
 		return id, true, err
-	case "map_get", "map_delete", "list_get", "append":
-		if len(astNode.Children) < 3 || astNode.Children[1].Type != "SYMBOL" {
+	case "map_get", "map_delete", "list_get", "append", "cli_args", "read_file", "parse_json", "is_nil":
+		if len(astNode.Children) < 2 {
+			return "", false, nil
+		}
+		if (head == "map_get" || head == "map_delete" || head == "list_get" || head == "append" || head == "parse_json") && astNode.Children[1].Type != "SYMBOL" {
 			return "", false, nil
 		}
 		node.Kind = head
-		node.Value = astNode.Children[1].Value
+		if head == "map_get" || head == "map_delete" || head == "list_get" || head == "append" || head == "parse_json" {
+			node.Value = astNode.Children[1].Value
+		}
+
+		if head == "cli_args" {
+			if len(astNode.Children) == 2 {
+				id, err := addNamed([]struct {
+					name  string
+					child *ast.Node
+				}{{"index", astNode.Children[1]}})
+				return id, true, err
+			} else if len(astNode.Children) == 1 {
+				return ctx.Graph.AddNode(node), true, nil
+			}
+			return "", false, nil
+		} else if head == "read_file" {
+			if len(astNode.Children) != 2 {
+				return "", false, nil
+			}
+			id, err := addNamed([]struct {
+				name  string
+				child *ast.Node
+			}{{"path", astNode.Children[1]}})
+			return id, true, err
+		} else if head == "parse_json" {
+			if len(astNode.Children) != 3 {
+				return "", false, nil
+			}
+			id, err := addNamed([]struct {
+				name  string
+				child *ast.Node
+			}{{"content", astNode.Children[2]}})
+			return id, true, err
+		} else if head == "is_nil" {
+			if len(astNode.Children) != 2 {
+				return "", false, nil
+			}
+			id, err := addNamed([]struct {
+				name  string
+				child *ast.Node
+			}{{"value", astNode.Children[1]}})
+			return id, true, err
+		}
+
 		edgeName := "key"
 		if head == "list_get" {
 			edgeName = "index"
@@ -266,6 +312,53 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			name  string
 			child *ast.Node
 		}{{"key", astNode.Children[2]}, {"value", astNode.Children[3]}})
+		return id, true, err
+	case "try_let":
+		if len(astNode.Children) != 4 || astNode.Children[1].Type != "List" || len(astNode.Children[1].Children) != 2 || astNode.Children[1].Children[0].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		if astNode.Children[2].Type != "List" || len(astNode.Children[2].Children) != 3 || astNode.Children[2].Children[0].Value != "catch" || astNode.Children[2].Children[1].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = "try"
+		node.Value = astNode.Children[1].Children[0].Value // success binding
+
+		id := ctx.Graph.AddNode(node)
+
+		exprID, err := ctx.lowerNode(astNode.Children[1].Children[1])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "expression", SourceNode: exprID})
+
+		successBodyID, err := ctx.lowerNode(astNode.Children[3])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "success_body", SourceNode: successBodyID})
+
+		catchNode := &Node{Kind: "catch", Module: ctx.Module, Provenance: node.Provenance, Value: astNode.Children[2].Children[1].Value} // catch binding
+		catchID := ctx.Graph.AddNode(catchNode)
+
+		catchBodyID, err := ctx.lowerNode(astNode.Children[2].Children[2])
+		if err != nil {
+			return "", true, err
+		}
+		catchNode.DataInputs = append(catchNode.DataInputs, DataEdge{Name: "body", SourceNode: catchBodyID})
+
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "catch", SourceNode: catchID})
+
+		return id, true, nil
+	case "for":
+		if len(astNode.Children) != 4 || astNode.Children[1].Type != "SYMBOL" {
+			return "", false, nil
+		}
+		node.Kind = "for"
+		node.Value = astNode.Children[1].Value
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"iterable", astNode.Children[2]}, {"body", astNode.Children[3]}})
 		return id, true, err
 	}
 	return "", false, nil

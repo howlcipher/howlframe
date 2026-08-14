@@ -49,6 +49,7 @@ func main() {
 	outDir := flag.String("o", "", "output directory, or exact artifact file after input with -compile-bc or -compile-wasm")
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
+	compileHfirBc := flag.Bool("compile-hfir-bc", false, "EXPERIMENTAL: compile directly from semantic HFIR to bytecode JSON")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
@@ -124,6 +125,28 @@ func main() {
 	if *compileBc {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
+		var buf bytes.Buffer
+		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
+		}
+		outFile := inputFile + ".bc.bin"
+		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
+			outFile = outputFile
+		} else if *outDir != "" {
+			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".bc.bin")
+		}
+		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
+		}
+		os.Exit(0)
+	}
+
+	if *compileHfirBc {
+		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
+		prog, diags := hfir.LowerToBytecode(graph)
+		if len(diags) > 0 {
+			ast.ReportError(fmt.Sprintf("HFIR direct lowering failed: %s", diags[0].Message), diags[0].Location.Line, diags[0].Location.Column)
+		}
 		var buf bytes.Buffer
 		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
@@ -386,7 +409,7 @@ var hfirBlockingCodes = map[string]bool{
 // feasibility are not implemented in internal/hfir yet (ControlEdges is
 // declared but never populated by LowerAST, and isFeasible only has rules
 // for "wasm").
-func runHFIRGate(root *ast.Node, module string, target hfirTarget) {
+func runHFIRGate(root *ast.Node, module string, target hfirTarget) *hfir.Graph {
 	graph, err := hfir.LowerAST(root, module)
 	if err != nil {
 		line, column := 0, 0
@@ -408,15 +431,16 @@ func runHFIRGate(root *ast.Node, module string, target hfirTarget) {
 	// gate's failure policy.
 	diags = append(diags, hfir.VerifyConstructs(root, string(target))...)
 
-	var errDiags []hfir.Diagnostic
+	var blocking []hfir.Diagnostic
 	for _, d := range diags {
 		if d.Severity == hfir.SeverityError && hfirBlockingCodes[d.Code] {
-			errDiags = append(errDiags, d)
+			blocking = append(blocking, d)
 		}
 	}
-	if len(errDiags) > 0 {
-		reportHFIRDiagnostics(errDiags)
+	if len(blocking) > 0 {
+		reportHFIRDiagnostics(blocking)
 	}
+	return graph
 }
 
 // reportHFIRDiagnostics prints every ERROR diagnostic as one deterministic

@@ -241,6 +241,48 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			op, name = bytecode.OpEnv, "ENV"
 		}
 		return append(insts, instruction(op, name, func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })), nil
+	case "read_file":
+		if len(children) != 1 || node.DataInputs[0].Name != "path" {
+			diagnostic := c.diagnostic(node, "read_file requires path")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		return append(insts, instruction(bytecode.OpReadFile, "READ_FILE", nil)), nil
+	case "parse_json":
+		if len(children) != 1 || node.DataInputs[0].Name != "content" {
+			diagnostic := c.diagnostic(node, "parse_json requires content")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		return append(insts, instruction(bytecode.OpParseJson, "PARSE_JSON", func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })), nil
+	case "is_nil":
+		if len(children) != 1 || node.DataInputs[0].Name != "value" {
+			diagnostic := c.diagnostic(node, "is_nil requires value")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		return append(insts, instruction(bytecode.OpIsNil, "IS_NIL", nil)), nil
+	case "cli_args":
+		if len(children) == 1 && node.DataInputs[0].Name == "index" {
+			insts, childDiagnostic := compileChild(0)
+			if childDiagnostic != nil {
+				return nil, childDiagnostic
+			}
+			return append(insts, instruction(bytecode.OpCliArgsGet, "CLI_ARGS_GET", nil)), nil
+		} else if len(children) == 0 {
+			return []bytecode.BCInstruction{instruction(bytecode.OpCliArgs, "CLI_ARGS", nil)}, nil
+		}
+		diagnostic := c.diagnostic(node, "cli_args requires either zero arguments or one index")
+		return nil, &diagnostic
 	case "str_split", "str_join":
 		if len(children) != 2 || node.DataInputs[0].Name != "value" || node.DataInputs[1].Name != "separator" {
 			diagnostic := c.diagnostic(node, node.Kind+" requires value and separator")
@@ -290,6 +332,71 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			return nil, childDiagnostic
 		}
 		return append(insts, instruction(bytecode.OpMapSet, "MAP_SET", func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })), nil
+	case "try":
+		if node.Value == "" || len(children) != 3 || node.DataInputs[0].Name != "expression" || node.DataInputs[1].Name != "success_body" || node.DataInputs[2].Name != "catch" {
+			diagnostic := c.diagnostic(node, "try requires expression, success_body, and catch edges")
+			return nil, &diagnostic
+		}
+		exprInsts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		successInsts, childDiagnostic := compileChild(1)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		catchNode := children[2]
+		if catchNode.Kind != "catch" || catchNode.Value == "" || len(catchNode.DataInputs) != 1 || catchNode.DataInputs[0].Name != "body" {
+			diagnostic := c.diagnostic(catchNode, "catch requires a body edge and error binding")
+			return nil, &diagnostic
+		}
+		catchChildren, catchDiagnostic := c.children(catchNode)
+		if catchDiagnostic != nil {
+			return nil, catchDiagnostic
+		}
+		catchBodyInsts, catchChildDiag := c.compile(catchChildren[0])
+		if catchChildDiag != nil {
+			return nil, catchChildDiag
+		}
+
+		insts := []bytecode.BCInstruction{instruction(bytecode.OpTryLet, "TRY_LET", func(inst *bytecode.BCInstruction) {
+			inst.StringOperand = node.Value
+			inst.StringOperand2 = catchNode.Value
+			inst.IntOperand = int64(len(exprInsts))
+			inst.IntOperand2 = int64(len(catchBodyInsts))
+			inst.IntOperand3 = int64(len(successInsts))
+		})}
+		insts = append(insts, exprInsts...)
+		insts = append(insts, catchBodyInsts...)
+		insts = append(insts, successInsts...)
+		return insts, nil
+	case "for":
+		if node.Value == "" || len(children) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" {
+			diagnostic := c.diagnostic(node, "for requires iterable and body edges")
+			return nil, &diagnostic
+		}
+		listInsts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		bodyInsts, childDiagnostic := compileChild(1)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+
+		var insts []bytecode.BCInstruction
+		insts = append(insts, listInsts...)
+		insts = append(insts, instruction(bytecode.OpForInit, "FOR_INIT", nil))
+		loopStart := len(insts)
+		insts = append(insts, instruction(bytecode.OpForNext, "FOR_NEXT", func(inst *bytecode.BCInstruction) {
+			inst.StringOperand = node.Value
+			inst.IntOperand = int64(len(bodyInsts) + 2)
+		}))
+		insts = append(insts, bodyInsts...)
+		insts = append(insts, instruction(bytecode.OpJump, "JUMP", func(inst *bytecode.BCInstruction) {
+			inst.IntOperand = int64(-(len(insts) - loopStart))
+		}))
+		return insts, nil
 	default:
 		diagnostic := c.diagnostic(node, fmt.Sprintf("node kind %q is not in the Phase-1 executable subset", node.Kind))
 		return nil, &diagnostic

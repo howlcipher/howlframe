@@ -49,8 +49,12 @@ func TestVerifier(t *testing.T) {
 
 	t.Run("Effect inference", func(t *testing.T) {
 		g := NewGraph()
+		pathID := g.AddNode(&Node{Kind: "const"})
 		id := g.AddNode(&Node{
 			Kind: "read_file",
+			DataInputs: []DataEdge{
+				{Name: "path", SourceNode: pathID},
+			},
 		})
 
 		verifier := NewVerifier(g, "go")
@@ -87,8 +91,12 @@ func TestVerifier(t *testing.T) {
 // effects Verify() appends to nodes as a side effect.
 func TestVerifierIsIdempotent(t *testing.T) {
 	g := NewGraph()
+	pathID := g.AddNode(&Node{Kind: "const"})
 	g.AddNode(&Node{
 		Kind: "read_file",
+		DataInputs: []DataEdge{
+			{Name: "path", SourceNode: pathID},
+		},
 	})
 	g.AddNode(&Node{
 		Kind: "spawn_agent",
