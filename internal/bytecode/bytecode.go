@@ -414,7 +414,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "SQL_QUERY", Op: OpSqlQuery, StringOperand: dbVar, StringOperand2: queryStr})
 		case "store_open":
 			if len(node.Children) != 3 {
-				ast.ReportError(`store_open expects (store_open handle "memory://name")`, node.Line, node.Column)
+				ast.ReportError(`store_open expects (store_open handle "memory://name" or "file://name")`, node.Line, node.Column)
 			}
 			handleNode := node.Children[1]
 			uriNode := node.Children[2]

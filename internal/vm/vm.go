@@ -1124,6 +1124,7 @@ type bcStoreRegistry struct {
 type bcMemoryStore struct {
 	mu      sync.RWMutex
 	records map[string]map[string]any
+	file    string
 }
 
 func newBCStoreRegistry() *bcStoreRegistry {
@@ -1137,9 +1138,23 @@ func (registry *bcStoreRegistry) open(uri string) *bcMemoryStore {
 	store, ok := registry.stores[uri]
 	if !ok {
 		store = &bcMemoryStore{records: make(map[string]map[string]any)}
+		if strings.HasPrefix(uri, "file://") {
+			store.file = strings.TrimPrefix(uri, "file://")
+			data, err := os.ReadFile(store.file)
+			if err == nil {
+				json.Unmarshal(data, &store.records)
+			}
+		}
 		registry.stores[uri] = store
 	}
 	return store
+}
+
+func (s *bcMemoryStore) syncToFile() {
+	if s.file != "" {
+		data, _ := json.MarshalIndent(s.records, "", "  ")
+		os.WriteFile(s.file, data, 0644)
+	}
 }
 
 type BcEnv struct {
@@ -1426,13 +1441,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(results)
 		case bytecode.OpStoreOpen:
 			uri := inst.StringOperand2
-			if !strings.HasPrefix(uri, "memory://") || len(uri) == len("memory://") {
+			if (!strings.HasPrefix(uri, "memory://") && !strings.HasPrefix(uri, "file://")) || len(uri) <= len("file://") {
 				panic(NewRuntimeError(
 					"INVALID_STORE_URI",
 					"main",
 					vm.ip,
 					inst.Op,
-					"store URI must use memory:// with a non-empty name",
+					"store URI must use memory:// or file:// with a non-empty name",
 				))
 			}
 			env.vars[inst.StringOperand] = vm.stores.open(uri)
@@ -1453,6 +1468,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
 			store.mu.Lock()
 			store.records[key] = cloneStoreRecord(record)
+			store.syncToFile()
 			store.mu.Unlock()
 		case bytecode.OpStoreGet:
 			key := fmt.Sprint(vm.pop(inst.Op))
@@ -1475,6 +1491,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
 			store.mu.Lock()
 			delete(store.records, key)
+			store.syncToFile()
 			store.mu.Unlock()
 		case bytecode.OpFetch:
 			method := vm.pop(inst.Op).(string)
