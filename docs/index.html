@@ -40,12 +40,31 @@
             </div>
         </header>
 
+        <nav class="section-nav" aria-label="Page sections">
+            <span class="section-nav-label">READ_PATH:</span>
+            <a href="#overview">Start here</a>
+            <a href="#toolchain">Toolchain</a>
+            <a href="#quick-start">Quick start</a>
+            <a href="#examples">Examples</a>
+            <a href="#references">References</a>
+        </nav>
+
         <main id="main-content">
             <section id="overview">
                 <h2>Overview</h2>
-                <p>HowlFrame is an AI-native programming language and verified execution platform for adaptive software, designed so probabilistic reasoning can operate inside explicit deterministic boundaries.</p>
-                <blockquote><strong>Intent is not authority.</strong> Adaptive intelligence can reason and propose. Deterministic machinery controls permissions, capabilities, state, mutation, invariants, verification, and approval.</blockquote>
-                <p>Generated Go remains the broadest backend. HowlFrame also includes JavaScript generation, WebAssembly Text targets, direct AST execution for a bounded CLI subset, and binary bytecode execution through the HowlFrame VM. The project is experimental, and each target rejects unsupported behavior rather than presenting roadmap work as complete.</p>
+                <div class="overview-layout">
+                    <div>
+                        <p class="lead">HowlFrame is an AI-native programming language and verified execution platform for adaptive software, designed so probabilistic reasoning can operate inside explicit deterministic boundaries.</p>
+                        <blockquote><strong>Intent is not authority.</strong> Adaptive intelligence can reason and propose. Deterministic machinery controls permissions, capabilities, state, mutation, invariants, verification, and approval.</blockquote>
+                        <p>Generated Go remains the broadest backend. HowlFrame also includes JavaScript generation, WebAssembly Text targets, direct AST execution for a bounded CLI subset, and binary bytecode execution through the HowlFrame VM. The project is experimental, and each target rejects unsupported behavior rather than presenting roadmap work as complete.</p>
+                    </div>
+                    <div class="signal-grid" aria-label="HowlFrame operating model">
+                        <div><strong>REASON</strong><span>Adaptive proposals</span></div>
+                        <div><strong>VERIFY</strong><span>Typed IR checks</span></div>
+                        <div><strong>BOUND</strong><span>Explicit capabilities</span></div>
+                        <div><strong>RUN</strong><span>Verified targets</span></div>
+                    </div>
+                </div>
             </section>
 
             <section id="toolchain">
