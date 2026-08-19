@@ -473,6 +473,8 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return interp.evalMapGet(node, env)
 	case "list_get":
 		return interp.evalListGet(node, env)
+	case "time_now":
+		return int64(time.Now().Unix())
 	case "to_int":
 		if len(node.Children) != 2 {
 			InterpErr("to_int expects (to_int val)", node)
@@ -1628,7 +1630,20 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					panic("undefined req")
 				}
 				req := reqAny.(*http.Request)
-				data, _ = io.ReadAll(req.Body)
+				if req.Body == nil {
+					panic("request body is nil")
+				}
+				// Bound request body read to 10MB to prevent unbounded memory DoS
+				const maxBodyBytes = 10 * 1024 * 1024
+				limitedReader := io.LimitReader(req.Body, maxBodyBytes+1)
+				readData, err := io.ReadAll(limitedReader)
+				if err != nil {
+					panic(fmt.Sprintf("failed to read request body: %v", err))
+				}
+				if len(readData) > maxBodyBytes {
+					panic(fmt.Sprintf("request body exceeds maximum limit of %d bytes", maxBodyBytes))
+				}
+				data = readData
 				req.Body = io.NopCloser(bytes.NewBuffer(data))
 			} else {
 				bodyAny, ok := env.get(bodyVar)
@@ -2257,6 +2272,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpIsNil:
 			val := vm.pop(inst.Op)
 			vm.push(val == nil)
+		case bytecode.OpTimeNow:
+			vm.push(int64(time.Now().Unix()))
 		case bytecode.OpCliArgs:
 			var argsAny []any
 			for _, arg := range vm.args {

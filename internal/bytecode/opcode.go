@@ -68,6 +68,7 @@ const (
 	OpExit
 	OpListLen
 	OpIsNil
+	OpTimeNow
 )
 
 type OperandType string
@@ -149,6 +150,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list"},
 	OpIsNil:            {Code: OpIsNil, Name: "IS_NIL", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Checks if a value is nil"},
+	OpTimeNow:          {Code: OpTimeNow, Name: "TIME_NOW", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets current unix timestamp"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

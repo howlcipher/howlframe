@@ -1,4 +1,5 @@
 # Generated binaries
+/bin/
 .directory
 /server
 hello

@@ -88,6 +88,7 @@
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
 | `test` | No | None | No | Yes | improvements.md #96 | AUTHORITATIVE |
+| `time_now` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_float` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_int` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_string` | Yes | None | No | No | - | AUTHORITATIVE |

@@ -300,6 +300,11 @@ class TaskInstruction(BaseModel):
     string_operand: str
 
 
+class TimeNowInstruction(BaseModel):
+    op: Literal["TIME_NOW"]
+    pass
+
+
 class TryLetInstruction(BaseModel):
     op: Literal["TRY_LET"]
     string_operand: str
@@ -372,6 +377,7 @@ Instruction = Annotated[
         StrJoinInstruction,
         StrSplitInstruction,
         TaskInstruction,
+        TimeNowInstruction,
         TryLetInstruction,
         WriteFileInstruction,
     ],

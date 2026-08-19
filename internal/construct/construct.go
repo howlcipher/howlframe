@@ -163,6 +163,7 @@ var table = []Entry{
 	{Name: "struct", Support: Unsupported, Note: "the VM has no struct representation; accepting the declaration would hide the gap"},
 	{Name: "task", Support: Supported, Opaque: true, Note: "TASK; reads child .Value directly"},
 	{Name: "test", Support: Unsupported, Tracker: "improvements.md #96", Note: "test blocks are extracted into Go _test.go output; the VM cannot run them"},
+	{Name: "time_now", Support: Supported, Note: "TIME_NOW"},
 	{Name: "to_float", Support: Supported, Note: "CONVERT"},
 	{Name: "to_int", Support: Supported, Note: "CONVERT"},
 	{Name: "to_string", Support: Supported, Note: "CONVERT"},

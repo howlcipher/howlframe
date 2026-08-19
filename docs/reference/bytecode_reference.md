@@ -60,5 +60,6 @@
 | `STR_JOIN` |  | 2 | 1 |  | Joins a list of strings |
 | `STR_SPLIT` |  | 2 | 1 |  | Splits a string |
 | `TASK` | string | 0 | 1 |  | Defines a task for a subagent |
+| `TIME_NOW` |  | 0 | 1 |  | Gets current unix timestamp |
 | `TRY_LET` | string, string, int64 | 0 | 0 |  | Try block with let binding |
 | `WRITE_FILE` |  | 2 | 0 | filesystem | Writes to a file |
