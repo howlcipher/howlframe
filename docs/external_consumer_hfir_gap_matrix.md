@@ -23,7 +23,7 @@ This matrix reflects the clean consumer checkouts used by the 2026-08-14 runtime
 
 ## Evidence and interpretation
 
-ChangeOps and HowlBot are the two direct-HFIR policy consumers. Their current policy artifacts produced matching decisions on their tested normalized inputs. HowlBoard remains a legacy-bytecode application and was used here as a runtime stress consumer; it was not migrated.
+ChangeOps, HowlPlane, and HowlBot represent primary external policy consumers. ChangeOps and HowlBot are the two direct-HFIR policy consumers; their current policy artifacts produced matching decisions on their tested normalized inputs. HowlPlane operates as a primary real-world dogfooding consumer for AI engineering control plane workflows. HowlBoard remains a legacy-bytecode application and was used here as a runtime stress consumer; it was not migrated.
 
 HowlBot’s role/set and JSON-array ergonomics were not execution blockers. They remain ergonomic backlog items rather than new language surface for this milestone.
 
