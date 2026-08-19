@@ -1,0 +1,12 @@
+(cli_app
+  (let (x 10)
+    (do
+      (print "initial x:" x)
+      (set x 25)
+      (print "updated x:" x)
+      (let (y (+ x 5))
+        (do
+          (print "y:" y)
+          (let (z (+ y 100))
+            (print "inner z:" z))
+          (print "outer x:" x))))))

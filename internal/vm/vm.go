@@ -89,6 +89,10 @@ type VmExit struct {
 	code int
 }
 
+func (e VmExit) Code() int {
+	return e.code
+}
+
 func InterpErr(reason string, node *ast.Node) {
 	line, col := 0, 0
 	if node != nil {
@@ -2351,6 +2355,9 @@ func bcNumericBinop(op string, a, b any) any {
 	case "*":
 		return af * bf
 	case "/":
+		if bf == 0 {
+			panic("division by zero")
+		}
 		return af / bf
 	case "<":
 		return af < bf

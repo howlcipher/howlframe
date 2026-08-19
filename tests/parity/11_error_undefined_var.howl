@@ -1,0 +1,3 @@
+(cli_app
+  (let (x 10)
+    (print undefined_var_y)))

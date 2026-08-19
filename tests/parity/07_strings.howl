@@ -1,0 +1,13 @@
+(cli_app
+  (let (csv "apple,banana,cherry,date")
+    (let (parts (str_split csv ","))
+      (let (rejoined (str_join parts ":"))
+        (let (match1 (regex_match "^[a-z]+$" "hello"))
+          (let (match2 (regex_match "^[0-9]+$" "notanumber"))
+            (do
+              (print "parts count:" (list_len parts))
+              (print "part 0:" (list_get parts 0))
+              (print "part 2:" (list_get parts 2))
+              (print "rejoined:" rejoined)
+              (print "match1:" match1)
+              (print "match2:" match2))))))))

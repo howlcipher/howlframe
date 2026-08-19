@@ -1,0 +1,11 @@
+(cli_app
+  (let (i (to_int "123"))
+    (let (i2 (to_int 42))
+      (let (f (to_float "45.67"))
+        (let (f2 (to_float 10))
+          (let (s (to_string 890))
+            (let (s2 (to_string "already string"))
+              (do
+                (print "int:" i i2)
+                (print "float:" f f2)
+                (print "string:" s s2)))))))))
