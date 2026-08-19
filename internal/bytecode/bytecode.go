@@ -668,7 +668,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				op = "=="
 			}
 			insts = append(insts, BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: op})
-		case "to_int", "to_float", "to_string", "bytes_to_string":
+		case "to_int":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: "to_int"})
+		case "time_now":
+			insts = append(insts, BCInstruction{OpString: "TIME_NOW", Op: OpTimeNow})
+		case "to_float", "to_string", "bytes_to_string":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: head})
 		case "str_split":

@@ -43,6 +43,12 @@ func TestBytecodeParseJSONRequestBody(t *testing.T) {
 			wantStatus: 400,
 			wantJSON:   map[string]any{"error": "invalid_json"},
 		},
+		{
+			name:       "empty body follows catch branch",
+			body:       "",
+			wantStatus: 400,
+			wantJSON:   map[string]any{"error": "invalid_json"},
+		},
 	}
 
 	for _, tt := range tests {
