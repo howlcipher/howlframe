@@ -1,0 +1,45 @@
+(cli_app
+  (defun evaluate_policy (action repo branch tests build approved)
+    (let (decision "DENY")
+      (let (reason "default deny")
+        (do
+          (if (= action "deploy")
+            (if (!= branch "main")
+              (do
+                (set decision "DENY")
+                (set reason "deploys must target main branch"))
+              (if (!= tests "passed")
+                (do
+                  (set decision "DENY")
+                  (set reason "tests have not passed"))
+                (if (!= build "passed")
+                  (do
+                    (set decision "DENY")
+                    (set reason "build has not passed"))
+                  (if (!= approved "true")
+                    (do
+                      (set decision "REQUIRE_APPROVAL")
+                      (set reason "deployment requires explicit human approval"))
+                    (do
+                      (set decision "ALLOW")
+                      (set reason "all checks passed and approved"))))))
+            (if (= action "inspect")
+              (do
+                (set decision "ALLOW")
+                (set reason "read-only inspection is safe"))
+              (do
+                (set decision "DENY")
+                (set reason "unrecognized action"))))
+          (return (+ decision (+ ":" reason)))))))
+
+  (let (res1 (call evaluate_policy "inspect" "howlframe" "feature" "none" "none" "false"))
+    (let (res2 (call evaluate_policy "deploy" "howlframe" "feature" "passed" "passed" "true"))
+      (let (res3 (call evaluate_policy "deploy" "howlframe" "main" "failed" "passed" "true"))
+        (let (res4 (call evaluate_policy "deploy" "howlframe" "main" "passed" "passed" "false"))
+          (let (res5 (call evaluate_policy "deploy" "howlframe" "main" "passed" "passed" "true"))
+            (do
+              (print "inspect policy:" res1)
+              (print "branch policy:" res2)
+              (print "test policy  :" res3)
+              (print "approval pol :" res4)
+              (print "allow policy :" res5))))))))

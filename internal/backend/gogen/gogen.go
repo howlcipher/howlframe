@@ -77,6 +77,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	var testCode string
 	var extraImports []string
 	defaultImports := map[string]bool{
+		"bufio":         true,
 		"bytes":         true,
 		"database/sql":  true,
 		"encoding/json": true,
@@ -455,6 +456,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	code := `package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -494,6 +496,7 @@ import (
 	}()
 	var _ = runtime.GOOS
 	var _ = debug.Stack
+	var _ = bufio.NewReader
 	var _ = sql.Open
 	var _ = os.Getenv
 	var _ = json.Marshal
@@ -526,6 +529,7 @@ import (
 		fullTestCode := `package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -550,6 +554,7 @@ import (
 		}
 		fullTestCode += `)
 
+var _ = bufio.NewReader
 var _ = sql.Open
 var _ = os.Getenv
 var _ = json.Marshal
@@ -578,7 +583,7 @@ func generateStatement(node *ast.Node, reqVar string, depth int) string {
 	}
 	head := node.Children[0].Value
 	switch head {
-	case "return", "res_json", "res", "let", "do", "try_let", "spawn", "spawn_agent", "task", "if", "print", "db_connect", "sql_query", "append", "map_set", "map_delete", "for", "sleep", "write_file", "mkdir", "exec", "while", "match", "set", "call", "cli_args":
+	case "return", "res_json", "res", "let", "do", "try_let", "spawn", "spawn_agent", "task", "if", "print", "db_connect", "sql_query", "append", "map_set", "map_delete", "for", "sleep", "write_file", "mkdir", "exec", "while", "match", "set", "call", "cli_args", "stderr", "exit":
 		if node.Filename != "" {
 			return fmt.Sprintf("//line %s:%d\n%s", node.Filename, node.Line, code)
 		}
@@ -831,10 +836,10 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("		time.Sleep(time.Duration(%s) * time.Millisecond)", msStr)
 	case "to_int":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("func() int { v, _ := strconv.Atoi(%s); return v }()", valStr)
+		return fmt.Sprintf("func() int { v, _ := strconv.Atoi(fmt.Sprint(%s)); return v }()", valStr)
 	case "to_float":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("func() float64 { v, _ := strconv.ParseFloat(%s, 64); return v }()", valStr)
+		return fmt.Sprintf("func() float64 { v, _ := strconv.ParseFloat(fmt.Sprint(%s), 64); return v }()", valStr)
 	case "to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("fmt.Sprint(%s)", valStr)
@@ -852,7 +857,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "regex_match":
 		patStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		sStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("regexp.MatchString(%s, %s)", patStr, sStr)
+		return fmt.Sprintf("func() bool { m, _ := regexp.MatchString(%s, %s); return m }()", patStr, sStr)
 	case "append":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
@@ -889,6 +894,12 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		idxStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("func() string { _i, _ := strconv.Atoi(fmt.Sprint(%s)); if _i >= 0 && _i < len(%s) { return %s[_i] }; return \"\" }()", idxStr, listNode.Value, listNode.Value)
+	case "list_len":
+		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("len(%s)", listStr)
+	case "is_nil":
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("func() bool { var _v any = %s; return _v == nil || fmt.Sprint(_v) == \"<nil>\" }()", valStr)
 	case "list":
 		var items []string
 		for _, kid := range ir.Kids {
@@ -1446,6 +1457,14 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		} else {
 			// ast.ReportError("cli_args expects (cli_args) or (cli_args index)", node.Line, node.Column)
 		}
+	} else if head == "stderr" {
+		valStr := generateExpression(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("		fmt.Fprint(os.Stderr, %s)", valStr)
+	} else if head == "exit" {
+		codeStr := generateExpression(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("		os.Exit(func() int { _c, _ := strconv.Atoi(fmt.Sprint(%s)); return _c }())", codeStr)
+	} else if head == "read_line" {
+		return "func() string { _reader := bufio.NewReader(os.Stdin); _line, _ := _reader.ReadString('\\n'); return strings.TrimRight(_line, \"\\r\\n\") }()"
 	}
 	// ast.ReportError(fmt.Sprintf("Unknown statement: %s", head), node.Line, node.Column)
 	return ""

@@ -254,6 +254,12 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		listNode := ir.Kids[0]
 		idxStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("(%s[%s] ?? \"\")", listNode.Value, idxStr)
+	case "list_len":
+		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("(%s).length", listStr)
+	case "is_nil":
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("(%s === null || %s === undefined)", valStr, valStr)
 	case "list":
 		var items []string
 		for _, kid := range ir.Kids {

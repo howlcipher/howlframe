@@ -1,0 +1,10 @@
+(cli_app
+  (let (filename "/tmp/parity_temp_io.txt")
+    (do
+      (write_file filename "hello parity file io")
+      (try_let (content (read_file filename))
+        (catch err (stderr "read failed\n"))
+        (print "read back:" (bytes_to_string content)))
+      (exec "rm" "-f" filename)
+      (stderr "parity stderr notice\n")
+      (print "completed io test"))))

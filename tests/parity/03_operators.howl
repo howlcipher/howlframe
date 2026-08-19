@@ -1,0 +1,13 @@
+(cli_app
+  (let (a 10)
+    (let (b 20)
+      (do
+        (print "< :" (< a b))
+        (print "> :" (> a b))
+        (print "<=:" (<= a 10))
+        (print ">=:" (>= b 20))
+        (print "==:" (== a 10))
+        (print "= :" (= b 20))
+        (print "!=:" (!= a b))
+        (print "and:" (and true (== a 10)))
+        (print "or :" (or false (!= a b)))))))

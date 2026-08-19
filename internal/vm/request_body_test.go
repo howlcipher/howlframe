@@ -2,12 +2,38 @@ package vm
 
 import (
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/capability"
 )
+
+type customErrReader struct {
+	msg string
+}
+
+func (c *customErrReader) Read(p []byte) (n int, err error) {
+	return 0, &testingCustomError{msg: c.msg}
+}
+
+type testingCustomError struct {
+	msg string
+}
+
+func (e *testingCustomError) Error() string {
+	return e.msg
+}
+
+type repeatByteReader byte
+
+func (r repeatByteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = byte(r)
+	}
+	return len(p), nil
+}
 
 // TestBytecodeParseJSONRequestBody documents the supported standalone HTTP
 // composition: parse_json reads req.body inside a route context, try_let
@@ -24,13 +50,13 @@ func TestBytecodeParseJSONRequestBody(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		body       string
+		body       io.Reader
 		wantStatus int
 		wantJSON   map[string]any
 	}{
 		{
 			name:       "object and list values",
-			body:       `{"title":"Ship v0.1.1","tags":["release","consumer"]}`,
+			body:       strings.NewReader(`{"title":"Ship v0.1.1","tags":["release","consumer"]}`),
 			wantStatus: 200,
 			wantJSON: map[string]any{
 				"title": "Ship v0.1.1",
@@ -39,13 +65,25 @@ func TestBytecodeParseJSONRequestBody(t *testing.T) {
 		},
 		{
 			name:       "malformed JSON follows catch branch",
-			body:       `{`,
+			body:       strings.NewReader(`{`),
 			wantStatus: 400,
 			wantJSON:   map[string]any{"error": "invalid_json"},
 		},
 		{
 			name:       "empty body follows catch branch",
-			body:       "",
+			body:       strings.NewReader(""),
+			wantStatus: 400,
+			wantJSON:   map[string]any{"error": "invalid_json"},
+		},
+		{
+			name:       "simulated read error follows catch branch",
+			body:       &customErrReader{msg: "connection reset by peer"},
+			wantStatus: 400,
+			wantJSON:   map[string]any{"error": "invalid_json"},
+		},
+		{
+			name:       "oversized body exceeds 10MB limit follows catch branch",
+			body:       io.LimitReader(repeatByteReader('{'), 10*1024*1024+100),
 			wantStatus: 400,
 			wantJSON:   map[string]any{"error": "invalid_json"},
 		},
@@ -53,7 +91,7 @@ func TestBytecodeParseJSONRequestBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/tasks", strings.NewReader(tt.body))
+			req := httptest.NewRequest("POST", "/tasks", tt.body)
 			recorder := httptest.NewRecorder()
 			env := NewBcEnv(nil)
 			env.vars["req"] = req
