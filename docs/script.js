@@ -1,7 +1,5 @@
 /**
- * Howl Ecosystem Shared Client Script
- * Features: Light/Dark theme toggle with system preference fallback,
- * code snippet copy-to-clipboard, accessible aria state updates.
+ * Howl Ecosystem Shared Client Script - HowlFrame
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,10 +42,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Listen for system theme changes if user hasn't explicitly set preference
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     if (!localStorage.getItem('howl-theme')) {
       applyTheme(e.matches ? 'dark' : 'light');
+    }
+  });
+
+  // Hamburger / Ecosystem Drawer
+  const drawerToggle = document.getElementById('eco-menu-toggle');
+  const drawer = document.getElementById('eco-drawer');
+  const drawerOverlay = document.getElementById('eco-drawer-overlay');
+  const drawerCloseBtn = document.getElementById('eco-drawer-close');
+
+  const openDrawer = () => {
+    if (drawer && drawerOverlay) {
+      drawer.classList.add('active');
+      drawerOverlay.classList.add('active');
+      if (drawerToggle) drawerToggle.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      if (drawerCloseBtn) drawerCloseBtn.focus();
+    }
+  };
+
+  const closeDrawer = () => {
+    if (drawer && drawerOverlay) {
+      drawer.classList.remove('active');
+      drawerOverlay.classList.remove('active');
+      if (drawerToggle) {
+        drawerToggle.setAttribute('aria-expanded', 'false');
+        drawerToggle.focus();
+      }
+      document.body.style.overflow = '';
+    }
+  };
+
+  if (drawerToggle) {
+    drawerToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isActive = drawer && drawer.classList.contains('active');
+      if (isActive) closeDrawer();
+      else openDrawer();
+    });
+  }
+
+  if (drawerCloseBtn) {
+    drawerCloseBtn.addEventListener('click', closeDrawer);
+  }
+
+  if (drawerOverlay) {
+    drawerOverlay.addEventListener('click', closeDrawer);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawer && drawer.classList.contains('active')) {
+      closeDrawer();
     }
   });
 
