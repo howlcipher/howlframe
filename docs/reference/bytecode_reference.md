@@ -11,6 +11,7 @@
 | `CONFIDENCE` |  | 1 | 1 |  | Returns confidence score for LLM generate |
 | `CONVERT` | string | 1 | 1 |  | Type conversion |
 | `DB_CONNECT` | string, string, string | 0 | 0 | database | Connects to a database |
+| `ENCODE_JSON` |  | 1 | 1 |  | Encodes a value as a JSON string |
 | `ENV` |  | 1 | 1 | environment | Gets an environment variable |
 | `EPHEMERAL_CIRCUIT` | int64 | var | 1 |  | Generates an ephemeral specialized model, executes it, and discards it |
 | `EXEC` | int64 | var | 1 | process | Executes a shell command |

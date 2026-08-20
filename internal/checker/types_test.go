@@ -452,6 +452,7 @@ func TestAnalyzeReportsMalformedSharedForms(t *testing.T) {
 		{`(cli_app (to_float))`, "to_float expects 1 argument"},
 		{`(cli_app (to_string))`, "to_string expects 1 argument"},
 		{`(cli_app (bytes_to_string))`, "bytes_to_string expects 1 argument"},
+		{`(cli_app (encode_json))`, "encode_json expects 1 argument"},
 		{`(cli_app (str_split value))`, "str_split expects 2 arguments"},
 		{`(cli_app (str_join values))`, "str_join expects 2 arguments"},
 		{`(cli_app (regex_match pattern))`, "regex_match expects 2 arguments"},

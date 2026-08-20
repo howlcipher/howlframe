@@ -846,6 +846,9 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "bytes_to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("string(%s)", valStr)
+	case "encode_json":
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("func() string { b, _ := json.Marshal(%s); return string(b) }()", valStr)
 	case "str_split":
 		sStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)

@@ -156,6 +156,7 @@ func TestLowerSSASupportedDataCallsAndConversions(t *testing.T) {
 				ssaList("to_float", ssaInt("1")),
 				ssaList("to_string", ssaInt("1")),
 				ssaList("bytes_to_string", ssaSymbol("raw")),
+				ssaList("encode_json", ssaSymbol("values")),
 			),
 		),
 	)
@@ -170,7 +171,7 @@ func TestLowerSSASupportedDataCallsAndConversions(t *testing.T) {
 	gotOps := instructionOps(graph.Blocks[0])
 	for _, want := range []SSAOp{
 		OpList, OpDict, OpCall, OpListGet, OpMapGet,
-		OpToInt, OpToFloat, OpToString, OpBytesToString,
+		OpToInt, OpToFloat, OpToString, OpBytesToString, OpEncodeJson,
 	} {
 		if !containsSSAOp(gotOps, want) {
 			t.Errorf("instruction ops = %v, missing %q", gotOps, want)

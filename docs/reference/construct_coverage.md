@@ -28,6 +28,7 @@
 | `defun` | Yes | None | No | No | - | AUTHORITATIVE |
 | `dict` | Yes | None | No | No | - | AUTHORITATIVE |
 | `do` | Yes | None | No | No | - | AUTHORITATIVE |
+| `encode_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `env` | Yes | environment | No | No | - | AUTHORITATIVE |
 | `ephemeral_circuit` | Yes | None | No | No | - | AUTHORITATIVE |
 | `exec` | Yes | process | No | No | - | AUTHORITATIVE |

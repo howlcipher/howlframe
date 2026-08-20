@@ -221,7 +221,7 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Kind = head
 		id, err := addChildren(1, "value")
 		return id, true, err
-	case "to_int", "to_float", "to_string", "bytes_to_string":
+	case "to_int", "to_float", "to_string", "bytes_to_string", "encode_json":
 		if len(astNode.Children) != 2 {
 			return "", false, nil
 		}

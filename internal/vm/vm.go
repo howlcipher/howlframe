@@ -521,6 +521,16 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		val := interp.eval(node.Children[1], env)
 		return val == nil
+	case "encode_json":
+		if len(node.Children) != 2 {
+			InterpErr("encode_json expects (encode_json val)", node)
+		}
+		val := interp.eval(node.Children[1], env)
+		b, err := json.Marshal(normalizeForJSON(val))
+		if err != nil {
+			InterpErr(fmt.Sprintf("encode_json: %v", err), node)
+		}
+		return string(b)
 	case "str_split":
 		if len(node.Children) != 3 {
 			InterpErr("str_split expects (str_split s sep)", node)
@@ -2278,6 +2288,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(val == nil)
 		case bytecode.OpTimeNow:
 			vm.push(int64(time.Now().Unix()))
+		case bytecode.OpEncodeJson:
+			val := vm.pop(inst.Op)
+			b, err := json.Marshal(normalizeForJSON(val))
+			if err != nil {
+				panic(NewRuntimeError("ENCODE_JSON_ERROR", "main", ip, inst.Op, "%v", err))
+			}
+			vm.push(string(b))
 		case bytecode.OpCliArgs:
 			var argsAny []any
 			for _, arg := range vm.args {
@@ -2433,4 +2450,25 @@ func BcSliceToAny(strs []string) []any {
 		out[i] = s
 	}
 	return out
+}
+
+func normalizeForJSON(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = normalizeForJSON(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, val := range t {
+			out[i] = normalizeForJSON(val)
+		}
+		return out
+	case int64:
+		return float64(t)
+	default:
+		return v
+	}
 }
