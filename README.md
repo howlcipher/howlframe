@@ -1,5 +1,7 @@
 # HowlFrame
 
+> **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
+
 ## What is HowlFrame?
 
 HowlFrame is an experimental AI-native language and capability-bounded execution runtime.

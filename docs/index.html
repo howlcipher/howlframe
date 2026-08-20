@@ -3,177 +3,454 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="HowlFrame is a verified execution platform for adaptive, AI-native software, combining bounded probabilistic reasoning with deterministic authority.">
+    <meta name="description" content="HowlFrame is an AI-native programming language and verified execution platform designed so probabilistic reasoning operates inside explicit deterministic boundaries.">
     <link rel="canonical" href="https://howlcipher.github.io/howlframe/">
 
+    <!-- Open Graph Metadata -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="HowlFrame">
     <meta property="og:title" content="HowlFrame | Verified Execution for Adaptive Software">
-    <meta property="og:description" content="Adaptive intelligence can reason and propose. Deterministic machinery controls authority.">
+    <meta property="og:description" content="Intent is not authority. Adaptive intelligence can reason and propose; deterministic machinery controls execution authority.">
     <meta property="og:url" content="https://howlcipher.github.io/howlframe/">
-    <meta property="og:image" content="https://howlcipher.github.io/howlframe/social-preview.jpg">
+    <meta property="og:image" content="https://howlcipher.github.io/howlframe/social-preview.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="HowlFrame geometric frame and waveform mark with the words Intent is not authority">
+    <meta property="og:image:alt" content="HowlFrame architecture preview: Intent is not authority">
 
+    <!-- Twitter Card Metadata -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="HowlFrame | Verified Execution for Adaptive Software">
-    <meta name="twitter:description" content="Adaptive intelligence can reason and propose. Deterministic machinery controls authority.">
-    <meta name="twitter:image" content="https://howlcipher.github.io/howlframe/social-preview.jpg">
-    <meta name="twitter:image:alt" content="HowlFrame geometric frame and waveform mark with the words Intent is not authority">
+    <meta name="twitter:description" content="Intent is not authority. Adaptive intelligence can reason and propose; deterministic machinery controls execution authority.">
+    <meta name="twitter:image" content="https://howlcipher.github.io/howlframe/social-preview.png">
+    <meta name="twitter:image:alt" content="HowlFrame architecture preview: Intent is not authority">
 
     <title>HowlFrame | Verified Execution for Adaptive Software</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" type="image/png" href="favicon.png">
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <div class="container">
-        <header>
-            <div>
-                <p class="kicker">// adaptive intelligence / deterministic authority</p>
-                <h1 id="main-title">HowlFrame</h1>
+
+    <div class="layout-container">
+        <!-- Site Header -->
+        <header class="site-header">
+            <div class="header-top">
+                <div class="header-brand">
+                    <a href="https://howlcipher.github.io/howlframe/" class="brand-sig">HOWL <span>//</span> HOWLFRAME</a>
+                    <span class="subsystem-tag">SYS_ID: HF-CORE-01</span>
+                </div>
+                <div class="header-actions">
+                    <button id="theme-toggle" class="btn-theme-toggle" type="button" aria-pressed="false">
+                        <span aria-hidden="true">☾</span> [DARK_MODE]
+                    </button>
+                    <a href="https://github.com/howlcipher/howlframe" class="btn-tech btn-tech-primary" target="_blank" rel="noreferrer">
+                        [ VIEW ON GITHUB ]
+                    </a>
+                </div>
             </div>
-            <div class="header-actions">
-                <a href="https://github.com/howlcipher/howlframe" target="_blank" rel="noreferrer">[ View on GitHub ]</a>
-                <button id="theme-toggle" type="button" aria-pressed="false">Switch to light theme</button>
+
+            <!-- Ecosystem Navigation Strip -->
+            <div class="howl-ecosystem-bar" aria-label="Howl Ecosystem Navigation">
+                <div class="eco-label">HOWL ECOSYSTEM</div>
+                <nav class="eco-nav">
+                    <a href="https://howlcipher.github.io/howlframe/" class="eco-link active" aria-current="page">HowlFrame // VM</a>
+                    <a href="https://howlcipher.github.io/howlplane/" class="eco-link">HowlPlane // Control</a>
+                    <a href="https://howlcipher.github.io/howlnotes/" class="eco-link">HowlNotes // Knowledge</a>
+                    <a href="https://howlcipher.github.io/changeops/" class="eco-link">ChangeOps // Authority</a>
+                    <a href="https://howlcipher.github.io/howlboard/" class="eco-link">HowlBoard // Telemetry</a>
+                </nav>
             </div>
+
+            <!-- In-Page Section Navigation -->
+            <nav class="section-nav" aria-label="Page sections">
+                <span class="section-nav-label">READ_PATH:</span>
+                <a href="#overview">01_Overview</a>
+                <a href="#architecture">02_Architecture</a>
+                <a href="#toolchain">03_Toolchain</a>
+                <a href="#why-howlframe">04_Principles</a>
+                <a href="#quick-start">05_QuickStart</a>
+                <a href="#examples">06_Examples</a>
+                <a href="#language-surface">07_Surface</a>
+                <a href="#benchmark">08_Benchmarks</a>
+                <a href="#references">09_References</a>
+            </nav>
         </header>
 
-        <nav class="section-nav" aria-label="Page sections">
-            <span class="section-nav-label">READ_PATH:</span>
-            <a href="#overview">Start here</a>
-            <a href="#toolchain">Toolchain</a>
-            <a href="#quick-start">Quick start</a>
-            <a href="#examples">Examples</a>
-            <a href="#references">References</a>
-        </nav>
-
+        <!-- Main Content Surface -->
         <main id="main-content">
-            <section id="overview">
-                <h2>Overview</h2>
-                <div class="overview-layout">
-                    <div>
-                        <p class="lead">HowlFrame is an AI-native programming language and verified execution platform for adaptive software, designed so probabilistic reasoning can operate inside explicit deterministic boundaries.</p>
-                        <blockquote><strong>Intent is not authority.</strong> Adaptive intelligence can reason and propose. Deterministic machinery controls permissions, capabilities, state, mutation, invariants, verification, and approval.</blockquote>
-                        <p>Generated Go remains the broadest backend. HowlFrame also includes JavaScript generation, WebAssembly Text targets, direct AST execution for a bounded CLI subset, and binary bytecode execution through the HowlFrame VM. The project is experimental, and each target rejects unsupported behavior rather than presenting roadmap work as complete.</p>
+            <!-- Hero Panel -->
+            <section class="hero-panel" aria-labelledby="main-title">
+                <div class="hero-banner">
+                    <span>SPEC_SYS_VER // 0.1.0 (HFBC v1)</span>
+                    <span>ARCHITECTURE: REASONING ↔ DETERMINISTIC BOUNDARIES</span>
+                </div>
+                <div class="hero-body">
+                    <div class="hero-header-block">
+                        <p class="hero-kicker">// adaptive intelligence / deterministic authority</p>
+                        <h1 id="main-title" class="hero-title">HowlFrame <span class="jp-sub">ホウルフレーム // 2026</span></h1>
+                        <p class="hero-lead">
+                            HowlFrame is an AI-native programming language and capability-bounded execution platform designed so probabilistic reasoning can operate safely inside explicit, verifiable machine boundaries.
+                        </p>
                     </div>
-                    <div class="signal-grid" aria-label="HowlFrame operating model">
-                        <div><strong>REASON</strong><span>Adaptive proposals</span></div>
-                        <div><strong>VERIFY</strong><span>Typed IR checks</span></div>
-                        <div><strong>BOUND</strong><span>Explicit capabilities</span></div>
-                        <div><strong>RUN</strong><span>Verified targets</span></div>
+
+                    <div class="axiom-card" role="region" aria-label="Governing Principle">
+                        <strong>AXIOM // INTENT IS NOT AUTHORITY.</strong> Adaptive intelligence can reason, classify, rank, plan, and propose. Deterministic machinery owns permissions, capability grants, persistent state, irreversible mutations, invariant checking, verification, and approval.
+                    </div>
+
+                    <div class="hero-actions">
+                        <a href="https://github.com/howlcipher/howlframe" class="btn-tech btn-tech-primary" target="_blank" rel="noreferrer">
+                            [ CLONE REPOSITORY ]
+                        </a>
+                        <a href="#architecture" class="btn-tech">
+                            [ EXPLORE ARCHITECTURE ]
+                        </a>
+                        <a href="#examples" class="btn-tech">
+                            [ CODE EXAMPLES ]
+                        </a>
+                    </div>
+
+                    <!-- Hero Architecture Diagram -->
+                    <div class="hero-diagram-wrap" aria-label="HowlFrame Signal Processing Architecture">
+                        <div class="diagram-header">
+                            <span>SIGNAL_FLOW // ADAPTIVE PROPOSAL TO DETERMINISTIC TARGETS</span>
+                            <span>INVARIANTS: ENFORCED</span>
+                        </div>
+                        <div class="signal-flow-grid">
+                            <div class="flow-step step-reason">
+                                <div class="flow-step-header">01 // REASON</div>
+                                <div class="flow-step-body">
+                                    <div class="flow-step-title">Adaptive Intent</div>
+                                    <div class="flow-step-desc">Probabilistic LLMs generate uniform S-expression ASTs. Proposes structure without authority.</div>
+                                    <div class="flow-step-tag">[TIER: PROBABILISTIC]</div>
+                                </div>
+                            </div>
+                            <div class="flow-step step-verify">
+                                <div class="flow-step-header">02 // VERIFY</div>
+                                <div class="flow-step-body">
+                                    <div class="flow-step-title">HFIR Gate</div>
+                                    <div class="flow-step-desc">Static semantic validation, typed IR lowering, and localized JSON errors before compilation.</div>
+                                    <div class="flow-step-tag">[GATE: TYPED_IR]</div>
+                                </div>
+                            </div>
+                            <div class="flow-step step-bound">
+                                <div class="flow-step-header">03 // BOUND</div>
+                                <div class="flow-step-body">
+                                    <div class="flow-step-title">Capability Barrier</div>
+                                    <div class="flow-step-desc">Explicit runner-owned tokens (network, database, filesystem) and finite instruction budgets.</div>
+                                    <div class="flow-step-tag">[GATE: RUNNER_OWNED]</div>
+                                </div>
+                            </div>
+                            <div class="flow-step step-run">
+                                <div class="flow-step-header">04 // EXECUTE</div>
+                                <div class="flow-step-body">
+                                    <div class="flow-step-title">Verified Targets</div>
+                                    <div class="flow-step-desc">Standalone Bytecode VM with native stores, generated Go, JavaScript web apps, and WAT.</div>
+                                    <div class="flow-step-tag">[TIER: DETERMINISTIC]</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <section id="toolchain">
-                <h2>Toolchain</h2>
-                <ul>
-                    <li><strong>Front end:</strong> lexer, parser, AST transforms, semantic checking, and an enforced HowlFrame Intermediate Representation (HFIR) verification gate.</li>
-                    <li><strong>Go target:</strong> <code>cli_app</code> and <code>http_server</code> programs emit <code>server.go</code> plus optional Go tests.</li>
-                    <li><strong>JavaScript target:</strong> <code>web_app</code> programs emit <code>app.js</code> plus optional Node tests.</li>
-                    <li><strong>WAT target:</strong> <code>wasm_app</code> emits structurally validated WebAssembly Text for the supported typed expression subset.</li>
-                    <li><strong>Standalone WAT target:</strong> <code>-compile-wasm</code> lowers a checked <code>cli_app</code> program through a typed SSA/CFG into WebAssembly Text with zero Go process at runtime &mdash; arithmetic, comparisons, <code>if</code>/phi control flow, structured <code>while</code> loops, and calls between <code>defun</code>s (including recursion) over scalar int/float/bool values, verified standalone with <code>wasmtime</code>.</li>
-                    <li><strong>Direct execution:</strong> <code>-run</code> interprets supported <code>cli_app</code> programs without writing generated source.</li>
-                    <li><strong>Bytecode:</strong> <code>-compile-bc</code> writes binary bytecode and <code>-run-bc</code> executes it in the VM, including native in-memory stores for structured records.</li>
-                </ul>
+            <!-- 01 Overview -->
+            <section id="overview" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 01</span> System Overview</h2>
+                    <span class="subsystem-tag">HF-MOD-OVERVIEW</span>
+                </div>
+                <div class="tech-body">
+                    <p>
+                        LLMs excel at producing structural code proposals, but frequently struggle with syntax nuances, invalid API signatures, and cascading refactor drift. HowlFrame restricts source grammar to small, uniform, balanced S-expressions so generation can be grammar-constrained, type-checked, and validated before runtime.
+                    </p>
+                    <p>
+                        Generated Go remains the broadest backend. HowlFrame also includes native JavaScript generation, WebAssembly Text (WAT) compilation, direct AST interpretation for bounded CLI tasks, and binary bytecode execution through the HowlFrame VM. Every target rejects unsupported constructs rather than pretending roadmap features are ready.
+                    </p>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Concern Domain</th>
+                                    <th>Adaptive Subsystem</th>
+                                    <th>Deterministic Subsystem</th>
+                                    <th>Boundary Guarantee</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Reasoning &amp; Generation</strong></td>
+                                    <td>Synthesizes logic, formulates plans, suggests transforms</td>
+                                    <td>Rejects invalid grammar, enforces JSON schemas</td>
+                                    <td><span class="chip chip-ai">PROPOSAL ONLY</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Intermediate Representation</strong></td>
+                                    <td>Emits candidate AST nodes</td>
+                                    <td>HFIR typing, semantic validation, structural invariants</td>
+                                    <td><span class="chip chip-pass">VERIFIED</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Capability Grants</strong></td>
+                                    <td>Requests permissions (net, db, fs)</td>
+                                    <td>Runner strictly grants or denies capability tokens</td>
+                                    <td><span class="chip chip-deny">FAIL CLOSED</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Runtime Execution</strong></td>
+                                    <td>None (isolated from execution)</td>
+                                    <td>Bytecode VM, Go binary, JS app, or WAT compiler</td>
+                                    <td><span class="chip chip-allow">BOUNDED RUN</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
-            <section id="why-howlframe">
-                <h2>Why HowlFrame?</h2>
-                <ul>
-                    <li><strong>Uniform syntax:</strong> balanced S-expressions are easier to grammar-constrain than full-size languages.</li>
-                    <li><strong>Semantic feedback:</strong> invalid programs return localized JSON errors before backend output is written.</li>
-                    <li><strong>Explicit capabilities:</strong> behavior must have an implemented AST, IR, backend, or VM mapping.</li>
-                    <li><strong>Target-aware limits:</strong> unsupported backend and VM combinations are rejected rather than presented as universally available.</li>
-                </ul>
+            <!-- 02 Architecture -->
+            <section id="architecture" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 02</span> Architecture &amp; Execution Pipeline</h2>
+                    <span class="subsystem-tag">HF-MOD-ARCH</span>
+                </div>
+                <div class="tech-body">
+                    <p>
+                        HowlFrame enforces strict separation between parsing, intermediate representation lowering, backend code emission, and VM bytecode execution.
+                    </p>
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-title">[SCHEMATIC // COMPILATION_PIPELINE]</span>
+                            <span class="subsystem-tag">PIPELINE_FLOW</span>
+                        </div>
+                        <pre><code>.howl Source Code
+       │
+       ▼
+Lexer &amp; Parser (S-Expression AST)
+       │
+       ▼
+Semantic Checker &amp; Type Invariants
+       │
+       ▼
+HowlFrame Intermediate Representation (HFIR Gate)
+       │
+       ├──────────────────┬─────────────────┬──────────────────┬─────────────────┐
+       ▼                  ▼                 ▼                  ▼                 ▼
+Generated Go       Generated JS       Standalone WAT     Direct Runner     Bytecode (.hfbc)
+(cli_app / server) (web_app DOM)      (wasm_app SSA/CFG) (-run CLI subset)       │
+                                                                                 ▼
+                                                                          HowlFrame VM
+                                                                          (Caps + Budget + Store)</code></pre>
+                    </div>
+                </div>
             </section>
 
-            <section id="quick-start">
-                <h2>Quick Start</h2>
-                <p>HowlFrame requires Go 1.21 or newer for normal toolchain use. Python, Outlines, OpenAI-compatible client support, and Ollama are optional for the local orchestrator experiment.</p>
-                <pre><code>git clone https://github.com/howlcipher/howlframe.git
+            <!-- 03 Toolchain -->
+            <section id="toolchain" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 03</span> Compiler Toolchain</h2>
+                    <span class="subsystem-tag">HF-MOD-TARGETS</span>
+                </div>
+                <div class="tech-body">
+                    <ul>
+                        <li><strong>Front End:</strong> Lexer, recursive-descent parser, AST transforms, semantic checking, and an enforced HowlFrame Intermediate Representation (HFIR) verification gate.</li>
+                        <li><strong>Go Target:</strong> <code>cli_app</code> and <code>http_server</code> programs emit <code>server.go</code> plus optional Go test suites.</li>
+                        <li><strong>JavaScript Target:</strong> <code>web_app</code> programs emit <code>app.js</code> with reactive DOM event bindings, asynchronous fetch, and optional Node tests.</li>
+                        <li><strong>WebAssembly Text (WAT) Target:</strong> <code>-compile-wasm</code> lowers checked <code>cli_app</code> programs through a typed SSA/CFG into WebAssembly Text with zero Go process at runtime &mdash; arithmetic, comparisons, <code>if</code>/phi control flow, structured <code>while</code> loops, and recursion over scalar values, verified standalone with <code>wasmtime</code>.</li>
+                        <li><strong>Direct Execution:</strong> <code>-run</code> interprets supported <code>cli_app</code> programs directly without emitting intermediate Go code.</li>
+                        <li><strong>Bytecode VM:</strong> <code>-compile-bc</code> emits binary bytecode (HFBC v1) and <code>-run-bc</code> executes it inside the VM, with runner-granted capability tokens and native record stores for structured persistence.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 04 Principles -->
+            <section id="why-howlframe" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 04</span> Why HowlFrame?</h2>
+                    <span class="subsystem-tag">HF-MOD-RATIONALE</span>
+                </div>
+                <div class="tech-body">
+                    <div class="grid-2col">
+                        <div>
+                            <h3>Uniform S-Expression Syntax</h3>
+                            <p>Balanced parentheses provide a deterministic grammar structure that LLMs can generate with strict token masking without syntax hallucinations.</p>
+                        </div>
+                        <div>
+                            <h3>Localized Semantic Feedback</h3>
+                            <p>Invalid programs return structured JSON diagnostic errors pinpointing exact line and AST coordinate mismatches before any backend generation occurs.</p>
+                        </div>
+                        <div>
+                            <h3>Explicit Runner Capabilities</h3>
+                            <p>Operations requesting network, database, or filesystem access must possess explicit tokens granted by the invoking host runner.</p>
+                        </div>
+                        <div>
+                            <h3>Target-Aware Boundaries</h3>
+                            <p>Features not supported by a backend target (e.g. DOM operations on WASM) fail cleanly at compile-time rather than crashing at runtime.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 05 Quick Start -->
+            <section id="quick-start" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 05</span> Quick Start &amp; Toolchain Usage</h2>
+                    <span class="subsystem-tag">HF-MOD-CLI</span>
+                </div>
+                <div class="tech-body">
+                    <p>HowlFrame requires Go 1.21 or newer for normal toolchain compilation and runtime execution.</p>
+                    
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-title">[TERMINAL // BUILD_AND_RUN]</span>
+                            <button class="btn-copy" type="button">[COPY]</button>
+                        </div>
+                        <pre><code># 1. Clone repository
+git clone https://github.com/howlcipher/howlframe.git
 cd howlframe
+
+# 2. Compile and run CLI example
 go run howlframe.go examples/cli_hello.howl
-go run server.go</code></pre>
+go run server.go
+
+# 3. Compile to Bytecode and execute in VM with finite budget
+go run howlframe.go -compile-bc examples/cli_hello.howl -o build/hello.hfbc
+go run howlframe.go -run-bc --max-instructions 100000 build/hello.hfbc
+
+# 4. Compile directly to WebAssembly Text (WAT)
+go run howlframe.go -compile-wasm examples/native_math.howl -o build/math.wat</code></pre>
+                    </div>
+                    <p>
+                        Bytecode execution defaults to 100,000 instructions. Only the trusted runner may specify a different positive, finite ceiling; invalid values fail closed before execution.
+                    </p>
+                </div>
             </section>
 
-            <section id="examples">
-                <h2>Examples</h2>
-                <h3>CLI</h3>
-                <pre><code>(cli_app
+            <!-- 06 Examples -->
+            <section id="examples" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 06</span> Code Examples</h2>
+                    <span class="subsystem-tag">HF-MOD-SAMPLES</span>
+                </div>
+                <div class="tech-body">
+                    <h3>CLI Application (<code>cli_app</code>)</h3>
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-title">[HOWL // CLI_HELLO.HOWL]</span>
+                            <button class="btn-copy" type="button">[COPY]</button>
+                        </div>
+                        <pre><code>(cli_app
   (print "Hello, World!")
   (let (name "HowlFrame")
     (print "Welcome to" name)
   )
 )</code></pre>
+                    </div>
 
-                <h3>HTTP</h3>
-                <pre><code>(http_server 8080
+                    <h3>HTTP Service (<code>http_server</code>)</h3>
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-title">[HOWL // HTTP_SERVER.HOWL]</span>
+                            <button class="btn-copy" type="button">[COPY]</button>
+                        </div>
+                        <pre><code>(http_server 8080
   (route "/" (lambda (req)
     (res 200 "text/plain" "Hello from HowlFrame")
   ))
 )</code></pre>
+                    </div>
 
-                <h3>Web App Logic</h3>
-                <pre><code>(web_app
+                    <h3>Web Application Frontend (<code>web_app</code>)</h3>
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-title">[HOWL // FRONTEND.HOWL]</span>
+                            <button class="btn-copy" type="button">[COPY]</button>
+                        </div>
+                        <pre><code>(web_app
   (defun increment (n)
     (type_hint n "int")
     (type_hint return "int")
     (return (+ n 1))
   )
 )</code></pre>
-
-                <h3>Direct Execution</h3>
-                <pre><code>go run howlframe.go -run examples/cli_hello.howl</code></pre>
-
-                <h3>Bytecode</h3>
-                <pre><code>go run howlframe.go -compile-bc examples/cli_hello.howl
-go run howlframe.go -run-bc examples/cli_hello.howl.bc.bin
-go run howlframe.go -compile-bc tests/test_store_bytecode.howl -o /tmp/test_store_bytecode.hfbc
-go run howlframe.go -run-bc /tmp/test_store_bytecode.hfbc
-go run howlframe.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.hfbc</code></pre>
-                <p>Bytecode execution defaults to 100,000 instructions. Only the trusted runner may select another positive, finite ceiling; invalid values fail before execution, there is no unlimited sentinel, and instruction budgets never grant capabilities.</p>
-
-                <h3>WebAssembly Text</h3>
-                <pre><code>go run howlframe.go -compile-wasm examples/native_math.howl -o /tmp/native_math.wat</code></pre>
+                    </div>
+                </div>
             </section>
 
-            <section id="features">
-                <h2>Language Surface</h2>
-                <ul>
-                    <li><strong>Control flow:</strong> <code>let</code>, <code>set</code>, <code>if</code>, <code>while</code>, <code>for</code>, <code>match</code>, and <code>do</code>.</li>
-                    <li><strong>Functions and types:</strong> <code>defun</code>, <code>call</code>, <code>return</code>, <code>type_hint</code>, <code>type_param</code>, <code>struct</code>, <code>parse_json</code>, and <code>schema_bridge</code> for typed constrained-output boundaries in provider-neutral mask plans.</li>
-                    <li><strong>Collections and strings:</strong> lists, dictionaries, mutation, random-access reads, splitting, joining, regex matching, and deterministic conversions.</li>
-                    <li><strong>Runtime primitives:</strong> file I/O, subprocess execution, CLI args, HTTP fetches, middleware, environment reads, imports, includes, spawning, bytecode-native record stores, and native tests where supported by the target.</li>
-                    <li><strong>AI-oriented primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, patching, context threading, runtime optimization blocks, compile-time optimization signatures, and agent tasks.</li>
-                </ul>
-                <p><code>(optimize_signature name (metric "accuracy") (test "go test ./...") (candidate "baseline" "prompt") body)</code> records compile-time optimization intent while evaluating <code>body</code> normally. Run <code>go run howlframe.go -optimization-plan program.howl</code> to print deterministic <code>howlframe.optimization_plan/v1</code> JSON. Constrained decoding uses <code>howlframe.mask_plan/v1</code>. Plan generation never runs tests, calls a model, rewrites source, or selects a candidate.</p>
+            <!-- 07 Surface -->
+            <section id="language-surface" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 07</span> Language Surface &amp; Primitives</h2>
+                    <span class="subsystem-tag">HF-MOD-PRIMITIVES</span>
+                </div>
+                <div class="tech-body">
+                    <ul>
+                        <li><strong>Control Flow:</strong> <code>let</code>, <code>set</code>, <code>if</code>, <code>while</code>, <code>for</code>, <code>match</code>, <code>try_let</code>, and <code>do</code>.</li>
+                        <li><strong>Functions &amp; Types:</strong> <code>defun</code>, <code>call</code>, <code>return</code>, <code>type_hint</code>, <code>type_param</code>, <code>struct</code>, <code>parse_json</code>, and <code>schema_bridge</code> for typed constrained-output boundaries.</li>
+                        <li><strong>Collections &amp; Strings:</strong> Lists, dictionaries, random-access mutations, splitting, joining, regex matching, and deterministic type conversions.</li>
+                        <li><strong>Runtime Primitives:</strong> File I/O, subprocess execution, CLI argument parsing, HTTP clients, CORS headers, environment variables, imports, and bytecode-native persistent record stores.</li>
+                        <li><strong>AI-Oriented Primitives:</strong> LLM generation, fuzzy casting, semantic assertions, semantic routing, neural circuits, ephemeral circuits, goal-driven execution, lazy synthesis, runtime optimization blocks, and agent tasks.</li>
+                    </ul>
+                </div>
             </section>
 
-            <section id="benchmark">
-                <h2>Write-Cost Benchmark</h2>
-                <p>The benchmark measures LLM write time and token count for producing compiler-verified solutions in HowlFrame, Go, Python, Node.js, C#, and Java. It is a write-cost benchmark, not a runtime performance benchmark.</p>
-                <p><a href="language_write_cost_benchmark.md">Read the full benchmark methodology and current results</a>.</p>
+            <!-- 08 Benchmark -->
+            <section id="benchmark" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 08</span> Write-Cost Benchmark</h2>
+                    <span class="subsystem-tag">HF-MOD-BENCH</span>
+                </div>
+                <div class="tech-body">
+                    <p>
+                        The HowlFrame benchmark evaluates LLM write time and token economy required to generate compiler-verified solutions compared against Go, Python, Node.js, C#, and Java. It measures generative write overhead, not micro-benchmark execution speed.
+                    </p>
+                    <p>
+                        <a href="language_write_cost_benchmark.md" class="btn-tech">
+                            [ VIEW FULL BENCHMARK METHODOLOGY &amp; DATA ]
+                        </a>
+                    </p>
+                </div>
             </section>
 
-            <section id="references">
-                <h2>References</h2>
-                <ul>
-                    <li><a href="https://github.com/howlcipher/howlframe/blob/main/README.md" target="_blank" rel="noreferrer">README and quick start</a></li>
-                    <li><a href="direct_execution_design.md">Direct execution design</a></li>
-                    <li><a href="howlframe_native_store_design.md">HowlFrame native store design</a></li>
-                    <li><a href="reference/bytecode_reference.md">Bytecode reference</a></li>
-                    <li><a href="https://github.com/howlcipher/howlframe/tree/main/tools" target="_blank" rel="noreferrer">Optional tools</a></li>
-                    <li><a href="https://github.com/howlcipher/howlframe/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a></li>
-                </ul>
+            <!-- 09 References -->
+            <section id="references" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 09</span> Documentation &amp; References</h2>
+                    <span class="subsystem-tag">HF-MOD-DOCS</span>
+                </div>
+                <div class="tech-body">
+                    <ul>
+                        <li><a href="https://github.com/howlcipher/howlframe/blob/main/README.md" target="_blank" rel="noreferrer">README and Toolchain Quick Start</a></li>
+                        <li><a href="direct_execution_design.md">Direct Execution Design Document</a></li>
+                        <li><a href="howlframe_native_store_design.md">Native Record Store Architecture</a></li>
+                        <li><a href="reference/bytecode_reference.md">Bytecode Instruction Reference (HFBC v1)</a></li>
+                        <li><a href="https://github.com/howlcipher/howlframe/tree/main/tools" target="_blank" rel="noreferrer">Compiler Utilities &amp; Differential Testing</a></li>
+                        <li><a href="https://github.com/howlcipher/howlframe/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a></li>
+                    </ul>
+                </div>
             </section>
         </main>
 
-        <footer>
-            <span><span class="status-dot" aria-hidden="true"></span>STATUS: ACTIVE &mdash; HOWLFRAME://TOOLCHAIN</span>
-            <a href="https://github.com/howlcipher/howlframe" target="_blank" rel="noreferrer">github.com/howlcipher/howlframe</a>
+        <!-- Site Footer -->
+        <footer class="site-footer">
+            <div class="footer-telemetry">
+                <div class="status-indicator">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span>SYS_STATUS: ACTIVE // HOWLFRAME-TOOLCHAIN</span>
+                </div>
+                <div>AUTH // HOWL ECOSYSTEM 2026</div>
+            </div>
+            <div class="footer-links">
+                <nav class="footer-nav" aria-label="Ecosystem Links">
+                    <a href="https://howlcipher.github.io/howlframe/">HowlFrame</a>
+                    <a href="https://howlcipher.github.io/howlplane/">HowlPlane</a>
+                    <a href="https://howlcipher.github.io/howlnotes/">HowlNotes</a>
+                    <a href="https://howlcipher.github.io/changeops/">ChangeOps</a>
+                    <a href="https://howlcipher.github.io/howlboard/">HowlBoard</a>
+                </nav>
+                <a href="#main-content">[ BACK TO TOP ]</a>
+            </div>
         </footer>
     </div>
 
