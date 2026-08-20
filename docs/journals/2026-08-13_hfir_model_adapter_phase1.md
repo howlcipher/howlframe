@@ -205,8 +205,8 @@ provider-quality claim.
 
 ## Consumer regression evidence
 
-ChangeOps' current `src/changeops.howl` compiled through HowlFrame's unchanged
-public AST bytecode path into a temporary artifact successfully. No ChangeOps
+HowlChangeOps' current `src/howlchangeops.howl` compiled through HowlFrame's unchanged
+public AST bytecode path into a temporary artifact successfully. No HowlChangeOps
 file or consumer contract changed.
 
 The local HowlBoard checkout is already two commits ahead of its remote and

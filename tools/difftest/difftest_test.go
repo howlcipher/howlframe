@@ -40,7 +40,7 @@ func TestParityCorpus(t *testing.T) {
 	}
 }
 
-// TestChangeOpsPolicyParity specifically validates ChangeOps-style governance policy:
+// TestChangeOpsPolicyParity specifically validates HowlChangeOps-style governance policy:
 // ALLOW, DENY, REQUIRE_APPROVAL, and branch/test/approval verification.
 func TestChangeOpsPolicyParity(t *testing.T) {
 	fixturePath := filepath.Join("..", "..", "tests", "parity", "10_governed_policy.howl")
@@ -55,7 +55,7 @@ func TestChangeOpsPolicyParity(t *testing.T) {
 		t.Fatalf("VerifyParity error: %v", err)
 	}
 	if report.OverallStatus != StatusPass {
-		t.Fatalf("ChangeOps policy parity mismatch:\n%s", strings.Join(report.Discrepancies, "\n"))
+		t.Fatalf("HowlChangeOps policy parity mismatch:\n%s", strings.Join(report.Discrepancies, "\n"))
 	}
 
 	// Verify the canonical decision outputs

@@ -158,7 +158,7 @@ Ambiguous candidates receive no editable region.
 
 Full local validation passed: format, build, vet, normal and race tests,
 benchmark harness, differential test, code generation, and diff check.
-ChangeOps integration, adversarial, and authority-bypass consumers passed in a
+HowlChangeOps integration, adversarial, and authority-bypass consumers passed in a
 mount-isolated run using the candidate binary. HowlBoard backend HTTP smoke
 passed; browser smoke was attempted but Chromium is not installed.
 

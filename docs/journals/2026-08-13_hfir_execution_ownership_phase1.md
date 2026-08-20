@@ -48,11 +48,11 @@ Complete independent architecture and consumer reviews, then define the exact HF
 
 ## Investigation
 
-Independent architecture review confirmed that anonymous HFIR edges could not distinguish a binding, dictionary pair, catch clause, parameter list, or ordinary argument. Consumer review found ChangeOps needs 23 runtime constructs plus `catch`; HowlBoard needs functions, HTTP routes/lambdas, request parsing, stores, and loops. Differential-test review recommended in-process isolated `BCVM` execution because the public runner exits the process on a structured VM error.
+Independent architecture review confirmed that anonymous HFIR edges could not distinguish a binding, dictionary pair, catch clause, parameter list, or ordinary argument. Consumer review found HowlChangeOps needs 23 runtime constructs plus `catch`; HowlBoard needs functions, HTTP routes/lambdas, request parsing, stores, and loops. Differential-test review recommended in-process isolated `BCVM` execution because the public runner exits the process on a structured VM error.
 
 ## Evidence
 
-Architecture review executed simple and representative baseline bytecode artifacts successfully and located the production AST compiler call after the HFIR verifier gate. Consumer review ran ChangeOps check/build, adapter build/vet/test, integration/adversarial/authority-bypass scripts successfully. HowlBoard `make test` passed with the candidate binary; its browser test was blocked by an absent local Playwright Chromium executable after backend/frontend build completed.
+Architecture review executed simple and representative baseline bytecode artifacts successfully and located the production AST compiler call after the HFIR verifier gate. Consumer review ran HowlChangeOps check/build, adapter build/vet/test, integration/adversarial/authority-bypass scripts successfully. HowlBoard `make test` passed with the candidate binary; its browser test was blocked by an absent local Playwright Chromium executable after backend/frontend build completed.
 
 ## Decision
 

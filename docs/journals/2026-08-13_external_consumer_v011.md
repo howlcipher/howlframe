@@ -3,7 +3,7 @@
 ## Scope
 
 Consumer-driven HowlFrame conformance investigation for HowlBoard and
-ChangeOps. This journal records executable evidence only.
+HowlChangeOps. This journal records executable evidence only.
 
 ## System snapshot
 

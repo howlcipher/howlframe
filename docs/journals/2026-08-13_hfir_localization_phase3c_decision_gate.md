@@ -107,10 +107,10 @@ than full graph transport.
 
 # Consumer regression
 
-Clean shallow checkouts were created from ChangeOps
+Clean shallow checkouts were created from HowlChangeOps
 `e7bc44d3307eb9a4192d7391b113d1b05cb4aa86` and HowlBoard
 `6d9b67cd1e59665494c96f651591cf5da934c6a7`. A binary built from the starting
-SHA passed ChangeOps integration and adversarial scripts. It compiled
+SHA passed HowlChangeOps integration and adversarial scripts. It compiled
 HowlBoard's backend and frontend, served `GET /api/tasks` correctly from the
 compiled backend, and produced the expected task JSON. Browser smoke remains
 blocked because Playwright Chromium is not installed locally.

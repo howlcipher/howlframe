@@ -55,9 +55,9 @@ The equivalence suite verifies that inferred HFIR capability effects equal capab
 
 Only the standalone bytecode backend has this Phase-1 direct HFIR route. Go, JavaScript, Wasm, and the direct interpreter still consume AST or target-specific intermediate forms. No backend was rewritten.
 
-## ChangeOps gap
+## HowlChangeOps gap
 
-ChangeOps passes its current compatibility suite on the baseline AST bytecode path, but its policy is broader than Phase 1.
+HowlChangeOps passes its current compatibility suite on the baseline AST bytecode path, but its policy is broader than Phase 1.
 
 | Construct group | HFIR representation now | Direct lowering | Blocker | Risk |
 | --- | --- | --- | --- | --- |
@@ -66,7 +66,7 @@ ChangeOps passes its current compatibility suite on the baseline AST bytecode pa
 | Evidence loop | AST-shaped `for` | Unsupported | Iterator binding and control-flow form | Medium |
 | Filesystem effect | Generic current graph node | Unsupported | Deliberate effectful boundary expansion | Medium |
 
-ChangeOps needs 23 runtime constructs plus `catch`; Phase 1 does not support a meaningful full policy. Expanding it now would turn the vertical slice into a broad control-flow and error-model migration.
+HowlChangeOps needs 23 runtime constructs plus `catch`; Phase 1 does not support a meaningful full policy. Expanding it now would turn the vertical slice into a broad control-flow and error-model migration.
 
 ## HowlBoard compatibility
 

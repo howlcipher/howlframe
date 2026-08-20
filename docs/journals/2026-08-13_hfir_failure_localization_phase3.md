@@ -185,7 +185,7 @@ grants, or instruction policy select an editable region.
 # Consumer regression
 
 The HowlBoard HTTP integration suite passed using the Phase-3 binary. The
-ChangeOps integration suite passed from an isolated temporary copy with the
+HowlChangeOps integration suite passed from an isolated temporary copy with the
 same binary; its dirty-repository denial, approval gate, stale-evidence block,
 and missing-HFBC failure all remained intact. Neither consumer worktree was
 used as a source of Phase-3 changes.

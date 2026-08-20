@@ -116,7 +116,7 @@ so this is a node-surface comparison, not a token or operational-cost claim.
 # Consumer regression and validation
 
 The public AST and HFBC paths were not changed. Consumer integrations were not
-available in this checkout, so no new ChangeOps or HowlBoard execution claim is
+available in this checkout, so no new HowlChangeOps or HowlBoard execution claim is
 made. Focused HFIR localization, repair, and adversarial tests passed before
 the full repository validation gate.
 

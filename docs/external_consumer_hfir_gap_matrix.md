@@ -2,7 +2,7 @@
 
 This matrix reflects the clean consumer checkouts used by the 2026-08-14 runtime integrity gate. “Direct HFIR proven” means the current consumer policy was compiled with `compile-hfir-bc` and exercised through `run-bc`; it does not imply that every consumer feature is in HFIR.
 
-| Category | Current constructs | ChangeOps | HowlBot | HowlBoard backend | HowlBoard frontend |
+| Category | Current constructs | HowlChangeOps | HowlBot | HowlBoard backend | HowlBoard frontend |
 | --- | --- | --- | --- | --- | --- |
 | Core logic | `let`, `set`, `if`, `do`, equality, `and`, `or`, conversions | Direct HFIR proven | Direct HFIR proven | Legacy bytecode | JS-only |
 | CLI args | `cli_app`, `cli_args` | Direct HFIR proven | Direct HFIR proven | Missing | Missing |
@@ -23,7 +23,7 @@ This matrix reflects the clean consumer checkouts used by the 2026-08-14 runtime
 
 ## Evidence and interpretation
 
-ChangeOps, HowlPlane, and HowlBot represent primary external policy consumers. ChangeOps and HowlBot are the two direct-HFIR policy consumers; their current policy artifacts produced matching decisions on their tested normalized inputs. HowlPlane operates as a primary real-world dogfooding consumer for AI engineering control plane workflows. HowlBoard remains a legacy-bytecode application and was used here as a runtime stress consumer; it was not migrated.
+HowlChangeOps, HowlPlane, and HowlBot represent primary external policy consumers. HowlChangeOps and HowlBot are the two direct-HFIR policy consumers; their current policy artifacts produced matching decisions on their tested normalized inputs. HowlPlane operates as a primary real-world dogfooding consumer for AI engineering control plane workflows. HowlBoard remains a legacy-bytecode application and was used here as a runtime stress consumer; it was not migrated.
 
 HowlBot’s role/set and JSON-array ergonomics were not execution blockers. They remain ergonomic backlog items rather than new language surface for this milestone.
 

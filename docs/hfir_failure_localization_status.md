@@ -106,7 +106,7 @@ policy failures and receive no semantic repair region.
 # Consumer compatibility
 
 The public AST-backed build path and durable HFBC encoding are unchanged.
-HowlBoard's HTTP integration suite passes with the Phase-3 binary. ChangeOps'
+HowlBoard's HTTP integration suite passes with the Phase-3 binary. HowlChangeOps'
 isolated integration suite also passes, including approval, stale-evidence,
 and missing-HFBC failure boundaries.
 

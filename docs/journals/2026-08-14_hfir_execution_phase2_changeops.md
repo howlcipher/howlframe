@@ -1,10 +1,10 @@
 # Goal
-Execute the CURRENT ChangeOps HowlFrame policy through HowlFrame's direct HFIR execution architecture.
+Execute the CURRENT HowlChangeOps HowlFrame policy through HowlFrame's direct HFIR execution architecture.
 
 # Starting HowlFrame SHA
 6110cc687b038467fa641dd9041cc187d14279e4
 
-# ChangeOps SHA
+# HowlChangeOps SHA
 41bb22153c0f6cecf0b82efb1b5957330a4b32fc
 
 # HowlBoard SHA
@@ -13,7 +13,7 @@ Execute the CURRENT ChangeOps HowlFrame policy through HowlFrame's direct HFIR e
 # Current direct-HFIR subset
 Phase 1 executable subset included program, sequence, const, symbol, let, set, if, binary, list, dict, print, etc.
 
-# ChangeOps construct inventory
+# HowlChangeOps construct inventory
 `read_file`, `parse_json`, `try_let`, `catch`, `for`, `cli_args` (with indices), `is_nil`.
 
 # Missing semantic forms
@@ -32,11 +32,11 @@ All the constructs in the inventory were missing from the direct-HFIR subset.
 - **Semantic Repair**: A test in `internal/hfir/repair_test.go` proves HFIR's viability for autonomous fixes: it locates a `try` node missing its `catch` edge, injects a fallback catch node, and passes validation.
 
 # Differential evidence
-We compiled the unmodified `changeops.howl` using both the legacy AST compiler (`-compile-bc`) and the direct HFIR path (`-compile-hfir-bc`).
+We compiled the unmodified `howlchangeops.howl` using both the legacy AST compiler (`-compile-bc`) and the direct HFIR path (`-compile-hfir-bc`).
 A test script (`test_changeops.sh`) successfully verified identical behavior across 10 execution paths including `inspect`, `validate`, `record_release_ready` (valid/invalid), `create_release_candidate` (approved/unapproved/stale), and `rollback_release_candidate`.
 
 # Consumer evidence
-ChangeOps successfully executes unmodified over the direct HFIR path with all policy decisions identical.
+HowlChangeOps successfully executes unmodified over the direct HFIR path with all policy decisions identical.
 
 # Security evidence
 1. Capability tracking remained correctly inferred directly from HFIR via `read_file` mappings. The bytecode correctly aborted execution when missing the `filesystem` capability over both legacy and HFIR paths.
@@ -51,4 +51,4 @@ The HFIR compiler path does not yet support:
 This is tracked in `docs/external_consumer_hfir_gap_matrix.md`.
 
 # Final recommendation
-Direct HFIR execution is proven and reliable for Phase 2 consumers (ChangeOps). Phase 2B should target HowlBoard, requiring `defun`, `call`, `return`, `route`, and persistent `store` operations to be safely added to HFIR's supported subset. Meanwhile, HowlBoard's `set_html` XSS vulnerability must be resolved.
+Direct HFIR execution is proven and reliable for Phase 2 consumers (HowlChangeOps). Phase 2B should target HowlBoard, requiring `defun`, `call`, `return`, `route`, and persistent `store` operations to be safely added to HFIR's supported subset. Meanwhile, HowlBoard's `set_html` XSS vulnerability must be resolved.
