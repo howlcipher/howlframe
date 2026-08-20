@@ -103,6 +103,7 @@ var table = []Entry{
 	{Name: "defun", Support: Supported, Note: "registers a BCFunction; the name and parameter list are structural"},
 	{Name: "dict", Support: Supported, Note: "MAKE_DICT; key/value pairs are destructured by the case"},
 	{Name: "do", Support: Supported, Note: "compiles every child in sequence"},
+	{Name: "encode_json", Support: Supported, Note: "ENCODE_JSON"},
 	{Name: "env", Support: Supported, Note: "ENV"},
 	{Name: "ephemeral_circuit", Support: Supported, Note: "EPHEMERAL_CIRCUIT"},
 	{Name: "exec", Support: Supported, Note: "EXEC"},

@@ -50,6 +50,11 @@ class DbConnectInstruction(BaseModel):
     string_operand_3: str
 
 
+class EncodeJsonInstruction(BaseModel):
+    op: Literal["ENCODE_JSON"]
+    pass
+
+
 class EnvInstruction(BaseModel):
     op: Literal["ENV"]
     pass
@@ -328,6 +333,7 @@ Instruction = Annotated[
         ConfidenceInstruction,
         ConvertInstruction,
         DbConnectInstruction,
+        EncodeJsonInstruction,
         EnvInstruction,
         EphemeralCircuitInstruction,
         ExecInstruction,

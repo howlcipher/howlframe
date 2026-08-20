@@ -69,6 +69,7 @@ const (
 	OpListLen
 	OpIsNil
 	OpTimeNow
+	OpEncodeJson
 )
 
 type OperandType string
@@ -151,6 +152,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list"},
 	OpIsNil:            {Code: OpIsNil, Name: "IS_NIL", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Checks if a value is nil"},
 	OpTimeNow:          {Code: OpTimeNow, Name: "TIME_NOW", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets current unix timestamp"},
+	OpEncodeJson:       {Code: OpEncodeJson, Name: "ENCODE_JSON", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes a value as a JSON string"},
 }
 
 func NameToOpcode(name string) (Opcode, bool) {

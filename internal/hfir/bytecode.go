@@ -234,7 +234,11 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		case "exit":
 			op, name = bytecode.OpExit, "EXIT"
 		case "convert":
-			op, name = bytecode.OpConvert, "CONVERT"
+			if node.Value == "encode_json" {
+				op, name = bytecode.OpEncodeJson, "ENCODE_JSON"
+			} else {
+				op, name = bytecode.OpConvert, "CONVERT"
+			}
 		case "list_len":
 			op, name = bytecode.OpListLen, "LIST_LEN"
 		case "env":

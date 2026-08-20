@@ -60,6 +60,7 @@ const (
 	OpToFloat       SSAOp = "to_float"
 	OpToString      SSAOp = "to_string"
 	OpBytesToString SSAOp = "bytes_to_string"
+	OpEncodeJson    SSAOp = "encode_json"
 )
 
 // Instruction defines exactly one SSA value. Blocks is populated for phi
@@ -382,6 +383,8 @@ func (builder *ssaBuilder) lowerList(node *ast.Node) (ValueID, error) {
 		return builder.lowerSimple(OpToString, shared.Kids, node)
 	case "bytes_to_string":
 		return builder.lowerSimple(OpBytesToString, shared.Kids, node)
+	case "encode_json":
+		return builder.lowerSimple(OpEncodeJson, shared.Kids, node)
 	default:
 		return 0, builder.errorAt(node, "SSA lowering does not support %q", shared.Kind)
 	}

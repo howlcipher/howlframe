@@ -221,6 +221,9 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("String(%s)", valStr)
+	case "encode_json":
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("JSON.stringify(%s)", valStr)
 	case "str_split":
 		sStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		sepStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)

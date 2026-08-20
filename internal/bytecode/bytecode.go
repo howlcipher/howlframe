@@ -676,6 +676,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "to_float", "to_string", "bytes_to_string":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: head})
+		case "encode_json":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "ENCODE_JSON", Op: OpEncodeJson})
 		case "str_split":
 			insts = append(insts, c.compileNode(node.Children[1])...) // string
 			insts = append(insts, c.compileNode(node.Children[2])...) // sep
