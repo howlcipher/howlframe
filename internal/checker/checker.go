@@ -415,11 +415,18 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 		if pathNode.Type != "STRING" {
 			ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
 		}
-		reqNodeList := handlerNode.Children[2].Children[1]
+		lambdaNode := handlerNode.Children[2]
+		if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
+			ast.ReportError("route expects a lambda handler (lambda (req) body)", lambdaNode.Line, lambdaNode.Column)
+		}
+		reqNodeList := lambdaNode.Children[1]
 		if reqNodeList.Type != "List" || len(reqNodeList.Children) != 1 {
 			ast.ReportError("Expected exactly 1 argument in lambda (req)", reqNodeList.Line, reqNodeList.Column)
 		}
-		bodyNode := handlerNode.Children[2].Children[2]
+		if reqNodeList.Children[0].Type != "SYMBOL" {
+			ast.ReportError("lambda parameter must be an identifier", reqNodeList.Children[0].Line, reqNodeList.Children[0].Column)
+		}
+		bodyNode := lambdaNode.Children[2]
 		checkGoStatement(bodyNode, 0)
 	case "middleware":
 		if len(handlerNode.Children) < 3 {
@@ -440,16 +447,7 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 			if routeNode.Type != "List" || len(routeNode.Children) == 0 || routeNode.Children[0].Value != "route" {
 				ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
 			}
-			if len(routeNode.Children) != 3 {
-				ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
-			}
-			pathNode := routeNode.Children[1]
-			if pathNode.Type != "STRING" {
-				ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
-			}
-			routeLambdaNode := routeNode.Children[2]
-			routeBodyNode := routeLambdaNode.Children[2]
-			checkGoStatement(routeBodyNode, 0)
+			checkGoAppHandler(routeNode, isCliApp)
 		}
 	default:
 		if isCliApp {

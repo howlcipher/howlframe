@@ -1,14 +1,16 @@
 package checker
 
 import (
-	"github.com/howlcipher/howlframe/internal/ast"
-	"github.com/howlcipher/howlframe/internal/ir"
-	"github.com/howlcipher/howlframe/internal/lexer"
-	"github.com/howlcipher/howlframe/internal/parser"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/ir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
 
 func parseTestProgram(t *testing.T, source string) *ast.Node {
@@ -508,5 +510,114 @@ func TestCheckReportsMalformedSharedForm(t *testing.T) {
 	}
 	if !strings.Contains(string(output), `{"reason":"return expects 1 argument, got 0","line":1,"column":10}`) {
 		t.Fatalf("checker did not emit the expected diagnostic: %s", output)
+	}
+}
+
+func TestCheckRouteHandlerValidation(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{
+			name:     "top_level_bodyless_lambda",
+			source:   `(http_server 8080 (route "/" (lambda (req))))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "top_level_non_list",
+			source:   `(http_server 8080 (route "/" "handler"))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "top_level_multibody_lambda",
+			source:   `(http_server 8080 (route "/" (lambda (req) (print 1) (print 2))))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "top_level_zero_args_lambda",
+			source:   `(http_server 8080 (route "/" (lambda () (print "hi"))))`,
+			expected: "Expected exactly 1 argument in lambda (req)",
+		},
+		{
+			name:     "top_level_multi_args_lambda",
+			source:   `(http_server 8080 (route "/" (lambda (req extra) (print "hi"))))`,
+			expected: "Expected exactly 1 argument in lambda (req)",
+		},
+		{
+			name:     "top_level_non_symbol_param",
+			source:   `(http_server 8080 (route "/" (lambda (123) (print "hi"))))`,
+			expected: "lambda parameter must be an identifier",
+		},
+		{
+			name:     "middleware_bodyless_lambda",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" (lambda (req)))))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "middleware_non_list",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" "handler")))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "middleware_multibody_lambda",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" (lambda (req) (print 1) (print 2)))))`,
+			expected: "route expects a lambda handler (lambda (req) body)",
+		},
+		{
+			name:     "middleware_zero_args_lambda",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" (lambda () (print "hi")))))`,
+			expected: "Expected exactly 1 argument in lambda (req)",
+		},
+		{
+			name:     "middleware_multi_args_lambda",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" (lambda (req extra) (print "hi")))))`,
+			expected: "Expected exactly 1 argument in lambda (req)",
+		},
+		{
+			name:     "middleware_non_symbol_param",
+			source:   `(http_server 8080 (middleware (lambda (req) (print "mw")) (route "/" (lambda (123) (print "hi")))))`,
+			expected: "lambda parameter must be an identifier",
+		},
+	}
+
+	if key := os.Getenv("HOWLFRAME_ROUTE_CASE"); key != "" {
+		for _, tc := range cases {
+			if tc.name == key {
+				Check(parseTestProgram(t, tc.source))
+				return
+			}
+		}
+		t.Fatalf("unknown route test case: %s", key)
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			sub := exec.Command(os.Args[0], "-test.run=^TestCheckRouteHandlerValidation$")
+			sub.Env = append(os.Environ(), "HOWLFRAME_ROUTE_CASE="+tc.name)
+			raw, runErr := sub.CombinedOutput()
+			if runErr == nil {
+				t.Fatalf("expected error for case %s, got success", tc.name)
+			}
+			msg := string(raw)
+			if strings.Contains(msg, "panic:") {
+				t.Fatalf("case %s panicked instead of reporting error: %s", tc.name, msg)
+			}
+			exit, ok := runErr.(*exec.ExitError)
+			if !ok || exit.ExitCode() != 1 {
+				t.Fatalf("case %s exited abnormally: %v\n%s", tc.name, runErr, msg)
+			}
+			var out ast.ErrorOutput
+			if err := json.Unmarshal(raw, &out); err != nil {
+				t.Fatalf("case %s emitted malformed JSON error: %v\n%s", tc.name, err, msg)
+			}
+			if out.Reason != tc.expected {
+				t.Fatalf("case %s expected reason %q, got %q", tc.name, tc.expected, out.Reason)
+			}
+			if out.Line == 0 || out.Column == 0 {
+				t.Fatalf("case %s reported invalid coordinates: line=%d col=%d", tc.name, out.Line, out.Column)
+			}
+		})
 	}
 }
