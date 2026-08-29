@@ -104,6 +104,18 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* `route` handlers are validated before they are indexed. `checkGoAppHandler`'s
+  `case "route"` read `Children[2].Children[1]` and `Children[2].Children[2]`
+  without checking that the handler was a well-formed `(lambda (req) body)`, so
+  `(http_server 8080 (route "/" (lambda (req))))` crashed the compiler with
+  `index out of range [2] with length 2` rather than reporting an error. The
+  guard the `middleware` case already applied to its own lambda is now applied
+  to `route` as well, and the middleware nested-route loop delegates to
+  `checkGoAppHandler` instead of duplicating the validation, so nested routes
+  are checked identically without adding duplication debt. A parameter that is
+  not a symbol is now rejected too. Covered by `TestCheckRouteHandlerValidation`
+  with 12 subtests across both forms. (bugs.md #50)
+
 * `docs/archive/old_howlframe.go` is no longer counted as production Go. The
   file is a 4177-line archive of the pre-cutover monolithic implementation
   whose first line is `//go:build ignore`, so Go itself never compiled it, but
