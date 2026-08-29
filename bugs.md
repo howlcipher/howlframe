@@ -8,6 +8,11 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 
 | # | Bug | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 50 | [`route` indexes a handler lambda it never validated, panicking the compiler](#50-route-indexes-a-handler-lambda-it-never-validated-panicking-the-compiler) | Pending | 6.0 (6×1÷1) | Sonnet 5 | — | gpt-5.6-sol | `(route "/" (lambda (req)))` crashes the compiler with `index out of range [2] with length 2` instead of reporting an error. The `middleware` case ten lines below already performs exactly the guard `route` is missing, so the fix is a copy of an in-file precedent. |
+| 51 | [A stale `difftest` exemption permanently skips a fixture that now passes](#51-a-stale-difftest-exemption-permanently-skips-a-fixture-that-now-passes) | Pending | 2.5 (5×1÷2) | Haiku 4.5 | — | gpt-5.6-luna | `tools/difftest/manifest.json` still exempts `test_improvement_46.howl` as "unsupported in run", but it runs clean today, so the fixture contributes zero regression coverage and nothing ever re-checks whether an exemption is still earned. |
+| 52 | [`-allow-caps` and `-max-instructions` are silently ignored when placed after the input file](#52--allow-caps-and--max-instructions-are-silently-ignored-when-placed-after-the-input-file) | Pending | 2.0 (8×0.5÷2) | Sonnet 5 | — | gpt-5.6-sol | Go's `flag` stops parsing at the first positional, so both bytecode execution-sandbox controls become no-ops after the filename and their validation is skipped entirely. Same "flag ignored after the input file" theme as Done bug #39, which fixed only `-o` (decay 0.5). |
+| 53 | [VM file and network instructions use unchecked type assertions](#53-vm-file-and-network-instructions-use-unchecked-type-assertions) | Pending | 1.5 (6×0.5÷2) | Sonnet 5 | — | gpt-5.6-terra | `OpFetch`, `OpReadFile`, `OpWriteFile` and `OpMkdir` still pop with bare `.(string)` while bug #47 established the checked-assertion/`TYPE_ERROR` pattern for the string and collection instructions (decay 0.5). |
+| 54 | [`SPAWN_AGENT` and `TASK` are emitted but unimplemented, reported as `VM_INTERNAL`](#54-spawn_agent-and-task-are-emitted-but-unimplemented-reported-as-vm_internal) | Pending | 1.0 (4×0.5÷2) | Haiku 4.5 | — | gpt-5.6-luna | The bytecode compiler emits both opcodes but the VM has no case for either, so a known unimplemented construct is reported as an internal VM fault. The Phase 1 interpreter reports the same gap cleanly (decay 0.5 from bug #45's silent-construct theme). |
 | 49 | [A `//go:build ignore` archive is counted as production Go, pushing `go_production` over its ceiling](#49-a-gobuild-ignore-archive-is-counted-as-production-go-pushing-go_production-over-its-ceiling) | Done (2026-08-29) | 6.0 (6×1÷1) | Opus 5 | — | — | `go_production`'s `scan_path: .` / `**/*.go` glob matched `docs/archive/old_howlframe.go`, a build-excluded archive of the old monolithic implementation, so 4177 lines of dead history counted as production source and held the scope at 291 active clones against a committed ceiling of 290. |
 | 48 | [`parse_json req.body` reads unbounded request data and ignores read errors](#48-parse_json-reqbody-reads-unbounded-request-data-and-ignores-read-errors) | Done (2026-08-18) | 2.0 (8×1÷4) | Sonnet 5 | Gemini 3.1 Pro | gpt-5.6-terra | The standalone HTTP bytecode VM bounded to 10MB limit and handles read errors cleanly without silent data corruption. |
 | 40 | [Missing `.agents/prompts/work_next_item.md` file](#40-missing-agentspromptswork_next_itemmd-file) | Done (2026-08-04) | 3.0 (3×1÷1) | — | Gemini 3.1 Pro | — | The `work_next_item` skill expects a prompt file `.agents/prompts/work_next_item.md` which does not exist in the repository, making the skill fail to load its prompt. |
@@ -59,6 +64,56 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 38 | [`test_primitives.howl` wraps deterministic conversions in `try_let`](#38-test_primitiveshowl-wraps-deterministic-conversions-in-try_let) | Done (2026-07-31) | 3.0 (3×1÷1) | — | — | gpt-5.6-luna | The fixture used `try_let` around `to_int` and `to_float`, but those deterministic conversions return one value, so generated tests failed with assignment-mismatch errors. |
 | 39 | [`-o <dir>` is silently ignored when placed after the input file for the Go/JS backend](#39--o-dir-is-silently-ignored-when-placed-after-the-input-file-for-the-gojs-backend) | Done (2026-08-01) | 6.0 (6×1÷1) | Sonnet 5 | — | gpt-5.6-sol | `howlframe.go` now applies one output-directory helper to Go, JavaScript, and legacy WAT output, accepts `-o` on either side of input, and creates destination directories. |
 ## Details
+
+**Investigated and deliberately not filed (2026-08-29):** `BCInstruction.UnmarshalJSON`
+(`internal/bytecode/bytecode.go:32-42`) discards `NameToOpcode`'s failure signal with
+`inst.Op, _ = NameToOpcode(inst.OpString)`, which looks like a fail-open at the artifact
+boundary. It is not reachable from product code: the durable artifact format is HFBC, which
+`ReadArtifact` decodes with `gob` behind a magic check, a version check, a length bound and a
+SHA-256 payload hash, and nothing in the repository JSON-decodes a `BCProgram`. The method is
+latent, so it is recorded here rather than filed as a live bug.
+
+
+
+### 50. `route` indexes a handler lambda it never validated, panicking the compiler
+* **Symptom:** `(http_server 8080 (route "/" (lambda (req))))` — a lambda with an argument list but no body — crashes the compiler with `panic: runtime error: index out of range [2] with length 2` at `internal/checker/checker.go:422`, instead of reporting a checker error. Verified by running `howlframe -validate` on that source.
+* **Root Cause:** `checkGoAppHandler`'s `case "route"` reads `handlerNode.Children[2].Children[1]` and `handlerNode.Children[2].Children[2]` without ever checking that `Children[2]` is a `List` of three children whose head is `lambda`. The nested route loop inside `case "middleware"` has the same unguarded read at `internal/checker/checker.go:450` (`routeLambdaNode.Children[2]`). Note that `case "middleware"` itself, at `internal/checker/checker.go:428-431`, already performs precisely the missing check (`lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda"`) — the guard exists in the same function and was simply never applied to `route`.
+* **Not the same as:** a non-list handler such as `(route "/" invalid)`, which is already caught cleanly as `undefined reference to "invalid"`. The crash needs a *malformed lambda*, not a non-lambda.
+* **Fix sketch:** apply the `middleware` guard to both `route` sites before indexing.
+* **Deterministic acceptance:** a `go test` in `internal/checker` asserting that `(http_server 8080 (route "/" (lambda (req))))` reports a structured `route expects a lambda handler (lambda (req) body)` error rather than panicking, plus the same for the `middleware`-nested form.
+* **Estimated effort:** ~16 lines in one file.
+
+### 51. A stale `difftest` exemption permanently skips a fixture that now passes
+* **Symptom:** `tools/difftest/manifest.json` lists `"test_improvement_46.howl": "unsupported in run"`, so `difftest` prints `SKIP` for it forever. Running it directly succeeds: `howlframe -run tests/test_improvement_46.howl` prints `43`, `6`, `42` and exits 0. The claim in the manifest is simply no longer true, and the fixture provides zero regression coverage.
+* **Root Cause:** `tools/difftest/main.go:14-38` reads the manifest and unconditionally skips any listed fixture. Nothing ever verifies that an exemption is still earned, so an exemption written for a real limitation survives the fix that removed the limitation — the same failure mode slopslint guards against with its `unmatched_tombstones` diagnostic.
+* **Fix sketch:** drop the stale entry, and make `difftest` report an exemption whose fixture now passes as an error rather than silently honouring it.
+* **Deterministic acceptance:** `go run tools/difftest/main.go` reports `test_improvement_46.howl` as RUN and passing, and a deliberately stale exemption causes a non-zero exit naming it.
+* **Estimated effort:** ~20 lines in `tools/difftest/main.go` plus one manifest line.
+* **Note:** the other `"unsupported in run"` entries were checked and are genuine — `test_ai_primitives`, `test_llm`, `test_store_bytecode`, `test_swarm` and `test_trace` all still fail with a structured "not supported under -run in Phase 1" diagnostic.
+
+### 52. `-allow-caps` and `-max-instructions` are silently ignored when placed after the input file
+* **Symptom:** the two flags that bound bytecode execution become no-ops depending only on argv position. Verified live against a `(cli_app (print (env "HOME")))` program compiled to bytecode:
+  * `howlframe -run-bc -allow-caps environment prog.bc` → prints the value.
+  * `howlframe -run-bc prog.bc -allow-caps environment` → `CAPABILITY_DENIED`.
+  * `howlframe -run-bc -max-instructions 1 -allow-caps environment prog.bc` → `LIMIT_EXCEEDED`.
+  * `howlframe -run-bc -allow-caps environment prog.bc -max-instructions 1` → runs to completion, budget ignored.
+  * An invalid capability *before* the file is rejected (`unknown capability in -allow-caps: "bogus"`); *after* the file, `parseAllowedCaps`'s validation never runs at all.
+* **Root Cause:** Go's `flag` package stops parsing at the first non-flag argument, so anything after the filename is left in `flag.Args()` and never bound. `howlframe.go:55-56` declare both flags and `howlframe.go:83` consumes them. Bug #39 (Done) fixed exactly this class for `-o` by re-scanning raw argv in `outputDirectory(os.Args[1:], inputFile, *outDir)`; the sandbox flags never received the same treatment.
+* **Severity note:** fail-closed in the capability case (the flag is dropped, so capabilities are denied rather than granted), but `-max-instructions` fails *open* — an intended budget is silently replaced by the 100000 default.
+* **Fix sketch:** parse flags from the full argv the way `outputDirectory` already does, or reorder so positional arguments do not terminate flag parsing; keep `parseAllowedCaps`'s validation on the resulting value.
+* **Deterministic acceptance:** a `go test` asserting identical behaviour for both flag orders, and that an invalid capability after the input file still fails before execution.
+
+### 53. VM file and network instructions use unchecked type assertions
+* **Symptom:** popping a non-string operand into a file or network instruction raises a raw Go panic (`interface conversion: interface {} is ..., not string`) which surfaces as an untyped `VM_INTERNAL` failure, rather than the structured, catchable `TYPE_ERROR` the VM promises elsewhere.
+* **Root Cause:** `internal/vm/vm.go:1570-1571` (`OpFetch`), `:1591` (`OpReadFile`), `:1603` (`OpWriteFile`) and `:1617` (`OpMkdir`) pop with bare `.(string)`. Bug #47 (Done) established the correct pattern — see `OpStrSplit` at `internal/vm/vm.go:2126-2133`, which uses `val, ok :=` and raises `NewRuntimeError("TYPE_ERROR", ...)` — but applied it only to the string and collection instructions.
+* **Fix sketch:** convert the four sites to checked assertions raising `TYPE_ERROR`, matching `OpStrSplit`.
+* **Deterministic acceptance:** a `go test` running a `BCProgram` whose `OpReadFile` is preceded by a `LOAD_CONST` of a number, with `capability.Filesystem` granted, asserting the runtime failure code is `TYPE_ERROR` and not `VM_INTERNAL`.
+
+### 54. `SPAWN_AGENT` and `TASK` are emitted but unimplemented, reported as `VM_INTERNAL`
+* **Symptom:** compiling and running `tests/test_swarm.howl` under the bytecode VM yields `{"phase":"runtime","code":"VM_INTERNAL","function":"main","instruction":0,"message":"unknown opcode: TASK"}`. `VM_INTERNAL` means "the VM broke", but this is a construct the project simply has not implemented yet — and `tools/difftest/manifest.json` already exempts the fixture as a result.
+* **Root Cause:** `internal/bytecode/bytecode.go:500,502` emit `OpSpawnAgent` and `OpTask`, and both are registered in `internal/bytecode/opcode.go:140-141`, but `internal/vm/vm.go`'s dispatch switch has no case for either, so they reach the `default` backstop. A cross-check confirmed these are the *only* two registered opcodes the VM never references; every other registered opcode is handled. The Phase 1 interpreter reports the same gap correctly, as `"spawn_agent" is not supported under -run in Phase 1`.
+* **Fix sketch (bounded):** give the VM an explicit unsupported-construct error naming the opcode, distinct from `VM_INTERNAL`. Actually implementing subagent spawning is a separate, much larger item and is not in scope here.
+* **Deterministic acceptance:** a `go test` running a bytecode program containing `SPAWN_AGENT` and asserting a structured unsupported-construct code rather than `VM_INTERNAL`.
 
 ### 49. A `//go:build ignore` archive is counted as production Go, pushing `go_production` over its ceiling
 * **Symptom:** `slopslint check --classify --enforce` failed with `go_production has 291 active clones, exceeding the committed ceiling of 290`, with no corresponding duplication in any code the compiler actually builds. Because the check is a required repository-hygiene gate, every governed task against this repository failed its verification stage regardless of what the task changed.
