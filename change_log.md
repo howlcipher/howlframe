@@ -104,6 +104,22 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* `docs/archive/old_howlframe.go` is no longer counted as production Go. The
+  file is a 4177-line archive of the pre-cutover monolithic implementation
+  whose first line is `//go:build ignore`, so Go itself never compiled it, but
+  `.slop`'s `go_production` scope (`scan_path: .`, `pattern: "**/*.go"`)
+  matched it and counted 4177 lines of dead history as production source. It
+  was one side of roughly 81% of the repository's duplicated windows, which
+  held `go_production` at 291 active clones against a committed ceiling of
+  290 and failed the required repository-hygiene gate for every governed task
+  regardless of what that task changed. Renamed to
+  `docs/archive/old_howlframe.go.txt`, which states a fact that was already
+  true rather than adding an ignore rule or tombstone to the hygiene policy.
+  `go_production` fell from 291 active clones across 41 sources to 84 across
+  40, and the committed ceiling was ratcheted down from 290 to 84 to match.
+  `go_tests` is unaffected at 128. Build, vet, test and `gofmt` output are
+  unchanged, since the file was never in the build. (bugs.md #49)
+
 * Fixed a severe issue where `str_split`, `str_join`, `regex_match`, `append`, `map_set`, `map_delete`, `map_get`, `list_get`, and `list_len` bytecode VM instructions relied on unsafe Go type assertions, which caused immediate uncatchable internal panics (`interface {} is ...`) instead of deterministic script errors. The VM now performs safe checks and produces structured `TYPE_ERROR` runtime errors when given unexpected types, enabling correct `try_let` interception.
 
 * Bytecode `try_let` now resumes after its complete embedded instruction region
