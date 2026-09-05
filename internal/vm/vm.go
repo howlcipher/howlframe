@@ -1402,6 +1402,88 @@ func cloneStoreValue(value any) any {
 	}
 }
 
+// popCheckedString pops a value and asserts it is a string, panicking with a
+// structured TYPE_ERROR labelled by msgPrefix otherwise. Shared by the
+// file/network instructions' operand checks to avoid repeating the
+// pop/assert/panic triple per operand.
+func (vm *BCVM) popCheckedString(inst bytecode.BCInstruction, ip int, msgPrefix string) string {
+	val := vm.pop(inst.Op)
+	s, ok := val.(string)
+	if !ok {
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, msgPrefix+", got %T", val))
+	}
+	return s
+}
+
+// requireHTTPMux fetches and type-checks the "__http_mux" environment
+// variable the HTTP routing instructions share, panicking with a structured
+// error labelled by opName if the server was never started or the stored
+// value is not a *http.ServeMux. Shared by every instruction that needs the
+// active mux.
+func requireHTTPMux(env *BcEnv, ip int, inst bytecode.BCInstruction, opName string) *http.ServeMux {
+	muxAny, ok := env.get("__http_mux")
+	if !ok {
+		panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http server not started"))
+	}
+	mux, ok := muxAny.(*http.ServeMux)
+	if !ok {
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected *http.ServeMux, got %T", muxAny))
+	}
+	return mux
+}
+
+// bytesToAnySlice converts a []byte into a []any of float64 elements, the
+// representation HowlFrame values use for byte data on the operand stack.
+// Shared by every instruction that returns raw bytes (fetch responses, file
+// reads, subprocess output) to avoid repeating the same conversion loop.
+func bytesToAnySlice(b []byte) []any {
+	var bytesAny []any
+	for _, bb := range b {
+		bytesAny = append(bytesAny, float64(bb))
+	}
+	return bytesAny
+}
+
+// popCheckedStatus pops a value and converts it to an int HTTP status code,
+// accepting float64/int64/int and panicking with a structured TYPE_ERROR
+// labelled by opName otherwise. Shared by the response instructions.
+func (vm *BCVM) popCheckedStatus(inst bytecode.BCInstruction, ip int, opName string) int {
+	statusVal := vm.pop(inst.Op)
+	switch s := statusVal.(type) {
+	case float64:
+		return int(s)
+	case int64:
+		return int(s)
+	case int:
+		return s
+	default:
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected number status, got %T", statusVal))
+	}
+}
+
+// bytesFromNumberList converts a []any of numeric elements (float64/int64/int)
+// into a []byte, panicking with a structured TYPE_ERROR labelled by opName on
+// any non-numeric element. Shared by write_file and parse_json's byte-list
+// input handling.
+func bytesFromNumberList(items []any, ip int, inst bytecode.BCInstruction, opName string) []byte {
+	var data []byte
+	for _, bb := range items {
+		var bNum float64
+		switch n := bb.(type) {
+		case float64:
+			bNum = n
+		case int64:
+			bNum = float64(n)
+		case int:
+			bNum = float64(n)
+		default:
+			panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" byte list element expected number, got %T", bb))
+		}
+		data = append(data, byte(bNum))
+	}
+	return data
+}
+
 func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 	if vm.stores == nil {
 		vm.stores = newBCStoreRegistry()
@@ -1567,8 +1649,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.persistStore(store, records, inst.Op)
 			store.mu.Unlock()
 		case bytecode.OpFetch:
-			method := vm.pop(inst.Op).(string)
-			urlStr := vm.pop(inst.Op).(string)
+			method := vm.popCheckedString(inst, ip, "fetch expected string method")
+			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
 			req, err := http.NewRequest(method, urlStr, nil)
 			if err != nil {
 				panic(err)
@@ -1582,39 +1664,34 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
-			var bytesAny []any
-			for _, bb := range b {
-				bytesAny = append(bytesAny, float64(bb))
-			}
-			vm.push(bytesAny)
+			vm.push(bytesToAnySlice(b))
 		case bytecode.OpReadFile:
-			path := vm.pop(inst.Op).(string)
+			path := vm.popCheckedString(inst, ip, "read_file expected string")
 			b, err := os.ReadFile(path)
 			if err != nil {
 				panic(err)
 			}
-			var bytesAny []any
-			for _, bb := range b {
-				bytesAny = append(bytesAny, float64(bb))
-			}
-			vm.push(bytesAny)
+			vm.push(bytesToAnySlice(b))
 		case bytecode.OpWriteFile:
 			dataAny := vm.pop(inst.Op)
-			path := vm.pop(inst.Op).(string)
+			path := vm.popCheckedString(inst, ip, "write_file expected string path")
 			var data []byte
-			if s, ok := dataAny.(string); ok {
-				data = []byte(s)
-			} else if b, ok := dataAny.([]any); ok {
-				for _, bb := range b {
-					data = append(data, byte(bb.(float64)))
-				}
+			switch v := dataAny.(type) {
+			case string:
+				data = []byte(v)
+			case []byte:
+				data = v
+			case []any:
+				data = bytesFromNumberList(v, ip, inst, "write_file")
+			default:
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "write_file expected string or byte list data, got %T", dataAny))
 			}
 			err := os.WriteFile(path, data, 0644)
 			if err != nil {
 				panic(err)
 			}
 		case bytecode.OpMkdir:
-			path := vm.pop(inst.Op).(string)
+			path := vm.popCheckedString(inst, ip, "mkdir expected string")
 			err := os.MkdirAll(path, 0755)
 			if err != nil {
 				panic(err)
@@ -1630,20 +1707,19 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(err)
 			}
-			var bytesAny []any
-			for _, bb := range out {
-				bytesAny = append(bytesAny, float64(bb))
-			}
-			vm.push(bytesAny)
+			vm.push(bytesToAnySlice(out))
 		case bytecode.OpParseJson:
 			bodyVar := inst.StringOperand
 			var data []byte
 			if bodyVar == "req.body" {
 				reqAny, ok := env.get("req")
 				if !ok {
-					panic("undefined req")
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined req"))
 				}
-				req := reqAny.(*http.Request)
+				req, ok := reqAny.(*http.Request)
+				if !ok {
+					panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "parse_json expected *http.Request, got %T", reqAny))
+				}
 				if req.Body == nil {
 					panic("request body is nil")
 				}
@@ -1662,15 +1738,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			} else {
 				bodyAny, ok := env.get(bodyVar)
 				if !ok {
-					panic("undefined var: " + bodyVar)
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined var: "+bodyVar))
 				}
 				if s, ok := bodyAny.(string); ok {
 					data = []byte(s)
-				}
-				if b, ok := bodyAny.([]any); ok {
-					for _, bb := range b {
-						data = append(data, byte(bb.(float64)))
-					}
+				} else if b, ok := bodyAny.([]byte); ok {
+					data = b
+				} else if b, ok := bodyAny.([]any); ok {
+					data = bytesFromNumberList(b, ip, inst, "parse_json")
 				}
 			}
 			var result any
@@ -1698,32 +1773,40 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			ip += bodyLen
 		case bytecode.OpRes:
 			bodyAny := vm.pop(inst.Op)
-			contentType := vm.pop(inst.Op).(string)
-			status := int(ToBCFloat(vm.pop(inst.Op)))
+			contentTypeVal := vm.pop(inst.Op)
+			contentType, ok := contentTypeVal.(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "res expected string content type, got %T", contentTypeVal))
+			}
+			status := vm.popCheckedStatus(inst, ip, "res")
 			wAny, ok := env.get("w")
 			if !ok {
 				panic("no response writer")
 			}
-			w := wAny.(http.ResponseWriter)
+			w, ok := wAny.(http.ResponseWriter)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "res expected http.ResponseWriter, got %T", wAny))
+			}
 			w.Header().Set("Content-Type", contentType)
 			w.WriteHeader(status)
 			if s, ok := bodyAny.(string); ok {
 				w.Write([]byte(s))
+			} else if b, ok := bodyAny.([]byte); ok {
+				w.Write(b)
 			} else if b, ok := bodyAny.([]any); ok {
-				var data []byte
-				for _, bb := range b {
-					data = append(data, byte(bb.(float64)))
-				}
-				w.Write(data)
+				w.Write(bytesFromNumberList(b, ip, inst, "res"))
 			}
 		case bytecode.OpResJson:
 			data := vm.pop(inst.Op)
-			status := int(ToBCFloat(vm.pop(inst.Op)))
+			status := vm.popCheckedStatus(inst, ip, "res_json")
 			wAny, ok := env.get("w")
 			if !ok {
 				panic("no response writer")
 			}
-			w := wAny.(http.ResponseWriter)
+			w, ok := wAny.(http.ResponseWriter)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "res_json expected http.ResponseWriter, got %T", wAny))
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(data)
@@ -1737,8 +1820,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 
-			muxAny, _ := env.get("__http_mux")
-			mux := muxAny.(*http.ServeMux)
+			mux := requireHTTPMux(env, ip, inst, "http_route")
 
 			capturedEnv := NewBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
@@ -1767,10 +1849,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			ip += bodyLen
 		case bytecode.OpHttpServerServe:
-			muxAny, _ := env.get("__http_mux")
-			mux := muxAny.(*http.ServeMux)
-			portAny, _ := env.get("__http_port")
-			port := portAny.(string)
+			mux := requireHTTPMux(env, ip, inst, "http_server_serve")
+			portAny, ok := env.get("__http_port")
+			if !ok {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http server port not configured"))
+			}
+			port, ok := portAny.(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_server_serve expected string port, got %T", portAny))
+			}
 			fmt.Fprintln(vm.Out, "Listening on "+port)
 			err := http.ListenAndServe(":"+port, mux)
 			if err != nil {
@@ -1781,17 +1868,31 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic("no request context")
 			}
-			req := reqAny.(*http.Request)
+			req, ok := reqAny.(*http.Request)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_req_method expected *http.Request, got %T", reqAny))
+			}
 			vm.push(req.Method)
 		case bytecode.OpHttpResHeader:
-			value := vm.pop(inst.Op)
-			name := vm.pop(inst.Op)
+			valueVal := vm.pop(inst.Op)
+			nameVal := vm.pop(inst.Op)
+			name, okName := nameVal.(string)
+			if !okName {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_res_header expected string name, got %T", nameVal))
+			}
+			value, okVal := valueVal.(string)
+			if !okVal {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_res_header expected string value, got %T", valueVal))
+			}
 			wAny, ok := env.get("w")
 			if !ok {
 				panic("no response writer")
 			}
-			w := wAny.(http.ResponseWriter)
-			w.Header().Set(fmt.Sprint(name), fmt.Sprint(value))
+			w, ok := wAny.(http.ResponseWriter)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_res_header expected http.ResponseWriter, got %T", wAny))
+			}
+			w.Header().Set(name, value)
 		case bytecode.OpNeuralCircuit:
 			numInputs := int(inst.IntOperand)
 			inputs := make([]any, numInputs)
@@ -1928,7 +2029,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 		case bytecode.OpLlmGenerate:
 			modelStr := inst.StringOperand
-			promptStr := vm.pop(inst.Op).(string)
+			promptVal := vm.pop(inst.Op)
+			promptStr, ok := promptVal.(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "llm_generate expected string prompt, got %T", promptVal))
+			}
 			reqBody, _ := json.Marshal(map[string]any{
 				"model":  modelStr,
 				"prompt": promptStr,

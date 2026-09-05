@@ -104,6 +104,28 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* Flags written after the positional input file are honoured instead of
+  discarded. Go's `flag` package stops parsing at the first non-flag argument,
+  so `howlframe prog.howl -mask-plan` set no mode flag at all, fell through to
+  the default Go backend, exited 0 with no output and wrote an unrequested
+  `server.go` into the working directory. `main` now resumes parsing over the
+  trailing tokens with a second `FlagSet` that re-registers every flag sharing
+  the identical `flag.Value`, so every flag works on either side of the input
+  and anything unconsumable is reported rather than ignored. This replaces
+  `outputFlagAfterInput`, which rescanned raw argv for the `-o` and `-o=`
+  spellings alone, so `-o` is no longer the only flag with after-input
+  handling, while keeping its position-dependent meaning (output directory
+  before the input, exact artifact file after it). The `-run-bc` and `-run`
+  argv contract is untouched: those modes skip the resumed parse entirely and
+  still hand every token after the input to the target program verbatim, and
+  writing either of them after the input is now rejected with a diagnostic
+  instead of silently reinterpreting the program's arguments. The `build`
+  subcommand resumes its own parse the same way, so it too accepts any of its
+  flags after the source file and now rejects a stray positional or an
+  undefined flag there rather than ignoring it. `-h` and `-help` after the
+  input print the same usage and exit 0 just as they do before it, instead of
+  becoming a `flag: help requested` diagnostic. Covered by
+  `TestCLIFlagPositionRelativeToInput`. (bugs.md #52)
 * `route` handlers are validated before they are indexed. `checkGoAppHandler`'s
   `case "route"` read `Children[2].Children[1]` and `Children[2].Children[2]`
   without checking that the handler was a well-formed `(lambda (req) body)`, so

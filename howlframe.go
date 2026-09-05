@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
@@ -20,6 +21,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/optimization"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"github.com/howlcipher/howlframe/internal/vm"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,12 +63,58 @@ func main() {
 	if *runBc && *maxInstructions <= 0 {
 		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
 	}
+	if *outDir != "" && strings.HasPrefix(*outDir, "-") {
+		ast.ReportError("flag needs an argument: -o", 0, 0)
+	}
+	if *allowCaps != "" && strings.HasPrefix(*allowCaps, "-") {
+		ast.ReportError("flag needs an argument: -allow-caps", 0, 0)
+	}
 
 	if flag.NArg() < 1 {
 		ast.ReportError("Missing file argument", 0, 0)
 	}
 	inputFile := flag.Arg(0)
-	outputDir := outputDirectory(os.Args[1:], inputFile, *outDir)
+	trailing := flag.Args()[1:]
+
+	// Everything after the input file belongs to the target program under the
+	// argv-owning modes and to this CLI under every other mode (see
+	// argvOwningModes). *runBc/*runMode is the same condition the dispatch
+	// below uses, so the tokens handed to vm.RunBytecodeWithPolicy and
+	// vm.Interpret are exactly flag.Args()[1:], unchanged.
+	var programArgs []string
+	var setAfterInput map[string]bool
+	if *runBc || *runMode {
+		programArgs = trailing
+	} else {
+		afterInput, leftover, err := resumeFlagsAfterInput(flag.CommandLine, trailing)
+		if errors.Is(err, flag.ErrHelp) {
+			// -h and -help are answered by the first parse with usage and a
+			// zero exit; the resumed parse must answer them the same way
+			// rather than reporting a diagnostic, or -h would be the one flag
+			// still position-dependent.
+			flag.Usage()
+			os.Exit(0)
+		}
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("Cannot parse arguments after input file %q: %v", inputFile, err), 0, 0)
+		}
+		setAfterInput = afterInput
+		if *outDir != "" && strings.HasPrefix(*outDir, "-") {
+			ast.ReportError(fmt.Sprintf("Cannot parse arguments after input file %q: flag needs an argument: -o", inputFile), 0, 0)
+		}
+		if *allowCaps != "" && strings.HasPrefix(*allowCaps, "-") {
+			ast.ReportError(fmt.Sprintf("Cannot parse arguments after input file %q: flag needs an argument: -allow-caps", inputFile), 0, 0)
+		}
+		for _, mode := range argvOwningModes {
+			if setAfterInput[mode] {
+				ast.ReportError(fmt.Sprintf("-%s must be given before the input file, because every token after the input file is passed to the program being run as its arguments", mode), 0, 0)
+			}
+		}
+		if len(leftover) > 0 {
+			ast.ReportError(fmt.Sprintf("Unexpected argument %q after input file %q", leftover[0], inputFile), 0, 0)
+		}
+	}
+	outputDir := *outDir
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -80,7 +128,7 @@ func main() {
 		}
 		executionPolicy := vm.DefaultExecutionPolicy()
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
-		os.Exit(vm.RunBytecodeWithPolicy(prog, flag.Args()[1:], executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	lx := lexer.NewLexer(string(content))
@@ -129,12 +177,7 @@ func main() {
 		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
-		outFile := inputFile + ".bc.bin"
-		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
-			outFile = outputFile
-		} else if *outDir != "" {
-			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".bc.bin")
-		}
+		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
@@ -151,12 +194,7 @@ func main() {
 		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
-		outFile := inputFile + ".bc.bin"
-		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
-			outFile = outputFile
-		} else if *outDir != "" {
-			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".bc.bin")
-		}
+		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
@@ -194,12 +232,7 @@ func main() {
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to serialize SSA graph: %v", err), expression.Line, expression.Column)
 		}
-		outFile := inputFile + ".ssa.wat"
-		if outputFile := outputFlagAfterInput(os.Args[1:], inputFile); outputFile != "" {
-			outFile = outputFile
-		} else if *outDir != "" {
-			outFile = filepath.Join(*outDir, filepath.Base(inputFile)+".ssa.wat")
-		}
+		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".ssa.wat")
 		if err = writeArtifact(outFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
@@ -208,7 +241,7 @@ func main() {
 
 	if *runMode {
 		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
-		os.Exit(vm.Interpret(root, flag.Args()[1:], os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(vm.Interpret(root, programArgs, os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
@@ -322,33 +355,63 @@ func ssaWasmProgram(root *ast.Node, analysis *checker.Analysis) ([]wasmFunctionS
 	return functions, entry, nil
 }
 
-func outputFlagAfterInput(args []string, inputFile string) string {
-	inputSeen := false
-	for index, arg := range args {
-		if arg == inputFile {
-			inputSeen = true
-			continue
-		}
-		if !inputSeen {
-			continue
-		}
-		if arg == "-o" && index+1 < len(args) {
-			return args[index+1]
-		}
-		if strings.HasPrefix(arg, "-o=") {
-			return strings.TrimPrefix(arg, "-o=")
-		}
+// argvOwningModes names the mode flags whose contract hands every token after
+// the positional input file to the target program instead of to this CLI: main
+// passes them verbatim to vm.RunBytecodeWithPolicy (-run-bc) and vm.Interpret
+// (-run) as the program's argv, so `-run-bc app.bc -allow-caps environment`
+// must deliver ["-allow-caps", "environment"] to the program rather than
+// setting this CLI's -allow-caps. Those modes therefore opt out of
+// resumeFlagsAfterInput entirely and must be written before the input file;
+// main rejects them after it rather than silently reinterpreting the program's
+// arguments (bugs.md #52).
+var argvOwningModes = []string{"run", "run-bc"}
+
+// resumeFlagsAfterInput continues parsing fs's flags over the tokens that
+// follow the positional input file. Go's flag package stops at the first
+// non-flag argument, so without this every flag written after the filename is
+// dropped and - because no mode flag was ever set - the CLI silently falls
+// through to its default Go backend (bugs.md #52).
+//
+// The resumed parse is a second FlagSet that re-registers every flag fs
+// already declares, sharing the identical flag.Value. It therefore writes into
+// the same variables the first parse did and accepts the same syntax for them
+// (including bare booleans and -name=value), while knowing nothing about any
+// individual flag. That is what replaces bug #39's outputFlagAfterInput, which
+// re-scanned raw argv for the "-o" and "-o=" spellings alone and so left every
+// other flag broken after the input.
+//
+// It returns the names of the flags this resumed parse set - callers whose
+// flag has a position-dependent meaning, such as -o, need that distinction -
+// along with any tokens the resumed parse could not consume, which the caller
+// must reject rather than ignore. A trailing -h or -help returns flag.ErrHelp,
+// which callers answer with usage and a zero exit exactly as their first parse
+// does, so help is not the one flag left position-dependent.
+func resumeFlagsAfterInput(fs *flag.FlagSet, trailing []string) (map[string]bool, []string, error) {
+	resumed := flag.NewFlagSet(fs.Name(), flag.ContinueOnError)
+	resumed.SetOutput(io.Discard)
+	fs.VisitAll(func(f *flag.Flag) { resumed.Var(f.Value, f.Name, f.Usage) })
+	if err := resumed.Parse(trailing); err != nil {
+		return nil, nil, err
 	}
-	return ""
+	setAfterInput := make(map[string]bool)
+	resumed.Visit(func(f *flag.Flag) { setAfterInput[f.Name] = true })
+	return setAfterInput, resumed.Args(), nil
 }
 
-// outputDirectory accepts -o before or after the positional input file for
-// backends whose -o contract names a directory rather than an exact artifact.
-func outputDirectory(args []string, inputFile, configured string) string {
-	if output := outputFlagAfterInput(args, inputFile); output != "" {
+// artifactOutputPath resolves where -compile-bc, -compile-hfir-bc and
+// -compile-wasm write their emitted artifact. Their -o names an exact file
+// when it is written after the input file and an output directory when it is
+// written before it, the contract bug #39 established; outputAfterInput says
+// which position the user used.
+func artifactOutputPath(inputFile, output string, outputAfterInput bool, suffix string) string {
+	switch {
+	case output == "":
+		return inputFile + suffix
+	case outputAfterInput:
 		return output
+	default:
+		return filepath.Join(output, filepath.Base(inputFile)+suffix)
 	}
-	return configured
 }
 
 // hfirTarget identifies which internal/hfir verifier target identity a given
@@ -601,15 +664,39 @@ func buildSource() {
 		buildFlags.Usage()
 		os.Exit(1)
 	}
+	if *outPath != "" && strings.HasPrefix(*outPath, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: -o")
+		buildFlags.Usage()
+		os.Exit(1)
+	}
 
 	inputFile := buildFlags.Arg(0)
+	// build has no argv-owning mode, so every token after the source file is
+	// this subcommand's to parse or to reject (bugs.md #52).
+	_, leftover, err := resumeFlagsAfterInput(buildFlags, buildFlags.Args()[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		buildFlags.Usage()
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: %v\n", inputFile, err)
+		buildFlags.Usage()
+		os.Exit(1)
+	}
+	if *outPath != "" && strings.HasPrefix(*outPath, "-") {
+		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: flag needs an argument: -o\n", inputFile)
+		buildFlags.Usage()
+		os.Exit(1)
+	}
+	if len(leftover) > 0 {
+		fmt.Fprintf(os.Stderr, "Unexpected argument %q after source file %q\n", leftover[0], inputFile)
+		buildFlags.Usage()
+		os.Exit(1)
+	}
+
 	outFile := *outPath
 	if outFile == "" {
-		if output := outputFlagAfterInput(os.Args[2:], inputFile); output != "" {
-			outFile = output
-		} else {
-			outFile = strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile)) + ".hfbc"
-		}
+		outFile = strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile)) + ".hfbc"
 	}
 
 	content, err := os.ReadFile(inputFile)
