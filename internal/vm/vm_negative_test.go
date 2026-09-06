@@ -13,12 +13,13 @@ import (
 	"github.com/howlcipher/howlframe/internal/capability"
 )
 
-// runVMExpectingPanic constructs a BCVM for insts, applies setupEnv to its
+// runVMExpectingPanicWithCaps constructs a BCVM for insts, applies setupEnv to its
 // environment (nil is a no-op), and asserts that running it panics. If
-// wantCode is non-empty, the panic must be a *VMError with that Code. Shared
-// by every negative test in this file that drives the VM directly (rather
-// than through RunBytecodeWithEvidence) to assert a specific failure mode.
-func runVMExpectingPanic(t *testing.T, insts []bytecode.BCInstruction, setupEnv func(*BcEnv), wantCode string) {
+// wantCode is non-empty, the panic must be a *VMError with that Code, and if
+// wantMsgContains is non-empty the message must contain that substring.
+// Shared by every negative test in this file that drives the VM directly
+// (rather than through RunBytecodeWithEvidence) to assert a specific failure mode.
+func runVMExpectingPanicWithCaps(t *testing.T, insts []bytecode.BCInstruction, caps []capability.Capability, setupEnv func(*BcEnv), wantCode string, wantMsgContains string) {
 	t.Helper()
 	env := NewBcEnv(nil)
 	if setupEnv != nil {
@@ -30,7 +31,7 @@ func runVMExpectingPanic(t *testing.T, insts []bytecode.BCInstruction, setupEnv 
 		insts:       insts,
 		stores:      newBCStoreRegistry(),
 		Limits:      DefaultLimits,
-		AllowedCaps: []capability.Capability{capability.Network},
+		AllowedCaps: caps,
 	}
 	defer func() {
 		r := recover()
@@ -42,9 +43,20 @@ func runVMExpectingPanic(t *testing.T, insts []bytecode.BCInstruction, setupEnv 
 			if !ok || vmerr.Code != wantCode {
 				t.Fatalf("expected %s, got %v", wantCode, r)
 			}
+			if wantMsgContains != "" && !strings.Contains(vmerr.Message, wantMsgContains) {
+				t.Fatalf("expected message to contain %q, got %q", wantMsgContains, vmerr.Message)
+			}
 		}
 	}()
 	vm.run(vm.insts, vm.env)
+}
+
+// runVMExpectingPanic is the capability-defaulting wrapper used by older
+// negative tests; it grants network capability and does not assert a message
+// substring.
+func runVMExpectingPanic(t *testing.T, insts []bytecode.BCInstruction, setupEnv func(*BcEnv), wantCode string) {
+	t.Helper()
+	runVMExpectingPanicWithCaps(t, insts, []capability.Capability{capability.Network}, setupEnv, wantCode, "")
 }
 
 func TestVMNegativeStackUnderflowHandling(t *testing.T) {
@@ -580,4 +592,92 @@ func TestVMUnsupportedConstructs(t *testing.T) {
 			t.Fatalf("expected caught output to contain UNSUPPORTED_CONSTRUCT, got %q", outBuf.String())
 		}
 	})
+}
+
+func TestVMTypeAndRuntimeErrors(t *testing.T) {
+	cases := []struct {
+		name            string
+		caps            []capability.Capability
+		insts           []bytecode.BCInstruction
+		wantCode        string
+		wantMsgContains string
+	}{
+		{
+			name: "OpEnv with non-string operand",
+			caps: []capability.Capability{capability.Environment},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(123)},
+				{Op: bytecode.OpEnv, OpString: "ENV"},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "env expected string name",
+		},
+		{
+			name: "OpSleep with non-number operand",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a number"},
+				{Op: bytecode.OpSleep, OpString: "SLEEP"},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "sleep requires number",
+		},
+		{
+			name: "OpCliArgsGet with non-number index",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "index"},
+				{Op: bytecode.OpCliArgsGet, OpString: "CLI_ARGS_GET"},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "cli_args index must be a number",
+		},
+		{
+			name: "OpForInit with non-list operand",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a list"},
+				{Op: bytecode.OpForInit, OpString: "FOR_INIT"},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "for requires a list",
+		},
+		{
+			name: "OpForNext with wrong index type",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: []any{"a", "b"}},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a number"},
+				{Op: bytecode.OpForNext, OpString: "FOR_NEXT", StringOperand: "x", IntOperand: 0},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "for index must be a number",
+		},
+		{
+			name: "OpForNext with wrong items type",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a list"},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(0)},
+				{Op: bytecode.OpForNext, OpString: "FOR_NEXT", StringOperand: "x", IntOperand: 0},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "for requires a list",
+		},
+		{
+			name: "OpCall to undefined function",
+			caps: nil,
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpCall, OpString: "CALL", StringOperand: "undefined_function_xyz", IntOperand: 0},
+			},
+			wantCode:        "RUNTIME_ERROR",
+			wantMsgContains: "undefined function",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runVMExpectingPanicWithCaps(t, tc.insts, tc.caps, nil, tc.wantCode, tc.wantMsgContains)
+		})
+	}
 }
