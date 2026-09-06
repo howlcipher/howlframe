@@ -958,6 +958,8 @@ func ToInt(v any) (int64, error) {
 		return t, nil
 	case float64:
 		return int64(t), nil
+	case int:
+		return int64(t), nil
 	case string:
 		return strconv.ParseInt(t, 10, 64)
 	}
@@ -1463,8 +1465,7 @@ func (vm *BCVM) popCheckedStatus(inst bytecode.BCInstruction, ip int, opName str
 
 // bytesFromNumberList converts a []any of numeric elements (float64/int64/int)
 // into a []byte, panicking with a structured TYPE_ERROR labelled by opName on
-// any non-numeric element. Shared by write_file and parse_json's byte-list
-// input handling.
+// any non-numeric element. Shared by write_file, parse_json and bytes_to_string.
 func bytesFromNumberList(items []any, ip int, inst bytecode.BCInstruction, opName string) []byte {
 	var data []byte
 	for _, bb := range items {
@@ -2098,25 +2099,29 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxAny := vm.pop(inst.Op)
 			itemsAny := vm.pop(inst.Op)
 
-			idxFloat, ok := idxAny.(float64)
-			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for index must be a number, got %T", idxAny))
-			}
 			items, ok := itemsAny.([]any)
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", itemsAny))
 			}
+			idx, err := ToInt(idxAny)
+			if err != nil {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for index must be a number, got %T", idxAny))
+			}
+			if f, ok := idxAny.(float64); ok && float64(int64(f)) != f {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index must be an integer, got %v", f))
+			}
 
-			idx := int(idxFloat)
-
-			if idx < len(items) {
-				env.vars[varName] = items[idx]
-				vm.push(items)
-				vm.push(float64(idx + 1))
-			} else {
+			if idx < 0 || idx > int64(len(items)) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index %d out of range [0,%d)", idx, len(items)))
+			}
+			if idx == int64(len(items)) {
 				ip += offset
 				continue
 			}
+
+			env.vars[varName] = items[idx]
+			vm.push(items)
+			vm.push(float64(idx + 1))
 		case bytecode.OpCall:
 			funcName := inst.StringOperand
 			numArgs := int(inst.IntOperand)
@@ -2127,6 +2132,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 
 			if fn.LazySynthesize {
+				vm.requireCapability(capability.Network, inst.Op)
+
 				promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
 				reqBody, _ := json.Marshal(map[string]any{
 					"model":  "llama3",
@@ -2135,14 +2142,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				})
 				resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 				if err != nil {
-					panic(err)
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis network request failed: %v", err))
 				}
 				var res struct {
 					Response string `json:"response"`
 				}
 				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 					resp.Body.Close()
-					panic(err)
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis response decode failed: %v", err))
 				}
 				resp.Body.Close()
 				code := strings.TrimSpace(res.Response)
@@ -2158,9 +2165,25 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				p := parser.NewParser(lx, "lazy_synthesize")
 				astNode := p.ParseExpression()
 
-				newProg := bytecode.CompileToBytecode(astNode)
-				fn.Instructions = newProg.Functions[fn.Name].Instructions
+				var newProg *bytecode.BCProgram
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis compile failed: %v", r))
+						}
+					}()
+					newProg = bytecode.CompileToBytecode(astNode)
+				}()
+				synthFn, ok := newProg.Functions[fn.Name]
+				if !ok {
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis did not produce function: %s", fn.Name))
+				}
+				fn.Instructions = synthFn.Instructions
 				fn.LazySynthesize = false
+			}
+
+			if numArgs != len(fn.Params) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "%s expects %d argument(s), got %d", funcName, len(fn.Params), numArgs))
 			}
 
 			var argVals []any
@@ -2427,8 +2450,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpSleep:
 			msAny := vm.pop(inst.Op)
-			ms, ok := msAny.(float64)
-			if !ok {
+			ms, err := ToInt(msAny)
+			if err != nil {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %T", msAny))
 			}
 			time.Sleep(time.Duration(ms) * time.Millisecond)
@@ -2548,13 +2571,11 @@ func BcConvert(target string, a any) any {
 	case "to_string":
 		return fmt.Sprint(a)
 	case "bytes_to_string":
-		if b, ok := a.([]any); ok {
-			var bytes []byte
-			for _, bb := range b {
-				bytes = append(bytes, byte(bb.(float64)))
-			}
-			return string(bytes)
+		items, ok := a.([]any)
+		if !ok {
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, bytecode.OpConvert, "bytes_to_string expected []any, got %T", a))
 		}
+		return string(bytesFromNumberList(items, 0, bytecode.BCInstruction{Op: bytecode.OpConvert}, "bytes_to_string"))
 	}
 	return a
 }
