@@ -681,3 +681,138 @@ func TestVMTypeAndRuntimeErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestVMOpSleepNumericTypes(t *testing.T) {
+	cases := []struct {
+		name string
+		val  any
+	}{
+		{"int64", int64(1)},
+		{"int", int(1)},
+		{"float64", float64(1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prog := &bytecode.BCProgram{
+				Main: []bytecode.BCInstruction{
+					{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: tc.val},
+					{Op: bytecode.OpSleep, OpString: "SLEEP"},
+				},
+			}
+			ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, nil, nil, 0)
+			if ev.RuntimeFailure != nil {
+				t.Fatalf("expected success, got runtime failure: %#v", ev.RuntimeFailure)
+			}
+		})
+	}
+}
+
+func TestVMOpSleepNonNumeric(t *testing.T) {
+	runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: []any{"not a number"}},
+		{Op: bytecode.OpSleep, OpString: "SLEEP"},
+	}, nil, nil, "TYPE_ERROR", "sleep requires number")
+}
+
+func TestVMOpForNextBounds(t *testing.T) {
+	cases := []struct {
+		name string
+		idx  any
+	}{
+		{"negative", float64(-1)},
+		{"past end", float64(3)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: []any{"a", "b"}},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: tc.idx},
+				{Op: bytecode.OpForNext, OpString: "FOR_NEXT", StringOperand: "x", IntOperand: 0},
+			}, nil, nil, "RUNTIME_ERROR", "for index")
+		})
+	}
+}
+
+func TestVMOpCallArityMismatch(t *testing.T) {
+	cases := []struct {
+		name     string
+		pushArgs []any
+		numArgs  int64
+	}{
+		{"too few", nil, 0},
+		{"too many", []any{"arg1", "arg2"}, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var main []bytecode.BCInstruction
+			for _, arg := range tc.pushArgs {
+				main = append(main, bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: arg})
+			}
+			main = append(main, bytecode.BCInstruction{
+				Op:            bytecode.OpCall,
+				OpString:      "CALL",
+				StringOperand: "f",
+				IntOperand:    tc.numArgs,
+			})
+			prog := &bytecode.BCProgram{
+				Functions: map[string]*bytecode.BCFunction{
+					"f": {
+						Params: []string{"a"},
+						Instructions: []bytecode.BCInstruction{
+							{Op: bytecode.OpLoadVar, OpString: "LOAD_VAR", StringOperand: "a"},
+						},
+					},
+				},
+				Main: main,
+			}
+			ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, nil, nil, 0)
+			if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "RUNTIME_ERROR" {
+				t.Fatalf("expected RUNTIME_ERROR, got %#v", ev.RuntimeFailure)
+			}
+			if !strings.Contains(ev.RuntimeFailure.Message, "expects 1 argument") {
+				t.Fatalf("expected arity error message, got %q", ev.RuntimeFailure.Message)
+			}
+		})
+	}
+}
+
+func TestVMOpCallLazySynthesisCapability(t *testing.T) {
+	prog := &bytecode.BCProgram{
+		Functions: map[string]*bytecode.BCFunction{
+			"synth": {
+				Name:           "synth",
+				Params:         []string{"a"},
+				LazySynthesize: true,
+				Docstring:      "return a",
+			},
+		},
+		Main: []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "hello"},
+			{Op: bytecode.OpCall, OpString: "CALL", StringOperand: "synth", IntOperand: 1},
+		},
+	}
+	ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, nil, nil, 0)
+	if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" {
+		t.Fatalf("expected CAPABILITY_DENIED, got %#v", ev.RuntimeFailure)
+	}
+}
+
+func TestVMBytesToStringTypeErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		val     any
+		wantMsg string
+	}{
+		{"non-list", "not a list", "bytes_to_string expected []any"},
+		{"list with string element", []any{"not a number"}, "bytes_to_string byte list element expected number"},
+		{"list with bool element", []any{true}, "bytes_to_string byte list element expected number"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: tc.val},
+				{Op: bytecode.OpConvert, OpString: "CONVERT", StringOperand: "bytes_to_string"},
+			}, nil, nil, "TYPE_ERROR", tc.wantMsg)
+		})
+	}
+}

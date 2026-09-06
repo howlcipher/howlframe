@@ -122,6 +122,13 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Root Cause:** `internal/vm/vm.go` previously popped operands with bare `.(string)` in several opcodes. Bug #47 (Done) established the checked-assertion/`NewRuntimeError("TYPE_ERROR", ...)` pattern, but not every opcode had been migrated.
 * **Fix:** The file/network opcodes (`OpFetch`, `OpReadFile`, `OpWriteFile`, `OpMkdir`) already use checked helpers. The remaining sites (`OpEnv`, `OpSleep`, `OpCliArgsGet`, `OpForInit`, `OpForNext`, `OpCall`) were migrated to the same pattern: wrong operand types raise `TYPE_ERROR`, and an undefined function raises `RUNTIME_ERROR`, all carrying a structured `*VMError`.
 * **Deterministic acceptance:** `go test ./internal/vm -run TestVMFileAndNetworkTypeAssertions` and `go test ./internal/vm -run TestVMTypeAndRuntimeErrors` pass, asserting that every listed opcode produces the expected structured error code and message for malformed operands.
+* **Addendum (2026-09-06):** Astra review of PR #31 identified additional defensive follow-ups that were implemented in branch `fix/vm-defensive-followups`:
+  * `OpSleep` now accepts any integer numeric type (`float64`, `int64`, `int`) and rejects non-numeric operands with `TYPE_ERROR`.
+  * `OpForNext` validates the loop index is an integer in range `0 <= idx < len(items)` before indexing, raising `RUNTIME_ERROR` for out-of-range or non-integer indices.
+  * `OpCall` checks arity (`len(argVals) == len(fn.Params)`) before binding arguments, raising `RUNTIME_ERROR` on mismatch.
+  * `OpCall`'s lazy-synthesis branch requires `capability.Network`, converts network/JSON/compile errors into `RUNTIME_ERROR`, and verifies the synthesized function exists in `newProg.Functions[fn.Name]` before use.
+  * `BcConvert`'s `bytes_to_string` case rejects operands that are not `[]any` or contain non-numeric elements with `TYPE_ERROR`.
+  * Covered by `TestVMOpSleepNumericTypes`, `TestVMOpSleepNonNumeric`, `TestVMOpForNextBounds`, `TestVMOpCallArityMismatch`, `TestVMOpCallLazySynthesisCapability`, and `TestVMBytesToStringTypeErrors` in `internal/vm/vm_negative_test.go`.
 
 ### 54. `SPAWN_AGENT` and `TASK` are emitted but unimplemented, reported as `VM_INTERNAL`
 * **Symptom:** compiling and running `tests/test_swarm.howl` under the bytecode VM yields `{"phase":"runtime","code":"VM_INTERNAL","function":"main","instruction":0,"message":"unknown opcode: TASK"}`. `VM_INTERNAL` means "the VM broke", but this is a construct the project simply has not implemented yet — and `tools/difftest/manifest.json` already exempts the fixture as a result.
