@@ -78,3 +78,21 @@ func TestHttpRouteInheritsCapabilitiesAndResumesExecution(t *testing.T) {
 		t.Errorf("route handler did not execute, output: %s", outStr)
 	}
 }
+
+func TestDefunWithTypedParametersAndReturnType(t *testing.T) {
+	src := `(cli_app
+		(defun add ((a int) (b int)) int
+			(return (+ a b)))
+		(print (call add 40 2)))`
+	_, prog := parseAndCompile(t, src)
+
+	var out, errOut bytes.Buffer
+	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
+	if evidence.RuntimeFailure != nil {
+		t.Fatalf("unexpected runtime failure: %v", evidence.RuntimeFailure)
+	}
+	got := strings.TrimSpace(out.String())
+	if got != "42" {
+		t.Fatalf("got %q, want %q", got, "42")
+	}
+}
