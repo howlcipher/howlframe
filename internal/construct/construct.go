@@ -359,8 +359,13 @@ func scanSupported(node *ast.Node, head string, out *[]Violation) {
 	case "defun":
 		// (defun name (params) body...): children 1 and 2 are the name
 		// and the parameter list, whose entries are identifiers or
-		// type_hint annotations.
-		scanChildren(node, head, out, 3)
+		// type_hint annotations. If child 3 is a return type symbol
+		// with subsequent body children, start at child 4.
+		bodyStart := 3
+		if len(node.Children) > 4 && node.Children[3].Type == "SYMBOL" {
+			bodyStart = 4
+		}
+		scanChildren(node, head, out, bodyStart)
 	case "lambda":
 		// (lambda (params) body...)
 		scanChildren(node, head, out, 2)

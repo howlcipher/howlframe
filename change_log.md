@@ -104,6 +104,19 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* Bytecode compiler properly extracts typed parameter names in `defun` and
+  `lazy_synthesize`, and skips return-type annotations in `defun` body compilation.
+  Previously, parameters written with types like `((a int) (b int))` had their names
+  collapsed to empty strings in the bytecode function definition, and return-type
+  symbols were erroneously emitted as `LOAD_VAR <type>` instructions in the function
+  body, causing runtime `undefined variable: <type>` panics. In addition,
+  `tools/difftest/main.go` now dynamically verifies that exemptions for `"unsupported in run"`
+  are still earned, failing if an exempt fixture passes all backends; the stale exemption
+  for `test_improvement_46.howl` in `tools/difftest/manifest.json` was removed and now
+  passes cross-backend differential testing. Covered by unit regressions in
+  `internal/bytecode/bytecode_test.go` (`TestCompileDefunWithTypedParametersAndReturnType`,
+  `TestCompileDefunAdversarialEdgeCases`), `internal/vm/regression_test.go`
+  (`TestDefunWithTypedParametersAndReturnType`), and `difftest`. (bugs.md #51)
 * Flags written after the positional input file are honoured instead of
   discarded. Go's `flag` package stops parsing at the first non-flag argument,
   so `howlframe prog.howl -mask-plan` set no mode flag at all, fell through to

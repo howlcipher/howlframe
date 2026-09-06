@@ -76,3 +76,79 @@ func assertStoreSpec(t *testing.T, op Opcode, name string, pops int, pushes int)
 		t.Fatalf("%s capability = %q, want %q", name, spec.Capability, capability.Database)
 	}
 }
+
+func TestCompileDefunWithTypedParametersAndReturnType(t *testing.T) {
+	source := `(cli_app
+		(defun add ((a int) (b int)) int
+			(return (+ a b)))
+		(print (call add 40 2)))`
+
+	lx := lexer.NewLexer(source)
+	p := parser.NewParser(lx, "defun_test.howl")
+	prog := CompileToBytecode(p.ParseExpression())
+
+	fn, ok := prog.Functions["add"]
+	if !ok {
+		t.Fatalf("expected function add in prog.Functions")
+	}
+	if len(fn.Params) != 2 || fn.Params[0] != "a" || fn.Params[1] != "b" {
+		t.Fatalf("expected params [a b], got %v", fn.Params)
+	}
+	for _, inst := range fn.Instructions {
+		if inst.Op == OpLoadVar && inst.StringOperand == "int" {
+			t.Fatalf("found erroneous LOAD_VAR int in function body instructions: %#v", fn.Instructions)
+		}
+	}
+}
+
+func TestCompileDefunAdversarialEdgeCases(t *testing.T) {
+	source := `(cli_app
+		(defun zero_param () int
+			(return 42))
+		(defun mixed_params (x (y int) z) string
+			(print x)
+			(return z))
+		(lazy_synthesize synth ((a int) (b string)) "prompt docstring")
+	)`
+
+	lx := lexer.NewLexer(source)
+	p := parser.NewParser(lx, "adversarial_defun.howl")
+	prog := CompileToBytecode(p.ParseExpression())
+
+	fn0, ok := prog.Functions["zero_param"]
+	if !ok {
+		t.Fatalf("missing zero_param function")
+	}
+	if len(fn0.Params) != 0 {
+		t.Fatalf("zero_param expected 0 params, got %v", fn0.Params)
+	}
+	for _, inst := range fn0.Instructions {
+		if inst.Op == OpLoadVar && inst.StringOperand == "int" {
+			t.Fatalf("zero_param has leaked return type instruction: %#v", fn0.Instructions)
+		}
+	}
+
+	fnMixed, ok := prog.Functions["mixed_params"]
+	if !ok {
+		t.Fatalf("missing mixed_params function")
+	}
+	if len(fnMixed.Params) != 3 || fnMixed.Params[0] != "x" || fnMixed.Params[1] != "y" || fnMixed.Params[2] != "z" {
+		t.Fatalf("mixed_params expected [x y z], got %v", fnMixed.Params)
+	}
+	for _, inst := range fnMixed.Instructions {
+		if inst.Op == OpLoadVar && inst.StringOperand == "string" {
+			t.Fatalf("mixed_params has leaked return type instruction: %#v", fnMixed.Instructions)
+		}
+	}
+
+	fnSynth, ok := prog.Functions["synth"]
+	if !ok {
+		t.Fatalf("missing synth function")
+	}
+	if len(fnSynth.Params) != 2 || fnSynth.Params[0] != "a" || fnSynth.Params[1] != "b" {
+		t.Fatalf("synth expected [a b], got %v", fnSynth.Params)
+	}
+	if !fnSynth.LazySynthesize || fnSynth.Docstring != "prompt docstring" {
+		t.Fatalf("synth lazy synthesize fields corrupted: %#v", fnSynth)
+	}
+}

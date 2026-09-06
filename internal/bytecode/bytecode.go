@@ -361,12 +361,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 		case "defun":
 			funcName := node.Children[1].Value
-			var params []string
-			for _, p := range node.Children[2].Children {
-				params = append(params, p.Value)
+			params := extractParamNames(node.Children[2])
+			bodyStart := 3
+			if len(node.Children) > 4 && node.Children[3].Type == "SYMBOL" {
+				bodyStart = 4
 			}
 			var bodyInsts []BCInstruction
-			for _, child := range node.Children[3:] {
+			for _, child := range node.Children[bodyStart:] {
 				bodyInsts = append(bodyInsts, c.compileNode(child)...)
 			}
 			c.funcs[funcName] = &BCFunction{
@@ -376,10 +377,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 		case "lazy_synthesize":
 			funcName := node.Children[1].Value
-			var params []string
-			for _, p := range node.Children[2].Children {
-				params = append(params, p.Value)
-			}
+			params := extractParamNames(node.Children[2])
 			docstring := node.Children[3].Value
 			c.funcs[funcName] = &BCFunction{
 				Name:           funcName,
@@ -771,4 +769,19 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		}
 	}
 	return insts
+}
+
+func extractParamNames(paramsNode *ast.Node) []string {
+	if paramsNode == nil {
+		return nil
+	}
+	var params []string
+	for _, p := range paramsNode.Children {
+		if p.Type == "List" && len(p.Children) > 0 {
+			params = append(params, p.Children[0].Value)
+		} else {
+			params = append(params, p.Value)
+		}
+	}
+	return params
 }

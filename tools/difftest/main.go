@@ -33,86 +33,29 @@ func main() {
 	for _, file := range files {
 		base := filepath.Base(file)
 		if reason, ok := exempt[base]; ok {
+			if reason == "unsupported in run" {
+				pass, _, _ := testFixture(file)
+				if pass {
+					fmt.Printf("FAIL %s: stale exemption %q, fixture now passes differential testing\n", base, reason)
+					failed++
+					continue
+				}
+			}
 			fmt.Printf("SKIP %s: %s\n", base, reason)
 			skipped++
 			continue
 		}
 
-		// Also try to sniff root form.
-		content, err := os.ReadFile(file)
-		if err != nil {
-			log.Fatalf("failed to read %s: %v", file, err)
-		}
-		if !strings.Contains(string(content), "(cli_app") {
-			fmt.Printf("SKIP %s: not a cli_app\n", base)
+		pass, skipReason, failMsg := testFixture(file)
+		if skipReason != "" {
+			fmt.Printf("SKIP %s: %s\n", base, skipReason)
 			skipped++
 			continue
 		}
 
 		fmt.Printf("RUN  %s...\n", base)
-
-		out1, err := runCommand("go", "run", "howlframe.go", "-run", file)
-		if err != nil {
-			fmt.Printf("FAIL %s (interpreter): %v\n%s\n", base, err, out1)
-			failed++
-			continue
-		}
-
-		outDir, err := os.MkdirTemp("", "difftest-*")
-		if err != nil {
-			log.Fatalf("failed to make temp dir: %v", err)
-		}
-
-		out2, err := runCommand("go", "run", "howlframe.go", "-o", outDir, file)
-		if err != nil {
-			fmt.Printf("FAIL %s (codegen): %v\n%s\n", base, err, out2)
-			failed++
-			continue
-		}
-
-		// HowlFrame transpiler output directory name sets the resulting package/binary name.
-		// `filepath.Base` of the input file without `.howl` is used if `-o` is not provided,
-		// but with `-o` it writes `server.go` inside. Let's just build `server.go`.
-		binaryPath := filepath.Join(outDir, "server")
-		serverGoPath := filepath.Join(outDir, "server.go")
-		out3, err := runCommand("go", "build", "-o", binaryPath, serverGoPath)
-		if err != nil {
-			fmt.Printf("FAIL %s (go build): %v\n%s\n", base, err, out3)
-			failed++
-			continue
-		}
-
-		out4, err := runCommand(binaryPath)
-		if err != nil {
-			fmt.Printf("FAIL %s (go binary run): %v\n%s\n", base, err, out4)
-			failed++
-			continue
-		}
-
-		bcPath := filepath.Join(outDir, "test.bc")
-		out5, err := runCommand("go", "run", "howlframe.go", "-compile-bc", file, "-o", bcPath)
-		if err != nil {
-			fmt.Printf("FAIL %s (compile-bc): %v\n%s\n", base, err, out5)
-			failed++
-			continue
-		}
-
-		// Differential testing checks backend parity, not capability enforcement,
-		// so run bytecode with every capability allowed.
-		out6, err := runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
-		if err != nil {
-			fmt.Printf("FAIL %s (run-bc): %v\n%s\n", base, err, out6)
-			failed++
-			continue
-		}
-
-		os.RemoveAll(outDir)
-
-		if out1 != out4 || out1 != out6 {
-			fmt.Printf("FAIL %s: stdout mismatch\n", base)
-			fmt.Printf("--- interpreter ---\n%s\n", out1)
-			fmt.Printf("--- go backend  ---\n%s\n", out4)
-			fmt.Printf("--- bytecode    ---\n%s\n", out6)
+		if !pass {
+			fmt.Printf("FAIL %s %s\n", base, failMsg)
 			failed++
 			continue
 		}
@@ -124,6 +67,62 @@ func main() {
 	if failed > 0 {
 		os.Exit(1)
 	}
+}
+
+func testFixture(file string) (passed bool, skipReason string, failMsg string) {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return false, "", fmt.Sprintf("failed to read %s: %v", file, err)
+	}
+	if !strings.Contains(string(content), "(cli_app") {
+		return false, "not a cli_app", ""
+	}
+
+	out1, err := runCommand("go", "run", "howlframe.go", "-run", file)
+	if err != nil {
+		return false, "", fmt.Sprintf("(interpreter): %v\n%s", err, out1)
+	}
+
+	outDir, err := os.MkdirTemp("", "difftest-*")
+	if err != nil {
+		return false, "", fmt.Sprintf("failed to make temp dir: %v", err)
+	}
+	defer os.RemoveAll(outDir)
+
+	out2, err := runCommand("go", "run", "howlframe.go", "-o", outDir, file)
+	if err != nil {
+		return false, "", fmt.Sprintf("(codegen): %v\n%s", err, out2)
+	}
+
+	binaryPath := filepath.Join(outDir, "server")
+	serverGoPath := filepath.Join(outDir, "server.go")
+	out3, err := runCommand("go", "build", "-o", binaryPath, serverGoPath)
+	if err != nil {
+		return false, "", fmt.Sprintf("(go build): %v\n%s", err, out3)
+	}
+
+	out4, err := runCommand(binaryPath)
+	if err != nil {
+		return false, "", fmt.Sprintf("(go binary run): %v\n%s", err, out4)
+	}
+
+	bcPath := filepath.Join(outDir, "test.bc")
+	out5, err := runCommand("go", "run", "howlframe.go", "-compile-bc", file, "-o", bcPath)
+	if err != nil {
+		return false, "", fmt.Sprintf("(compile-bc): %v\n%s", err, out5)
+	}
+
+	out6, err := runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
+	if err != nil {
+		return false, "", fmt.Sprintf("(run-bc): %v\n%s", err, out6)
+	}
+
+	if out1 != out4 || out1 != out6 {
+		msg := fmt.Sprintf("stdout mismatch\n--- interpreter ---\n%s\n--- go backend  ---\n%s\n--- bytecode    ---\n%s", out1, out4, out6)
+		return false, "", msg
+	}
+
+	return true, "", ""
 }
 
 func runCommand(name string, arg ...string) (string, error) {
