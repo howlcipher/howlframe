@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1711,4 +1712,89 @@ func mustWriteFile(t *testing.T, dir, name, content string) string {
 		t.Fatalf("failed to write %s: %v", name, err)
 	}
 	return path
+}
+
+func runCompiledBytecodeForTest(t *testing.T, binary, sourcePath string, caps []string, ctx context.Context) ([]byte, error) {
+	t.Helper()
+	bc := filepath.Join(t.TempDir(), filepath.Base(sourcePath)+".bc.bin")
+	if out, err := exec.Command(binary, "-compile-bc", sourcePath, "-o", bc).CombinedOutput(); err != nil {
+		t.Fatalf("compile-bc failed on %s: %v\n%s", sourcePath, err, out)
+	}
+	args := []string{"-run-bc"}
+	if len(caps) > 0 {
+		args = append(args, "-allow-caps", strings.Join(caps, ","))
+	}
+	args = append(args, bc)
+	if ctx != nil {
+		return exec.CommandContext(ctx, binary, args...).CombinedOutput()
+	}
+	return exec.Command(binary, args...).CombinedOutput()
+}
+
+func assertSwarmUnsupportedConstruct(t *testing.T, caps []string) {
+	t.Helper()
+	binary := buildHowlFrameBinaryForTest(t)
+	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_swarm.howl", caps, nil)
+	if err == nil {
+		t.Fatalf("expected -run-bc on test_swarm.howl to fail, but exited 0")
+	}
+	msg := string(out)
+	if strings.Contains(msg, "VM_INTERNAL") {
+		t.Fatalf("expected unsupported-construct code, got VM_INTERNAL: %s", msg)
+	}
+	if !strings.Contains(msg, "UNSUPPORTED_CONSTRUCT") || !strings.Contains(msg, "TASK") {
+		t.Fatalf("expected UNSUPPORTED_CONSTRUCT and TASK in output, got: %s", msg)
+	}
+
+	var failure struct {
+		Code    string `json:"code"`
+		Opcode  string `json:"opcode"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &failure); err != nil {
+		t.Fatalf("expected structured JSON runtime failure, got parse error %v on output: %s", err, msg)
+	}
+	if failure.Code != "UNSUPPORTED_CONSTRUCT" || failure.Opcode != "TASK" {
+		t.Fatalf("expected UNSUPPORTED_CONSTRUCT for TASK, got %#v", failure)
+	}
+	if !strings.Contains(failure.Message, "TASK") {
+		t.Fatalf("expected failure message citing TASK, got %q", failure.Message)
+	}
+}
+
+func TestBytecodeRunSwarmFixtureReportsUnsupportedConstruct(t *testing.T) {
+	assertSwarmUnsupportedConstruct(t, []string{"process"})
+}
+
+func TestBytecodeRunSwarmFixtureWithoutCapabilities(t *testing.T) {
+	assertSwarmUnsupportedConstruct(t, nil)
+}
+
+func TestBytecodeRunWithMalformedOpcode(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_malformed_opcode.howl", []string{"process"}, nil)
+	if err == nil {
+		t.Fatalf("expected -run-bc on test_malformed_opcode.howl to fail, but exited 0")
+	}
+	msg := string(out)
+	if !strings.Contains(msg, "UNSUPPORTED_CONSTRUCT") {
+		t.Fatalf("expected UNSUPPORTED_CONSTRUCT in output, got: %s", msg)
+	}
+}
+
+func TestBytecodeRunWithTimeout(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_timeout.howl", []string{"process"}, ctx)
+	if err == nil {
+		t.Fatalf("expected -run-bc on test_timeout.howl to fail due to timeout, but exited 0")
+	}
+	msg := string(out)
+	if ctx.Err() != nil {
+		msg += " " + ctx.Err().Error()
+	}
+	if !strings.Contains(msg, "context deadline exceeded") {
+		t.Fatalf("expected context deadline exceeded in output, got: %s", msg)
+	}
 }

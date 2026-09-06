@@ -23,5 +23,7 @@
   "test_advanced_control.howl": "unsupported in run",
   "test_let_arity.howl": "unsupported in run",
   "test_primitives.howl": "unsupported in run",
-  "test_void_defun.howl": "unsupported in run"
+  "test_void_defun.howl": "unsupported in run",
+  "test_malformed_opcode.howl": "unsupported in run",
+  "test_timeout.howl": "timeout test fixture"
 }
