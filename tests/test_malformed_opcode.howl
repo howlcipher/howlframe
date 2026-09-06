@@ -1,0 +1,3 @@
+(cli_app
+  (spawn_agent "Researcher" (task "find sources on quantum computing"))
+)

@@ -104,6 +104,16 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* `SPAWN_AGENT` and `TASK` opcodes in the standalone bytecode VM now report a
+  structured `UNSUPPORTED_CONSTRUCT` runtime error naming the opcode rather than
+  panicking with `VM_INTERNAL` as an unknown opcode. Both opcodes are emitted
+  by the compiler and registered in the opcode table, but are unimplemented in the
+  runtime; reporting them with an explicit unsupported-construct error distinguishes
+  known unimplemented constructs from internal VM crashes. For `SPAWN_AGENT`,
+  capability checks for `capability.Process` precede the unsupported construct error. Covered by
+  `TestVMUnsupportedConstructs` in `internal/vm/vm_negative_test.go` and
+  `TestBytecodeRunSwarmFixtureReportsUnsupportedConstruct`, `TestBytecodeRunSwarmFixtureWithoutCapabilities`,
+  `TestBytecodeRunWithMalformedOpcode`, and `TestBytecodeRunWithTimeout` in `howlframe_test.go`. (bugs.md #54)
 * Bytecode compiler properly extracts typed parameter names in `defun` and
   `lazy_synthesize`, and skips return-type annotations in `defun` body compilation.
   Previously, parameters written with types like `((a int) (b int))` had their names

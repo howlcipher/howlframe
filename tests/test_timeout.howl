@@ -1,0 +1,5 @@
+(cli_app
+  (while true
+    (sleep 50)
+  )
+)

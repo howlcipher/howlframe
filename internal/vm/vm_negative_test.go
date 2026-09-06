@@ -509,3 +509,75 @@ func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
 		}, "TYPE_ERROR")
 	})
 }
+
+func TestVMUnsupportedConstructs(t *testing.T) {
+	cases := []struct {
+		name       string
+		inst       bytecode.BCInstruction
+		caps       []capability.Capability
+		wantOpcode string
+	}{
+		{
+			name:       "spawn_agent reports unsupported construct when capability granted",
+			inst:       bytecode.BCInstruction{Op: bytecode.OpSpawnAgent, OpString: "SPAWN_AGENT", StringOperand: "Worker"},
+			caps:       []capability.Capability{capability.Process},
+			wantOpcode: "SPAWN_AGENT",
+		},
+		{
+			name:       "task reports unsupported construct without capabilities",
+			inst:       bytecode.BCInstruction{Op: bytecode.OpTask, OpString: "TASK", StringOperand: "work"},
+			caps:       nil,
+			wantOpcode: "TASK",
+		},
+		{
+			name:       "task reports unsupported construct when capability granted",
+			inst:       bytecode.BCInstruction{Op: bytecode.OpTask, OpString: "TASK", StringOperand: "work"},
+			caps:       []capability.Capability{capability.Process},
+			wantOpcode: "TASK",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{tc.inst}}
+			ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), tc.caps, nil, nil, nil, 0)
+			if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "UNSUPPORTED_CONSTRUCT" || ev.RuntimeFailure.Opcode != tc.wantOpcode {
+				t.Fatalf("expected UNSUPPORTED_CONSTRUCT for %s, got %#v", tc.wantOpcode, ev.RuntimeFailure)
+			}
+			if !strings.Contains(ev.RuntimeFailure.Message, tc.wantOpcode) {
+				t.Fatalf("expected message to cite %s, got %s", tc.wantOpcode, ev.RuntimeFailure.Message)
+			}
+		})
+	}
+
+	t.Run("spawn_agent capability check precedes unsupported construct check", func(t *testing.T) {
+		prog := &bytecode.BCProgram{
+			Main: []bytecode.BCInstruction{
+				{Op: bytecode.OpSpawnAgent, OpString: "SPAWN_AGENT", StringOperand: "Worker"},
+			},
+		}
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, nil, nil, 0)
+		if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" {
+			t.Fatalf("expected CAPABILITY_DENIED, got %#v", ev.RuntimeFailure)
+		}
+	})
+
+	t.Run("try_let catches unsupported construct", func(t *testing.T) {
+		prog := &bytecode.BCProgram{
+			Main: []bytecode.BCInstruction{
+				tryLetInstruction(1),
+				{Op: bytecode.OpTask, OpString: "TASK", StringOperand: "subtask"},
+				{Op: bytecode.OpLoadVar, OpString: "LOAD_VAR", StringOperand: "err"},
+				{Op: bytecode.OpPrint, OpString: "PRINT", IntOperand: 1},
+			},
+		}
+		var outBuf bytes.Buffer
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, &outBuf, nil, 0)
+		if ev.RuntimeFailure != nil {
+			t.Fatalf("expected try_let to catch error, but VM failed: %#v", ev.RuntimeFailure)
+		}
+		if !strings.Contains(outBuf.String(), "UNSUPPORTED_CONSTRUCT") {
+			t.Fatalf("expected caught output to contain UNSUPPORTED_CONSTRUCT, got %q", outBuf.String())
+		}
+	})
+}

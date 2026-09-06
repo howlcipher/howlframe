@@ -2427,6 +2427,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpEnv:
 			name := vm.pop(inst.Op).(string)
 			vm.push(os.Getenv(name))
+		case bytecode.OpSpawnAgent, bytecode.OpTask:
+			panic(NewRuntimeError("UNSUPPORTED_CONSTRUCT", "main", vm.ip, inst.Op, "unsupported construct: %s", inst.OpString))
 		default:
 			panic("unknown opcode: " + bytecode.Registry[inst.Op].Name)
 		}
