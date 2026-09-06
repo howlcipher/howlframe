@@ -2087,7 +2087,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			list := vm.pop(inst.Op)
 			items, ok := list.([]any)
 			if !ok {
-				panic("for requires a list")
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", list))
 			}
 			vm.push(items)
 			vm.push(0.0) // index
@@ -2098,8 +2098,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxAny := vm.pop(inst.Op)
 			itemsAny := vm.pop(inst.Op)
 
-			idx := int(idxAny.(float64))
-			items := itemsAny.([]any)
+			idxFloat, ok := idxAny.(float64)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for index must be a number, got %T", idxAny))
+			}
+			items, ok := itemsAny.([]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", itemsAny))
+			}
+
+			idx := int(idxFloat)
 
 			if idx < len(items) {
 				env.vars[varName] = items[idx]
@@ -2115,7 +2123,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			fn, ok := vm.prog.Functions[funcName]
 			if !ok {
-				panic("undefined function: " + funcName)
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined function: %s", funcName))
 			}
 
 			if fn.LazySynthesize {
@@ -2410,7 +2418,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxAny := vm.pop(inst.Op)
 			idx, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idxAny)))
 			if err != nil {
-				panic("cli_args index must be a number")
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "cli_args index must be a number, got %T", idxAny))
 			}
 			if idx >= 0 && idx < len(vm.args) {
 				vm.push(vm.args[idx])
@@ -2421,11 +2429,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			msAny := vm.pop(inst.Op)
 			ms, ok := msAny.(float64)
 			if !ok {
-				panic("sleep requires number")
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %T", msAny))
 			}
 			time.Sleep(time.Duration(ms) * time.Millisecond)
 		case bytecode.OpEnv:
-			name := vm.pop(inst.Op).(string)
+			name := vm.popCheckedString(inst, ip, "env expected string name")
 			vm.push(os.Getenv(name))
 		case bytecode.OpSpawnAgent, bytecode.OpTask:
 			panic(NewRuntimeError("UNSUPPORTED_CONSTRUCT", "main", vm.ip, inst.Op, "unsupported construct: %s", inst.OpString))
