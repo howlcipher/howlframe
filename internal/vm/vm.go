@@ -293,8 +293,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return nil
 	case "exit":
 		val := interp.eval(node.Children[1], env)
-		code := int(val.(int64))
-		panic(VmExit{code: code})
+		exitCode, err := ToInt(val)
+		if err != nil {
+			InterpErr(fmt.Sprintf("exit expects a numeric code, got %T", val), node.Children[1])
+		}
+		panic(VmExit{code: int(exitCode)})
 	case "read_line":
 		line, err := interp.lineReader.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -336,14 +339,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("neural_circuit: network request failed: %v", err), node)
 		}
 		defer resp.Body.Close()
 		var res struct {
 			Response string `json:"response"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("neural_circuit: response decode failed: %v", err), node)
 		}
 		return res.Response
 	case "ephemeral_circuit":
@@ -372,7 +375,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		})
 		createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("ephemeral_circuit: model creation failed: %v", err), node)
 		}
 		createResp.Body.Close()
 
@@ -394,14 +397,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("ephemeral_circuit: network request failed: %v", err), node)
 		}
 		defer resp.Body.Close()
 		var res struct {
 			Response string `json:"response"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("ephemeral_circuit: response decode failed: %v", err), node)
 		}
 		return res.Response
 	case "achieve":
@@ -417,14 +420,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("achieve: network request failed: %v", err), node)
 		}
 		defer resp.Body.Close()
 		var res struct {
 			Response string `json:"response"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("achieve: response decode failed: %v", err), node)
 		}
 		return res.Response
 	case "confidence":
@@ -439,14 +442,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("confidence: network request failed: %v", err), node)
 		}
 		defer resp.Body.Close()
 		var res struct {
 			Response string `json:"response"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("confidence: response decode failed: %v", err), node)
 		}
 		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 		return val
@@ -691,14 +694,14 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 		})
 		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 		if err != nil {
-			panic(err)
+			InterpErr(fmt.Sprintf("lazy_synthesize: network request failed: %v", err), node)
 		}
 		var res struct {
 			Response string `json:"response"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 			resp.Body.Close()
-			panic(err)
+			InterpErr(fmt.Sprintf("lazy_synthesize: response decode failed: %v", err), node)
 		}
 		resp.Body.Close()
 		code := strings.TrimSpace(res.Response)
@@ -1549,7 +1552,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			dsn := inst.StringOperand3
 			db, err := sql.Open(driver, dsn)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "db_connect failed: %v", err))
 			}
 			env.vars[varName] = db
 		case bytecode.OpSqlQuery:
@@ -1557,12 +1560,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			queryStr := inst.StringOperand2
 			dbAny, ok := env.get(dbVar)
 			if !ok {
-				panic("undefined db: " + dbVar)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined db: %s", dbVar))
 			}
-			db := dbAny.(*sql.DB)
+			db, ok := dbAny.(*sql.DB)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sql_query expected *sql.DB, got %T", dbAny))
+			}
 			rows, err := db.Query(queryStr)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "sql_query failed: %v", err))
 			}
 			var results []any
 			cols, _ := rows.Columns()
@@ -1654,23 +1660,23 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
 			req, err := http.NewRequest(method, urlStr, nil)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch request creation failed: %v", err))
 			}
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch failed: %v", err))
 			}
 			defer resp.Body.Close()
 			b, err := io.ReadAll(resp.Body)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch body read failed: %v", err))
 			}
 			vm.push(bytesToAnySlice(b))
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
 			b, err := os.ReadFile(path)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
 			}
 			vm.push(bytesToAnySlice(b))
 		case bytecode.OpWriteFile:
@@ -1689,13 +1695,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			err := os.WriteFile(path, data, 0644)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "write_file failed: %v", err))
 			}
 		case bytecode.OpMkdir:
 			path := vm.popCheckedString(inst, ip, "mkdir expected string")
 			err := os.MkdirAll(path, 0755)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "mkdir failed: %v", err))
 			}
 		case bytecode.OpExec:
 			numArgs := int(inst.IntOperand)
@@ -1706,7 +1712,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
 			out, err := exec.Command(cmdStr, args...).CombinedOutput()
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err))
 			}
 			vm.push(bytesToAnySlice(out))
 		case bytecode.OpParseJson:
@@ -1722,17 +1728,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "parse_json expected *http.Request, got %T", reqAny))
 				}
 				if req.Body == nil {
-					panic("request body is nil")
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "request body is nil"))
 				}
 				// Bound request body read to 10MB to prevent unbounded memory DoS
 				const maxBodyBytes = 10 * 1024 * 1024
 				limitedReader := io.LimitReader(req.Body, maxBodyBytes+1)
 				readData, err := io.ReadAll(limitedReader)
 				if err != nil {
-					panic(fmt.Sprintf("failed to read request body: %v", err))
+					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", err))
 				}
 				if len(readData) > maxBodyBytes {
-					panic(fmt.Sprintf("request body exceeds maximum limit of %d bytes", maxBodyBytes))
+					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBodyBytes))
 				}
 				data = readData
 				req.Body = io.NopCloser(bytes.NewBuffer(data))
@@ -1752,7 +1758,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			var result any
 			err := json.Unmarshal(data, &result)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "parse_json failed: %v", err))
 			}
 			vm.push(result)
 		case bytecode.OpSpawn:
@@ -1782,7 +1788,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			status := vm.popCheckedStatus(inst, ip, "res")
 			wAny, ok := env.get("w")
 			if !ok {
-				panic("no response writer")
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "no response writer"))
 			}
 			w, ok := wAny.(http.ResponseWriter)
 			if !ok {
@@ -1802,7 +1808,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			status := vm.popCheckedStatus(inst, ip, "res_json")
 			wAny, ok := env.get("w")
 			if !ok {
-				panic("no response writer")
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "no response writer"))
 			}
 			w, ok := wAny.(http.ResponseWriter)
 			if !ok {
@@ -1862,12 +1868,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			fmt.Fprintln(vm.Out, "Listening on "+port)
 			err := http.ListenAndServe(":"+port, mux)
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http listen failed: %v", err))
 			}
 		case bytecode.OpHttpReqMethod:
 			reqAny, ok := env.get("req")
 			if !ok {
-				panic("no request context")
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "no request context"))
 			}
 			req, ok := reqAny.(*http.Request)
 			if !ok {
@@ -1887,7 +1893,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			wAny, ok := env.get("w")
 			if !ok {
-				panic("no response writer")
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "no response writer"))
 			}
 			w, ok := wAny.(http.ResponseWriter)
 			if !ok {
@@ -1915,14 +1921,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit request failed: %v", err))
 			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit response decode failed: %v", err))
 			}
 			vm.push(res.Response)
 
@@ -1950,7 +1956,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit model create failed: %v", err))
 			}
 			createResp.Body.Close()
 
@@ -1972,13 +1978,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit request failed: %v", err))
 			}
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit response decode failed: %v", err))
 			}
 			resp.Body.Close()
 			vm.push(res.Response)
@@ -1995,14 +2001,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve request failed: %v", err))
 			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve response decode failed: %v", err))
 			}
 			vm.push(res.Response)
 
@@ -2016,14 +2022,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence request failed: %v", err))
 			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence response decode failed: %v", err))
 			}
 			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
 			vm.push(val)
@@ -2042,14 +2048,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			})
 			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
 			if err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate request failed: %v", err))
 			}
 			defer resp.Body.Close()
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				panic(err)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate response decode failed: %v", err))
 			}
 			vm.push(res.Response)
 
@@ -2061,7 +2067,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if val, ok := env.get(name); ok {
 				vm.push(val)
 			} else {
-				panic("undefined variable: " + name)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", name))
 			}
 		case bytecode.OpStoreVar:
 			name := inst.StringOperand
@@ -2071,7 +2077,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			name := inst.StringOperand
 			vm.trace.state("var:"+name, "value")
 			if !env.set(name, vm.pop(inst.Op)) {
-				panic("undefined variable: " + name)
+				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", name))
 			}
 		case bytecode.OpJumpIfFalse:
 			cond := vm.pop(inst.Op)
@@ -2461,7 +2467,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpSpawnAgent, bytecode.OpTask:
 			panic(NewRuntimeError("UNSUPPORTED_CONSTRUCT", "main", vm.ip, inst.Op, "unsupported construct: %s", inst.OpString))
 		default:
-			panic("unknown opcode: " + bytecode.Registry[inst.Op].Name)
+			panic(NewRuntimeError("VM_INTERNAL", "main", ip, inst.Op, "unknown opcode: %s", bytecode.Registry[inst.Op].Name))
 		}
 		ip++
 	}
@@ -2472,7 +2478,7 @@ func BcToBool(v any) bool {
 	if b, ok := v.(bool); ok {
 		return b
 	}
-	panic("expected boolean")
+	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected boolean, got %T", v))
 }
 
 func BcBinop(op string, a, b any) any {
@@ -2511,7 +2517,7 @@ func bcNumericBinop(op string, a, b any) any {
 		return af * bf
 	case "/":
 		if bf == 0 {
-			panic("division by zero")
+			panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "division by zero"))
 		}
 		return af / bf
 	case "<":
@@ -2523,7 +2529,7 @@ func bcNumericBinop(op string, a, b any) any {
 	case ">=":
 		return af >= bf
 	}
-	panic("unknown binop")
+	panic(NewRuntimeError("VM_INTERNAL", "main", 0, 0, "unknown binop: %s", op))
 }
 
 func ToBCFloat(v any) float64 {
@@ -2535,7 +2541,7 @@ func ToBCFloat(v any) float64 {
 	case int:
 		return float64(t)
 	}
-	panic(fmt.Sprintf("expected number, got %T", v))
+	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected number, got %T", v))
 }
 
 func BcValuesEqual(a, b any) bool {

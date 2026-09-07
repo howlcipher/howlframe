@@ -308,7 +308,8 @@ func TestHTTPFunctionContextIsRequestScoped(t *testing.T) {
 		outside.prog = program
 		outside.run([]bytecode.BCInstruction{{Op: bytecode.OpCall, OpString: "CALL", StringOperand: "one", IntOperand: 0}}, outside.env)
 	})
-	if recovered == nil || recovered != "no response writer" {
-		t.Fatalf("outside-context response helper panic = %#v, want no response writer", recovered)
+	vmerr, ok := recovered.(*VMError)
+	if !ok || vmerr.Code != "RUNTIME_ERROR" || !strings.Contains(vmerr.Message, "no response writer") {
+		t.Fatalf("outside-context response helper panic = %#v, want RUNTIME_ERROR containing 'no response writer'", recovered)
 	}
 }
