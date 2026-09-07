@@ -1,10 +1,13 @@
 package bytecode
 
 import (
+	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
-	"testing"
 )
 
 func TestCompileStoreOperations(t *testing.T) {
@@ -150,5 +153,49 @@ func TestCompileDefunAdversarialEdgeCases(t *testing.T) {
 	}
 	if !fnSynth.LazySynthesize || fnSynth.Docstring != "prompt docstring" {
 		t.Fatalf("synth lazy synthesize fields corrupted: %#v", fnSynth)
+	}
+}
+
+// TestUnmarshalJSONRejectsUnknownOpcode verifies that BCInstruction.UnmarshalJSON
+// returns an error for an unrecognized opcode name instead of silently setting
+// Op to OpUnknown.
+func TestUnmarshalJSONRejectsUnknownOpcode(t *testing.T) {
+	raw := `{"op":"DOES_NOT_EXIST","string_operand":"x"}`
+	var inst BCInstruction
+	err := json.Unmarshal([]byte(raw), &inst)
+	if err == nil {
+		t.Fatalf("expected error for unknown opcode, got nil (Op=%d)", inst.Op)
+	}
+	if !strings.Contains(err.Error(), "unknown opcode") {
+		t.Fatalf("expected 'unknown opcode' error, got: %v", err)
+	}
+}
+
+// TestUnmarshalJSONAcceptsKnownOpcode verifies that a valid opcode name
+// round-trips correctly through JSON.
+func TestUnmarshalJSONAcceptsKnownOpcode(t *testing.T) {
+	raw := `{"op":"LOAD_CONST","value_operand":"hello"}`
+	var inst BCInstruction
+	err := json.Unmarshal([]byte(raw), &inst)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inst.Op != OpLoadConst {
+		t.Fatalf("expected OpLoadConst (%d), got %d", OpLoadConst, inst.Op)
+	}
+}
+
+// TestUnmarshalJSONAcceptsEmptyOpcode verifies that an empty op string does
+// not trigger the unknown-opcode error (backwards compatibility for
+// zero-value instructions).
+func TestUnmarshalJSONAcceptsEmptyOpcode(t *testing.T) {
+	raw := `{"op":""}`
+	var inst BCInstruction
+	err := json.Unmarshal([]byte(raw), &inst)
+	if err != nil {
+		t.Fatalf("unexpected error for empty op: %v", err)
+	}
+	if inst.Op != OpUnknown {
+		t.Fatalf("expected OpUnknown for empty op, got %d", inst.Op)
 	}
 }

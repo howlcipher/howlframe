@@ -2,6 +2,10 @@ package vm
 
 import (
 	"bytes"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +16,45 @@ import (
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
 )
+
+// Deterministic in-process database/sql drivers used to exercise the VM's
+// structured error paths without touching real databases or the network.
+func init() {
+	sql.Register("vmtest_open_fail", &openFailDriver{})
+	sql.Register("vmtest_query_fail", &queryFailDriver{})
+}
+
+type openFailDriver struct{}
+
+func (openFailDriver) Open(name string) (driver.Conn, error) {
+	return nil, errors.New("open failed")
+}
+
+type queryFailDriver struct{}
+
+func (queryFailDriver) Open(name string) (driver.Conn, error) {
+	return &queryFailConn{}, nil
+}
+
+type queryFailConn struct{}
+
+func (*queryFailConn) Prepare(query string) (driver.Stmt, error) {
+	return nil, errors.New("query failed")
+}
+
+func (*queryFailConn) Close() error { return nil }
+func (*queryFailConn) Begin() (driver.Tx, error) {
+	return nil, errors.New("transactions not supported")
+}
+
+// errReadCloser is an io.ReadCloser that always returns a configured error.
+// Used to exercise parse_json request-body read failures deterministically.
+type errReadCloser struct {
+	err error
+}
+
+func (e errReadCloser) Read(p []byte) (int, error) { return 0, e.err }
+func (e errReadCloser) Close() error               { return nil }
 
 // runVMExpectingPanicWithCaps constructs a BCVM for insts, applies setupEnv to its
 // environment (nil is a no-op), and asserts that running it panics. If
@@ -67,9 +110,49 @@ func TestVMNegativeStackUnderflowHandling(t *testing.T) {
 }
 
 func TestVMNegativeUndefinedVariable(t *testing.T) {
-	runVMExpectingPanic(t, []bytecode.BCInstruction{
+	runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
 		{Op: bytecode.OpLoadVar, StringOperand: "non_existent_variable_xyz"},
-	}, nil, "")
+	}, nil, nil, "UNDEFINED_VAR", "undefined variable")
+}
+
+func TestVMNegativeSetUndefinedVariable(t *testing.T) {
+	runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(42)},
+		{Op: bytecode.OpSetVar, StringOperand: "non_existent_variable_xyz"},
+	}, nil, nil, "UNDEFINED_VAR", "undefined variable")
+}
+
+func TestVMNegativeMissingHTTPContext(t *testing.T) {
+	t.Run("res requires response writer", func(t *testing.T) {
+		runVMExpectingPanic(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(200)},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "text/plain"},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "body"},
+			{Op: bytecode.OpRes, OpString: "RES"},
+		}, nil, "RUNTIME_ERROR")
+	})
+
+	t.Run("res_json requires response writer", func(t *testing.T) {
+		runVMExpectingPanic(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(200)},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "data"},
+			{Op: bytecode.OpResJson, OpString: "RES_JSON"},
+		}, nil, "RUNTIME_ERROR")
+	})
+
+	t.Run("http_res_header requires response writer", func(t *testing.T) {
+		runVMExpectingPanic(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "Header-Name"},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "Header-Val"},
+			{Op: bytecode.OpHttpResHeader, OpString: "HTTP_RES_HEADER"},
+		}, nil, "RUNTIME_ERROR")
+	})
+
+	t.Run("http_req_method requires request context", func(t *testing.T) {
+		runVMExpectingPanic(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpHttpReqMethod, OpString: "HTTP_REQ_METHOD"},
+		}, nil, "RUNTIME_ERROR")
+	})
 }
 
 func TestVMFileAndNetworkTypeAssertions(t *testing.T) {
@@ -598,6 +681,7 @@ func TestVMTypeAndRuntimeErrors(t *testing.T) {
 	cases := []struct {
 		name            string
 		caps            []capability.Capability
+		setupEnv        func(*testing.T, *BcEnv)
 		insts           []bytecode.BCInstruction
 		wantCode        string
 		wantMsgContains string
@@ -673,11 +757,92 @@ func TestVMTypeAndRuntimeErrors(t *testing.T) {
 			wantCode:        "RUNTIME_ERROR",
 			wantMsgContains: "undefined function",
 		},
+		{
+			name: "OpDbConnect open failure",
+			caps: []capability.Capability{capability.Database},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpDbConnect, OpString: "DB_CONNECT", StringOperand: "db", StringOperand2: "", StringOperand3: ""},
+			},
+			wantCode:        "IO_ERROR",
+			wantMsgContains: "db_connect failed",
+		},
+		{
+			name: "OpSqlQuery undefined db var",
+			caps: []capability.Capability{capability.Database},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpSqlQuery, OpString: "SQL_QUERY", StringOperand: "missing_db", StringOperand2: "SELECT 1"},
+			},
+			wantCode:        "UNDEFINED_VAR",
+			wantMsgContains: "undefined db",
+		},
+		{
+			name: "OpSqlQuery non-db value",
+			caps: []capability.Capability{capability.Database},
+			setupEnv: func(t *testing.T, env *BcEnv) {
+				env.vars["db"] = "not a database"
+			},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpSqlQuery, OpString: "SQL_QUERY", StringOperand: "db", StringOperand2: "SELECT 1"},
+			},
+			wantCode:        "TYPE_ERROR",
+			wantMsgContains: "expected *sql.DB",
+		},
+		{
+			name: "OpSqlQuery execution failure",
+			caps: []capability.Capability{capability.Database},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpDbConnect, OpString: "DB_CONNECT", StringOperand: "db", StringOperand2: "vmtest_query_fail", StringOperand3: ""},
+				{Op: bytecode.OpSqlQuery, OpString: "SQL_QUERY", StringOperand: "db", StringOperand2: "SELECT 1"},
+			},
+			wantCode:        "IO_ERROR",
+			wantMsgContains: "sql_query failed",
+		},
+		{
+			name: "parse_json nil request body",
+			caps: nil,
+			setupEnv: func(t *testing.T, env *BcEnv) {
+				env.vars["req"] = &http.Request{Body: nil}
+			},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpParseJson, OpString: "PARSE_JSON", StringOperand: "req.body"},
+			},
+			wantCode:        "RUNTIME_ERROR",
+			wantMsgContains: "request body is nil",
+		},
+		{
+			name: "parse_json request body read error",
+			caps: nil,
+			setupEnv: func(t *testing.T, env *BcEnv) {
+				env.vars["req"] = &http.Request{Body: errReadCloser{err: errors.New("body read boom")}}
+			},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpParseJson, OpString: "PARSE_JSON", StringOperand: "req.body"},
+			},
+			wantCode:        "IO_ERROR",
+			wantMsgContains: "failed to read request body",
+		},
+		{
+			name: "parse_json request body exceeds 10MB",
+			caps: nil,
+			setupEnv: func(t *testing.T, env *BcEnv) {
+				const maxBodyBytes = 10 * 1024 * 1024
+				env.vars["req"] = &http.Request{Body: io.NopCloser(bytes.NewReader(make([]byte, maxBodyBytes+1)))}
+			},
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpParseJson, OpString: "PARSE_JSON", StringOperand: "req.body"},
+			},
+			wantCode:        "LIMIT_EXCEEDED",
+			wantMsgContains: "request body exceeds maximum limit",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			runVMExpectingPanicWithCaps(t, tc.insts, tc.caps, nil, tc.wantCode, tc.wantMsgContains)
+			var setup func(*BcEnv)
+			if tc.setupEnv != nil {
+				setup = func(env *BcEnv) { tc.setupEnv(t, env) }
+			}
+			runVMExpectingPanicWithCaps(t, tc.insts, tc.caps, setup, tc.wantCode, tc.wantMsgContains)
 		})
 	}
 }
@@ -813,6 +978,156 @@ func TestVMBytesToStringTypeErrors(t *testing.T) {
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: tc.val},
 				{Op: bytecode.OpConvert, OpString: "CONVERT", StringOperand: "bytes_to_string"},
 			}, nil, nil, "TYPE_ERROR", tc.wantMsg)
+		})
+	}
+}
+
+func TestVMNegativeHelperStructuredErrors(t *testing.T) {
+	t.Run("BcToBool non-boolean panics TYPE_ERROR", func(t *testing.T) {
+		// OpJumpIfFalse calls BcToBool, which must produce a structured TYPE_ERROR
+		runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a bool"},
+			{Op: bytecode.OpJumpIfFalse, OpString: "JUMP_IF_FALSE", IntOperand: 1},
+		}, nil, nil, "TYPE_ERROR", "expected boolean")
+	})
+
+	t.Run("division by zero panics RUNTIME_ERROR", func(t *testing.T) {
+		runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(1)},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(0)},
+			{Op: bytecode.OpBinop, OpString: "BINOP", StringOperand: "/"},
+		}, nil, nil, "RUNTIME_ERROR", "division by zero")
+	})
+
+	t.Run("ToBCFloat non-number panics TYPE_ERROR", func(t *testing.T) {
+		runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a number"},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(1)},
+			{Op: bytecode.OpBinop, OpString: "BINOP", StringOperand: "+"},
+		}, nil, nil, "TYPE_ERROR", "expected number")
+	})
+
+	t.Run("parse_json invalid JSON panics RUNTIME_ERROR", func(t *testing.T) {
+		runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
+			{Op: bytecode.OpParseJson, OpString: "PARSE_JSON", StringOperand: "data"},
+		}, nil, func(env *BcEnv) {
+			env.vars["data"] = "not valid json {"
+		}, "RUNTIME_ERROR", "parse_json failed")
+	})
+}
+
+func TestVMNegativeRawPanicsAreStructured(t *testing.T) {
+	// Verify that all converted panic sites produce structured RuntimeFailure
+	// through RunBytecodeWithEvidence (not VM_INTERNAL).
+	cases := []struct {
+		name     string
+		insts    []bytecode.BCInstruction
+		caps     []capability.Capability
+		setupEnv func(*BcEnv)
+		wantCode string
+	}{
+		{
+			name: "OpLoadVar undefined yields UNDEFINED_VAR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadVar, OpString: "LOAD_VAR", StringOperand: "missing_var"},
+			},
+			wantCode: "UNDEFINED_VAR",
+		},
+		{
+			name: "OpSetVar undefined yields UNDEFINED_VAR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(1)},
+				{Op: bytecode.OpSetVar, OpString: "SET_VAR", StringOperand: "missing_var"},
+			},
+			wantCode: "UNDEFINED_VAR",
+		},
+		{
+			name: "OpRes no writer yields RUNTIME_ERROR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(200)},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "text/html"},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "hello"},
+				{Op: bytecode.OpRes, OpString: "RES"},
+			},
+			caps:     []capability.Capability{capability.Network},
+			wantCode: "RUNTIME_ERROR",
+		},
+		{
+			name: "OpHttpReqMethod no req yields RUNTIME_ERROR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpHttpReqMethod, OpString: "HTTP_REQ_METHOD"},
+			},
+			caps:     []capability.Capability{capability.Network},
+			wantCode: "RUNTIME_ERROR",
+		},
+		{
+			name: "division by zero yields RUNTIME_ERROR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(10)},
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(0)},
+				{Op: bytecode.OpBinop, OpString: "BINOP", StringOperand: "/"},
+			},
+			wantCode: "RUNTIME_ERROR",
+		},
+		{
+			name: "BcToBool non-bool yields TYPE_ERROR",
+			insts: []bytecode.BCInstruction{
+				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(42)},
+				{Op: bytecode.OpJumpIfFalse, OpString: "JUMP_IF_FALSE", IntOperand: 1},
+			},
+			wantCode: "TYPE_ERROR",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prog := &bytecode.BCProgram{Main: tc.insts}
+			caps := tc.caps
+			ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), caps, nil, &strings.Builder{}, &strings.Builder{}, 0)
+			if ev.RuntimeFailure == nil {
+				t.Fatalf("expected RuntimeFailure, got none")
+			}
+			if ev.RuntimeFailure.Code != tc.wantCode {
+				t.Fatalf("expected code %s, got %s (message: %s)", tc.wantCode, ev.RuntimeFailure.Code, ev.RuntimeFailure.Message)
+			}
+			if ev.RuntimeFailure.Code == "VM_INTERNAL" {
+				t.Fatalf("panic fell through to VM_INTERNAL: %s", ev.RuntimeFailure.Message)
+			}
+		})
+	}
+}
+
+// TestInterpExitToIntSafety verifies that the ToInt conversion used by the
+// interpreter's (exit) handler safely rejects non-numeric types instead of
+// relying on a raw Go type assertion that would panic on type mismatch.
+// This is a regression guard for the fix that replaced val.(int64) with ToInt.
+func TestInterpExitToIntSafety(t *testing.T) {
+	cases := []struct {
+		name    string
+		val     any
+		wantErr bool
+		wantVal int64
+	}{
+		{"int64", int64(42), false, 42},
+		{"float64", float64(3.0), false, 3},
+		{"int", int(7), false, 7},
+		{"string_numeric", "10", false, 10},
+		{"string_non_numeric", "not_a_number", true, 0},
+		{"bool", true, true, 0},
+		{"nil", nil, true, 0},
+		{"list", []any{"a"}, true, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			val, err := ToInt(tc.val)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for %T, got nil", tc.val)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error for %T: %v", tc.val, err)
+			}
+			if !tc.wantErr && val != tc.wantVal {
+				t.Fatalf("expected %d, got %d", tc.wantVal, val)
+			}
 		})
 	}
 }
