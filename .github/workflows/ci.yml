@@ -38,3 +38,6 @@ jobs:
       working-directory: benchmarks/v2/harness
       run: python3 -m unittest test_harness.py
 
+    - name: Verify SEO Metadata & Artifacts
+      run: python3 scripts/test_seo.py
+
