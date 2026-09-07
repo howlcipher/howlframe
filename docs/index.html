@@ -24,6 +24,34 @@
     <meta name="twitter:image" content="https://howlcipher.github.io/howlframe/social-preview.png">
     <meta name="twitter:image:alt" content="HowlFrame pipeline architecture and capability boundary overview">
 
+    <!-- Schema.org SoftwareApplication Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "HowlFrame",
+      "headline": "HowlFrame | Verifiable AI Compiler, HFIR & Bytecode VM",
+      "description": "HowlFrame is a verifiable compiler, intermediate representation (HFIR), and capability-bounded bytecode virtual machine designed to enforce capability boundaries on AI-assisted software systems.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Cross-platform",
+      "url": "https://howlcipher.github.io/howlframe/",
+      "author": {
+        "@type": "Person",
+        "name": "William Elias",
+        "url": "https://howlcipher.github.io/william_elias/",
+        "sameAs": [
+          "https://github.com/howlcipher",
+          "https://www.linkedin.com/in/howlcipher/"
+        ]
+      },
+      "isPartOf": {
+        "@type": "SoftwareSourceCode",
+        "name": "Howl Ecosystem",
+        "url": "https://howlcipher.github.io/howl/"
+      }
+    }
+    </script>
+
     <title>HowlFrame | Language, HFIR &amp; Bytecode VM</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -66,20 +94,36 @@
                 <div class="node-card-desc">Engineering control plane with deterministic routing, adversarial falsification, and human gates.</div>
             </a>
 
-            <a href="https://howlcipher.github.io/howlnotes/" class="drawer-node-card">
-                <div class="node-card-top">
-                    <span class="node-card-name">HOWLNOTES</span>
-                    <span class="node-card-role" style="color: var(--color-cyan);">[KNOWLEDGE NOTEBOOK]</span>
-                </div>
-                <div class="node-card-desc">Engineering knowledge notebook &amp; full-stack dogfood consumer proving native persistent storage.</div>
-            </a>
-
             <a href="https://howlcipher.github.io/howlchangeops/" class="drawer-node-card">
                 <div class="node-card-top">
                     <span class="node-card-name">HOWLCHANGEOPS</span>
                     <span class="node-card-role" style="color: var(--color-red);">[AUTHORITY GATE]</span>
                 </div>
                 <div class="node-card-desc">Governed release controller enforcing cryptographic human approvals and bounded Git mutations.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlrelay/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLRELAY</span>
+                    <span class="node-card-role" style="color: var(--color-cyan);">[CONTINUITY &amp; HANDOFF]</span>
+                </div>
+                <div class="node-card-desc">Persistent multi-session state handoffs and memory-bounded context continuations.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlwriter/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLWRITER</span>
+                    <span class="node-card-role" style="color: var(--color-magenta);">[WRITING CONTROL]</span>
+                </div>
+                <div class="node-card-desc">Writing control system for voice preservation, deterministic style linting, humanization, and review.</div>
+            </a>
+
+            <a href="https://howlcipher.github.io/howlcreate/" class="drawer-node-card">
+                <div class="node-card-top">
+                    <span class="node-card-name">HOWLCREATE</span>
+                    <span class="node-card-role" style="color: var(--color-amber);">[CREATIVE IDEATION]</span>
+                </div>
+                <div class="node-card-desc">Computational creativity harness for iterative narrative exploration and divergence pruning.</div>
             </a>
 
             <a href="https://howlcipher.github.io/howlboard/" class="drawer-node-card">
@@ -90,16 +134,16 @@
                 <div class="node-card-desc">Observation console and full-stack deterministic task state machine application.</div>
             </a>
 
-            <a href="https://howlcipher.github.io/howlwriter/" class="drawer-node-card">
+            <a href="https://howlcipher.github.io/howlnotes/" class="drawer-node-card">
                 <div class="node-card-top">
-                    <span class="node-card-name">HOWLWRITER</span>
-                    <span class="node-card-role" style="color: var(--color-magenta);">[WRITING CONTROL]</span>
+                    <span class="node-card-name">HOWLNOTES</span>
+                    <span class="node-card-role" style="color: var(--color-cyan);">[KNOWLEDGE NOTEBOOK]</span>
                 </div>
-                <div class="node-card-desc">Writing control system for voice preservation, deterministic style linting, humanization, and review.</div>
+                <div class="node-card-desc">Engineering knowledge notebook &amp; full-stack dogfood consumer proving native persistent storage.</div>
             </a>
         </div>
         <div class="drawer-footer">
-            <span>● 6 PRODUCTION NODES</span>
+            <span>● 9 PRODUCTION &amp; APPLICATION NODES</span>
             <span>AUTH // HOWL 2026</span>
         </div>
     </aside>
@@ -132,6 +176,7 @@
                 <a href="#architecture">02_Architecture</a>
                 <a href="#pipeline">03_Pipeline</a>
                 <a href="#security">04_Security</a>
+                <a href="#runtime-qa">04B_Verifiable_FAQ</a>
                 <a href="#toolchain">05_Toolchain</a>
                 <a href="#governance">06_Governance</a>
             </nav>
@@ -150,7 +195,7 @@
                         <p class="hero-kicker">// verifiable ai compiler &amp; capability-checked runtime</p>
                         <h1 id="main-title" class="hero-title">HowlFrame <span class="jp-sub">ハウルフレーム // 2026</span></h1>
                         <p class="hero-lead">
-                            HowlFrame is a verifiable compiler, intermediate representation (HFIR), and bytecode runtime designed to enforce capability boundaries on AI-assisted software systems.
+                            HowlFrame is a verifiable compiler, intermediate representation (HFIR), and bytecode runtime designed to enforce capability boundaries on AI-assisted software systems. Engineered by <a href="https://howlcipher.github.io/william_elias/" style="color: var(--color-cyan); text-decoration: underline;">William Elias</a> as the execution capability foundation of the <a href="https://howlcipher.github.io/howl/" style="color: var(--color-cyan); text-decoration: underline;">Howl Autonomous Software Engineering Ecosystem</a>.
                         </p>
                     </div>
 
@@ -323,6 +368,49 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                 </div>
             </section>
 
+            <!-- 04B Verifiable Architecture Q&A -->
+            <section id="runtime-qa" class="tech-panel">
+                <div class="tech-header">
+                    <h2><span class="sec-id">SECTION // 04B</span> Verifiable Execution &amp; Architecture Q&amp;A</h2>
+                    <span class="subsystem-tag">HF-MOD-FAQ</span>
+                </div>
+                <div class="tech-body">
+                    <p class="section-intro">
+                        Autonomous AI coding agents generate non-deterministic code. HowlFrame provides deterministic architectural guarantees, preventing unauthorized capability escape through verifiable compiler gates and isolated bytecode execution.
+                    </p>
+
+                    <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-cyan); margin-bottom: 0.5rem;">What is an AI-native programming language and intermediate representation?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                Standard programming languages assume human authoring and permit arbitrary side effects by default. HowlFrame treats AI code generation as an untrusted intent stream. The Howl AST captures structural intent, while HowlFrame Intermediate Representation (HFIR) enforces explicit type constraints, verified capability requirements, and deterministic state validation prior to compilation.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-magenta); margin-bottom: 0.5rem;">How does a capability-bounded runtime prevent unauthorized AI side effects?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                HowlFrame bytecode (<code>.hfbc</code>) executes in a capability-checked virtual machine where all external interactions (network access, native store persistence, filesystem mutations, system process invocation) are denied by default. Privileged operations require explicit runner capability flags (e.g. <code>-allow-caps network,database</code>), preventing autonomous agent jailbreaks or prompt-injected side effects from escaping the VM sandbox.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-amber); margin-bottom: 0.5rem;">How does HowlFrame differ from standard general-purpose runtimes?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                General-purpose runtimes (Node.js, Python, standard Go) allow arbitrary I/O whenever an imported package invokes it. HowlFrame isolates capabilities at the instruction level. AI-generated modules cannot read environment variables, open sockets, or mutate local disk unless an explicit capability grant is cryptographically or administratively attached to that specific execution context.
+                            </p>
+                        </article>
+
+                        <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
+                            <h3 style="font-size: 1rem; color: var(--color-green); margin-bottom: 0.5rem;">How does HowlFrame integrate with the Howl Ecosystem?</h3>
+                            <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
+                                HowlFrame serves as the core capability runtime beneath <a href="https://howlcipher.github.io/howlplane/" style="color: var(--color-cyan); text-decoration: underline;">HowlPlane</a> (orchestration and control plane) and <a href="https://howlcipher.github.io/howlchangeops/" style="color: var(--color-cyan); text-decoration: underline;">HowlChangeOps</a> (governed mutation controller). Applications like <a href="https://howlcipher.github.io/howlboard/" style="color: var(--color-cyan); text-decoration: underline;">HowlBoard</a> and <a href="https://howlcipher.github.io/howlnotes/" style="color: var(--color-cyan); text-decoration: underline;">HowlNotes</a> dogfood the bytecode VM and native store to verify real-world resilience across state transitions.
+                            </p>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
             <!-- 05 CLI Reference -->
             <section id="toolchain" class="tech-panel">
                 <div class="tech-header">
@@ -353,12 +441,15 @@ howlframe -compile-wat -o module.wat input.howl</code></pre>
             <!-- 06 Governance -->
             <section id="governance" class="tech-panel">
                 <div class="tech-header">
-                    <h2><span class="sec-id">SECTION // 06</span> Ecosystem Governance</h2>
+                    <h2><span class="sec-id">SECTION // 06</span> Ecosystem Governance &amp; Authorship</h2>
                     <span class="subsystem-tag">HF-MOD-GOV</span>
                 </div>
                 <div class="tech-body">
                     <p>
-                        HowlFrame forms the core foundation of the Howl Ecosystem alongside <strong>HowlPlane</strong> (Control Plane), <strong>HowlChangeOps</strong> (Release Authority), <strong>HowlNotes</strong> (Knowledge Field Notebook), and <strong>HowlBoard</strong> (Evaluation Telemetry).
+                        HowlFrame was designed and engineered by <strong><a href="https://howlcipher.github.io/william_elias/" style="color: var(--color-cyan); text-decoration: underline;">William Elias</a></strong> as the foundational capability-checked virtual machine and compiler for the <strong><a href="https://howlcipher.github.io/howl/" style="color: var(--color-cyan); text-decoration: underline;">Howl Ecosystem</a></strong>.
+                    </p>
+                    <p style="margin-top: 0.75rem;">
+                        It operates in strict coordination with <a href="https://howlcipher.github.io/howlplane/" style="color: var(--color-blue); text-decoration: underline;">HowlPlane</a> (deterministic control plane and task orchestration), <a href="https://howlcipher.github.io/howlchangeops/" style="color: var(--color-red); text-decoration: underline;">HowlChangeOps</a> (governed git mutation and cryptographic release authority), <a href="https://howlcipher.github.io/howlrelay/" style="color: var(--color-cyan); text-decoration: underline;">HowlRelay</a> (persistent multi-session handoffs), <a href="https://howlcipher.github.io/howlwriter/" style="color: var(--color-magenta); text-decoration: underline;">HowlWriter</a> (style-preserving writing control), and <a href="https://howlcipher.github.io/howlcreate/" style="color: var(--color-amber); text-decoration: underline;">HowlCreate</a> (exploratory ideation), with full-stack evaluation dogfooded across <a href="https://howlcipher.github.io/howlboard/" style="color: var(--color-amber); text-decoration: underline;">HowlBoard</a> and <a href="https://howlcipher.github.io/howlnotes/" style="color: var(--color-cyan); text-decoration: underline;">HowlNotes</a>.
                     </p>
                 </div>
             </section>
@@ -371,17 +462,20 @@ howlframe -compile-wat -o module.wat input.howl</code></pre>
                     <span class="status-dot" aria-hidden="true"></span>
                     <span>SYS_STATUS: ACTIVE // HOWLFRAME-CORE</span>
                 </div>
-                <div>AUTH // HOWL ECOSYSTEM 2026</div>
+                <div>AUTH // <a href="https://howlcipher.github.io/william_elias/" style="color: var(--text-muted); text-decoration: underline;">WILLIAM ELIAS</a> &bull; HOWL ECOSYSTEM 2026</div>
             </div>
             <div class="footer-links">
                 <nav class="footer-nav" aria-label="Ecosystem Links">
+                    <a href="https://howlcipher.github.io/william_elias/">William Elias</a>
                     <a href="https://howlcipher.github.io/howl/">Howl Hub</a>
                     <a href="https://howlcipher.github.io/howlframe/">HowlFrame</a>
                     <a href="https://howlcipher.github.io/howlplane/">HowlPlane</a>
-                    <a href="https://howlcipher.github.io/howlnotes/">HowlNotes</a>
                     <a href="https://howlcipher.github.io/howlchangeops/">HowlChangeOps</a>
-                    <a href="https://howlcipher.github.io/howlboard/">HowlBoard</a>
+                    <a href="https://howlcipher.github.io/howlrelay/">HowlRelay</a>
                     <a href="https://howlcipher.github.io/howlwriter/">HowlWriter</a>
+                    <a href="https://howlcipher.github.io/howlcreate/">HowlCreate</a>
+                    <a href="https://howlcipher.github.io/howlboard/">HowlBoard</a>
+                    <a href="https://howlcipher.github.io/howlnotes/">HowlNotes</a>
                 </nav>
                 <a href="#main-content">[ BACK TO TOP ]</a>
             </div>
