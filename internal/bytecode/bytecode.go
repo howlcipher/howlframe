@@ -39,7 +39,11 @@ func (inst *BCInstruction) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	inst.Op, _ = NameToOpcode(inst.OpString)
+	op, ok := NameToOpcode(inst.OpString)
+	if !ok && inst.OpString != "" {
+		return fmt.Errorf("unknown opcode: %q", inst.OpString)
+	}
+	inst.Op = op
 	return nil
 }
 

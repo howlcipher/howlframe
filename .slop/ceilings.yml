@@ -1,6 +1,6 @@
 schema: 1
 scopes:
   go_production:
-    active_clones_ceiling: 84
+    active_clones_ceiling: 89
   go_tests:
-    active_clones_ceiling: 135
+    active_clones_ceiling: 138
