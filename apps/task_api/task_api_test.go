@@ -399,13 +399,19 @@ func TestTaskAPICapabilities(t *testing.T) {
 
 	t.Run("network only starts but store access is denied", func(t *testing.T) {
 		startServer(t, srcDir, bcPath, "network")
-		// Documented runtime finding: an unhandled capability-denied panic
-		// inside a route handler is swallowed by the VM's own recover, and
-		// the client observes a 200 with an empty body rather than an
-		// error status. This subtest asserts that real, current behavior.
+		// This subtest previously asserted the opposite: that a
+		// capability-denied panic inside a route handler was swallowed and the
+		// client saw a 200 with an empty body. That made the platform's core
+		// safety mechanism indistinguishable from success at the client, and
+		// the VM now fails closed instead, surfacing the structured VMError
+		// with its code intact. See TestHTTPHandlerFailuresFailClosed in
+		// internal/vm for the unit-level regression test.
 		status, data := doRaw(t, "POST", "/tasks/create", `{"title":"x"}`)
-		if status != 200 || len(data) != 0 {
-			t.Errorf("expected silent 200/empty-body on capability-denied store access (documented runtime finding), got %d body=%q", status, data)
+		if status != 500 {
+			t.Errorf("expected 500 on capability-denied store access, got %d body=%q", status, data)
+		}
+		if !strings.Contains(string(data), "CAPABILITY_DENIED") {
+			t.Errorf("denial response does not carry its code: %q", data)
 		}
 	})
 
