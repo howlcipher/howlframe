@@ -313,3 +313,57 @@ func TestHTTPFunctionContextIsRequestScoped(t *testing.T) {
 		t.Fatalf("outside-context response helper panic = %#v, want RUNTIME_ERROR containing 'no response writer'", recovered)
 	}
 }
+
+// A handler that panics must not reach the client as a success. Go sends 200
+// with an empty body when nothing is written, which previously made a denied
+// capability indistinguishable from a completed request.
+func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
+	_, program := parseAndCompile(t, `(http_server 0
+  (route "/denied" (lambda (req) (do (store_open kv "memory://x") (res_json 200 (dict ("ok" "yes"))))))
+  (route "/ok" (lambda (req) (res_json 200 (dict ("ok" "yes"))))))`)
+
+	env := NewBcEnv(nil)
+	errOut := &bytes.Buffer{}
+	vm := &BCVM{
+		prog:        program,
+		env:         env,
+		insts:       program.Main,
+		stores:      newBCStoreRegistry(),
+		Limits:      DefaultLimits,
+		AllowedCaps: []capability.Capability{capability.Network},
+		ErrOut:      errOut,
+	}
+	// Register both routes without reaching HTTP_SERVER_SERVE, which blocks.
+	serve := len(program.Main)
+	for index, inst := range program.Main {
+		if inst.Op == bytecode.OpHttpServerServe {
+			serve = index
+			break
+		}
+	}
+	vm.run(program.Main[:serve], env)
+	mux := env.vars["__http_mux"].(*http.ServeMux)
+
+	denied := httptest.NewRecorder()
+	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodGet, "/denied", nil))
+	if denied.Code != http.StatusInternalServerError {
+		t.Fatalf("denied handler status = %d, want 500 (body %q)", denied.Code, denied.Body.String())
+	}
+	var failure VMError
+	if err := json.Unmarshal(denied.Body.Bytes(), &failure); err != nil {
+		t.Fatalf("denied body = %q, want structured VMError JSON: %v", denied.Body.String(), err)
+	}
+	if failure.Code != "CAPABILITY_DENIED" {
+		t.Fatalf("denied code = %q, want CAPABILITY_DENIED", failure.Code)
+	}
+	if !strings.Contains(errOut.String(), "CAPABILITY_DENIED") {
+		t.Errorf("failure not reported on ErrOut: %q", errOut.String())
+	}
+
+	// A handler that succeeds must be completely unaffected.
+	ok := httptest.NewRecorder()
+	mux.ServeHTTP(ok, httptest.NewRequest(http.MethodGet, "/ok", nil))
+	if ok.Code != http.StatusOK || !strings.Contains(ok.Body.String(), `"ok":"yes"`) {
+		t.Fatalf("healthy handler = %d %q, want 200 with body", ok.Code, ok.Body.String())
+	}
+}

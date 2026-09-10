@@ -117,3 +117,72 @@ func getStoreRecord(vm *BCVM, handle string, key string) map[string]any {
 	}, vm.env)
 	return vm.pop(bytecode.OpStoreGet).(map[string]any)
 }
+
+// store_keys is the enumeration primitive every prior HowlFrame application had
+// to fake with a hand-maintained index record. Order must be sorted: Go
+// randomizes map iteration, and callers list records for display.
+func TestBytecodeStoreKeysSortedAndDeterministic(t *testing.T) {
+	vm := newStoreTestVM()
+	for _, key := range []string{"mission:c", "_seq", "mission:a", "mission:b"} {
+		putStoreRecord(vm, "kv", "memory://session", key, map[string]any{"n": key})
+	}
+
+	want := []any{"_seq", "mission:a", "mission:b", "mission:c"}
+	for attempt := 0; attempt < 8; attempt++ {
+		vm.run([]bytecode.BCInstruction{
+			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+		}, vm.env)
+		got := vm.pop(bytecode.OpStoreKeys)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("attempt %d: STORE_KEYS = %#v, want %#v", attempt, got, want)
+		}
+	}
+}
+
+func TestBytecodeStoreKeysReflectsDeletesAndEmptyStore(t *testing.T) {
+	vm := newStoreTestVM()
+	vm.run([]bytecode.BCInstruction{
+		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "kv", "memory://session"),
+		storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+	}, vm.env)
+	if got := vm.pop(bytecode.OpStoreKeys); !reflect.DeepEqual(got, []any{}) {
+		t.Fatalf("empty store STORE_KEYS = %#v, want empty list", got)
+	}
+
+	putStoreRecord(vm, "kv", "memory://session", "task:1", map[string]any{"status": "open"})
+	putStoreRecord(vm, "kv", "memory://session", "task:2", map[string]any{"status": "open"})
+	vm.run([]bytecode.BCInstruction{
+		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
+		storeInstruction(bytecode.OpStoreDelete, "STORE_DELETE", "kv", ""),
+		storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+	}, vm.env)
+	if got := vm.pop(bytecode.OpStoreKeys); !reflect.DeepEqual(got, []any{"task:2"}) {
+		t.Fatalf("post-delete STORE_KEYS = %#v, want [task:2]", got)
+	}
+}
+
+func TestBytecodeStoreKeysRequiresDatabaseCapability(t *testing.T) {
+	vm := newStoreTestVM()
+	putStoreRecord(vm, "kv", "memory://session", "task:1", map[string]any{"status": "open"})
+	vm.AllowedCaps = []capability.Capability{capability.Filesystem}
+
+	failure := func() (failure *VMError) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				if vmErr, ok := recovered.(*VMError); ok {
+					failure = vmErr
+					return
+				}
+				panic(recovered)
+			}
+		}()
+		vm.run([]bytecode.BCInstruction{
+			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+		}, vm.env)
+		return nil
+	}()
+
+	if failure == nil || failure.Code != "CAPABILITY_DENIED" {
+		t.Fatalf("STORE_KEYS without database capability = %v, want CAPABILITY_DENIED", failure)
+	}
+}

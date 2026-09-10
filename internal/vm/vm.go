@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1644,6 +1645,23 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			} else {
 				vm.push(record)
 			}
+		case bytecode.OpStoreKeys:
+			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
+			if store.file != "" {
+				vm.requireCapability(capability.Filesystem, inst.Op)
+			}
+			store.mu.RLock()
+			keys := make([]any, 0, len(store.records))
+			for key := range store.records {
+				keys = append(keys, key)
+			}
+			store.mu.RUnlock()
+			// Go randomizes map iteration order. Sorting keeps enumeration
+			// deterministic, which every caller listing records depends on.
+			sort.Slice(keys, func(i, j int) bool {
+				return keys[i].(string) < keys[j].(string)
+			})
+			vm.push(keys)
 		case bytecode.OpStoreDelete:
 			key := fmt.Sprint(vm.pop(inst.Op))
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
@@ -1840,16 +1858,40 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			prog := vm.prog
 			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				recorder := &httpResponseRecorder{ResponseWriter: w}
 				reqEnv := NewBcEnv(capturedEnv)
-				reqEnv.vars["w"] = w
+				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
 				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
-						if r := recover(); r != nil {
-							fmt.Println("HTTP Handler Panic:", r)
+						recovered := recover()
+						if recovered == nil {
+							return
 						}
+						// A panicking handler must not reach the client as a
+						// success. Without an explicit response Go sends 200
+						// with an empty body, which makes a CAPABILITY_DENIED
+						// denial indistinguishable from a completed request.
+						failure, ok := recovered.(*VMError)
+						if !ok {
+							failure = &VMError{
+								Phase:   "runtime",
+								Code:    "HANDLER_PANIC",
+								Message: fmt.Sprint(recovered),
+							}
+						}
+						fmt.Fprintln(vm.ErrOut, "HTTP handler failure:", failure.Error())
+						if recorder.wrote {
+							// The handler already committed a response; the
+							// status line cannot be rewritten, so surface the
+							// failure on the server side only.
+							return
+						}
+						recorder.Header().Set("Content-Type", "application/json")
+						recorder.WriteHeader(http.StatusInternalServerError)
+						_ = json.NewEncoder(recorder).Encode(failure)
 					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
@@ -2613,4 +2655,22 @@ func normalizeForJSON(v any) any {
 	default:
 		return v
 	}
+}
+
+// httpResponseRecorder tracks whether a route handler committed a response.
+// The VM needs this to tell a handler that answered from one that panicked
+// before writing anything, so only the latter is converted into a 500.
+type httpResponseRecorder struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (w *httpResponseRecorder) WriteHeader(status int) {
+	w.wrote = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *httpResponseRecorder) Write(b []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(b)
 }

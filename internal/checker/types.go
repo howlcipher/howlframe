@@ -596,7 +596,12 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 					copy := value
 					result.Element = &copy
 				} else if result.Element != nil && known(value) && !compatible(*result.Element, value) {
-					a.add(node, fmt.Sprintf("dict value %d has type %s, want %s", index+1, typeName(value), typeName(*result.Element)))
+					// Dicts double as record literals, where mixed value types are
+					// the normal case rather than a mistake. The bytecode store and
+					// the VM both carry map[string]any, so widen the element type to
+					// any instead of rejecting a program the runtime executes fine.
+					widened := join(*result.Element, value)
+					result.Element = &widened
 				}
 			}
 		}
@@ -647,7 +652,9 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			a.add(node, fmt.Sprintf("map_set key must be string, got %s", typeName(key)))
 		}
 		if dict.Element != nil && known(value) && !compatible(*dict.Element, value) {
-			a.add(node, fmt.Sprintf("map_set value has type %s, want %s", typeName(value), typeName(*dict.Element)))
+			// Same record-literal reasoning as the dict case: widen the target's
+			// element type to any rather than reject a mutation the VM accepts.
+			a.widenDictElement(node.Children[1], env, join(*dict.Element, value))
 		}
 		return ast.Layout(ast.Void)
 	case "map_delete":
@@ -964,7 +971,7 @@ func isKeyword(name string) bool {
 		"str_join", "regex_match", "confidence", "achieve", "fuzzy_cast",
 		"time_now", "lazy_synthesize", "semantic_match", "neural_circuit",
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
-		"store_get", "store_put", "store_delete", "intent",
+		"store_get", "store_put", "store_delete", "store_keys", "intent",
 		"optimize_signature", "schema_bridge", "cli_args", "rate_limit",
 		"void", "string", "int", "float", "bool", "read_line", "stderr", "exit":
 		return true
@@ -1061,6 +1068,22 @@ func known(value ast.TypeInfo) bool {
 
 func numeric(value ast.TypeInfo) bool {
 	return value.Kind == ast.Int || value.Kind == ast.Float
+}
+
+// widenDictElement relaxes the recorded element type of a dict-valued binding
+// after a heterogeneous write. Each occurrence of a symbol is a distinct AST
+// node, so updating the environment here keeps every later read of the same
+// binding permissive instead of reporting a stale element type.
+func (a *Analysis) widenDictElement(target *ast.Node, env typeEnv, widened ast.TypeInfo) {
+	if target == nil || target.Type != "SYMBOL" {
+		return
+	}
+	current, ok := env[target.Value]
+	if !ok || current.Kind != ast.Dict {
+		return
+	}
+	current.Element = &widened
+	env[target.Value] = current
 }
 
 func compatible(left, right ast.TypeInfo) bool {

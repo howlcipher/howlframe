@@ -55,6 +55,7 @@
 | `STDERR` |  | 1 | 0 |  | Prints a value to standard error |
 | `STORE_DELETE` | string | 1 | 0 | database | Deletes a structured record by key |
 | `STORE_GET` | string | 1 | 1 | database | Fetches a structured record by key |
+| `STORE_KEYS` | string | 0 | 1 | database | Returns every record key in a store, sorted |
 | `STORE_OPEN` | string, string | 0 | 0 | database | Creates or attaches a named in-memory store handle |
 | `STORE_PUT` | string | 2 | 0 | database | Upserts a structured record by key |
 | `STORE_VAR` | string | 1 | 0 |  | Pops a value and stores it in a new variable |

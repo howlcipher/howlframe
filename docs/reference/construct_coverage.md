@@ -82,6 +82,7 @@
 | `stderr` | Yes | None | No | No | - | AUTHORITATIVE |
 | `store_delete` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_get` | Yes | database | No | No | - | AUTHORITATIVE |
+| `store_keys` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_open` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_put` | Yes | database | No | No | - | AUTHORITATIVE |
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
