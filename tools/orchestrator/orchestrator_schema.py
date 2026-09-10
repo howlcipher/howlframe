@@ -274,6 +274,11 @@ class StoreGetInstruction(BaseModel):
     string_operand: str
 
 
+class StoreKeysInstruction(BaseModel):
+    op: Literal["STORE_KEYS"]
+    string_operand: str
+
+
 class StoreOpenInstruction(BaseModel):
     op: Literal["STORE_OPEN"]
     string_operand: str
@@ -377,6 +382,7 @@ Instruction = Annotated[
         StderrInstruction,
         StoreDeleteInstruction,
         StoreGetInstruction,
+        StoreKeysInstruction,
         StoreOpenInstruction,
         StorePutInstruction,
         StoreVarInstruction,

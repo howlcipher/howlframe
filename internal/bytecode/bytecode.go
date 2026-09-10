@@ -467,6 +467,15 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			insts = append(insts, BCInstruction{OpString: "STORE_DELETE", Op: OpStoreDelete, StringOperand: handleNode.Value})
+		case "store_keys":
+			if len(node.Children) != 2 {
+				ast.ReportError("store_keys expects (store_keys handle)", node.Line, node.Column)
+			}
+			handleNode := node.Children[1]
+			if handleNode.Type != "SYMBOL" {
+				ast.ReportError("store_keys handle must be a symbol", handleNode.Line, handleNode.Column)
+			}
+			insts = append(insts, BCInstruction{OpString: "STORE_KEYS", Op: OpStoreKeys, StringOperand: handleNode.Value})
 		case "fetch":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)

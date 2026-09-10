@@ -4,6 +4,36 @@ Phase 3 dogfooding: a genuine stateful HTTP CRUD service, running as
 standalone bytecode, exercised across multiple independent HTTP requests
 against one long-lived server process.
 
+## Corrections (recorded during the HowlBoard dogfood pass)
+
+Three claims below were accurate when written and are no longer true. They are
+left in place for the record, with the correction stated here rather than
+silently edited into the original text.
+
+* **"No opcode exposes method, query string, headers, or path segments" — partly
+  stale.** `OpHttpReqMethod` exists and `(req_method req)` returns the HTTP
+  method; HowlBoard uses it for OPTIONS preflight in every route. Query strings,
+  headers and path segments remain genuinely unavailable, and `req_header` is
+  documented in the app-development skill despite having no opcode.
+
+* **"`defun` return-type annotations compile but crash at runtime" and "there is
+  currently no working path to a `defun` that returns a dict" — stale.** The
+  supported form is the `type_hint` annotation, not a positional type symbol:
+  `(defun make_rec (id) (type_hint return "dict") ...)` compiles and returns a
+  dict that `map_get` consumes correctly at the call site. `type_hint` is
+  compiled away as a pure annotation. HowlBoard's backend and interface are both
+  decomposed into dict-returning helpers on this basis.
+
+* **"An unhandled panic inside a route handler is silently swallowed as a
+  successful response" — fixed.** A handler that fails before writing now
+  returns 500 carrying the structured `VMError` JSON with its code preserved,
+  logged to the VM error stream rather than process stdout. See
+  `TestHTTPHandlerFailuresFailClosed`.
+
+Separately, the note that `store_keys`-style enumeration is "adequate friction,
+not a blocker" no longer applies: `store_keys` exists, returns sorted keys, and
+removes the `next_id` scan workaround entirely.
+
 ## What worked well
 
 * **State sharing across HTTP requests.** Every `route` handler runs in a

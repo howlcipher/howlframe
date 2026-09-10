@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+* `time_now` in the JavaScript backend. It was supported by the bytecode VM and
+  the Go backend but rejected as an unknown statement for `web_app` programs, so
+  a browser interface had no way to read the clock and render relative times.
+* `store_keys` construct and `STORE_KEYS` bytecode instruction, returning every
+  record key in a native store as a sorted list. Go randomizes map iteration, so
+  enumeration is sorted to keep listing deterministic. Every prior HowlFrame
+  application (`kv_cli`, `todo_cli`, `task_api`, HowlBoard) had to maintain a
+  parallel index record that could silently diverge from the records it indexed;
+  `store_keys` removes that workaround. Requires the `database` capability, and
+  `filesystem` additionally for `file://` stores.
 * Runner-sealed, bounded negative map-state provenance for the internal direct
   HFIR experiment. It records completed map mutations and reads by backing-map
   identity, proves never-present versus effectively deleted keys, and fails
@@ -65,6 +75,13 @@
   diverge silently.
 
 ### Changed
+* Dict values may now mix types. Dicts are the language's record literal, and the
+  VM and native store both carry `map[string]any`, so a record combining strings,
+  ints, lists, and nested dicts already executed correctly; only the analyzer
+  rejected it. Heterogeneous dict literals and `map_set` writes now widen the
+  element type to `any` through the existing `join` helper instead of reporting
+  `dict value N has type X, want Y`. Key checks, target-kind checks, and list
+  element homogeneity are unchanged.
 
 * Documented the existing standalone HTTP JSON request composition
   (`parse_json ... req.body` with `try_let`), its bounded scope, and the
@@ -104,6 +121,26 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* `for` over an expression no longer silently miscompiles in the JavaScript and
+  Go backends. Both read the iterable's raw node value, which is empty for
+  anything but a bound symbol, so `(for m (map_get d "missions") ...)` emitted
+  `for (let m of )` and `for _, m := range {` - invalid output produced with no
+  diagnostic, in a toolchain whose contract is to fail closed.
+* `on_event` now terminates its statement. Automatic semicolon insertion does
+  not apply before `(`, so any following top-level statement was parsed as a
+  call of the `addEventListener` result.
+* A `web_app`'s top-level statements are wrapped in an async IIFE. They routinely
+  contain awaited calls, and a classic `<script>` has no top-level await, so
+  every generated interface failed to parse in the browser. Function
+  declarations remain at top level so inline handlers can still reach them as
+  globals.
+* Route handlers fail closed. A panic inside an `http_server` route handler wrote
+  nothing to the `ResponseWriter`, so Go emitted `200` with an empty body and a
+  denied capability was indistinguishable from a completed request. Handlers that
+  fail before responding now return `500` with the structured `VMError` JSON
+  (preserving codes such as `CAPABILITY_DENIED` and `LIMIT_EXCEEDED`), and the
+  failure is reported on the VM's error stream rather than process stdout. A
+  handler that already committed a response is left untouched.
 * `SPAWN_AGENT` and `TASK` opcodes in the standalone bytecode VM now report a
   structured `UNSUPPORTED_CONSTRUCT` runtime error naming the opcode rather than
   panicking with `VM_INTERNAL` as an unknown opcode. Both opcodes are emitted

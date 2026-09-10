@@ -319,6 +319,10 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "time_now" {
+		if len(node.Children) != 1 {
+			ast.ReportError("time_now expects (time_now)", node.Line, node.Column)
+		}
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}

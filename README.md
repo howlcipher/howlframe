@@ -75,6 +75,15 @@ bounded effect
 
 ## Applications Built With HowlFrame
 
+* **[HowlBoard](https://github.com/howlcipher/howlboard)** — the canonical
+  HowlFrame reference application and human-facing AI engineering operations
+  interface. A full-stack mission-control console for governed autonomous work:
+  `http_server` compiled to standalone bytecode, `web_app` compiled through the
+  JavaScript backend, native-store persistence, and no hand-written server or
+  client code. Live at <https://howlcipher.github.io/howlboard/>. Its
+  [dogfooding journal](https://github.com/howlcipher/howlboard/blob/main/docs/dogfooding.md)
+  is the most detailed record of where this language helps and where it gets in
+  the way.
 * [Status API](apps/status_api/README.md) — Proves HTTP serving, deterministic routing, and environment inspection.
 * [Log Analyzer](apps/log_analyzer/README.md) — Proves file parsing, deterministic string logic, and graceful capability denial.
 * [KV CLI](apps/kv_cli/README.md) — Proves in-memory store functionality and sequential deterministic state.
@@ -281,7 +290,20 @@ go run howlframe.go -o build examples/wasm_math.howl
 
 ### Reference Application
 
-[HowlFrame Repo Analyst](examples/repo_analyst/README.md) is a deterministic, five-module application that compiles to HowlFrame bytecode and analyzes repositories without generated Go or JavaScript. Its dogfooding tests prove both the unchanged default instruction ceiling and a larger finite budget explicitly authorized by the trusted runner.
+[HowlBoard](https://github.com/howlcipher/howlboard) is the canonical reference
+application: a full-stack mission-control interface for governed autonomous
+engineering work, with both tiers written in HowlFrame. It is the largest
+program built on this toolchain and the one that most exercises it — the
+`store_keys` primitive, heterogeneous dict records, fail-closed HTTP handlers,
+and several `web_app` codegen fixes all exist because building it required
+them.
+
+[HowlFrame Repo Analyst](examples/repo_analyst/README.md) remains the reference
+for the in-repository bytecode path: a deterministic, five-module application
+that compiles to HowlFrame bytecode and analyzes repositories without generated
+Go or JavaScript. Its dogfooding tests prove both the unchanged default
+instruction ceiling and a larger finite budget explicitly authorized by the
+trusted runner.
 
 ## Common Language Features
 

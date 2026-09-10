@@ -157,6 +157,7 @@ var table = []Entry{
 	{Name: "stderr", Support: Supported, Note: "STDERR"},
 	{Name: "store_delete", Support: Supported, Note: "STORE_DELETE"},
 	{Name: "store_get", Support: Supported, Note: "STORE_GET"},
+	{Name: "store_keys", Support: Supported, Note: "STORE_KEYS"},
 	{Name: "store_open", Support: Supported, Opaque: true, Note: "STORE_OPEN; handle and URI are read as literals"},
 	{Name: "store_put", Support: Supported, Note: "STORE_PUT"},
 	{Name: "str_join", Support: Supported, Note: "STR_JOIN"},

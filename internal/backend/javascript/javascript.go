@@ -155,9 +155,12 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (e) {\n\t\t%s = e;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
 	case "for":
 		itemNode := ir.Kids[0].Value
-		listNode := ir.Kids[1].Value
+		// The iterable may be any expression, not only a bound symbol. Reading
+		// .Value directly yielded "" for a list-valued expression such as
+		// (for m (map_get d "missions") ...), emitting "for (let m of )".
+		listExpr := generateJSExpression(ir.Kids[1], reqVar, depth+1)
 		bodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
-		return fmt.Sprintf("for (let %s of %s) {\n%s\n}", itemNode, listNode, bodyCode)
+		return fmt.Sprintf("for (let %s of %s) {\n%s\n}", itemNode, listExpr, bodyCode)
 	case "call":
 		funcName := sanitizeJSName(ir.Kids[0].Value)
 		var args []string
@@ -263,6 +266,10 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "is_nil":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(%s === null || %s === undefined)", valStr, valStr)
+	case "time_now":
+		// Unix seconds, matching the bytecode and Go backends. A web_app that
+		// renders relative timestamps has no other way to read the clock.
+		return "Math.floor(Date.now() / 1000)"
 	case "list":
 		var items []string
 		for _, kid := range ir.Kids {
@@ -369,7 +376,14 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		appCode += generateJSStatement(handlerNode, "", 0) + "\n"
 	}
 
-	code := funcsCode + appCode
+	// Top-level statements are the application's bootstrap and routinely
+	// contain awaited calls. A classic <script> has no top-level await, so they
+	// run inside an async IIFE. Function declarations stay at top level, which
+	// keeps them reachable as globals for inline event handlers.
+	code := funcsCode
+	if strings.TrimSpace(appCode) != "" {
+		code += fmt.Sprintf(";(async () => {\n%s\n})();\n", appCode)
+	}
 
 	if testCode != "" {
 		testCode = "const test = require('node:test');\n" +
@@ -419,7 +433,10 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if ir, ok := ir.LowerShared(node); ok {
 		return EmitJSIR(ir, reqVar, depth)
 	}
-	if head == "dom_query" {
+	if head == "time_now" {
+		// Unix seconds, matching the bytecode VM and the Go backend.
+		return "Math.floor(Date.now() / 1000)"
+	} else if head == "dom_query" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)
 		}
@@ -441,7 +458,10 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			argName = args[0].Value
 		}
 		body := generateJSStatement(lambda.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("%s.addEventListener(%s, async (%s) => {\n%s\n})", el, event, argName, body)
+		// The trailing semicolon is required: without it a following statement
+		// that begins with "(" is parsed as a call of this expression's result
+		// rather than as its own statement.
+		return fmt.Sprintf("%s.addEventListener(%s, async (%s) => {\n%s\n});", el, event, argName, body)
 	} else if head == "set_html" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("set_html expects (set_html el val)", node.Line, node.Column)

@@ -351,7 +351,6 @@ func TestAnalyzeRejectsInconsistentAggregateLayouts(t *testing.T) {
 	for _, expected := range []string{
 		"list element 2 has type string, want int",
 		"list_get index must be int, got string",
-		"dict value 2 has type string, want int",
 		"map_get key must be string, got int",
 	} {
 		found := false
@@ -388,7 +387,6 @@ func TestAnalyzeRejectsInvalidAggregateMutationTypes(t *testing.T) {
 		"append item has type int, want string",
 		"map_set target must be dict, got list",
 		"map_set key must be string, got int",
-		"map_set value has type int, want string",
 		"append target must be list, got dict",
 	} {
 		found := false
@@ -619,5 +617,61 @@ func TestCheckRouteHandlerValidation(t *testing.T) {
 				t.Fatalf("case %s reported invalid coordinates: line=%d col=%d", tc.name, out.Line, out.Column)
 			}
 		})
+	}
+}
+
+// Dicts are the language's record literal. The VM and the native store both
+// carry map[string]any, so a record mixing strings, ints, lists, and nested
+// dicts executes correctly; the analyzer must widen the element type to any
+// rather than reject a program the runtime accepts.
+func TestAnalyzeWidensHeterogeneousDictValues(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (mission (dict
+				("id" "m1")
+				("insertions" 7)
+				("evidence" (list "ev-1"))
+				("authority" (dict ("decision" "ALLOW")))))
+			(do
+				(map_set mission "outcome" "task_completed")
+				(map_set mission "retries" 2)
+				(map_get mission "id"))))`)
+
+	analysis := Analyze(root)
+	for _, diagnostic := range analysis.Diagnostics {
+		if strings.Contains(diagnostic.Reason, "dict value") ||
+			strings.Contains(diagnostic.Reason, "map_set value") {
+			t.Errorf("unexpected homogeneity diagnostic: %q", diagnostic.Reason)
+		}
+	}
+}
+
+// Widening must not silently disable the checks that still catch real
+// mistakes: keys stay strings and the target still has to be a dict.
+func TestAnalyzeStillRejectsDictKeyAndTargetErrors(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (mission (dict ("id" "m1") ("count" 2)))
+			(do
+				(map_set mission 3 "three")
+				(map_get mission 4))))`)
+
+	analysis := Analyze(root)
+	reasons := make([]string, 0, len(analysis.Diagnostics))
+	for _, diagnostic := range analysis.Diagnostics {
+		reasons = append(reasons, diagnostic.Reason)
+	}
+	for _, expected := range []string{
+		"map_set key must be string, got int",
+		"map_get key must be string, got int",
+	} {
+		found := false
+		for _, reason := range reasons {
+			if reason == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
+		}
 	}
 }
