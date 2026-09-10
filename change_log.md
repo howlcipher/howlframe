@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+* `time_now` in the JavaScript backend. It was supported by the bytecode VM and
+  the Go backend but rejected as an unknown statement for `web_app` programs, so
+  a browser interface had no way to read the clock and render relative times.
 * `store_keys` construct and `STORE_KEYS` bytecode instruction, returning every
   record key in a native store as a sorted list. Go randomizes map iteration, so
   enumeration is sorted to keep listing deterministic. Every prior HowlFrame
@@ -118,6 +121,19 @@
   are classified separately and keep compiling unchanged.
 
 ### Fixed
+* `for` over an expression no longer silently miscompiles in the JavaScript and
+  Go backends. Both read the iterable's raw node value, which is empty for
+  anything but a bound symbol, so `(for m (map_get d "missions") ...)` emitted
+  `for (let m of )` and `for _, m := range {` - invalid output produced with no
+  diagnostic, in a toolchain whose contract is to fail closed.
+* `on_event` now terminates its statement. Automatic semicolon insertion does
+  not apply before `(`, so any following top-level statement was parsed as a
+  call of the `addEventListener` result.
+* A `web_app`'s top-level statements are wrapped in an async IIFE. They routinely
+  contain awaited calls, and a classic `<script>` has no top-level await, so
+  every generated interface failed to parse in the browser. Function
+  declarations remain at top level so inline handlers can still reach them as
+  globals.
 * Route handlers fail closed. A panic inside an `http_server` route handler wrote
   nothing to the `ResponseWriter`, so Go emitted `200` with an empty body and a
   denied capability was indistinguishable from a completed request. Handlers that

@@ -775,12 +775,15 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("		%s(%s)", funcName, strings.Join(args, ", "))
 	case "for":
 		itemNode := ir.Kids[0].Value
-		listNode := ir.Kids[1].Value
+		// The iterable may be any expression, not only a bound symbol. Reading
+		// .Value directly yielded "" for a list-valued expression such as
+		// (for m (map_get d "missions") ...), emitting "for _, m := range {".
+		listExpr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		bodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf(`		for _, %s := range %s {
 			_ = %s
 %s
-		}`, itemNode, listNode, itemNode, bodyCode)
+		}`, itemNode, listExpr, itemNode, bodyCode)
 	case "return":
 		return fmt.Sprintf("		return %s", generateStatementRaw(ir.Kids[0], reqVar, depth+1))
 	case "if":
