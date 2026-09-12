@@ -175,29 +175,26 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 		if negativeDiagnostic != nil {
 			return CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, NegativeState: negative}, []Diagnostic{*negativeDiagnostic}
 		}
+		addWriterDependencies := func(writer NodeID, selection SelectionReason) {
+			add(writer, selection)
+			for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
+				add(dependency, SelectionDependency)
+				if isLeaf(candidate.Graph, dependency) {
+					core[dependency] = true
+				}
+			}
+		}
 		if negative != nil {
 			// A direct absent map read is not independently editable. Its key
 			// producer is only context until an effective delete or uniquely
 			// value-correlated live writer proves a causal mutation.
 			dependencies = nil
-			if negative.Cause == "DELETED" && len(negative.CandidateNodeIDs) == 1 {
-				writer := negative.CandidateNodeIDs[0]
-				add(writer, SelectionNegativeDelete)
-				for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
-					add(dependency, SelectionDependency)
-					if isLeaf(candidate.Graph, dependency) {
-						core[dependency] = true
-					}
+			if (negative.Cause == "DELETED" || negative.Cause == "VALUE_MATCH") && len(negative.CandidateNodeIDs) == 1 {
+				selection := SelectionNegativeDelete
+				if negative.Cause == "VALUE_MATCH" {
+					selection = SelectionNegativeValue
 				}
-			} else if negative.Cause == "VALUE_MATCH" && len(negative.CandidateNodeIDs) == 1 {
-				writer := negative.CandidateNodeIDs[0]
-				add(writer, SelectionNegativeValue)
-				for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
-					add(dependency, SelectionDependency)
-					if isLeaf(candidate.Graph, dependency) {
-						core[dependency] = true
-					}
-				}
+				addWriterDependencies(negative.CandidateNodeIDs[0], selection)
 			} else {
 				return CandidateRepairRegion{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, NegativeState: negative}, []Diagnostic{localizationDiagnostic("HFIR_LOCALIZATION_AMBIGUOUS_STATE_CAUSE", "absent map key has no uniquely proven causal writer")}
 			}
@@ -210,13 +207,7 @@ func LocalizeFailure(candidate Candidate, evidence LocalizationEvidence) (Candid
 			writers = nil
 		}
 		for _, writer := range writers {
-			add(writer, SelectionLastWriter)
-			for _, dependency := range executedWriterDependencies(candidate.Graph, writer, executed) {
-				add(dependency, SelectionDependency)
-				if isLeaf(candidate.Graph, dependency) {
-					core[dependency] = true
-				}
-			}
+			addWriterDependencies(writer, SelectionLastWriter)
 		}
 		if len(writers) == 0 {
 			for _, dependency := range dependencies {

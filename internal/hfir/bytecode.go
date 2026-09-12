@@ -16,36 +16,50 @@ const BytecodeUnsupportedCode = "HFIR_BYTECODE_UNSUPPORTED"
 // BCProgram. It accepts only a graph: it neither reconstructs an AST nor calls
 // the legacy AST bytecode compiler.
 func LowerToBytecode(graph *Graph) (*bytecode.BCProgram, []Diagnostic) {
+	prog, _, _, diags := LowerToBytecodeIncremental(graph, nil)
+	return prog, diags
+}
+
+// LowerToBytecodeIncremental converts the Phase-1 semantic HFIR subset into a
+// BCProgram, reusing cached bytecode fragments for preserved subgraphs.
+func LowerToBytecodeIncremental(graph *Graph, preservedCache map[NodeID][]bytecode.BCInstruction) (*bytecode.BCProgram, map[NodeID][]bytecode.BCInstruction, int, []Diagnostic) {
 	compiler := &bytecodeLowerer{
-		graph:     graph,
-		compiling: make(map[NodeID]bool),
+		graph:       graph,
+		compiling:   make(map[NodeID]bool),
+		cachedNodes: preservedCache,
+		reusedNodes: make(map[NodeID]bool),
+		nodeInsts:   make(map[NodeID][]bytecode.BCInstruction),
 		prog: &bytecode.BCProgram{
 			Version:   1,
 			Functions: make(map[string]*bytecode.BCFunction),
 		},
 	}
 	if graph == nil {
-		return nil, []Diagnostic{compiler.diagnostic(nil, "HFIR graph is required")}
+		return nil, nil, 0, []Diagnostic{compiler.diagnostic(nil, "HFIR graph is required")}
 	}
 	entry := graph.NodeByID(graph.EntryNode)
 	if entry == nil {
-		return nil, []Diagnostic{compiler.diagnostic(nil, "HFIR entry node is missing")}
+		return nil, nil, 0, []Diagnostic{compiler.diagnostic(nil, "HFIR entry node is missing")}
 	}
 	insts, diagnostic := compiler.compile(entry)
 	if diagnostic != nil {
-		return nil, []Diagnostic{*diagnostic}
+		return nil, nil, compiler.loweredCount, []Diagnostic{*diagnostic}
 	}
 	compiler.prog.Main = insts
 	if !compiler.prog.AttachTrustedMainOrigins() || !compiler.prog.BindLocalizationIdentity(GraphHash(graph)) {
-		return nil, []Diagnostic{compiler.diagnostic(entry, "direct HFIR lowering produced incomplete instruction provenance")}
+		return nil, nil, compiler.loweredCount, []Diagnostic{compiler.diagnostic(entry, "direct HFIR lowering produced incomplete instruction provenance")}
 	}
-	return compiler.prog, nil
+	return compiler.prog, compiler.nodeInsts, compiler.loweredCount, nil
 }
 
 type bytecodeLowerer struct {
-	graph     *Graph
-	prog      *bytecode.BCProgram
-	compiling map[NodeID]bool
+	graph        *Graph
+	prog         *bytecode.BCProgram
+	compiling    map[NodeID]bool
+	cachedNodes  map[NodeID][]bytecode.BCInstruction
+	reusedNodes  map[NodeID]bool
+	nodeInsts    map[NodeID][]bytecode.BCInstruction
+	loweredCount int
 }
 
 func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruction, diagnostic *Diagnostic) {
@@ -53,6 +67,16 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		value := c.diagnostic(nil, "HFIR node is missing")
 		return nil, &value
 	}
+	if c.cachedNodes != nil && c.cachedNodes[node.ID] != nil {
+		if c.reusedNodes != nil {
+			c.reusedNodes[node.ID] = true
+		}
+		return append([]bytecode.BCInstruction(nil), c.cachedNodes[node.ID]...), nil
+	}
+	if c.nodeInsts != nil && c.nodeInsts[node.ID] != nil {
+		return append([]bytecode.BCInstruction(nil), c.nodeInsts[node.ID]...), nil
+	}
+	c.loweredCount++
 	defer func() {
 		if diagnostic != nil {
 			return
@@ -66,6 +90,9 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			if !bytecode.HasSemanticOrigin(instructions[index]) {
 				bytecode.SetSemanticOrigin(&instructions[index], string(node.ID))
 			}
+		}
+		if c.nodeInsts != nil {
+			c.nodeInsts[node.ID] = append([]bytecode.BCInstruction(nil), instructions...)
 		}
 	}()
 	if c.compiling[node.ID] {

@@ -32,23 +32,31 @@ func TestASTLowering(t *testing.T) {
 	}
 }
 
+func parseAndLower(t *testing.T, src, filename string, check bool) *Graph {
+	t.Helper()
+	lx := lexer.NewLexer(src)
+	p := parser.NewParser(lx, filename)
+	root := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		t.Fatalf("unexpected tokens after EOF")
+	}
+	if check {
+		checker.Check(root)
+	}
+	g, err := LowerAST(root, "test")
+	if err != nil {
+		t.Fatalf("LowerAST failed for %s: %v", filename, err)
+	}
+	return g
+}
+
 // TestASTLoweringHandlesIntegerLiterals is a regression test for the
 // NUMBER-vs-INT mismatch (bug #40): the old hand-built ast.Node{Type:
 // "NUMBER"} fixtures never went through the real lexer, so they masked the
 // fact that real integer literals lex as "INT" and could not be lowered.
 func TestASTLoweringHandlesIntegerLiterals(t *testing.T) {
 	src := `(cli_app (print 42))`
-	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "int_literal_test.howl")
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		t.Fatalf("unexpected tokens after EOF")
-	}
-
-	g, err := LowerAST(root, "test")
-	if err != nil {
-		t.Fatalf("LowerAST failed on a real integer literal: %v", err)
-	}
+	g := parseAndLower(t, src, "int_literal_test.howl", false)
 	if len(g.Nodes) != 3 {
 		t.Errorf("expected 3 nodes (cli_app, print, const 42), got %d", len(g.Nodes))
 	}
@@ -59,19 +67,7 @@ func TestASTLoweringHandlesIntegerLiterals(t *testing.T) {
 // the gap where every prior test used hand-built AST/graph literals.
 func TestASTLoweringOnRealCheckedFixture(t *testing.T) {
 	src := `(cli_app (let (x 1) (print (+ x 2))))`
-	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "checked_fixture_test.howl")
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		t.Fatalf("unexpected tokens after EOF")
-	}
-
-	checker.Check(root)
-
-	g, err := LowerAST(root, "test")
-	if err != nil {
-		t.Fatalf("LowerAST failed on a real checked fixture: %v", err)
-	}
+	g := parseAndLower(t, src, "checked_fixture_test.howl", true)
 	if g.EntryNode == "" {
 		t.Errorf("expected a non-empty entry node")
 	}
@@ -85,17 +81,7 @@ func TestASTLoweringOnRealCheckedFixture(t *testing.T) {
 // error path since only non-empty Lists were handled.
 func TestASTLoweringHandlesEmptyParameterLists(t *testing.T) {
 	src := `(cli_app (defun f () (return 1)) (print (call f)))`
-	lx := lexer.NewLexer(src)
-	p := parser.NewParser(lx, "empty_params_test.howl")
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		t.Fatalf("unexpected tokens after EOF")
-	}
-
-	g, err := LowerAST(root, "test")
-	if err != nil {
-		t.Fatalf("LowerAST failed on a zero-argument defun: %v", err)
-	}
+	g := parseAndLower(t, src, "empty_params_test.howl", false)
 	if g.EntryNode == "" {
 		t.Errorf("expected a non-empty entry node")
 	}

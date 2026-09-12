@@ -213,6 +213,7 @@ func GraphHash(graph *Graph) string {
 		}
 		clone := *node
 		clone.Effects = nil
+		clone.Provenance = Provenance{Filename: node.Provenance.Filename}
 		clone.DataInputs = append([]DataEdge(nil), node.DataInputs...)
 		clone.ControlEdges = append([]NodeID(nil), node.ControlEdges...)
 		copy.AddNode(&clone)
@@ -229,6 +230,7 @@ func NodeHash(node *Node) string {
 	}
 	clone := *node
 	clone.Effects = nil
+	clone.Provenance = Provenance{Filename: node.Provenance.Filename}
 	encoded, _ := json.Marshal(clone)
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:])

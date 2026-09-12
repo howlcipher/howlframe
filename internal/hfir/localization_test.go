@@ -390,6 +390,11 @@ func binaryOutputCandidate(t *testing.T, left, right, branch string) Candidate {
 		)
 		body = "branch"
 	}
+	return programCandidateWithBody(t, NodeID(body), nodes)
+}
+
+func programCandidateWithBody(t *testing.T, body NodeID, nodes []transportNode) Candidate {
+	t.Helper()
 	nodes = append(nodes, testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: body}}))
 	return mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: nodes})
 }
@@ -475,8 +480,7 @@ func scaledBehavioralCandidate(t *testing.T, size int) Candidate {
 		nodes = append(nodes, testNode(id, "sequence", "", "", []transportEdge{{Role: "body", NodeID: body}}))
 		body = id
 	}
-	nodes = append(nodes, testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: body}}))
-	return mustCandidate(t, candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: nodes})
+	return programCandidateWithBody(t, body, nodes)
 }
 
 func automaticDictionaryAuthorDelta(t *testing.T, candidate Candidate, context RepairContext) []byte {

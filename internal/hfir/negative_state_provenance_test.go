@@ -65,12 +65,7 @@ func TestNegativeStateProvenanceCorpus(t *testing.T) {
 				if scenario.wantCause == "DELETED" {
 					replacements = map[string]string{"result": "preserve"}
 				}
-				delta := restrictedAuthorDelta(t, candidate, region.Context, replacements)
-				updated, repairDiagnostics := ApplyRepair(candidate, region.Context, delta)
-				if len(repairDiagnostics) != 0 {
-					t.Fatalf("ApplyRepair() diagnostics = %#v", repairDiagnostics)
-				}
-				assertCandidateOutput(t, updated, "ready\n")
+				applyRepairAndAssertReady(t, candidate, region.Context, replacements)
 			}
 		})
 	}
@@ -148,14 +143,19 @@ func TestNegativeStateProvenanceRepairsMultiNodeWrongKeys(t *testing.T) {
 				t.Fatalf("multi-node localization = %#v, %#v", region, diagnostics)
 			}
 			replacements := map[string]string{parts[0]: "res", parts[1]: "ult"}
-			delta := restrictedAuthorDelta(t, candidate, region.Context, replacements)
-			updated, repairDiagnostics := ApplyRepair(candidate, region.Context, delta)
-			if len(repairDiagnostics) != 0 {
-				t.Fatalf("ApplyRepair() diagnostics = %#v", repairDiagnostics)
-			}
-			assertCandidateOutput(t, updated, "ready\n")
+			applyRepairAndAssertReady(t, candidate, region.Context, replacements)
 		})
 	}
+}
+
+func applyRepairAndAssertReady(t *testing.T, candidate Candidate, context RepairContext, replacements map[string]string) {
+	t.Helper()
+	delta := restrictedAuthorDelta(t, candidate, context, replacements)
+	updated, repairDiagnostics := ApplyRepair(candidate, context, delta)
+	if len(repairDiagnostics) != 0 {
+		t.Fatalf("ApplyRepair() diagnostics = %#v", repairDiagnostics)
+	}
+	assertCandidateOutput(t, updated, "ready\n")
 }
 
 func computedWrongKeyCandidate(t *testing.T, parts []string) Candidate {
