@@ -20,7 +20,6 @@ health.json
 
 # Go modules
 vendor/
-go.sum
 
 # Python
 __pycache__/
