@@ -9,18 +9,20 @@ import (
 
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/ir"
-	"github.com/howlcipher/howlframe/internal/lexer"
-	"github.com/howlcipher/howlframe/internal/parser"
+	"github.com/howlcipher/howlframe/internal/testutil"
 )
 
 func parseTestProgram(t *testing.T, source string) *ast.Node {
+	return testutil.ParseTestProgram(t, source, "types_test.howl")
+}
+
+func assertDiagnosticReasons(t *testing.T, diagnostics []Diagnostic, want []string) {
 	t.Helper()
-	p := parser.NewParser(lexer.NewLexer(source), "types_test.howl")
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		t.Fatalf("parser stopped at %s", p.Cur.Value)
+	reasons := make([]string, 0, len(diagnostics))
+	for _, d := range diagnostics {
+		reasons = append(reasons, d.Reason)
 	}
-	return root
+	testutil.AssertStringsContain(t, reasons, want)
 }
 
 func TestAnalyzePropagatesTypesAndNativeLayout(t *testing.T) {
@@ -343,27 +345,11 @@ func TestAnalyzeRejectsInconsistentAggregateLayouts(t *testing.T) {
 		(let (values (dict ("one" 1) ("two" "two")))
 			(map_get values 2)))`)
 
-	analysis := Analyze(root)
-	reasons := make([]string, 0, len(analysis.Diagnostics))
-	for _, diagnostic := range analysis.Diagnostics {
-		reasons = append(reasons, diagnostic.Reason)
-	}
-	for _, expected := range []string{
+	assertDiagnosticReasons(t, Analyze(root).Diagnostics, []string{
 		"list element 2 has type string, want int",
 		"list_get index must be int, got string",
 		"map_get key must be string, got int",
-	} {
-		found := false
-		for _, reason := range reasons {
-			if reason == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
-		}
-	}
+	})
 }
 
 func TestAnalyzeRejectsInvalidAggregateMutationTypes(t *testing.T) {
@@ -378,28 +364,12 @@ func TestAnalyzeRejectsInvalidAggregateMutationTypes(t *testing.T) {
 				(map_set values "two" 2)
 				(append values "three"))))`)
 
-	analysis := Analyze(root)
-	reasons := make([]string, 0, len(analysis.Diagnostics))
-	for _, diagnostic := range analysis.Diagnostics {
-		reasons = append(reasons, diagnostic.Reason)
-	}
-	for _, expected := range []string{
+	assertDiagnosticReasons(t, Analyze(root).Diagnostics, []string{
 		"append item has type int, want string",
 		"map_set target must be dict, got list",
 		"map_set key must be string, got int",
 		"append target must be list, got dict",
-	} {
-		found := false
-		for _, reason := range reasons {
-			if reason == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
-		}
-	}
+	})
 }
 
 func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
@@ -411,29 +381,13 @@ func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
 		(+ true false)
 		(+ 1 (to_float 2)))`)
 
-	analysis := Analyze(root)
-	reasons := make([]string, 0, len(analysis.Diagnostics))
-	for _, diagnostic := range analysis.Diagnostics {
-		reasons = append(reasons, diagnostic.Reason)
-	}
-	for _, expected := range []string{
+	assertDiagnosticReasons(t, Analyze(root).Diagnostics, []string{
 		`function "choose" expects 1 argument, got 0`,
 		`function "choose" expects 1 argument, got 2`,
 		"if branches have incompatible types int and float64",
 		"+ requires numeric operands, got bool and bool",
 		"+ requires matching numeric types, got int and float64",
-	} {
-		found := false
-		for _, reason := range reasons {
-			if reason == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("missing diagnostic %q in %+v", expected, reasons)
-		}
-	}
+	})
 }
 
 func TestAnalyzeReportsMalformedSharedForms(t *testing.T) {

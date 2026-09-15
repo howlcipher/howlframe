@@ -2,11 +2,11 @@ package masking
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/checker"
-	"github.com/howlcipher/howlframe/internal/lexer"
-	"github.com/howlcipher/howlframe/internal/parser"
-	"testing"
+	"github.com/howlcipher/howlframe/internal/testutil"
 )
 
 func TestCompileTypePrimitiveConstraints(t *testing.T) {
@@ -179,23 +179,12 @@ func TestCompileAnalysisAcceptsNil(t *testing.T) {
 }
 
 func parseProgram(t *testing.T, source string) *ast.Node {
-	t.Helper()
-	p := parser.NewParser(lexer.NewLexer(source), "masking_test.howl")
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		t.Fatalf("parser stopped at %s", p.Cur.Value)
-	}
-	return root
+	return testutil.ParseTestProgram(t, source, "masking_test.howl")
 }
 
 func assertStringsEqual(t *testing.T, got, want []string) {
-	t.Helper()
+	testutil.AssertStringsContain(t, got, want)
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
-	}
-	for index := range got {
-		if got[index] != want[index] {
-			t.Fatalf("got %v, want %v", got, want)
-		}
 	}
 }
