@@ -211,7 +211,7 @@ func ExecuteInterpreter(filePath string, cliArgs []string, input string) Executi
 		return ExecutionResult{Target: TargetInterpreter, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 
-	runArgs := append([]string{"-run", filePath}, cliArgs...)
+	runArgs := append([]string{"-run", "-allow-caps", "network,filesystem,process,environment,database", filePath}, cliArgs...)
 	runCmd := exec.Command(compiler, runArgs...)
 	runCmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
 	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, input)

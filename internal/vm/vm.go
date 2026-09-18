@@ -78,12 +78,22 @@ type InterpFunc struct {
 // defun bodies have no closure over caller scope, matching the Go backend's
 // model where defun compiles to an independent top-level function.
 type Interpreter struct {
-	funcs      map[string]*InterpFunc
-	args       []string
-	In         io.Reader
-	Out        io.Writer
-	ErrOut     io.Writer
-	lineReader *bufio.Reader
+	funcs       map[string]*InterpFunc
+	args        []string
+	In          io.Reader
+	Out         io.Writer
+	ErrOut      io.Writer
+	lineReader  *bufio.Reader
+	AllowedCaps []capability.Capability
+}
+
+func (interp *Interpreter) requireCapability(cap capability.Capability, node *ast.Node) {
+	for _, allowed := range interp.AllowedCaps {
+		if allowed == cap {
+			return
+		}
+	}
+	InterpErr(fmt.Sprintf("capability denied: %s", cap), node)
 }
 
 type VmExit struct {
@@ -94,32 +104,32 @@ func (e VmExit) Code() int {
 	return e.code
 }
 
+type interpError struct {
+	reason string
+	line   int
+	col    int
+}
+
 func InterpErr(reason string, node *ast.Node) {
 	line, col := 0, 0
 	if node != nil {
 		line, col = node.Line, node.Column
 	}
-	ast.ReportError(reason, line, col)
+	panic(interpError{reason: reason, line: line, col: col})
 }
 
 // Interpret executes a cli_app AST directly and returns a process exit code.
 // http_server/web_app roots are rejected with a clear error — Phase 1 is
 // cli_app only, per docs/direct_execution_design.md.
-func Interpret(ast *ast.Node, args []string, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
-	if ast == nil || ast.Type != "List" || len(ast.Children) == 0 || ast.Children[0].Type != "SYMBOL" {
-		InterpErr("Expected cli_app as root symbol", ast)
-	}
-	root := ast.Children[0].Value
-	if root != "cli_app" {
-		InterpErr(fmt.Sprintf("-run only supports cli_app in Phase 1 (see docs/direct_execution_design.md); got %q", root), ast.Children[0])
-	}
-
+// Enforces allowedCaps matching RunBytecodeWithPolicy (HOWL-CANON-002).
+func Interpret(root *ast.Node, args []string, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
 	interp := &Interpreter{
-		funcs:  make(map[string]*InterpFunc),
-		args:   args,
-		In:     in,
-		Out:    out,
-		ErrOut: errOut,
+		funcs:       make(map[string]*InterpFunc),
+		args:        args,
+		In:          in,
+		Out:         out,
+		ErrOut:      errOut,
+		AllowedCaps: allowedCaps,
 	}
 	if interp.In == nil {
 		interp.In = os.Stdin
@@ -131,38 +141,57 @@ func Interpret(ast *ast.Node, args []string, in io.Reader, out io.Writer, errOut
 		interp.ErrOut = os.Stderr
 	}
 	interp.lineReader = bufio.NewReader(interp.In)
+
+	defer func() {
+		if r := recover(); r != nil {
+			if exit, ok := r.(VmExit); ok {
+				exitCode = exit.code
+				return
+			}
+			if returnSig, ok := r.(returnSignal); ok {
+				if returnSig.value != nil {
+					if num, ok := returnSig.value.(int64); ok {
+						exitCode = int(num)
+					}
+				}
+				return
+			}
+			if interpErr, ok := r.(interpError); ok {
+				errOutObj := ast.ErrorOutput{Reason: interpErr.reason, Line: interpErr.line, Column: interpErr.col}
+				b, _ := json.Marshal(errOutObj)
+				if interp.ErrOut != nil {
+					fmt.Fprintln(interp.ErrOut, string(b))
+				} else {
+					fmt.Println(string(b))
+				}
+				exitCode = 1
+				return
+			}
+			panic(r)
+		}
+	}()
+
+	if root == nil || root.Type != "List" || len(root.Children) == 0 || root.Children[0].Type != "SYMBOL" {
+		InterpErr("Expected cli_app as root symbol", root)
+	}
+	rootSym := root.Children[0].Value
+	if rootSym != "cli_app" {
+		InterpErr(fmt.Sprintf("-run only supports cli_app in Phase 1 (see docs/direct_execution_design.md); got %q", rootSym), root.Children[0])
+	}
+
 	globalEnv := NewInterpEnv(nil)
 
-	for _, child := range ast.Children[1:] {
+	for _, child := range root.Children[1:] {
 		if IsDefun(child) {
 			interp.registerDefun(child)
 		}
 	}
 
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				if exit, ok := r.(VmExit); ok {
-					exitCode = exit.code
-					return
-				}
-				if returnSig, ok := r.(returnSignal); ok {
-					if returnSig.value != nil {
-						if num, ok := returnSig.value.(int64); ok {
-							exitCode = int(num)
-						}
-					}
-					return
-				}
-				panic(r)
-			}
-		}()
-		for _, child := range ast.Children[1:] {
-			if !IsDefun(child) {
-				interp.eval(child, globalEnv)
-			}
+	for _, child := range root.Children[1:] {
+		if !IsDefun(child) {
+			interp.eval(child, globalEnv)
 		}
-	}()
+	}
 	return exitCode
 }
 
@@ -237,6 +266,13 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 
 	if ir.BinOpKinds[head] {
 		return interp.evalBinop(head, node, env)
+	}
+
+	if reqCap := capability.ForConstruct(head); reqCap != capability.None {
+		interp.requireCapability(reqCap, node)
+	}
+	if head == "neural_circuit" || head == "ephemeral_circuit" {
+		interp.requireCapability(capability.Network, node)
 	}
 
 	switch head {

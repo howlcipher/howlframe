@@ -241,7 +241,7 @@ func main() {
 
 	if *runMode {
 		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
-		os.Exit(vm.Interpret(root, programArgs, os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {

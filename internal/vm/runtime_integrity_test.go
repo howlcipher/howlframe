@@ -179,7 +179,7 @@ func TestBooleanLiteralsAcrossExecutionPaths(t *testing.T) {
 	source := `(cli_app (if true (print true) (print false)) (if false (print false) (print true)))`
 	root, legacy := parseAndCompile(t, source)
 	var interpreted bytes.Buffer
-	if exit := Interpret(root, nil, strings.NewReader(""), &interpreted, &bytes.Buffer{}); exit != 0 {
+	if exit := Interpret(root, nil, nil, strings.NewReader(""), &interpreted, &bytes.Buffer{}); exit != 0 {
 		t.Fatalf("interpreter exit = %d", exit)
 	}
 	if interpreted.String() != "true\ntrue\n" {

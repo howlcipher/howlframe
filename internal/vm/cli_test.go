@@ -90,7 +90,7 @@ func TestStandaloneCLISemantics(t *testing.T) {
 			in := strings.NewReader(tt.stdin)
 			var out, errOut bytes.Buffer
 
-			exitCode := Interpret(node, nil, in, &out, &errOut)
+			exitCode := Interpret(node, nil, nil, in, &out, &errOut)
 			if exitCode != tt.wantExit {
 				t.Errorf("exitCode = %d, want %d", exitCode, tt.wantExit)
 			}
