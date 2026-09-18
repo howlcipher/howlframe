@@ -962,7 +962,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return node.Value
 	}
 	if node.Type != "List" || len(node.Children) == 0 {
-		// ast.ReportError("Expected list for statement", node.Line, node.Column)
+		return ""
 	}
 	head := node.Children[0].Value
 	if head == "intent" {
@@ -1278,18 +1278,15 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		bodyGo := generateStatement(bodyNode, reqVar, depth+1)
 
 		return fmt.Sprintf(`func() {
-			if optFn, ok := observer.GetOptimizedPlugin(%s); ok {
-				optFn()
-				return
-			}
 			start := time.Now()
 			func() {
 				%s
 			}()
-			if time.Since(start).Milliseconds() > int64(%s) {
-				go observer.OptimizeGoImplementation(%s, %q)
+			durationMs := time.Since(start).Milliseconds()
+			if durationMs > int64(%s) {
+				observer.RecordOptimizationOpportunity(%s, durationMs)
 			}
-		}()`, metricName, bodyGo, threshold, metricName, bodyGo)
+		}()`, bodyGo, threshold, metricName)
 	} else if head == "ephemeral_circuit" {
 		if len(node.Children) < 3 {
 			// ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)
