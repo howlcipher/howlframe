@@ -1,20 +1,21 @@
 # HFIR Execution Status
 
-## Current canonical representation
+## Canonical representation & role freeze (HOWL-CANON-010)
 
-The checked AST remains the canonical representation for production source builds. HFIR is a verified semantic graph and now has one explicit executable bytecode-lowering API, but the public `howlframe build` command still uses the legacy AST bytecode compiler.
+Per canonical remediation baseline finding HOWL-CANON-010, HFIR's architectural role is formally frozen as an ahead-of-time semantic verifier and contract gate (`runHFIRGate`) across all compilation targets. Direct AST compilation via `bytecode.CompileToBytecode` (`howlframe build` / `-compile-bc`) is the production compiler. The direct HFIR-to-bytecode pathway (`-compile-hfir-bc` via `hfir.LowerToBytecode`) is retained strictly as an internal experimental research pathway for bounded Phase-1 `cli_app` programs, not a replacement compiler backend.
 
 ```mermaid
 flowchart LR
-    Source[.howl compatibility frontend] --> AST[Checked AST]
-    AST --> HFIR[Semantic HFIR]
-    HFIR --> Verify[HFIR verifier]
-    Verify --> Direct[LowerToBytecode]
-    Direct --> Artifact[BCProgram or HFBC artifact]
+    Source[.howl source] --> AST[Checked AST]
+    AST --> Gate[runHFIRGate: AOT Semantic Verification]
+    Gate --> ASTComp[bytecode.CompileToBytecode: Production Compiler]
+    Gate -.-> Direct[LowerToBytecode: Experimental Research Path]
+    ASTComp --> Artifact[HFBC Bytecode Artifact]
+    Direct -.-> Artifact
     Artifact --> VM[Bytecode VM]
 ```
 
-The direct path is exercised in CI through real parser, checker, verifier, artifact serialization, artifact validation, and isolated VM execution. It is an internal experimental API, not an automatic production-path selector.
+The production path (`-compile-bc` / `howlframe build`) runs the full semantic verification gate ahead of bytecode emission. The direct path (`-compile-hfir-bc`) is an internal experimental API for graph-lowering research.
 
 ## What HFIR actually owns now
 

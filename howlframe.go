@@ -170,6 +170,10 @@ func main() {
 		return
 	}
 
+	// Bytecode Compilation Pathways (HOWL-CANON-010):
+	// Path 1 (Production Compiler): AST -> runHFIRGate (AOT semantic verification & contract gate) -> bytecode.CompileToBytecode.
+	// Per HOWL-CANON-010, HFIR's architectural role is formally frozen as an ahead-of-time
+	// semantic verifier and contract gate. bytecode.CompileToBytecode remains the production compiler.
 	if *compileBc {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
@@ -184,6 +188,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Path 2 (Experimental Research Lowering): AST -> runHFIRGate -> hfir.LowerToBytecode.
+	// Bounded Phase-1 research pathway for direct semantic graph lowering.
+	// Not a replacement compiler backend.
 	if *compileHfirBc {
 		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog, diags := hfir.LowerToBytecode(graph)
@@ -457,7 +464,10 @@ var hfirBlockingCodes = map[string]bool{
 	"HFIR_TARGET_INFEASIBLE": true,
 }
 
-// runHFIRGate lowers root to a HFIR graph and verifies it against target
+// runHFIRGate executes the canonical ahead-of-time semantic verification and contract gate.
+// Per HOWL-CANON-010, HFIR's architectural role is formally frozen as an ahead-of-time
+// semantic verifier and contract gate rather than a replacement bytecode generator.
+// It lowers root to an intermediate semantic graph (HFIR) and verifies it against target
 // (hfirTargetNone for target-independent validation, used only by
 // -validate). Any lowering error, or any diagnostic whose code is in
 // hfirBlockingCodes, is reported as one deterministic JSON array via

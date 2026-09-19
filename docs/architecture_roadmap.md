@@ -56,7 +56,16 @@ It must have three separate forms:
 | Lowered HFIR | Typed CFG/SSA and target-independent optimization facts | Model prompts or provider tokens |
 | Artifact manifest | Hashes, target, toolchain version, capability grant, proof/test results | Secrets or full private prompt context |
 
-The existing AST may lower into HFIR as a compatibility frontend. New model integrations should produce HFIR directly through a schema and validator, not free-form bytecode. The existing bytecode VM should eventually consume a lowered HFIR-derived bytecode, rather than become a competing semantic source.
+The existing AST lowers into HFIR for verification. Per HOWL-CANON-010, HFIR's role is frozen as an ahead-of-time semantic verification gate rather than a replacement compiler backend.
+
+### Canonical Role Freeze: HFIR as Semantic Verifier Gate (HOWL-CANON-010)
+
+Per canonical remediation finding HOWL-CANON-010, the architectural role of HowlFrame Intermediate Representation (HFIR) is formally frozen:
+
+1. **Ahead-of-Time Semantic Verifier and Contract Gate**: HFIR's production role is to serve as an ahead-of-time semantic verification gate (`runHFIRGate`). Before any backend emits code (bytecode, Go, JS, Wasm, or interpreter), the AST is lowered into HFIR where `hfir.NewVerifier` executes deterministic checks: reference integrity, construct safety, target feasibility, and effect/capability inference.
+2. **Canonical Production Bytecode Compiler**: Direct AST-to-bytecode compilation via `bytecode.CompileToBytecode` (`-compile-bc` / `howlframe build`) remains the authoritative, production compiler pipeline. It benefits from the preceding HFIR gate while preserving full language construct support.
+3. **Experimental Direct Lowering Research Pathway**: The direct graph-to-bytecode pathway (`-compile-hfir-bc` via `hfir.LowerToBytecode`) is frozen as an experimental research path for bounded Phase-1 `cli_app` programs. It is not an alternative production compiler and does not replace `compileBc`.
+4. **Strict Delineation**: Compiler code strictly separates the semantic verification pass (`hfir.NewVerifier` / `runHFIRGate`) from backend emission (`bytecode.CompileToBytecode`, `gogen`, `javascript`, `wasm`).
 
 ### Verification Boundary
 

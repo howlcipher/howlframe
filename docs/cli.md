@@ -35,8 +35,9 @@ Prints the current version of the HowlFrame CLI and the supported HFBC artifact 
 ## Legacy Compatibility Interface
 The v0.1 CLI retains full backward compatibility with the original flat flag structure:
 
-* `-validate` : Run lexer, parser, and semantic checker without transpiling.
-* `-compile-bc` : Compile AST to bytecode JSON.
+* `-validate` : Run lexer, parser, semantic checker, and AOT HFIR verifier without transpiling.
+* `-compile-bc` : Compile AST to bytecode JSON (production bytecode compiler, gated by AOT HFIR semantic verifier; HOWL-CANON-010).
+* `-compile-hfir-bc` : Compile directly from semantic HFIR to bytecode JSON (experimental research direct lowering pathway; HOWL-CANON-010).
 * `-run-bc` : Run bytecode from JSON file.
 * `-compile-wasm` : Compile typed SSA/CFG to WebAssembly Text.
 * `-run` : Interpret and execute a script directly.
