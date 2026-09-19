@@ -210,34 +210,13 @@ func main() {
 
 	if *compileWasm {
 		runHFIRGate(root, hfirModule, hfirTargetWasm)
-		functionSources, expression, err := ssaWasmProgram(root, analysis)
+		wasmCode, err := compileToWasm(root, analysis)
 		if err != nil {
 			line, column := 0, 0
 			if root != nil {
 				line, column = root.Line, root.Column
 			}
 			ast.ReportError(err.Error(), line, column)
-		}
-		var wasmFunctions []wasm.Function
-		for _, source := range functionSources {
-			functionGraph, err := ir.LowerSSAFunction(source.params, source.body)
-			if err != nil {
-				ast.ReportError(fmt.Sprintf("Failed to lower SSA graph for function %q: %v", source.name, err), source.body.Line, source.body.Column)
-			}
-			wasmFunctions = append(wasmFunctions, wasm.Function{
-				Name:   source.name,
-				Params: source.params,
-				Return: source.ret,
-				Graph:  functionGraph,
-			})
-		}
-		graph, err := ir.LowerSSA(expression)
-		if err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to lower SSA graph: %v", err), expression.Line, expression.Column)
-		}
-		wasmCode, err := wasm.SerializeSSAProgram(wasmFunctions, graph)
-		if err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to serialize SSA graph: %v", err), expression.Line, expression.Column)
 		}
 		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".ssa.wat")
 		if err = writeArtifact(outFile, []byte(wasmCode)); err != nil {
@@ -360,6 +339,38 @@ func ssaWasmProgram(root *ast.Node, analysis *checker.Analysis) ([]wasmFunctionS
 		return nil, nil, fmt.Errorf("-compile-wasm requires cli_app's final child to be an entry expression, not a defun")
 	}
 	return functions, entry, nil
+}
+
+func compileToWasm(root *ast.Node, analysis *checker.Analysis) (string, error) {
+	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
+		return wasm.GenerateWasmCode(root), nil
+	}
+	functionSources, expression, err := ssaWasmProgram(root, analysis)
+	if err != nil {
+		return "", err
+	}
+	var wasmFunctions []wasm.Function
+	for _, source := range functionSources {
+		functionGraph, err := ir.LowerSSAFunction(source.params, source.body)
+		if err != nil {
+			return "", fmt.Errorf("Failed to lower SSA graph for function %q: %w", source.name, err)
+		}
+		wasmFunctions = append(wasmFunctions, wasm.Function{
+			Name:   source.name,
+			Params: source.params,
+			Return: source.ret,
+			Graph:  functionGraph,
+		})
+	}
+	graph, err := ir.LowerSSA(expression)
+	if err != nil {
+		return "", fmt.Errorf("Failed to lower SSA graph: %w", err)
+	}
+	wasmCode, err := wasm.SerializeSSAProgram(wasmFunctions, graph)
+	if err != nil {
+		return "", fmt.Errorf("Failed to serialize SSA graph: %w", err)
+	}
+	return wasmCode, nil
 }
 
 // argvOwningModes names the mode flags whose contract hands every token after
@@ -610,8 +621,8 @@ Usage:
 
 Commands:
   check     Parse, type-check, and verify a .howl file without emitting an artifact.
-  build     Compile a .howl file to a standalone .hfbc bytecode artifact.
-  run       Execute a .hfbc bytecode artifact.
+  build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
+  run       Execute a bytecode artifact or source script (--target=bytecode|interpreter).
   version   Print version information.
   help      Print this help message.
 
@@ -662,9 +673,10 @@ func checkSource() {
 func buildSource() {
 	buildFlags := flag.NewFlagSet("build", flag.ExitOnError)
 	outPath := buildFlags.String("o", "", "output artifact file path")
+	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm")
 
 	buildFlags.Usage = func() {
-		fmt.Println("Usage: howlframe build <source.howl> [-o <output.hfbc>]")
+		fmt.Println("Usage: howlframe build <source.howl> [-o <output>] [--target={bytecode|go|js|wasm}]")
 		buildFlags.PrintDefaults()
 	}
 	buildFlags.Parse(os.Args[2:])
@@ -679,11 +691,16 @@ func buildSource() {
 		buildFlags.Usage()
 		os.Exit(1)
 	}
+	if *target != "" && strings.HasPrefix(*target, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: --target")
+		buildFlags.Usage()
+		os.Exit(1)
+	}
 
 	inputFile := buildFlags.Arg(0)
 	// build has no argv-owning mode, so every token after the source file is
 	// this subcommand's to parse or to reject (bugs.md #52).
-	_, leftover, err := resumeFlagsAfterInput(buildFlags, buildFlags.Args()[1:])
+	setAfterInput, leftover, err := resumeFlagsAfterInput(buildFlags, buildFlags.Args()[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		buildFlags.Usage()
 		os.Exit(0)
@@ -698,15 +715,15 @@ func buildSource() {
 		buildFlags.Usage()
 		os.Exit(1)
 	}
+	if *target != "" && strings.HasPrefix(*target, "-") {
+		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: flag needs an argument: --target\n", inputFile)
+		buildFlags.Usage()
+		os.Exit(1)
+	}
 	if len(leftover) > 0 {
 		fmt.Fprintf(os.Stderr, "Unexpected argument %q after source file %q\n", leftover[0], inputFile)
 		buildFlags.Usage()
 		os.Exit(1)
-	}
-
-	outFile := *outPath
-	if outFile == "" {
-		outFile = strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile)) + ".hfbc"
 	}
 
 	content, err := os.ReadFile(inputFile)
@@ -727,39 +744,129 @@ func buildSource() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
-	_ = checker.Check(root)
-
+	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
-	runHFIRGate(root, hfirModule, hfirTargetBytecode)
 
-	prog := bytecode.CompileToBytecode(root)
-	var buf bytes.Buffer
-	if err := bytecode.WriteArtifact(&buf, prog); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to encode bytecode: %v\n", err)
+	targetVal := strings.ToLower(strings.TrimSpace(*target))
+	switch targetVal {
+	case "bytecode", "bc":
+		runHFIRGate(root, hfirModule, hfirTargetBytecode)
+		outFile := *outPath
+		if outFile == "" {
+			outFile = strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile)) + ".hfbc"
+		}
+		prog := bytecode.CompileToBytecode(root)
+		var buf bytes.Buffer
+		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to encode bytecode: %v\n", err)
+			os.Exit(1)
+		}
+		if err := writeArtifact(outFile, buf.Bytes()); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Built %s\n", outFile)
+
+	case "wasm":
+		runHFIRGate(root, hfirModule, hfirTargetWasm)
+		wasmCode, err := compileToWasm(root, analysis)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to compile to WASM: %v\n", err)
+			os.Exit(1)
+		}
+		outFile := *outPath
+		if outFile == "" {
+			outFile = artifactOutputPath(inputFile, *outPath, setAfterInput["o"], ".ssa.wat")
+		}
+		if err := writeArtifact(outFile, []byte(wasmCode)); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Built %s\n", outFile)
+
+	case "go":
+		runHFIRGate(root, hfirModule, hfirTargetGo)
+		goCode, testCode := gogen.GenerateCode(root)
+		outFile := *outPath
+		if outFile != "" && strings.HasSuffix(outFile, ".go") {
+			if err := writeArtifact(outFile, []byte(goCode)); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Built %s\n", outFile)
+		} else {
+			outputDir := outFile
+			serverFile := filepath.Join(outputDir, "server.go")
+			serverTestFile := filepath.Join(outputDir, "server_test.go")
+			if err := writeArtifact(serverFile, []byte(goCode)); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", serverFile, err)
+				os.Exit(1)
+			}
+			if testCode != "" {
+				if err := writeArtifact(serverTestFile, []byte(testCode)); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", serverTestFile, err)
+					os.Exit(1)
+				}
+			} else {
+				os.Remove(serverTestFile)
+			}
+			fmt.Printf("Built %s\n", serverFile)
+		}
+
+	case "js", "javascript":
+		runHFIRGate(root, hfirModule, hfirTargetJavaScript)
+		jsCode, testCode := javascript.GenerateJSCode(root)
+		outFile := *outPath
+		if outFile != "" && strings.HasSuffix(outFile, ".js") {
+			if err := writeArtifact(outFile, []byte(jsCode)); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Built %s\n", outFile)
+		} else {
+			outputDir := outFile
+			appFile := filepath.Join(outputDir, "app.js")
+			appTestFile := filepath.Join(outputDir, "app.test.js")
+			if err := writeArtifact(appFile, []byte(jsCode)); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", appFile, err)
+				os.Exit(1)
+			}
+			if testCode != "" {
+				if err := writeArtifact(appTestFile, []byte(testCode)); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", appTestFile, err)
+					os.Exit(1)
+				}
+			} else {
+				os.Remove(appTestFile)
+			}
+			fmt.Printf("Built %s\n", appFile)
+		}
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm\n", *target)
 		os.Exit(1)
 	}
-
-	if err := writeArtifact(outFile, buf.Bytes()); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Built %s\n", outFile)
 }
 
 func runArtifact() {
 	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
+	target := runFlags.String("target", "bytecode", "execution target: bytecode (or bc), interpreter (or run)")
 	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
 
 	runFlags.Usage = func() {
-		fmt.Println("Usage: howlframe run <artifact.hfbc> [options] [-- arguments...]")
+		fmt.Println("Usage: howlframe run [options] <artifact-or-source> [-- arguments...]")
 		runFlags.PrintDefaults()
 	}
 	runFlags.Parse(os.Args[2:])
 
 	if runFlags.NArg() < 1 {
 		fmt.Fprintln(os.Stderr, "Missing artifact file")
+		runFlags.Usage()
+		os.Exit(1)
+	}
+	if *target != "" && strings.HasPrefix(*target, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: --target")
 		runFlags.Usage()
 		os.Exit(1)
 	}
@@ -776,18 +883,63 @@ func runArtifact() {
 		os.Exit(1)
 	}
 
-	prog, err := bytecode.ReadArtifact(bytes.NewReader(content))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse bytecode: %v\n", err)
-		os.Exit(1)
-	}
-
-	executionPolicy := vm.DefaultExecutionPolicy()
 	if *maxInst <= 0 {
 		fmt.Fprintln(os.Stderr, "-max-instructions must be greater than zero")
 		os.Exit(1)
 	}
-	executionPolicy.Limits.MaxInstructions = *maxInst
 
-	os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+	targetVal := strings.ToLower(strings.TrimSpace(*target))
+	switch targetVal {
+	case "interpreter", "run":
+		lx := lexer.NewLexer(string(content))
+		p := parser.NewParser(lx, filepath.Base(inputFile))
+		root := p.ParseExpression()
+		if p.Cur.Type != lexer.TokenEOF {
+			ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+		}
+		parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+		ast.ResolveModules(root)
+		ast.ApplyPatches(root)
+		root = ast.ApplyWithContext(root, nil)
+		root = ast.ApplyWithContext(root, nil)
+		_ = checker.Check(root)
+		hfirModule := filepath.Base(inputFile)
+		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
+		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+
+	case "bytecode", "bc":
+		executionPolicy := vm.DefaultExecutionPolicy()
+		executionPolicy.Limits.MaxInstructions = *maxInst
+
+		var prog *bytecode.BCProgram
+		if strings.HasSuffix(inputFile, ".howl") {
+			lx := lexer.NewLexer(string(content))
+			p := parser.NewParser(lx, filepath.Base(inputFile))
+			root := p.ParseExpression()
+			if p.Cur.Type != lexer.TokenEOF {
+				ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+			}
+			parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+			ast.ResolveModules(root)
+			ast.ApplyPatches(root)
+			root = ast.ApplyWithContext(root, nil)
+			root = ast.ApplyWithContext(root, nil)
+			_ = checker.Check(root)
+			hfirModule := filepath.Base(inputFile)
+			runHFIRGate(root, hfirModule, hfirTargetBytecode)
+			prog = bytecode.CompileToBytecode(root)
+		} else {
+			var err error
+			prog, err = bytecode.ReadArtifact(bytes.NewReader(content))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot parse bytecode: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown target %q: valid run targets are bytecode, interpreter\n", *target)
+		os.Exit(1)
+	}
 }

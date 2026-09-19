@@ -537,3 +537,144 @@ func TestResumeFlagsAfterInput_Synthetic(t *testing.T) {
 		t.Errorf("unexpected leftovers: %v", leftover)
 	}
 }
+
+// TestCLI_TargetUnification covers HOWL-CANON-012.
+// howlframe build and run subcommands support --target={bytecode|go|js|wasm}.
+// build --target=wasm produces WASM output identically to -compile-wasm.
+func TestCLI_TargetUnification(t *testing.T) {
+	tmpDir := t.TempDir()
+	binaryPath := filepath.Join(tmpDir, "howlframe")
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, "howlframe.go")
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to build CLI: %v\nOutput: %s", err, string(out))
+	}
+
+	workDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatalf("failed to create workdir: %v", err)
+	}
+
+	wasmSource := filepath.Join(workDir, "wasm_prog.howl")
+	if err := os.WriteFile(wasmSource, []byte(`(cli_app (let (x 4) (if (> x 2) (+ x 3) (- x 1))))`), 0o644); err != nil {
+		t.Fatalf("failed to stage SSA fixture: %v", err)
+	}
+
+	runCLI := func(args ...string) (string, error) {
+		cmd := exec.Command(binaryPath, args...)
+		cmd.Dir = workDir
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+
+	// 1. Compile with legacy -compile-wasm and capture baseline output
+	legacyOutPath := filepath.Join(workDir, "legacy.ssa.wat")
+	out, err := runCLI("-compile-wasm", wasmSource, "-o", legacyOutPath)
+	if err != nil {
+		t.Fatalf("legacy -compile-wasm failed: %v\nOutput: %s", err, out)
+	}
+	legacyBytes, err := os.ReadFile(legacyOutPath)
+	if err != nil {
+		t.Fatalf("failed to read legacy wasm output: %v", err)
+	}
+	if len(legacyBytes) == 0 {
+		t.Fatalf("legacy -compile-wasm emitted empty artifact")
+	}
+
+	// 2. Compile with build --target=wasm with default output path
+	defaultWasmPath := wasmSource + ".ssa.wat"
+	os.Remove(defaultWasmPath)
+	out, err = runCLI("build", "--target=wasm", wasmSource)
+	if err != nil {
+		t.Fatalf("build --target=wasm failed: %v\nOutput: %s", err, out)
+	}
+	buildBytes, err := os.ReadFile(defaultWasmPath)
+	if err != nil {
+		t.Fatalf("failed to read build --target=wasm output: %v", err)
+	}
+	if !bytes.Equal(buildBytes, legacyBytes) {
+		t.Errorf("build --target=wasm output does not match -compile-wasm: got %d bytes, want %d bytes", len(buildBytes), len(legacyBytes))
+	}
+
+	// 3. Flag placement after input: build wasm_prog.howl --target=wasm
+	os.Remove(defaultWasmPath)
+	out, err = runCLI("build", wasmSource, "--target=wasm")
+	if err != nil {
+		t.Fatalf("build <file> --target=wasm after input failed: %v\nOutput: %s", err, out)
+	}
+	afterBytes, err := os.ReadFile(defaultWasmPath)
+	if err != nil {
+		t.Fatalf("failed to read build output after input: %v", err)
+	}
+	if !bytes.Equal(afterBytes, legacyBytes) {
+		t.Errorf("build <file> --target=wasm output does not match legacy: got %d bytes, want %d bytes", len(afterBytes), len(legacyBytes))
+	}
+
+	// 4. Compile with build --target=wasm -o <custom.wat>
+	customWasm := filepath.Join(workDir, "custom.wat")
+	out, err = runCLI("build", "--target=wasm", "-o", customWasm, wasmSource)
+	if err != nil {
+		t.Fatalf("build --target=wasm -o custom failed: %v\nOutput: %s", err, out)
+	}
+	customBytes, err := os.ReadFile(customWasm)
+	if err != nil {
+		t.Fatalf("failed to read custom wasm output: %v", err)
+	}
+	if !bytes.Equal(customBytes, legacyBytes) {
+		t.Errorf("custom wasm output mismatch")
+	}
+
+	// 5. Compile with build --target=go
+	goOut := filepath.Join(workDir, "custom_server.go")
+	out, err = runCLI("build", "--target=go", "-o", goOut, wasmSource)
+	if err != nil {
+		t.Fatalf("build --target=go failed: %v\nOutput: %s", err, out)
+	}
+	goBytes, err := os.ReadFile(goOut)
+	if err != nil {
+		t.Fatalf("failed to read go output: %v", err)
+	}
+	if !strings.Contains(string(goBytes), "package main") {
+		t.Errorf("expected go output to contain 'package main', got: %s", string(goBytes))
+	}
+
+	// 6. Compile with build --target=js
+	jsOut := filepath.Join(workDir, "custom_app.js")
+	out, err = runCLI("build", "--target=js", "-o", jsOut, wasmSource)
+	if err != nil {
+		t.Fatalf("build --target=js failed: %v\nOutput: %s", err, out)
+	}
+	jsBytes, err := os.ReadFile(jsOut)
+	if err != nil {
+		t.Fatalf("failed to read js output: %v", err)
+	}
+	if len(jsBytes) == 0 {
+		t.Errorf("expected non-empty js output")
+	}
+
+	// 7. Compile with build --target=bytecode and run with run --target=bytecode
+	hfbcOut := filepath.Join(workDir, "prog.hfbc")
+	out, err = runCLI("build", "--target=bytecode", "-o", hfbcOut, wasmSource)
+	if err != nil {
+		t.Fatalf("build --target=bytecode failed: %v\nOutput: %s", err, out)
+	}
+	runOut, err := runCLI("run", "--target=bytecode", hfbcOut)
+	if err != nil {
+		t.Fatalf("run --target=bytecode failed: %v\nOutput: %s", err, runOut)
+	}
+
+	// 8. Run source directly with run --target=interpreter
+	interpOut, err := runCLI("run", "--target=interpreter", wasmSource)
+	if err != nil {
+		t.Fatalf("run --target=interpreter failed: %v\nOutput: %s", err, interpOut)
+	}
+
+	// 9. Rejection of invalid target
+	out, err = runCLI("build", "--target=nonexistent", wasmSource)
+	if err == nil {
+		t.Errorf("expected build with invalid target to fail, got success: %s", out)
+	}
+	if !strings.Contains(out, "Unknown target") {
+		t.Errorf("expected 'Unknown target' error message, got: %s", out)
+	}
+}
+
