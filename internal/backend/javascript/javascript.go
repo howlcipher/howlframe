@@ -263,6 +263,11 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "list_len":
 		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(%s).length", listStr)
+	case "map_keys":
+		dictStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		// Object.keys order is insertion order. Sorting matches the bytecode
+		// VM, which cannot rely on Go map iteration.
+		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_keys expected dict\"); } return Object.keys(_d).sort(); })(%s)", dictStr)
 	case "is_nil":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(%s === null || %s === undefined)", valStr, valStr)

@@ -16,3 +16,21 @@ func TestGenerateCodePreservesFloatComparison(t *testing.T) {
 		t.Fatalf("generated code did not preserve float comparison:\n%s", code)
 	}
 }
+
+func TestGenerateCodeMapKeysSortsBothDictShapes(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(
+		`(cli_app (let (counts (dict ("beta" "2") ("alpha" "1"))) (print (str_join (map_keys counts) ","))))`),
+		"keys.howl").ParseExpression()
+	checker.Check(root)
+	code, _ := GenerateCode(root)
+	for _, want := range []string{
+		"case map[string]string:",
+		"case map[string]any:",
+		"sort.Strings(_keys)",
+		"TYPE_ERROR: map_keys expected dict",
+	} {
+		if !strings.Contains(code, want) {
+			t.Fatalf("generated Go is missing %q:\n%s", want, code)
+		}
+	}
+}

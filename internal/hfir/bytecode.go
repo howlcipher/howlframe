@@ -244,7 +244,7 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			return nil, childDiagnostic
 		}
 		return append(insts, instruction(bytecode.OpPrint, "PRINT", func(inst *bytecode.BCInstruction) { inst.IntOperand = int64(len(children)) })), nil
-	case "stderr", "exit", "convert", "list_len", "env":
+	case "stderr", "exit", "convert", "list_len", "env", "map_keys":
 		if len(children) != 1 || node.DataInputs[0].Name != "value" {
 			diagnostic := c.diagnostic(node, node.Kind+" requires one value")
 			return nil, &diagnostic
@@ -268,6 +268,8 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			}
 		case "list_len":
 			op, name = bytecode.OpListLen, "LIST_LEN"
+		case "map_keys":
+			op, name = bytecode.OpMapKeys, "MAP_KEYS"
 		case "env":
 			op, name = bytecode.OpEnv, "ENV"
 		}

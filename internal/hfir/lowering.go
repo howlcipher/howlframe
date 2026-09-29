@@ -239,7 +239,7 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			child *ast.Node
 		}{{"value", astNode.Children[1]}, {"separator", astNode.Children[2]}})
 		return id, true, err
-	case "list_len", "env":
+	case "list_len", "env", "map_keys":
 		if len(astNode.Children) != 2 {
 			return "", false, nil
 		}

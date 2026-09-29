@@ -126,6 +126,7 @@ var table = []Entry{
 	{Name: "llm_generate", Support: Supported, Note: "LLM_GENERATE"},
 	{Name: "map_delete", Support: Supported, Note: "MAP_DELETE"},
 	{Name: "map_get", Support: Supported, Note: "MAP_GET"},
+	{Name: "map_keys", Support: Supported, Note: "MAP_KEYS; returns keys sorted so enumeration is deterministic"},
 	{Name: "map_set", Support: Supported, Note: "MAP_SET"},
 	{Name: "match", Support: Unsupported, Note: "no opcode; the interpreter also fails closed on it (internal/vm/vm.go)"},
 	{Name: "middleware", Support: Unsupported, Note: "HTTP middleware chain; no opcode, Go backend only"},

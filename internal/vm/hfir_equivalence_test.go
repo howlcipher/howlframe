@@ -56,6 +56,12 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
 			source: `(cli_app (let (parts (str_split "alpha,beta" ",")) (print (str_join parts "|"))))`,
 		},
 		{
+			name: "dict keys",
+			source: `(cli_app
+  (let (counts (dict ("beta" "2") ("alpha" "1")))
+    (print (str_join (map_keys counts) ","))))`,
+		},
+		{
 			name:   "stderr and exit",
 			source: `(cli_app (stderr "halt\n") (exit 7) (print "unreachable"))`,
 		},
