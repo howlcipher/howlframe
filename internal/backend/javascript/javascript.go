@@ -45,6 +45,31 @@ func flattenModulesJS(nodes []*ast.Node) []*ast.Node {
 // or req_path, so the helper is prepended once. It is reset on every call.
 var jsNeedsRequestRead bool
 
+// jsNeedsHTMLEscape is set when GenerateJSCode emits html_escape or
+// attr_escape. Both share one helper. It is reset on every call.
+var jsNeedsHTMLEscape bool
+
+func htmlEscapeJSHelper() string {
+	// The replacements match Go's html.EscapeString: & < > " '.
+	// A non-string throws TYPE_ERROR. This is not a JavaScript encoder.
+	return `function howlFrameHTMLEscape(kind, v) {
+  if (typeof v !== "string") {
+    throw new Error("TYPE_ERROR: " + kind + " expected string, got " + (v === null ? "null" : typeof v));
+  }
+  return v.replace(/[&<>"']/g, function (c) {
+    switch (c) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&#34;";
+      case "'": return "&#39;";
+      default: return c;
+    }
+  });
+}
+`
+}
+
 func requestReadJSHelper() string {
 	return `function howlRequestRead(kind, req, name) {
   if (typeof name !== "string" || name === "") {
@@ -301,6 +326,10 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "encode_json":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("JSON.stringify(%s)", valStr)
+	case "html_escape", "attr_escape":
+		jsNeedsHTMLEscape = true
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameHTMLEscape(%q, %s)", ir.Kind, valStr)
 	case "str_split":
 		sStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		sepStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
@@ -398,6 +427,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsRequestRead = false
+	jsNeedsHTMLEscape = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -480,6 +510,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 	if jsNeedsRequestRead {
 		helper := requestReadJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsHTMLEscape {
+		helper := htmlEscapeJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

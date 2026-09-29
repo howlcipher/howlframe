@@ -21,6 +21,10 @@ var gogenHTTPReq bool
 // is written once into the generated file. It is reset on every call.
 var gogenMapGet bool
 
+// gogenHTMLEscape is set when GenerateCode emits html_escape or attr_escape.
+// Both calls share one helper. The flag is reset on every call.
+var gogenHTMLEscape bool
+
 // mapGetHelperSource is the Go form of the map_get absence contract.
 // map[string]string already yields "" for a missing key. map[string]any
 // yields nil, so the helper returns "" for that miss. A present value,
@@ -66,6 +70,21 @@ func howlFrameMapGetValue(m any, key string) any {
 // goDictLiteral emits a dict literal. String values stay map[string]string.
 // A nested dict is map[string]any so a path read can hold the next level.
 // A nested dict whose own values are strings stays map[string]string.
+// htmlEscapeHelperSource is the Go form of html_escape and attr_escape.
+// Quoted attributes use the same five-character encoding as text. A
+// non-string fails closed with TYPE_ERROR. The helper grants nothing.
+func htmlEscapeHelperSource() string {
+	return `func howlFrameHTMLEscape(kind string, v any) string {
+	s, ok := v.(string)
+	if !ok {
+		panic(fmt.Sprintf("TYPE_ERROR: %s expected string, got %T", kind, v))
+	}
+	return html.EscapeString(s)
+}
+
+`
+}
+
 func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
 	nested := false
 	rendered := make([]string, 0, len(pairs))
@@ -172,6 +191,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
 	gogenMapGet = false
+	gogenHTMLEscape = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -577,6 +597,9 @@ func GenerateCode(node *ast.Node) (string, string) {
 	if gogenHTTPReq || useDispatch {
 		extraImports = append(extraImports, "github.com/howlcipher/howlframe/internal/httpreq")
 	}
+	if gogenHTMLEscape {
+		extraImports = append(extraImports, "html")
+	}
 
 	code := `package main
 
@@ -606,6 +629,9 @@ import (
 `
 	if gogenMapGet {
 		code += mapGetHelperSource()
+	}
+	if gogenHTMLEscape {
+		code += htmlEscapeHelperSource()
 	}
 	code += funcsCode
 	code += `func main() {
@@ -709,8 +735,14 @@ var _ = fmt.Println
 var _ = observer.Trace
 
 `
+		if gogenHTMLEscape {
+			fullTestCode = strings.Replace(fullTestCode, "\t\"github.com/howlcipher/howlframe/observer\"\n", "\t\"github.com/howlcipher/howlframe/observer\"\n\t\"html\"\n", 1)
+		}
 		if gogenMapGet {
 			fullTestCode += mapGetHelperSource()
+		}
+		if gogenHTMLEscape {
+			fullTestCode += htmlEscapeHelperSource()
 		}
 		fullTestCode += testCode
 		testCode = fullTestCode
@@ -976,6 +1008,10 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "encode_json":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() string { b, _ := json.Marshal(%s); return string(b) }()", valStr)
+	case "html_escape", "attr_escape":
+		gogenHTMLEscape = true
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameHTMLEscape(%q, %s)", ir.Kind, valStr)
 	case "str_split":
 		sStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)

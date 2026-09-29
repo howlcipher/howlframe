@@ -1,0 +1,19 @@
+(cli_app
+  (print (html_escape "&"))
+  (print (html_escape "<"))
+  (print (html_escape ">"))
+  (print (html_escape "\""))
+  (print (html_escape "'"))
+  (print (html_escape "&<>\"'"))
+  (print (attr_escape "&<>\"'"))
+  (print (str_join (list "[" (html_escape "") (attr_escape "") "]") ""))
+  (let (id "a<b&c\"d'e")
+    (let (title "x<y&z")
+      (print (str_join (list
+        "<button data-id=\""
+        (attr_escape id)
+        "\" onclick=\""
+        "onTask"
+        "\">"
+        (html_escape title)
+        "</button>") "")))))

@@ -12,6 +12,11 @@ class AppendInstruction(BaseModel):
     string_operand: str
 
 
+class AttrEscapeInstruction(BaseModel):
+    op: Literal["ATTR_ESCAPE"]
+    pass
+
+
 class BinopInstruction(BaseModel):
     op: Literal["BINOP"]
     string_operand: str
@@ -89,6 +94,11 @@ class ForNextInstruction(BaseModel):
     op: Literal["FOR_NEXT"]
     string_operand: str
     int_operand: int
+
+
+class HtmlEscapeInstruction(BaseModel):
+    op: Literal["HTML_ESCAPE"]
+    pass
 
 
 class HttpReqHeaderInstruction(BaseModel):
@@ -351,6 +361,7 @@ Instruction = Annotated[
     Union[
         AchieveInstruction,
         AppendInstruction,
+        AttrEscapeInstruction,
         BinopInstruction,
         CallInstruction,
         CliArgsInstruction,
@@ -366,6 +377,7 @@ Instruction = Annotated[
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
+        HtmlEscapeInstruction,
         HttpReqHeaderInstruction,
         HttpReqMethodInstruction,
         HttpReqPathInstruction,

@@ -19,6 +19,8 @@ func TestLowerSharedRejectsMalformedFormsWithoutPanicking(t *testing.T) {
 		sharedTestNode("to_string"),
 		sharedTestNode("bytes_to_string"),
 		sharedTestNode("encode_json"),
+		sharedTestNode("html_escape"),
+		sharedTestNode("attr_escape"),
 		sharedTestNode("str_split", sharedTestSymbol("value")),
 		sharedTestNode("str_join", sharedTestSymbol("values")),
 		sharedTestNode("regex_match", sharedTestSymbol("pattern")),

@@ -11,6 +11,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/htmlescape"
 	"github.com/howlcipher/howlframe/internal/httpreq"
 	"github.com/howlcipher/howlframe/internal/ir"
 	"github.com/howlcipher/howlframe/internal/lexer"
@@ -117,6 +118,17 @@ func InterpErr(reason string, node *ast.Node) {
 		line, col = node.Line, node.Column
 	}
 	panic(interpError{reason: reason, line: line, col: col})
+}
+
+// escapeHTMLText encodes a string for HTML text or a quoted attribute.
+// Both contexts use the same five-character encoding. A non-string fails
+// closed; the operation grants no capability.
+func escapeHTMLText(val any, opName string, node *ast.Node) string {
+	s, ok := val.(string)
+	if !ok {
+		InterpErr(fmt.Sprintf("TYPE_ERROR: %s expected string, got %T", opName, val), node)
+	}
+	return htmlescape.Escape(s)
 }
 
 // sortedMapKeys returns dict keys in lexicographic order as a non-nil list.
@@ -616,6 +628,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("encode_json: %v", err), node)
 		}
 		return string(b)
+	case "html_escape", "attr_escape":
+		if len(node.Children) != 2 {
+			InterpErr(fmt.Sprintf("%s expects (%s text)", head, head), node)
+		}
+		return escapeHTMLText(interp.eval(node.Children[1], env), head, node)
 	case "str_split":
 		if len(node.Children) != 3 {
 			InterpErr("str_split expects (str_split s sep)", node)
@@ -2625,6 +2642,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("ENCODE_JSON_ERROR", "main", ip, inst.Op, "%v", err))
 			}
 			vm.push(string(b))
+		case bytecode.OpHTMLEscape, bytecode.OpAttrEscape:
+			opName := "html_escape"
+			if inst.Op == bytecode.OpAttrEscape {
+				opName = "attr_escape"
+			}
+			val := vm.pop(inst.Op)
+			s, ok := val.(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "%s expected string, got %T", opName, val))
+			}
+			vm.push(htmlescape.Escape(s))
 		case bytecode.OpCliArgs:
 			var argsAny []any
 			for _, arg := range vm.args {
