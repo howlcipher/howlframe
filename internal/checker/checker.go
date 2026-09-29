@@ -507,10 +507,10 @@ func checkGoStatement(node *ast.Node, depth int) {
 			}
 			checkGoStatement(irNode.Kids[1], depth+1)
 		case "map_get":
-			dictNode := irNode.Kids[0]
-			if dictNode.Type != "SYMBOL" {
-				ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
-			}
+			// A path read is a nested map_get. The dict operand is any
+			// expression; map_set and map_delete still name a variable
+			// because they mutate it.
+			checkGoStatement(irNode.Kids[0], depth+1)
 			checkGoStatement(irNode.Kids[1], depth+1)
 		case "list_get":
 			listNode := irNode.Kids[0]

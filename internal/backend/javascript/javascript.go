@@ -329,7 +329,14 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "map_get":
 		dictNode := ir.Kids[0]
 		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("(%s[%s] ?? \"\")", dictNode.Value, keyStr)
+		// A symbol keeps the #103 expression. An expression dict, including a
+		// nested map_get, rejects a non-dict. The miss sentinel is "", and
+		// indexing that sentinel must not become another miss.
+		if dictNode.Type == "SYMBOL" {
+			return fmt.Sprintf("(%s[%s] ?? \"\")", dictNode.Value, keyStr)
+		}
+		dictStr := generateJSStatementRaw(dictNode, reqVar, depth+1)
+		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_get expected dict, got \" + (_d === null ? \"null\" : typeof _d)); } return (_d[%s] ?? \"\"); })(%s)", keyStr, dictStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		idxStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)

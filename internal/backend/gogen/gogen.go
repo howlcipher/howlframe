@@ -39,7 +39,64 @@ func mapGetHelperSource() string {
 	return zero
 }
 
+// howlFrameMapGetValue reads a key from a dict expression. A named map_get
+// stays on howlFrameMapGet so a string map still returns a string. A nested
+// map_get receives that result as any. A missing key is still "". A map_get
+// of that sentinel, or of any other non-dict, fails closed.
+func howlFrameMapGetValue(m any, key string) any {
+	switch d := m.(type) {
+	case map[string]string:
+		if v, ok := d[key]; ok {
+			return v
+		}
+		return ""
+	case map[string]any:
+		if v, ok := d[key]; ok {
+			return v
+		}
+		return ""
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %T", m))
+	}
+}
+
 `
+}
+
+// goDictLiteral emits a dict literal. String values stay map[string]string.
+// A nested dict is map[string]any so a path read can hold the next level.
+// A nested dict whose own values are strings stays map[string]string.
+func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
+	nested := false
+	rendered := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		if pair.Type != "List" || len(pair.Children) != 2 {
+			continue
+		}
+		kNode := pair.Children[0]
+		vNode := pair.Children[1]
+		var k string
+		if kNode.Type == "STRING" {
+			k = fmt.Sprintf("%q", kNode.Value)
+		} else {
+			k = generateExpression(kNode, reqVar, depth+1)
+		}
+		var v string
+		if vNode.Type == "STRING" {
+			v = fmt.Sprintf("%q", vNode.Value)
+		} else {
+			if vNode.Type == "List" && len(vNode.Children) > 0 && vNode.Children[0].Value == "dict" {
+				nested = true
+			}
+			v = generateExpression(vNode, reqVar, depth+1)
+		}
+		rendered = append(rendered, fmt.Sprintf("%s: %s", k, v))
+	}
+	kind := "map[string]string"
+	if nested {
+		kind = "map[string]any"
+	}
+	return fmt.Sprintf("%s{%s}", kind, strings.Join(rendered, ", "))
 }
 
 func flattenModules(nodes []*ast.Node) []*ast.Node {
@@ -734,26 +791,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 					}
 					valStr = fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
 				} else if funcName == "dict" {
-					var pairs []string
-					for j := 1; j < len(valNode.Children); j++ {
-						pair := valNode.Children[j]
-						if pair.Type == "List" && len(pair.Children) == 2 {
-							k := pair.Children[0].Value
-							if pair.Children[0].Type == "STRING" {
-								k = fmt.Sprintf("%q", k)
-							} else {
-								k = generateExpression(pair.Children[0], reqVar, depth+1)
-							}
-							v := pair.Children[1].Value
-							if pair.Children[1].Type == "STRING" {
-								v = fmt.Sprintf("%q", v)
-							} else {
-								v = generateExpression(pair.Children[1], reqVar, depth+1)
-							}
-							pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
-						}
-					}
-					valStr = fmt.Sprintf("map[string]string{%s}", strings.Join(pairs, ", "))
+					valStr = goDictLiteral(valNode.Children[1:], reqVar, depth)
 				} else if funcName == "env" {
 					keyNode := valNode.Children[1]
 					if keyNode.Type == "STRING" {
@@ -974,15 +1012,18 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
 	case "map_get":
 		dictNode := ir.Kids[0]
-		if dictNode.Type != "SYMBOL" {
-			// ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
-		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		// Missing keys are "". Raw indexing does that for map[string]string
 		// and returns nil for map[string]any, so every map_get goes through
-		// the helper.
+		// a helper. A symbol keeps the generic helper. An expression, including
+		// a nested map_get, goes through howlFrameMapGetValue so the
+		// intermediate does not have to be a named map.
 		gogenMapGet = true
-		return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
+		if dictNode.Type == "SYMBOL" {
+			return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
+		}
+		dictStr := generateExpression(dictNode, reqVar, depth+1)
+		return fmt.Sprintf("howlFrameMapGetValue(%s, %s)", dictStr, keyStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
@@ -1013,26 +1054,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
 	case "dict":
-		var pairs []string
-		for _, kid := range ir.Kids {
-			if kid.Type != "List" || len(kid.Children) != 2 {
-				// ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
-			}
-			k := kid.Children[0].Value
-			if kid.Children[0].Type == "STRING" {
-				k = fmt.Sprintf("%q", k)
-			} else {
-				k = generateExpression(kid.Children[0], reqVar, depth+1)
-			}
-			v := kid.Children[1].Value
-			if kid.Children[1].Type == "STRING" {
-				v = fmt.Sprintf("%q", v)
-			} else {
-				v = generateExpression(kid.Children[1], reqVar, depth+1)
-			}
-			pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
-		}
-		return fmt.Sprintf("map[string]string{%s}", strings.Join(pairs, ", "))
+		return goDictLiteral(ir.Kids, reqVar, depth)
 	case "print":
 		var args []string
 		for _, kid := range ir.Kids {
