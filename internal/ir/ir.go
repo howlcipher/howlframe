@@ -58,7 +58,7 @@ func ValidateShared(node *ast.Node) (string, bool) {
 		return requireArguments(node, 2), true
 	}
 	switch head {
-	case "return", "sleep", "to_int", "to_float", "to_string", "bytes_to_string", "list_len", "is_nil", "encode_json", "map_keys":
+	case "return", "sleep", "to_int", "to_float", "to_string", "bytes_to_string", "list_len", "is_nil", "encode_json", "map_keys", "html_escape", "attr_escape":
 		return requireArguments(node, 1), true
 	case "if":
 		arguments := len(node.Children) - 1
@@ -182,6 +182,10 @@ func lowerShared(node *ast.Node) (*IRNode, bool) {
 		return &IRNode{Kind: "bytes_to_string", Kids: []*ast.Node{node.Children[1]}}, true
 	case "encode_json":
 		return &IRNode{Kind: "encode_json", Kids: []*ast.Node{node.Children[1]}}, true
+	case "html_escape":
+		return &IRNode{Kind: "html_escape", Kids: []*ast.Node{node.Children[1]}}, true
+	case "attr_escape":
+		return &IRNode{Kind: "attr_escape", Kids: []*ast.Node{node.Children[1]}}, true
 	case "str_split":
 		return &IRNode{Kind: "str_split", Kids: node.Children[1:]}, true
 	case "str_join":

@@ -4,6 +4,7 @@
 |---|---|---|---|---|---|
 | `ACHIEVE` |  | 2 | 1 | network | Achieves a target state given a constraint |
 | `APPEND` | string | 1 | 0 |  | Appends to a list |
+| `ATTR_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for a quoted HTML attribute |
 | `BINOP` | string | 2 | 1 |  | Binary operation |
 | `CALL` | string, int64 | var | 1 |  | Calls a function |
 | `CLI_ARGS` |  | 0 | 1 |  | Gets command line arguments |
@@ -19,6 +20,7 @@
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
 | `FOR_NEXT` | string, int64 | 0 | 0 |  | Next iteration of a for loop |
+| `HTML_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for HTML text |
 | `HTTP_REQ_HEADER` |  | 2 | 1 |  | Reads one request header from an already-accepted request |
 | `HTTP_REQ_METHOD` |  | 0 | 1 | network | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |

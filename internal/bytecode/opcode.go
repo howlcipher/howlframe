@@ -75,6 +75,8 @@ const (
 	OpHttpReqQuery
 	OpHttpReqHeader
 	OpHttpReqPath
+	OpHTMLEscape
+	OpAttrEscape
 )
 
 type OperandType string
@@ -156,6 +158,8 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpHttpReqQuery:     {Code: OpHttpReqQuery, Name: "HTTP_REQ_QUERY", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Reads one query parameter from an already-accepted request"},
 	OpHttpReqHeader:    {Code: OpHttpReqHeader, Name: "HTTP_REQ_HEADER", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Reads one request header from an already-accepted request"},
 	OpHttpReqPath:      {Code: OpHttpReqPath, Name: "HTTP_REQ_PATH", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Reads one path parameter from an already-accepted request"},
+	OpHTMLEscape:       {Code: OpHTMLEscape, Name: "HTML_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for HTML text"},
+	OpAttrEscape:       {Code: OpAttrEscape, Name: "ATTR_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for a quoted HTML attribute"},
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},

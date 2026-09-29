@@ -630,6 +630,20 @@ func TestAnalyzeStillRejectsDictKeyAndTargetErrors(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHTMLEscapeIsAString(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app (print (html_escape "a&b") (attr_escape "c<d")))`)
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+	}
+	for _, head := range []string{"html_escape", "attr_escape"} {
+		node := findHead(root, head)
+		if node == nil || node.Inferred.Kind != ast.String {
+			t.Fatalf("%s type = %+v, want string", head, node)
+		}
+	}
+}
+
 func TestAnalyzeMapKeysIsAStringList(t *testing.T) {
 	root := parseTestProgram(t, `(cli_app
 		(let (counts (dict ("beta" "2") ("alpha" "1")))

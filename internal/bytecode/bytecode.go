@@ -708,6 +708,16 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "encode_json":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "ENCODE_JSON", Op: OpEncodeJson})
+		case "html_escape", "attr_escape":
+			if len(node.Children) != 2 {
+				ast.ReportError(fmt.Sprintf("%s expects (%s text)", head, head), node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			if head == "attr_escape" {
+				insts = append(insts, BCInstruction{OpString: "ATTR_ESCAPE", Op: OpAttrEscape})
+			} else {
+				insts = append(insts, BCInstruction{OpString: "HTML_ESCAPE", Op: OpHTMLEscape})
+			}
 		case "str_split":
 			insts = append(insts, c.compileNode(node.Children[1])...) // string
 			insts = append(insts, c.compileNode(node.Children[2])...) // sep

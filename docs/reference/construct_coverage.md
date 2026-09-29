@@ -19,6 +19,7 @@
 | `and` | Yes | None | No | No | - | AUTHORITATIVE |
 | `append` | Yes | None | No | No | - | AUTHORITATIVE |
 | `assert_semantic` | No | None | No | Yes | - | AUTHORITATIVE |
+| `attr_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `bytes_to_string` | Yes | None | No | No | - | AUTHORITATIVE |
 | `call` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_app` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -38,6 +39,7 @@
 | `for` | Yes | None | No | No | - | AUTHORITATIVE |
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
+| `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `http_server` | Yes | None | No | No | - | AUTHORITATIVE |
 | `if` | Yes | None | No | No | - | AUTHORITATIVE |
 | `import` | No | None | No | Yes | - | AUTHORITATIVE |

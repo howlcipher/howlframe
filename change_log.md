@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+* `html_escape` and `attr_escape`, with `HTML_ESCAPE` and `ATTR_ESCAPE`. Both
+  encode `&`, `<`, `>`, `"`, and `'` the same way (`&amp;`, `&lt;`, `&gt;`,
+  `&#34;`, `&#39;`) and grant no capability. `attr_escape` is the attribute-context
+  name for that encoding. A non-string fails closed with `TYPE_ERROR`. An empty
+  string stays empty. Contract tests reject a handler body that interpolates an
+  untrusted id into a `<script>` string or an inline handler; data attributes
+  carry the escaped text and handler names stay constants.
 * `req_query`, `req_header`, and `req_path`, with `HTTP_REQ_QUERY`,
   `HTTP_REQ_HEADER`, and `HTTP_REQ_PATH`. A handler can read one query
   parameter, one request header, and one `{name}` path segment. A missing
