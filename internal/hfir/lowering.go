@@ -246,6 +246,16 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Kind = head
 		id, err := addChildren(1, "value")
 		return id, true, err
+	case "req_query", "req_header", "req_path":
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"request", astNode.Children[1]}, {"name", astNode.Children[2]}})
+		return id, true, err
 	case "map_get", "map_delete", "list_get", "append", "cli_args", "read_file", "parse_json", "is_nil":
 		if len(astNode.Children) < 2 {
 			return "", false, nil

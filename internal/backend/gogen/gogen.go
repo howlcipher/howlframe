@@ -3,6 +3,7 @@ package gogen
 import (
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/httpreq"
 	"github.com/howlcipher/howlframe/internal/ir"
 	"strconv"
 	"strings"
@@ -10,6 +11,11 @@ import (
 )
 
 var CurrentSchemaDDLs []string
+
+// gogenHTTPReq is set while GenerateCode emits a request read or a {name}
+// route, so the generated file imports internal/httpreq. It is reset at the
+// start of every GenerateCode call.
+var gogenHTTPReq bool
 
 func flattenModules(nodes []*ast.Node) []*ast.Node {
 	var result []*ast.Node
@@ -44,8 +50,45 @@ func sanitizeGoName(name string) string {
 	return res
 }
 
+func handlersNeedDispatch(handlers []*ast.Node) bool {
+	for _, handlerNode := range handlers {
+		if handlerNode == nil || handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
+			continue
+		}
+		head := handlerNode.Children[0].Value
+		if head == "route" && len(handlerNode.Children) >= 2 && handlerNode.Children[1].Type == "STRING" && routeNeedsPatternDispatch(handlerNode.Children[1].Value) {
+			return true
+		}
+		if head != "middleware" {
+			continue
+		}
+		for _, child := range handlerNode.Children[2:] {
+			if child != nil && child.Type == "List" && len(child.Children) >= 2 && child.Children[0].Value == "route" && child.Children[1].Type == "STRING" && routeNeedsPatternDispatch(child.Children[1].Value) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func routeNeedsPatternDispatch(routePath string) bool {
+	pattern, err := httpreq.ParseRoute(routePath)
+	if err != nil {
+		return true
+	}
+	return pattern.Parametric
+}
+
+func formatRouteRegistration(routePath, reqVar, trace, body string, dispatch bool) string {
+	if dispatch {
+		return fmt.Sprintf("\tif err := howlHTTP.Handle(%q, func(w http.ResponseWriter, %s *http.Request) {\n%s%s\n\t}); err != nil { panic(err.Error()) }\n", routePath, reqVar, trace, body)
+	}
+	return fmt.Sprintf("\thttp.HandleFunc(%q, func(w http.ResponseWriter, %s *http.Request) {\n%s%s\n\t})\n", routePath, reqVar, trace, body)
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
+	gogenHTTPReq = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -96,6 +139,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	seenImports := make(map[string]bool)
 
 	handlers := flattenModules(node.Children[startIndex:])
+	useDispatch := handlersNeedDispatch(handlers)
 	for i := 0; i < len(handlers); i++ {
 		handlerNode := handlers[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
@@ -386,10 +430,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			bodyNode := handlerNode.Children[2].Children[2]
 			bodyCode := generateStatement(bodyNode, reqVar, 0)
 			traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{%q: %s.URL.Path})()\n", "route:"+pathNode.Value, reqVar, reqVar)
-			routesCode += fmt.Sprintf(`	http.HandleFunc(%q, func(w http.ResponseWriter, %s *http.Request) {
-%s%s
-	})
-`, pathNode.Value, reqVar, traceInject, bodyCode)
+			routesCode += formatRouteRegistration(pathNode.Value, reqVar, traceInject, bodyCode, useDispatch)
 			continue
 		}
 
@@ -436,10 +477,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 				combinedCode := generateStatement(clonedMwBody, mwReqVar, 0)
 				traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{%q: %s.URL.Path})()\n", "middleware_route:"+pathNode.Value, mwReqVar, mwReqVar)
 
-				routesCode += fmt.Sprintf(`	http.HandleFunc(%q, func(w http.ResponseWriter, %s *http.Request) {
-%s%s
-	})
-`, pathNode.Value, mwReqVar, traceInject, combinedCode)
+				routesCode += formatRouteRegistration(pathNode.Value, mwReqVar, traceInject, combinedCode, useDispatch)
 			}
 			continue
 		}
@@ -451,6 +489,10 @@ func GenerateCode(node *ast.Node) (string, string) {
 		}
 
 		// ast.ReportError("Expected route, defun, struct, import, test, or middleware block", handlerNode.Line, handlerNode.Column)
+	}
+
+	if gogenHTTPReq || useDispatch {
+		extraImports = append(extraImports, "github.com/howlcipher/howlframe/internal/httpreq")
 	}
 
 	code := `package main
@@ -517,14 +559,21 @@ import (
 		code += cliCode
 		code += "}\n"
 	} else {
+		if useDispatch {
+			code += "\thowlHTTP := httpreq.NewServer(http.NewServeMux())\n"
+		}
 		code += routesCode
+		listenTarget := "nil"
+		if useDispatch {
+			listenTarget = "howlHTTP"
+		}
 		code += fmt.Sprintf(`	
 	fmt.Println("Starting server on port %s...")
-	if err := http.ListenAndServe(":%s", nil); err != nil {
+	if err := http.ListenAndServe(":%s", %s); err != nil {
 		fmt.Println("Server error:", err)
 	}
 }
-`, portNode.Value, portNode.Value)
+`, portNode.Value, portNode.Value, listenTarget)
 	}
 
 	if testCode != "" {
@@ -1270,6 +1319,21 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		reqVarName := node.Children[1].Value
 		return fmt.Sprintf("%s.Method", reqVarName)
+	} else if head == "req_query" || head == "req_header" || head == "req_path" {
+		gogenHTTPReq = true
+		if len(node.Children) != 3 {
+			return ""
+		}
+		recv := generateExpression(node.Children[1], reqVar, depth+1)
+		name := generateExpression(node.Children[2], reqVar, depth+1)
+		fn := "Query"
+		switch head {
+		case "req_header":
+			fn = "Header"
+		case "req_path":
+			fn = "Path"
+		}
+		return fmt.Sprintf("func() string { _v, _err := httpreq.%s(%s, %s); if _err != nil { panic(_err.Error()) }; return _v }()", fn, recv, name)
 	} else if head == "res_header" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("res_header expects (res_header name value)", node.Line, node.Column)

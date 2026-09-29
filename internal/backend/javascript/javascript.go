@@ -41,6 +41,80 @@ func flattenModulesJS(nodes []*ast.Node) []*ast.Node {
 	return result
 }
 
+// jsNeedsRequestRead is set when GenerateJSCode emits req_query, req_header,
+// or req_path, so the helper is prepended once. It is reset on every call.
+var jsNeedsRequestRead bool
+
+func requestReadJSHelper() string {
+	return `function howlRequestRead(kind, req, name) {
+  if (typeof name !== "string" || name === "") {
+    throw new Error("TYPE_ERROR: " + kind + " expected non-empty string name");
+  }
+  if (req === null || typeof req !== "object" || Array.isArray(req)) {
+    throw new Error("TYPE_ERROR: " + kind + " expected request");
+  }
+  if (kind === "req_query") return howlReadQuery(req, name);
+  if (kind === "req_header") return howlReadHeader(req, name);
+  if (kind === "req_path") return howlReadPath(req, name);
+  throw new Error("TYPE_ERROR: " + kind + " expected request");
+}
+function howlReadQuery(req, name) {
+  if (req.searchParams && typeof req.searchParams.get === "function") {
+    var found = req.searchParams.get(name);
+    return found == null ? "" : String(found);
+  }
+  if (typeof req.url === "string") {
+    var parsed = null;
+    try { parsed = new URL(req.url, "http://localhost"); } catch (e) { parsed = null; }
+    if (!parsed) throw new Error("TYPE_ERROR: req_query expected request");
+    var value = parsed.searchParams.get(name);
+    return value == null ? "" : String(value);
+  }
+  if (req.query && typeof req.query === "object" && !Array.isArray(req.query)) {
+    if (!Object.prototype.hasOwnProperty.call(req.query, name)) return "";
+    return howlRequestString("req_query", req.query[name]);
+  }
+  throw new Error("TYPE_ERROR: req_query expected request");
+}
+function howlReadHeader(req, name) {
+  var headers = req.headers;
+  if (headers == null) return "";
+  if (typeof headers.get === "function") {
+    var found = headers.get(name);
+    return found == null ? "" : String(found);
+  }
+  if (typeof headers !== "object" || Array.isArray(headers)) {
+    throw new Error("TYPE_ERROR: req_header expected request");
+  }
+  var want = name.toLowerCase();
+  var keys = Object.keys(headers);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].toLowerCase() === want) return howlRequestString("req_header", headers[keys[i]]);
+  }
+  return "";
+}
+function howlReadPath(req, name) {
+  var params = req.pathParams;
+  if (params == null) return "";
+  if (typeof params !== "object" || Array.isArray(params)) {
+    throw new Error("TYPE_ERROR: req_path expected request");
+  }
+  if (!Object.prototype.hasOwnProperty.call(params, name)) return "";
+  return howlRequestString("req_path", params[name]);
+}
+function howlRequestString(kind, value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    value = value[0];
+  }
+  if (value == null) return "";
+  if (typeof value !== "string") throw new Error("TYPE_ERROR: " + kind + " expected string value");
+  return value;
+}
+
+`
+}
+
 func sanitizeJSName(name string) string {
 	if !strings.Contains(name, "/") {
 		return name
@@ -316,6 +390,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 }
 
 func GenerateJSCode(node *ast.Node) (string, string) {
+	jsNeedsRequestRead = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -394,6 +469,14 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		testCode = "const test = require('node:test');\n" +
 			"const assert = require('node:assert');\n\n" +
 			funcsCode + testCode
+	}
+
+	if jsNeedsRequestRead {
+		helper := requestReadJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
 	}
 
 	return code, testCode
@@ -525,6 +608,14 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
 		return generateJSExpression(node.Children[1], reqVar, depth+1)
+	} else if head == "req_query" || head == "req_header" || head == "req_path" {
+		jsNeedsRequestRead = true
+		if len(node.Children) != 3 {
+			return ""
+		}
+		recv := generateJSExpression(node.Children[1], reqVar, depth+1)
+		name := generateJSExpression(node.Children[2], reqVar, depth+1)
+		return fmt.Sprintf("howlRequestRead(%q, %s, %s)", head, recv, name)
 	} else if head == "schema_bridge" {
 		return generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 	} else if head == "optimize_signature" {

@@ -11,6 +11,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/httpreq"
 	"github.com/howlcipher/howlframe/internal/ir"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
@@ -579,6 +580,26 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("TYPE_ERROR: map_keys expected dict, got %T", val), node.Children[1])
 		}
 		return sortedMapKeys(dict)
+	case "req_query", "req_header", "req_path":
+		if len(node.Children) != 3 {
+			InterpErr(fmt.Sprintf("%s expects (%s req name)", head, head), node)
+		}
+		recv := interp.eval(node.Children[1], env)
+		name := interp.eval(node.Children[2], env)
+		var value string
+		var err error
+		switch head {
+		case "req_header":
+			value, err = httpreq.Header(recv, name)
+		case "req_path":
+			value, err = httpreq.Path(recv, name)
+		default:
+			value, err = httpreq.Query(recv, name)
+		}
+		if err != nil {
+			InterpErr(err.Error(), node)
+		}
+		return value
 	case "is_nil":
 		if len(node.Children) != 2 {
 			InterpErr("is_nil expects (is_nil val)", node)
@@ -1486,16 +1507,45 @@ func (vm *BCVM) popCheckedString(inst bytecode.BCInstruction, ip int, msgPrefix 
 // error labelled by opName if the server was never started or the stored
 // value is not a *http.ServeMux. Shared by every instruction that needs the
 // active mux.
-func requireHTTPMux(env *BcEnv, ip int, inst bytecode.BCInstruction, opName string) *http.ServeMux {
-	muxAny, ok := env.get("__http_mux")
+func requireHTTPDispatch(env *BcEnv, ip int, inst bytecode.BCInstruction, opName string) *httpreq.Server {
+	raw, ok := env.get("__http_dispatch")
 	if !ok {
 		panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http server not started"))
 	}
-	mux, ok := muxAny.(*http.ServeMux)
+	server, ok := raw.(*httpreq.Server)
 	if !ok {
-		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected *http.ServeMux, got %T", muxAny))
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected request dispatcher, got %T", raw))
 	}
-	return mux
+	return server
+}
+
+func panicRequestRead(ip int, op bytecode.Opcode, err error) {
+	code := "RUNTIME_ERROR"
+	msg := err.Error()
+	if he, ok := err.(*httpreq.Error); ok {
+		code = he.Code
+		msg = he.Message
+	}
+	panic(NewRuntimeError(code, "main", ip, op, "%s", msg))
+}
+
+func (vm *BCVM) readRequestField(ip int, inst bytecode.BCInstruction, kind string) string {
+	nameVal := vm.pop(inst.Op)
+	recvVal := vm.pop(inst.Op)
+	var value string
+	var err error
+	switch kind {
+	case "req_header":
+		value, err = httpreq.Header(recvVal, nameVal)
+	case "req_path":
+		value, err = httpreq.Path(recvVal, nameVal)
+	default:
+		value, err = httpreq.Query(recvVal, nameVal)
+	}
+	if err != nil {
+		panicRequestRead(ip, inst.Op, err)
+	}
+	return value
 }
 
 // bytesToAnySlice converts a []byte into a []any of float64 elements, the
@@ -1897,15 +1947,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			json.NewEncoder(w).Encode(data)
 		case bytecode.OpHttpServerStart:
 			port := inst.StringOperand
-			env.vars["__http_mux"] = http.NewServeMux()
+			mux := http.NewServeMux()
+			env.vars["__http_mux"] = mux
 			env.vars["__http_port"] = port
+			env.vars["__http_dispatch"] = httpreq.NewServer(mux)
 		case bytecode.OpHttpRoute:
 			path := inst.StringOperand
 			reqVar := inst.StringOperand2
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 
-			mux := requireHTTPMux(env, ip, inst, "http_route")
+			dispatch := requireHTTPDispatch(env, ip, inst, "http_route")
 
 			capturedEnv := NewBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
@@ -1917,7 +1969,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 
 			prog := vm.prog
-			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if err := dispatch.Handle(path, func(w http.ResponseWriter, r *http.Request) {
 				recorder := &httpResponseRecorder{ResponseWriter: w}
 				reqEnv := NewBcEnv(capturedEnv)
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
@@ -1955,10 +2007,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
-			})
+			}); err != nil {
+				panicRequestRead(ip, inst.Op, err)
+			}
 			ip += bodyLen
 		case bytecode.OpHttpServerServe:
-			mux := requireHTTPMux(env, ip, inst, "http_server_serve")
+			dispatch := requireHTTPDispatch(env, ip, inst, "http_server_serve")
 			portAny, ok := env.get("__http_port")
 			if !ok {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http server port not configured"))
@@ -1968,7 +2022,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_server_serve expected string port, got %T", portAny))
 			}
 			fmt.Fprintln(vm.Out, "Listening on "+port)
-			err := http.ListenAndServe(":"+port, mux)
+			err := http.ListenAndServe(":"+port, dispatch)
 			if err != nil {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http listen failed: %v", err))
 			}
@@ -1982,6 +2036,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_req_method expected *http.Request, got %T", reqAny))
 			}
 			vm.push(req.Method)
+		case bytecode.OpHttpReqQuery:
+			vm.push(vm.readRequestField(ip, inst, "req_query"))
+		case bytecode.OpHttpReqHeader:
+			vm.push(vm.readRequestField(ip, inst, "req_header"))
+		case bytecode.OpHttpReqPath:
+			vm.push(vm.readRequestField(ip, inst, "req_path"))
 		case bytecode.OpHttpResHeader:
 			valueVal := vm.pop(inst.Op)
 			nameVal := vm.pop(inst.Op)

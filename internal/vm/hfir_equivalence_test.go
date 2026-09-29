@@ -70,6 +70,10 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
 			source: `(cli_app (print (env "HFIR_EQ_TEST_VALUE")))`,
 			caps:   []capability.Capability{capability.Environment},
 		},
+		{
+			name:   "request query rejects a non-request",
+			source: `(cli_app (let (req "nope") (print (req_query req "status"))))`,
+		},
 	}
 
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")

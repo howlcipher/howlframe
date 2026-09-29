@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+* `req_query`, `req_header`, and `req_path`, with `HTTP_REQ_QUERY`,
+  `HTTP_REQ_HEADER`, and `HTTP_REQ_PATH`. A handler can read one query
+  parameter, one request header, and one `{name}` path segment. A missing
+  name is an empty string. A bad receiver or name is `TYPE_ERROR`. The reads
+  grant no capability. Literal routes stay on the existing mux.
 * `map_keys` construct and `MAP_KEYS` bytecode instruction. It returns every key
   of a dictionary as a sorted list and requires no capability. HowlBoard could
   not iterate the keys of a record it received, so object-shaped responses had

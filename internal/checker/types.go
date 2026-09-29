@@ -641,6 +641,16 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		element := ast.Layout(ast.String)
 		result.Element = &element
 		return result
+	case "req_query", "req_header", "req_path":
+		if len(node.Children) != 3 {
+			a.add(node, fmt.Sprintf("%s expects (%s req name)", head, head))
+		}
+		a.inferChild(node, 1, env)
+		nameType := a.inferChild(node, 2, env)
+		if known(nameType) && nameType.Kind != ast.String {
+			a.add(node, fmt.Sprintf("%s name must be string, got %s", head, typeName(nameType)))
+		}
+		return ast.Layout(ast.String)
 	case "append":
 		list := a.inferChild(node, 1, env)
 		item := a.inferChild(node, 2, env)
@@ -972,7 +982,7 @@ func isKeyword(name string) bool {
 	switch name {
 	case "if", "let", "defun", "struct", "schema", "column", "import", "test",
 		"cli_app", "http_server", "web_app", "wasm_app", "module", "route",
-		"lambda", "parse_json", "res_json", "res_header", "req_method", "spawn", "catch", "try_let",
+		"lambda", "parse_json", "res_json", "res_header", "req_method", "req_query", "req_header", "req_path", "spawn", "catch", "try_let",
 		"print", "env", "read_file", "write_file", "mkdir", "exec", "call",
 		"return", "do", "while", "for", "match", "default", "set", "list",
 		"dict", "list_get", "map_get", "map_keys", "map_set", "map_delete", "append",
