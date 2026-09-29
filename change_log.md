@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+* `map_keys` construct and `MAP_KEYS` bytecode instruction. It returns every key
+  of a dictionary as a sorted list and requires no capability. HowlBoard could
+  not iterate the keys of a record it received, so object-shaped responses had
+  to be rewritten as lists. An empty dictionary returns an empty list, and a
+  non-dictionary fails closed with `TYPE_ERROR`. The same sorted enumeration is
+  available to the interpreter and to the Go and JavaScript backends.
 * `time_now` in the JavaScript backend. It was supported by the bytecode VM and
   the Go backend but rejected as an unknown statement for `web_app` programs, so
   a browser interface had no way to read the clock and render relative times.

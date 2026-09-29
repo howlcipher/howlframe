@@ -117,3 +117,17 @@ func TestGenerateJSOnEventTerminatesStatement(t *testing.T) {
 		t.Fatalf("on_event statement is not separated from the next:\n%s", body)
 	}
 }
+
+func TestGenerateJSMapKeysSortsObjectKeys(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(
+		`(web_app (let (counts (dict ("beta" "2") ("alpha" "1"))) (for name (map_keys counts) (print name))))`),
+		"keys.howl").ParseExpression()
+	checker.Check(root)
+	appCode, _ := GenerateJSCode(root)
+	if !strings.Contains(appCode, "Object.keys(_d).sort()") {
+		t.Fatalf("map_keys did not sort object keys:\n%s", appCode)
+	}
+	if !strings.Contains(appCode, "TYPE_ERROR: map_keys expected dict") {
+		t.Fatalf("map_keys did not fail closed on a non-dict:\n%s", appCode)
+	}
+}

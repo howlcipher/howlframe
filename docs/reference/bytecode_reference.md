@@ -36,6 +36,7 @@
 | `MAKE_LIST` | int64 | var | 1 |  | Creates a list |
 | `MAP_DELETE` | string | 1 | 0 |  | Deletes a key from a dictionary |
 | `MAP_GET` | string | 1 | 1 |  | Gets a value from a dictionary |
+| `MAP_KEYS` |  | 1 | 1 |  | Returns every key in a dictionary, sorted |
 | `MAP_SET` | string | 2 | 0 |  | Sets a key in a dictionary |
 | `MKDIR` |  | 1 | 0 | filesystem | Creates a directory |
 | `NEURAL_CIRCUIT` | int64 | var | 1 |  | Executes an LLM logic circuit with a given number of inputs and an instruction |

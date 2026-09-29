@@ -118,6 +118,20 @@ func InterpErr(reason string, node *ast.Node) {
 	panic(interpError{reason: reason, line: line, col: col})
 }
 
+// sortedMapKeys returns dict keys in lexicographic order as a non-nil list.
+// Go randomizes map iteration. An empty dict must stay an empty list so JSON
+// callers see [] rather than null.
+func sortedMapKeys(dict map[string]any) []any {
+	keys := make([]any, 0, len(dict))
+	for key := range dict {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].(string) < keys[j].(string)
+	})
+	return keys
+}
+
 // Interpret executes a cli_app AST directly and returns a process exit code.
 // http_server/web_app roots are rejected with a clear error — Phase 1 is
 // cli_app only, per docs/direct_execution_design.md.
@@ -555,6 +569,16 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, got %T", val), node.Children[1])
 		return int64(0)
+	case "map_keys":
+		if len(node.Children) != 2 {
+			InterpErr("map_keys expects (map_keys dict)", node)
+		}
+		val := interp.eval(node.Children[1], env)
+		dict, ok := val.(map[string]any)
+		if !ok {
+			InterpErr(fmt.Sprintf("TYPE_ERROR: map_keys expected dict, got %T", val), node.Children[1])
+		}
+		return sortedMapKeys(dict)
 	case "is_nil":
 		if len(node.Children) != 2 {
 			InterpErr("is_nil expects (is_nil val)", node)
@@ -2503,6 +2527,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, got %T", val))
 			}
 			vm.push(int64(len(items)))
+		case bytecode.OpMapKeys:
+			val := vm.pop(inst.Op)
+			dict, ok := val.(map[string]any)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_keys expected dict, got %T", val))
+			}
+			vm.push(sortedMapKeys(dict))
 		case bytecode.OpIsNil:
 			val := vm.pop(inst.Op)
 			vm.push(val == nil)

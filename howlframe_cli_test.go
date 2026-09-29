@@ -677,4 +677,3 @@ func TestCLI_TargetUnification(t *testing.T) {
 		t.Errorf("expected 'Unknown target' error message, got: %s", out)
 	}
 }
-

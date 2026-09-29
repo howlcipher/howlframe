@@ -705,6 +705,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "list_len":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "LIST_LEN", Op: OpListLen})
+		case "map_keys":
+			if len(node.Children) != 2 {
+				ast.ReportError("map_keys expects (map_keys dict)", node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "MAP_KEYS", Op: OpMapKeys})
 		case "is_nil":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "IS_NIL", Op: OpIsNil})

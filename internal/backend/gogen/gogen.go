@@ -468,6 +468,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -508,6 +509,7 @@ import (
 	var _ = strings.Split
 	var _ = time.Sleep
 	var _ = strconv.Atoi
+	var _ = sort.Strings
 	var _ = fmt.Println
 	var _ = observer.Trace
 `
@@ -539,6 +541,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -566,6 +569,7 @@ var _ = regexp.MatchString
 var _ = strings.Split
 var _ = time.Sleep
 var _ = strconv.Atoi
+var _ = sort.Strings
 var _ = fmt.Println
 var _ = observer.Trace
 
@@ -903,6 +907,12 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "list_len":
 		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("len(%s)", listStr)
+	case "map_keys":
+		dictStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		// Dict literals lower to map[string]string and parsed records to
+		// map[string]any. Both are dictionaries; anything else fails closed
+		// instead of ranging a list or a scalar.
+		return fmt.Sprintf("func() []string { switch _m := any(%s).(type) { case map[string]string: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; case map[string]any: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; default: panic(fmt.Sprintf(\"TYPE_ERROR: map_keys expected dict, got %%T\", _m)) } }()", dictStr)
 	case "is_nil":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() bool { var _v any = %s; return _v == nil || fmt.Sprint(_v) == \"<nil>\" }()", valStr)

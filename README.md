@@ -311,7 +311,7 @@ HowlFrame supports the core control-flow and data primitives expected by the shi
 
 - `let`, `set`, `if`, `while`, `for`, `match`, and `do`.
 - `defun`, `call`, `return`, `type_hint`, and `type_param`.
-- `list`, `dict`, `append`, `map_set`, `map_delete`, `map_get`, and `list_get`.
+- `list`, `dict`, `append`, `map_set`, `map_delete`, `map_get`, `map_keys`, and `list_get`.
 - `str_split`, `str_join`, `regex_match`, `to_int`, `to_float`, `to_string`, and `bytes_to_string`.
 - `read_file`, `write_file`, `mkdir`, `exec`, `sleep`, and `cli_args`.
 - `spawn`, `fetch`, `middleware`, `next`, `env`, `import`, and `include` where supported by the target backend.

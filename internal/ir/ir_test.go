@@ -26,6 +26,7 @@ func TestLowerSharedRejectsMalformedFormsWithoutPanicking(t *testing.T) {
 		sharedTestNode("map_set", sharedTestSymbol("values"), sharedTestSymbol("key")),
 		sharedTestNode("map_delete", sharedTestSymbol("values")),
 		sharedTestNode("map_get", sharedTestSymbol("values")),
+		sharedTestNode("map_keys"),
 		sharedTestNode("list_get", sharedTestSymbol("values")),
 		sharedTestNode("+", sharedTestSymbol("value")),
 		sharedTestNode("call"),

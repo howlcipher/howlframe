@@ -51,6 +51,7 @@
 | `llm_generate` | Yes | network | No | No | - | AUTHORITATIVE |
 | `map_delete` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_get` | Yes | None | No | No | - | AUTHORITATIVE |
+| `map_keys` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |

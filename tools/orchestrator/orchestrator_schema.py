@@ -178,6 +178,11 @@ class MapGetInstruction(BaseModel):
     string_operand: str
 
 
+class MapKeysInstruction(BaseModel):
+    op: Literal["MAP_KEYS"]
+    pass
+
+
 class MapSetInstruction(BaseModel):
     op: Literal["MAP_SET"]
     string_operand: str
@@ -363,6 +368,7 @@ Instruction = Annotated[
         MakeListInstruction,
         MapDeleteInstruction,
         MapGetInstruction,
+        MapKeysInstruction,
         MapSetInstruction,
         MkdirInstruction,
         NeuralCircuitInstruction,

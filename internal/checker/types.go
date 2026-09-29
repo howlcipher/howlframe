@@ -632,6 +632,15 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			return *dict.Element
 		}
 		return ast.Layout(ast.Unknown)
+	case "map_keys":
+		dict := a.inferChild(node, 1, env)
+		if known(dict) && dict.Kind != ast.Dict {
+			a.add(node, fmt.Sprintf("map_keys target must be dict, got %s", typeName(dict)))
+		}
+		result := ast.Layout(ast.List)
+		element := ast.Layout(ast.String)
+		result.Element = &element
+		return result
 	case "append":
 		list := a.inferChild(node, 1, env)
 		item := a.inferChild(node, 2, env)
@@ -966,7 +975,7 @@ func isKeyword(name string) bool {
 		"lambda", "parse_json", "res_json", "res_header", "req_method", "spawn", "catch", "try_let",
 		"print", "env", "read_file", "write_file", "mkdir", "exec", "call",
 		"return", "do", "while", "for", "match", "default", "set", "list",
-		"dict", "list_get", "map_get", "map_set", "map_delete", "append",
+		"dict", "list_get", "map_get", "map_keys", "map_set", "map_delete", "append",
 		"to_int", "to_float", "to_string", "bytes_to_string", "encode_json", "str_split",
 		"str_join", "regex_match", "confidence", "achieve", "fuzzy_cast",
 		"time_now", "lazy_synthesize", "semantic_match", "neural_circuit",

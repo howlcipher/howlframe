@@ -629,3 +629,46 @@ func TestAnalyzeStillRejectsDictKeyAndTargetErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeMapKeysIsAStringList(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (counts (dict ("beta" "2") ("alpha" "1")))
+			(for name (map_keys counts) (print name))))`)
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+	}
+	keys := findHead(root, "map_keys")
+	if keys == nil || keys.Inferred.Kind != ast.List || keys.Inferred.Element == nil || keys.Inferred.Element.Kind != ast.String {
+		t.Fatalf("map_keys type = %+v, want list of string", keys.Inferred)
+	}
+}
+
+func TestAnalyzeMapKeysRejectsNonDict(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app (print (map_keys (list "a"))))`)
+	analysis := Analyze(root)
+	found := false
+	for _, diagnostic := range analysis.Diagnostics {
+		if diagnostic.Reason == "map_keys target must be dict, got list" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+	}
+}
+
+func findHead(node *ast.Node, head string) *ast.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" && node.Children[0].Value == head {
+		return node
+	}
+	for _, child := range node.Children {
+		if found := findHead(child, head); found != nil {
+			return found
+		}
+	}
+	return nil
+}

@@ -71,6 +71,7 @@ const (
 	OpTimeNow
 	OpEncodeJson
 	OpStoreKeys
+	OpMapKeys
 )
 
 type OperandType string
@@ -148,6 +149,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpStoreGet:         {Code: OpStoreGet, Name: "STORE_GET", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Capability: capability.Database, Description: "Fetches a structured record by key"},
 	OpStoreDelete:      {Code: OpStoreDelete, Name: "STORE_DELETE", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 0, Capability: capability.Database, Description: "Deletes a structured record by key"},
 	OpStoreKeys:        {Code: OpStoreKeys, Name: "STORE_KEYS", Operands: []OperandType{OperandString}, Pops: 0, Pushes: 1, Capability: capability.Database, Description: "Returns every record key in a store, sorted"},
+	OpMapKeys:          {Code: OpMapKeys, Name: "MAP_KEYS", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns every key in a dictionary, sorted"},
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
