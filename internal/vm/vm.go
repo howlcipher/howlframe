@@ -899,16 +899,21 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 		InterpErr("map_get expects (map_get dict key)", node)
 	}
 	dictNode := node.Children[1]
-	if dictNode.Type != "SYMBOL" {
-		InterpErr("map_get requires a symbol for dict", dictNode)
-	}
-	current, ok := env.get(dictNode.Value)
-	if !ok {
-		InterpErr(fmt.Sprintf("undefined variable: %s", dictNode.Value), dictNode)
+	var current any
+	if dictNode.Type == "SYMBOL" {
+		var ok bool
+		current, ok = env.get(dictNode.Value)
+		if !ok {
+			InterpErr(fmt.Sprintf("undefined variable: %s", dictNode.Value), dictNode)
+		}
+	} else {
+		current = interp.eval(dictNode, env)
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("map_get target %q is not a dict", dictNode.Value), dictNode)
+		// A missing key is "". Reading through that sentinel, or any other
+		// non-dict, is a type error rather than another absence value.
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %T", current), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	if val, ok := d[key]; ok {
@@ -2535,15 +2540,27 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 			vm.mapLedger.mutation(dict, ip, nodeID, "DELETE", key, nil, deleted)
 		case bytecode.OpMapGet:
-			varName := inst.StringOperand
+			// A named operand reads that variable and pops only the key.
+			// An empty operand pops the dict value as well, so a nested
+			// map_get is a path read. Both forms grant nothing.
 			keyAny := vm.pop(inst.Op)
 			key := fmt.Sprint(keyAny)
-			current, ok := env.get(varName)
-			if !ok {
-				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
+			varName := inst.StringOperand
+			var current any
+			if varName != "" {
+				var ok bool
+				current, ok = env.get(varName)
+				if !ok {
+					panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
+				}
+			} else {
+				current = vm.pop(inst.Op)
+				varName = "value"
 			}
 			dict, ok := current.(map[string]any)
 			if !ok {
+				// A missing key is "". map_get of that sentinel is a type
+				// error, not a second miss.
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
 			}
 			if val, ok := dict[key]; ok {

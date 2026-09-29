@@ -756,8 +756,21 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, c.compileNode(node.Children[2])...) // key
 			insts = append(insts, BCInstruction{OpString: "MAP_DELETE", Op: OpMapDelete, StringOperand: node.Children[1].Value})
 		case "map_get":
+			if len(node.Children) != 3 {
+				ast.ReportError("map_get expects (map_get dict key)", node.Line, node.Column)
+			}
+			dictNode := node.Children[1]
+			// A symbol stays a variable operand so a named read still traces
+			// as that variable. Any other expression is evaluated and popped,
+			// which is what lets one map_get be the dict of another.
+			name := ""
+			if dictNode.Type == "SYMBOL" {
+				name = dictNode.Value
+			} else {
+				insts = append(insts, c.compileNode(dictNode)...)
+			}
 			insts = append(insts, c.compileNode(node.Children[2])...) // key
-			insts = append(insts, BCInstruction{OpString: "MAP_GET", Op: OpMapGet, StringOperand: node.Children[1].Value})
+			insts = append(insts, BCInstruction{OpString: "MAP_GET", Op: OpMapGet, StringOperand: name})
 		case "list_get":
 			insts = append(insts, c.compileNode(node.Children[2])...) // index
 			insts = append(insts, BCInstruction{OpString: "LIST_GET", Op: OpListGet, StringOperand: node.Children[1].Value})
