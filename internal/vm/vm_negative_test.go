@@ -15,6 +15,7 @@ import (
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/httpreq"
 )
 
 // Deterministic in-process database/sql drivers used to exercise the VM's
@@ -558,11 +559,11 @@ func TestVMFileAndNetworkPositiveFileOps(t *testing.T) {
 }
 
 func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
-	t.Run("http_route with invalid mux in env", func(t *testing.T) {
+	t.Run("http_route with invalid dispatcher in env", func(t *testing.T) {
 		runVMExpectingPanic(t, []bytecode.BCInstruction{
 			{Op: bytecode.OpHttpRoute, OpString: "HTTP_ROUTE", StringOperand: "/test", StringOperand2: "req", IntOperand: 0},
 		}, func(env *BcEnv) {
-			env.vars["__http_mux"] = "not_a_serve_mux"
+			env.vars["__http_dispatch"] = "not_a_dispatcher"
 		}, "TYPE_ERROR")
 	})
 
@@ -570,7 +571,9 @@ func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
 		runVMExpectingPanic(t, []bytecode.BCInstruction{
 			{Op: bytecode.OpHttpServerServe, OpString: "HTTP_SERVER_SERVE"},
 		}, func(env *BcEnv) {
-			env.vars["__http_mux"] = http.NewServeMux()
+			mux := http.NewServeMux()
+			env.vars["__http_mux"] = mux
+			env.vars["__http_dispatch"] = httpreq.NewServer(mux)
 			env.vars["__http_port"] = float64(8080) // not a string
 		}, "TYPE_ERROR")
 	})

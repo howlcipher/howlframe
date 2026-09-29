@@ -249,6 +249,25 @@ provide a general request-body value, streaming input, or a configurable
 body-size limit. Request bodies are untrusted input, so applications should
 keep payloads small and validate their decoded fields.
 
+A handler can also read one query parameter, one request header, and one
+path segment. A missing name is `""`. These reads do not add a capability.
+
+```lisp
+(route "/tasks/{id}" (lambda (req)
+  (let (id (req_path req "id"))
+    (let (status (req_query req "status"))
+      (let (auth (req_header req "Authorization"))
+        (res_json 200 (dict ("id" id) ("status" status) ("auth" auth)))
+      )
+    )
+  )
+))
+```
+
+`{id}` is one whole path segment. A path with no braces is still an exact
+route, and an exact route wins over a pattern. This is not a general
+router: no methods, no regular expressions, and no catch-all.
+
 ### Web App Logic
 
 ```lisp

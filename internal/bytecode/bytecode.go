@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/httpreq"
 	"strconv"
 )
 
@@ -526,12 +527,29 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "HTTP_RES_HEADER", Op: OpHttpResHeader})
 		case "req_method":
 			insts = append(insts, BCInstruction{OpString: "HTTP_REQ_METHOD", Op: OpHttpReqMethod})
+		case "req_query", "req_header", "req_path":
+			if len(node.Children) != 3 {
+				ast.ReportError(fmt.Sprintf("%s expects (%s req name)", head, head), node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			op, opName := OpHttpReqQuery, "HTTP_REQ_QUERY"
+			switch head {
+			case "req_header":
+				op, opName = OpHttpReqHeader, "HTTP_REQ_HEADER"
+			case "req_path":
+				op, opName = OpHttpReqPath, "HTTP_REQ_PATH"
+			}
+			insts = append(insts, BCInstruction{OpString: opName, Op: op})
 		case "http_server":
 			portNode := node.Children[1]
 			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})
 			for _, child := range node.Children[2:] {
 				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "route" {
 					path := child.Children[1].Value
+					if _, err := httpreq.ParseRoute(path); err != nil {
+						ast.ReportError(err.Error(), child.Children[1].Line, child.Children[1].Column)
+					}
 					reqVar := child.Children[2].Children[1].Children[0].Value
 					bodyInsts := c.compileNode(child.Children[2].Children[2])
 					insts = append(insts, BCInstruction{OpString: "HTTP_ROUTE", Op: OpHttpRoute, StringOperand: path, StringOperand2: reqVar, IntOperand: int64(float64(len(bodyInsts)))})

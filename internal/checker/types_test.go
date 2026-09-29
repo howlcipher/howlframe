@@ -644,6 +644,36 @@ func TestAnalyzeMapKeysIsAStringList(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRequestReadsAreStrings(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app
+		(let (req "request")
+			(print (req_query req "status") (req_header req "Authorization") (req_path req "id"))))`)
+	analysis := Analyze(root)
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+	}
+	for _, head := range []string{"req_query", "req_header", "req_path"} {
+		node := findHead(root, head)
+		if node == nil || node.Inferred.Kind != ast.String {
+			t.Fatalf("%s type = %+v, want string", head, node)
+		}
+	}
+}
+
+func TestAnalyzeRequestReadRejectsNonStringName(t *testing.T) {
+	root := parseTestProgram(t, `(cli_app (print (req_query req 1)))`)
+	analysis := Analyze(root)
+	found := false
+	for _, diagnostic := range analysis.Diagnostics {
+		if diagnostic.Reason == "req_query name must be string, got int" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+	}
+}
+
 func TestAnalyzeMapKeysRejectsNonDict(t *testing.T) {
 	root := parseTestProgram(t, `(cli_app (print (map_keys (list "a"))))`)
 	analysis := Analyze(root)

@@ -10,11 +10,11 @@ Three claims below were accurate when written and are no longer true. They are
 left in place for the record, with the correction stated here rather than
 silently edited into the original text.
 
-* **"No opcode exposes method, query string, headers, or path segments" — partly
-  stale.** `OpHttpReqMethod` exists and `(req_method req)` returns the HTTP
-  method; HowlBoard uses it for OPTIONS preflight in every route. Query strings,
-  headers and path segments remain genuinely unavailable, and `req_header` is
-  documented in the app-development skill despite having no opcode.
+* **"No opcode exposes method, query string, headers, or path segments" — stale.**
+  `(req_method req)`, `(req_query req name)`, `(req_header req name)`, and
+  `(req_path req name)` read the method, the first query value, the first
+  header value, and one `{name}` path segment. A missing name is `""`.
+  See `docs/journals/2026-09-29_http_request_surface.md`.
 
 * **"`defun` return-type annotations compile but crash at runtime" and "there is
   currently no working path to a `defun` that returns a dict" — stale.** The

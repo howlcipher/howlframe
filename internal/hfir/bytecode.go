@@ -316,6 +316,23 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		}
 		diagnostic := c.diagnostic(node, "cli_args requires either zero arguments or one index")
 		return nil, &diagnostic
+	case "req_query", "req_header", "req_path":
+		if len(children) != 2 || node.DataInputs[0].Name != "request" || node.DataInputs[1].Name != "name" {
+			diagnostic := c.diagnostic(node, node.Kind+" requires request and name")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileAll()
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		op, name := bytecode.OpHttpReqQuery, "HTTP_REQ_QUERY"
+		switch node.Kind {
+		case "req_header":
+			op, name = bytecode.OpHttpReqHeader, "HTTP_REQ_HEADER"
+		case "req_path":
+			op, name = bytecode.OpHttpReqPath, "HTTP_REQ_PATH"
+		}
+		return append(insts, instruction(op, name, nil)), nil
 	case "str_split", "str_join":
 		if len(children) != 2 || node.DataInputs[0].Name != "value" || node.DataInputs[1].Name != "separator" {
 			diagnostic := c.diagnostic(node, node.Kind+" requires value and separator")

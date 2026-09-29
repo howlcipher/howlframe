@@ -323,6 +323,12 @@ func checkJSStatement(node *ast.Node, depth int) {
 		if len(node.Children) != 1 {
 			ast.ReportError("time_now expects (time_now)", node.Line, node.Column)
 		}
+	} else if head == "req_query" || head == "req_header" || head == "req_path" {
+		if len(node.Children) != 3 {
+			ast.ReportError(fmt.Sprintf("%s expects (%s req name)", head, head), node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+		checkJSStatement(node.Children[2], depth+1)
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}
@@ -560,6 +566,12 @@ func checkGoStatement(node *ast.Node, depth int) {
 			if len(node.Children) != 2 {
 				ast.ReportError("req_method expects (req_method req)", node.Line, node.Column)
 			}
+		case "req_query", "req_header", "req_path":
+			if len(node.Children) != 3 {
+				ast.ReportError(fmt.Sprintf("%s expects (%s req name)", head, head), node.Line, node.Column)
+			}
+			checkGoStatement(node.Children[1], depth+1)
+			checkGoStatement(node.Children[2], depth+1)
 		case "res_header":
 			if len(node.Children) != 3 {
 				ast.ReportError("res_header expects (res_header name value)", node.Line, node.Column)

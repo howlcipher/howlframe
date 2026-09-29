@@ -13,7 +13,7 @@ This matrix reflects the clean consumer checkouts used by the 2026-08-14 runtime
 | Call/return | `call`, `return` | Missing | Missing | Legacy bytecode | JS-only |
 | HTTP | `http_server` | Missing | Missing | Legacy bytecode | Missing |
 | Route/lambda | `route`, `lambda` | Missing | Missing | Legacy bytecode | JS-only |
-| Request/response | `req_method`, `res_json`, `res_header` | Missing | Missing | Legacy bytecode | Missing |
+| Request/response | `req_method`, `req_query`, `req_header`, `req_path`, `res_json`, `res_header` | Missing | Missing | Legacy bytecode | Missing |
 | Stores | `store_open`, `store_get`, `store_put`, `store_delete` | Missing | Missing | Legacy bytecode | Missing |
 | Filesystem | `read_file`, `bytes_to_string` | Direct HFIR proven | Missing | Legacy bytecode | Missing |
 | Fetch | `fetch` | Missing | Missing | Missing | JS-only |

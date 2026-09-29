@@ -91,8 +91,23 @@ class ForNextInstruction(BaseModel):
     int_operand: int
 
 
+class HttpReqHeaderInstruction(BaseModel):
+    op: Literal["HTTP_REQ_HEADER"]
+    pass
+
+
 class HttpReqMethodInstruction(BaseModel):
     op: Literal["HTTP_REQ_METHOD"]
+    pass
+
+
+class HttpReqPathInstruction(BaseModel):
+    op: Literal["HTTP_REQ_PATH"]
+    pass
+
+
+class HttpReqQueryInstruction(BaseModel):
+    op: Literal["HTTP_REQ_QUERY"]
     pass
 
 
@@ -351,7 +366,10 @@ Instruction = Annotated[
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
+        HttpReqHeaderInstruction,
         HttpReqMethodInstruction,
+        HttpReqPathInstruction,
+        HttpReqQueryInstruction,
         HttpResHeaderInstruction,
         HttpRouteInstruction,
         HttpServerServeInstruction,
