@@ -914,6 +914,7 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 	if val, ok := d[key]; ok {
 		return val
 	}
+	// Missing keys are the empty string. A missing store record is nil.
 	return ""
 }
 
@@ -2554,6 +2555,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.trace.state("map:"+varName, key)
 				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 				vm.mapLedger.read(dict, ip, nodeID, key, false, nil)
+				// Missing keys are the empty string. A missing store record is nil.
 				vm.push("")
 			}
 		case bytecode.OpListGet:

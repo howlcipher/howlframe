@@ -17,6 +17,31 @@ var CurrentSchemaDDLs []string
 // start of every GenerateCode call.
 var gogenHTTPReq bool
 
+// gogenMapGet is set when GenerateCode emits map_get, so the absence helper
+// is written once into the generated file. It is reset on every call.
+var gogenMapGet bool
+
+// mapGetHelperSource is the Go form of the map_get absence contract.
+// map[string]string already yields "" for a missing key. map[string]any
+// yields nil, so the helper returns "" for that miss. A present value,
+// including "" and a present nil, is returned unchanged.
+func mapGetHelperSource() string {
+	return `func howlFrameMapGet[V any](m map[string]V, key string) V {
+	if v, ok := m[key]; ok {
+		return v
+	}
+	var zero V
+	if any(zero) == nil {
+		if blank, ok := any("").(V); ok {
+			return blank
+		}
+	}
+	return zero
+}
+
+`
+}
+
 func flattenModules(nodes []*ast.Node) []*ast.Node {
 	var result []*ast.Node
 	for _, node := range nodes {
@@ -89,6 +114,7 @@ func formatRouteRegistration(routePath, reqVar, trace, body string, dispatch boo
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
+	gogenMapGet = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -521,6 +547,9 @@ import (
 	}
 	code += `)
 `
+	if gogenMapGet {
+		code += mapGetHelperSource()
+	}
 	code += funcsCode
 	code += `func main() {
 	defer func() {
@@ -622,7 +651,11 @@ var _ = sort.Strings
 var _ = fmt.Println
 var _ = observer.Trace
 
-` + testCode
+`
+		if gogenMapGet {
+			fullTestCode += mapGetHelperSource()
+		}
+		fullTestCode += testCode
 		testCode = fullTestCode
 	}
 
@@ -945,7 +978,11 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			// ast.ReportError("map_get requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("%s[%s]", dictNode.Value, keyStr)
+		// Missing keys are "". Raw indexing does that for map[string]string
+		// and returns nil for map[string]any, so every map_get goes through
+		// the helper.
+		gogenMapGet = true
+		return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
