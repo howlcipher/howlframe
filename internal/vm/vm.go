@@ -858,7 +858,7 @@ func (interp *Interpreter) evalAppend(node *ast.Node, env *InterpEnv) any {
 	}
 	items, ok := current.([]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("append target %q is not a list", listNode.Value), listNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: append expected list, got %T", current), listNode)
 	}
 	item := interp.eval(node.Children[2], env)
 	newItems := append(append([]any{}, items...), item)
@@ -882,7 +882,7 @@ func (interp *Interpreter) evalMapSet(node *ast.Node, env *InterpEnv) any {
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("map_set target %q is not a dict", dictNode.Value), dictNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_set expected dict, got %T", current), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	val := interp.eval(node.Children[3], env)
@@ -904,7 +904,7 @@ func (interp *Interpreter) evalMapDelete(node *ast.Node, env *InterpEnv) any {
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("map_delete target %q is not a dict", dictNode.Value), dictNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_delete expected dict, got %T", current), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	delete(d, key)
@@ -954,12 +954,12 @@ func (interp *Interpreter) evalListGet(node *ast.Node, env *InterpEnv) any {
 	}
 	items, ok := current.([]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("list_get target %q is not a list", listNode.Value), listNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get expected list, got %T", current), listNode)
 	}
 	idxVal := interp.eval(node.Children[2], env)
 	idx, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idxVal)))
 	if err != nil {
-		InterpErr("list_get index must be a number", node.Children[2])
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get index must be a number, got %T", idxVal), node.Children[2])
 	}
 	if idx < 0 || idx >= len(items) {
 		return ""

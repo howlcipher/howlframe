@@ -52,7 +52,7 @@ func TestJSMapGetMissIsEmptyString(t *testing.T) {
 	root := parser.NewParser(lexer.NewLexer(source), "absence.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
-	if !strings.Contains(code, `(strings["missing"] ?? "")`) {
+	if !strings.Contains(code, `howlFrameMapGet(strings, "missing")`) || !strings.Contains(code, `?? ""`) {
 		t.Fatalf("generated JavaScript does not coerce a missing map_get to \"\":\n%s", code)
 	}
 

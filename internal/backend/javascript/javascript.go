@@ -49,6 +49,71 @@ var jsNeedsRequestRead bool
 // attr_escape. Both share one helper. It is reset on every call.
 var jsNeedsHTMLEscape bool
 
+// jsNeedsCollection is set when GenerateJSCode emits a dict or list op
+// that must fail closed. map_keys keeps its own guard. The flag is reset
+// on every call.
+var jsNeedsCollection bool
+
+func collectionJSHelper() string {
+	// Dicts are plain objects. Lists are arrays. A missing map_get key is
+	// still "". list_get of an in-range element returns that element. An
+	// out-of-range index is "". A wrong receiver is TYPE_ERROR. A list_get
+	// index that is not a whole number is TYPE_ERROR, matching Atoi.
+	return `function howlFrameValueKind(v) {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "list";
+  return typeof v;
+}
+function howlFrameIsDict(v) {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+function howlFrameMapGet(dict, key) {
+  if (!howlFrameIsDict(dict)) {
+    throw new Error("TYPE_ERROR: map_get expected dict, got " + howlFrameValueKind(dict));
+  }
+  return dict[key] ?? "";
+}
+function howlFrameMapSet(dict, key, val) {
+  if (!howlFrameIsDict(dict)) {
+    throw new Error("TYPE_ERROR: map_set expected dict, got " + howlFrameValueKind(dict));
+  }
+  dict[key] = val;
+}
+function howlFrameMapDelete(dict, key) {
+  if (!howlFrameIsDict(dict)) {
+    throw new Error("TYPE_ERROR: map_delete expected dict, got " + howlFrameValueKind(dict));
+  }
+  delete dict[key];
+}
+function howlFrameAppend(list, item) {
+  if (!Array.isArray(list)) {
+    throw new Error("TYPE_ERROR: append expected list, got " + howlFrameValueKind(list));
+  }
+  list.push(item);
+  return list;
+}
+function howlFrameListIndex(idx) {
+  if (typeof idx === "number" && Number.isInteger(idx)) return idx;
+  if (typeof idx === "string" && /^[+-]?\d+$/.test(idx.trim())) return parseInt(idx.trim(), 10);
+  throw new Error("TYPE_ERROR: list_get index must be a number, got " + howlFrameValueKind(idx));
+}
+function howlFrameListGet(list, idx) {
+  if (!Array.isArray(list)) {
+    throw new Error("TYPE_ERROR: list_get expected list, got " + howlFrameValueKind(list));
+  }
+  var i = howlFrameListIndex(idx);
+  if (i < 0 || i >= list.length) return "";
+  return list[i] ?? "";
+}
+function howlFrameListLen(list) {
+  if (!Array.isArray(list)) {
+    throw new Error("TYPE_ERROR: list_len expected list, got " + howlFrameValueKind(list));
+  }
+  return list.length;
+}
+`
+}
+
 func htmlEscapeJSHelper() string {
 	// The replacements match Go's html.EscapeString: & < > " '.
 	// A non-string throws TYPE_ERROR. This is not a JavaScript encoder.
@@ -343,36 +408,41 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		sStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("new RegExp(%s).test(%s)", patStr, sStr)
 	case "append":
+		jsNeedsCollection = true
 		listNode := ir.Kids[0]
 		itemStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("%s.push(%s)", listNode.Value, itemStr)
+		return fmt.Sprintf("howlFrameAppend(%s, %s)", listNode.Value, itemStr)
 	case "map_set":
+		jsNeedsCollection = true
 		dictNode := ir.Kids[0]
 		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
 		valStr := generateJSStatementRaw(ir.Kids[2], reqVar, depth+1)
-		return fmt.Sprintf("%s[%s] = %s", dictNode.Value, keyStr, valStr)
+		return fmt.Sprintf("howlFrameMapSet(%s, %s, %s)", dictNode.Value, keyStr, valStr)
 	case "map_delete":
+		jsNeedsCollection = true
 		dictNode := ir.Kids[0]
 		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("delete %s[%s]", dictNode.Value, keyStr)
+		return fmt.Sprintf("howlFrameMapDelete(%s, %s)", dictNode.Value, keyStr)
 	case "map_get":
+		jsNeedsCollection = true
 		dictNode := ir.Kids[0]
 		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		// A symbol keeps the #103 expression. An expression dict, including a
-		// nested map_get, rejects a non-dict. The miss sentinel is "", and
-		// indexing that sentinel must not become another miss.
-		if dictNode.Type == "SYMBOL" {
-			return fmt.Sprintf("(%s[%s] ?? \"\")", dictNode.Value, keyStr)
+		// Every map_get rejects a non-dict. The miss sentinel stays "".
+		// Indexing that sentinel must not become another miss.
+		dictStr := dictNode.Value
+		if dictNode.Type != "SYMBOL" {
+			dictStr = generateJSStatementRaw(dictNode, reqVar, depth+1)
 		}
-		dictStr := generateJSStatementRaw(dictNode, reqVar, depth+1)
-		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_get expected dict, got \" + (_d === null ? \"null\" : typeof _d)); } return (_d[%s] ?? \"\"); })(%s)", keyStr, dictStr)
+		return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictStr, keyStr)
 	case "list_get":
+		jsNeedsCollection = true
 		listNode := ir.Kids[0]
 		idxStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("(%s[%s] ?? \"\")", listNode.Value, idxStr)
+		return fmt.Sprintf("howlFrameListGet(%s, %s)", listNode.Value, idxStr)
 	case "list_len":
+		jsNeedsCollection = true
 		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("(%s).length", listStr)
+		return fmt.Sprintf("howlFrameListLen(%s)", listStr)
 	case "map_keys":
 		dictStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		// Object.keys order is insertion order. Sorting matches the bytecode
@@ -428,6 +498,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
+	jsNeedsCollection = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -517,6 +588,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsHTMLEscape {
 		helper := htmlEscapeJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsCollection {
+		helper := collectionJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

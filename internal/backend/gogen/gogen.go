@@ -25,6 +25,24 @@ var gogenMapGet bool
 // Both calls share one helper. The flag is reset on every call.
 var gogenHTMLEscape bool
 
+// gogenCollection is set when GenerateCode emits a dict or list op that
+// needs a runtime type switch. Concrete maps and string lists keep their
+// direct Go operations. The flag is reset on every call.
+var gogenCollection bool
+
+// gogenVarTypes records the Go type of names emitted in the current
+// GenerateCode call. An untracked name stays on the historical direct
+// operation. A dynamic any value goes through the fail-closed helpers.
+var gogenVarTypes map[string]string
+
+type goVarFrame struct {
+	name string
+	prev string
+	had  bool
+}
+
+var gogenVarStack []goVarFrame
+
 // mapGetHelperSource is the Go form of the map_get absence contract.
 // map[string]string already yields "" for a missing key. map[string]any
 // yields nil, so the helper returns "" for that miss. A present value,
@@ -67,6 +85,94 @@ func howlFrameMapGetValue(m any, key string) any {
 `
 }
 
+// collectionHelperSource is the fail-closed form of the remaining dict and
+// list operations. A missing map_get key is still "". A list_get index that
+// is in range returns the element. An out-of-range index is "". A receiver
+// of the wrong type is TYPE_ERROR, as is a list_get index that is not a
+// whole number.
+func collectionHelperSource() string {
+	return `func howlFrameAppend(list any, item any) any {
+	switch l := list.(type) {
+	case []string:
+		s, ok := item.(string)
+		if !ok {
+			panic(fmt.Sprintf("TYPE_ERROR: append expected string item, got %T", item))
+		}
+		return append(l, s)
+	case []any:
+		return append(l, item)
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: append expected list, got %T", list))
+	}
+}
+
+func howlFrameMapSet(dict any, key string, val any) {
+	switch d := dict.(type) {
+	case map[string]string:
+		s, ok := val.(string)
+		if !ok {
+			panic(fmt.Sprintf("TYPE_ERROR: map_set expected string value, got %T", val))
+		}
+		d[key] = s
+	case map[string]any:
+		d[key] = val
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: map_set expected dict, got %T", dict))
+	}
+}
+
+func howlFrameMapDelete(dict any, key string) {
+	switch d := dict.(type) {
+	case map[string]string:
+		delete(d, key)
+	case map[string]any:
+		delete(d, key)
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: map_delete expected dict, got %T", dict))
+	}
+}
+
+func howlFrameListGet(list any, idx any) string {
+	i, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idx)))
+	if err != nil {
+		panic(fmt.Sprintf("TYPE_ERROR: list_get index must be a number, got %T", idx))
+	}
+	switch l := list.(type) {
+	case []string:
+		if i >= 0 && i < len(l) {
+			return l[i]
+		}
+		return ""
+	case []any:
+		if i >= 0 && i < len(l) {
+			if l[i] == nil {
+				return ""
+			}
+			if s, ok := l[i].(string); ok {
+				return s
+			}
+			return fmt.Sprint(l[i])
+		}
+		return ""
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: list_get expected list, got %T", list))
+	}
+}
+
+func howlFrameListLen(list any) int {
+	switch l := list.(type) {
+	case []string:
+		return len(l)
+	case []any:
+		return len(l)
+	default:
+		panic(fmt.Sprintf("TYPE_ERROR: list_len expected list, got %T", list))
+	}
+}
+
+`
+}
+
 // goDictLiteral emits a dict literal. String values stay map[string]string.
 // A nested dict is map[string]any so a path read can hold the next level.
 // A nested dict whose own values are strings stays map[string]string.
@@ -83,6 +189,140 @@ func htmlEscapeHelperSource() string {
 }
 
 `
+}
+
+func resetGoVarTypes() {
+	gogenVarTypes = map[string]string{}
+	gogenVarStack = nil
+}
+
+func goVarKind(name string) string {
+	if gogenVarTypes == nil {
+		return ""
+	}
+	return gogenVarTypes[name]
+}
+
+func pushGoVar(name, typ string) {
+	if gogenVarTypes == nil {
+		gogenVarTypes = map[string]string{}
+	}
+	prev, had := gogenVarTypes[name]
+	gogenVarStack = append(gogenVarStack, goVarFrame{name: name, prev: prev, had: had})
+	gogenVarTypes[name] = typ
+}
+
+func popGoVars(n int) {
+	for i := 0; i < n; i++ {
+		if len(gogenVarStack) == 0 {
+			return
+		}
+		frame := gogenVarStack[len(gogenVarStack)-1]
+		gogenVarStack = gogenVarStack[:len(gogenVarStack)-1]
+		if frame.had {
+			gogenVarTypes[frame.name] = frame.prev
+		} else {
+			delete(gogenVarTypes, frame.name)
+		}
+	}
+}
+
+// trackGoBinding records the Go type of a let binding. A name already
+// declared in this block is updated in place. A new name is pushed so the
+// enclosing block can restore the outer binding when it ends.
+func trackGoBinding(name string, valNode *ast.Node, declared map[string]bool) bool {
+	typ := goValueType(valNode)
+	if declared[name] {
+		if gogenVarTypes == nil {
+			gogenVarTypes = map[string]string{}
+		}
+		gogenVarTypes[name] = typ
+		return false
+	}
+	pushGoVar(name, typ)
+	return true
+}
+
+func goValueType(node *ast.Node) string {
+	if node == nil {
+		return ""
+	}
+	switch node.Type {
+	case "STRING":
+		return "string"
+	case "INT":
+		return "int"
+	case "FLOAT":
+		return "float64"
+	case "SYMBOL":
+		if node.Value == "true" || node.Value == "false" {
+			return "bool"
+		}
+		return goVarKind(node.Value)
+	case "List":
+		if len(node.Children) == 0 || node.Children[0].Type != "SYMBOL" {
+			return ""
+		}
+		switch node.Children[0].Value {
+		case "list":
+			return "[]string"
+		case "dict":
+			return goDictKind(node.Children[1:])
+		case "map_get":
+			if len(node.Children) < 2 {
+				return ""
+			}
+			return goMapGetResultType(node.Children[1])
+		case "map_keys", "str_split":
+			return "[]string"
+		case "cli_args":
+			if len(node.Children) == 2 {
+				return "string"
+			}
+			return "[]string"
+		case "list_get", "str_join", "to_string", "html_escape", "attr_escape", "bytes_to_string", "encode_json", "env":
+			return "string"
+		case "list_len", "to_int", "time_now":
+			return "int"
+		case "to_float":
+			return "float64"
+		case "is_nil":
+			return "bool"
+		default:
+			return ""
+		}
+	default:
+		return ""
+	}
+}
+
+func goMapGetResultType(dictNode *ast.Node) string {
+	if dictNode == nil || dictNode.Type != "SYMBOL" {
+		return "any"
+	}
+	switch goVarKind(dictNode.Value) {
+	case "map[string]string":
+		return "string"
+	case "map[string]any":
+		return "any"
+	case "":
+		return ""
+	default:
+		return "any"
+	}
+}
+
+func goDictKind(pairs []*ast.Node) string {
+	for _, pair := range pairs {
+		if pair.Type != "List" || len(pair.Children) != 2 {
+			continue
+		}
+		value := pair.Children[1]
+		if value.Type == "List" && len(value.Children) > 0 && value.Children[0].Value == "dict" {
+			return "map[string]any"
+		}
+	}
+	return "map[string]string"
 }
 
 func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
@@ -192,6 +432,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenHTTPReq = false
 	gogenMapGet = false
 	gogenHTMLEscape = false
+	gogenCollection = false
+	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -630,6 +872,9 @@ import (
 	if gogenMapGet {
 		code += mapGetHelperSource()
 	}
+	if gogenCollection {
+		code += collectionHelperSource()
+	}
 	if gogenHTMLEscape {
 		code += htmlEscapeHelperSource()
 	}
@@ -741,6 +986,9 @@ var _ = observer.Trace
 		if gogenMapGet {
 			fullTestCode += mapGetHelperSource()
 		}
+		if gogenCollection {
+			fullTestCode += collectionHelperSource()
+		}
 		if gogenHTMLEscape {
 			fullTestCode += htmlEscapeHelperSource()
 		}
@@ -798,9 +1046,13 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		declaredVars := make(map[string]bool)
 
 		bindings, curr := ast.LetChain(&ast.Node{Type: "List", Children: []*ast.Node{{Type: "SYMBOL", Value: "let"}, ir.Kids[0], ir.Kids[1]}})
+		pushed := 0
 		for _, binds := range bindings {
 			varName := binds.Children[0].Value
 			valNode := binds.Children[1]
+			if trackGoBinding(varName, valNode, declaredVars) {
+				pushed++
+			}
 			var valStr string
 			if valNode.Type == "STRING" {
 				valStr = fmt.Sprintf("%q", valNode.Value)
@@ -862,6 +1114,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 
 		bodyCode := generateStatement(curr, reqVar, depth+1)
+		popGoVars(pushed)
 		return fmt.Sprintf("%s%s\n		}", letPrefix.String(), bodyCode)
 	case "try_let":
 		binds := ir.Kids[0]
@@ -1030,7 +1283,19 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			// ast.ReportError("append requires a symbol for list", listNode.Line, listNode.Column)
 		}
 		itemStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("		%s = append(%s, %s)", listNode.Value, listNode.Value, itemStr)
+		// A concrete string list keeps append. A dynamic value (map_get of a
+		// mixed record) cannot be appended in Go; the helper fails closed
+		// when the runtime value is not a list.
+		switch goVarKind(listNode.Value) {
+		case "[]string", "":
+			return fmt.Sprintf("		%s = append(%s, %s)", listNode.Value, listNode.Value, itemStr)
+		case "any":
+			gogenCollection = true
+			return fmt.Sprintf("		%s = howlFrameAppend(%s, %s)", listNode.Value, listNode.Value, itemStr)
+		default:
+			gogenCollection = true
+			return fmt.Sprintf("		panic(fmt.Sprintf(\"TYPE_ERROR: append expected list, got %%T\", %s))", listNode.Value)
+		}
 	case "map_set":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
@@ -1038,25 +1303,42 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		valStr := generateExpression(ir.Kids[2], reqVar, depth+1)
-		return fmt.Sprintf("		%s[%s] = %s", dictNode.Value, keyStr, valStr)
+		switch goVarKind(dictNode.Value) {
+		case "map[string]string", "map[string]any", "":
+			return fmt.Sprintf("		%s[%s] = %s", dictNode.Value, keyStr, valStr)
+		default:
+			gogenCollection = true
+			return fmt.Sprintf("		howlFrameMapSet(%s, fmt.Sprint(%s), %s)", dictNode.Value, keyStr, valStr)
+		}
 	case "map_delete":
 		dictNode := ir.Kids[0]
 		if dictNode.Type != "SYMBOL" {
 			// ast.ReportError("map_delete requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
+		switch goVarKind(dictNode.Value) {
+		case "map[string]string", "map[string]any", "":
+			return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
+		default:
+			gogenCollection = true
+			return fmt.Sprintf("		howlFrameMapDelete(%s, fmt.Sprint(%s))", dictNode.Value, keyStr)
+		}
 	case "map_get":
 		dictNode := ir.Kids[0]
 		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
 		// Missing keys are "". Raw indexing does that for map[string]string
 		// and returns nil for map[string]any, so every map_get goes through
-		// a helper. A symbol keeps the generic helper. An expression, including
-		// a nested map_get, goes through howlFrameMapGetValue so the
-		// intermediate does not have to be a named map.
+		// a helper. A concrete map keeps the generic helper. An expression,
+		// including a nested map_get, and a dynamic non-map value go through
+		// howlFrameMapGetValue so the wrong type is TYPE_ERROR.
 		gogenMapGet = true
 		if dictNode.Type == "SYMBOL" {
-			return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
+			switch goVarKind(dictNode.Value) {
+			case "map[string]string", "map[string]any", "":
+				return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
+			default:
+				return fmt.Sprintf("howlFrameMapGetValue(%s, %s)", dictNode.Value, keyStr)
+			}
 		}
 		dictStr := generateExpression(dictNode, reqVar, depth+1)
 		return fmt.Sprintf("howlFrameMapGetValue(%s, %s)", dictStr, keyStr)
@@ -1066,10 +1348,12 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			// ast.ReportError("list_get requires a symbol for list", listNode.Line, listNode.Column)
 		}
 		idxStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("func() string { _i, _ := strconv.Atoi(fmt.Sprint(%s)); if _i >= 0 && _i < len(%s) { return %s[_i] }; return \"\" }()", idxStr, listNode.Value, listNode.Value)
+		gogenCollection = true
+		return fmt.Sprintf("howlFrameListGet(%s, %s)", listNode.Value, idxStr)
 	case "list_len":
 		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("len(%s)", listStr)
+		gogenCollection = true
+		return fmt.Sprintf("howlFrameListLen(%s)", listStr)
 	case "map_keys":
 		dictStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		// Dict literals lower to map[string]string and parsed records to
