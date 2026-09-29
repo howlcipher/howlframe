@@ -139,7 +139,7 @@ func TestGenerateJSForOverExpression(t *testing.T) {
 	if strings.Contains(appCode, "of )") {
 		t.Fatalf("for loop lost its iterable expression:\n%s", appCode)
 	}
-	if !strings.Contains(appCode, `(d["rows"] ?? "")`) {
+	if !strings.Contains(appCode, `howlFrameMapGet(d, "rows")`) || !strings.Contains(appCode, `?? ""`) {
 		t.Fatalf("for loop did not emit the iterable expression:\n%s", appCode)
 	}
 }

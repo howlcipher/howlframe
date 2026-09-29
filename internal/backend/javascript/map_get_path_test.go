@@ -24,7 +24,7 @@ func TestJSChainedMapGetPath(t *testing.T) {
 	const want = "two ada\nthree pdx\nleaf-miss \n"
 
 	code := generateCheckedJS(t, source)
-	if !strings.Contains(code, `(row["user"] ?? "")`) {
+	if !strings.Contains(code, `howlFrameMapGet(row, "user")`) || !strings.Contains(code, `?? ""`) {
 		t.Fatalf("named map_get lost the empty-string miss:\n%s", code)
 	}
 	if !strings.Contains(code, "TYPE_ERROR: map_get expected dict") {
