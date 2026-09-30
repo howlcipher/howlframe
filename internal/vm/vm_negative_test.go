@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -494,6 +495,59 @@ func TestVMFileAndNetworkPositiveFetch(t *testing.T) {
 	}
 	if receivedMethod != "POST" || receivedPath != "/test-endpoint" {
 		t.Fatalf("expected POST /test-endpoint, got %s %s", receivedMethod, receivedPath)
+	}
+}
+
+func TestVMFetchDeniedBeforeRequest(t *testing.T) {
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
+	const secretBody = "phase2d-secret-bytes"
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(secretBody))
+	}))
+	defer srv.Close()
+
+	prog := &bytecode.BCProgram{
+		Main: []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: srv.URL + "/phase2d-secret-url"},
+			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "GET"},
+			{Op: bytecode.OpFetch, OpString: "FETCH"},
+		},
+	}
+	run := func(caps []capability.Capability) (string, *bytecode.RuntimeFailure) {
+		t.Helper()
+		var outBuf, errBuf bytes.Buffer
+		evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), caps, strings.NewReader(""), &outBuf, &errBuf, 0)
+		return outBuf.String() + errBuf.String(), evidence.RuntimeFailure
+	}
+
+	for _, tc := range []struct {
+		name string
+		caps []capability.Capability
+	}{
+		{"empty grant", nil},
+		{"filesystem grant", []capability.Capability{capability.Filesystem}},
+	} {
+		text, failure := run(tc.caps)
+		if failure == nil || failure.Code != "CAPABILITY_DENIED" {
+			t.Fatalf("%s: expected CAPABILITY_DENIED, got %#v", tc.name, failure)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("%s: denial performed %d HTTP request(s)", tc.name, hits.Load())
+		}
+		if strings.Contains(text, secretBody) || strings.Contains(text, "phase2d-secret-url") || strings.Contains(failure.Message, "phase2d-secret-url") {
+			t.Fatalf("%s: denial leaked the response or URL: %s (%s)", tc.name, text, failure.Message)
+		}
+	}
+
+	text, failure := run([]capability.Capability{capability.Network})
+	if failure != nil {
+		t.Fatalf("network grant failed: %#v\n%s", failure, text)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("network grant performed %d HTTP request(s), want 1", hits.Load())
 	}
 }
 

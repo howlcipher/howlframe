@@ -42,6 +42,10 @@ var gogenNeedsExec bool
 // checks the runner grant before any filesystem read. It is reset on every call.
 var gogenNeedsReadFile bool
 
+// gogenNeedsFetch is set when GenerateCode emits fetch. The helper checks
+// the runner grant before any HTTP request. It is reset on every call.
+var gogenNeedsFetch bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -512,9 +516,44 @@ func howlFrameReadFileBytes(path string) []byte {
 `
 }
 
+// fetchHelperSource mediates (fetch url method [body]). The grant name is
+// network, the same name as capability.ForConstruct("fetch") and OpFetch.
+// http.NewRequest and DefaultClient.Do run only after that grant is present,
+// so a denial cannot open a connection or include the URL in the error.
+// howlFrameFetch keeps the (bytes, error) pair that try_let already binds.
+// howlFrameFetchBytes is the single value let and bytes_to_string expect;
+// an IO failure there panics after the grant check.
+func fetchHelperSource() string {
+	return `func howlFrameFetch(url string, method string, body io.Reader) ([]byte, error) {
+	if !howlFrameGrantHas("network") {
+		panic("CAPABILITY_DENIED: capability denied: network")
+	}
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func howlFrameFetchBytes(url string, method string, body io.Reader) []byte {
+	b, err := howlFrameFetch(url, method, body)
+	if err != nil {
+		panic(fmt.Sprintf("IO_ERROR: fetch failed: %v", err))
+	}
+	return b
+}
+
+`
+}
+
 func goHostHelpers() string {
 	var code string
-	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile {
+	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile || gogenNeedsFetch {
 		code += grantHelperSource()
 	}
 	if gogenNeedsEnv {
@@ -525,6 +564,9 @@ func goHostHelpers() string {
 	}
 	if gogenNeedsReadFile {
 		code += readFileHelperSource()
+	}
+	if gogenNeedsFetch {
+		code += fetchHelperSource()
 	}
 	return code
 }
@@ -567,6 +609,27 @@ func goReadFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string
 	return fmt.Sprintf("howlFrameReadFileBytes(%s)", pathStr)
 }
 
+// goFetchCall emits the mediated request. tuple is the try_let form, which
+// still binds (bytes, error). Every other use gets one []byte. A missing
+// body is a nil reader, the same request the previous closure sent.
+func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+	gogenNeedsFetch = true
+	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
+		return ""
+	}
+	urlStr := generateStatement(node.Children[1], reqVar, depth+1)
+	methodStr := generateStatement(node.Children[2], reqVar, depth+1)
+	bodyStr := "nil"
+	if len(node.Children) == 4 {
+		bodyStr = fmt.Sprintf("strings.NewReader(%s)", generateStatement(node.Children[3], reqVar, depth+1))
+	}
+	fn := "howlFrameFetchBytes"
+	if tuple {
+		fn = "howlFrameFetch"
+	}
+	return fmt.Sprintf("%s(%s, %s, %s)", fn, urlStr, methodStr, bodyStr)
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
@@ -576,6 +639,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenNeedsEnv = false
 	gogenNeedsExec = false
 	gogenNeedsReadFile = false
+	gogenNeedsFetch = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -1300,6 +1364,8 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "read_file" {
 			valStr = goReadFileCall(valNode, reqVar, depth, true)
+		} else if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "fetch" {
+			valStr = goFetchCall(valNode, reqVar, depth, true)
 		} else {
 			valStr = generateStatement(valNode, reqVar, depth+1)
 		}
@@ -1701,32 +1767,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			%s
 		}`, timesStr, bodyCode)
 	} else if head == "fetch" {
-		if len(node.Children) != 3 && len(node.Children) != 4 {
-			// ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
-		}
-		urlStr := generateStatement(node.Children[1], reqVar, depth+1)
-		methodStr := generateStatement(node.Children[2], reqVar, depth+1)
-
-		if len(node.Children) == 4 {
-			bodyCode := generateStatement(node.Children[3], reqVar, depth+1)
-			return fmt.Sprintf(`func() ([]byte, error) {
-			req, err := http.NewRequest(%s, %s, strings.NewReader(%s))
-			if err != nil { return nil, err }
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil { return nil, err }
-			defer resp.Body.Close()
-			return io.ReadAll(resp.Body)
-		}()`, methodStr, urlStr, bodyCode)
-		}
-
-		return fmt.Sprintf(`func() ([]byte, error) {
-			req, err := http.NewRequest(%s, %s, nil)
-			if err != nil { return nil, err }
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil { return nil, err }
-			defer resp.Body.Close()
-			return io.ReadAll(resp.Body)
-		}()`, methodStr, urlStr)
+		return goFetchCall(node, reqVar, depth, false)
 	} else if head == "confidence" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("confidence expects (confidence prompt)", node.Line, node.Column)

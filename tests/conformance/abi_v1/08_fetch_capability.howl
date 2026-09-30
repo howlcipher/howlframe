@@ -1,0 +1,3 @@
+(cli_app
+  (let (value (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET"))
+    (print (bytes_to_string value))))

@@ -107,6 +107,24 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2c-read-marker"
+    },
+    {
+      "name": "fetch_denied",
+      "fixture": "tests/conformance/abi_v1/08_fetch_capability.howl",
+      "deny_all": true,
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2d-fetch-marker"
+    },
+    {
+      "name": "fetch_granted",
+      "fixture": "tests/conformance/abi_v1/08_fetch_capability.howl",
+      "allow_caps": "network",
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2d-fetch-marker"
     }
   ]
 }

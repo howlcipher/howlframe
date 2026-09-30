@@ -2,9 +2,13 @@ package vm
 
 import (
 	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/capability"
@@ -164,6 +168,70 @@ func TestInterpretReadFileGrantedReads(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout.String()) != "phase2c-read-marker" {
 		t.Fatalf("stdout = %q, want phase2c-read-marker", stdout.String())
+	}
+}
+
+func TestInterpretFetchDeniedBeforeRequest(t *testing.T) {
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
+	const secretBody = "phase2d-secret-bytes"
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, secretBody)
+	}))
+	t.Cleanup(srv.Close)
+	secretURL := srv.URL + "/phase2d-secret-url"
+	source := `(cli_app (print (bytes_to_string (fetch "` + secretURL + `" "GET"))))`
+	node, _ := parseAndCompile(t, source)
+
+	assertDenied := func(label string, caps []capability.Capability) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		exitCode := Interpret(node, nil, caps, strings.NewReader(""), &stdout, &stderr)
+		if exitCode == 0 {
+			t.Fatalf("%s: expected Interpret to deny fetch, got exit 0; stdout=%q", label, stdout.String())
+		}
+		errStr := stderr.String()
+		if !strings.Contains(errStr, "capability denied: network") {
+			t.Fatalf("%s: expected 'capability denied: network' in stderr, got: %s", label, errStr)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("%s: denial performed %d HTTP request(s)", label, hits.Load())
+		}
+		if strings.Contains(errStr+stdout.String(), secretBody) || strings.Contains(errStr, "phase2d-secret-url") {
+			t.Fatalf("%s: denial leaked the response or URL: stdout=%q stderr=%q", label, stdout.String(), errStr)
+		}
+	}
+
+	assertDenied("empty grant", nil)
+	assertDenied("filesystem grant", []capability.Capability{capability.Filesystem})
+}
+
+func TestInterpretFetchGrantedReads(t *testing.T) {
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
+	const secretBody = "phase2d-fetch-marker"
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, secretBody)
+	}))
+	t.Cleanup(srv.Close)
+	source := `(cli_app (print (bytes_to_string (fetch "` + srv.URL + `/phase2d" "GET"))))`
+	node, _ := parseAndCompile(t, source)
+
+	var stdout, stderr bytes.Buffer
+	allowed := []capability.Capability{capability.Network}
+	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected Interpret to fetch with network, got exit %d; stderr=%s", exitCode, stderr.String())
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("network grant performed %d HTTP request(s), want 1", hits.Load())
+	}
+	if strings.TrimSpace(stdout.String()) != secretBody {
+		t.Fatalf("stdout = %q, want %s", stdout.String(), secretBody)
 	}
 }
 
