@@ -120,6 +120,7 @@ func TestModelAdapterAdversarialMatrixFailsBeforeLowering(t *testing.T) {
 		{"loop", "HFIR_TRANSPORT_KIND", withKind("while")},
 		{"iteration", "HFIR_TRANSPORT_KIND", withKind("for")},
 		{"process", "HFIR_TRANSPORT_KIND", withKind("exec")},
+		{"network", "HFIR_TRANSPORT_KIND", withKind("fetch")},
 		{"HTTP", "HFIR_TRANSPORT_KIND", withKind("http_server_start")},
 		{"cycle", "HFIR_TRANSPORT_CYCLE", withInput("program")},
 		{"raw opcode", "HFIR_TRANSPORT_INVALID", []byte(`{"schema_version":"hfir-model-adapter/v1","graph_version":"v1","entry_node":"program","bytecode":"LOAD_CONST","nodes":[]}`)},

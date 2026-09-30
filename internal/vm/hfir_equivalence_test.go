@@ -2,11 +2,15 @@ package vm
 
 import (
 	"bytes"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/ast"
@@ -16,6 +20,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/hfir"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
+	"github.com/howlcipher/howlframe/internal/testutil"
 )
 
 type bytecodeOutcome struct {
@@ -773,14 +778,193 @@ func TestHFIRBytecodeNestedExecFixture(t *testing.T) {
 	}
 }
 
-// TestHFIRBytecodeFetchStaysUnsupported locks the fail-closed boundary for
-// fetch. exec now lowers onto the existing EXEC opcode. The fetch
-// conformance cases stay on the AST hosts.
-func TestHFIRBytecodeFetchStaysUnsupported(t *testing.T) {
-	_, graph := checkedHFIRGraph(t, readAbiFixture(t, "08_fetch_capability.howl"))
-	program, diagnostics := hfir.LowerToBytecode(graph)
-	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != hfir.BytecodeUnsupportedCode {
-		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+// TestHFIRBytecodeFetchFixture compares production AST bytecode with the
+// experimental HFIR lowerer on the Phase 2d fetch fixture. The conformance
+// harness runs that file through -compile-bc and -compile-hfir-bc, granted
+// and denied. This test round-trips both artifacts and checks that FETCH
+// carries the URL and then the method.
+func TestHFIRBytecodeFetchFixture(t *testing.T) {
+	hits, bodies := serveABIFetchFixture(t)
+	source := readAbiFixture(t, "08_fetch_capability.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	var fetches int
+	for _, node := range graph.Nodes {
+		if node.Kind != "fetch" {
+			continue
+		}
+		fetches++
+		if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+			t.Fatalf("fetch %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+		if got := fsPathValue(t, graph, node); got != abiFetchURL {
+			t.Fatalf("fetch url = %q, want %s", got, abiFetchURL)
+		}
+		method := graph.NodeByID(node.DataInputs[1].SourceNode)
+		if method == nil || method.Kind != "const" || method.Value != "GET" {
+			t.Fatalf("fetch method = %#v, want GET", method)
+		}
+	}
+	if fetches != 1 {
+		t.Fatalf("fetch nodes = %d, want 1", fetches)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := graphCapabilities(graph), []capability.Capability{capability.Network}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("HFIR effects = %v, want network", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Network}) {
+		t.Fatalf("emitted capabilities = %v, want network", programCapabilities(direct))
+	}
+	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
+	}
+	if !reflect.DeepEqual(fetchOperandShapes(direct), []string{"main\x00" + abiFetchURL + "\x00GET"}) {
+		t.Fatalf("FETCH operands = %#v", fetchOperandShapes(direct))
+	}
+
+	legacyDenied := runBytecodeOutcome(legacy, "", nil)
+	directDenied := runBytecodeOutcome(direct, "", nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	requireNetworkDenial(t, legacyDenied, abiFetchURL, abiFetchMarker)
+	if hits.Load() != 0 || bodies.Load() != 0 {
+		t.Fatalf("denial hits = %d bodies = %d, want no request", hits.Load(), bodies.Load())
+	}
+
+	caps := []capability.Capability{capability.Network}
+	legacyGranted := runBytecodeOutcome(legacy, "", caps)
+	directGranted := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != abiFetchMarker+"\n" || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if hits.Load() != 2 || bodies.Load() != 0 {
+		t.Fatalf("granted hits = %d bodies = %d, want 2 requests and no body", hits.Load(), bodies.Load())
+	}
+}
+
+// TestHFIRBytecodeFetchOperandOrder locks GET, POST, and a three-argument
+// fetch onto the same FETCH instruction the AST compiler emits: URL, then
+// method. The third argument is a body. OpFetch has no body operand, so
+// neither compiler loads it, and the fixture server sees an empty body.
+func TestHFIRBytecodeFetchOperandOrder(t *testing.T) {
+	hits, bodies := serveABIFetchFixture(t)
+	source := `(cli_app
+  (print (bytes_to_string (fetch "` + abiFetchURL + `" "GET")))
+  (print (bytes_to_string (fetch "` + abiFetchURL + `" "POST")))
+  (print (bytes_to_string (fetch "` + abiFetchURL + `" "PUT" "phase2d-body-not-sent"))))`
+	root, graph := checkedHFIRGraph(t, source)
+	var methods []string
+	var bodiesOnGraph int
+	for _, node := range graph.Nodes {
+		if node.Kind != "fetch" {
+			continue
+		}
+		if len(node.DataInputs) < 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+			t.Fatalf("fetch %s edges %#v", node.ID, node.DataInputs)
+		}
+		if len(node.DataInputs) == 3 {
+			if node.DataInputs[2].Name != "body" {
+				t.Fatalf("fetch %s edges %#v", node.ID, node.DataInputs)
+			}
+			bodiesOnGraph++
+		} else if len(node.DataInputs) != 2 {
+			t.Fatalf("fetch %s edges %#v", node.ID, node.DataInputs)
+		}
+		method := graph.NodeByID(node.DataInputs[1].SourceNode)
+		if method == nil || method.Kind != "const" {
+			t.Fatalf("fetch method = %#v", method)
+		}
+		methods = append(methods, method.Value)
+	}
+	if !reflect.DeepEqual(methods, []string{"GET", "POST", "PUT"}) || bodiesOnGraph != 1 {
+		t.Fatalf("methods = %v body edges = %d, want GET, POST, PUT and one body", methods, bodiesOnGraph)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	wantShapes := []string{
+		"main\x00" + abiFetchURL + "\x00GET",
+		"main\x00" + abiFetchURL + "\x00POST",
+		"main\x00" + abiFetchURL + "\x00PUT",
+	}
+	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(got, wantShapes) {
+		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v\nwant %#v", got, want, wantShapes)
+	}
+	caps := []capability.Capability{capability.Network}
+	legacyOutcome := runBytecodeOutcome(legacy, "", caps)
+	directOutcome := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyOutcome, directOutcome)
+	const wantStdout = abiFetchMarker + "\n" + abiFetchMarker + "\n" + abiFetchMarker + "\n"
+	if legacyOutcome.stdout != wantStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
+		t.Fatalf("granted outcome %#v, want stdout %q", legacyOutcome, wantStdout)
+	}
+	if hits.Load() != 6 || bodies.Load() != 0 {
+		t.Fatalf("hits = %d bodies = %d, want 6 requests and no body", hits.Load(), bodies.Load())
+	}
+}
+
+// TestHFIRBytecodeNestedFetchFixture compares production AST bytecode with
+// the experimental HFIR lowerer on one program that nests fetch inside if,
+// while, for, and defun. The conformance harness runs the same file through
+// -compile-bc and -compile-hfir-bc, granted and denied.
+func TestHFIRBytecodeNestedFetchFixture(t *testing.T) {
+	hits, bodies := serveABIFetchFixture(t)
+	source := readAbiFixture(t, "20_nested_fetch.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	assertNestedFetchShape(t, graph)
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := graphCapabilities(graph), []capability.Capability{capability.Network}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("HFIR effects = %v, want network", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Network}) {
+		t.Fatalf("emitted capabilities = %v, want network", programCapabilities(direct))
+	}
+	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
+	}
+
+	const wantStdout = abiFetchMarker + "\nL a 0\nL b 0\nkept 2\n" + abiFetchMarker + "\nresult 2\nmiss\n" + abiFetchMarker + "\nempty 0\n"
+	legacyDenied := runBytecodeOutcome(legacy, "", nil)
+	directDenied := runBytecodeOutcome(direct, "", nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	requireNetworkDenial(t, legacyDenied, abiFetchURL, abiFetchMarker)
+	if hits.Load() != 0 || bodies.Load() != 0 {
+		t.Fatalf("denial hits = %d bodies = %d, want no request", hits.Load(), bodies.Load())
+	}
+
+	caps := []capability.Capability{capability.Network}
+	legacyGranted := runBytecodeOutcome(legacy, "", caps)
+	directGranted := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if strings.Contains(legacyGranted.stdout, "no") {
+		t.Fatalf("granted stdout ran an untaken branch: %q", legacyGranted.stdout)
+	}
+	if hits.Load() != 6 || bodies.Load() != 0 {
+		t.Fatalf("granted hits = %d bodies = %d, want 6 requests and no body", hits.Load(), bodies.Load())
 	}
 }
 
@@ -1139,6 +1323,113 @@ func assertNestedExecShape(t *testing.T, graph *hfir.Graph) {
 	}
 }
 
+func assertNestedFetchShape(t *testing.T, graph *hfir.Graph) {
+	t.Helper()
+	var defuns, calls, whiles, ifWithElse, fetches int
+	fors := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			ifWithElse++
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		case "fetch":
+			fetches++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+				t.Fatalf("fetch %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			if got := fsPathValue(t, graph, node); got != abiFetchURL {
+				t.Fatalf("fetch url = %q, want %s", got, abiFetchURL)
+			}
+			method := graph.NodeByID(node.DataInputs[1].SourceNode)
+			if method == nil || method.Kind != "const" || method.Value != "GET" {
+				t.Fatalf("fetch method = %#v, want GET", method)
+			}
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || fetches != 7 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d fetch=%d, want 1, 2, 2, 3, 3, 7", defuns, calls, whiles, ifWithElse, len(fors), fetches)
+	}
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+		t.Fatal("taken branch does not contain fetch")
+	}
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "fetch" }) {
+				t.Fatal("false while body does not contain fetch")
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+		t.Fatal("name for does not contain fetch")
+	}
+	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+		t.Fatal("empty for does not contain fetch")
+	}
+	var defunHoldsFetch bool
+	for _, node := range graph.Nodes {
+		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "fetch" }) {
+			defunHoldsFetch = true
+		}
+	}
+	if !defunHoldsFetch {
+		t.Fatal("defun does not contain fetch")
+	}
+}
+
 func hasPathSuffix(paths map[string]*hfir.Node, suffix string) bool {
 	for path := range paths {
 		if strings.HasSuffix(path, suffix) {
@@ -1273,6 +1564,40 @@ func requireSameBytecodeOutcome(t *testing.T, legacy, direct bytecodeOutcome) {
 	}
 }
 
+const (
+	abiFetchURL    = "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"
+	abiFetchMarker = "phase2d-fetch-marker"
+)
+
+func serveABIFetchFixture(t *testing.T) (hits, bodies *atomic.Int64) {
+	t.Helper()
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
+	unlock := testutil.LockABIFetchFixture(t)
+	t.Cleanup(unlock)
+	hits = &atomic.Int64{}
+	bodies = &atomic.Int64{}
+	ln, err := net.Listen("tcp", "127.0.0.1:47653")
+	if err != nil {
+		t.Fatalf("listen fetch fixture: %v", err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/howlframe-abi-v1-phase2d" {
+			http.NotFound(w, r)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if len(body) != 0 {
+			bodies.Add(1)
+		}
+		hits.Add(1)
+		_, _ = w.Write([]byte(abiFetchMarker))
+	})}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return hits, bodies
+}
+
 func requireProcessDenial(t *testing.T, outcome bytecodeOutcome, command, marker string) {
 	t.Helper()
 	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != "EXEC" || outcome.vmError.Message != "capability denied: process" {
@@ -1283,6 +1608,22 @@ func requireProcessDenial(t *testing.T, outcome bytecodeOutcome, command, marker
 	}
 	blob := outcome.vmError.Message
 	for _, secret := range []string{command, marker} {
+		if secret != "" && strings.Contains(blob, secret) {
+			t.Fatalf("denial leaked %q in %q", secret, blob)
+		}
+	}
+}
+
+func requireNetworkDenial(t *testing.T, outcome bytecodeOutcome, url, marker string) {
+	t.Helper()
+	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != "FETCH" || outcome.vmError.Message != "capability denied: network" {
+		t.Fatalf("denial = %#v, want CAPABILITY_DENIED FETCH", outcome)
+	}
+	if outcome.stdout != "" || outcome.stderr != "" {
+		t.Fatalf("denial produced output %#v", outcome)
+	}
+	blob := outcome.vmError.Message
+	for _, secret := range []string{url, marker} {
 		if secret != "" && strings.Contains(blob, secret) {
 			t.Fatalf("denial leaked %q in %q", secret, blob)
 		}
@@ -1554,6 +1895,54 @@ func execOperandShapes(program *bytecode.BCProgram) []string {
 			parts := []string{where}
 			literal := true
 			for _, prev := range insts[index-argc-1 : index] {
+				text, ok := prev.ValueOperand.(string)
+				if prev.Op != bytecode.OpLoadConst || !ok {
+					literal = false
+					break
+				}
+				parts = append(parts, text)
+			}
+			if !literal {
+				shapes = append(shapes, where+"\x00nonliteral")
+				continue
+			}
+			shapes = append(shapes, strings.Join(parts, "\x00"))
+		}
+	}
+	collect("main", program.Main)
+	names := make([]string, 0, len(program.Functions))
+	for name := range program.Functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fn := program.Functions[name]
+		if fn != nil {
+			collect(name, fn.Instructions)
+		}
+	}
+	return shapes
+}
+
+// fetchOperandShapes records each FETCH as its function, then the URL, then
+// the method. Those values are the two LOAD_CONST instructions immediately
+// before FETCH, which is the operand order CompileToBytecode already emits.
+// FETCH pops the method and then the URL. A compiled body would shift that
+// window off the URL.
+func fetchOperandShapes(program *bytecode.BCProgram) []string {
+	var shapes []string
+	collect := func(where string, insts []bytecode.BCInstruction) {
+		for index, inst := range insts {
+			if inst.Op != bytecode.OpFetch {
+				continue
+			}
+			if inst.IntOperand != 0 || inst.StringOperand != "" || index < 2 {
+				shapes = append(shapes, where+"\x00short")
+				continue
+			}
+			parts := []string{where}
+			literal := true
+			for _, prev := range insts[index-2 : index] {
 				text, ok := prev.ValueOperand.(string)
 				if prev.Op != bytecode.OpLoadConst || !ok {
 					literal = false

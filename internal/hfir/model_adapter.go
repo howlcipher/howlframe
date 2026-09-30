@@ -724,8 +724,8 @@ func nodeRoles(kind string) []string {
 		// Phase 3b lowers while from source on that same flag.
 		// Phase 3c fills if control edges from the roles above.
 		// Phase 3d lowers for from source on that same flag.
-		// write_file, mkdir, and exec are lowered from source on that same
-		// flag and stay outside this allow-list, with read_file and fetch.
+		// write_file, mkdir, exec, and fetch are lowered from source on that
+		// same flag and stay outside this allow-list, with read_file.
 		// The transport still has no control-edge field.
 		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil

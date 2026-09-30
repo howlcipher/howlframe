@@ -90,6 +90,10 @@ func (v *Verifier) Verify() []Diagnostic {
 			checkRole("path", true)
 		case "exec":
 			checkRole("cmd", true)
+		case "fetch":
+			checkRole("url", true)
+			checkRole("method", true)
+			checkRole("body", false)
 		case "write_file":
 			checkRole("path", true)
 			checkRole("data", true)
