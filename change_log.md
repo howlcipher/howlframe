@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* Generated Go and JavaScript mediate `(fetch)`. An empty, missing, or non-`network` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before any HTTP request, and the denial does not include the URL. The `network` grant performs the request. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2d_fetch.md`.
 * Generated Go and JavaScript mediate `(read_file)`. An empty, missing, or non-`filesystem` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before any filesystem read, and the denial does not include the path. The `filesystem` grant reads the file. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2c_read_file.md`.
 * Generated Go and JavaScript mediate `(exec)`. An empty, missing, or non-`process` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before a subprocess starts, and the denial does not include the command. The `process` grant runs it. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2b_exec.md`.
 * Generated Go and JavaScript mediate `(env)`. An empty or non-`environment` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before the variable is read. The `environment` grant returns the value. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2a_env.md`.

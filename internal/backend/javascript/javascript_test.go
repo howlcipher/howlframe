@@ -102,7 +102,8 @@ func TestGenerateJSFetchWithBody(t *testing.T) {
 	checker.Check(root)
 	appCode, _ := GenerateJSCode(root)
 	for _, want := range []string{
-		`await fetch("http://example.test/tasks", { method: "POST", body: "{\"title\":\"Ship\"}" })`,
+		`howlFrameFetch("http://example.test/tasks", "POST", "{\"title\":\"Ship\"}")`,
+		`return fetch(url, init).then(function (r) { return r.text(); })`,
 		`JSON.parse(response)`,
 	} {
 		if !strings.Contains(appCode, want) {

@@ -732,6 +732,32 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
 		}
 		return b
+	case "fetch":
+		// requireCapability already ran for network. The request is sent only
+		// after that grant, so a denial cannot open a connection.
+		if len(node.Children) != 3 && len(node.Children) != 4 {
+			InterpErr("fetch expects (fetch url method [body])", node)
+		}
+		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
+		method := fmt.Sprint(interp.eval(node.Children[2], env))
+		var body io.Reader
+		if len(node.Children) == 4 {
+			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
+		}
+		req, err := http.NewRequest(method, urlStr, body)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: fetch request creation failed: %v", err), node)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: fetch failed: %v", err), node)
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: fetch body read failed: %v", err), node)
+		}
+		return b
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])

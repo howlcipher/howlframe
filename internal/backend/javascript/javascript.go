@@ -70,6 +70,10 @@ var jsNeedsExec bool
 // checks the runner grant before any filesystem read. It is reset on every call.
 var jsNeedsReadFile bool
 
+// jsNeedsFetch is set when GenerateJSCode emits fetch. The helper checks
+// the runner grant before any HTTP request. It is reset on every call.
+var jsNeedsFetch bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -329,8 +333,29 @@ func readFileJSHelper() string {
 `
 }
 
+// fetchJSHelper mediates (fetch url method [body]). The grant name is
+// network, the same name as capability.ForConstruct("fetch") and OpFetch.
+// fetch runs only after that grant is present, so a denial cannot open a
+// connection or put the URL in the error. The return is response text,
+// which bytes_to_string prints unchanged. A third argument is the body;
+// a two-argument call sends none.
+func fetchJSHelper() string {
+	return `function howlFrameFetch(url, method, body) {
+  if (!howlFrameGrantHas("network")) {
+    throw new Error("CAPABILITY_DENIED: capability denied: network");
+  }
+  var init = { method: method };
+  if (arguments.length >= 3) {
+    init.body = body;
+  }
+  return fetch(url, init).then(function (r) { return r.text(); });
+}
+
+`
+}
+
 func jsHostHelpers() string {
-	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile {
+	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch {
 		return ""
 	}
 	helper := grantJSHelper()
@@ -342,6 +367,9 @@ func jsHostHelpers() string {
 	}
 	if jsNeedsReadFile {
 		helper += readFileJSHelper()
+	}
+	if jsNeedsFetch {
+		helper += fetchJSHelper()
 	}
 	return helper
 }
@@ -374,6 +402,20 @@ func jsReadFileCall(node *ast.Node, reqVar string, depth int) string {
 	}
 	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
 	return fmt.Sprintf("howlFrameReadFile(%s)", pathStr)
+}
+
+func jsFetchCall(node *ast.Node, reqVar string, depth int) string {
+	jsNeedsFetch = true
+	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
+		return ""
+	}
+	urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+	methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+	if len(node.Children) == 4 {
+		bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s))", urlStr, methodStr, bodyStr)
+	}
+	return fmt.Sprintf("(await howlFrameFetch(%s, %s))", urlStr, methodStr)
 }
 
 func sanitizeJSName(name string) string {
@@ -676,6 +718,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsEnv = false
 	jsNeedsExec = false
 	jsNeedsReadFile = false
+	jsNeedsFetch = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -747,9 +790,9 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	// keeps them reachable as globals for inline event handlers.
 	code := funcsCode
 	if strings.TrimSpace(appCode) != "" {
-		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile {
-			// A denied env read, exec, or read_file throws. The async IIFE would
-			// otherwise turn that into an unhandled rejection and a zero exit.
+		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile || jsNeedsFetch {
+			// A denied env read, exec, read_file, or fetch throws. The async IIFE
+			// would otherwise turn that into an unhandled rejection and a zero exit.
 			// try_let still catches the throw before it reaches this handler.
 			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  process.exit(1);\n});\n", appCode)
 		} else {
@@ -905,16 +948,7 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("%s.value", el)
 	} else if head == "fetch" {
-		if len(node.Children) != 3 && len(node.Children) != 4 {
-			// ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
-		}
-		urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		if len(node.Children) == 4 {
-			bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
-			return fmt.Sprintf("(await fetch(%s, { method: %s, body: %s }).then(r => r.text()))", urlStr, methodStr, bodyStr)
-		}
-		return fmt.Sprintf("(await fetch(%s, { method: %s }).then(r => r.text()))", urlStr, methodStr)
+		return jsFetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)

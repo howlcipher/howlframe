@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"math/rand"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/hfir"
@@ -71,6 +74,10 @@ func (c conformanceCase) wantStdout() string {
 // share one error class and must not print a forbidden value.
 func TestLoweredHFIRABIConformance(t *testing.T) {
 	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
+	// Loopback is the fixture. A proxy would hide a denied request or miss the
+	// granted one. 08_fetch_capability.howl uses this exact address.
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
 	// 07_read_file_capability.howl reads this absolute path. Generated Go runs
 	// in its own temp directory, so a relative fixture path would miss.
 	const readMarkerPath = "/tmp/howlframe-abi-v1-phase2c.txt"
@@ -78,6 +85,22 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 		t.Fatalf("write read_file marker: %v", err)
 	}
 	t.Cleanup(func() { os.Remove(readMarkerPath) })
+	const fetchAddr = "127.0.0.1:47653"
+	var fetchHits atomic.Int64
+	ln, err := net.Listen("tcp", fetchAddr)
+	if err != nil {
+		t.Fatalf("listen fetch fixture: %v", err)
+	}
+	fetchSrv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/howlframe-abi-v1-phase2d" {
+			http.NotFound(w, r)
+			return
+		}
+		fetchHits.Add(1)
+		_, _ = w.Write([]byte("phase2d-fetch-marker"))
+	})}
+	go func() { _ = fetchSrv.Serve(ln) }()
+	t.Cleanup(func() { _ = fetchSrv.Close() })
 	root, file := loadConformance(t)
 	if file.ABI != hfir.LoweredABIV1 {
 		t.Fatalf("manifest abi = %q, want %q", file.ABI, hfir.LoweredABIV1)
@@ -93,9 +116,17 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				t.Fatal("case sets both deny_all and allow_caps")
 			}
 			fixture := filepath.Join(root, tc.Fixture)
+			hitsBefore := fetchHits.Load()
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
 			if err != nil {
 				t.Fatalf("VerifyParityWithOptions: %v", err)
+			}
+			hits := fetchHits.Load() - hitsBefore
+			if tc.Name == "fetch_denied" && hits != 0 {
+				t.Fatalf("fetch_denied performed %d HTTP request(s)", hits)
+			}
+			if tc.Name == "fetch_granted" && hits == 0 {
+				t.Fatalf("fetch_granted performed no HTTP request")
 			}
 			if report.OverallStatus != StatusPass {
 				t.Fatalf("parity: %s", strings.Join(report.Discrepancies, "\n"))
