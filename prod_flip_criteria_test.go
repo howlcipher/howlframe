@@ -86,7 +86,6 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		op           bytecode.Opcode
 	}{
 		{"regex_match", `(cli_app (print (regex_match "^a$" "a")))`, bytecode.OpRegexMatch},
-		{"html_escape", `(cli_app (print (html_escape "a<b")))`, bytecode.OpHTMLEscape},
 		{"attr_escape", `(cli_app (print (attr_escape "a<b")))`, bytecode.OpAttrEscape},
 	} {
 		sample := sample
@@ -102,6 +101,19 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("html_escape", func(t *testing.T) {
+		const source = `(cli_app (print (html_escape "a<b")))`
+		graph := mustGraph(t, source)
+		program, diags := hfir.LowerToBytecode(graph)
+		if len(diags) != 0 || program == nil || !programHasOpcode(program, bytecode.OpHTMLEscape) {
+			t.Fatalf("LowerToBytecode() program=%v diags=%#v, want HTML_ESCAPE", program != nil, diags)
+		}
+		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
+		if !programHasOpcode(astProgram, bytecode.OpHTMLEscape) {
+			t.Fatal("production bytecode missing HTML_ESCAPE")
+		}
+	})
 
 	t.Run("fetch body", func(t *testing.T) {
 		const body = "body-not-sent"

@@ -259,6 +259,19 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Kind = head
 		id, err := addChildren(1, "value")
 		return id, true, err
+	case "html_escape":
+		// (html_escape text). Existing HTML_ESCAPE opcode. Experimental
+		// -compile-hfir-bc only. No new opcode and no new capability.
+		// attr_escape stays on the generic fallback.
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[1]}})
+		return id, true, err
 	case "req_query", "req_header", "req_path":
 		if len(astNode.Children) != 3 {
 			return "", false, nil
