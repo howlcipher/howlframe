@@ -86,8 +86,11 @@ func (v *Verifier) Verify() []Diagnostic {
 		case "while":
 			checkRole("condition", true)
 			checkRole("body", true)
-		case "read_file":
+		case "read_file", "mkdir":
 			checkRole("path", true)
+		case "write_file":
+			checkRole("path", true)
+			checkRole("data", true)
 		case "parse_json":
 			checkRole("content", true)
 		case "is_nil":

@@ -1,0 +1,45 @@
+(cli_app
+  (defun place (passes)
+    (type_hints (passes int) (return int))
+    (let (names (list "a" "b"))
+      (let (total 0)
+        (let (n 0)
+          (do
+            (while (< n passes)
+              (do
+                (for label (list "L")
+                  (if (= label "skip")
+                    (do
+                      (write_file "/tmp/howlframe-abi-v1-dogfood-skip.txt" "no")
+                      (mkdir "/tmp/howlframe-abi-v1-dogfood-skip")
+                      (print "no"))
+                    (do
+                      (write_file "/tmp/howlframe-abi-v1-dogfood-write.txt" "dogfood-write-marker")
+                      (mkdir "/tmp/howlframe-abi-v1-dogfood-dir")
+                      (for name names
+                        (if (= name "z")
+                          (do
+                            (write_file "/tmp/howlframe-abi-v1-dogfood-else.txt" "no")
+                            (print "no"))
+                          (do
+                            (set total (+ total 1))
+                            (print label name n))))
+                      (for absent (list)
+                        (do
+                          (write_file "/tmp/howlframe-abi-v1-dogfood-empty.txt" "no")
+                          (print "no")))
+                      (while false
+                        (do
+                          (mkdir "/tmp/howlframe-abi-v1-dogfood-dead")
+                          (print "no"))))))
+                (set n (+ n 1))))
+            (if (> total 0)
+              (do
+                (write_file "/tmp/howlframe-abi-v1-dogfood-loop.txt" "dogfood-loop-marker")
+                (print "kept" total))
+              (do
+                (mkdir "/tmp/howlframe-abi-v1-dogfood-miss")
+                (print "miss")))
+            (return total))))))
+  (print "result" (call place 1))
+  (print "empty" (call place 0)))

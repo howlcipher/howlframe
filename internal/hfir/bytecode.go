@@ -292,6 +292,28 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			return nil, childDiagnostic
 		}
 		return append(insts, instruction(bytecode.OpReadFile, "READ_FILE", nil)), nil
+	case "write_file":
+		if len(children) != 2 || node.DataInputs[0].Name != "path" || node.DataInputs[1].Name != "data" {
+			diagnostic := c.diagnostic(node, "write_file requires path and data")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileAll()
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same operand order as bytecode.CompileToBytecode: path, then data.
+		// WRITE_FILE pops data, then path. No new opcode.
+		return append(insts, instruction(bytecode.OpWriteFile, "WRITE_FILE", nil)), nil
+	case "mkdir":
+		if len(children) != 1 || node.DataInputs[0].Name != "path" {
+			diagnostic := c.diagnostic(node, "mkdir requires path")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		return append(insts, instruction(bytecode.OpMkdir, "MKDIR", nil)), nil
 	case "parse_json":
 		if len(children) != 1 || node.DataInputs[0].Name != "content" {
 			diagnostic := c.diagnostic(node, "parse_json requires content")
