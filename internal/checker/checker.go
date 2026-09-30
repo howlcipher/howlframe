@@ -329,6 +329,11 @@ func checkJSStatement(node *ast.Node, depth int) {
 		}
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
+	} else if head == "env" {
+		if len(node.Children) != 2 {
+			ast.ReportError(`env expects (env "KEY")`, node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}

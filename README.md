@@ -439,6 +439,8 @@ go run howlframe.go -run-bc -allow-caps network,filesystem examples/cli_hello.ho
 
 An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
 
+Generated Go and JavaScript mediate `(env "KEY")` the same way. The runner grant is the `HOWLFRAME_ALLOW_CAPS` environment variable, a comma-separated list of the same names. An empty or unset value denies the read with `CAPABILITY_DENIED` before the variable is fetched. `environment` returns the value. Other generated host effects are not on this gate yet.
+
 Dictionary operations such as `map_get` and `map_keys` grant nothing. `map_keys` is pure: `MAP_KEYS` has an empty capability field and runs under an empty grant. `store_keys` stays `database`. A `memory://` store needs that grant alone. A `file://` store additionally requires `filesystem`; `database` alone denies `file://` `store_keys` with `CAPABILITY_DENIED`. The generated opcode table records the opcode field (empty for `MAP_KEYS`, `database` for `STORE_KEYS`). The URI-dependent grant is written in [bytecode capability notes](docs/reference/bytecode_capability_notes.md).
 
 ## Observability

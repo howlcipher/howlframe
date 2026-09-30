@@ -85,13 +85,6 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 			if tc.DenyAll && tc.AllowCaps != nil {
 				t.Fatal("case sets both deny_all and allow_caps")
 			}
-			if tc.Name == "env_denied" {
-				for _, tgt := range tc.Targets {
-					if tgt == TargetGo || tgt == TargetJavaScript {
-						t.Fatalf("env_denied includes %s; those hosts do not mediate capabilities yet", tgt)
-					}
-				}
-			}
 			fixture := filepath.Join(root, tc.Fixture)
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
 			if err != nil {
@@ -135,7 +128,7 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 						t.Errorf("%s stdout = %q, want empty on rejection", tgt, res.Stdout)
 					}
 				}
-				if tc.Forbid != "" && strings.Contains(res.Stdout+res.Stderr, tc.Forbid) {
+				if tc.Forbid != "" && strings.Contains(res.Stdout+res.Stderr+res.ErrorMessage, tc.Forbid) {
 					t.Errorf("%s leaked %q", tgt, tc.Forbid)
 				}
 			}

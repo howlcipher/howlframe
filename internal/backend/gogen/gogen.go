@@ -30,6 +30,10 @@ var gogenHTMLEscape bool
 // direct Go operations. The flag is reset on every call.
 var gogenCollection bool
 
+// gogenNeedsEnv is set when GenerateCode emits env. The helper checks the
+// runner grant before reading the requested variable. It is reset on every call.
+var gogenNeedsEnv bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -427,12 +431,45 @@ func formatRouteRegistration(routePath, reqVar, trace, body string, dispatch boo
 	return fmt.Sprintf("\thttp.HandleFunc(%q, func(w http.ResponseWriter, %s *http.Request) {\n%s%s\n\t})\n", routePath, reqVar, trace, body)
 }
 
+// envHelperSource mediates (env key). The runner grant is
+// HOWLFRAME_ALLOW_CAPS, comma-separated, the same names as -allow-caps.
+// An empty or unset grant denies. The requested key is read only after
+// environment is present, so a denial cannot return the secret.
+func envHelperSource() string {
+	return `func howlFrameGrantHas(name string) bool {
+	for _, part := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		if strings.TrimSpace(part) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func howlFrameEnv(key string) string {
+	if !howlFrameGrantHas("environment") {
+		panic("CAPABILITY_DENIED: capability denied: environment")
+	}
+	return os.Getenv(key)
+}
+
+`
+}
+
+func goEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
+	gogenNeedsEnv = true
+	if keyNode != nil && keyNode.Type == "STRING" {
+		return fmt.Sprintf("howlFrameEnv(%q)", keyNode.Value)
+	}
+	return fmt.Sprintf("howlFrameEnv(%s)", generateExpression(keyNode, reqVar, depth+1))
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
 	gogenMapGet = false
 	gogenHTMLEscape = false
 	gogenCollection = false
+	gogenNeedsEnv = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -878,6 +915,9 @@ import (
 	if gogenHTMLEscape {
 		code += htmlEscapeHelperSource()
 	}
+	if gogenNeedsEnv {
+		code += envHelperSource()
+	}
 	code += funcsCode
 	code += `func main() {
 	defer func() {
@@ -992,6 +1032,9 @@ var _ = observer.Trace
 		if gogenHTMLEscape {
 			fullTestCode += htmlEscapeHelperSource()
 		}
+		if gogenNeedsEnv {
+			fullTestCode += envHelperSource()
+		}
 		fullTestCode += testCode
 		testCode = fullTestCode
 	}
@@ -1077,9 +1120,8 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 				} else if funcName == "dict" {
 					valStr = goDictLiteral(valNode.Children[1:], reqVar, depth)
 				} else if funcName == "env" {
-					keyNode := valNode.Children[1]
-					if keyNode.Type == "STRING" {
-						valStr = fmt.Sprintf("os.Getenv(%q)", keyNode.Value)
+					if len(valNode.Children) >= 2 {
+						valStr = goEnvCall(valNode.Children[1], reqVar, depth)
 					}
 				} else if funcName == "parse_json" {
 					// Handled downstream
@@ -1907,6 +1949,11 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return false }
 			return strings.TrimSpace(strings.ToLower(res.Response)) == "true"
 		}()`, condStr, varStr)
+	} else if head == "env" {
+		if len(node.Children) != 2 {
+			return ""
+		}
+		return goEnvCall(node.Children[1], reqVar, depth)
 	} else if head == "cli_args" {
 		if len(node.Children) == 1 {
 			return "os.Args[1:]"
