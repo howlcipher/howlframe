@@ -307,6 +307,170 @@ func TestHFIRBytecodeNestedIfWhileDefunFixture(t *testing.T) {
 	}
 }
 
+// TestHFIRBytecodeNestedForIfWhileDefunFixture compares production AST
+// bytecode with the experimental HFIR lowerer on one program that nests the
+// Phase 3a–3d surface: for inside for, for inside if, for inside while, and
+// while inside for, all inside one defun. The conformance harness runs the
+// same file through -compile-bc and -compile-hfir-bc. This test also
+// round-trips both artifacts.
+func TestHFIRBytecodeNestedForIfWhileDefunFixture(t *testing.T) {
+	path := filepath.Join("..", "..", "tests", "conformance", "abi_v1", "14_nested_for_if_while_defun.howl")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, graph := checkedHFIRGraph(t, string(source))
+	var defuns, calls, whiles, ifThenOnly, ifWithElse int
+	fors := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != len(node.DataInputs) || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			switch len(node.ControlEdges) {
+			case 2:
+				ifThenOnly++
+			case 3:
+				if node.DataInputs[2].Name != "else" {
+					t.Fatalf("if %s else edge name = %q", node.ID, node.DataInputs[2].Name)
+				}
+				ifWithElse++
+			default:
+				t.Fatalf("if %s has %d control edges", node.ID, len(node.ControlEdges))
+			}
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 3 || ifThenOnly != 1 || ifWithElse != 3 || len(fors) != 4 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d for=%d, want 1, 2, 3, 1, 3, 4", defuns, calls, whiles, ifThenOnly, ifWithElse, len(fors))
+	}
+	label := fors["label"]
+	item := fors["item"]
+	word := fors["word"]
+	absent := fors["absent"]
+	if label == nil || item == nil || word == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, item, word, absent", forIteratorNames(fors))
+	}
+	itemIter := graph.NodeByID(item.DataInputs[0].SourceNode)
+	if itemIter == nil || itemIter.Kind != "symbol" || itemIter.Value != "cells" {
+		t.Fatalf("inner for iterable = %#v, want symbol cells", itemIter)
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == item }) {
+		t.Fatal("label for body does not contain the item for")
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "if" }) || !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "while" }) {
+		t.Fatal("label for body does not contain both if and while")
+	}
+	if !hfirSubtreeHas(graph, item.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "if" }) || !hfirSubtreeHas(graph, item.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "while" }) {
+		t.Fatal("item for body does not contain both if and while")
+	}
+	absentIter := graph.NodeByID(absent.DataInputs[0].SourceNode)
+	if absentIter == nil || absentIter.Kind != "list" || len(absentIter.DataInputs) != 0 {
+		t.Fatalf("empty for iterable = %#v, want a list with no items", absentIter)
+	}
+	var whileHoldsFor, ifHoldsFor, defunHoldsFor bool
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "while":
+			if hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "for" }) {
+				whileHoldsFor = true
+			}
+		case "if":
+			for _, edge := range node.DataInputs[1:] {
+				if hfirSubtreeHas(graph, edge.SourceNode, func(child *hfir.Node) bool { return child.Kind == "for" }) {
+					ifHoldsFor = true
+				}
+			}
+		case "defun":
+			if hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "for" }) {
+				defunHoldsFor = true
+			}
+		}
+	}
+	if !whileHoldsFor || !ifHoldsFor || !defunHoldsFor {
+		t.Fatalf("nesting while-for=%v if-for=%v defun-for=%v", whileHoldsFor, ifHoldsFor, defunHoldsFor)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	const want = "L a 0\nstep a\nL b 0\nstep b\nL a 1\nstep a\nL b 1\nstep b\nkept 4\nresult 4\nmiss\nempty 0\n"
+	if legacyOutcome.stdout != want {
+		t.Fatalf("stdout = %q, want %q", legacyOutcome.stdout, want)
+	}
+	if strings.Contains(legacyOutcome.stdout, "no") || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil || legacyOutcome.panicVal != nil {
+		t.Fatalf("unexpected outcome %#v", legacyOutcome)
+	}
+}
+
+func forIteratorNames(fors map[string]*hfir.Node) []string {
+	names := make([]string, 0, len(fors))
+	for name := range fors {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// hfirSubtreeHas reports whether id or any data-edge descendant matches pred.
+func hfirSubtreeHas(graph *hfir.Graph, id hfir.NodeID, pred func(*hfir.Node) bool) bool {
+	seen := map[hfir.NodeID]bool{}
+	var walk func(hfir.NodeID) bool
+	walk = func(current hfir.NodeID) bool {
+		if current == "" || seen[current] {
+			return false
+		}
+		seen[current] = true
+		node := graph.NodeByID(current)
+		if node == nil {
+			return false
+		}
+		if pred(node) {
+			return true
+		}
+		for _, edge := range node.DataInputs {
+			if walk(edge.SourceNode) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(id)
+}
+
 func TestHFIRBytecodeCapabilityConsistencyAndDenial(t *testing.T) {
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")
 	root, graph := checkedHFIRGraph(t, `(cli_app (print (env "HFIR_EQ_TEST_VALUE")))`)

@@ -1,0 +1,37 @@
+(cli_app
+  (defun walk (passes)
+    (type_hints (passes int) (return int))
+    (let (cells (list "a" "b"))
+      (let (total 0)
+        (let (n 0)
+          (do
+            (while (< n passes)
+              (do
+                (for label (list "L")
+                  (do
+                    (if (= label "skip")
+                      (print "no")
+                      (for item cells
+                        (do
+                          (if (= item "z")
+                            (print "no")
+                            (print label item n))
+                          (if true
+                            (set total (+ total 1)))
+                          (let (k 0)
+                            (while (< k 1)
+                              (do
+                                (print "step" item)
+                                (set k (+ k 1))))))))
+                    (while false
+                      (print "no"))))
+                (set n (+ n 1))))
+            (if (> total 0)
+              (for word (list "kept")
+                (print word total))
+              (print "miss"))
+            (for absent (list)
+              (print "no"))
+            (return total))))))
+  (print "result" (call walk 2))
+  (print "empty" (call walk 0)))
