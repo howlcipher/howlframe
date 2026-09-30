@@ -89,6 +89,8 @@ Phase 3c records that shape on the experimental lowerer. `LowerAST` stores a `co
 
 The conformance case `if_control` is `tests/conformance/abi_v1/11_if.howl`. Its hosts are the same five as `defun_call`. The false branches must not print. The taken branches print `else`, `then`, `greater`, and `only`.
 
+The conformance case `nested_if_while_defun` is `tests/conformance/abi_v1/12_nested_if_while_defun.howl`. Its hosts are the same five. One `defun` nests a `while` that contains `if`, and an `if` that contains `while`, and the program calls that function twice. The false loop must not print. The taken lines are `low 0`, `low 1`, `mid 2`, `hit 3`, `mid 4`, `again 1`, `result 2`, `miss`, and `empty 0`. This case is evidence that the experimental lowerer and the AST bytecode compiler execute that combination the same way. It does not switch `-compile-bc` to HFIR.
+
 ### Memory and runtime imports
 
 v1 defines no linear memory and no Wasm import table.
@@ -167,4 +169,4 @@ Phase 2 is one lowered graph consumed by every host, with identical outcomes or 
 
 ## What the suite does not prove
 
-Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, Phase 3a `defun` / `call`, Phase 3b `while`, and Phase 3c `if`. That test is not the production compiler. The `defun_call`, `while_control`, and `if_control` conformance cases compare `-compile-hfir-bc` with the AST hosts on those fixtures. Matching stdout there does not mean `-compile-bc` consumes HFIR.
+Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, Phase 3a `defun` / `call`, Phase 3b `while`, Phase 3c `if`, and the nested `if` / `while` / `defun` fixture. That test is not the production compiler. The `defun_call`, `while_control`, `if_control`, and `nested_if_while_defun` conformance cases compare `-compile-hfir-bc` with the AST hosts on those fixtures. Matching stdout there does not mean `-compile-bc` consumes HFIR.

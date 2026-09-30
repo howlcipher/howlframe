@@ -1,0 +1,27 @@
+(cli_app
+  (defun scan (limit)
+    (type_hints (limit int) (return int))
+    (let (n 0)
+      (let (hits 0)
+        (do
+          (while (< n limit)
+            (do
+              (if (< n 2)
+                (print "low" n)
+                (if (= n 3)
+                  (print "hit" n)
+                  (print "mid" n)))
+              (if (= n 3)
+                (set hits (+ hits 1)))
+              (set n (+ n 1))))
+          (if (> hits 0)
+            (while (< hits 2)
+              (do
+                (print "again" hits)
+                (set hits (+ hits 1))))
+            (print "miss"))
+          (while false
+            (print "no"))
+          (return hits)))))
+  (print "result" (call scan 5))
+  (print "empty" (call scan 0)))
