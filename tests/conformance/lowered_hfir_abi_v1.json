@@ -144,6 +144,16 @@
       "expect": "PASS",
       "stdout": "1\n2\n3",
       "forbid": "no"
+    },
+    {
+      "name": "if_control",
+      "fixture": "tests/conformance/abi_v1/11_if.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "else\nthen\ngreater\nonly",
+      "forbid": "no"
     }
   ]
 }

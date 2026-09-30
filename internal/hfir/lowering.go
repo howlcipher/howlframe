@@ -164,10 +164,14 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		}{{"value", astNode.Children[2]}})
 		return id, true, err
 	case "if":
+		// (if cond then) or (if cond then else). ControlEdges are the
+		// branch successors: the test, then the then-branch, then an
+		// optional else. for stays without control edges.
 		if len(astNode.Children) != 3 && len(astNode.Children) != 4 {
 			return "", false, nil
 		}
 		node.Kind = "if"
+		id := ctx.Graph.AddNode(node)
 		parts := []struct {
 			name  string
 			child *ast.Node
@@ -178,8 +182,17 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 				child *ast.Node
 			}{"else", astNode.Children[3]})
 		}
-		id, err := addNamed(parts)
-		return id, true, err
+		edges := make([]NodeID, 0, len(parts))
+		for _, part := range parts {
+			childID, err := ctx.lowerNode(part.child)
+			if err != nil {
+				return "", true, err
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: part.name, SourceNode: childID})
+			edges = append(edges, childID)
+		}
+		node.ControlEdges = edges
+		return id, true, nil
 	case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=", "and", "or":
 		if len(astNode.Children) != 3 {
 			return "", false, nil

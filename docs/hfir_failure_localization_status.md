@@ -16,13 +16,16 @@ and cannot be localized from that map.
 # Control-flow representation
 
 Phase 3b writes ordered control successors on a source-lowered `while`
-header: the condition, then the body. The experimental lowerer follows that
-pair. Localization does not. It still derives a read-only Phase-1 control
-view from validated canonical roles: program and sequence body order, let
-body continuation, if then or else branch containment, and a `while` only
-when those persisted successors match the condition and body roles. No
-model-supplied control edge is accepted. `exit` remains terminal runtime
-behavior rather than an arbitrary graph edge.
+header: the condition, then the body. Phase 3c writes them on a
+source-lowered `if`: the condition, the then-branch, and an optional else.
+The experimental lowerer follows those successors. Localization does not.
+It still derives a read-only Phase-1 control view from validated canonical
+roles: program and sequence body order, let body continuation, if then or
+else branch containment only when those persisted successors match the
+condition, then, and optional else, and a `while` only when its persisted
+successors match the condition and body roles. The transport schema has no
+control-edge field. No model-supplied control edge is accepted. `exit`
+remains terminal runtime behavior rather than an arbitrary graph edge.
 
 # Runtime trace
 

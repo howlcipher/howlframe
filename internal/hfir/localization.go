@@ -102,12 +102,15 @@ func DerivePhase1ControlRelations(graph *Graph) []DerivedControlRelation {
 				relations = append(relations, DerivedControlRelation{Controller: node.ID, Controlled: node.DataInputs[1].SourceNode, Role: "body", Ordinal: 1})
 			}
 		case "if":
-			if len(node.DataInputs) >= 2 && len(node.DataInputs) <= 3 && node.DataInputs[0].Name == "condition" {
-				for index := 1; index < len(node.DataInputs); index++ {
-					input := node.DataInputs[index]
-					if (input.Name == "then" || input.Name == "else") && graph.NodeByID(input.SourceNode) != nil {
-						relations = append(relations, DerivedControlRelation{Controller: node.ID, Controlled: input.SourceNode, Role: input.Name, Ordinal: index})
-					}
+			// The relation exists only when the persisted control successors
+			// are the condition, then the then-branch, and an optional else.
+			// An if with data roles and no control edges yields nothing.
+			// The published roles stay then and else. The condition is the
+			// test the lowerer jumps on, not a contained branch.
+			if ifControlSuccessorsMatch(graph, node) {
+				for index := 1; index < len(node.ControlEdges); index++ {
+					role := node.DataInputs[index].Name
+					relations = append(relations, DerivedControlRelation{Controller: node.ID, Controlled: node.ControlEdges[index], Role: role, Ordinal: index})
 				}
 			}
 		case "while":
@@ -129,6 +132,25 @@ func DerivePhase1ControlRelations(graph *Graph) []DerivedControlRelation {
 		return relations[i].Ordinal < relations[j].Ordinal
 	})
 	return relations
+}
+
+// ifControlSuccessorsMatch reports whether an if node's persisted control
+// successors are the condition, the then-branch, and an optional else, in
+// that order, and those nodes exist. A missing or swapped edge matches nothing.
+func ifControlSuccessorsMatch(graph *Graph, node *Node) bool {
+	if graph == nil || node == nil {
+		return false
+	}
+	n := len(node.DataInputs)
+	if (n != 2 && n != 3) || len(node.ControlEdges) != n || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || (n == 3 && node.DataInputs[2].Name != "else") {
+		return false
+	}
+	for index := range node.ControlEdges {
+		if node.ControlEdges[index] != node.DataInputs[index].SourceNode || graph.NodeByID(node.ControlEdges[index]) == nil {
+			return false
+		}
+	}
+	return true
 }
 
 // LocalizeFailure derives a bounded repair region from trusted evidence. It

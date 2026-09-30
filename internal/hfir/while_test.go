@@ -27,8 +27,19 @@ func TestLowerToBytecodeEmitsWhileControlEdges(t *testing.T) {
 			loop = node
 			continue
 		}
-		if node.Kind == "if" && len(node.ControlEdges) != 0 {
-			t.Fatalf("if %s has control edges %v; this slice fills them on while only", node.ID, node.ControlEdges)
+		if node.Kind == "if" {
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 {
+				t.Fatalf("if %s = %#v", node.ID, node)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if control %v data %#v", node.ControlEdges, node.DataInputs)
+				}
+			}
+			continue
+		}
+		if node.Kind == "for" && len(node.ControlEdges) != 0 {
+			t.Fatalf("for %s has control edges %v", node.ID, node.ControlEdges)
 		}
 	}
 	if loop == nil {

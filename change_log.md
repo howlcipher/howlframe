@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* Experimental `-compile-hfir-bc` compiles and runs `if` with the existing `JUMP_IF_FALSE` and `JUMP` opcodes. An if node's control edges are the condition, the then-branch, and an optional else. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3c_if.md`.
 * Experimental `-compile-hfir-bc` compiles and runs `while` with the existing `JUMP_IF_FALSE` and `JUMP` opcodes. A while header's control edges are the condition and then the body. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3b_while.md`.
 * Experimental `-compile-hfir-bc` compiles and runs `defun`, `call`, and `return` with the existing `CALL` and `RETURN` opcodes. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3a_defun_call.md`.
 * Generated Go and JavaScript mediate `(fetch)`. An empty, missing, or non-`network` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before any HTTP request, and the denial does not include the URL. The `network` grant performs the request. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2d_fetch.md`.
