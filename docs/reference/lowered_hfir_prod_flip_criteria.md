@@ -6,9 +6,11 @@ Version: checklist beside `lowered-hfir-abi/v1`. #90 stays Partial.
 
 Defer the production flip. Production `-compile-bc` stays Path 1 from HOWL-CANON-010: `runHFIRGate`, then `bytecode.CompileToBytecode` on the checked AST (`howlframe.go`, the `*compileBc` branch). Experimental `-compile-hfir-bc` stays Path 2: the same gate, then `hfir.LowerToBytecode`. That flag is the dogfood path until the Owner authorizes a flip PR.
 
-This note is the kill, defer, and promote checklist for that future PR. Publishing it leaves the emission source where it is. The recorded tip is `a9f00bcc91680abe505616fb9b9ed6e643ffa3bc` on `main` (PR #69). That SHA is the baseline this checklist was written against. It is not an Assurance release, and it does not authorize a flip.
+This note is the kill, defer, and promote checklist for that future PR. Publishing it leaves the emission source where it is. The baseline this checklist was written against is `a9f00bcc91680abe505616fb9b9ed6e643ffa3bc` on `main` (PR #69). That SHA is not an Assurance release, and it does not authorize a flip.
 
-The ABI text is `docs/reference/lowered_hfir_abi_v1.md`. The suite is `tests/conformance/lowered_hfir_abi_v1.json`. The journal for this spike is `docs/journals/2026-09-30_lowered_hfir_prod_flip_criteria.md`.
+The Assurance tip-lock is `4d74dbcf9654caa05e0b1d9212b15bc5398359e3` on `main`. That commit is PR #71: experimental `-compile-hfir-bc` lowers `html_escape` onto the existing `HTML_ESCAPE` opcode. At the lock, `git rev-parse origin/main` was that SHA. On it, the `*compileBc` branch still calls `bytecode.CompileToBytecode(root)` and the `*compileHfirBc` branch still calls `hfir.LowerToBytecode(graph)`. The measurement record is `docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md`. The lock is not a promote. It does not authorize a flip. #90 stays Partial.
+
+The ABI text is `docs/reference/lowered_hfir_abi_v1.md`. The suite is `tests/conformance/lowered_hfir_abi_v1.json`. The journal for the checklist spike is `docs/journals/2026-09-30_lowered_hfir_prod_flip_criteria.md`.
 
 ## Promote
 
@@ -77,7 +79,7 @@ These `construct.Supported` names have a `compileNode` case and no `LowerToBytec
 
 `regex_match` and `attr_escape` remain in this fence. `html_escape` left it when experimental `-compile-hfir-bc` started emitting the existing `HTML_ESCAPE` opcode with parity against production `-compile-bc`. `tests/parity/07_strings.howl` and `tests/parity/13_html_escape.howl` are the current rejected parity files. `13_html_escape.howl` still blocks because it also calls `attr_escape`. The same fence holds the other production bytecode constructs the dogfood subset never emitted: stores, the HTTP server, spawn, database, model calls, `time_now`, `sleep`, and `read_line`.
 
-`TestProdFlipCriteriaLock` recomputes this fence from `internal/construct`, `internal/bytecode/bytecode.go`, and `internal/hfir/bytecode.go`. The list below is that fence. The recorded tip in the Decision section is the baseline the checklist was written against. The fence moves when a dogfood slice teaches `LowerToBytecode` an existing opcode.
+`TestProdFlipCriteriaLock` recomputes this fence from `internal/construct`, `internal/bytecode/bytecode.go`, and `internal/hfir/bytecode.go`. The list below is that fence at the Assurance tip-lock `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`. `html_escape` is outside it. The baseline the checklist was written against remains `a9f00bcc91680abe505616fb9b9ed6e643ffa3bc`. The fence moves when a later dogfood slice teaches `LowerToBytecode` an existing opcode, and that move expires this lock.
 
 ```promote-blockers
 achieve
@@ -142,13 +144,15 @@ A killed track leaves `-compile-hfir-bc` as research. #90 stays Partial until a 
 
 ## Defer
 
-Defer is the decision at the recorded tip, and it stays the decision while any of these is true:
+Defer is the decision at the Assurance tip-lock, and it stays the decision while any of these is true:
 
 * The promote-blocker fence is non-empty.
 * `hfirRejectedParity` is non-empty.
 * The Assurance tip-lock is missing or stale.
 * Mediated host-effect conformance for `env`, `exec`, `read_file`, `write_file`, `mkdir`, or `fetch` disagrees across the hosts in the table above.
 * The Owner has not merged a flip PR that cites a fresh lock.
+
+The tip-lock named above is present for `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`. Defer still holds on that SHA: the promote-blocker fence is non-empty, `hfirRejectedParity` is non-empty, and the Owner has not merged a flip PR.
 
 While deferred, further dogfood lands on `-compile-hfir-bc` only. A slice that teaches the lowerer an existing opcode for a fenced name may shrink the fence. That slice still leaves `*compileBc` on `bytecode.CompileToBytecode`, and #90 stays Partial.
 

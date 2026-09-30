@@ -6,7 +6,7 @@ Phases 2a–2e and 3a–3d, and the dogfood comparisons through PR #69, show exp
 
 ## Starting SHA
 
-`a9f00bcc91680abe505616fb9b9ed6e643ffa3bc` on `origin/main` (PR #69). That commit is the baseline the checklist was written against. It is not an Assurance tip-lock release.
+`a9f00bcc91680abe505616fb9b9ed6e643ffa3bc` on `origin/main` (PR #69). That commit is the baseline the checklist was written against. It is not an Assurance tip-lock release. The later Assurance tip-lock is `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`, recorded in `docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md`. That lock still defers, and #90 stays Partial.
 
 ## Decision
 

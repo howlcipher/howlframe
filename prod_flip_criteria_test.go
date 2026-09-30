@@ -45,6 +45,9 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		"## Defer",
 		"## Dogfood path",
 		"Assurance tip-lock",
+		"4d74dbcf9654caa05e0b1d9212b15bc5398359e3",
+		"docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md",
+		"The lock is not a promote.",
 		"HFIR_BYTECODE_UNSUPPORTED",
 		"OpFetch",
 		"model-adapter",
@@ -53,6 +56,29 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 	} {
 		if !strings.Contains(criteria, phrase) {
 			t.Errorf("criteria doc missing %q", phrase)
+		}
+	}
+	journal := readRepoFile(t, "docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md")
+	for _, phrase := range []string{
+		"4d74dbcf9654caa05e0b1d9212b15bc5398359e3",
+		"Decision: Defer",
+		"#90 stays Partial",
+		"does not authorize a flip",
+		"html_escape",
+		"attr_escape",
+		"regex_match",
+		"OpFetch",
+		"`env`",
+		"`exec`",
+		"`read_file`",
+		"`write_file`",
+		"`mkdir`",
+		"`fetch`",
+		"Wasm",
+		"#106",
+	} {
+		if !strings.Contains(journal, phrase) {
+			t.Errorf("tip-lock journal missing %q", phrase)
 		}
 	}
 	if got, want := blockerFence(t, criteria), promoteBlockers(t); !reflect.DeepEqual(got, want) {
