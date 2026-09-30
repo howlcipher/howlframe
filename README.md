@@ -108,6 +108,7 @@ See:
 - [Architecture roadmap](docs/architecture_roadmap.md)
 - [HFIR execution status](docs/hfir_execution_status.md)
 - [Bytecode reference](docs/reference/bytecode_reference.md)
+- [Bytecode capability notes](docs/reference/bytecode_capability_notes.md)
 - [Improvement backlog](improvements.md)
 - [Bug log](bugs.md)
 
@@ -437,6 +438,8 @@ go run howlframe.go -run-bc -allow-caps network,filesystem examples/cli_hello.ho
 ```
 
 An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
+
+Dictionary operations such as `map_get` and `map_keys` grant nothing. `map_keys` is pure: `MAP_KEYS` has an empty capability field and runs under an empty grant. `store_keys` stays `database`. A `memory://` store needs that grant alone. A `file://` store additionally requires `filesystem`; `database` alone denies `file://` `store_keys` with `CAPABILITY_DENIED`. The generated opcode table records the opcode field (empty for `MAP_KEYS`, `database` for `STORE_KEYS`). The URI-dependent grant is written in [bytecode capability notes](docs/reference/bytecode_capability_notes.md).
 
 ## Observability
 

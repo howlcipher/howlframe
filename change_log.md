@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+* Locked the pure-versus-store capability split in docs and tests. `map_keys` grants nothing and runs under an empty grant. `store_keys` stays `database`. A `file://` store additionally requires `filesystem`. No opcode grant changed. Journal: `docs/journals/2026-09-30_capability_surface_honesty.md`.
+
 ### Added
 * `html_escape` and `attr_escape`, with `HTML_ESCAPE` and `ATTR_ESCAPE`. Both
   encode `&`, `<`, `>`, `"`, and `'` the same way (`&amp;`, `&lt;`, `&gt;`,

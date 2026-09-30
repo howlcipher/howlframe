@@ -71,3 +71,5 @@
 | `TIME_NOW` |  | 0 | 1 |  | Gets current unix timestamp |
 | `TRY_LET` | string, string, int64 | 0 | 0 |  | Try block with let binding |
 | `WRITE_FILE` |  | 2 | 0 | filesystem | Writes to a file |
+
+The capability column is the opcode field from `internal/bytecode/opcode.go`. `MAP_KEYS` is pure (empty). `STORE_KEYS` is `database`, and a `file://` store additionally requires `filesystem`. The hand-written note for that URI grant is [bytecode capability notes](bytecode_capability_notes.md).

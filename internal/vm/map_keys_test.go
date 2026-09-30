@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/capability"
 )
 
 // map_keys is the dict counterpart of store_keys. HowlBoard had to reshape
 // object APIs into lists because a HowlFrame client could not enumerate the
 // keys of a record it received. Order is sorted because Go map iteration is
-// not, and the operation is pure: it must not require the database capability.
+// not, and the operation is pure: both runs pass a nil grant. Growing
+// OpMapKeys's capability must fail this test.
 func TestMapKeysSortedWithoutCapabilityGrant(t *testing.T) {
 	const source = `(cli_app
   (let (counts (dict ("beta" "2") ("alpha" "1") ("gamma" "3")))
@@ -42,6 +44,17 @@ func TestMapKeysSortedWithoutCapabilityGrant(t *testing.T) {
 			t.Fatalf("stdout = %q, want %q", out.String(), want)
 		}
 	})
+}
+
+// TestMapKeysDeclaresNoCapability fails if OpMapKeys grows a capability,
+// including a change that also updates the empty-grant run above.
+func TestMapKeysDeclaresNoCapability(t *testing.T) {
+	if got := bytecode.Registry[bytecode.OpMapKeys].Capability; got != capability.None {
+		t.Fatalf("OpMapKeys capability = %q, want none", got)
+	}
+	if got := capability.ForConstruct("map_keys"); got != capability.None {
+		t.Fatalf("ForConstruct(map_keys) = %q, want none", got)
+	}
 }
 
 func TestMapKeysRejectsNonDict(t *testing.T) {
