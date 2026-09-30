@@ -71,6 +71,13 @@ func (c conformanceCase) wantStdout() string {
 // share one error class and must not print a forbidden value.
 func TestLoweredHFIRABIConformance(t *testing.T) {
 	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
+	// 07_read_file_capability.howl reads this absolute path. Generated Go runs
+	// in its own temp directory, so a relative fixture path would miss.
+	const readMarkerPath = "/tmp/howlframe-abi-v1-phase2c.txt"
+	if err := os.WriteFile(readMarkerPath, []byte("phase2c-read-marker"), 0o644); err != nil {
+		t.Fatalf("write read_file marker: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(readMarkerPath) })
 	root, file := loadConformance(t)
 	if file.ABI != hfir.LoweredABIV1 {
 		t.Fatalf("manifest abi = %q, want %q", file.ABI, hfir.LoweredABIV1)

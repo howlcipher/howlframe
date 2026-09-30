@@ -89,6 +89,24 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2b-exec-marker"
+    },
+    {
+      "name": "read_file_denied",
+      "fixture": "tests/conformance/abi_v1/07_read_file_capability.howl",
+      "deny_all": true,
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2c-read-marker"
+    },
+    {
+      "name": "read_file_granted",
+      "fixture": "tests/conformance/abi_v1/07_read_file_capability.howl",
+      "allow_caps": "filesystem",
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2c-read-marker"
     }
   ]
 }

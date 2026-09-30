@@ -38,6 +38,10 @@ var gogenNeedsEnv bool
 // runner grant before spawning a process. It is reset on every call.
 var gogenNeedsExec bool
 
+// gogenNeedsReadFile is set when GenerateCode emits read_file. The helper
+// checks the runner grant before any filesystem read. It is reset on every call.
+var gogenNeedsReadFile bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -482,9 +486,35 @@ func execHelperSource() string {
 `
 }
 
+// readFileHelperSource mediates (read_file path). The grant name is
+// filesystem, the same name as capability.ForConstruct("read_file") and
+// OpReadFile. os.ReadFile runs only after that grant is present, so a
+// denial cannot read the file or include the path in the error.
+// howlFrameReadFile keeps the (bytes, error) pair that try_let already
+// binds. howlFrameReadFileBytes is the single value let and bytes_to_string
+// expect; an IO failure there panics after the grant check.
+func readFileHelperSource() string {
+	return `func howlFrameReadFile(path string) ([]byte, error) {
+	if !howlFrameGrantHas("filesystem") {
+		panic("CAPABILITY_DENIED: capability denied: filesystem")
+	}
+	return os.ReadFile(path)
+}
+
+func howlFrameReadFileBytes(path string) []byte {
+	b, err := howlFrameReadFile(path)
+	if err != nil {
+		panic(fmt.Sprintf("IO_ERROR: read_file failed: %v", err))
+	}
+	return b
+}
+
+`
+}
+
 func goHostHelpers() string {
 	var code string
-	if gogenNeedsEnv || gogenNeedsExec {
+	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile {
 		code += grantHelperSource()
 	}
 	if gogenNeedsEnv {
@@ -492,6 +522,9 @@ func goHostHelpers() string {
 	}
 	if gogenNeedsExec {
 		code += execHelperSource()
+	}
+	if gogenNeedsReadFile {
+		code += readFileHelperSource()
 	}
 	return code
 }
@@ -520,6 +553,20 @@ func goExecCall(node *ast.Node, reqVar string, depth int) string {
 	return fmt.Sprintf("howlFrameExec(%s, %s)", cmd, strings.Join(args, ", "))
 }
 
+// goReadFileCall emits the mediated read. tuple is the try_let form, which
+// still binds (bytes, error). Every other use gets one []byte.
+func goReadFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+	gogenNeedsReadFile = true
+	if node == nil || len(node.Children) != 2 {
+		return ""
+	}
+	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
+	if tuple {
+		return fmt.Sprintf("howlFrameReadFile(%s)", pathStr)
+	}
+	return fmt.Sprintf("howlFrameReadFileBytes(%s)", pathStr)
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
@@ -528,6 +575,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenCollection = false
 	gogenNeedsEnv = false
 	gogenNeedsExec = false
+	gogenNeedsReadFile = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -1249,7 +1297,12 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			}
 		}
 
-		valStr := generateStatement(valNode, reqVar, depth+1)
+		var valStr string
+		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "read_file" {
+			valStr = goReadFileCall(valNode, reqVar, depth, true)
+		} else {
+			valStr = generateStatement(valNode, reqVar, depth+1)
+		}
 		return fmt.Sprintf(`		{
 			%s, %s := %s
 			if %s != nil {
@@ -1604,11 +1657,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		queryStr := generateExpression(queryNode, reqVar, depth+1)
 		return fmt.Sprintf("		%s.Query(%s)", dbVar, queryStr)
 	} else if head == "read_file" {
-		if len(node.Children) != 2 {
-			// ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
-		}
-		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
-		return fmt.Sprintf("os.ReadFile(%s)", pathStr)
+		return goReadFileCall(node, reqVar, depth, false)
 	} else if head == "write_file" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("write_file expects (write_file path data)", node.Line, node.Column)

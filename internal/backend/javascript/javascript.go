@@ -66,6 +66,10 @@ var jsNeedsEnv bool
 // runner grant before spawning a process. It is reset on every call.
 var jsNeedsExec bool
 
+// jsNeedsReadFile is set when GenerateJSCode emits read_file. The helper
+// checks the runner grant before any filesystem read. It is reset on every call.
+var jsNeedsReadFile bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -309,8 +313,24 @@ func execJSHelper() string {
 `
 }
 
+// readFileJSHelper mediates (read_file path). The grant name is filesystem,
+// the same name as capability.ForConstruct("read_file") and OpReadFile.
+// readFileSync runs only after that grant is present, so a denial cannot
+// read the file or put the path in the error. The return is UTF-8 text,
+// which bytes_to_string prints unchanged.
+func readFileJSHelper() string {
+	return `function howlFrameReadFile(path) {
+  if (!howlFrameGrantHas("filesystem")) {
+    throw new Error("CAPABILITY_DENIED: capability denied: filesystem");
+  }
+  return require("fs").readFileSync(path, "utf8");
+}
+
+`
+}
+
 func jsHostHelpers() string {
-	if !jsNeedsEnv && !jsNeedsExec {
+	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile {
 		return ""
 	}
 	helper := grantJSHelper()
@@ -319,6 +339,9 @@ func jsHostHelpers() string {
 	}
 	if jsNeedsExec {
 		helper += execJSHelper()
+	}
+	if jsNeedsReadFile {
+		helper += readFileJSHelper()
 	}
 	return helper
 }
@@ -342,6 +365,15 @@ func jsExecCall(node *ast.Node, reqVar string, depth int) string {
 		args = append(args, generateJSExpression(arg, reqVar, depth+1))
 	}
 	return fmt.Sprintf("howlFrameExec(%s, [%s])", cmd, strings.Join(args, ", "))
+}
+
+func jsReadFileCall(node *ast.Node, reqVar string, depth int) string {
+	jsNeedsReadFile = true
+	if node == nil || len(node.Children) != 2 {
+		return ""
+	}
+	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+	return fmt.Sprintf("howlFrameReadFile(%s)", pathStr)
 }
 
 func sanitizeJSName(name string) string {
@@ -643,6 +675,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
 	jsNeedsExec = false
+	jsNeedsReadFile = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -714,10 +747,10 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	// keeps them reachable as globals for inline event handlers.
 	code := funcsCode
 	if strings.TrimSpace(appCode) != "" {
-		if jsNeedsEnv || jsNeedsExec {
-			// A denied env read or exec throws. The async IIFE would otherwise
-			// turn that into an unhandled rejection and a zero exit. try_let
-			// still catches the throw before it reaches this handler.
+		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile {
+			// A denied env read, exec, or read_file throws. The async IIFE would
+			// otherwise turn that into an unhandled rejection and a zero exit.
+			// try_let still catches the throw before it reaches this handler.
 			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  process.exit(1);\n});\n", appCode)
 		} else {
 			code += fmt.Sprintf(";(async () => {\n%s\n})();\n", appCode)
@@ -901,6 +934,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return jsEnvCall(node.Children[1], reqVar, depth)
 	} else if head == "exec" {
 		return jsExecCall(node, reqVar, depth)
+	} else if head == "read_file" {
+		return jsReadFileCall(node, reqVar, depth)
 	} else if head == "req_query" || head == "req_header" || head == "req_path" {
 		jsNeedsRequestRead = true
 		if len(node.Children) != 3 {
