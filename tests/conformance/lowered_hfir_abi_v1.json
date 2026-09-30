@@ -174,6 +174,16 @@
       "expect": "PASS",
       "stdout": "low 0\nlow 1\nmid 2\nhit 3\nmid 4\nagain 1\nresult 2\nmiss\nempty 0",
       "forbid": "no"
+    },
+    {
+      "name": "nested_for_if_while_defun",
+      "fixture": "tests/conformance/abi_v1/14_nested_for_if_while_defun.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "L a 0\nstep a\nL b 0\nstep b\nL a 1\nstep a\nL b 1\nstep b\nkept 4\nresult 4\nmiss\nempty 0",
+      "forbid": "no"
     }
   ]
 }
