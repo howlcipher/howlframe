@@ -88,6 +88,8 @@ func (v *Verifier) Verify() []Diagnostic {
 			checkRole("body", true)
 		case "read_file", "mkdir":
 			checkRole("path", true)
+		case "exec":
+			checkRole("cmd", true)
 		case "write_file":
 			checkRole("path", true)
 			checkRole("data", true)

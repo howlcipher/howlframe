@@ -110,6 +110,70 @@ func TestLowerToBytecodeFailsClosedWithProvenance(t *testing.T) {
 	}
 }
 
+func TestLowerToBytecodeExecEmitsExistingOpcode(t *testing.T) {
+	graph := NewGraph()
+	cmd := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "printf"})
+	arg := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2b-exec-marker"})
+	entry := graph.AddNode(&Node{
+		Kind: "exec",
+		DataInputs: []DataEdge{
+			{Name: "cmd", SourceNode: cmd},
+			{Name: "arg", SourceNode: arg},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	last := program.Main[len(program.Main)-1]
+	if last.Op != bytecode.OpExec || last.OpString != "EXEC" || last.IntOperand != 1 {
+		t.Fatalf("last instruction = %#v, want EXEC with one argument", last)
+	}
+	if bytecode.Registry[last.Op].Capability != "process" {
+		t.Fatalf("EXEC capability = %q, want process", bytecode.Registry[last.Op].Capability)
+	}
+}
+
+func TestLowerToBytecodeExecRequiresCommand(t *testing.T) {
+	graph := NewGraph()
+	arg := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2b-exec-marker"})
+	entry := graph.AddNode(&Node{
+		Kind:       "exec",
+		Provenance: Provenance{Filename: "exec.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "arg", SourceNode: arg}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+}
+
+func TestLowerToBytecodeExecRejectsArgumentBeforeCommand(t *testing.T) {
+	graph := NewGraph()
+	arg := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2b-exec-marker"})
+	cmd := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "printf"})
+	entry := graph.AddNode(&Node{
+		Kind: "exec",
+		DataInputs: []DataEdge{
+			{Name: "arg", SourceNode: arg},
+			{Name: "cmd", SourceNode: cmd},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+}
+
 func TestLowerToBytecodeWriteFileRequiresPathAndData(t *testing.T) {
 	graph := NewGraph()
 	path := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "/tmp/x"})

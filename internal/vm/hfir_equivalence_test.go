@@ -609,18 +609,178 @@ func TestHFIRBytecodeNestedEnvReadFixture(t *testing.T) {
 	}
 }
 
-// TestHFIRBytecodeExecAndFetchStayUnsupported locks the fail-closed boundary
-// for the two host effects the experimental lowerer still does not emit.
-// The conformance cases for those fixtures stay on the AST hosts.
-func TestHFIRBytecodeExecAndFetchStayUnsupported(t *testing.T) {
-	for _, name := range []string{"06_exec_capability.howl", "08_fetch_capability.howl"} {
-		t.Run(name, func(t *testing.T) {
-			_, graph := checkedHFIRGraph(t, readAbiFixture(t, name))
-			program, diagnostics := hfir.LowerToBytecode(graph)
-			if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != hfir.BytecodeUnsupportedCode {
-				t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+// TestHFIRBytecodeExecFixture compares production AST bytecode with the
+// experimental HFIR lowerer on the Phase 2b exec fixture. The conformance
+// harness runs that file through -compile-bc and -compile-hfir-bc, granted
+// and denied. This test round-trips both artifacts and checks that EXEC
+// carries the command and then the argument.
+func TestHFIRBytecodeExecFixture(t *testing.T) {
+	source := readAbiFixture(t, "06_exec_capability.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	var execs int
+	for _, node := range graph.Nodes {
+		if node.Kind != "exec" {
+			continue
+		}
+		execs++
+		if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
+			t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+		if got := fsPathValue(t, graph, node); got != "printf" {
+			t.Fatalf("exec command = %q, want printf", got)
+		}
+		arg := graph.NodeByID(node.DataInputs[1].SourceNode)
+		if arg == nil || arg.Kind != "const" || arg.Value != "phase2b-exec-marker" {
+			t.Fatalf("exec argument = %#v, want phase2b-exec-marker", arg)
+		}
+	}
+	if execs != 1 {
+		t.Fatalf("exec nodes = %d, want 1", execs)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := graphCapabilities(graph), []capability.Capability{capability.Process}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("HFIR effects = %v, want process", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Process}) {
+		t.Fatalf("emitted capabilities = %v, want process", programCapabilities(direct))
+	}
+	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
+	}
+	if !reflect.DeepEqual(execOperandShapes(direct), []string{"main\x00printf\x00phase2b-exec-marker"}) {
+		t.Fatalf("EXEC operands = %#v", execOperandShapes(direct))
+	}
+
+	legacyDenied := runBytecodeOutcome(legacy, "", nil)
+	directDenied := runBytecodeOutcome(direct, "", nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	requireProcessDenial(t, legacyDenied, "printf", "phase2b-exec-marker")
+
+	caps := []capability.Capability{capability.Process}
+	legacyGranted := runBytecodeOutcome(legacy, "", caps)
+	directGranted := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != "phase2b-exec-marker\n" || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+}
+
+// TestHFIRBytecodeExecOperandOrder locks zero, one, and three arguments onto
+// the same EXEC instruction the AST compiler emits: command, then arguments,
+// with IntOperand equal to the argument count. The three-argument form is a
+// printf format plus two values, so a swapped operand changes the text.
+func TestHFIRBytecodeExecOperandOrder(t *testing.T) {
+	source := `(cli_app
+  (print (bytes_to_string (exec "true")))
+  (print (bytes_to_string (exec "printf" "only")))
+  (print (bytes_to_string (exec "printf" "%s:%s" "left" "right"))))`
+	root, graph := checkedHFIRGraph(t, source)
+	var counts []int
+	for _, node := range graph.Nodes {
+		if node.Kind != "exec" {
+			continue
+		}
+		if len(node.DataInputs) == 0 || node.DataInputs[0].Name != "cmd" {
+			t.Fatalf("exec %s edges %#v", node.ID, node.DataInputs)
+		}
+		for _, edge := range node.DataInputs[1:] {
+			if edge.Name != "arg" {
+				t.Fatalf("exec %s edges %#v", node.ID, node.DataInputs)
 			}
-		})
+		}
+		counts = append(counts, len(node.DataInputs)-1)
+	}
+	if !reflect.DeepEqual(counts, []int{0, 1, 3}) {
+		t.Fatalf("argument counts = %v, want 0, 1, 3", counts)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	wantShapes := []string{
+		"main\x00true",
+		"main\x00printf\x00only",
+		"main\x00printf\x00%s:%s\x00left\x00right",
+	}
+	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(got, wantShapes) {
+		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v\nwant %#v", got, want, wantShapes)
+	}
+	caps := []capability.Capability{capability.Process}
+	legacyOutcome := runBytecodeOutcome(legacy, "", caps)
+	directOutcome := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyOutcome, directOutcome)
+	const wantStdout = "\nonly\nleft:right\n"
+	if legacyOutcome.stdout != wantStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
+		t.Fatalf("granted outcome %#v, want stdout %q", legacyOutcome, wantStdout)
+	}
+}
+
+// TestHFIRBytecodeNestedExecFixture compares production AST bytecode with
+// the experimental HFIR lowerer on one program that nests exec inside if,
+// while, for, and defun. The conformance harness runs the same file through
+// -compile-bc and -compile-hfir-bc, granted and denied.
+func TestHFIRBytecodeNestedExecFixture(t *testing.T) {
+	source := readAbiFixture(t, "19_nested_exec.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	assertNestedExecShape(t, graph)
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := graphCapabilities(graph), []capability.Capability{capability.Process}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("HFIR effects = %v, want process", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Process}) {
+		t.Fatalf("emitted capabilities = %v, want process", programCapabilities(direct))
+	}
+	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
+	}
+
+	const wantStdout = "phase2b-exec-marker\nL a 0\nL b 0\nkept 2\nphase2b-exec-kept\nresult 2\nmiss\nphase2b-exec-miss\nempty 0\n"
+	legacyDenied := runBytecodeOutcome(legacy, "", nil)
+	directDenied := runBytecodeOutcome(direct, "", nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	requireProcessDenial(t, legacyDenied, "printf", "phase2b-exec-marker")
+
+	caps := []capability.Capability{capability.Process}
+	legacyGranted := runBytecodeOutcome(legacy, "", caps)
+	directGranted := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if strings.Contains(legacyGranted.stdout, "no") {
+		t.Fatalf("granted stdout ran an untaken branch: %q", legacyGranted.stdout)
+	}
+}
+
+// TestHFIRBytecodeFetchStaysUnsupported locks the fail-closed boundary for
+// fetch. exec now lowers onto the existing EXEC opcode. The fetch
+// conformance cases stay on the AST hosts.
+func TestHFIRBytecodeFetchStaysUnsupported(t *testing.T) {
+	_, graph := checkedHFIRGraph(t, readAbiFixture(t, "08_fetch_capability.howl"))
+	program, diagnostics := hfir.LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != hfir.BytecodeUnsupportedCode {
+		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
 	}
 }
 
@@ -865,6 +1025,120 @@ func assertNestedEnvReadShape(t *testing.T, graph *hfir.Graph) {
 	}
 }
 
+func assertNestedExecShape(t *testing.T, graph *hfir.Graph) {
+	t.Helper()
+	var defuns, calls, whiles, ifWithElse, execs int
+	args := map[string]int{}
+	fors := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			ifWithElse++
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		case "exec":
+			execs++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
+				t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			if got := fsPathValue(t, graph, node); got != "printf" {
+				t.Fatalf("exec command = %q, want printf", got)
+			}
+			arg := graph.NodeByID(node.DataInputs[1].SourceNode)
+			if arg == nil || arg.Kind != "const" || arg.LiteralKind != "STRING" || arg.Value == "" {
+				t.Fatalf("exec argument = %#v, want a string const", arg)
+			}
+			args[arg.Value]++
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || execs != 7 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d exec=%d, want 1, 2, 2, 3, 3, 7", defuns, calls, whiles, ifWithElse, len(fors), execs)
+	}
+	for _, arg := range []string{"no-skip", "phase2b-exec-marker", "no-else", "no-empty", "no-dead", "phase2b-exec-kept", "phase2b-exec-miss"} {
+		if args[arg] != 1 {
+			t.Fatalf("exec args = %#v, missing %s", args, arg)
+		}
+	}
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+		t.Fatal("taken branch does not contain exec")
+	}
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
+				t.Fatal("false while body does not contain exec")
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+		t.Fatal("name for does not contain exec")
+	}
+	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+		t.Fatal("empty for does not contain exec")
+	}
+	var defunHoldsExec bool
+	for _, node := range graph.Nodes {
+		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
+			defunHoldsExec = true
+		}
+	}
+	if !defunHoldsExec {
+		t.Fatal("defun does not contain exec")
+	}
+}
+
 func hasPathSuffix(paths map[string]*hfir.Node, suffix string) bool {
 	for path := range paths {
 		if strings.HasSuffix(path, suffix) {
@@ -996,6 +1270,22 @@ func requireSameBytecodeOutcome(t *testing.T, legacy, direct bytecodeOutcome) {
 	}
 	if legacy.vmError == nil || direct.vmError == nil || legacy.vmError.Code != direct.vmError.Code || legacy.vmError.Message != direct.vmError.Message || legacy.vmError.Opcode != direct.vmError.Opcode {
 		t.Fatalf("AST error = %#v\nHFIR error = %#v", legacy.vmError, direct.vmError)
+	}
+}
+
+func requireProcessDenial(t *testing.T, outcome bytecodeOutcome, command, marker string) {
+	t.Helper()
+	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != "EXEC" || outcome.vmError.Message != "capability denied: process" {
+		t.Fatalf("denial = %#v, want CAPABILITY_DENIED EXEC", outcome)
+	}
+	if outcome.stdout != "" || outcome.stderr != "" {
+		t.Fatalf("denial produced output %#v", outcome)
+	}
+	blob := outcome.vmError.Message
+	for _, secret := range []string{command, marker} {
+		if secret != "" && strings.Contains(blob, secret) {
+			t.Fatalf("denial leaked %q in %q", secret, blob)
+		}
 	}
 }
 
@@ -1242,6 +1532,55 @@ func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {
 	if legacyOutcome.stdout != "" || directOutcome.stdout != "" {
 		t.Fatalf("arity rejection printed stdout: AST %q HFIR %q", legacyOutcome.stdout, directOutcome.stdout)
 	}
+}
+
+// execOperandShapes records each EXEC as its function, then the command,
+// then each argument. Those values are the LOAD_CONST instructions
+// immediately before EXEC, which is the operand order CompileToBytecode
+// already emits. IntOperand is the argument count, so the window is that
+// count plus the command.
+func execOperandShapes(program *bytecode.BCProgram) []string {
+	var shapes []string
+	collect := func(where string, insts []bytecode.BCInstruction) {
+		for index, inst := range insts {
+			if inst.Op != bytecode.OpExec {
+				continue
+			}
+			argc := int(inst.IntOperand)
+			if argc < 0 || index < argc+1 {
+				shapes = append(shapes, where+"\x00short")
+				continue
+			}
+			parts := []string{where}
+			literal := true
+			for _, prev := range insts[index-argc-1 : index] {
+				text, ok := prev.ValueOperand.(string)
+				if prev.Op != bytecode.OpLoadConst || !ok {
+					literal = false
+					break
+				}
+				parts = append(parts, text)
+			}
+			if !literal {
+				shapes = append(shapes, where+"\x00nonliteral")
+				continue
+			}
+			shapes = append(shapes, strings.Join(parts, "\x00"))
+		}
+	}
+	collect("main", program.Main)
+	names := make([]string, 0, len(program.Functions))
+	for name := range program.Functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fn := program.Functions[name]
+		if fn != nil {
+			collect(name, fn.Instructions)
+		}
+	}
+	return shapes
 }
 
 func graphCapabilities(graph *hfir.Graph) []capability.Capability {

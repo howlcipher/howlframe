@@ -76,7 +76,7 @@
       "name": "exec_denied",
       "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase2b-exec-marker"
@@ -85,7 +85,7 @@
       "name": "exec_granted",
       "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
       "allow_caps": "process",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2b-exec-marker"
@@ -257,6 +257,25 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase1-token\ndogfood-read-marker\nL a 0\nL b 0\nkept 2\nphase1-token\nresult 2\nmiss\ndogfood-miss-marker\nempty 0",
+      "forbid": "no"
+    },
+    {
+      "name": "nested_exec_denied",
+      "fixture": "tests/conformance/abi_v1/19_nested_exec.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2b-exec-marker"
+    },
+    {
+      "name": "nested_exec_granted",
+      "fixture": "tests/conformance/abi_v1/19_nested_exec.howl",
+      "allow_caps": "process",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2b-exec-marker\nL a 0\nL b 0\nkept 2\nphase2b-exec-kept\nresult 2\nmiss\nphase2b-exec-miss\nempty 0",
       "forbid": "no"
     }
   ]

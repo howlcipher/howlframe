@@ -332,6 +332,28 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		}
 		id, err := addChildren(2, edgeName)
 		return id, true, err
+	case "exec":
+		// (exec cmd args...). Existing EXEC opcode. The first edge is the
+		// command and each later edge is an argument, in source order.
+		// Experimental -compile-hfir-bc only. No new opcode and no new capability.
+		if len(astNode.Children) < 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id := ctx.Graph.AddNode(node)
+		cmdID, err := ctx.lowerNode(astNode.Children[1])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "cmd", SourceNode: cmdID})
+		for _, arg := range astNode.Children[2:] {
+			argID, err := ctx.lowerNode(arg)
+			if err != nil {
+				return "", true, err
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: "arg", SourceNode: argID})
+		}
+		return id, true, nil
 	case "write_file":
 		// (write_file path data). Existing WRITE_FILE opcode. Experimental
 		// -compile-hfir-bc only. No new opcode and no new capability.
