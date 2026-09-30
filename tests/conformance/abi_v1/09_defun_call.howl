@@ -1,0 +1,9 @@
+(cli_app
+  (defun add (a b)
+    (type_hints (a int) (b int) (return int))
+    (return (+ a b)))
+  (defun label ()
+    (type_hint return "string")
+    (return "phase3a"))
+  (print (call add (call add 20 1) 21))
+  (print (call label)))

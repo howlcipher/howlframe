@@ -719,6 +719,9 @@ func nodeRoles(kind string) []string {
 	case "map_set":
 		return []string{"key", "value"}
 	default:
+		// defun, call, return, param, and while are not transport kinds.
+		// Phase 3a lowers defun and call from source on -compile-hfir-bc.
+		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil
 	}
 }

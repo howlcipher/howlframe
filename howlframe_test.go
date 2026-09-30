@@ -1239,6 +1239,46 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 	}
 }
 
+// TestCompileBcStaysASTWhileHfirBcRejectsWhile locks the production flag.
+// -compile-bc still emits AST bytecode for while. -compile-hfir-bc still
+// rejects while and writes no artifact. Phase 3a does not flip that flag.
+func TestCompileBcStaysASTWhileHfirBcRejectsWhile(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
+	}
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "while.howl")
+	if err := os.WriteFile(source, []byte("(cli_app (let (n 0) (while (< n 1) (do (set n (+ n 1)) (print n)))))\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	astOut := filepath.Join(dir, "ast.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", source, "-o", astOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected while: %v\n%s", err, output)
+	}
+	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of production while artifact: %v\n%s", err, runOut)
+	}
+	if !strings.Contains(string(runOut), "1") {
+		t.Fatalf("production while stdout = %q", runOut)
+	}
+
+	hfirOut := filepath.Join(dir, "hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput()
+	if err == nil {
+		t.Fatalf("-compile-hfir-bc accepted while:\n%s", output)
+	}
+	if !strings.Contains(string(output), "while") {
+		t.Fatalf("experimental rejection = %s", output)
+	}
+	if _, statErr := os.Stat(hfirOut); !os.IsNotExist(statErr) {
+		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
+	}
+}
+
 // TestCompileBcFailsClosedCitingOwningTracker proves the diagnostic points at
 // the backlog item that owns the gap, so the failure is actionable rather than
 // just a wall.

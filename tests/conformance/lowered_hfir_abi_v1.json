@@ -125,6 +125,15 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2d-fetch-marker"
+    },
+    {
+      "name": "defun_call",
+      "fixture": "tests/conformance/abi_v1/09_defun_call.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "42\nphase3a"
     }
   ]
 }

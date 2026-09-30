@@ -74,6 +74,35 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
 			name:   "request query rejects a non-request",
 			source: `(cli_app (let (req "nope") (print (req_query req "status"))))`,
 		},
+		{
+			name: "defun and call",
+			source: `(cli_app
+  (defun add (a b)
+    (type_hints (a int) (b int) (return int))
+    (return (+ a b)))
+  (defun label ()
+    (type_hint return "string")
+    (return "phase3a"))
+  (print (call add (call add 20 1) 21))
+  (print (call label)))`,
+		},
+		{
+			name: "defun after its call",
+			source: `(cli_app
+  (print (call add 2 3))
+  (defun add ((a int) (b int)) int
+    (return (+ a b))))`,
+		},
+		{
+			name: "recursive defun",
+			source: `(cli_app
+  (defun fact (n)
+    (type_hints (n int) (return int))
+    (if (< n 2)
+      (return 1)
+      (return (* n (call fact (- n 1))))))
+  (print (call fact 5)))`,
+		},
 	}
 
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")
@@ -189,6 +218,39 @@ func runBytecodeOutcome(program *bytecode.BCProgram, stdin string, caps []capabi
 	}()
 	machine.run(machine.insts, machine.env)
 	return outcome
+}
+
+func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {
+	// The checker rejects this arity before either compiler. This comparison
+	// is the two bytecode emitters, which both still emit CALL.
+	source := `(cli_app
+  (defun id (n)
+    (type_hints (n int) (return int))
+    (return n))
+  (print (call id)))`
+	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
+	root := parsed.ParseExpression()
+	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if legacyOutcome.vmError == nil || directOutcome.vmError == nil {
+		t.Fatalf("AST error = %#v\nHFIR error = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.vmError.Code != directOutcome.vmError.Code || legacyOutcome.vmError.Message != directOutcome.vmError.Message {
+		t.Fatalf("AST error = %#v\nHFIR error = %#v", legacyOutcome.vmError, directOutcome.vmError)
+	}
+	if legacyOutcome.stdout != "" || directOutcome.stdout != "" {
+		t.Fatalf("arity rejection printed stdout: AST %q HFIR %q", legacyOutcome.stdout, directOutcome.stdout)
+	}
 }
 
 func graphCapabilities(graph *hfir.Graph) []capability.Capability {
