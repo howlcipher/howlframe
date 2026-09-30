@@ -292,6 +292,89 @@ func TestLowerToBytecodeWriteFileRequiresPathAndData(t *testing.T) {
 	}
 }
 
+func TestLowerToBytecodeHTMLEscapeEmitsExistingOpcode(t *testing.T) {
+	graph := NewGraph()
+	text := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "a&b<c>"})
+	entry := graph.AddNode(&Node{
+		Kind:       "html_escape",
+		DataInputs: []DataEdge{{Name: "value", SourceNode: text}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Main) != 2 {
+		t.Fatalf("instructions = %#v, want text then HTML_ESCAPE", program.Main)
+	}
+	if program.Main[0].Op != bytecode.OpLoadConst || program.Main[0].ValueOperand != "a&b<c>" {
+		t.Fatalf("operand = %#v, want the text", program.Main[0])
+	}
+	last := program.Main[1]
+	if last.Op != bytecode.OpHTMLEscape || last.OpString != "HTML_ESCAPE" || last.StringOperand != "" || last.IntOperand != 0 {
+		t.Fatalf("last instruction = %#v, want bare HTML_ESCAPE", last)
+	}
+	if bytecode.Registry[last.Op].Capability != "" {
+		t.Fatalf("HTML_ESCAPE capability = %q, want none", bytecode.Registry[last.Op].Capability)
+	}
+}
+
+func TestLowerToBytecodeHTMLEscapeRequiresValue(t *testing.T) {
+	graph := NewGraph()
+	text := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "a&b"})
+	entry := graph.AddNode(&Node{
+		Kind:       "html_escape",
+		Provenance: Provenance{Filename: "escape.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "text", SourceNode: text}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+	if diagnostics[0].Message != "html_escape requires value" {
+		t.Fatalf("message = %q", diagnostics[0].Message)
+	}
+}
+
+func TestLowerASTHTMLEscapeRejectsSiblings(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		kind   string
+	}{
+		{name: "missing text", source: `(cli_app (print (html_escape)))`, kind: "html_escape"},
+		{name: "extra text", source: `(cli_app (print (html_escape "a" "b")))`, kind: "html_escape"},
+		{name: "attr_escape", source: `(cli_app (print (attr_escape "a<b")))`, kind: "attr_escape"},
+		{name: "regex_match", source: `(cli_app (print (regex_match "^a$" "a")))`, kind: "regex_match"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := parser.NewParser(lexer.NewLexer(tc.source), "escape.howl").ParseExpression()
+			graph, err := LowerAST(root, "escape.howl")
+			if err != nil {
+				t.Fatal(err)
+			}
+			program, diagnostics := LowerToBytecode(graph)
+			if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode {
+				t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+			}
+			want := "html_escape requires value"
+			if tc.kind != "html_escape" {
+				want = "node kind \"" + tc.kind + "\" is not in the Phase-1 executable subset"
+			}
+			if diagnostics[0].Message != want {
+				t.Fatalf("message = %q, want %q", diagnostics[0].Message, want)
+			}
+		})
+	}
+}
+
 func TestLowerToBytecodeRejectsMissingDataInput(t *testing.T) {
 	graph := NewGraph()
 	entry := graph.AddNode(&Node{

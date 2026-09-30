@@ -325,6 +325,24 @@
       "expect": "PASS",
       "stdout": "phase1-token\nmulti-read-marker\nphase2b-exec-marker\nphase2d-fetch-marker\nL a 0\nL b 0\nkept 2\nphase1-token\nmulti-kept-read\nphase2b-exec-kept\nphase2d-fetch-marker\nresult 2\nmiss\nphase1-token\nmulti-miss-read\nphase2b-exec-miss\nphase2d-fetch-marker\nempty 0",
       "forbid": "no"
+    },
+    {
+      "name": "html_escape",
+      "fixture": "tests/conformance/abi_v1/22_html_escape.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "&amp;\n&lt;\n&gt;\n&#34;\n&#39;\n&amp;&lt;&gt;&#34;&#39;\n[]\nx&lt;y&amp;z\na&amp;b\nc&lt;d\ne&gt;f\ng&#34;h",
+      "forbid": "untaken"
+    },
+    {
+      "name": "html_escape_type_error",
+      "fixture": "tests/conformance/abi_v1/23_html_escape_type_error.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "TYPE_ERROR"
     }
   ]
 }
