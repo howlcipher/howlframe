@@ -429,19 +429,21 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		insts = append(insts, successInsts...)
 		return insts, nil
 	case "for":
-		if node.Value == "" || len(children) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" {
-			diagnostic := c.diagnostic(node, "for requires iterable and body edges")
-			return nil, &diagnostic
+		iterNode, bodyNode, shapeDiagnostic := c.forSuccessors(node)
+		if shapeDiagnostic != nil {
+			return nil, shapeDiagnostic
 		}
-		listInsts, childDiagnostic := compileChild(0)
+		listInsts, childDiagnostic := c.compile(iterNode)
 		if childDiagnostic != nil {
 			return nil, childDiagnostic
 		}
-		bodyInsts, childDiagnostic := compileChild(1)
+		bodyInsts, childDiagnostic := c.compile(bodyNode)
 		if childDiagnostic != nil {
 			return nil, childDiagnostic
 		}
-
+		// Same relative jumps as bytecode.CompileToBytecode's for case.
+		// FOR_NEXT skips the body and the back edge when the iterator is
+		// done. JUMP returns to FOR_NEXT. No new opcode.
 		var insts []bytecode.BCInstruction
 		insts = append(insts, listInsts...)
 		insts = append(insts, instruction(bytecode.OpForInit, "FOR_INIT", nil))
@@ -563,6 +565,25 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		diagnostic := c.diagnostic(node, fmt.Sprintf("node kind %q is not in the Phase-1 executable subset", node.Kind))
 		return nil, &diagnostic
 	}
+}
+
+// forSuccessors is the executable control-edge contract for an iterator
+// header. ControlEdges[0] is the iterable and ControlEdges[1] is the body.
+// They must be the same nodes as the named data edges, and Value is the
+// iterator binding. A for without those edges is not executable. The back
+// edge is the JUMP the caller emits.
+func (c *bytecodeLowerer) forSuccessors(node *Node) (*Node, *Node, *Diagnostic) {
+	if node.Value == "" || len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+		diagnostic := c.diagnostic(node, "for requires an iterable control edge and a body control edge")
+		return nil, nil, &diagnostic
+	}
+	iter := c.graph.NodeByID(node.ControlEdges[0])
+	body := c.graph.NodeByID(node.ControlEdges[1])
+	if iter == nil || body == nil {
+		diagnostic := c.diagnostic(node, "for control edge references a missing node")
+		return nil, nil, &diagnostic
+	}
+	return iter, body, nil
 }
 
 // whileSuccessors is the executable control-edge contract for a loop header.

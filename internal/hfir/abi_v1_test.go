@@ -134,6 +134,42 @@ func TestLoweredABIV1WhileIsExecutable(t *testing.T) {
 	}
 }
 
+func TestLoweredABIV1ForIsExecutable(t *testing.T) {
+	source := `(cli_app (for item (list) (print "no")) (for item (list "a") (print item)))`
+	root := parser.NewParser(lexer.NewLexer(source), "abi_for.howl").ParseExpression()
+	checker.Check(root)
+	graph, err := LowerAST(root, "abi_for.howl")
+	if err != nil {
+		t.Fatalf("LowerAST(%q) error = %v", source, err)
+	}
+	var loops int
+	for _, node := range graph.Nodes {
+		if node.Kind != "for" {
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("node %s kind %s has control edges; only for is in this slice", node.ID, node.Kind)
+			}
+			continue
+		}
+		loops++
+		if node.Value != "item" || len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" {
+			t.Fatalf("for shape = %#v", node)
+		}
+		if node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+			t.Fatalf("for control edges = %v, data = %#v", node.ControlEdges, node.DataInputs)
+		}
+	}
+	if loops != 2 {
+		t.Fatalf("for nodes = %d", loops)
+	}
+	program, diags := LowerToBytecode(graph)
+	if program == nil || len(diags) != 0 {
+		t.Fatalf("LowerToBytecode(%q) program=%v diags=%#v", source, program != nil, diags)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func lowerFixture(t *testing.T, path string) *Graph {
 	t.Helper()
 	data, err := os.ReadFile(path)

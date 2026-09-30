@@ -1365,6 +1365,70 @@ func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
 	}
 }
 
+// TestCompileBcStaysASTWhileHfirBcRunsFor locks the production flag for the
+// iterator slice. Both flags compile and run a small for to the same stdout.
+// -compile-bc is still the AST compiler: sleep is in that compiler and still
+// outside the experimental lowerer. Phase 3d does not flip -compile-bc.
+func TestCompileBcStaysASTWhileHfirBcRunsFor(t *testing.T) {
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
+		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
+	}
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "for.howl")
+	if err := os.WriteFile(source, []byte("(cli_app (for item (list) (print \"no\")) (for item (list \"a\" \"b\") (print item)))\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	astOut := filepath.Join(dir, "ast.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", source, "-o", astOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected for: %v\n%s", err, output)
+	}
+	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of production for artifact: %v\n%s", err, runOut)
+	}
+	if strings.TrimSpace(string(runOut)) != "a\nb" {
+		t.Fatalf("production for stdout = %q", runOut)
+	}
+	if strings.Contains(string(runOut), "no") {
+		t.Fatalf("production for printed the empty iteration: %q", runOut)
+	}
+
+	hfirOut := filepath.Join(dir, "hfir.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-hfir-bc rejected for: %v\n%s", err, output)
+	}
+	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of experimental for artifact: %v\n%s", err, hfirRun)
+	}
+	if string(hfirRun) != string(runOut) {
+		t.Fatalf("experimental for stdout = %q, production = %q", hfirRun, runOut)
+	}
+
+	sleepSource := filepath.Join(dir, "sleep.howl")
+	if err := os.WriteFile(sleepSource, []byte("(cli_app (sleep 0))\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sleepOut := filepath.Join(dir, "sleep.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", sleepSource, "-o", sleepOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected sleep, so production is not the AST compiler: %v\n%s", err, output)
+	}
+	rejected := filepath.Join(dir, "sleep-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", sleepSource, "-o", rejected).CombinedOutput()
+	if err == nil {
+		t.Fatalf("-compile-hfir-bc accepted sleep:\n%s", output)
+	}
+	if !strings.Contains(string(output), "sleep") {
+		t.Fatalf("experimental rejection = %s", output)
+	}
+	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
+		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
+	}
+}
+
 // TestCompileBcFailsClosedCitingOwningTracker proves the diagnostic points at
 // the backlog item that owns the gap, so the failure is actionable rather than
 // just a wall.

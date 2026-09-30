@@ -53,8 +53,8 @@ func TestLowerToBytecodeEmitsIfControlEdges(t *testing.T) {
 	if len(withoutElse.ControlEdges) != 2 || withoutElse.DataInputs[0].Name != "condition" || withoutElse.DataInputs[1].Name != "then" {
 		t.Fatalf("if then = %#v", withoutElse)
 	}
-	if len(loop.ControlEdges) != 0 {
-		t.Fatalf("for has control edges %v", loop.ControlEdges)
+	if len(loop.ControlEdges) != 2 || loop.DataInputs[0].Name != "iterable" || loop.DataInputs[1].Name != "body" || loop.ControlEdges[0] != loop.DataInputs[0].SourceNode || loop.ControlEdges[1] != loop.DataInputs[1].SourceNode {
+		t.Fatalf("for control %v data %#v", loop.ControlEdges, loop.DataInputs)
 	}
 	thenBranch := graph.NodeByID(withElse.ControlEdges[1])
 	elseBranch := graph.NodeByID(withElse.ControlEdges[2])

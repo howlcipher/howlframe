@@ -1,0 +1,5 @@
+(cli_app
+  (for item (list)
+    (print "no"))
+  (for item (list "a" "b" "c")
+    (print item)))

@@ -491,9 +491,9 @@ var hfirBlockingCodes = map[string]bool{
 // runs as a Verify() side effect but never itself produces a blocking
 // diagnostic) - real control-flow/cycle verification and non-wasm target
 // feasibility are not implemented in internal/hfir yet. LowerAST fills
-// ControlEdges for a while header (condition, then body) and for an if
-// (condition, then, optional else). for stays empty. That is not a CFG,
-// and isFeasible only has rules for "wasm".
+// ControlEdges for a while header (condition, then body), for an if
+// (condition, then, optional else), and for a for header (iterable, then
+// body). That is not a CFG, and isFeasible only has rules for "wasm".
 func runHFIRGate(root *ast.Node, module string, target hfirTarget) *hfir.Graph {
 	graph, err := hfir.LowerAST(root, module)
 	if err != nil {
