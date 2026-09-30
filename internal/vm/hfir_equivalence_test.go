@@ -519,6 +519,111 @@ func TestHFIRBytecodeNestedFsWriteFixture(t *testing.T) {
 	compareCompilerFilesystem(t, legacy, direct, paths, "WRITE_FILE", prefix, wantStdout, granted)
 }
 
+// TestHFIRBytecodeNestedEnvReadFixture compares production AST bytecode with
+// the experimental HFIR lowerer on one program that nests env and read_file
+// inside if, while, for, and defun. The conformance harness runs the same
+// file through -compile-bc and -compile-hfir-bc, granted and denied.
+// This test round-trips both artifacts.
+func TestHFIRBytecodeNestedEnvReadFixture(t *testing.T) {
+	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
+	source := readAbiFixture(t, "18_nested_env_read.howl")
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "hostread")
+	source = strings.ReplaceAll(source, "/tmp/howlframe-abi-v1-hostread", prefix)
+	taken := map[string]string{
+		prefix + "-read.txt": "dogfood-read-marker",
+		prefix + "-miss.txt": "dogfood-miss-marker",
+	}
+	untaken := []string{
+		prefix + "-skip.txt",
+		prefix + "-else.txt",
+		prefix + "-empty.txt",
+		prefix + "-dead.txt",
+	}
+	for path, body := range taken {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	root, graph := checkedHFIRGraph(t, source)
+	assertNestedEnvReadShape(t, graph)
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	wantCaps := []capability.Capability{capability.Environment, capability.Filesystem}
+	if got := graphCapabilities(graph); !reflect.DeepEqual(got, wantCaps) {
+		t.Fatalf("HFIR effects = %v, want environment and filesystem", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), wantCaps) {
+		t.Fatalf("emitted capabilities = %v, want environment and filesystem", programCapabilities(direct))
+	}
+
+	const wantStdout = "phase1-token\ndogfood-read-marker\nL a 0\nL b 0\nkept 2\nphase1-token\nresult 2\nmiss\ndogfood-miss-marker\nempty 0\n"
+	legacyDenied := runBytecodeOutcome(legacy, "", nil)
+	directDenied := runBytecodeOutcome(direct, "", nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	if legacyDenied.vmError == nil || legacyDenied.vmError.Code != "CAPABILITY_DENIED" || legacyDenied.vmError.Opcode != "ENV" || legacyDenied.vmError.Message != "capability denied: environment" {
+		t.Fatalf("denial = %#v, want CAPABILITY_DENIED ENV", legacyDenied)
+	}
+	if legacyDenied.stdout != "" || legacyDenied.stderr != "" {
+		t.Fatalf("denial produced output %#v", legacyDenied)
+	}
+	denialText := legacyDenied.vmError.Message
+	for _, secret := range []string{"phase1-token", prefix, "dogfood-read-marker", "dogfood-miss-marker"} {
+		if strings.Contains(denialText, secret) {
+			t.Fatalf("denial leaked %q in %q", secret, denialText)
+		}
+	}
+
+	caps := []capability.Capability{capability.Environment, capability.Filesystem}
+	legacyGranted := runBytecodeOutcome(legacy, "", caps)
+	directGranted := runBytecodeOutcome(direct, "", caps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if strings.Contains(legacyGranted.stdout, "no") || strings.Contains(legacyGranted.stdout, prefix) {
+		t.Fatalf("granted stdout leaked an untaken branch or path: %q", legacyGranted.stdout)
+	}
+	for path, body := range taken {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != body {
+			t.Fatalf("read marker %s changed to %q", path, got)
+		}
+	}
+	for _, path := range untaken {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("untaken path exists: %s (%v)", path, err)
+		}
+	}
+}
+
+// TestHFIRBytecodeExecAndFetchStayUnsupported locks the fail-closed boundary
+// for the two host effects the experimental lowerer still does not emit.
+// The conformance cases for those fixtures stay on the AST hosts.
+func TestHFIRBytecodeExecAndFetchStayUnsupported(t *testing.T) {
+	for _, name := range []string{"06_exec_capability.howl", "08_fetch_capability.howl"} {
+		t.Run(name, func(t *testing.T) {
+			_, graph := checkedHFIRGraph(t, readAbiFixture(t, name))
+			program, diagnostics := hfir.LowerToBytecode(graph)
+			if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != hfir.BytecodeUnsupportedCode {
+				t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+			}
+		})
+	}
+}
+
 func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
 	t.Helper()
 	var defuns, calls, whiles, ifWithElse, writes, mkdirs int
@@ -637,6 +742,125 @@ func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
 	for _, path := range []string{"-dir", "-miss", "-skip", "-dead"} {
 		if !hasPathSuffix(mkdirPaths, path) {
 			t.Fatalf("missing mkdir %s in %v", path, pathKeys(mkdirPaths))
+		}
+	}
+}
+
+func assertNestedEnvReadShape(t *testing.T, graph *hfir.Graph) {
+	t.Helper()
+	var defuns, calls, whiles, ifWithElse, reads int
+	envKeys := map[string]int{}
+	fors := map[string]*hfir.Node{}
+	readPaths := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			ifWithElse++
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		case "env":
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" {
+				t.Fatalf("env %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			envKeys[fsPathValue(t, graph, node)]++
+		case "read_file":
+			reads++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "path" {
+				t.Fatalf("read_file %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			readPaths[fsPathValue(t, graph, node)] = node
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || len(envKeys) != 4 || reads != 6 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d env-keys=%d read=%d, want 1, 2, 2, 3, 3, 4, 6", defuns, calls, whiles, ifWithElse, len(fors), len(envKeys), reads)
+	}
+	if envKeys["HOWLFRAME_ABI_SECRET"] != 2 || envKeys["HOWLFRAME_ABI_SKIP"] != 1 || envKeys["HOWLFRAME_ABI_ELSE"] != 1 || envKeys["HOWLFRAME_ABI_DEAD"] != 1 {
+		t.Fatalf("env keys = %#v", envKeys)
+	}
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+		t.Fatal("taken branch does not contain env and read_file")
+	}
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			body := node.DataInputs[1].SourceNode
+			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "env" }) || !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "read_file" }) {
+				t.Fatal("false while body does not contain env and read_file")
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+		t.Fatal("name for does not contain env and read_file")
+	}
+	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+		t.Fatal("empty for does not contain read_file")
+	}
+	var defunHoldsRead bool
+	for _, node := range graph.Nodes {
+		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
+			return child.Kind == "env" || child.Kind == "read_file"
+		}) {
+			defunHoldsRead = true
+		}
+	}
+	if !defunHoldsRead {
+		t.Fatal("defun does not contain env or read_file")
+	}
+	for _, path := range []string{"-read.txt", "-miss.txt", "-skip.txt", "-else.txt", "-empty.txt", "-dead.txt"} {
+		if !hasPathSuffix(readPaths, path) {
+			t.Fatalf("missing read_file %s in %v", path, pathKeys(readPaths))
 		}
 	}
 }

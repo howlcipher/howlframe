@@ -5,7 +5,7 @@
       "name": "arith_if",
       "fixture": "tests/conformance/abi_v1/01_arith_if.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "14\n6\n40\n5\ngreater\nunequal\ntrue"
@@ -14,7 +14,7 @@
       "name": "map_keys",
       "fixture": "tests/conformance/abi_v1/02_map_keys.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "alpha,beta,gamma\n0"
@@ -23,7 +23,7 @@
       "name": "map_get_absence",
       "fixture": "tests/conformance/abi_v1/03_map_get_absence.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "yes\nfalse\nx||y"
@@ -32,7 +32,7 @@
       "name": "map_keys_sort_bmp",
       "fixture": "tests/fixtures/map_keys_sort_bmp.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout_keys": ["gamma", "beta", "alpha", "é"]
@@ -41,7 +41,7 @@
       "name": "map_keys_sort_nonbmp",
       "fixture": "tests/fixtures/map_keys_sort_nonbmp.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout_keys": ["\uD83D\uDE00", "a", "\uF000", "\uD83C\uDC00", "é"]
@@ -50,7 +50,7 @@
       "name": "map_keys_type_error",
       "fixture": "tests/conformance/abi_v1/04_map_keys_type_error.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "TYPE_ERROR"
     },
@@ -58,7 +58,7 @@
       "name": "env_denied",
       "fixture": "tests/conformance/abi_v1/05_env_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase1-token"
@@ -67,7 +67,7 @@
       "name": "env_granted",
       "fixture": "tests/conformance/abi_v1/05_env_capability.howl",
       "allow_caps": "environment",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase1-token"
@@ -94,7 +94,7 @@
       "name": "read_file_denied",
       "fixture": "tests/conformance/abi_v1/07_read_file_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase2c-read-marker"
@@ -103,7 +103,7 @@
       "name": "read_file_granted",
       "fixture": "tests/conformance/abi_v1/07_read_file_capability.howl",
       "allow_caps": "filesystem",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2c-read-marker"
@@ -238,6 +238,25 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "L a 0\nL b 0\nkept 2\nresult 2\nmiss\nempty 0",
+      "forbid": "no"
+    },
+    {
+      "name": "nested_env_read_denied",
+      "fixture": "tests/conformance/abi_v1/18_nested_env_read.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase1-token"
+    },
+    {
+      "name": "nested_env_read_granted",
+      "fixture": "tests/conformance/abi_v1/18_nested_env_read.howl",
+      "allow_caps": "environment,filesystem",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase1-token\ndogfood-read-marker\nL a 0\nL b 0\nkept 2\nphase1-token\nresult 2\nmiss\ndogfood-miss-marker\nempty 0",
       "forbid": "no"
     }
   ]
