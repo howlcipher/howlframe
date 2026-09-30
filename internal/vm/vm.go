@@ -706,6 +706,21 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		key := fmt.Sprint(interp.eval(node.Children[1], env))
 		return os.Getenv(key)
+	case "exec":
+		// requireCapability already ran for process. Spawn only after that grant.
+		if len(node.Children) < 2 {
+			InterpErr("exec expects (exec cmd args...)", node)
+		}
+		cmd := fmt.Sprint(interp.eval(node.Children[1], env))
+		args := make([]string, 0, len(node.Children)-2)
+		for _, argNode := range node.Children[2:] {
+			args = append(args, fmt.Sprint(interp.eval(argNode, env)))
+		}
+		out, err := exec.Command(cmd, args...).CombinedOutput()
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
+		}
+		return out
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])

@@ -784,11 +784,16 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		return ast.Layout(ast.Void)
 	case "export":
 		return a.inferChild(node, 1, env)
-	case "write_file", "mkdir", "exec":
+	case "write_file", "mkdir":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)
 		}
 		return ast.Layout(ast.Void)
+	case "exec":
+		for _, child := range node.Children[1:] {
+			a.infer(child, env)
+		}
+		return ast.Layout(ast.Bytes)
 	case "print", "sleep", "test":
 		for _, child := range node.Children[1:] {
 			a.infer(child, env)

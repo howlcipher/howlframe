@@ -62,6 +62,10 @@ var jsNeedsMapKeyOrder bool
 // runner grant before reading the requested variable. It is reset on every call.
 var jsNeedsEnv bool
 
+// jsNeedsExec is set when GenerateJSCode emits exec. The helper checks the
+// runner grant before spawning a process. It is reset on every call.
+var jsNeedsExec bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -249,11 +253,9 @@ function howlRequestString(kind, value) {
 `
 }
 
-// envJSHelper mediates (env key). The runner grant is
-// HOWLFRAME_ALLOW_CAPS, comma-separated, the same names as -allow-caps.
-// An empty or unset grant denies. process.env[key] runs only after
-// environment is present, so a denial cannot return the secret.
-func envJSHelper() string {
+// grantJSHelper reads HOWLFRAME_ALLOW_CAPS, comma-separated, the same names
+// as -allow-caps. An empty or unset grant denies every name.
+func grantJSHelper() string {
 	return `function howlFrameGrantHas(name) {
   var raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
   var parts = raw.split(",");
@@ -262,7 +264,14 @@ func envJSHelper() string {
   }
   return false;
 }
-function howlFrameEnv(key) {
+
+`
+}
+
+// envJSHelper mediates (env key). process.env[key] runs only after
+// environment is present, so a denial cannot return the secret.
+func envJSHelper() string {
+	return `function howlFrameEnv(key) {
   if (!howlFrameGrantHas("environment")) {
     throw new Error("CAPABILITY_DENIED: capability denied: environment");
   }
@@ -274,12 +283,65 @@ function howlFrameEnv(key) {
 `
 }
 
+// execJSHelper mediates (exec cmd args...). The grant name is process, the
+// same name as capability.ForConstruct("exec") and OpExec. spawnSync runs
+// only after that grant is present, so a denial cannot start a process or
+// put the command in the error. There is no shell. Stdout is returned
+// ahead of stderr, which matches CombinedOutput when only one stream writes.
+func execJSHelper() string {
+	return `function howlFrameExec(cmd, args) {
+  if (!howlFrameGrantHas("process")) {
+    throw new Error("CAPABILITY_DENIED: capability denied: process");
+  }
+  var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8" });
+  if (result.error) {
+    throw new Error("IO_ERROR: exec failed: " + result.error.message);
+  }
+  if (result.status !== 0) {
+    var statusText = result.status == null ? "signal" : String(result.status);
+    throw new Error("IO_ERROR: exec failed: exit status " + statusText);
+  }
+  var stdout = result.stdout == null ? "" : String(result.stdout);
+  var stderr = result.stderr == null ? "" : String(result.stderr);
+  return stdout + stderr;
+}
+
+`
+}
+
+func jsHostHelpers() string {
+	if !jsNeedsEnv && !jsNeedsExec {
+		return ""
+	}
+	helper := grantJSHelper()
+	if jsNeedsEnv {
+		helper += envJSHelper()
+	}
+	if jsNeedsExec {
+		helper += execJSHelper()
+	}
+	return helper
+}
+
 func jsEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
 	jsNeedsEnv = true
 	if keyNode != nil && keyNode.Type == "STRING" {
 		return fmt.Sprintf("howlFrameEnv(%q)", keyNode.Value)
 	}
 	return fmt.Sprintf("howlFrameEnv(%s)", generateJSExpression(keyNode, reqVar, depth+1))
+}
+
+func jsExecCall(node *ast.Node, reqVar string, depth int) string {
+	jsNeedsExec = true
+	if node == nil || len(node.Children) < 2 {
+		return ""
+	}
+	cmd := generateJSExpression(node.Children[1], reqVar, depth+1)
+	args := make([]string, 0, len(node.Children)-2)
+	for _, arg := range node.Children[2:] {
+		args = append(args, generateJSExpression(arg, reqVar, depth+1))
+	}
+	return fmt.Sprintf("howlFrameExec(%s, [%s])", cmd, strings.Join(args, ", "))
 }
 
 func sanitizeJSName(name string) string {
@@ -580,6 +642,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
+	jsNeedsExec = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -651,10 +714,10 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	// keeps them reachable as globals for inline event handlers.
 	code := funcsCode
 	if strings.TrimSpace(appCode) != "" {
-		if jsNeedsEnv {
-			// A denied env read throws. The async IIFE would otherwise turn
-			// that into an unhandled rejection and a zero exit. try_let still
-			// catches the throw before it reaches this handler.
+		if jsNeedsEnv || jsNeedsExec {
+			// A denied env read or exec throws. The async IIFE would otherwise
+			// turn that into an unhandled rejection and a zero exit. try_let
+			// still catches the throw before it reaches this handler.
 			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  process.exit(1);\n});\n", appCode)
 		} else {
 			code += fmt.Sprintf(";(async () => {\n%s\n})();\n", appCode)
@@ -695,8 +758,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsEnv {
-		helper := envJSHelper()
+	if helper := jsHostHelpers(); helper != "" {
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
@@ -837,6 +899,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			return ""
 		}
 		return jsEnvCall(node.Children[1], reqVar, depth)
+	} else if head == "exec" {
+		return jsExecCall(node, reqVar, depth)
 	} else if head == "req_query" || head == "req_header" || head == "req_path" {
 		jsNeedsRequestRead = true
 		if len(node.Children) != 3 {
