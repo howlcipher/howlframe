@@ -732,6 +732,39 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
 		}
 		return b
+	case "write_file":
+		// requireCapability already ran for filesystem. Write only after that grant.
+		{
+			if len(node.Children) != 3 {
+				InterpErr("write_file expects (write_file path data)", node)
+			}
+			writePath := fmt.Sprint(interp.eval(node.Children[1], env))
+			var data []byte
+			switch v := interp.eval(node.Children[2], env).(type) {
+			case string:
+				data = []byte(v)
+			case []byte:
+				data = v
+			default:
+				InterpErr(fmt.Sprintf("TYPE_ERROR: write_file expected string data, got %T", v), node)
+			}
+			if err := os.WriteFile(writePath, data, 0644); err != nil {
+				InterpErr(fmt.Sprintf("IO_ERROR: write_file failed: %v", err), node)
+			}
+			return nil
+		}
+	case "mkdir":
+		// requireCapability already ran for filesystem. Create the directory only after that grant.
+		{
+			if len(node.Children) != 2 {
+				InterpErr("mkdir expects (mkdir path)", node)
+			}
+			dirPath := fmt.Sprint(interp.eval(node.Children[1], env))
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				InterpErr(fmt.Sprintf("IO_ERROR: mkdir failed: %v", err), node)
+			}
+			return nil
+		}
 	case "fetch":
 		// requireCapability already ran for network. The request is sent only
 		// after that grant, so a denial cannot open a connection.
