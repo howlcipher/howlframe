@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/hfir"
+	"github.com/howlcipher/howlframe/internal/testutil"
 )
 
 type conformanceFile struct {
@@ -73,6 +74,8 @@ func (c conformanceCase) wantStdout() string {
 // differential harness. Passing cases must share stdout. Rejections must
 // share one error class and must not print a forbidden value.
 func TestLoweredHFIRABIConformance(t *testing.T) {
+	unlockFetch := testutil.LockABIFetchFixture(t)
+	t.Cleanup(unlockFetch)
 	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
 	// Loopback is the fixture. A proxy would hide a denied request or miss the
 	// granted one. 08_fetch_capability.howl uses this exact address.
@@ -190,11 +193,11 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				t.Fatalf("VerifyParityWithOptions: %v", err)
 			}
 			hits := fetchHits.Load() - hitsBefore
-			if tc.Name == "fetch_denied" && hits != 0 {
-				t.Fatalf("fetch_denied performed %d HTTP request(s)", hits)
+			if (tc.Name == "fetch_denied" || tc.Name == "nested_fetch_denied") && hits != 0 {
+				t.Fatalf("%s performed %d HTTP request(s)", tc.Name, hits)
 			}
-			if tc.Name == "fetch_granted" && hits == 0 {
-				t.Fatalf("fetch_granted performed no HTTP request")
+			if (tc.Name == "fetch_granted" || tc.Name == "nested_fetch_granted") && hits == 0 {
+				t.Fatalf("%s performed no HTTP request", tc.Name)
 			}
 			if report.OverallStatus != StatusPass {
 				t.Fatalf("parity: %s", strings.Join(report.Discrepancies, "\n"))

@@ -174,6 +174,108 @@ func TestLowerToBytecodeExecRejectsArgumentBeforeCommand(t *testing.T) {
 	}
 }
 
+func TestLowerToBytecodeFetchEmitsExistingOpcode(t *testing.T) {
+	graph := NewGraph()
+	url := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"})
+	method := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "GET"})
+	entry := graph.AddNode(&Node{
+		Kind: "fetch",
+		DataInputs: []DataEdge{
+			{Name: "url", SourceNode: url},
+			{Name: "method", SourceNode: method},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Main) != 3 {
+		t.Fatalf("instructions = %d, want URL, method, FETCH", len(program.Main))
+	}
+	last := program.Main[len(program.Main)-1]
+	if last.Op != bytecode.OpFetch || last.OpString != "FETCH" || last.IntOperand != 0 || last.StringOperand != "" {
+		t.Fatalf("last instruction = %#v, want bare FETCH", last)
+	}
+	if program.Main[0].ValueOperand != "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" || program.Main[1].ValueOperand != "GET" {
+		t.Fatalf("operands = %#v, %#v, want URL then method", program.Main[0].ValueOperand, program.Main[1].ValueOperand)
+	}
+	if bytecode.Registry[last.Op].Capability != "network" {
+		t.Fatalf("FETCH capability = %q, want network", bytecode.Registry[last.Op].Capability)
+	}
+}
+
+func TestLowerToBytecodeFetchSkipsBodyOperand(t *testing.T) {
+	graph := NewGraph()
+	url := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"})
+	method := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "PUT"})
+	body := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2d-body-not-sent"})
+	entry := graph.AddNode(&Node{
+		Kind: "fetch",
+		DataInputs: []DataEdge{
+			{Name: "url", SourceNode: url},
+			{Name: "method", SourceNode: method},
+			{Name: "body", SourceNode: body},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if len(program.Main) != 3 || program.Main[2].Op != bytecode.OpFetch {
+		t.Fatalf("instructions = %#v, want URL, method, FETCH", program.Main)
+	}
+	if program.Main[0].ValueOperand != "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" || program.Main[1].ValueOperand != "PUT" {
+		t.Fatalf("operands = %#v, %#v, want URL then method", program.Main[0].ValueOperand, program.Main[1].ValueOperand)
+	}
+	for _, inst := range program.Main {
+		if inst.ValueOperand == "phase2d-body-not-sent" || inst.StringOperand == "phase2d-body-not-sent" {
+			t.Fatalf("FETCH compiled the body: %#v", program.Main)
+		}
+	}
+}
+
+func TestLowerToBytecodeFetchRequiresURLAndMethod(t *testing.T) {
+	graph := NewGraph()
+	method := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "GET"})
+	entry := graph.AddNode(&Node{
+		Kind:       "fetch",
+		Provenance: Provenance{Filename: "fetch.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "method", SourceNode: method}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+}
+
+func TestLowerToBytecodeFetchRejectsMethodBeforeURL(t *testing.T) {
+	graph := NewGraph()
+	method := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "GET"})
+	url := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"})
+	entry := graph.AddNode(&Node{
+		Kind: "fetch",
+		DataInputs: []DataEdge{
+			{Name: "method", SourceNode: method},
+			{Name: "url", SourceNode: url},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+}
+
 func TestLowerToBytecodeWriteFileRequiresPathAndData(t *testing.T) {
 	graph := NewGraph()
 	path := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "/tmp/x"})

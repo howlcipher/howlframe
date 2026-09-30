@@ -335,6 +335,29 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		return append(insts, instruction(bytecode.OpExec, "EXEC", func(inst *bytecode.BCInstruction) {
 			inst.IntOperand = int64(len(children) - 1)
 		})), nil
+	case "fetch":
+		if len(children) < 2 || len(children) > 3 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+			diagnostic := c.diagnostic(node, "fetch requires a url and a method")
+			return nil, &diagnostic
+		}
+		if len(children) == 3 && node.DataInputs[2].Name != "body" {
+			diagnostic := c.diagnostic(node, "fetch requires a url, a method, and an optional body")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		methodInsts, childDiagnostic := compileChild(1)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		insts = append(insts, methodInsts...)
+		// Same operand order as bytecode.CompileToBytecode: URL, then method.
+		// FETCH pops the method and then the URL. The optional body is not
+		// an operand; the AST compiler does not compile that child either.
+		// No new opcode.
+		return append(insts, instruction(bytecode.OpFetch, "FETCH", nil)), nil
 	case "parse_json":
 		if len(children) != 1 || node.DataInputs[0].Name != "content" {
 			diagnostic := c.diagnostic(node, "parse_json requires content")

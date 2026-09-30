@@ -1,0 +1,43 @@
+(cli_app
+  (defun probe (passes)
+    (type_hints (passes int) (return int))
+    (let (names (list "a" "b"))
+      (let (total 0)
+        (let (n 0)
+          (do
+            (while (< n passes)
+              (do
+                (for label (list "L")
+                  (if (= label "skip")
+                    (do
+                      (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
+                      (print "no"))
+                    (do
+                      (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
+                      (for name names
+                        (if (= name "z")
+                          (do
+                            (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
+                            (print "no"))
+                          (do
+                            (set total (+ total 1))
+                            (print label name n))))
+                      (for absent (list)
+                        (do
+                          (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
+                          (print "no")))
+                      (while false
+                        (do
+                          (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
+                          (print "no"))))))
+                (set n (+ n 1))))
+            (if (> total 0)
+              (do
+                (print "kept" total)
+                (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET"))))
+              (do
+                (print "miss")
+                (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))))
+            (return total))))))
+  (print "result" (call probe 1))
+  (print "empty" (call probe 0)))

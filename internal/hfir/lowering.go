@@ -354,6 +354,36 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			node.DataInputs = append(node.DataInputs, DataEdge{Name: "arg", SourceNode: argID})
 		}
 		return id, true, nil
+	case "fetch":
+		// (fetch url method [body]). Existing FETCH opcode. The first edge
+		// is the URL and the second is the method. An optional third edge
+		// records a body. Experimental -compile-hfir-bc only. No new opcode
+		// and no new capability. OpFetch has no body operand, and the AST
+		// bytecode compiler does not compile that child, so the bytecode
+		// lowerer does not either.
+		if len(astNode.Children) != 3 && len(astNode.Children) != 4 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id := ctx.Graph.AddNode(node)
+		urlID, err := ctx.lowerNode(astNode.Children[1])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "url", SourceNode: urlID})
+		methodID, err := ctx.lowerNode(astNode.Children[2])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs, DataEdge{Name: "method", SourceNode: methodID})
+		if len(astNode.Children) == 4 {
+			bodyID, err := ctx.lowerNode(astNode.Children[3])
+			if err != nil {
+				return "", true, err
+			}
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: "body", SourceNode: bodyID})
+		}
+		return id, true, nil
 	case "write_file":
 		// (write_file path data). Existing WRITE_FILE opcode. Experimental
 		// -compile-hfir-bc only. No new opcode and no new capability.

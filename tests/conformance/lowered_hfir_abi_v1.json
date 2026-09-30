@@ -112,7 +112,7 @@
       "name": "fetch_denied",
       "fixture": "tests/conformance/abi_v1/08_fetch_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase2d-fetch-marker"
@@ -121,7 +121,7 @@
       "name": "fetch_granted",
       "fixture": "tests/conformance/abi_v1/08_fetch_capability.howl",
       "allow_caps": "network",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2d-fetch-marker"
@@ -276,6 +276,25 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2b-exec-marker\nL a 0\nL b 0\nkept 2\nphase2b-exec-kept\nresult 2\nmiss\nphase2b-exec-miss\nempty 0",
+      "forbid": "no"
+    },
+    {
+      "name": "nested_fetch_denied",
+      "fixture": "tests/conformance/abi_v1/20_nested_fetch.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2d-fetch-marker"
+    },
+    {
+      "name": "nested_fetch_granted",
+      "fixture": "tests/conformance/abi_v1/20_nested_fetch.howl",
+      "allow_caps": "network",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2d-fetch-marker\nL a 0\nL b 0\nkept 2\nphase2d-fetch-marker\nresult 2\nmiss\nphase2d-fetch-marker\nempty 0",
       "forbid": "no"
     }
   ]
