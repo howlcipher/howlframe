@@ -156,6 +156,16 @@
       "forbid": "no"
     },
     {
+      "name": "for_control",
+      "fixture": "tests/conformance/abi_v1/13_for.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "a\nb\nc",
+      "forbid": "no"
+    },
+    {
       "name": "nested_if_while_defun",
       "fixture": "tests/conformance/abi_v1/12_nested_if_while_defun.howl",
       "deny_all": true,

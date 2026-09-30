@@ -166,7 +166,7 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 	case "if":
 		// (if cond then) or (if cond then else). ControlEdges are the
 		// branch successors: the test, then the then-branch, then an
-		// optional else. for stays without control edges.
+		// optional else.
 		if len(astNode.Children) != 3 && len(astNode.Children) != 4 {
 			return "", false, nil
 		}
@@ -380,20 +380,36 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 
 		return id, true, nil
 	case "for":
-		if len(astNode.Children) != 4 || astNode.Children[1].Type != "SYMBOL" {
+		// (for item iterable body). ControlEdges are the header successors:
+		// the iterable, then the body. The iterator name stays on Value.
+		// The back edge is the JUMP the lowerer emits to FOR_NEXT. match,
+		// try, defun, and every other node besides if and while stay
+		// without control edges.
+		if len(astNode.Children) != 4 || astNode.Children[1].Type != "SYMBOL" || astNode.Children[1].Value == "" {
 			return "", false, nil
 		}
 		node.Kind = "for"
 		node.Value = astNode.Children[1].Value
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"iterable", astNode.Children[2]}, {"body", astNode.Children[3]}})
-		return id, true, err
+		id := ctx.Graph.AddNode(node)
+		iterID, err := ctx.lowerNode(astNode.Children[2])
+		if err != nil {
+			return "", true, err
+		}
+		bodyID, err := ctx.lowerNode(astNode.Children[3])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs,
+			DataEdge{Name: "iterable", SourceNode: iterID},
+			DataEdge{Name: "body", SourceNode: bodyID},
+		)
+		node.ControlEdges = []NodeID{iterID, bodyID}
+		return id, true, nil
 	case "while":
 		// (while cond body). ControlEdges are the header successors: the
 		// test, then the body. The back edge is the JUMP the lowerer emits
-		// to the test. Other nodes stay without control edges.
+		// to the test. match, try, defun, and every other node besides if
+		// and for stay without control edges.
 		if len(astNode.Children) != 3 {
 			return "", false, nil
 		}

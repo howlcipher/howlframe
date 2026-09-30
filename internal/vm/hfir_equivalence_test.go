@@ -182,6 +182,33 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
   (print (call choose true))
   (print (call choose false)))`,
 		},
+		{
+			name: "for iterates",
+			source: `(cli_app
+  (for item (list "a" "b" "c")
+    (print item)))`,
+		},
+		{
+			name:   "for does not enter",
+			source: `(cli_app (for item (list) (print "no")) (print "done"))`,
+		},
+		{
+			name: "nested for",
+			source: `(cli_app
+  (for row (list (list "a" "b") (list "c"))
+    (for item row
+      (print item))))`,
+		},
+		{
+			name: "for inside defun",
+			source: `(cli_app
+  (defun show ((items any)) string
+    (do
+      (for item items
+        (print item))
+      (return "done")))
+  (print (call show (list "a" "b"))))`,
+		},
 	}
 
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")
@@ -372,6 +399,36 @@ func runBytecodeOutcome(program *bytecode.BCProgram, stdin string, caps []capabi
 	}()
 	machine.run(machine.insts, machine.env)
 	return outcome
+}
+
+func TestHFIRBytecodeForRejectsNonListLikeAST(t *testing.T) {
+	// The checker rejects this before either compiler on the CLI. This
+	// comparison is the two bytecode emitters, which both still emit
+	// FOR_INIT and then fail in the VM.
+	source := `(cli_app (for item 1 (print "no")))`
+	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
+	root := parsed.ParseExpression()
+	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.vmError == nil || legacyOutcome.vmError.Code != "TYPE_ERROR" {
+		t.Fatalf("non-list for = %#v, want TYPE_ERROR", legacyOutcome)
+	}
+	if legacyOutcome.stdout != "" || directOutcome.stdout != "" {
+		t.Fatalf("non-list for printed stdout: AST %q HFIR %q", legacyOutcome.stdout, directOutcome.stdout)
+	}
 }
 
 func TestHFIRBytecodeWhileRejectsNonBoolLikeAST(t *testing.T) {

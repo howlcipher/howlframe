@@ -123,6 +123,16 @@ func DerivePhase1ControlRelations(graph *Graph) []DerivedControlRelation {
 					DerivedControlRelation{Controller: node.ID, Controlled: node.ControlEdges[1], Role: "body", Ordinal: 1},
 				)
 			}
+		case "for":
+			// The relation exists only when the persisted control successors
+			// are the iterable and then the body. A for with data roles and
+			// no control edges yields nothing.
+			if len(node.DataInputs) == 2 && node.DataInputs[0].Name == "iterable" && node.DataInputs[1].Name == "body" && len(node.ControlEdges) == 2 && node.ControlEdges[0] == node.DataInputs[0].SourceNode && node.ControlEdges[1] == node.DataInputs[1].SourceNode && graph.NodeByID(node.ControlEdges[0]) != nil && graph.NodeByID(node.ControlEdges[1]) != nil {
+				relations = append(relations,
+					DerivedControlRelation{Controller: node.ID, Controlled: node.ControlEdges[0], Role: "iterable", Ordinal: 0},
+					DerivedControlRelation{Controller: node.ID, Controlled: node.ControlEdges[1], Role: "body", Ordinal: 1},
+				)
+			}
 		}
 	}
 	sort.Slice(relations, func(i, j int) bool {

@@ -719,11 +719,12 @@ func nodeRoles(kind string) []string {
 	case "map_set":
 		return []string{"key", "value"}
 	default:
-		// defun, call, return, param, and while are not transport kinds.
+		// defun, call, return, param, while, and for are not transport kinds.
 		// Phase 3a lowers defun and call from source on -compile-hfir-bc.
 		// Phase 3b lowers while from source on that same flag.
-		// Phase 3c fills if control edges from the roles above. The
-		// transport still has no control-edge field.
+		// Phase 3c fills if control edges from the roles above.
+		// Phase 3d lowers for from source on that same flag.
+		// The transport still has no control-edge field.
 		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil
 	}
@@ -897,8 +898,8 @@ func nodeFromTransport(node transportNode) *Node {
 	result := &Node{ID: node.ID, Kind: node.Kind, Value: node.Value, LiteralKind: node.LiteralKind, DataInputs: inputs, Provenance: Provenance{Filename: "model:" + node.Provenance.Label}}
 	// The transport schema has no control-edge field, so a model cannot
 	// name a successor. An if's executable edges are the validated roles
-	// in order, the same contract LowerAST writes from source. while and
-	// defun are not transport kinds.
+	// in order, the same contract LowerAST writes from source. while,
+	// defun, and for are not transport kinds.
 	if node.Kind == "if" {
 		result.ControlEdges = make([]NodeID, len(node.Inputs))
 		for index, input := range node.Inputs {
