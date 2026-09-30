@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/checker"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
@@ -69,7 +70,7 @@ func TestLoweredABIV1CoreFixtureHasNoControlEdges(t *testing.T) {
 	}
 	for _, node := range graph.Nodes {
 		if len(node.ControlEdges) != 0 {
-			t.Fatalf("node %s kind %s has control edges %v; v1 LowerAST does not populate CFG edges", node.ID, node.Kind, node.ControlEdges)
+			t.Fatalf("node %s kind %s has control edges %v; the arith fixture has no while", node.ID, node.Kind, node.ControlEdges)
 		}
 	}
 	program, diags := LowerToBytecode(graph)
@@ -81,24 +82,39 @@ func TestLoweredABIV1CoreFixtureHasNoControlEdges(t *testing.T) {
 	}
 }
 
-func TestLoweredABIV1WhileIsNotExecutable(t *testing.T) {
-	sources := []string{
-		`(cli_app (while false (print "no")))`,
+func TestLoweredABIV1WhileIsExecutable(t *testing.T) {
+	source := `(cli_app (while false (print "no")))`
+	root := parser.NewParser(lexer.NewLexer(source), "abi_while.howl").ParseExpression()
+	checker.Check(root)
+	graph, err := LowerAST(root, "abi_while.howl")
+	if err != nil {
+		t.Fatalf("LowerAST(%q) error = %v", source, err)
 	}
-	for _, source := range sources {
-		root := parser.NewParser(lexer.NewLexer(source), "abi_deferred.howl").ParseExpression()
-		checker.Check(root)
-		graph, err := LowerAST(root, "abi_deferred.howl")
-		if err != nil {
-			t.Fatalf("LowerAST(%q) error = %v", source, err)
+	var loops int
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("node %s kind %s has control edges; only while is in this slice", node.ID, node.Kind)
+			}
+			continue
 		}
-		program, diags := LowerToBytecode(graph)
-		if program != nil {
-			t.Fatalf("LowerToBytecode(%q) returned a program; v1 must fail closed", source)
+		loops++
+		if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" {
+			t.Fatalf("while shape = %#v", node)
 		}
-		if len(diags) == 0 || diags[0].Code != BytecodeUnsupportedCode {
-			t.Fatalf("LowerToBytecode(%q) diags = %#v, want %s", source, diags, BytecodeUnsupportedCode)
+		if node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+			t.Fatalf("while control edges = %v, data = %#v", node.ControlEdges, node.DataInputs)
 		}
+	}
+	if loops != 1 {
+		t.Fatalf("while nodes = %d", loops)
+	}
+	program, diags := LowerToBytecode(graph)
+	if program == nil || len(diags) != 0 {
+		t.Fatalf("LowerToBytecode(%q) program=%v diags=%#v", source, program != nil, diags)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
 	}
 }
 

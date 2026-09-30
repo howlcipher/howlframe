@@ -61,7 +61,7 @@ Integer `/` is not one rule yet. The interpreter truncates `int64`. The bytecode
 
 A `defun` has a name, a parameter list, optional `type_hints`, and a body. `return` leaves the function. `(call name arg ...)` passes arguments by position. The existing harness already compares that shape on the interpreter, the bytecode VM, and Go: `tests/parity/06_control_flow.howl` (`TestParityCorpus`).
 
-Phase 3a makes that shape executable on the experimental lowerer only. `LowerAST` gives `defun` a name, `param` edges, and `body` edges, and erases `type_hint`, `type_hints`, and `type_param`. A return-type symbol between the parameter list and the body is erased the same way the AST bytecode compiler skips it. `call` stores the callee name and `arg` edges. `return` has an optional `value`. `LowerToBytecode` emits the existing `CALL` and `RETURN` opcodes and registers a `BCFunction`. It does not add an opcode. `while` is still `HFIR_BYTECODE_UNSUPPORTED` with no `BCProgram`. `ControlEdges` stay empty. The model-adapter transport still rejects `defun`.
+Phase 3a makes that shape executable on the experimental lowerer only. `LowerAST` gives `defun` a name, `param` edges, and `body` edges, and erases `type_hint`, `type_hints`, and `type_param`. A return-type symbol between the parameter list and the body is erased the same way the AST bytecode compiler skips it. `call` stores the callee name and `arg` edges. `return` has an optional `value`. `LowerToBytecode` emits the existing `CALL` and `RETURN` opcodes and registers a `BCFunction`. It does not add an opcode. The model-adapter transport still rejects `defun`.
 
 The conformance case `defun_call` is `tests/conformance/abi_v1/09_defun_call.howl`. Its hosts are:
 
@@ -71,7 +71,15 @@ The conformance case `defun_call` is `tests/conformance/abi_v1/09_defun_call.how
 | `bytecode` | Production `-compile-bc` (AST bytecode after the gate), then `-run-bc`. Canonical result. |
 | `interpreter`, `go`, `javascript` | Still the AST. Included because this fixture is already in their executable subset. |
 
-Those hosts must print the same stdout. A program the experimental lowerer rejects, including `while`, is not a shared case: the AST hosts run it and `-compile-hfir-bc` fails closed.
+Those hosts must print the same stdout. A program the experimental lowerer rejects is not a shared case: the AST hosts run it and `-compile-hfir-bc` fails closed.
+
+### Loops
+
+`(while cond body)` re-evaluates `cond` and runs `body` while the condition is true. The body runs zero times when the condition is false. A condition that is not a bool is `TYPE_ERROR` at runtime, and the checker rejects a known non-bool before either compiler.
+
+Phase 3b makes that shape executable on the experimental lowerer only. `LowerAST` stores a `condition` data edge, a `body` data edge, and `ControlEdges` in that order: the test, then the body. The back edge is the existing `JUMP` to the test. `LowerToBytecode` follows those control edges and emits the existing `JUMP_IF_FALSE` and `JUMP` opcodes, with the same relative offsets as the AST bytecode compiler. A `while` whose control edges are missing or are not that pair fails with `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. It does not add an opcode. `if` and `for` still have empty `ControlEdges`. The model-adapter transport still rejects `while`.
+
+The conformance case `while_control` is `tests/conformance/abi_v1/10_while.howl`. Its hosts are the same five as `defun_call`. The false loop must not print. The counting loop prints `1`, `2`, and `3`.
 
 ### Memory and runtime imports
 
@@ -133,15 +141,15 @@ A later lowering that owns meaning has to be a typed CFG in SSA:
 * Control edges connect blocks.
 * Node kinds are constructs, not user binding names.
 
-`hfir.LowerAST` is not that form. It fills data edges for the semantic subset and leaves `ControlEdges` empty on every node, including the v1 arithmetic fixture. Kinds outside `lowerSemanticList` still come from the list head, so a user name can appear as a kind. v1 records that fact. It does not pretend the graph is SSA.
+`hfir.LowerAST` is not that form. It fills data edges for the semantic subset. Phase 3b fills `ControlEdges` on a `while` header only: the condition, then the body. The v1 arithmetic fixture has no `while`, so every node in that fixture still has empty `ControlEdges`. `if` and `for` stay empty. Kinds outside `lowerSemanticList` still come from the list head, so a user name can appear as a kind. v1 records that fact. It does not pretend the graph is SSA.
 
 ## Deferred (Phase 2)
 
 Phase 2 is one lowered graph consumed by every host, with identical outcomes or the same feasibility rejection.
 
-* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a does not flip it.
-* `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is not. The interpreter, the production bytecode VM, Go, and JavaScript still run calls from the AST. One lowered graph for every host is still open.
-* `ControlEdges` are populated and the graph is SSA. Phase 3a does not fill them.
+* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a and Phase 3b do not flip it.
+* `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is executable on that same flag (Phase 3b), with control edges on the loop header only. The interpreter, the production bytecode VM, Go, and JavaScript still run calls and loops from the AST. One lowered graph for every host is still open.
+* `ControlEdges` on every control form, and an SSA graph, are still open. Phase 3b fills them for `while` only.
 * Go and JavaScript mediate `env` (Phase 2a), `exec` (Phase 2b), `read_file` (Phase 2c), and `fetch` (Phase 2d). Other generated host effects, including `write_file` and `mkdir`, still do not. One lowered graph for every host is still the rest of Phase 2.
 * One feasibility table covers every target, not only the three Wasm host effects.
 * Non-exact integer division picks one rule.
@@ -151,4 +159,4 @@ Phase 2 is one lowered graph consumed by every host, with identical outcomes or 
 
 ## What the suite does not prove
 
-Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, and Phase 3a `defun` / `call`. That test is not the production compiler. The `defun_call` conformance case compares `-compile-hfir-bc` with the AST hosts on one fixture. Matching stdout there does not mean `-compile-bc` consumes HFIR.
+Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, Phase 3a `defun` / `call`, and Phase 3b `while`. That test is not the production compiler. The `defun_call` and `while_control` conformance cases compare `-compile-hfir-bc` with the AST hosts on those fixtures. Matching stdout there does not mean `-compile-bc` consumes HFIR.

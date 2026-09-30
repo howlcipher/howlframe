@@ -103,6 +103,44 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
       (return (* n (call fact (- n 1))))))
   (print (call fact 5)))`,
 		},
+		{
+			name: "while counts",
+			source: `(cli_app
+  (let (n 0)
+    (while (< n 3)
+      (do
+        (set n (+ n 1))
+        (print n)))))`,
+		},
+		{
+			name:   "while does not enter",
+			source: `(cli_app (while false (print "no")) (print "done"))`,
+		},
+		{
+			name: "nested while",
+			source: `(cli_app
+  (let (i 0)
+    (while (< i 2)
+      (do
+        (let (j 0)
+          (while (< j 2)
+            (do
+              (print i j)
+              (set j (+ j 1)))))
+        (set i (+ i 1))))))`,
+		},
+		{
+			name: "while inside defun",
+			source: `(cli_app
+  (defun steps (limit)
+    (type_hints (limit int) (return int))
+    (let (n 0)
+      (do
+        (while (< n limit)
+          (set n (+ n 1)))
+        (return n))))
+  (print (call steps 4)))`,
+		},
 	}
 
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")
@@ -218,6 +256,36 @@ func runBytecodeOutcome(program *bytecode.BCProgram, stdin string, caps []capabi
 	}()
 	machine.run(machine.insts, machine.env)
 	return outcome
+}
+
+func TestHFIRBytecodeWhileRejectsNonBoolLikeAST(t *testing.T) {
+	// The checker rejects this before either compiler on the CLI. This
+	// comparison is the two bytecode emitters, which both still emit the
+	// while jumps and then fail in the VM.
+	source := `(cli_app (while 1 (print "no")))`
+	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
+	root := parsed.ParseExpression()
+	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.vmError == nil || legacyOutcome.vmError.Code != "TYPE_ERROR" {
+		t.Fatalf("non-bool while = %#v, want TYPE_ERROR", legacyOutcome)
+	}
+	if legacyOutcome.stdout != "" || directOutcome.stdout != "" {
+		t.Fatalf("non-bool while printed stdout: AST %q HFIR %q", legacyOutcome.stdout, directOutcome.stdout)
+	}
 }
 
 func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {

@@ -83,6 +83,9 @@ func (v *Verifier) Verify() []Diagnostic {
 			}
 			checkRole("iterable", true)
 			checkRole("body", true)
+		case "while":
+			checkRole("condition", true)
+			checkRole("body", true)
 		case "read_file":
 			checkRole("path", true)
 		case "parse_json":

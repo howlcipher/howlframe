@@ -25,7 +25,7 @@ Semantic information added for this path includes literal kind, explicit program
 
 ## What AST still owns
 
-The parser, source expansion, module resolution, patch/context transformations, checker rules, construct-position classification, and public build integration still operate on the AST. The legacy AST bytecode compiler remains the production compiler. Phase 3a teaches the experimental lowerer `defun`, `call`, and `return` with the existing `CALL` and `RETURN` opcodes. `while` and the rest of the control-frame layout stay on the AST compiler.
+The parser, source expansion, module resolution, patch/context transformations, checker rules, construct-position classification, and public build integration still operate on the AST. The legacy AST bytecode compiler remains the production compiler. Phase 3a teaches the experimental lowerer `defun`, `call`, and `return` with the existing `CALL` and `RETURN` opcodes. Phase 3b teaches it `while` with the existing `JUMP_IF_FALSE` and `JUMP` opcodes. The rest of the control-frame layout stays on the AST compiler.
 
 ## Phase-1 executable subset
 
@@ -39,13 +39,14 @@ The direct lowerer supports a deterministic `cli_app` subset:
 | Deterministic mutation | `map_set`, `map_delete`, `append` |
 | Observability | `print`, `stderr`, `exit` |
 | Capability evidence | `env`, using the existing shared capability authority |
-| Functions (Phase 3a) | `defun`, `param`, `call`, `return`. Existing `CALL` and `RETURN` opcodes. `while` is not included. |
+| Functions (Phase 3a) | `defun`, `param`, `call`, `return`. Existing `CALL` and `RETURN` opcodes. |
+| Loops (Phase 3b) | `while`. Control edges are the condition, then the body. Existing `JUMP_IF_FALSE` and `JUMP` opcodes. |
 
 ## Unsupported HFIR nodes
 
 Every node outside the subset fails closed with one `HFIR_BYTECODE_UNSUPPORTED` error diagnostic. The diagnostic identifies the offending graph node, target `bytecode`, and available source provenance. It returns no `BCProgram`.
 
-Phase 3a moved `defun`, `call`, and `return` into the experimental subset. `while` stays deferred: `LowerToBytecode` still returns `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. Other examples that remain outside a full CFG include loops the lowerer has not been asked to treat as SSA, `try_let` and `catch` where the graph is still not the production source, HTTP routes and lambdas, stores, and model-oriented operations. `ControlEdges` are still empty. This is not a claim that `while` cannot be represented later.
+Phase 3a moved `defun`, `call`, and `return` into the experimental subset. Phase 3b moves `while` in as well: `LowerAST` fills that node's `ControlEdges` with the condition and then the body, and `LowerToBytecode` emits the existing jumps. A `while` without those edges still returns `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. Other nodes still have empty `ControlEdges`. Examples that remain outside a full CFG include `for` treated as SSA, `try_let` and `catch` where the graph is still not the production source, HTTP routes and lambdas, stores, and model-oriented operations. This is not a claim that the graph is SSA.
 
 ## Bytecode ownership
 
@@ -72,11 +73,11 @@ HowlChangeOps needs 23 runtime constructs plus `catch`; Phase 1 does not support
 
 ## HowlBoard compatibility
 
-The existing HowlBoard backend compatibility suite passes against the baseline HowlFrame bytecode compiler, including HTTP request parsing, JSON dict/list behavior, stores, CORS, and network/database capability behavior. Its browser test is blocked locally only because Playwright Chromium is not installed. HowlBoard requires routes and lambdas, HTTP response forms, request parsing, stores, and loops, so it remains outside this experimental subset. Phase 3a covers `defun`, `call`, and `return` on `-compile-hfir-bc` only. The production path is unchanged.
+The existing HowlBoard backend compatibility suite passes against the baseline HowlFrame bytecode compiler, including HTTP request parsing, JSON dict/list behavior, stores, CORS, and network/database capability behavior. Its browser test is blocked locally only because Playwright Chromium is not installed. HowlBoard requires routes and lambdas, HTTP response forms, request parsing, stores, and loops, so it remains outside this experimental subset. Phase 3a covers `defun`, `call`, and `return` on `-compile-hfir-bc` only. Phase 3b covers `while` on that same flag. The production path is unchanged.
 
 ## What must happen before #88
 
-Improvement #88 has a real but deliberately bounded execution destination: model-authored graphs that meet the Phase-1 schema can be verified and lowered directly to a deterministic artifact, while unsupported nodes fail closed. Phase 3a adds source-level `defun`, `call`, and `return` on `-compile-hfir-bc`. The model-adapter transport still rejects those kinds, so this slice does not reopen #88. Structured error recovery, `while`, and control-flow edges remain. Work on #88 is still constrained Phase-1 adapter design, not a claim that arbitrary model-authored HFIR can execute today.
+Improvement #88 has a real but deliberately bounded execution destination: model-authored graphs that meet the Phase-1 schema can be verified and lowered directly to a deterministic artifact, while unsupported nodes fail closed. Phase 3a adds source-level `defun`, `call`, and `return` on `-compile-hfir-bc`. Phase 3b adds source-level `while` and that loop's control edges on the same flag. The model-adapter transport still rejects those kinds, so this slice does not reopen #88. Structured error recovery and a real CFG remain. Work on #88 is still constrained Phase-1 adapter design, not a claim that arbitrary model-authored HFIR can execute today.
 
 ## Lowered ABI v1 (improvement #90, phase 1)
 
@@ -84,7 +85,7 @@ Improvement #88 has a real but deliberately bounded execution destination: model
 
 Phase 2a mediates `env` in generated Go and JavaScript. An empty `HOWLFRAME_ALLOW_CAPS` grant is `CAPABILITY_DENIED` and does not read the variable. Phase 2b mediates `exec` the same way: an empty grant, or a grant that omits `process`, is `CAPABILITY_DENIED` before any subprocess starts. Phase 2c mediates `read_file` the same way: an empty grant, or a grant that omits `filesystem`, is `CAPABILITY_DENIED` before any filesystem read. Phase 2d mediates `fetch` the same way: an empty grant, or a grant that omits `network`, is `CAPABILITY_DENIED` before any HTTP request. The production compiler is unchanged.
 
-Wasm feasibility in this revision is the closed set `exec`, `spawn_agent`, and `http_server_start` (`HFIR_TARGET_INFEASIBLE`). Control edges are still unpopulated. Phase 3a makes `defun`, `call`, and `return` executable on `-compile-hfir-bc` only. `while` is still not executable HFIR. Production `-compile-bc` is still the AST. The rest of Phase 2 is one lowered graph for every host. Journals: `docs/journals/2026-09-30_lowered_hfir_abi_phase1.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2a_env.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2b_exec.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2c_read_file.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2d_fetch.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase3a_defun_call.md`.
+Wasm feasibility in this revision is the closed set `exec`, `spawn_agent`, and `http_server_start` (`HFIR_TARGET_INFEASIBLE`). Phase 3a makes `defun`, `call`, and `return` executable on `-compile-hfir-bc` only. Phase 3b makes `while` executable on that flag and fills `ControlEdges` for the loop header only. Production `-compile-bc` is still the AST. The rest of Phase 2 is one lowered graph for every host. Journals: `docs/journals/2026-09-30_lowered_hfir_abi_phase1.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2a_env.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2b_exec.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2c_read_file.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase2d_fetch.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase3a_defun_call.md`, `docs/journals/2026-09-30_lowered_hfir_abi_phase3b_while.md`.
 
 ## Provenance limitation
 

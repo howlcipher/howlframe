@@ -17,7 +17,7 @@ func TestLowerToBytecodeEmitsDefunAndCall(t *testing.T) {
   (print (call add 2 3)))`)
 	for _, node := range graph.Nodes {
 		if len(node.ControlEdges) != 0 {
-			t.Fatalf("node %s kind %s has control edges; Phase 3a does not build a CFG", node.ID, node.Kind)
+			t.Fatalf("node %s kind %s has control edges; this fixture has no while", node.ID, node.Kind)
 		}
 		if node.Kind == "type_hints" || node.Kind == "type_hint" || node.Kind == "while" {
 			t.Fatalf("erased or deferred kind %s was lowered", node.Kind)
@@ -121,10 +121,8 @@ func TestLowerToBytecodeDefunFromGraphWithoutAST(t *testing.T) {
 	}
 }
 
-func TestLowerToBytecodeStillRejectsWhileAndLambda(t *testing.T) {
+func TestLowerToBytecodeStillRejectsLambda(t *testing.T) {
 	for _, source := range []string{
-		`(cli_app (while false (print "no")))`,
-		`(cli_app (defun f () (while false (return 1))) (print (call f)))`,
 		`(cli_app (lambda (x) (print x)))`,
 	} {
 		root := parser.NewParser(lexer.NewLexer(source), "deferred.howl").ParseExpression()
@@ -151,7 +149,7 @@ func TestASTBytecodeStillCompilesWhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	program, diags := LowerToBytecode(graph)
-	if program != nil || len(diags) == 0 || diags[0].Code != BytecodeUnsupportedCode {
+	if program == nil || len(diags) != 0 {
 		t.Fatalf("experimental while = (%v, %#v)", program != nil, diags)
 	}
 	astProgram := bytecode.CompileToBytecode(root)
