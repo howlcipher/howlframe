@@ -296,6 +296,35 @@
       "expect": "PASS",
       "stdout": "phase2d-fetch-marker\nL a 0\nL b 0\nkept 2\nphase2d-fetch-marker\nresult 2\nmiss\nphase2d-fetch-marker\nempty 0",
       "forbid": "no"
+    },
+    {
+      "name": "nested_multi_effect_denied",
+      "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase1-token"
+    },
+    {
+      "name": "nested_multi_effect_partial",
+      "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
+      "allow_caps": "environment,filesystem,process",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "stdout": "phase1-token\nmulti-read-marker\nphase2b-exec-marker",
+      "forbid": "phase2d-fetch-marker"
+    },
+    {
+      "name": "nested_multi_effect_granted",
+      "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
+      "allow_caps": "environment,filesystem,process,network",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase1-token\nmulti-read-marker\nphase2b-exec-marker\nphase2d-fetch-marker\nL a 0\nL b 0\nkept 2\nphase1-token\nmulti-kept-read\nphase2b-exec-kept\nphase2d-fetch-marker\nresult 2\nmiss\nphase1-token\nmulti-miss-read\nphase2b-exec-miss\nphase2d-fetch-marker\nempty 0",
+      "forbid": "no"
     }
   ]
 }

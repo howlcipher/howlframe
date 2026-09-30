@@ -5,6 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/hfir"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
 
 // TestParityCorpus verifies that every semantic fixture in tests/parity/
@@ -35,6 +41,112 @@ func TestParityCorpus(t *testing.T) {
 			}
 			if report.OverallStatus != StatusPass {
 				t.Errorf("Parity mismatch in %s:\n%s", base, strings.Join(report.Discrepancies, "\n"))
+			}
+		})
+	}
+}
+
+// hfirSupportedParity is the tests/parity subset the experimental lowerer
+// already emits. hfirRejectedParity fails closed with
+// HFIR_BYTECODE_UNSUPPORTED. A new parity file has to join one list.
+var hfirSupportedParity = []string{
+	"01_primitives.howl",
+	"02_variables.howl",
+	"03_operators.howl",
+	"04_conversions.howl",
+	"05_collections.howl",
+	"06_control_flow.howl",
+	"08_io_cli.howl",
+	"09_boundary_values.howl",
+	"10_governed_policy.howl",
+	"11_error_undefined_var.howl",
+	"12_error_div_zero.howl",
+}
+
+var hfirRejectedParity = []string{
+	"07_strings.howl",
+	"13_html_escape.howl",
+}
+
+// TestHFIRBytecodeSupportedParity compares -compile-hfir-bc with the AST
+// hosts already in TestParityCorpus. Unsupported parity files must fail
+// closed and must not emit a program.
+func TestHFIRBytecodeSupportedParity(t *testing.T) {
+	parityDir := filepath.Join("..", "..", "tests", "parity")
+	files, err := filepath.Glob(filepath.Join(parityDir, "*.howl"))
+	if err != nil {
+		t.Fatalf("failed to glob parity tests: %v", err)
+	}
+	classified := map[string]bool{}
+	for _, name := range hfirSupportedParity {
+		classified[name] = true
+	}
+	for _, name := range hfirRejectedParity {
+		if classified[name] {
+			t.Fatalf("parity file %s is both supported and rejected", name)
+		}
+		classified[name] = true
+	}
+	if len(files) != len(classified) {
+		t.Fatalf("parity files = %d, classified = %d", len(files), len(classified))
+	}
+	for _, file := range files {
+		if !classified[filepath.Base(file)] {
+			t.Errorf("unclassified parity fixture %s", filepath.Base(file))
+		}
+	}
+
+	targets := []Target{TargetHFIRBytecode, TargetBytecode, TargetInterpreter, TargetGo}
+	for _, name := range hfirSupportedParity {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			report, err := VerifyParity(filepath.Join(parityDir, name), nil, "", targets)
+			if err != nil {
+				t.Fatalf("VerifyParity error: %v", err)
+			}
+			if report.OverallStatus != StatusPass {
+				t.Errorf("HFIR parity mismatch in %s:\n%s", name, strings.Join(report.Discrepancies, "\n"))
+			}
+		})
+	}
+}
+
+func TestHFIRBytecodeRejectsUnsupportedParity(t *testing.T) {
+	parityDir := filepath.Join("..", "..", "tests", "parity")
+	for _, name := range hfirRejectedParity {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(parityDir, name)
+			source, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed := parser.NewParser(lexer.NewLexer(string(source)), name)
+			root := parsed.ParseExpression()
+			if parsed.Cur.Type != lexer.TokenEOF {
+				t.Fatal("parser did not consume source")
+			}
+			ast.ApplyPatches(root)
+			root = ast.ApplyWithContext(root, nil)
+			checker.Check(root)
+			graph, err := hfir.LowerAST(root, name)
+			if err != nil {
+				t.Fatalf("LowerAST() error = %v", err)
+			}
+			program, diags := hfir.LowerToBytecode(graph)
+			if program != nil || len(diags) != 1 || diags[0].Code != hfir.BytecodeUnsupportedCode {
+				t.Fatalf("LowerToBytecode() program=%v diags=%#v, want one %s and no program", program != nil, diags, hfir.BytecodeUnsupportedCode)
+			}
+			rejected := executeHFIRBytecode(path, RunOptions{DenyAll: true})
+			if rejected.Status == StatusPass {
+				t.Fatalf("-compile-hfir-bc ran %s", name)
+			}
+			if !strings.Contains(rejected.ErrorMessage, "Phase-1 executable subset") {
+				t.Fatalf("-compile-hfir-bc error = %q, want the executable-subset rejection", rejected.ErrorMessage)
+			}
+			passed := executeBytecode(path, RunOptions{DenyAll: true})
+			if passed.Status != StatusPass {
+				t.Fatalf("production -compile-bc status = %s (%s)", passed.Status, passed.ErrorMessage)
 			}
 		})
 	}

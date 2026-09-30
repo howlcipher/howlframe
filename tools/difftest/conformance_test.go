@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -135,6 +136,55 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 			os.RemoveAll(path)
 		}
 	}
+	const multiPrefix = "/tmp/howlframe-abi-v1-multi"
+	multiReads := map[string]string{
+		multiPrefix + "-read.txt":      "multi-read-marker",
+		multiPrefix + "-kept-read.txt": "multi-kept-read",
+		multiPrefix + "-miss-read.txt": "multi-miss-read",
+	}
+	multiReadUntaken := []string{
+		multiPrefix + "-skip-read.txt",
+		multiPrefix + "-else-read.txt",
+		multiPrefix + "-empty-read.txt",
+		multiPrefix + "-dead-read.txt",
+	}
+	multiWrites := []string{
+		multiPrefix + "-write.txt",
+		multiPrefix + "-kept-write.txt",
+		multiPrefix + "-miss-write.txt",
+		multiPrefix + "-skip-write.txt",
+		multiPrefix + "-else-write.txt",
+		multiPrefix + "-empty-write.txt",
+		multiPrefix + "-dead-write.txt",
+	}
+	multiDirs := []string{
+		multiPrefix + "-dir",
+		multiPrefix + "-kept-dir",
+		multiPrefix + "-miss-dir",
+		multiPrefix + "-skip-dir",
+		multiPrefix + "-else-dir",
+		multiPrefix + "-empty-dir",
+		multiPrefix + "-dead-dir",
+	}
+	cleanMulti := func() {
+		for _, path := range multiWrites {
+			os.Remove(path)
+		}
+		for _, path := range multiDirs {
+			os.RemoveAll(path)
+		}
+	}
+	writeMultiReads := func() {
+		for path, body := range multiReads {
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatalf("write multi-effect marker %s: %v", path, err)
+			}
+		}
+		for _, path := range multiReadUntaken {
+			os.Remove(path)
+		}
+		cleanMulti()
+	}
 	t.Cleanup(func() {
 		os.Remove(writeMarkerPath)
 		os.RemoveAll(mkdirMarkerPath)
@@ -145,9 +195,17 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 		for _, path := range hostReadUntaken {
 			os.Remove(path)
 		}
+		for path := range multiReads {
+			os.Remove(path)
+		}
+		for _, path := range multiReadUntaken {
+			os.Remove(path)
+		}
+		cleanMulti()
 	})
 	const fetchAddr = "127.0.0.1:47653"
 	var fetchHits atomic.Int64
+	var fetchBodies atomic.Int64
 	ln, err := net.Listen("tcp", fetchAddr)
 	if err != nil {
 		t.Fatalf("listen fetch fixture: %v", err)
@@ -156,6 +214,10 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 		if r.URL.Path != "/howlframe-abi-v1-phase2d" {
 			http.NotFound(w, r)
 			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if len(body) != 0 {
+			fetchBodies.Add(1)
 		}
 		fetchHits.Add(1)
 		_, _ = w.Write([]byte("phase2d-fetch-marker"))
@@ -186,18 +248,28 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				cleanDogfood()
 			case "nested_env_read_denied", "nested_env_read_granted":
 				writeHostRead()
+			case "nested_multi_effect_denied", "nested_multi_effect_partial", "nested_multi_effect_granted":
+				writeMultiReads()
 			}
 			hitsBefore := fetchHits.Load()
+			bodiesBefore := fetchBodies.Load()
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
 			if err != nil {
 				t.Fatalf("VerifyParityWithOptions: %v", err)
 			}
 			hits := fetchHits.Load() - hitsBefore
-			if (tc.Name == "fetch_denied" || tc.Name == "nested_fetch_denied") && hits != 0 {
+			bodies := fetchBodies.Load() - bodiesBefore
+			if (tc.Name == "fetch_denied" || tc.Name == "nested_fetch_denied" || tc.Name == "nested_multi_effect_denied" || tc.Name == "nested_multi_effect_partial") && hits != 0 {
 				t.Fatalf("%s performed %d HTTP request(s)", tc.Name, hits)
 			}
-			if (tc.Name == "fetch_granted" || tc.Name == "nested_fetch_granted") && hits == 0 {
+			if (tc.Name == "fetch_granted" || tc.Name == "nested_fetch_granted" || tc.Name == "nested_multi_effect_granted") && hits == 0 {
 				t.Fatalf("%s performed no HTTP request", tc.Name)
+			}
+			if tc.Name == "nested_multi_effect_granted" && (hits%3 != 0 || bodies != 0) {
+				t.Fatalf("%s hits = %d bodies = %d, want a multiple of 3 requests and no body", tc.Name, hits, bodies)
+			}
+			if (tc.Name == "fetch_granted" || tc.Name == "nested_fetch_granted" || tc.Name == "nested_multi_effect_denied" || tc.Name == "nested_multi_effect_partial") && bodies != 0 {
+				t.Fatalf("%s sent %d request body(ies)", tc.Name, bodies)
 			}
 			if report.OverallStatus != StatusPass {
 				t.Fatalf("parity: %s", strings.Join(report.Discrepancies, "\n"))
@@ -218,6 +290,9 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				if report.CanonicalResult.ErrorClass != tc.Expect {
 					t.Fatalf("canonical error class = %q, want %q\n%s", report.CanonicalResult.ErrorClass, tc.Expect, report.CanonicalResult.ErrorMessage)
 				}
+				if got := NormalizeOutput(report.CanonicalResult.Stdout); got != NormalizeOutput(tc.Stdout) {
+					t.Fatalf("canonical stdout = %q, want %q", got, NormalizeOutput(tc.Stdout))
+				}
 			}
 
 			for _, tgt := range tc.Targets {
@@ -233,8 +308,8 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 					if res.ExitCode == 0 {
 						t.Errorf("%s exit = 0, want rejection", tgt)
 					}
-					if strings.TrimSpace(res.Stdout) != "" {
-						t.Errorf("%s stdout = %q, want empty on rejection", tgt, res.Stdout)
+					if got := NormalizeOutput(res.Stdout); got != NormalizeOutput(tc.Stdout) {
+						t.Errorf("%s stdout = %q, want %q", tgt, got, NormalizeOutput(tc.Stdout))
 					}
 				}
 				if tc.Forbid != "" && strings.Contains(res.Stdout+res.Stderr+res.ErrorMessage, tc.Forbid) {
@@ -324,6 +399,81 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				for _, path := range hostReadUntaken {
 					if _, err := os.Stat(path); !os.IsNotExist(err) {
 						t.Fatalf("untaken host-read path was created: %s", path)
+					}
+				}
+			case "nested_multi_effect_denied", "nested_multi_effect_partial", "nested_multi_effect_granted":
+				const fetchURL = "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"
+				for _, tgt := range tc.Targets {
+					res := report.TargetResults[tgt]
+					if tgt == TargetJavaScript && res.Status == StatusBackendUnsupported && strings.Contains(res.ErrorMessage, "node runtime not available") {
+						continue
+					}
+					blob := res.Stdout + res.Stderr + res.ErrorMessage
+					if strings.Contains(blob, fetchURL) || strings.Contains(blob, "phase2d-body-not-sent") || strings.Contains(blob, multiPrefix) {
+						t.Errorf("%s leaked the fetch URL, the dropped body, or a path", tgt)
+					}
+					if tc.Name == "nested_multi_effect_denied" && !strings.Contains(blob, "capability denied: environment") {
+						t.Errorf("%s denial = %s, want environment", tgt, blob)
+					}
+					if tc.Name == "nested_multi_effect_partial" && !strings.Contains(blob, "capability denied: network") {
+						t.Errorf("%s denial = %s, want network", tgt, blob)
+					}
+				}
+				for path, body := range multiReads {
+					got, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatalf("multi-effect read marker %s: %v", path, err)
+					}
+					if string(got) != body {
+						t.Fatalf("multi-effect read marker %s changed to %q", path, got)
+					}
+				}
+				for _, path := range multiReadUntaken {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatalf("untaken multi-effect read path was created: %s", path)
+					}
+				}
+				wantFiles := map[string]string{}
+				wantDirs := map[string]bool{}
+				switch tc.Name {
+				case "nested_multi_effect_partial":
+					wantFiles[multiPrefix+"-write.txt"] = "multi-write-marker"
+					wantDirs[multiPrefix+"-dir"] = true
+				case "nested_multi_effect_granted":
+					wantFiles[multiPrefix+"-write.txt"] = "multi-write-marker"
+					wantFiles[multiPrefix+"-kept-write.txt"] = "multi-kept-write"
+					wantFiles[multiPrefix+"-miss-write.txt"] = "multi-miss-write"
+					wantDirs[multiPrefix+"-dir"] = true
+					wantDirs[multiPrefix+"-kept-dir"] = true
+					wantDirs[multiPrefix+"-miss-dir"] = true
+				}
+				for _, path := range multiWrites {
+					body, ok := wantFiles[path]
+					_, err := os.Stat(path)
+					if !ok {
+						if !os.IsNotExist(err) {
+							t.Fatalf("%s created %s", tc.Name, path)
+						}
+						continue
+					}
+					got, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatalf("%s write %s: %v", tc.Name, path, err)
+					}
+					if string(got) != body {
+						t.Fatalf("%s write %s = %q, want %q", tc.Name, path, got, body)
+					}
+				}
+				for _, path := range multiDirs {
+					info, err := os.Stat(path)
+					if wantDirs[path] {
+						if err != nil || !info.IsDir() {
+							t.Fatalf("%s mkdir %s: %v", tc.Name, path, err)
+						}
+						continue
+					}
+					if !os.IsNotExist(err) {
+						t.Fatalf("%s created %s", tc.Name, path)
 					}
 				}
 			}

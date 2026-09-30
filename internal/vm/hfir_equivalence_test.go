@@ -968,6 +968,204 @@ func TestHFIRBytecodeNestedFetchFixture(t *testing.T) {
 	}
 }
 
+// TestHFIRBytecodeNestedMultiEffectFixture compares production AST bytecode
+// with the experimental HFIR lowerer on one program that nests env,
+// read_file, write_file, mkdir, exec, and fetch inside if, while, for, and
+// defun. One fetch records a body edge. OpFetch still has no body operand,
+// so neither compiler loads that string. The conformance harness runs the
+// same file through -compile-bc and -compile-hfir-bc.
+func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
+	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
+	hits, bodies := serveABIFetchFixture(t)
+	source := readAbiFixture(t, "21_nested_multi_effect.howl")
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "multi")
+	source = strings.ReplaceAll(source, "/tmp/howlframe-abi-v1-multi", prefix)
+	root, graph := checkedHFIRGraph(t, source)
+	assertNestedMultiEffectShape(t, graph, prefix)
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	wantCaps := []capability.Capability{capability.Environment, capability.Filesystem, capability.Network, capability.Process}
+	if got := graphCapabilities(graph); !reflect.DeepEqual(got, wantCaps) {
+		t.Fatalf("HFIR effects = %v, want environment, filesystem, network, and process", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), wantCaps) {
+		t.Fatalf("emitted capabilities = %v, want the four host grants", programCapabilities(direct))
+	}
+	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
+	}
+	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
+	}
+	const droppedBody = "phase2d-body-not-sent"
+	if strings.Contains(strings.Join(fetchOperandShapes(direct), "\n"), droppedBody) || programHasLiteral(direct, droppedBody) || programHasLiteral(legacy, droppedBody) {
+		t.Fatal("a bytecode compiler loaded the fetch body")
+	}
+	getShape := "probe\x00" + abiFetchURL + "\x00GET"
+	putShape := "probe\x00" + abiFetchURL + "\x00PUT"
+	var gets, puts int
+	for _, shape := range fetchOperandShapes(direct) {
+		switch shape {
+		case getShape:
+			gets++
+		case putShape:
+			puts++
+		default:
+			t.Fatalf("FETCH operand %q", shape)
+		}
+	}
+	if gets != 6 || puts != 1 {
+		t.Fatalf("FETCH shapes gets=%d puts=%d, want 6 and 1", gets, puts)
+	}
+
+	reads := map[string]string{
+		prefix + "-read.txt":      "multi-read-marker",
+		prefix + "-kept-read.txt": "multi-kept-read",
+		prefix + "-miss-read.txt": "multi-miss-read",
+	}
+	for path, body := range reads {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paths := []string{
+		prefix + "-write.txt",
+		prefix + "-kept-write.txt",
+		prefix + "-miss-write.txt",
+		prefix + "-skip-write.txt",
+		prefix + "-else-write.txt",
+		prefix + "-empty-write.txt",
+		prefix + "-dead-write.txt",
+		prefix + "-dir",
+		prefix + "-kept-dir",
+		prefix + "-miss-dir",
+		prefix + "-skip-dir",
+		prefix + "-else-dir",
+		prefix + "-empty-dir",
+		prefix + "-dead-dir",
+	}
+	t.Cleanup(func() { removePaths(paths) })
+	absent := map[string]fsEntry{}
+	for _, path := range paths {
+		absent[path] = fsEntry{kind: "absent"}
+	}
+	partialFS := map[string]fsEntry{}
+	for path, entry := range absent {
+		partialFS[path] = entry
+	}
+	partialFS[prefix+"-write.txt"] = fsEntry{kind: "file", body: "multi-write-marker"}
+	partialFS[prefix+"-dir"] = fsEntry{kind: "dir"}
+	grantedFS := map[string]fsEntry{}
+	for path, entry := range absent {
+		grantedFS[path] = entry
+	}
+	grantedFS[prefix+"-write.txt"] = fsEntry{kind: "file", body: "multi-write-marker"}
+	grantedFS[prefix+"-kept-write.txt"] = fsEntry{kind: "file", body: "multi-kept-write"}
+	grantedFS[prefix+"-miss-write.txt"] = fsEntry{kind: "file", body: "multi-miss-write"}
+	grantedFS[prefix+"-dir"] = fsEntry{kind: "dir"}
+	grantedFS[prefix+"-kept-dir"] = fsEntry{kind: "dir"}
+	grantedFS[prefix+"-miss-dir"] = fsEntry{kind: "dir"}
+
+	runOne := func(program *bytecode.BCProgram, caps []capability.Capability) (bytecodeOutcome, map[string]fsEntry) {
+		t.Helper()
+		removePaths(paths)
+		outcome := runBytecodeOutcome(program, "", caps)
+		return outcome, snapshotPaths(t, paths)
+	}
+
+	legacyDenied, legacyDeniedFS := runOne(legacy, nil)
+	directDenied, directDeniedFS := runOne(direct, nil)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	if legacyDenied.vmError == nil || legacyDenied.vmError.Code != "CAPABILITY_DENIED" || legacyDenied.vmError.Opcode != "ENV" || legacyDenied.vmError.Message != "capability denied: environment" {
+		t.Fatalf("denial = %#v, want CAPABILITY_DENIED ENV", legacyDenied)
+	}
+	if legacyDenied.stdout != "" || legacyDenied.stderr != "" {
+		t.Fatalf("denial produced output %#v", legacyDenied)
+	}
+	if !reflect.DeepEqual(legacyDeniedFS, absent) || !reflect.DeepEqual(directDeniedFS, absent) {
+		t.Fatalf("denial filesystem AST %#v HFIR %#v", legacyDeniedFS, directDeniedFS)
+	}
+
+	const partialStdout = "phase1-token\nmulti-read-marker\nphase2b-exec-marker\n"
+	partialCaps := []capability.Capability{capability.Environment, capability.Filesystem, capability.Process}
+	legacyPartial, legacyPartialFS := runOne(legacy, partialCaps)
+	directPartial, directPartialFS := runOne(direct, partialCaps)
+	requireSameBytecodeOutcome(t, legacyPartial, directPartial)
+	if legacyPartial.vmError == nil || legacyPartial.vmError.Code != "CAPABILITY_DENIED" || legacyPartial.vmError.Opcode != "FETCH" || legacyPartial.vmError.Message != "capability denied: network" {
+		t.Fatalf("partial denial = %#v, want CAPABILITY_DENIED FETCH", legacyPartial)
+	}
+	if strings.Contains(legacyPartial.vmError.Message, abiFetchURL) || strings.Contains(legacyPartial.stdout, abiFetchMarker) || strings.Contains(legacyPartial.stdout, droppedBody) {
+		t.Fatalf("partial denial leaked the URL, marker, or body: %#v", legacyPartial)
+	}
+	if legacyPartial.stdout != partialStdout {
+		t.Fatalf("partial stdout = %q, want %q", legacyPartial.stdout, partialStdout)
+	}
+	if !reflect.DeepEqual(legacyPartialFS, partialFS) || !reflect.DeepEqual(directPartialFS, partialFS) {
+		t.Fatalf("partial filesystem\nAST %#v\nHFIR %#v\nwant %#v", legacyPartialFS, directPartialFS, partialFS)
+	}
+	if hits.Load() != 0 || bodies.Load() != 0 {
+		t.Fatalf("pre-grant hits = %d bodies = %d, want no request", hits.Load(), bodies.Load())
+	}
+
+	const wantStdout = "phase1-token\nmulti-read-marker\nphase2b-exec-marker\n" + abiFetchMarker + "\nL a 0\nL b 0\nkept 2\nphase1-token\nmulti-kept-read\nphase2b-exec-kept\n" + abiFetchMarker + "\nresult 2\nmiss\nphase1-token\nmulti-miss-read\nphase2b-exec-miss\n" + abiFetchMarker + "\nempty 0\n"
+	legacyGranted, legacyFS := runOne(legacy, wantCaps)
+	directGranted, directFS := runOne(direct, wantCaps)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if strings.Contains(legacyGranted.stdout, "no") || strings.Contains(legacyGranted.stdout, droppedBody) || strings.Contains(legacyGranted.stdout, prefix) {
+		t.Fatalf("granted stdout leaked an untaken branch, body, or path: %q", legacyGranted.stdout)
+	}
+	if !reflect.DeepEqual(legacyFS, grantedFS) || !reflect.DeepEqual(directFS, grantedFS) {
+		t.Fatalf("grant filesystem\nAST %#v\nHFIR %#v\nwant %#v", legacyFS, directFS, grantedFS)
+	}
+	if hits.Load() != 6 || bodies.Load() != 0 {
+		t.Fatalf("granted hits = %d bodies = %d, want 6 requests and no body", hits.Load(), bodies.Load())
+	}
+	for path, body := range reads {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != body {
+			t.Fatalf("read marker %s changed to %q", path, got)
+		}
+	}
+}
+
+func programHasLiteral(program *bytecode.BCProgram, text string) bool {
+	scan := func(insts []bytecode.BCInstruction) bool {
+		for _, inst := range insts {
+			if value, ok := inst.ValueOperand.(string); ok && strings.Contains(value, text) {
+				return true
+			}
+			if strings.Contains(inst.StringOperand, text) || strings.Contains(inst.StringOperand2, text) {
+				return true
+			}
+		}
+		return false
+	}
+	if scan(program.Main) {
+		return true
+	}
+	for _, fn := range program.Functions {
+		if fn != nil && scan(fn.Instructions) {
+			return true
+		}
+	}
+	return false
+}
+
 func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
 	t.Helper()
 	var defuns, calls, whiles, ifWithElse, writes, mkdirs int
@@ -1427,6 +1625,200 @@ func assertNestedFetchShape(t *testing.T, graph *hfir.Graph) {
 	}
 	if !defunHoldsFetch {
 		t.Fatal("defun does not contain fetch")
+	}
+}
+
+func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string) {
+	t.Helper()
+	var defuns, calls, whiles, ifWithElse, reads, writes, mkdirs, execs, fetches, bodyEdges int
+	envKeys := map[string]int{}
+	execArgs := map[string]int{}
+	fors := map[string]*hfir.Node{}
+	readPaths := map[string]*hfir.Node{}
+	writePaths := map[string]*hfir.Node{}
+	mkdirPaths := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			ifWithElse++
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		case "env":
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" {
+				t.Fatalf("env %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			envKeys[fsPathValue(t, graph, node)]++
+		case "read_file":
+			reads++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "path" {
+				t.Fatalf("read_file %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			readPaths[fsPathValue(t, graph, node)] = node
+		case "write_file":
+			writes++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "path" || node.DataInputs[1].Name != "data" {
+				t.Fatalf("write_file %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			writePaths[fsPathValue(t, graph, node)] = node
+		case "mkdir":
+			mkdirs++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "path" {
+				t.Fatalf("mkdir %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			mkdirPaths[fsPathValue(t, graph, node)] = node
+		case "exec":
+			execs++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
+				t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			if got := fsPathValue(t, graph, node); got != "printf" {
+				t.Fatalf("exec command = %q, want printf", got)
+			}
+			arg := graph.NodeByID(node.DataInputs[1].SourceNode)
+			if arg == nil || arg.Kind != "const" || arg.Value == "" {
+				t.Fatalf("exec argument = %#v", arg)
+			}
+			execArgs[arg.Value]++
+		case "fetch":
+			fetches++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+				t.Fatalf("fetch %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			if got := fsPathValue(t, graph, node); got != abiFetchURL {
+				t.Fatalf("fetch url = %q, want %s", got, abiFetchURL)
+			}
+			method := graph.NodeByID(node.DataInputs[1].SourceNode)
+			if method == nil || method.Kind != "const" {
+				t.Fatalf("fetch method = %#v", method)
+			}
+			switch len(node.DataInputs) {
+			case 2:
+				if method.Value != "GET" {
+					t.Fatalf("two-edge fetch method = %q, want GET", method.Value)
+				}
+			case 3:
+				if node.DataInputs[2].Name != "body" || method.Value != "PUT" {
+					t.Fatalf("body fetch edges %#v method %#v", node.DataInputs, method)
+				}
+				body := graph.NodeByID(node.DataInputs[2].SourceNode)
+				if body == nil || body.Kind != "const" || body.Value != "phase2d-body-not-sent" {
+					t.Fatalf("fetch body = %#v", body)
+				}
+				bodyEdges++
+			default:
+				t.Fatalf("fetch %s edges %#v", node.ID, node.DataInputs)
+			}
+		case "try":
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("try %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || reads != 7 || writes != 7 || mkdirs != 7 || execs != 7 || fetches != 7 || bodyEdges != 1 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d read=%d write=%d mkdir=%d exec=%d fetch=%d body=%d, want 1, 2, 2, 3, 3, 7, 7, 7, 7, 7, 1", defuns, calls, whiles, ifWithElse, len(fors), reads, writes, mkdirs, execs, fetches, bodyEdges)
+	}
+	if envKeys["HOWLFRAME_ABI_SECRET"] != 3 || envKeys["HOWLFRAME_ABI_SKIP"] != 1 || envKeys["HOWLFRAME_ABI_ELSE"] != 1 || envKeys["HOWLFRAME_ABI_EMPTY"] != 1 || envKeys["HOWLFRAME_ABI_DEAD"] != 1 || len(envKeys) != 5 {
+		t.Fatalf("env keys = %#v", envKeys)
+	}
+	for _, arg := range []string{"no-skip", "phase2b-exec-marker", "no-else", "no-empty", "no-dead", "phase2b-exec-kept", "phase2b-exec-miss"} {
+		if execArgs[arg] != 1 {
+			t.Fatalf("exec args = %#v, missing %s", execArgs, arg)
+		}
+	}
+	for _, suffix := range []string{"-read.txt", "-kept-read.txt", "-miss-read.txt", "-skip-read.txt", "-else-read.txt", "-empty-read.txt", "-dead-read.txt"} {
+		if readPaths[prefix+suffix] == nil {
+			t.Fatalf("missing read_file %s in %v", suffix, pathKeys(readPaths))
+		}
+	}
+	for _, suffix := range []string{"-write.txt", "-kept-write.txt", "-miss-write.txt", "-skip-write.txt", "-else-write.txt", "-empty-write.txt", "-dead-write.txt"} {
+		if writePaths[prefix+suffix] == nil {
+			t.Fatalf("missing write_file %s in %v", suffix, pathKeys(writePaths))
+		}
+	}
+	for _, suffix := range []string{"-dir", "-kept-dir", "-miss-dir", "-skip-dir", "-else-dir", "-empty-dir", "-dead-dir"} {
+		if mkdirPaths[prefix+suffix] == nil {
+			t.Fatalf("missing mkdir %s in %v", suffix, pathKeys(mkdirPaths))
+		}
+	}
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	for _, kind := range []string{"env", "read_file", "write_file", "mkdir", "exec", "fetch"} {
+		kind := kind
+		if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == kind }) {
+			t.Fatalf("taken branch does not contain %s", kind)
+		}
+	}
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			body := node.DataInputs[1].SourceNode
+			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool {
+				return child.Kind == "fetch" && len(child.DataInputs) == 3
+			}) {
+				t.Fatal("false while body does not contain the fetch body edge")
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	var defunHoldsEffects bool
+	for _, node := range graph.Nodes {
+		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
+			return child.Kind == "fetch" && len(child.DataInputs) == 3
+		}) && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
+			defunHoldsEffects = true
+		}
+	}
+	if !defunHoldsEffects {
+		t.Fatal("defun does not contain exec and the fetch body edge")
 	}
 }
 
