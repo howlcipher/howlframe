@@ -89,6 +89,28 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 	const writeMarkerBody = "phase2e-write-marker"
 	const mkdirMarkerPath = "/tmp/howlframe-abi-v1-phase2e-dir"
 	const dogfoodPrefix = "/tmp/howlframe-abi-v1-dogfood"
+	const hostReadPrefix = "/tmp/howlframe-abi-v1-hostread"
+	hostReadTaken := map[string]string{
+		hostReadPrefix + "-read.txt": "dogfood-read-marker",
+		hostReadPrefix + "-miss.txt": "dogfood-miss-marker",
+	}
+	hostReadUntaken := []string{
+		hostReadPrefix + "-skip.txt",
+		hostReadPrefix + "-else.txt",
+		hostReadPrefix + "-empty.txt",
+		hostReadPrefix + "-dead.txt",
+	}
+	writeHostRead := func() {
+		for path, body := range hostReadTaken {
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatalf("write host-read marker %s: %v", path, err)
+			}
+		}
+		for _, path := range hostReadUntaken {
+			os.Remove(path)
+		}
+	}
+	writeHostRead()
 	dogfoodFiles := []string{
 		dogfoodPrefix + "-write.txt",
 		dogfoodPrefix + "-loop.txt",
@@ -114,6 +136,12 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 		os.Remove(writeMarkerPath)
 		os.RemoveAll(mkdirMarkerPath)
 		cleanDogfood()
+		for path := range hostReadTaken {
+			os.Remove(path)
+		}
+		for _, path := range hostReadUntaken {
+			os.Remove(path)
+		}
 	})
 	const fetchAddr = "127.0.0.1:47653"
 	var fetchHits atomic.Int64
@@ -153,6 +181,8 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				os.RemoveAll(mkdirMarkerPath)
 			case "nested_fs_write_denied", "nested_fs_write_granted":
 				cleanDogfood()
+			case "nested_env_read_denied", "nested_env_read_granted":
+				writeHostRead()
 			}
 			hitsBefore := fetchHits.Load()
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
@@ -268,6 +298,31 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 						t.Fatalf("untaken filesystem path was created: %s", path)
 					}
 				}
+			case "nested_env_read_denied", "nested_env_read_granted":
+				for _, tgt := range tc.Targets {
+					res := report.TargetResults[tgt]
+					blob := res.Stdout + res.Stderr + res.ErrorMessage
+					if strings.Contains(blob, hostReadPrefix) {
+						t.Errorf("%s leaked the host-read path", tgt)
+					}
+					if tc.Name == "nested_env_read_denied" && (strings.Contains(blob, "dogfood-read-marker") || strings.Contains(blob, "dogfood-miss-marker") || strings.Contains(blob, "phase1-token")) {
+						t.Errorf("%s leaked a host-read marker or secret: %s", tgt, blob)
+					}
+				}
+				for path, body := range hostReadTaken {
+					got, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatalf("host-read marker %s: %v", path, err)
+					}
+					if string(got) != body {
+						t.Fatalf("host-read marker %s changed to %q", path, got)
+					}
+				}
+				for _, path := range hostReadUntaken {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatalf("untaken host-read path was created: %s", path)
+					}
+				}
 			}
 		})
 	}
@@ -295,7 +350,7 @@ func TestCompareToCanonicalDetectsDrift(t *testing.T) {
 
 func TestABIPropertyArithmetic(t *testing.T) {
 	rng := rand.New(rand.NewSource(90))
-	targets := []Target{TargetBytecode, TargetInterpreter, TargetGo, TargetJavaScript}
+	targets := []Target{TargetHFIRBytecode, TargetBytecode, TargetInterpreter, TargetGo, TargetJavaScript}
 	opts := RunOptions{DenyAll: true, JSRoot: "web_app"}
 	var firstStdout string
 	var firstSource string
