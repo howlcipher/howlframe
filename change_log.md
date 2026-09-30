@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* Generated Go and JavaScript mediate `(exec)`. An empty, missing, or non-`process` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before a subprocess starts, and the denial does not include the command. The `process` grant runs it. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2b_exec.md`.
 * Generated Go and JavaScript mediate `(env)`. An empty or non-`environment` `HOWLFRAME_ALLOW_CAPS` grant fails with `CAPABILITY_DENIED` before the variable is read. The `environment` grant returns the value. The production `-compile-bc` path is unchanged. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase2a_env.md`.
 * `map_keys` order is UTF-8 byte order on the interpreter, the bytecode VM, the Go backend, and JavaScript. JavaScript no longer uses UTF-16 code-unit sort, so a supplementary-plane key sorts with the same list as Go `sort.Strings`. No new opcode and no capability change. Journal: `docs/journals/2026-09-30_dict_key_sort.md`.
 * Locked the pure-versus-store capability split in docs and tests. `map_keys` grants nothing and runs under an empty grant. `store_keys` stays `database`. A `file://` store additionally requires `filesystem`. No opcode grant changed. Journal: `docs/journals/2026-09-30_capability_surface_honesty.md`.

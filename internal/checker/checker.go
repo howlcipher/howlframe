@@ -334,6 +334,13 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError(`env expects (env "KEY")`, node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "exec" {
+		if len(node.Children) < 2 {
+			ast.ReportError("exec expects (exec cmd args...)", node.Line, node.Column)
+		}
+		for _, child := range node.Children[1:] {
+			checkJSStatement(child, depth+1)
+		}
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}

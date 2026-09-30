@@ -1,0 +1,3 @@
+(cli_app
+  (let (value (exec "printf" "phase2b-exec-marker"))
+    (print (bytes_to_string value))))

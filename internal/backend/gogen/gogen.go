@@ -34,6 +34,10 @@ var gogenCollection bool
 // runner grant before reading the requested variable. It is reset on every call.
 var gogenNeedsEnv bool
 
+// gogenNeedsExec is set when GenerateCode emits exec. The helper checks the
+// runner grant before spawning a process. It is reset on every call.
+var gogenNeedsExec bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -431,11 +435,9 @@ func formatRouteRegistration(routePath, reqVar, trace, body string, dispatch boo
 	return fmt.Sprintf("\thttp.HandleFunc(%q, func(w http.ResponseWriter, %s *http.Request) {\n%s%s\n\t})\n", routePath, reqVar, trace, body)
 }
 
-// envHelperSource mediates (env key). The runner grant is
-// HOWLFRAME_ALLOW_CAPS, comma-separated, the same names as -allow-caps.
-// An empty or unset grant denies. The requested key is read only after
-// environment is present, so a denial cannot return the secret.
-func envHelperSource() string {
+// grantHelperSource reads HOWLFRAME_ALLOW_CAPS, comma-separated, the same
+// names as -allow-caps. An empty or unset grant denies every name.
+func grantHelperSource() string {
 	return `func howlFrameGrantHas(name string) bool {
 	for _, part := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
 		if strings.TrimSpace(part) == name {
@@ -445,7 +447,13 @@ func envHelperSource() string {
 	return false
 }
 
-func howlFrameEnv(key string) string {
+`
+}
+
+// envHelperSource mediates (env key). The requested key is read only after
+// environment is present, so a denial cannot return the secret.
+func envHelperSource() string {
+	return `func howlFrameEnv(key string) string {
 	if !howlFrameGrantHas("environment") {
 		panic("CAPABILITY_DENIED: capability denied: environment")
 	}
@@ -453,6 +461,39 @@ func howlFrameEnv(key string) string {
 }
 
 `
+}
+
+// execHelperSource mediates (exec cmd args...). The grant name is process,
+// the same name as capability.ForConstruct("exec") and OpExec. The command
+// is spawned only after that grant is present, so a denial cannot run it
+// or include the command in the error.
+func execHelperSource() string {
+	return `func howlFrameExec(cmd string, args ...string) []byte {
+	if !howlFrameGrantHas("process") {
+		panic("CAPABILITY_DENIED: capability denied: process")
+	}
+	out, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		panic(fmt.Sprintf("IO_ERROR: exec failed: %v", err))
+	}
+	return out
+}
+
+`
+}
+
+func goHostHelpers() string {
+	var code string
+	if gogenNeedsEnv || gogenNeedsExec {
+		code += grantHelperSource()
+	}
+	if gogenNeedsEnv {
+		code += envHelperSource()
+	}
+	if gogenNeedsExec {
+		code += execHelperSource()
+	}
+	return code
 }
 
 func goEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
@@ -463,6 +504,22 @@ func goEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
 	return fmt.Sprintf("howlFrameEnv(%s)", generateExpression(keyNode, reqVar, depth+1))
 }
 
+func goExecCall(node *ast.Node, reqVar string, depth int) string {
+	gogenNeedsExec = true
+	if node == nil || len(node.Children) < 2 {
+		return ""
+	}
+	cmd := generateStatement(node.Children[1], reqVar, depth+1)
+	if len(node.Children) == 2 {
+		return fmt.Sprintf("howlFrameExec(%s)", cmd)
+	}
+	args := make([]string, 0, len(node.Children)-2)
+	for _, arg := range node.Children[2:] {
+		args = append(args, generateStatement(arg, reqVar, depth+1))
+	}
+	return fmt.Sprintf("howlFrameExec(%s, %s)", cmd, strings.Join(args, ", "))
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
@@ -470,6 +527,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenHTMLEscape = false
 	gogenCollection = false
 	gogenNeedsEnv = false
+	gogenNeedsExec = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -915,9 +973,7 @@ import (
 	if gogenHTMLEscape {
 		code += htmlEscapeHelperSource()
 	}
-	if gogenNeedsEnv {
-		code += envHelperSource()
-	}
+	code += goHostHelpers()
 	code += funcsCode
 	code += `func main() {
 	defer func() {
@@ -1032,9 +1088,7 @@ var _ = observer.Trace
 		if gogenHTMLEscape {
 			fullTestCode += htmlEscapeHelperSource()
 		}
-		if gogenNeedsEnv {
-			fullTestCode += envHelperSource()
-		}
+		fullTestCode += goHostHelpers()
 		fullTestCode += testCode
 		testCode = fullTestCode
 	}
@@ -1569,15 +1623,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("		os.MkdirAll(%s, 0755)", pathStr)
 	} else if head == "exec" {
-		if len(node.Children) < 2 {
-			// ast.ReportError("exec expects (exec cmd args...)", node.Line, node.Column)
-		}
-		cmdStr := generateStatement(node.Children[1], reqVar, depth+1)
-		var args []string
-		for j := 2; j < len(node.Children); j++ {
-			args = append(args, generateStatement(node.Children[j], reqVar, depth+1))
-		}
-		return fmt.Sprintf("func() ([]byte, error) { return exec.Command(%s, %s).CombinedOutput() }()", cmdStr, strings.Join(args, ", "))
+		return goExecCall(node, reqVar, depth)
 	} else if head == "rate_limit" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("rate_limit expects (rate_limit \"10/s\" body)", node.Line, node.Column)

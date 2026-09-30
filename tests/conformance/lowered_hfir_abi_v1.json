@@ -71,6 +71,24 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase1-token"
+    },
+    {
+      "name": "exec_denied",
+      "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
+      "deny_all": true,
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2b-exec-marker"
+    },
+    {
+      "name": "exec_granted",
+      "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
+      "allow_caps": "process",
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2b-exec-marker"
     }
   ]
 }
