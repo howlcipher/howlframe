@@ -81,9 +81,8 @@ func TestLoweredABIV1CoreFixtureHasNoControlEdges(t *testing.T) {
 	}
 }
 
-func TestLoweredABIV1DefunCallAndWhileAreNotExecutable(t *testing.T) {
+func TestLoweredABIV1WhileIsNotExecutable(t *testing.T) {
 	sources := []string{
-		`(cli_app (defun add_values (a b) (type_hints (a int) (b int) (return int)) (return (+ a b))) (print 1))`,
 		`(cli_app (while false (print "no")))`,
 	}
 	for _, source := range sources {

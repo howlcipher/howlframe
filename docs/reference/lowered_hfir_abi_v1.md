@@ -61,7 +61,17 @@ Integer `/` is not one rule yet. The interpreter truncates `int64`. The bytecode
 
 A `defun` has a name, a parameter list, optional `type_hints`, and a body. `return` leaves the function. `(call name arg ...)` passes arguments by position. The existing harness already compares that shape on the interpreter, the bytecode VM, and Go: `tests/parity/06_control_flow.howl` (`TestParityCorpus`).
 
-The experimental lowerer does not emit `defun`, `call`, or `while`. `LowerToBytecode` fails those graphs with `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. v1 does not move call execution onto HFIR.
+Phase 3a makes that shape executable on the experimental lowerer only. `LowerAST` gives `defun` a name, `param` edges, and `body` edges, and erases `type_hint`, `type_hints`, and `type_param`. A return-type symbol between the parameter list and the body is erased the same way the AST bytecode compiler skips it. `call` stores the callee name and `arg` edges. `return` has an optional `value`. `LowerToBytecode` emits the existing `CALL` and `RETURN` opcodes and registers a `BCFunction`. It does not add an opcode. `while` is still `HFIR_BYTECODE_UNSUPPORTED` with no `BCProgram`. `ControlEdges` stay empty. The model-adapter transport still rejects `defun`.
+
+The conformance case `defun_call` is `tests/conformance/abi_v1/09_defun_call.howl`. Its hosts are:
+
+| Host | Path |
+| --- | --- |
+| `hfir_bytecode` | Experimental `-compile-hfir-bc`, then `-run-bc`. This is the Phase 3a host. |
+| `bytecode` | Production `-compile-bc` (AST bytecode after the gate), then `-run-bc`. Canonical result. |
+| `interpreter`, `go`, `javascript` | Still the AST. Included because this fixture is already in their executable subset. |
+
+Those hosts must print the same stdout. A program the experimental lowerer rejects, including `while`, is not a shared case: the AST hosts run it and `-compile-hfir-bc` fails closed.
 
 ### Memory and runtime imports
 
@@ -129,9 +139,9 @@ A later lowering that owns meaning has to be a typed CFG in SSA:
 
 Phase 2 is one lowered graph consumed by every host, with identical outcomes or the same feasibility rejection.
 
-* Production `-compile-bc` still compiles the AST. Flipping that path is Phase 2.
-* `defun`, `call`, and `while` become executable HFIR, or every host rejects them with one code. Today the hosts run them and the experimental lowerer rejects them.
-* `ControlEdges` are populated and the graph is SSA.
+* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a does not flip it.
+* `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is not. The interpreter, the production bytecode VM, Go, and JavaScript still run calls from the AST. One lowered graph for every host is still open.
+* `ControlEdges` are populated and the graph is SSA. Phase 3a does not fill them.
 * Go and JavaScript mediate `env` (Phase 2a), `exec` (Phase 2b), `read_file` (Phase 2c), and `fetch` (Phase 2d). Other generated host effects, including `write_file` and `mkdir`, still do not. One lowered graph for every host is still the rest of Phase 2.
 * One feasibility table covers every target, not only the three Wasm host effects.
 * Non-exact integer division picks one rule.
@@ -141,4 +151,4 @@ Phase 2 is one lowered graph consumed by every host, with identical outcomes or 
 
 ## What the suite does not prove
 
-Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys` and a granted `env`. That test is not the production compiler.
+Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, and Phase 3a `defun` / `call`. That test is not the production compiler. The `defun_call` conformance case compares `-compile-hfir-bc` with the AST hosts on one fixture. Matching stdout there does not mean `-compile-bc` consumes HFIR.

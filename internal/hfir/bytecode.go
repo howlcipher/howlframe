@@ -67,14 +67,19 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		value := c.diagnostic(nil, "HFIR node is missing")
 		return nil, &value
 	}
-	if c.cachedNodes != nil && c.cachedNodes[node.ID] != nil {
-		if c.reusedNodes != nil {
-			c.reusedNodes[node.ID] = true
+	// A defun registers a BCFunction. That side effect is not stored in the
+	// instruction cache, so a preserved defun is lowered again and the
+	// function table is rebuilt. while stays outside this subset.
+	if node.Kind != "defun" {
+		if c.cachedNodes != nil && c.cachedNodes[node.ID] != nil {
+			if c.reusedNodes != nil {
+				c.reusedNodes[node.ID] = true
+			}
+			return append([]bytecode.BCInstruction(nil), c.cachedNodes[node.ID]...), nil
 		}
-		return append([]bytecode.BCInstruction(nil), c.cachedNodes[node.ID]...), nil
-	}
-	if c.nodeInsts != nil && c.nodeInsts[node.ID] != nil {
-		return append([]bytecode.BCInstruction(nil), c.nodeInsts[node.ID]...), nil
+		if c.nodeInsts != nil && c.nodeInsts[node.ID] != nil {
+			return append([]bytecode.BCInstruction(nil), c.nodeInsts[node.ID]...), nil
+		}
 	}
 	c.loweredCount++
 	defer func() {
@@ -447,6 +452,85 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			inst.IntOperand = int64(-(len(insts) - loopStart))
 		}))
 		return insts, nil
+	case "defun":
+		if node.Value == "" {
+			diagnostic := c.diagnostic(node, "defun requires a name")
+			return nil, &diagnostic
+		}
+		params := make([]string, 0)
+		var bodies []*Node
+		for index, edge := range node.DataInputs {
+			child := children[index]
+			switch edge.Name {
+			case "param":
+				if child.Kind != "param" || child.Value == "" {
+					diagnostic := c.diagnostic(child, "defun param requires a name")
+					return nil, &diagnostic
+				}
+				params = append(params, child.Value)
+			case "body":
+				bodies = append(bodies, child)
+			default:
+				diagnostic := c.diagnostic(node, "defun requires param and body edges")
+				return nil, &diagnostic
+			}
+		}
+		var bodyInsts []bytecode.BCInstruction
+		for _, body := range bodies {
+			insts, childDiagnostic := c.compile(body)
+			if childDiagnostic != nil {
+				return nil, childDiagnostic
+			}
+			bodyInsts = append(bodyInsts, insts...)
+		}
+		if c.prog.Functions == nil {
+			c.prog.Functions = make(map[string]*bytecode.BCFunction)
+		}
+		c.prog.Functions[node.Value] = &bytecode.BCFunction{
+			Name:         node.Value,
+			Params:       params,
+			Instructions: append([]bytecode.BCInstruction(nil), bodyInsts...),
+		}
+		// A definition emits no value into the caller. The call opcode does.
+		return nil, nil
+	case "param":
+		diagnostic := c.diagnostic(node, "param is a defun binding and has no instructions")
+		return nil, &diagnostic
+	case "call":
+		if node.Value == "" || !allEdgesNamed(node, "arg") {
+			diagnostic := c.diagnostic(node, "call requires a function name and arg edges")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileAll()
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		return append(insts, instruction(bytecode.OpCall, "CALL", func(inst *bytecode.BCInstruction) {
+			inst.StringOperand = node.Value
+			inst.IntOperand = int64(len(children))
+		})), nil
+	case "return":
+		if len(children) > 1 || (len(children) == 1 && node.DataInputs[0].Name != "value") {
+			diagnostic := c.diagnostic(node, "return requires an optional value")
+			return nil, &diagnostic
+		}
+		var insts []bytecode.BCInstruction
+		if len(children) == 1 {
+			var childDiagnostic *Diagnostic
+			insts, childDiagnostic = compileChild(0)
+			if childDiagnostic != nil {
+				return nil, childDiagnostic
+			}
+		} else {
+			insts = []bytecode.BCInstruction{instruction(bytecode.OpLoadConst, "LOAD_CONST", func(inst *bytecode.BCInstruction) {
+				inst.ValueOperand = nil
+			})}
+		}
+		return append(insts, instruction(bytecode.OpReturn, "RETURN", nil)), nil
+	case "type_hint", "type_hints", "type_param":
+		// Annotations have no runtime meaning. The AST bytecode compiler
+		// emits nothing for them, including inside a defun body.
+		return []bytecode.BCInstruction{}, nil
 	default:
 		diagnostic := c.diagnostic(node, fmt.Sprintf("node kind %q is not in the Phase-1 executable subset", node.Kind))
 		return nil, &diagnostic

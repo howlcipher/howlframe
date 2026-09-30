@@ -13,10 +13,11 @@ import (
 type Target string
 
 const (
-	TargetBytecode    Target = "bytecode"
-	TargetInterpreter Target = "interpreter"
-	TargetGo          Target = "go"
-	TargetJavaScript  Target = "javascript"
+	TargetBytecode     Target = "bytecode"
+	TargetHFIRBytecode Target = "hfir_bytecode"
+	TargetInterpreter  Target = "interpreter"
+	TargetGo           Target = "go"
+	TargetJavaScript   Target = "javascript"
 )
 
 type Status string
@@ -244,19 +245,30 @@ func ExecuteBytecode(filePath string, cliArgs []string, input string) ExecutionR
 }
 
 func executeBytecode(filePath string, opts RunOptions) ExecutionResult {
+	return executeBytecodeCommand(filePath, opts, TargetBytecode, "-compile-bc")
+}
+
+// executeHFIRBytecode compiles with the experimental -compile-hfir-bc
+// lowerer and runs the artifact on the same bytecode VM. It is not the
+// production -compile-bc path.
+func executeHFIRBytecode(filePath string, opts RunOptions) ExecutionResult {
+	return executeBytecodeCommand(filePath, opts, TargetHFIRBytecode, "-compile-hfir-bc")
+}
+
+func executeBytecodeCommand(filePath string, opts RunOptions, target Target, compileFlag string) ExecutionResult {
 	compiler, err := getCompiler()
 	if err != nil {
-		return ExecutionResult{Target: TargetBytecode, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		return ExecutionResult{Target: target, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 
 	tmpDir, err := os.MkdirTemp("", "howlframe-bc-*")
 	if err != nil {
-		return ExecutionResult{Target: TargetBytecode, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		return ExecutionResult{Target: target, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 	defer os.RemoveAll(tmpDir)
 
 	bcPath := filepath.Join(tmpDir, "app.hfbc")
-	compileCmd := exec.Command(compiler, "-compile-bc", filePath, "-o", bcPath)
+	compileCmd := exec.Command(compiler, compileFlag, filePath, "-o", bcPath)
 	compileOut, compileErr := compileCmd.CombinedOutput()
 	if compileErr != nil {
 		errMsg := strings.TrimSpace(string(compileOut))
@@ -265,7 +277,7 @@ func executeBytecode(filePath string, opts RunOptions) ExecutionResult {
 			status = StatusBackendUnsupported
 		}
 		return ExecutionResult{
-			Target:       TargetBytecode,
+			Target:       target,
 			ExitCode:     1,
 			ErrorMessage: errMsg,
 			ErrorClass:   NormalizeError(errMsg),
@@ -281,7 +293,7 @@ func executeBytecode(filePath string, opts RunOptions) ExecutionResult {
 	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	res := ExecutionResult{
-		Target:   TargetBytecode,
+		Target:   target,
 		ExitCode: exitCode,
 		Stdout:   stdout,
 		Stderr:   stderr,
@@ -587,6 +599,8 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 		switch tgt {
 		case TargetBytecode:
 			candidate = canonical
+		case TargetHFIRBytecode:
+			candidate = executeHFIRBytecode(filePath, opts)
 		case TargetInterpreter:
 			candidate = executeInterpreter(filePath, opts)
 		case TargetGo:

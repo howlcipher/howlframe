@@ -377,6 +377,113 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			child *ast.Node
 		}{{"iterable", astNode.Children[2]}, {"body", astNode.Children[3]}})
 		return id, true, err
+	case "defun":
+		// (defun name (params) [return-type-symbol] body...)
+		// type_hint forms in the body are erased. while is not this case.
+		if len(astNode.Children) < 4 || astNode.Children[1].Type != "SYMBOL" || astNode.Children[1].Value == "" || astNode.Children[2].Type != "List" {
+			return "", false, nil
+		}
+		params := astNode.Children[2].Children
+		names := make([]string, len(params))
+		for i, param := range params {
+			name, ok := defunParamName(param)
+			if !ok {
+				return "", false, nil
+			}
+			names[i] = name
+		}
+		node.Kind = "defun"
+		node.Value = astNode.Children[1].Value
+		id := ctx.Graph.AddNode(node)
+		for i, param := range params {
+			paramNode := &Node{
+				Kind:       "param",
+				Module:     ctx.Module,
+				Provenance: provenanceOf(param, node.Provenance),
+				Value:      names[i],
+			}
+			paramID := ctx.Graph.AddNode(paramNode)
+			node.DataInputs = append(node.DataInputs, DataEdge{Name: "param", SourceNode: paramID})
+		}
+		bodyStart := 3
+		if len(astNode.Children) > 4 && astNode.Children[3].Type == "SYMBOL" {
+			bodyStart = 4
+		}
+		for _, child := range astNode.Children[bodyStart:] {
+			if erasedTypeForm(child) {
+				continue
+			}
+			childID, err := ctx.lowerNode(child)
+			if err != nil {
+				return "", true, err
+			}
+			if childID != "" {
+				node.DataInputs = append(node.DataInputs, DataEdge{Name: "body", SourceNode: childID})
+			}
+		}
+		return id, true, nil
+	case "call":
+		if len(astNode.Children) < 2 || astNode.Children[1].Type != "SYMBOL" || astNode.Children[1].Value == "" {
+			return "", false, nil
+		}
+		node.Kind = "call"
+		node.Value = astNode.Children[1].Value
+		id, err := addChildren(2, "arg")
+		return id, true, err
+	case "return":
+		if len(astNode.Children) > 2 {
+			return "", false, nil
+		}
+		node.Kind = "return"
+		if len(astNode.Children) == 1 {
+			return ctx.Graph.AddNode(node), true, nil
+		}
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[1]}})
+		return id, true, err
 	}
 	return "", false, nil
+}
+
+// defunParamName matches bytecode.extractParamNames: a list parameter uses
+// its first child's value, and a symbol parameter uses its own value.
+func defunParamName(param *ast.Node) (string, bool) {
+	if param == nil {
+		return "", false
+	}
+	if param.Type == "List" {
+		if len(param.Children) == 0 || param.Children[0].Value == "" {
+			return "", false
+		}
+		return param.Children[0].Value, true
+	}
+	if param.Value == "" {
+		return "", false
+	}
+	return param.Value, true
+}
+
+func erasedTypeForm(node *ast.Node) bool {
+	if node == nil || node.Type != "List" || len(node.Children) == 0 || node.Children[0].Type != "SYMBOL" {
+		return false
+	}
+	switch node.Children[0].Value {
+	case "type_hint", "type_hints", "type_param":
+		return true
+	default:
+		return false
+	}
+}
+
+func provenanceOf(astNode *ast.Node, fallback Provenance) Provenance {
+	if astNode == nil {
+		return fallback
+	}
+	provenance := Provenance{Filename: astNode.Filename, Line: astNode.Line, Column: astNode.Column}
+	if provenance.Filename == "" {
+		provenance.Filename = fallback.Filename
+	}
+	return provenance
 }
