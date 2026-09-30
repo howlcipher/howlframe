@@ -1,0 +1,6 @@
+(cli_app
+  (let (d (dict ("present" "yes")))
+    (do
+      (print (map_get d "present"))
+      (print (is_nil (map_get d "missing")))
+      (print (str_join (list "x" (map_get d "missing") "y") "|")))))

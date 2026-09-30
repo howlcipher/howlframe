@@ -77,6 +77,12 @@ The existing HowlBoard backend compatibility suite passes against the baseline H
 
 Improvement #88 has a real but deliberately bounded execution destination: model-authored graphs that meet the Phase-1 schema can be verified and lowered directly to a deterministic artifact, while unsupported nodes fail closed. Before a broad adapter can replace `.howl`, HFIR still needs explicit semantic forms for functions, structured error recovery, iteration, opaque effect operations, and stronger graph/control-flow verification. Work on #88 is meaningful as constrained Phase-1 adapter design, but not as a claim that arbitrary model-authored HFIR can execute today.
 
+## Lowered ABI v1 (improvement #90, phase 1)
+
+`docs/reference/lowered_hfir_abi_v1.md` versions the contract the hosts must share (`lowered-hfir-abi/v1`). The conformance suite compares the interpreter, the bytecode VM, Go, and JavaScript on a pure core and on `env` denial. That comparison runs the production AST paths through `tools/difftest`. It does not switch `-compile-bc` over to `LowerToBytecode`.
+
+Wasm feasibility in this revision is the closed set `exec`, `spawn_agent`, and `http_server_start` (`HFIR_TARGET_INFEASIBLE`). Control edges are still unpopulated. Calls are still not executable HFIR. Phase 2 is the execution-path move. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase1.md`.
+
 ## Provenance limitation
 
 HFIR-to-bytecode compile diagnostics retain the source filename, line, and column available on their semantic node. Existing runtime `VMError` values identify function, instruction offset, and opcode only; bytecode instructions do not yet carry HFIR provenance. This Phase 1 does not redesign the artifact source-map format.

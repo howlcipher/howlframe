@@ -1,0 +1,4 @@
+(cli_app
+  (let (row (dict ("s" "ada") ("xs" (list "a")) ("d" (dict ("k" "v")))))
+    (let (s (map_get row "s"))
+      (print (map_keys s)))))

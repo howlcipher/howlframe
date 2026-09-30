@@ -7,6 +7,7 @@
 * Locked the pure-versus-store capability split in docs and tests. `map_keys` grants nothing and runs under an empty grant. `store_keys` stays `database`. A `file://` store additionally requires `filesystem`. No opcode grant changed. Journal: `docs/journals/2026-09-30_capability_surface_honesty.md`.
 
 ### Added
+* Lowered-HFIR ABI v1 (`docs/reference/lowered_hfir_abi_v1.md`) and a conformance suite (`tests/conformance/lowered_hfir_abi_v1.json`) run by `tools/difftest` across the interpreter, the bytecode VM, Go, and JavaScript. The production compiler is still the AST bytecode path. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase1.md`.
 * `html_escape` and `attr_escape`, with `HTML_ESCAPE` and `ATTR_ESCAPE`. Both
   encode `&`, `<`, `>`, `"`, and `'` the same way (`&amp;`, `&lt;`, `&gt;`,
   `&#34;`, `&#39;`) and grant no capability. `attr_escape` is the attribute-context

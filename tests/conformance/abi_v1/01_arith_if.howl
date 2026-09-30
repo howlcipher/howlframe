@@ -1,0 +1,15 @@
+(cli_app
+  (let (a 10)
+    (let (b 4)
+      (do
+        (print (+ a b))
+        (print (- a b))
+        (print (* a b))
+        (print (/ 20 4))
+        (if (> a b)
+          (print "greater")
+          (print "not-greater"))
+        (if (= a b)
+          (print "equal")
+          (print "unequal"))
+        (print (> a b))))))

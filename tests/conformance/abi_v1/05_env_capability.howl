@@ -1,0 +1,3 @@
+(cli_app
+  (let (value (env "HOWLFRAME_ABI_SECRET"))
+    (print value)))

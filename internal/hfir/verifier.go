@@ -114,18 +114,19 @@ func (v *Verifier) Verify() []Diagnostic {
 	return v.Diagnostics
 }
 
-// isFeasible has real rejection rules only for target == "wasm" today. Every
-// other target identity (including ones introduced by howlframe.go's production
-// wiring in improvement #87 Phase 2, e.g. "bytecode"/"interpreter"/"go"/
-// "javascript") is permissive by default - a passing result for those
-// targets does not mean real per-target feasibility coverage exists yet.
+// isFeasible has real rejection rules only for target == "wasm" today, and
+// that set is WasmInfeasibleKinds (lowered-hfir-abi/v1). Every other target
+// identity (including "bytecode", "interpreter", "go", and "javascript") is
+// permissive. A passing result for those targets does not mean per-target
+// feasibility coverage exists yet. Unsupported effects on those targets are
+// not silently treated as feasible by this function; they are outside the
+// v1 rejection set and stay a Phase 2 contract.
 func isFeasible(kind string, target string) bool {
 	if target == "wasm" {
-		// Wasm backend doesn't support complex networking, process, or file IO natively without imports
-		// For the sake of the verifier, we flag them if needed, but we'll leave it permissive for now.
-		switch kind {
-		case "exec", "spawn_agent", "http_server_start":
-			return false
+		for _, rejected := range WasmInfeasibleKinds {
+			if kind == rejected {
+				return false
+			}
 		}
 	}
 	return true
