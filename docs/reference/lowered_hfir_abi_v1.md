@@ -89,9 +89,9 @@ Backends may use different JSON. The suite compares the class from `tools/diffte
 
 Pure operations declare no capability. `map_keys` and `map_get` stay pure (#107). `store_keys` stays `database`, and a `file://` store also requires `filesystem`. v1 does not change that split.
 
-`env` is the negative capability case. The suite binds it with `let` and prints the binding. With no grant, the interpreter and the bytecode VM both reject with `CAPABILITY_DENIED`, exit nonzero, write no stdout, and do not include the secret value. With the `environment` grant, those two hosts and the Go backend print the value. The Go backend emits `os.Getenv` for that `let` binding.
+`env` is the negative capability case. The suite binds it with `let` and prints the binding. With no grant, the interpreter, the bytecode VM, generated Go, and JavaScript reject with `CAPABILITY_DENIED`, exit nonzero, write no stdout, and do not include the secret value. With the `environment` grant, those hosts print the value.
 
-Generated Go does not consult the capability grant. Generated JavaScript has no `env` form. Those hosts are not conformance targets for the denial case. Putting them on that case is allowed only once they reject with `CAPABILITY_DENIED` and do not reveal the value.
+The interpreter and the bytecode VM consult `-allow-caps` and deny before the read. Generated Go and JavaScript do that check in `howlFrameEnv` before `os.Getenv` or `process.env[key]`. Their runner grant is `HOWLFRAME_ALLOW_CAPS`, a comma-separated list of the same names as `-allow-caps`. An empty or unset value denies. A grant that omits `environment` denies. The mediator may read that grant variable. It does not read the requested key until `environment` is present. Other generated host effects, including `read_file` and `exec`, are still not mediated.
 
 ### Feasibility
 
@@ -126,7 +126,7 @@ Phase 2 is one lowered graph consumed by every host, with identical outcomes or 
 * Production `-compile-bc` still compiles the AST. Flipping that path is Phase 2.
 * `defun`, `call`, and `while` become executable HFIR, or every host rejects them with one code. Today the hosts run them and the experimental lowerer rejects them.
 * `ControlEdges` are populated and the graph is SSA.
-* Go and JavaScript mediate capabilities the way the interpreter and the bytecode VM do.
+* Go and JavaScript mediate `env` (Phase 2a). Other generated host effects still do not. One lowered graph for every host is still the rest of Phase 2.
 * One feasibility table covers every target, not only the three Wasm host effects.
 * Non-exact integer division picks one rule.
 * Wasm collections (#73) and `for` / `match` / `try_let` / `spawn` SSA lowering (#84) target this ABI. They are not part of v1, and this revision does not grow them.

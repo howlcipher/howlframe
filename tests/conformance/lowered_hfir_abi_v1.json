@@ -58,7 +58,8 @@
       "name": "env_denied",
       "fixture": "tests/conformance/abi_v1/05_env_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter"],
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase1-token"
     },
@@ -66,7 +67,8 @@
       "name": "env_granted",
       "fixture": "tests/conformance/abi_v1/05_env_capability.howl",
       "allow_caps": "environment",
-      "targets": ["bytecode", "interpreter", "go"],
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase1-token"
     }

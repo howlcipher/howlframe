@@ -177,6 +177,51 @@ func (o RunOptions) capFlags() []string {
 	return []string{"-allow-caps", caps}
 }
 
+// hostGrantValue is the runner grant for generated Go and JavaScript.
+// Those hosts read HOWLFRAME_ALLOW_CAPS at the env call. An empty value
+// denies. Nil AllowCaps keeps the historical grant of every known capability.
+func (o RunOptions) hostGrantValue() string {
+	if o.DenyAll {
+		return ""
+	}
+	if o.AllowCaps != nil {
+		return *o.AllowCaps
+	}
+	return allKnownCaps
+}
+
+// commandEnv returns the process environment with overrides replacing any
+// inherited values of the same name. A later append would lose to the
+// inherited key, and an inherited HOWLFRAME_ALLOW_CAPS would widen a denial.
+func commandEnv(overrides ...string) []string {
+	replaced := make(map[string]string, len(overrides))
+	order := make([]string, 0, len(overrides))
+	for _, ov := range overrides {
+		key, val, ok := strings.Cut(ov, "=")
+		if !ok {
+			continue
+		}
+		if _, seen := replaced[key]; !seen {
+			order = append(order, key)
+		}
+		replaced[key] = val
+	}
+	out := make([]string, 0, len(os.Environ())+len(order))
+	for _, entry := range os.Environ() {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, drop := replaced[key]; drop {
+				continue
+			}
+		}
+		out = append(out, entry)
+	}
+	for _, key := range order {
+		out = append(out, key+"="+replaced[key])
+	}
+	return out
+}
+
 // isStructuredRuntimeRejection reports runtime failures whose text is a
 // shared error class. Checker diagnostics also use a "reason" field, so
 // the interpreter path must not treat every JSON reason as a compile failure.
@@ -310,6 +355,10 @@ func executeInterpreter(filePath string, opts RunOptions) ExecutionResult {
 }
 
 func ExecuteGoBackend(filePath string, cliArgs []string, input string) ExecutionResult {
+	return executeGoBackend(filePath, RunOptions{CLIArgs: cliArgs, Input: input})
+}
+
+func executeGoBackend(filePath string, opts RunOptions) ExecutionResult {
 	compiler, err := getCompiler()
 	if err != nil {
 		return ExecutionResult{Target: TargetGo, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
@@ -348,10 +397,13 @@ func ExecuteGoBackend(filePath string, cliArgs []string, input string) Execution
 		}
 	}
 
-	runCmd := exec.Command(binPath, cliArgs...)
+	runCmd := exec.Command(binPath, opts.CLIArgs...)
 	runCmd.Dir = tmpDir
-	runCmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
-	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, input)
+	runCmd.Env = commandEnv(
+		"HOWLFRAME_TEST_TOKEN=expected-secret",
+		"HOWLFRAME_ALLOW_CAPS="+opts.hostGrantValue(),
+	)
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	res := ExecutionResult{
 		Target:   TargetGo,
@@ -452,6 +504,7 @@ func executeJSBackend(filePath string, opts RunOptions) ExecutionResult {
 	}
 
 	runCmd := exec.Command("node", append([]string{jsPath}, opts.CLIArgs...)...)
+	runCmd.Env = commandEnv("HOWLFRAME_ALLOW_CAPS=" + opts.hostGrantValue())
 	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	res := ExecutionResult{
@@ -537,7 +590,7 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 		case TargetInterpreter:
 			candidate = executeInterpreter(filePath, opts)
 		case TargetGo:
-			candidate = ExecuteGoBackend(filePath, opts.CLIArgs, opts.Input)
+			candidate = executeGoBackend(filePath, opts)
 		case TargetJavaScript:
 			candidate = executeJSBackend(filePath, opts)
 		default:

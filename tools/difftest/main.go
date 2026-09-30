@@ -127,8 +127,13 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 
 func runCommand(name string, arg ...string) (string, error) {
 	cmd := exec.Command(name, arg...)
-	// Inherit env, but inject HOWLFRAME_TEST_TOKEN for tests that need it
-	cmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
+	// HOWLFRAME_TEST_TOKEN feeds tests/test_env.howl. HOWLFRAME_ALLOW_CAPS is
+	// the generated Go and JavaScript grant, matching the all-caps list this
+	// runner already passes to -run-bc. The interpreter still takes -allow-caps.
+	cmd.Env = commandEnv(
+		"HOWLFRAME_TEST_TOKEN=expected-secret",
+		"HOWLFRAME_ALLOW_CAPS="+allKnownCaps,
+	)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
