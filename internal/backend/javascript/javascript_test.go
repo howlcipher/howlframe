@@ -186,8 +186,11 @@ func TestGenerateJSMapKeysSortsObjectKeys(t *testing.T) {
 		"keys.howl").ParseExpression()
 	checker.Check(root)
 	appCode, _ := GenerateJSCode(root)
-	if !strings.Contains(appCode, "Object.keys(_d).sort()") {
-		t.Fatalf("map_keys did not sort object keys:\n%s", appCode)
+	if !strings.Contains(appCode, "Object.keys(_d).sort(howlFrameCompareUTF8)") {
+		t.Fatalf("map_keys did not sort object keys in UTF-8 byte order:\n%s", appCode)
+	}
+	if strings.Contains(appCode, ".sort()") {
+		t.Fatalf("map_keys still uses JavaScript's default UTF-16 sort:\n%s", appCode)
 	}
 	if !strings.Contains(appCode, "TYPE_ERROR: map_keys expected dict") {
 		t.Fatalf("map_keys did not fail closed on a non-dict:\n%s", appCode)

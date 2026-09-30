@@ -1,0 +1,3 @@
+(cli_app
+  (let (counts (dict ("gamma" "3") ("beta" "2") ("alpha" "1") ("\u00e9" "e")))
+    (print (str_join (map_keys counts) ","))))

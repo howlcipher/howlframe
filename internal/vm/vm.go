@@ -131,18 +131,23 @@ func escapeHTMLText(val any, opName string, node *ast.Node) string {
 	return htmlescape.Escape(s)
 }
 
-// sortedMapKeys returns dict keys in lexicographic order as a non-nil list.
-// Go randomizes map iteration. An empty dict must stay an empty list so JSON
-// callers see [] rather than null.
+// sortedMapKeys returns dict keys in UTF-8 byte order as a non-nil list.
+// sort.Strings is that order: Go compares strings as bytes, the same rule
+// the Go backend emits. It is not UTF-16 code-unit order. A supplementary
+// plane key (for example U+1F600) sorts after U+F000 here, and before it
+// under JavaScript's default Array sort. Go randomizes map iteration. An
+// empty dict must stay an empty list so JSON callers see [] rather than null.
 func sortedMapKeys(dict map[string]any) []any {
-	keys := make([]any, 0, len(dict))
+	keys := make([]string, 0, len(dict))
 	for key := range dict {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i].(string) < keys[j].(string)
-	})
-	return keys
+	sort.Strings(keys)
+	out := make([]any, len(keys))
+	for i, key := range keys {
+		out[i] = key
+	}
+	return out
 }
 
 // Interpret executes a cli_app AST directly and returns a process exit code.
