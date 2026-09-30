@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* A differential dogfood case compiles `tests/conformance/abi_v1/12_nested_if_while_defun.howl` with experimental `-compile-hfir-bc` and production `-compile-bc` and requires the same stdout, stderr, and exit. The program nests `if` and `while` inside `defun` and calls that function. Production `-compile-bc` is still AST bytecode. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_dogfood_nested_control.md`.
 * Experimental `-compile-hfir-bc` compiles and runs `if` with the existing `JUMP_IF_FALSE` and `JUMP` opcodes. An if node's control edges are the condition, the then-branch, and an optional else. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3c_if.md`.
 * Experimental `-compile-hfir-bc` compiles and runs `while` with the existing `JUMP_IF_FALSE` and `JUMP` opcodes. A while header's control edges are the condition and then the body. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3b_while.md`.
 * Experimental `-compile-hfir-bc` compiles and runs `defun`, `call`, and `return` with the existing `CALL` and `RETURN` opcodes. Production `-compile-bc` is still AST bytecode after the gate. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_abi_phase3a_defun_call.md`.

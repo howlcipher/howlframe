@@ -2,6 +2,8 @@ package vm
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -200,6 +202,81 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
 				t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
 			}
 		})
+	}
+}
+
+// TestHFIRBytecodeNestedIfWhileDefunFixture compares production AST bytecode
+// with the experimental HFIR lowerer on one program that nests the Phase
+// 3a–3c surface: a defun call, while inside if, and if inside while.
+// The conformance harness runs the same file through -compile-bc and
+// -compile-hfir-bc. This test also round-trips both artifacts.
+func TestHFIRBytecodeNestedIfWhileDefunFixture(t *testing.T) {
+	path := filepath.Join("..", "..", "tests", "conformance", "abi_v1", "12_nested_if_while_defun.howl")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, graph := checkedHFIRGraph(t, string(source))
+	var defuns, calls, whiles, ifThenOnly, ifWithElse int
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != len(node.DataInputs) || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			switch len(node.ControlEdges) {
+			case 2:
+				ifThenOnly++
+			case 3:
+				if node.DataInputs[2].Name != "else" {
+					t.Fatalf("if %s else edge name = %q", node.ID, node.DataInputs[2].Name)
+				}
+				ifWithElse++
+			default:
+				t.Fatalf("if %s has %d control edges", node.ID, len(node.ControlEdges))
+			}
+		case "for":
+			t.Fatalf("dogfood fixture lowered a for node %s", node.ID)
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 3 || ifThenOnly != 1 || ifWithElse != 3 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d, want 1, 2, 3, 1, 3", defuns, calls, whiles, ifThenOnly, ifWithElse)
+	}
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	const want = "low 0\nlow 1\nmid 2\nhit 3\nmid 4\nagain 1\nresult 2\nmiss\nempty 0\n"
+	if legacyOutcome.stdout != want {
+		t.Fatalf("stdout = %q, want %q", legacyOutcome.stdout, want)
+	}
+	if strings.Contains(legacyOutcome.stdout, "no") || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil || legacyOutcome.panicVal != nil {
+		t.Fatalf("unexpected outcome %#v", legacyOutcome)
 	}
 }
 
