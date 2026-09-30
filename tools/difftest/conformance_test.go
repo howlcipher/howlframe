@@ -88,9 +88,32 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 	const writeMarkerPath = "/tmp/howlframe-abi-v1-phase2e-write.txt"
 	const writeMarkerBody = "phase2e-write-marker"
 	const mkdirMarkerPath = "/tmp/howlframe-abi-v1-phase2e-dir"
+	const dogfoodPrefix = "/tmp/howlframe-abi-v1-dogfood"
+	dogfoodFiles := []string{
+		dogfoodPrefix + "-write.txt",
+		dogfoodPrefix + "-loop.txt",
+		dogfoodPrefix + "-skip.txt",
+		dogfoodPrefix + "-else.txt",
+		dogfoodPrefix + "-empty.txt",
+	}
+	dogfoodDirs := []string{
+		dogfoodPrefix + "-dir",
+		dogfoodPrefix + "-miss",
+		dogfoodPrefix + "-skip",
+		dogfoodPrefix + "-dead",
+	}
+	cleanDogfood := func() {
+		for _, path := range dogfoodFiles {
+			os.Remove(path)
+		}
+		for _, path := range dogfoodDirs {
+			os.RemoveAll(path)
+		}
+	}
 	t.Cleanup(func() {
 		os.Remove(writeMarkerPath)
 		os.RemoveAll(mkdirMarkerPath)
+		cleanDogfood()
 	})
 	const fetchAddr = "127.0.0.1:47653"
 	var fetchHits atomic.Int64
@@ -128,6 +151,8 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				os.Remove(writeMarkerPath)
 			case "mkdir_denied", "mkdir_granted":
 				os.RemoveAll(mkdirMarkerPath)
+			case "nested_fs_write_denied", "nested_fs_write_granted":
+				cleanDogfood()
 			}
 			hitsBefore := fetchHits.Load()
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
@@ -204,6 +229,44 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				info, err := os.Stat(mkdirMarkerPath)
 				if err != nil || !info.IsDir() {
 					t.Fatalf("mkdir_granted did not create a directory: %v", err)
+				}
+			case "nested_fs_write_denied":
+				for _, path := range append(append([]string{}, dogfoodFiles...), dogfoodDirs...) {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatalf("nested_fs_write_denied created %s", path)
+					}
+				}
+			case "nested_fs_write_granted":
+				got, err := os.ReadFile(dogfoodPrefix + "-write.txt")
+				if err != nil {
+					t.Fatalf("nested write did not land: %v", err)
+				}
+				if string(got) != "dogfood-write-marker" {
+					t.Fatalf("nested write body = %q", got)
+				}
+				got, err = os.ReadFile(dogfoodPrefix + "-loop.txt")
+				if err != nil {
+					t.Fatalf("nested loop write did not land: %v", err)
+				}
+				if string(got) != "dogfood-loop-marker" {
+					t.Fatalf("nested loop body = %q", got)
+				}
+				for _, path := range []string{dogfoodPrefix + "-dir", dogfoodPrefix + "-miss"} {
+					info, err := os.Stat(path)
+					if err != nil || !info.IsDir() {
+						t.Fatalf("nested mkdir %s: %v", path, err)
+					}
+				}
+				for _, path := range []string{
+					dogfoodPrefix + "-skip.txt",
+					dogfoodPrefix + "-else.txt",
+					dogfoodPrefix + "-empty.txt",
+					dogfoodPrefix + "-skip",
+					dogfoodPrefix + "-dead",
+				} {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatalf("untaken filesystem path was created: %s", path)
+					}
 				}
 			}
 		})

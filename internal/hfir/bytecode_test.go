@@ -110,6 +110,22 @@ func TestLowerToBytecodeFailsClosedWithProvenance(t *testing.T) {
 	}
 }
 
+func TestLowerToBytecodeWriteFileRequiresPathAndData(t *testing.T) {
+	graph := NewGraph()
+	path := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "/tmp/x"})
+	entry := graph.AddNode(&Node{
+		Kind:       "write_file",
+		Provenance: Provenance{Filename: "write.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "path", SourceNode: path}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+}
+
 func TestLowerToBytecodeRejectsMissingDataInput(t *testing.T) {
 	graph := NewGraph()
 	entry := graph.AddNode(&Node{

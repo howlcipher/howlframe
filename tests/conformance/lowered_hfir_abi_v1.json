@@ -130,7 +130,7 @@
       "name": "write_file_denied",
       "fixture": "tests/conformance/abi_v1/15_write_file_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase2e-write-marker"
@@ -139,7 +139,7 @@
       "name": "write_file_granted",
       "fixture": "tests/conformance/abi_v1/15_write_file_capability.howl",
       "allow_caps": "filesystem",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2e-wrote"
@@ -148,7 +148,7 @@
       "name": "mkdir_denied",
       "fixture": "tests/conformance/abi_v1/16_mkdir_capability.howl",
       "deny_all": true,
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
       "forbid": "phase2e-made"
@@ -157,7 +157,7 @@
       "name": "mkdir_granted",
       "fixture": "tests/conformance/abi_v1/16_mkdir_capability.howl",
       "allow_caps": "filesystem",
-      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2e-made"
@@ -219,6 +219,25 @@
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "L a 0\nstep a\nL b 0\nstep b\nL a 1\nstep a\nL b 1\nstep b\nkept 4\nresult 4\nmiss\nempty 0",
+      "forbid": "no"
+    },
+    {
+      "name": "nested_fs_write_denied",
+      "fixture": "tests/conformance/abi_v1/17_nested_fs_write.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "howlframe-abi-v1-dogfood"
+    },
+    {
+      "name": "nested_fs_write_granted",
+      "fixture": "tests/conformance/abi_v1/17_nested_fs_write.howl",
+      "allow_caps": "filesystem",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "L a 0\nL b 0\nkept 2\nresult 2\nmiss\nempty 0",
       "forbid": "no"
     }
   ]

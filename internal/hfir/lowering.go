@@ -332,6 +332,30 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		}
 		id, err := addChildren(2, edgeName)
 		return id, true, err
+	case "write_file":
+		// (write_file path data). Existing WRITE_FILE opcode. Experimental
+		// -compile-hfir-bc only. No new opcode and no new capability.
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"path", astNode.Children[1]}, {"data", astNode.Children[2]}})
+		return id, true, err
+	case "mkdir":
+		// (mkdir path). Existing MKDIR opcode. Experimental -compile-hfir-bc
+		// only. No new opcode and no new capability.
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"path", astNode.Children[1]}})
+		return id, true, err
 	case "map_set":
 		if len(astNode.Children) != 4 || astNode.Children[1].Type != "SYMBOL" {
 			return "", false, nil

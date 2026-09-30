@@ -436,6 +436,368 @@ func TestHFIRBytecodeNestedForIfWhileDefunFixture(t *testing.T) {
 	}
 }
 
+// TestHFIRBytecodeWriteFileFixture compares production AST bytecode with
+// the experimental HFIR lowerer on the Phase 2e write_file fixture. The
+// conformance harness runs that file through -compile-bc and -compile-hfir-bc.
+// This test rewrites the absolute path into a temp directory and compares
+// the filesystem each compiler leaves behind.
+func TestHFIRBytecodeWriteFileFixture(t *testing.T) {
+	source := readAbiFixture(t, "15_write_file_capability.howl")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "write.txt")
+	source = strings.ReplaceAll(source, "/tmp/howlframe-abi-v1-phase2e-write.txt", path)
+	compareFilesystemCompilers(t, source, []string{path}, "WRITE_FILE", "phase2e-wrote\n", map[string]fsEntry{
+		path: {kind: "file", body: "phase2e-write-marker"},
+	})
+}
+
+// TestHFIRBytecodeMkdirFixture compares production AST bytecode with the
+// experimental HFIR lowerer on the Phase 2e mkdir fixture.
+func TestHFIRBytecodeMkdirFixture(t *testing.T) {
+	source := readAbiFixture(t, "16_mkdir_capability.howl")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "made")
+	source = strings.ReplaceAll(source, "/tmp/howlframe-abi-v1-phase2e-dir", path)
+	compareFilesystemCompilers(t, source, []string{path}, "MKDIR", "phase2e-made\n", map[string]fsEntry{
+		path: {kind: "dir"},
+	})
+}
+
+// TestHFIRBytecodeNestedFsWriteFixture compares production AST bytecode
+// with the experimental HFIR lowerer on one program that nests write_file
+// and mkdir inside if, while, for, and defun. The conformance harness runs
+// the same file through -compile-bc and -compile-hfir-bc, granted and denied.
+// This test round-trips both artifacts and snapshots the filesystem each
+// compiler leaves behind.
+func TestHFIRBytecodeNestedFsWriteFixture(t *testing.T) {
+	source := readAbiFixture(t, "17_nested_fs_write.howl")
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "dogfood")
+	source = strings.ReplaceAll(source, "/tmp/howlframe-abi-v1-dogfood", prefix)
+	root, graph := checkedHFIRGraph(t, source)
+	assertNestedFsWriteShape(t, graph)
+
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := graphCapabilities(graph), []capability.Capability{capability.Filesystem}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("HFIR effects = %v, want filesystem", got)
+	}
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Filesystem}) {
+		t.Fatalf("emitted capabilities = %v, want filesystem", programCapabilities(direct))
+	}
+
+	paths := []string{
+		prefix + "-write.txt",
+		prefix + "-loop.txt",
+		prefix + "-skip.txt",
+		prefix + "-else.txt",
+		prefix + "-empty.txt",
+		prefix + "-dir",
+		prefix + "-miss",
+		prefix + "-skip",
+		prefix + "-dead",
+	}
+	const wantStdout = "L a 0\nL b 0\nkept 2\nresult 2\nmiss\nempty 0\n"
+	granted := map[string]fsEntry{
+		prefix + "-write.txt": {kind: "file", body: "dogfood-write-marker"},
+		prefix + "-loop.txt":  {kind: "file", body: "dogfood-loop-marker"},
+		prefix + "-dir":       {kind: "dir"},
+		prefix + "-miss":      {kind: "dir"},
+		prefix + "-skip.txt":  {kind: "absent"},
+		prefix + "-else.txt":  {kind: "absent"},
+		prefix + "-empty.txt": {kind: "absent"},
+		prefix + "-skip":      {kind: "absent"},
+		prefix + "-dead":      {kind: "absent"},
+	}
+	compareCompilerFilesystem(t, legacy, direct, paths, "WRITE_FILE", prefix, wantStdout, granted)
+}
+
+func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
+	t.Helper()
+	var defuns, calls, whiles, ifWithElse, writes, mkdirs int
+	fors := map[string]*hfir.Node{}
+	writePaths := map[string]*hfir.Node{}
+	mkdirPaths := map[string]*hfir.Node{}
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "defun":
+			defuns++
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
+			}
+		case "call":
+			calls++
+		case "while":
+			whiles++
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+		case "if":
+			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			for index := range node.ControlEdges {
+				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+				}
+			}
+			ifWithElse++
+		case "for":
+			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			}
+			if _, ok := fors[node.Value]; ok {
+				t.Fatalf("duplicate for iterator %q", node.Value)
+			}
+			fors[node.Value] = node
+		case "write_file":
+			writes++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "path" || node.DataInputs[1].Name != "data" {
+				t.Fatalf("write_file %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			writePaths[fsPathValue(t, graph, node)] = node
+		case "mkdir":
+			mkdirs++
+			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "path" {
+				t.Fatalf("mkdir %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+			}
+			mkdirPaths[fsPathValue(t, graph, node)] = node
+		}
+	}
+	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || writes != 5 || mkdirs != 4 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d write=%d mkdir=%d, want 1, 2, 2, 3, 3, 5, 4", defuns, calls, whiles, ifWithElse, len(fors), writes, mkdirs)
+	}
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	// The label for's body is the if. Its else is the taken write.
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "write_file" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "mkdir" }) {
+		t.Fatal("taken branch does not contain write_file and mkdir")
+	}
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "mkdir" }) {
+				t.Fatal("false while body does not mkdir")
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
+		t.Fatal("name for does not contain write_file")
+	}
+	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
+		t.Fatal("empty for does not contain write_file")
+	}
+	var defunHoldsWrite bool
+	for _, node := range graph.Nodes {
+		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
+			return child.Kind == "write_file" || child.Kind == "mkdir"
+		}) {
+			defunHoldsWrite = true
+		}
+	}
+	if !defunHoldsWrite {
+		t.Fatal("defun does not contain the filesystem effects")
+	}
+	for _, path := range []string{"-write.txt", "-loop.txt", "-skip.txt", "-else.txt", "-empty.txt"} {
+		if !hasPathSuffix(writePaths, path) {
+			t.Fatalf("missing write_file %s in %v", path, pathKeys(writePaths))
+		}
+	}
+	for _, path := range []string{"-dir", "-miss", "-skip", "-dead"} {
+		if !hasPathSuffix(mkdirPaths, path) {
+			t.Fatalf("missing mkdir %s in %v", path, pathKeys(mkdirPaths))
+		}
+	}
+}
+
+func hasPathSuffix(paths map[string]*hfir.Node, suffix string) bool {
+	for path := range paths {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathKeys(paths map[string]*hfir.Node) []string {
+	keys := make([]string, 0, len(paths))
+	for path := range paths {
+		keys = append(keys, path)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func fsPathValue(t *testing.T, graph *hfir.Graph, node *hfir.Node) string {
+	t.Helper()
+	pathNode := graph.NodeByID(node.DataInputs[0].SourceNode)
+	if pathNode == nil || pathNode.Kind != "const" || pathNode.LiteralKind != "STRING" || pathNode.Value == "" {
+		t.Fatalf("%s path = %#v, want a string const", node.Kind, pathNode)
+	}
+	return pathNode.Value
+}
+
+type fsEntry struct {
+	kind string
+	body string
+}
+
+func compareFilesystemCompilers(t *testing.T, source string, paths []string, denyOpcode, wantStdout string, granted map[string]fsEntry) {
+	t.Helper()
+	root, graph := checkedHFIRGraph(t, source)
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Filesystem}) {
+		t.Fatalf("emitted capabilities = %v, want filesystem", programCapabilities(direct))
+	}
+	var secret string
+	if len(paths) > 0 {
+		secret = paths[0]
+	}
+	compareCompilerFilesystem(t, legacy, direct, paths, denyOpcode, secret, wantStdout, granted)
+}
+
+func compareCompilerFilesystem(t *testing.T, legacy, direct *bytecode.BCProgram, paths []string, denyOpcode, secret, wantStdout string, granted map[string]fsEntry) {
+	t.Helper()
+	t.Cleanup(func() { removePaths(paths) })
+	deniedAbsent := map[string]fsEntry{}
+	for _, path := range paths {
+		deniedAbsent[path] = fsEntry{kind: "absent"}
+	}
+	legacyDenied, legacyDeniedFS := runFilesystemOutcome(t, legacy, nil, paths)
+	directDenied, directDeniedFS := runFilesystemOutcome(t, direct, nil, paths)
+	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
+	requireFilesystemDenial(t, legacyDenied, denyOpcode, secret)
+	if !reflect.DeepEqual(legacyDeniedFS, deniedAbsent) || !reflect.DeepEqual(directDeniedFS, deniedAbsent) {
+		t.Fatalf("denial filesystem AST %#v HFIR %#v", legacyDeniedFS, directDeniedFS)
+	}
+
+	legacyGranted, legacyFS := runFilesystemOutcome(t, legacy, []capability.Capability{capability.Filesystem}, paths)
+	directGranted, directFS := runFilesystemOutcome(t, direct, []capability.Capability{capability.Filesystem}, paths)
+	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
+	if wantStdout != "" && legacyGranted.stdout != wantStdout {
+		t.Fatalf("stdout = %q, want %q", legacyGranted.stdout, wantStdout)
+	}
+	if strings.Contains(legacyGranted.stdout, "no") || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
+		t.Fatalf("granted outcome %#v", legacyGranted)
+	}
+	if !reflect.DeepEqual(legacyFS, granted) || !reflect.DeepEqual(directFS, granted) {
+		t.Fatalf("grant filesystem\nAST %#v\nHFIR %#v\nwant %#v", legacyFS, directFS, granted)
+	}
+}
+
+func runFilesystemOutcome(t *testing.T, program *bytecode.BCProgram, caps []capability.Capability, paths []string) (bytecodeOutcome, map[string]fsEntry) {
+	t.Helper()
+	removePaths(paths)
+	outcome := runBytecodeOutcome(program, "", caps)
+	return outcome, snapshotPaths(t, paths)
+}
+
+func snapshotPaths(t *testing.T, paths []string) map[string]fsEntry {
+	t.Helper()
+	snap := make(map[string]fsEntry, len(paths))
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			snap[path] = fsEntry{kind: "absent"}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.IsDir() {
+			snap[path] = fsEntry{kind: "dir"}
+			continue
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snap[path] = fsEntry{kind: "file", body: string(body)}
+	}
+	return snap
+}
+
+func removePaths(paths []string) {
+	for _, path := range paths {
+		os.RemoveAll(path)
+	}
+}
+
+func requireSameBytecodeOutcome(t *testing.T, legacy, direct bytecodeOutcome) {
+	t.Helper()
+	if legacy.stdout != direct.stdout || legacy.stderr != direct.stderr || legacy.exitCode != direct.exitCode || (legacy.panicVal != nil || direct.panicVal != nil) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacy, direct)
+	}
+	if legacy.vmError == nil && direct.vmError == nil {
+		return
+	}
+	if legacy.vmError == nil || direct.vmError == nil || legacy.vmError.Code != direct.vmError.Code || legacy.vmError.Message != direct.vmError.Message || legacy.vmError.Opcode != direct.vmError.Opcode {
+		t.Fatalf("AST error = %#v\nHFIR error = %#v", legacy.vmError, direct.vmError)
+	}
+}
+
+func requireFilesystemDenial(t *testing.T, outcome bytecodeOutcome, opcode, secret string) {
+	t.Helper()
+	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != opcode || outcome.vmError.Message != "capability denied: filesystem" {
+		t.Fatalf("denial = %#v, want CAPABILITY_DENIED %s", outcome, opcode)
+	}
+	if outcome.stdout != "" || outcome.stderr != "" {
+		t.Fatalf("denial produced output %#v", outcome)
+	}
+	if secret != "" && strings.Contains(outcome.stdout+outcome.stderr+outcome.vmError.Message, secret) {
+		t.Fatalf("denial leaked %q in %#v", secret, outcome)
+	}
+}
+
+func readAbiFixture(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join("..", "..", "tests", "conformance", "abi_v1", name)
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(source)
+}
+
 func forIteratorNames(fors map[string]*hfir.Node) []string {
 	names := make([]string, 0, len(fors))
 	for name := range fors {
@@ -672,9 +1034,17 @@ func graphCapabilities(graph *hfir.Graph) []capability.Capability {
 
 func programCapabilities(program *bytecode.BCProgram) []capability.Capability {
 	seen := make(map[capability.Capability]bool)
-	for _, inst := range program.Main {
-		if spec, ok := bytecode.Registry[inst.Op]; ok && spec.Capability != capability.None {
-			seen[spec.Capability] = true
+	collect := func(insts []bytecode.BCInstruction) {
+		for _, inst := range insts {
+			if spec, ok := bytecode.Registry[inst.Op]; ok && spec.Capability != capability.None {
+				seen[spec.Capability] = true
+			}
+		}
+	}
+	collect(program.Main)
+	for _, fn := range program.Functions {
+		if fn != nil {
+			collect(fn.Instructions)
 		}
 	}
 	return sortedCapabilities(seen)
