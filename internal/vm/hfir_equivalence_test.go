@@ -141,6 +141,45 @@ func TestHFIRBytecodeEquivalence(t *testing.T) {
         (return n))))
   (print (call steps 4)))`,
 		},
+		{
+			name: "if then else",
+			source: `(cli_app
+  (if false
+    (print "no")
+    (print "else"))
+  (if true
+    (print "then")
+    (print "no"))
+  (if (> 2 1)
+    (print "greater")
+    (print "no")))`,
+		},
+		{
+			name: "if without else",
+			source: `(cli_app
+  (if false (print "no"))
+  (if true (print "only")))`,
+		},
+		{
+			name: "nested if",
+			source: `(cli_app
+  (if true
+    (if false
+      (print "no")
+      (print "inner"))
+    (print "no")))`,
+		},
+		{
+			name: "if inside defun",
+			source: `(cli_app
+  (defun choose (flag)
+    (type_hints (flag bool) (return string))
+    (if flag
+      (return "yes")
+      (return "no")))
+  (print (call choose true))
+  (print (call choose false)))`,
+		},
 	}
 
 	t.Setenv("HFIR_EQ_TEST_VALUE", "expected")

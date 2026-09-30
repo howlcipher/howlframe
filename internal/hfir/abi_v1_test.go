@@ -63,15 +63,31 @@ func TestLoweredABIV1WasmRejectionSetIsClosed(t *testing.T) {
 	}
 }
 
-func TestLoweredABIV1CoreFixtureHasNoControlEdges(t *testing.T) {
+func TestLoweredABIV1ArithFixtureControlEdgesAreIfOnly(t *testing.T) {
 	graph := lowerFixture(t, filepath.Join("..", "..", "tests", "conformance", "abi_v1", "01_arith_if.howl"))
 	if len(graph.Nodes) == 0 {
 		t.Fatal("arith fixture lowered no nodes")
 	}
+	var branches int
 	for _, node := range graph.Nodes {
-		if len(node.ControlEdges) != 0 {
-			t.Fatalf("node %s kind %s has control edges %v; the arith fixture has no while", node.ID, node.Kind, node.ControlEdges)
+		if node.Kind != "if" {
+			if len(node.ControlEdges) != 0 {
+				t.Fatalf("node %s kind %s has control edges %v; the arith fixture fills them on if only", node.ID, node.Kind, node.ControlEdges)
+			}
+			continue
 		}
+		branches++
+		if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
+			t.Fatalf("if shape = %#v", node)
+		}
+		for index := range node.ControlEdges {
+			if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+				t.Fatalf("if control edges = %v, data = %#v", node.ControlEdges, node.DataInputs)
+			}
+		}
+	}
+	if branches != 2 {
+		t.Fatalf("if nodes = %d", branches)
 	}
 	program, diags := LowerToBytecode(graph)
 	if len(diags) != 0 {

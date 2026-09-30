@@ -1,0 +1,14 @@
+(cli_app
+  (if false
+    (print "no")
+    (print "else"))
+  (if true
+    (print "then")
+    (print "no"))
+  (if (> 2 1)
+    (print "greater")
+    (print "no"))
+  (if false
+    (print "no"))
+  (if true
+    (print "only")))

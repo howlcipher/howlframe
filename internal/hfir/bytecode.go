@@ -171,23 +171,26 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		}
 		return append(insts, instruction(bytecode.OpSetVar, "SET_VAR", func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })), nil
 	case "if":
-		if len(children) != 2 && len(children) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || len(children) == 3 && node.DataInputs[2].Name != "else" {
-			diagnostic := c.diagnostic(node, "if requires condition, then, and optional else")
-			return nil, &diagnostic
+		successors, shapeDiagnostic := c.ifSuccessors(node)
+		if shapeDiagnostic != nil {
+			return nil, shapeDiagnostic
 		}
-		condition, childDiagnostic := compileChild(0)
+		condition, childDiagnostic := c.compile(successors[0])
 		if childDiagnostic != nil {
 			return nil, childDiagnostic
 		}
-		thenInsts, childDiagnostic := compileChild(1)
+		thenInsts, childDiagnostic := c.compile(successors[1])
 		if childDiagnostic != nil {
 			return nil, childDiagnostic
 		}
-		if len(children) == 2 {
+		// Same relative jumps as bytecode.CompileToBytecode's if case.
+		// JUMP_IF_FALSE skips the then-branch. A present else is skipped
+		// by JUMP. No new opcode.
+		if len(successors) == 2 {
 			condition = append(condition, instruction(bytecode.OpJumpIfFalse, "JUMP_IF_FALSE", func(inst *bytecode.BCInstruction) { inst.IntOperand = int64(len(thenInsts) + 1) }))
 			return append(condition, thenInsts...), nil
 		}
-		elseInsts, childDiagnostic := compileChild(2)
+		elseInsts, childDiagnostic := c.compile(successors[2])
 		if childDiagnostic != nil {
 			return nil, childDiagnostic
 		}
@@ -578,6 +581,36 @@ func (c *bytecodeLowerer) whileSuccessors(node *Node) (*Node, *Node, *Diagnostic
 		return nil, nil, &diagnostic
 	}
 	return cond, body, nil
+}
+
+// ifSuccessors is the executable control-edge contract for a branch.
+// ControlEdges are the condition, then the then-branch, and an optional
+// else. They must be the same nodes as the named data edges, in that order.
+// An if whose control edges are missing or swapped is not executable.
+func (c *bytecodeLowerer) ifSuccessors(node *Node) ([]*Node, *Diagnostic) {
+	n := len(node.DataInputs)
+	shapeOK := (n == 2 || n == 3) && len(node.ControlEdges) == n && node.DataInputs[0].Name == "condition" && node.DataInputs[1].Name == "then" && (n != 3 || node.DataInputs[2].Name == "else")
+	if shapeOK {
+		for index := range node.ControlEdges {
+			if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+				shapeOK = false
+				break
+			}
+		}
+	}
+	if !shapeOK {
+		diagnostic := c.diagnostic(node, "if requires a condition control edge, a then control edge, and an optional else control edge")
+		return nil, &diagnostic
+	}
+	successors := make([]*Node, n)
+	for index, id := range node.ControlEdges {
+		successors[index] = c.graph.NodeByID(id)
+		if successors[index] == nil {
+			diagnostic := c.diagnostic(node, "if control edge references a missing node")
+			return nil, &diagnostic
+		}
+	}
+	return successors, nil
 }
 
 func (c *bytecodeLowerer) children(node *Node) ([]*Node, *Diagnostic) {

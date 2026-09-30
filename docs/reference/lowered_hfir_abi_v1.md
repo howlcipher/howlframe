@@ -77,9 +77,17 @@ Those hosts must print the same stdout. A program the experimental lowerer rejec
 
 `(while cond body)` re-evaluates `cond` and runs `body` while the condition is true. The body runs zero times when the condition is false. A condition that is not a bool is `TYPE_ERROR` at runtime, and the checker rejects a known non-bool before either compiler.
 
-Phase 3b makes that shape executable on the experimental lowerer only. `LowerAST` stores a `condition` data edge, a `body` data edge, and `ControlEdges` in that order: the test, then the body. The back edge is the existing `JUMP` to the test. `LowerToBytecode` follows those control edges and emits the existing `JUMP_IF_FALSE` and `JUMP` opcodes, with the same relative offsets as the AST bytecode compiler. A `while` whose control edges are missing or are not that pair fails with `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. It does not add an opcode. `if` and `for` still have empty `ControlEdges`. The model-adapter transport still rejects `while`.
+Phase 3b makes that shape executable on the experimental lowerer only. `LowerAST` stores a `condition` data edge, a `body` data edge, and `ControlEdges` in that order: the test, then the body. The back edge is the existing `JUMP` to the test. `LowerToBytecode` follows those control edges and emits the existing `JUMP_IF_FALSE` and `JUMP` opcodes, with the same relative offsets as the AST bytecode compiler. A `while` whose control edges are missing or are not that pair fails with `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. It does not add an opcode. `for` still has empty `ControlEdges`. The model-adapter transport still rejects `while`.
 
 The conformance case `while_control` is `tests/conformance/abi_v1/10_while.howl`. Its hosts are the same five as `defun_call`. The false loop must not print. The counting loop prints `1`, `2`, and `3`.
+
+### Branches
+
+`(if cond then)` and `(if cond then else)` evaluate `cond` and run one branch. A false condition skips `then`. A condition that is not a bool is `TYPE_ERROR` at runtime, and the checker rejects a known non-bool before either compiler.
+
+Phase 3c records that shape on the experimental lowerer. `LowerAST` stores a `condition` data edge, a `then` data edge, an optional `else` data edge, and `ControlEdges` in that order. `LowerToBytecode` follows those control edges and emits the existing `JUMP_IF_FALSE` and, when an else is present, `JUMP`, with the same relative offsets as the AST bytecode compiler. An `if` whose control edges are missing or swapped fails with `HFIR_BYTECODE_UNSUPPORTED` and no `BCProgram`. It does not add an opcode. `for` still has empty `ControlEdges`. The model-adapter transport still accepts `if` and still rejects `while` and `defun`. The transport schema has no control-edge field; decoding an `if` derives the successors from those roles.
+
+The conformance case `if_control` is `tests/conformance/abi_v1/11_if.howl`. Its hosts are the same five as `defun_call`. The false branches must not print. The taken branches print `else`, `then`, `greater`, and `only`.
 
 ### Memory and runtime imports
 
@@ -141,15 +149,15 @@ A later lowering that owns meaning has to be a typed CFG in SSA:
 * Control edges connect blocks.
 * Node kinds are constructs, not user binding names.
 
-`hfir.LowerAST` is not that form. It fills data edges for the semantic subset. Phase 3b fills `ControlEdges` on a `while` header only: the condition, then the body. The v1 arithmetic fixture has no `while`, so every node in that fixture still has empty `ControlEdges`. `if` and `for` stay empty. Kinds outside `lowerSemanticList` still come from the list head, so a user name can appear as a kind. v1 records that fact. It does not pretend the graph is SSA.
+`hfir.LowerAST` is not that form. It fills data edges for the semantic subset. Phase 3b fills `ControlEdges` on a `while` header: the condition, then the body. Phase 3c fills `ControlEdges` on an `if`: the condition, the then-branch, and an optional else. The v1 arithmetic fixture has no `while`. Its `if` nodes carry those branch successors, and every other node in that fixture still has empty `ControlEdges`. `for` stays empty. Kinds outside `lowerSemanticList` still come from the list head, so a user name can appear as a kind. v1 records that fact. It does not pretend the graph is SSA.
 
 ## Deferred (Phase 2)
 
 Phase 2 is one lowered graph consumed by every host, with identical outcomes or the same feasibility rejection.
 
-* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a and Phase 3b do not flip it.
-* `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is executable on that same flag (Phase 3b), with control edges on the loop header only. The interpreter, the production bytecode VM, Go, and JavaScript still run calls and loops from the AST. One lowered graph for every host is still open.
-* `ControlEdges` on every control form, and an SSA graph, are still open. Phase 3b fills them for `while` only.
+* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a, Phase 3b, and Phase 3c do not flip it.
+* `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is executable on that same flag (Phase 3b), with control edges on the loop header. `if` on that flag follows control edges for the condition, the then-branch, and an optional else (Phase 3c). The interpreter, the production bytecode VM, Go, and JavaScript still run calls, loops, and branches from the AST. One lowered graph for every host is still open.
+* `ControlEdges` on every control form, and an SSA graph, are still open. Phase 3b fills them for `while`. Phase 3c fills them for `if`. `for` stays empty.
 * Go and JavaScript mediate `env` (Phase 2a), `exec` (Phase 2b), `read_file` (Phase 2c), and `fetch` (Phase 2d). Other generated host effects, including `write_file` and `mkdir`, still do not. One lowered graph for every host is still the rest of Phase 2.
 * One feasibility table covers every target, not only the three Wasm host effects.
 * Non-exact integer division picks one rule.
@@ -159,4 +167,4 @@ Phase 2 is one lowered graph consumed by every host, with identical outcomes or 
 
 ## What the suite does not prove
 
-Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, Phase 3a `defun` / `call`, and Phase 3b `while`. That test is not the production compiler. The `defun_call` and `while_control` conformance cases compare `-compile-hfir-bc` with the AST hosts on those fixtures. Matching stdout there does not mean `-compile-bc` consumes HFIR.
+Agreement among the AST backends is not proof that HFIR is the source of that agreement. `internal/vm/hfir_equivalence_test.go` is separate evidence that the experimental lowerer matches the bytecode VM on the subset it already emits, including `map_keys`, a granted `env`, Phase 3a `defun` / `call`, Phase 3b `while`, and Phase 3c `if`. That test is not the production compiler. The `defun_call`, `while_control`, and `if_control` conformance cases compare `-compile-hfir-bc` with the AST hosts on those fixtures. Matching stdout there does not mean `-compile-bc` consumes HFIR.
