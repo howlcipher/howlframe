@@ -1,0 +1,8 @@
+(cli_app
+  (let (counts (dict
+      ("\U0001F600" "supplementary-emoji")
+      ("a" "ascii")
+      ("\uF000" "bmp-above-surrogate")
+      ("\U0001F000" "supplementary-low")
+      ("\u00e9" "latin1")))
+    (print (str_join (map_keys counts) ","))))

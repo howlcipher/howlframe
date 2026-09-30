@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* `map_keys` order is UTF-8 byte order on the interpreter, the bytecode VM, the Go backend, and JavaScript. JavaScript no longer uses UTF-16 code-unit sort, so a supplementary-plane key sorts with the same list as Go `sort.Strings`. No new opcode and no capability change. Journal: `docs/journals/2026-09-30_dict_key_sort.md`.
 * Locked the pure-versus-store capability split in docs and tests. `map_keys` grants nothing and runs under an empty grant. `store_keys` stays `database`. A `file://` store additionally requires `filesystem`. No opcode grant changed. Journal: `docs/journals/2026-09-30_capability_surface_honesty.md`.
 
 ### Added

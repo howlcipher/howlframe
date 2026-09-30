@@ -54,6 +54,10 @@ var jsNeedsHTMLEscape bool
 // on every call.
 var jsNeedsCollection bool
 
+// jsNeedsMapKeyOrder is set when GenerateJSCode emits map_keys. The
+// comparator orders keys by UTF-8 bytes. It is reset on every call.
+var jsNeedsMapKeyOrder bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -110,6 +114,42 @@ function howlFrameListLen(list) {
     throw new Error("TYPE_ERROR: list_len expected list, got " + howlFrameValueKind(list));
   }
   return list.length;
+}
+`
+}
+
+// mapKeyOrderJSHelper sorts dict keys by UTF-8 bytes.
+// Go's sort.Strings and the VM use that order. Array.prototype.sort with no
+// comparator compares UTF-16 code units, which places a supplementary-plane
+// key before U+F000. Encoding each code point to UTF-8 and comparing those
+// bytes matches Go, including non-BMP keys.
+func mapKeyOrderJSHelper() string {
+	return `function howlFrameUTF8Bytes(s) {
+  var out = [];
+  var i = 0;
+  while (i < s.length) {
+    var cp = s.codePointAt(i);
+    i += cp > 0xFFFF ? 2 : 1;
+    if (cp < 0x80) {
+      out.push(cp);
+    } else if (cp < 0x800) {
+      out.push(0xC0 | (cp >>> 6), 0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+      out.push(0xE0 | (cp >>> 12), 0x80 | ((cp >>> 6) & 0x3F), 0x80 | (cp & 0x3F));
+    } else {
+      out.push(0xF0 | (cp >>> 18), 0x80 | ((cp >>> 12) & 0x3F), 0x80 | ((cp >>> 6) & 0x3F), 0x80 | (cp & 0x3F));
+    }
+  }
+  return out;
+}
+function howlFrameCompareUTF8(a, b) {
+  var ab = howlFrameUTF8Bytes(a);
+  var bb = howlFrameUTF8Bytes(b);
+  var n = ab.length < bb.length ? ab.length : bb.length;
+  for (var i = 0; i < n; i++) {
+    if (ab[i] !== bb[i]) return ab[i] - bb[i];
+  }
+  return ab.length - bb.length;
 }
 `
 }
@@ -444,10 +484,12 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameListLen(%s)", listStr)
 	case "map_keys":
+		jsNeedsMapKeyOrder = true
 		dictStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		// Object.keys order is insertion order. Sorting matches the bytecode
-		// VM, which cannot rely on Go map iteration.
-		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_keys expected dict\"); } return Object.keys(_d).sort(); })(%s)", dictStr)
+		// Object.keys order is insertion order. howlFrameCompareUTF8 is
+		// UTF-8 byte order, matching sort.Strings on the VM and the Go
+		// backend. The default sort is UTF-16 code-unit order.
+		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_keys expected dict\"); } return Object.keys(_d).sort(howlFrameCompareUTF8); })(%s)", dictStr)
 	case "is_nil":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(%s === null || %s === undefined)", valStr, valStr)
@@ -499,6 +541,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
 	jsNeedsCollection = false
+	jsNeedsMapKeyOrder = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -595,6 +638,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsCollection {
 		helper := collectionJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsMapKeyOrder {
+		helper := mapKeyOrderJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

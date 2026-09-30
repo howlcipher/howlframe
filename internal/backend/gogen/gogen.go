@@ -1359,6 +1359,9 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// Dict literals lower to map[string]string and parsed records to
 		// map[string]any. Both are dictionaries; anything else fails closed
 		// instead of ranging a list or a scalar.
+		// sort.Strings is UTF-8 byte order, the same order as the VM.
+		// A rune sort or a UTF-16 code-unit sort would move supplementary
+		// plane keys. Improvement #109.
 		return fmt.Sprintf("func() []string { switch _m := any(%s).(type) { case map[string]string: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; case map[string]any: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; default: panic(fmt.Sprintf(\"TYPE_ERROR: map_keys expected dict, got %%T\", _m)) } }()", dictStr)
 	case "is_nil":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
