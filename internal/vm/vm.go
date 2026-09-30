@@ -721,6 +721,17 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
 		}
 		return out
+	case "read_file":
+		// requireCapability already ran for filesystem. Read only after that grant.
+		if len(node.Children) != 2 {
+			InterpErr("read_file expects (read_file path)", node)
+		}
+		path := fmt.Sprint(interp.eval(node.Children[1], env))
+		b, err := os.ReadFile(path)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
+		}
+		return b
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])

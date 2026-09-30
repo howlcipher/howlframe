@@ -1,0 +1,3 @@
+(cli_app
+  (let (value (read_file "/tmp/howlframe-abi-v1-phase2c.txt"))
+    (print (bytes_to_string value))))

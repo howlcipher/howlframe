@@ -341,6 +341,11 @@ func checkJSStatement(node *ast.Node, depth int) {
 		for _, child := range node.Children[1:] {
 			checkJSStatement(child, depth+1)
 		}
+	} else if head == "read_file" {
+		if len(node.Children) != 2 {
+			ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}

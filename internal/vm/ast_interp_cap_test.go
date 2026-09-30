@@ -100,6 +100,73 @@ func TestInterpretExecGrantedRuns(t *testing.T) {
 	}
 }
 
+func TestInterpretReadFileDeniedBeforeRead(t *testing.T) {
+	dir := t.TempDir()
+	secretPath := filepath.Join(dir, "phase2c-secret-path.txt")
+	const secretBody = "phase2c-secret-bytes"
+	if err := os.WriteFile(secretPath, []byte(secretBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := `(cli_app (print (bytes_to_string (read_file "` + secretPath + `"))))`
+	node, _ := parseAndCompile(t, source)
+
+	var stdout, stderr bytes.Buffer
+	exitCode := Interpret(node, nil, nil, strings.NewReader(""), &stdout, &stderr)
+	if exitCode == 0 {
+		t.Fatalf("expected Interpret to deny read_file without filesystem, got exit 0; stdout=%q", stdout.String())
+	}
+	errStr := stderr.String()
+	if !strings.Contains(errStr, "capability denied: filesystem") {
+		t.Fatalf("expected 'capability denied: filesystem' in stderr, got: %s", errStr)
+	}
+	if strings.Contains(errStr+stdout.String(), secretBody) || strings.Contains(errStr, "phase2c-secret-path") {
+		t.Fatalf("denial leaked the file: stdout=%q stderr=%q", stdout.String(), errStr)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	other := []capability.Capability{capability.Process}
+	exitCode = Interpret(node, nil, other, strings.NewReader(""), &stdout, &stderr)
+	if exitCode == 0 {
+		t.Fatalf("process grant read the file; stdout=%q", stdout.String())
+	}
+	if strings.Contains(stdout.String()+stderr.String(), secretBody) {
+		t.Fatalf("process grant leaked the file: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+
+	missing := filepath.Join(dir, "phase2c-missing-secret.txt")
+	missingSource := `(cli_app (print (bytes_to_string (read_file "` + missing + `"))))`
+	missingNode, _ := parseAndCompile(t, missingSource)
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = Interpret(missingNode, nil, nil, strings.NewReader(""), &stdout, &stderr)
+	if exitCode == 0 {
+		t.Fatal("missing path was read without filesystem")
+	}
+	if strings.Contains(stderr.String(), "phase2c-missing-secret") || strings.Contains(stderr.String(), "no such file") {
+		t.Fatalf("denial reached the filesystem: %s", stderr.String())
+	}
+}
+
+func TestInterpretReadFileGrantedReads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "phase2c-read.txt")
+	if err := os.WriteFile(path, []byte("phase2c-read-marker"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := `(cli_app (print (bytes_to_string (read_file "` + path + `"))))`
+	node, _ := parseAndCompile(t, source)
+
+	var stdout, stderr bytes.Buffer
+	allowed := []capability.Capability{capability.Filesystem}
+	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected Interpret to read with filesystem, got exit %d; stderr=%s", exitCode, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "phase2c-read-marker" {
+		t.Fatalf("stdout = %q, want phase2c-read-marker", stdout.String())
+	}
+}
+
 func TestInterpretNetworkCapabilityDeniedByDefault(t *testing.T) {
 	source := `(cli_app (neural_circuit () "test prompt"))`
 	node, _ := parseAndCompile(t, source)
