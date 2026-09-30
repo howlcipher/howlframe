@@ -1,0 +1,87 @@
+=== RUN   TestHFIRBytecodeEquivalence
+=== RUN   TestHFIRBytecodeEquivalence/scalar_control
+=== RUN   TestHFIRBytecodeEquivalence/collections
+=== RUN   TestHFIRBytecodeEquivalence/string_transforms
+=== RUN   TestHFIRBytecodeEquivalence/dict_keys
+=== RUN   TestHFIRBytecodeEquivalence/stderr_and_exit
+=== RUN   TestHFIRBytecodeEquivalence/capability_guarded_environment
+=== RUN   TestHFIRBytecodeEquivalence/request_query_rejects_a_non-request
+=== RUN   TestHFIRBytecodeEquivalence/defun_and_call
+=== RUN   TestHFIRBytecodeEquivalence/defun_after_its_call
+=== RUN   TestHFIRBytecodeEquivalence/recursive_defun
+=== RUN   TestHFIRBytecodeEquivalence/while_counts
+=== RUN   TestHFIRBytecodeEquivalence/while_does_not_enter
+=== RUN   TestHFIRBytecodeEquivalence/nested_while
+=== RUN   TestHFIRBytecodeEquivalence/while_inside_defun
+=== RUN   TestHFIRBytecodeEquivalence/if_then_else
+=== RUN   TestHFIRBytecodeEquivalence/if_without_else
+=== RUN   TestHFIRBytecodeEquivalence/nested_if
+=== RUN   TestHFIRBytecodeEquivalence/if_inside_defun
+=== RUN   TestHFIRBytecodeEquivalence/for_iterates
+=== RUN   TestHFIRBytecodeEquivalence/for_does_not_enter
+=== RUN   TestHFIRBytecodeEquivalence/nested_for
+=== RUN   TestHFIRBytecodeEquivalence/for_inside_defun
+--- PASS: TestHFIRBytecodeEquivalence (0.01s)
+    --- PASS: TestHFIRBytecodeEquivalence/scalar_control (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/collections (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/string_transforms (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/dict_keys (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/stderr_and_exit (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/capability_guarded_environment (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/request_query_rejects_a_non-request (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/defun_and_call (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/defun_after_its_call (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/recursive_defun (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/while_counts (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/while_does_not_enter (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/nested_while (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/while_inside_defun (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/if_then_else (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/if_without_else (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/nested_if (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/if_inside_defun (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/for_iterates (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/for_does_not_enter (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/nested_for (0.00s)
+    --- PASS: TestHFIRBytecodeEquivalence/for_inside_defun (0.00s)
+=== RUN   TestHFIRBytecodeHTMLEscapeFixture
+--- PASS: TestHFIRBytecodeHTMLEscapeFixture (0.00s)
+=== RUN   TestHFIRBytecodeHTMLEscapeTypeErrorMatchesAST
+--- PASS: TestHFIRBytecodeHTMLEscapeTypeErrorMatchesAST (0.00s)
+=== RUN   TestHFIRBytecodeNestedIfWhileDefunFixture
+--- PASS: TestHFIRBytecodeNestedIfWhileDefunFixture (0.00s)
+=== RUN   TestHFIRBytecodeNestedForIfWhileDefunFixture
+--- PASS: TestHFIRBytecodeNestedForIfWhileDefunFixture (0.00s)
+=== RUN   TestHFIRBytecodeWriteFileFixture
+--- PASS: TestHFIRBytecodeWriteFileFixture (0.00s)
+=== RUN   TestHFIRBytecodeMkdirFixture
+--- PASS: TestHFIRBytecodeMkdirFixture (0.00s)
+=== RUN   TestHFIRBytecodeNestedFsWriteFixture
+--- PASS: TestHFIRBytecodeNestedFsWriteFixture (0.00s)
+=== RUN   TestHFIRBytecodeNestedEnvReadFixture
+--- PASS: TestHFIRBytecodeNestedEnvReadFixture (0.00s)
+=== RUN   TestHFIRBytecodeExecFixture
+--- PASS: TestHFIRBytecodeExecFixture (0.00s)
+=== RUN   TestHFIRBytecodeExecOperandOrder
+--- PASS: TestHFIRBytecodeExecOperandOrder (0.00s)
+=== RUN   TestHFIRBytecodeNestedExecFixture
+--- PASS: TestHFIRBytecodeNestedExecFixture (0.01s)
+=== RUN   TestHFIRBytecodeFetchFixture
+--- PASS: TestHFIRBytecodeFetchFixture (0.00s)
+=== RUN   TestHFIRBytecodeFetchOperandOrder
+--- PASS: TestHFIRBytecodeFetchOperandOrder (0.00s)
+=== RUN   TestHFIRBytecodeNestedFetchFixture
+--- PASS: TestHFIRBytecodeNestedFetchFixture (0.00s)
+=== RUN   TestHFIRBytecodeNestedMultiEffectFixture
+--- PASS: TestHFIRBytecodeNestedMultiEffectFixture (0.02s)
+=== RUN   TestHFIRBytecodeCapabilityConsistencyAndDenial
+--- PASS: TestHFIRBytecodeCapabilityConsistencyAndDenial (0.00s)
+=== RUN   TestHFIRBytecodeForRejectsNonListLikeAST
+--- PASS: TestHFIRBytecodeForRejectsNonListLikeAST (0.00s)
+=== RUN   TestHFIRBytecodeWhileRejectsNonBoolLikeAST
+--- PASS: TestHFIRBytecodeWhileRejectsNonBoolLikeAST (0.00s)
+=== RUN   TestHFIRBytecodeCallArityRejectsLikeAST
+--- PASS: TestHFIRBytecodeCallArityRejectsLikeAST (0.00s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/vm	0.061s
+EXIT:0

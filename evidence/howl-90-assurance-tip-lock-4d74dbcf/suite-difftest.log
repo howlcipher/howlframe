@@ -1,0 +1,109 @@
+=== RUN   TestLoweredHFIRABIConformance
+=== RUN   TestLoweredHFIRABIConformance/arith_if
+=== RUN   TestLoweredHFIRABIConformance/map_keys
+=== RUN   TestLoweredHFIRABIConformance/map_get_absence
+=== RUN   TestLoweredHFIRABIConformance/map_keys_sort_bmp
+=== RUN   TestLoweredHFIRABIConformance/map_keys_sort_nonbmp
+=== RUN   TestLoweredHFIRABIConformance/map_keys_type_error
+=== RUN   TestLoweredHFIRABIConformance/env_denied
+=== RUN   TestLoweredHFIRABIConformance/env_granted
+=== RUN   TestLoweredHFIRABIConformance/exec_denied
+=== RUN   TestLoweredHFIRABIConformance/exec_granted
+=== RUN   TestLoweredHFIRABIConformance/read_file_denied
+=== RUN   TestLoweredHFIRABIConformance/read_file_granted
+=== RUN   TestLoweredHFIRABIConformance/fetch_denied
+=== RUN   TestLoweredHFIRABIConformance/fetch_granted
+=== RUN   TestLoweredHFIRABIConformance/write_file_denied
+=== RUN   TestLoweredHFIRABIConformance/write_file_granted
+=== RUN   TestLoweredHFIRABIConformance/mkdir_denied
+=== RUN   TestLoweredHFIRABIConformance/mkdir_granted
+=== RUN   TestLoweredHFIRABIConformance/defun_call
+=== RUN   TestLoweredHFIRABIConformance/while_control
+=== RUN   TestLoweredHFIRABIConformance/if_control
+=== RUN   TestLoweredHFIRABIConformance/for_control
+=== RUN   TestLoweredHFIRABIConformance/nested_if_while_defun
+=== RUN   TestLoweredHFIRABIConformance/nested_for_if_while_defun
+=== RUN   TestLoweredHFIRABIConformance/nested_fs_write_denied
+=== RUN   TestLoweredHFIRABIConformance/nested_fs_write_granted
+=== RUN   TestLoweredHFIRABIConformance/nested_env_read_denied
+=== RUN   TestLoweredHFIRABIConformance/nested_env_read_granted
+=== RUN   TestLoweredHFIRABIConformance/nested_exec_denied
+=== RUN   TestLoweredHFIRABIConformance/nested_exec_granted
+=== RUN   TestLoweredHFIRABIConformance/nested_fetch_denied
+=== RUN   TestLoweredHFIRABIConformance/nested_fetch_granted
+=== RUN   TestLoweredHFIRABIConformance/nested_multi_effect_denied
+=== RUN   TestLoweredHFIRABIConformance/nested_multi_effect_partial
+=== RUN   TestLoweredHFIRABIConformance/nested_multi_effect_granted
+=== RUN   TestLoweredHFIRABIConformance/html_escape
+=== RUN   TestLoweredHFIRABIConformance/html_escape_type_error
+--- PASS: TestLoweredHFIRABIConformance (18.67s)
+    --- PASS: TestLoweredHFIRABIConformance/arith_if (1.00s)
+    --- PASS: TestLoweredHFIRABIConformance/map_keys (0.58s)
+    --- PASS: TestLoweredHFIRABIConformance/map_get_absence (0.61s)
+    --- PASS: TestLoweredHFIRABIConformance/map_keys_sort_bmp (0.49s)
+    --- PASS: TestLoweredHFIRABIConformance/map_keys_sort_nonbmp (0.60s)
+    --- PASS: TestLoweredHFIRABIConformance/map_keys_type_error (0.50s)
+    --- PASS: TestLoweredHFIRABIConformance/env_denied (0.47s)
+    --- PASS: TestLoweredHFIRABIConformance/env_granted (0.43s)
+    --- PASS: TestLoweredHFIRABIConformance/exec_denied (0.45s)
+    --- PASS: TestLoweredHFIRABIConformance/exec_granted (0.48s)
+    --- PASS: TestLoweredHFIRABIConformance/read_file_denied (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/read_file_granted (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/fetch_denied (0.50s)
+    --- PASS: TestLoweredHFIRABIConformance/fetch_granted (0.73s)
+    --- PASS: TestLoweredHFIRABIConformance/write_file_denied (0.46s)
+    --- PASS: TestLoweredHFIRABIConformance/write_file_granted (0.43s)
+    --- PASS: TestLoweredHFIRABIConformance/mkdir_denied (0.45s)
+    --- PASS: TestLoweredHFIRABIConformance/mkdir_granted (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/defun_call (0.43s)
+    --- PASS: TestLoweredHFIRABIConformance/while_control (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/if_control (0.45s)
+    --- PASS: TestLoweredHFIRABIConformance/for_control (0.43s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_if_while_defun (0.45s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_for_if_while_defun (0.46s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_fs_write_denied (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_fs_write_granted (0.45s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_env_read_denied (0.44s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_env_read_granted (0.47s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_exec_denied (0.46s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_exec_granted (0.46s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_fetch_denied (0.49s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_fetch_granted (0.64s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_multi_effect_denied (0.51s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_multi_effect_partial (0.53s)
+    --- PASS: TestLoweredHFIRABIConformance/nested_multi_effect_granted (0.70s)
+    --- PASS: TestLoweredHFIRABIConformance/html_escape (0.47s)
+    --- PASS: TestLoweredHFIRABIConformance/html_escape_type_error (0.46s)
+=== RUN   TestHFIRBytecodeSupportedParity
+=== RUN   TestHFIRBytecodeSupportedParity/01_primitives.howl
+=== RUN   TestHFIRBytecodeSupportedParity/02_variables.howl
+=== RUN   TestHFIRBytecodeSupportedParity/03_operators.howl
+=== RUN   TestHFIRBytecodeSupportedParity/04_conversions.howl
+=== RUN   TestHFIRBytecodeSupportedParity/05_collections.howl
+=== RUN   TestHFIRBytecodeSupportedParity/06_control_flow.howl
+=== RUN   TestHFIRBytecodeSupportedParity/08_io_cli.howl
+=== RUN   TestHFIRBytecodeSupportedParity/09_boundary_values.howl
+=== RUN   TestHFIRBytecodeSupportedParity/10_governed_policy.howl
+=== RUN   TestHFIRBytecodeSupportedParity/11_error_undefined_var.howl
+=== RUN   TestHFIRBytecodeSupportedParity/12_error_div_zero.howl
+--- PASS: TestHFIRBytecodeSupportedParity (3.34s)
+    --- PASS: TestHFIRBytecodeSupportedParity/01_primitives.howl (0.36s)
+    --- PASS: TestHFIRBytecodeSupportedParity/02_variables.howl (0.35s)
+    --- PASS: TestHFIRBytecodeSupportedParity/03_operators.howl (0.34s)
+    --- PASS: TestHFIRBytecodeSupportedParity/04_conversions.howl (0.37s)
+    --- PASS: TestHFIRBytecodeSupportedParity/05_collections.howl (0.37s)
+    --- PASS: TestHFIRBytecodeSupportedParity/06_control_flow.howl (0.01s)
+    --- PASS: TestHFIRBytecodeSupportedParity/08_io_cli.howl (0.37s)
+    --- PASS: TestHFIRBytecodeSupportedParity/09_boundary_values.howl (0.36s)
+    --- PASS: TestHFIRBytecodeSupportedParity/10_governed_policy.howl (0.43s)
+    --- PASS: TestHFIRBytecodeSupportedParity/11_error_undefined_var.howl (0.01s)
+    --- PASS: TestHFIRBytecodeSupportedParity/12_error_div_zero.howl (0.36s)
+=== RUN   TestHFIRBytecodeRejectsUnsupportedParity
+=== RUN   TestHFIRBytecodeRejectsUnsupportedParity/07_strings.howl
+=== RUN   TestHFIRBytecodeRejectsUnsupportedParity/13_html_escape.howl
+--- PASS: TestHFIRBytecodeRejectsUnsupportedParity (0.02s)
+    --- PASS: TestHFIRBytecodeRejectsUnsupportedParity/07_strings.howl (0.01s)
+    --- PASS: TestHFIRBytecodeRejectsUnsupportedParity/13_html_escape.howl (0.01s)
+PASS
+ok  	github.com/howlcipher/howlframe/tools/difftest	22.035s
+EXIT:0

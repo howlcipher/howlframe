@@ -1,0 +1,47 @@
+=== RUN   TestProdFlipCriteriaLock
+=== RUN   TestProdFlipCriteriaLock/transport/defun
+=== RUN   TestProdFlipCriteriaLock/transport/call
+=== RUN   TestProdFlipCriteriaLock/transport/return
+=== RUN   TestProdFlipCriteriaLock/transport/while
+=== RUN   TestProdFlipCriteriaLock/transport/for
+=== RUN   TestProdFlipCriteriaLock/transport/read_file
+=== RUN   TestProdFlipCriteriaLock/transport/write_file
+=== RUN   TestProdFlipCriteriaLock/transport/mkdir
+=== RUN   TestProdFlipCriteriaLock/transport/exec
+=== RUN   TestProdFlipCriteriaLock/transport/fetch
+=== RUN   TestProdFlipCriteriaLock/transport/regex_match
+=== RUN   TestProdFlipCriteriaLock/transport/html_escape
+=== RUN   TestProdFlipCriteriaLock/transport/attr_escape
+=== RUN   TestProdFlipCriteriaLock/transport/match
+=== RUN   TestProdFlipCriteriaLock/transport/try
+=== RUN   TestProdFlipCriteriaLock/regex_match
+=== RUN   TestProdFlipCriteriaLock/attr_escape
+=== RUN   TestProdFlipCriteriaLock/html_escape
+=== RUN   TestProdFlipCriteriaLock/fetch_body
+=== RUN   TestProdFlipCriteriaLock/try_control_edges
+=== RUN   TestProdFlipCriteriaLock/match_control_edges
+--- PASS: TestProdFlipCriteriaLock (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/defun (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/call (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/return (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/while (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/for (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/read_file (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/write_file (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/mkdir (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/exec (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/fetch (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/regex_match (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/html_escape (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/attr_escape (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/match (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/transport/try (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/regex_match (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/attr_escape (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/html_escape (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/fetch_body (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/try_control_edges (0.00s)
+    --- PASS: TestProdFlipCriteriaLock/match_control_edges (0.00s)
+PASS
+ok  	github.com/howlcipher/howlframe	0.006s
+EXIT:0

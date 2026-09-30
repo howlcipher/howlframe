@@ -25,6 +25,10 @@ Decision: Defer.
 
 Defer still holds on the locked SHA because the promote-blocker fence is non-empty, `hfirRejectedParity` is non-empty, and the Owner has not merged a flip PR that cites this lock. This journal is the measurement record. It is not that merge. Production `-compile-bc` stays `runHFIRGate` and then `bytecode.CompileToBytecode`. Experimental `-compile-hfir-bc` stays the dogfood path until the Owner authorizes a flip PR. #90 stays Partial.
 
+## Assurance verdict
+
+Assurance (Lain) verified this tip. Overall: PASS. Promote: DEFERRED. Node on that run was v20.19.2 and Go was go1.24.4. The verdict journal is `docs/journals/2026-09-30_assurance_tip_lock_4d74dbcf.md`. The logs are `evidence/howl-90-assurance-tip-lock-4d74dbcf/`. The command timings in the checklist below are a separate local run of the same suite. They are not those logs. Both runs passed. The decision on both is Defer.
+
 ## Evidence checklist
 
 The suite named in the criteria was run on the locked tip before this docs commit. Each command exited 0.
