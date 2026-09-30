@@ -282,7 +282,7 @@
                                 <div class="pipe-step-header">03 // BOUND</div>
                                 <div class="pipe-step-body">
                                     <div class="pipe-step-title">Bytecode Compiler</div>
-                                    <div class="pipe-step-desc">Emits standalone <code>.hfbc</code> bytecode with capability metadata.</div>
+                                    <div class="pipe-step-desc">Production <code>-compile-bc</code> emits standalone <code>.hfbc</code> from the AST. Experimental <code>-compile-hfir-bc</code> is the dogfood lowerer.</div>
                                     <div class="pipe-step-tag">[IMMUTABLE]</div>
                                 </div>
                             </div>
@@ -340,6 +340,21 @@ HFIR Generator &amp; Type Verifier
 HFBC Bytecode       Native Go        WebAssembly       Browser JS
 (VM Execution)     (Go Backend)      (WAT Backend)     (web_app DSL)</code></pre>
                     </div>
+                    <p>
+                        Production <code>-compile-bc</code> runs the HFIR gate and then compiles the checked AST. Experimental <code>-compile-hfir-bc</code> lowers a bounded subset onto the opcodes that compiler already emits, and it is the dogfood path. Improvement #90 stays Partial. The production flip is deferred: the Assurance tip-lock of <code>4d74dbcf</code> is Overall PASS and Promote DEFERRED.
+                    </p>
+                    <p>
+                        Generated Go and JavaScript mediate <code>env</code>, <code>exec</code>, <code>read_file</code>, <code>write_file</code>, <code>mkdir</code>, and <code>fetch</code> on the same grant names as the bytecode VM. An optional <code>(fetch)</code> body stays off <code>OpFetch</code> on both bytecode compilers.
+                    </p>
+                    <p>
+                        <a href="reference/lowered_hfir_abi_v1.md" style="color: var(--color-cyan); text-decoration: underline;">Lowered-HFIR ABI v1</a>
+                        ·
+                        <a href="reference/lowered_hfir_prod_flip_criteria.md" style="color: var(--color-cyan); text-decoration: underline;">Production flip criteria</a>
+                        ·
+                        <a href="reference/fetch_body_bytecode_design.md" style="color: var(--color-cyan); text-decoration: underline;">Fetch-body bytecode design</a>
+                        ·
+                        <a href="hfir_execution_status.md" style="color: var(--color-cyan); text-decoration: underline;">HFIR execution status</a>
+                    </p>
                 </div>
             </section>
 
