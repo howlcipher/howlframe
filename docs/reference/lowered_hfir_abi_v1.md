@@ -183,7 +183,7 @@ A later lowering that owns meaning has to be a typed CFG in SSA:
 
 Phase 2 is one lowered graph consumed by every host, with identical outcomes or the same feasibility rejection.
 
-* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a, Phase 3b, Phase 3c, and Phase 3d do not flip it.
+* Production `-compile-bc` still compiles the AST. Flipping that path is still Phase 2. Phase 3a, Phase 3b, Phase 3c, and Phase 3d do not flip it. The kill, defer, and promote checklist is `docs/reference/lowered_hfir_prod_flip_criteria.md`. #90 stays Partial.
 * `defun`, `call`, and `return` are executable on `-compile-hfir-bc` (Phase 3a). `while` is executable on that same flag (Phase 3b), with control edges on the loop header. `if` on that flag follows control edges for the condition, the then-branch, and an optional else (Phase 3c). `for` on that flag follows control edges for the iterable and then the body (Phase 3d). The interpreter, the production bytecode VM, Go, and JavaScript still run calls, loops, and branches from the AST. One lowered graph for every host is still open.
 * `ControlEdges` on every control form, and an SSA graph, are still open. Phase 3b fills them for `while`. Phase 3c fills them for `if`. Phase 3d fills them for `for`. `match` and `try` stay empty.
 * Go and JavaScript mediate `env` (Phase 2a), `exec` (Phase 2b), `read_file` (Phase 2c), `fetch` (Phase 2d), and `write_file` and `mkdir` (Phase 2e). Experimental `-compile-hfir-bc` also lowers `exec` onto the existing `EXEC` opcode and `fetch` onto the existing `FETCH` opcode. The optional `fetch` body stays off that opcode. Other generated host effects still do not. One lowered graph for every host is still the rest of Phase 2.
