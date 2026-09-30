@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+* `README.md` and the GitHub Pages page `docs/index.html` name experimental `-compile-hfir-bc`, the mediated host effects, the deferred production flip, tip-lock `4d74dbcf` (Overall PASS, Promote DEFERRED), and point at `docs/reference/fetch_body_bytecode_design.md` and `docs/reference/lowered_hfir_prod_flip_criteria.md`. Docs only. #90 stays Partial.
 * Design spike for a later `(fetch url method body)` change on both bytecode compilers together. The note is `docs/reference/fetch_body_bytecode_design.md`. Docs only. No opcode, no capability, and no production `-compile-bc` flip. The Assurance tip-lock stays `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`. #90 stays Partial. Promote stays DEFERRED. Journal: `docs/journals/2026-09-30_fetch_body_bytecode_design.md`.
 * Assurance (Lain) tip-lock verdict for `main` SHA `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`: Overall PASS, Promote DEFERRED, #90 stays Partial. Node on that run was v20.19.2. Logs: `evidence/howl-90-assurance-tip-lock-4d74dbcf/`. Journal: `docs/journals/2026-09-30_assurance_tip_lock_4d74dbcf.md`. Production `-compile-bc` is still AST bytecode.
 * Assurance tip-lock of `main` SHA `4d74dbcf9654caa05e0b1d9212b15bc5398359e3` against `docs/reference/lowered_hfir_prod_flip_criteria.md` and `TestProdFlipCriteriaLock`. The decision stays Defer. Production `-compile-bc` is still AST bytecode. #90 stays Partial. Journal: `docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md`.

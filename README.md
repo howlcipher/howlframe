@@ -56,7 +56,7 @@ Hello from HowlFrame
 
 The compiler pipeline provides semantic feedback. Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted. The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. 
 
-The standalone bytecode target enforces this against an authoritative construct-support registry, so anything it cannot lower fails before an artifact is written rather than being silently dropped. The repository also has an internal, directly executable HFIR Phase-1 subset used for differential conformance evidence and bounded failure-localization experiments; public builds still use the AST bytecode compiler. See [HFIR execution status](docs/hfir_execution_status.md), [HFIR failure-localization status](docs/hfir_failure_localization_status.md), and [HFIR negative state provenance status](docs/hfir_negative_state_provenance_status.md).
+The standalone bytecode target enforces this against an authoritative construct-support registry, so anything it cannot lower fails before an artifact is written rather than being silently dropped. Production `-compile-bc` runs the HFIR gate and then compiles the checked AST. Experimental `-compile-hfir-bc` lowers a bounded subset of that graph onto the opcodes the AST compiler already emits, and it stays the dogfood path. Improvement #90 stays Partial. The production flip is deferred: the Assurance tip-lock of `4d74dbcf` is Overall PASS and Promote DEFERRED, and it does not authorize a flip. Generated Go and JavaScript mediate `env`, `exec`, `read_file`, `write_file`, `mkdir`, and `fetch` on the same grant names as the bytecode VM. An optional `(fetch url method body)` body stays off `OpFetch` on both bytecode compilers. See [lowered-HFIR ABI v1](docs/reference/lowered_hfir_abi_v1.md), [production flip criteria](docs/reference/lowered_hfir_prod_flip_criteria.md), [fetch-body bytecode design](docs/reference/fetch_body_bytecode_design.md), [HFIR execution status](docs/hfir_execution_status.md), [HFIR failure-localization status](docs/hfir_failure_localization_status.md), and [HFIR negative state provenance status](docs/hfir_negative_state_provenance_status.md).
 
 ## Security / authority model
 
@@ -107,6 +107,9 @@ See:
 - [Benchmark v2](benchmarks/v2/README.md)
 - [Architecture roadmap](docs/architecture_roadmap.md)
 - [HFIR execution status](docs/hfir_execution_status.md)
+- [Lowered-HFIR ABI v1](docs/reference/lowered_hfir_abi_v1.md)
+- [Production `-compile-bc` flip criteria](docs/reference/lowered_hfir_prod_flip_criteria.md)
+- [Fetch-body bytecode design](docs/reference/fetch_body_bytecode_design.md)
 - [Bytecode reference](docs/reference/bytecode_reference.md)
 - [Bytecode capability notes](docs/reference/bytecode_capability_notes.md)
 - [Improvement backlog](improvements.md)
@@ -439,7 +442,7 @@ go run howlframe.go -run-bc -allow-caps network,filesystem examples/cli_hello.ho
 
 An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
 
-Generated Go and JavaScript mediate `(env "KEY")`, `(exec cmd args...)`, `(read_file path)`, `(fetch url method)`, `(write_file path data)`, and `(mkdir path)` the same way. The runner grant is the `HOWLFRAME_ALLOW_CAPS` environment variable, a comma-separated list of the same names. An empty or unset value denies the effect with `CAPABILITY_DENIED` before the variable is fetched, a process is spawned, a file is read or written, a directory is created, or an HTTP request is sent. `environment` returns the value. `process` runs the command. `filesystem` reads a file, writes a file, or creates a directory. `network` performs the request. Other generated host effects are not on this gate yet.
+Generated Go and JavaScript mediate `(env "KEY")`, `(exec cmd args...)`, `(read_file path)`, `(fetch url method)`, `(write_file path data)`, and `(mkdir path)` the same way. The runner grant is the `HOWLFRAME_ALLOW_CAPS` environment variable, a comma-separated list of the same names. An empty or unset value denies the effect with `CAPABILITY_DENIED` before the variable is fetched, a process is spawned, a file is read or written, a directory is created, or an HTTP request is sent. `environment` returns the value. `process` runs the command. `filesystem` reads a file, writes a file, or creates a directory. `network` performs the request. Other generated host effects are not on this gate yet. An optional `(fetch)` body is still sent by the interpreter, Go, and JavaScript when that call runs. Both bytecode compilers leave it off `OpFetch`. The design for a later change on those two compilers together is [fetch-body bytecode design](docs/reference/fetch_body_bytecode_design.md). The flip checklist is [production flip criteria](docs/reference/lowered_hfir_prod_flip_criteria.md).
 
 Dictionary operations such as `map_get` and `map_keys` grant nothing. `map_keys` is pure: `MAP_KEYS` has an empty capability field and runs under an empty grant. `store_keys` stays `database`. A `memory://` store needs that grant alone. A `file://` store additionally requires `filesystem`; `database` alone denies `file://` `store_keys` with `CAPABILITY_DENIED`. The generated opcode table records the opcode field (empty for `MAP_KEYS`, `database` for `STORE_KEYS`). The URI-dependent grant is written in [bytecode capability notes](docs/reference/bytecode_capability_notes.md).
 

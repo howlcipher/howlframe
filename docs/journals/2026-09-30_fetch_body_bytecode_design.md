@@ -18,6 +18,10 @@ The design note is `docs/reference/fetch_body_bytecode_design.md`. It records th
 
 #90 stays Partial. Promote stays DEFERRED. Production `-compile-bc` stays `bytecode.CompileToBytecode`.
 
+## Owner follow-up
+
+The same docs-only slice updates `README.md` and the GitHub Pages page `docs/index.html` so they name experimental `-compile-hfir-bc`, the mediated host effects, the deferred flip, tip-lock `4d74dbcf` (Overall PASS, Promote DEFERRED), and the design note plus the prod-flip criteria. The Pages source is `docs/index.html`. No site redesign.
+
 ## What this does not do
 
 No opcode, no capability, no edit to either bytecode compiler, the VM, the Go or JavaScript backends, conformance JSON, or `TestProdFlipCriteriaLock`. No production flip. The tip-lock SHA stays `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`. A later body implementation expires that lock and still does not justify a flip.
