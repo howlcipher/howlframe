@@ -127,6 +127,42 @@
       "stdout": "phase2d-fetch-marker"
     },
     {
+      "name": "write_file_denied",
+      "fixture": "tests/conformance/abi_v1/15_write_file_capability.howl",
+      "deny_all": true,
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2e-write-marker"
+    },
+    {
+      "name": "write_file_granted",
+      "fixture": "tests/conformance/abi_v1/15_write_file_capability.howl",
+      "allow_caps": "filesystem",
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2e-wrote"
+    },
+    {
+      "name": "mkdir_denied",
+      "fixture": "tests/conformance/abi_v1/16_mkdir_capability.howl",
+      "deny_all": true,
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2e-made"
+    },
+    {
+      "name": "mkdir_granted",
+      "fixture": "tests/conformance/abi_v1/16_mkdir_capability.howl",
+      "allow_caps": "filesystem",
+      "targets": ["bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "phase2e-made"
+    },
+    {
       "name": "defun_call",
       "fixture": "tests/conformance/abi_v1/09_defun_call.howl",
       "deny_all": true,

@@ -85,6 +85,13 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 		t.Fatalf("write read_file marker: %v", err)
 	}
 	t.Cleanup(func() { os.Remove(readMarkerPath) })
+	const writeMarkerPath = "/tmp/howlframe-abi-v1-phase2e-write.txt"
+	const writeMarkerBody = "phase2e-write-marker"
+	const mkdirMarkerPath = "/tmp/howlframe-abi-v1-phase2e-dir"
+	t.Cleanup(func() {
+		os.Remove(writeMarkerPath)
+		os.RemoveAll(mkdirMarkerPath)
+	})
 	const fetchAddr = "127.0.0.1:47653"
 	var fetchHits atomic.Int64
 	ln, err := net.Listen("tcp", fetchAddr)
@@ -116,6 +123,12 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				t.Fatal("case sets both deny_all and allow_caps")
 			}
 			fixture := filepath.Join(root, tc.Fixture)
+			switch tc.Name {
+			case "write_file_denied", "write_file_granted":
+				os.Remove(writeMarkerPath)
+			case "mkdir_denied", "mkdir_granted":
+				os.RemoveAll(mkdirMarkerPath)
+			}
 			hitsBefore := fetchHits.Load()
 			report, err := VerifyParityWithOptions(fixture, tc.Targets, tc.runOptions())
 			if err != nil {
@@ -168,6 +181,29 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				}
 				if tc.Forbid != "" && strings.Contains(res.Stdout+res.Stderr+res.ErrorMessage, tc.Forbid) {
 					t.Errorf("%s leaked %q", tgt, tc.Forbid)
+				}
+			}
+			switch tc.Name {
+			case "write_file_denied":
+				if _, err := os.Stat(writeMarkerPath); !os.IsNotExist(err) {
+					t.Fatalf("write_file_denied created %s", writeMarkerPath)
+				}
+			case "write_file_granted":
+				got, err := os.ReadFile(writeMarkerPath)
+				if err != nil {
+					t.Fatalf("write_file_granted did not write: %v", err)
+				}
+				if string(got) != writeMarkerBody {
+					t.Fatalf("write_file_granted body = %q, want %s", got, writeMarkerBody)
+				}
+			case "mkdir_denied":
+				if _, err := os.Stat(mkdirMarkerPath); !os.IsNotExist(err) {
+					t.Fatalf("mkdir_denied created %s", mkdirMarkerPath)
+				}
+			case "mkdir_granted":
+				info, err := os.Stat(mkdirMarkerPath)
+				if err != nil || !info.IsDir() {
+					t.Fatalf("mkdir_granted did not create a directory: %v", err)
 				}
 			}
 		})

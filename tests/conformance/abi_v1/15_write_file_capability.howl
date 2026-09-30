@@ -1,0 +1,3 @@
+(cli_app
+  (write_file "/tmp/howlframe-abi-v1-phase2e-write.txt" "phase2e-write-marker")
+  (print "phase2e-wrote"))

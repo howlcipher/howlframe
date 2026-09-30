@@ -171,6 +171,133 @@ func TestInterpretReadFileGrantedReads(t *testing.T) {
 	}
 }
 
+func TestInterpretWriteFileDeniedBeforeWrite(t *testing.T) {
+	dir := t.TempDir()
+	secretPath := filepath.Join(dir, "phase2e-secret-path.txt")
+	const kept = "phase2e-kept"
+	const secretBody = "phase2e-secret-bytes"
+	if err := os.WriteFile(secretPath, []byte(kept), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := `(cli_app (write_file "` + secretPath + `" "` + secretBody + `") (print "phase2e-wrote"))`
+	node, _ := parseAndCompile(t, source)
+
+	assertDenied := func(label string, caps []capability.Capability) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		exitCode := Interpret(node, nil, caps, strings.NewReader(""), &stdout, &stderr)
+		if exitCode == 0 {
+			t.Fatalf("%s: expected Interpret to deny write_file, got exit 0; stdout=%q", label, stdout.String())
+		}
+		errStr := stderr.String()
+		if !strings.Contains(errStr, "capability denied: filesystem") {
+			t.Fatalf("%s: expected 'capability denied: filesystem' in stderr, got: %s", label, errStr)
+		}
+		if strings.Contains(errStr+stdout.String(), secretBody) || strings.Contains(errStr, "phase2e-secret-path") || strings.Contains(stdout.String(), "phase2e-wrote") {
+			t.Fatalf("%s: denial leaked the write: stdout=%q stderr=%q", label, stdout.String(), errStr)
+		}
+		body, err := os.ReadFile(secretPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != kept {
+			t.Fatalf("%s: file body = %q, want unchanged %s", label, body, kept)
+		}
+	}
+
+	assertDenied("empty grant", nil)
+	assertDenied("process grant", []capability.Capability{capability.Process})
+
+	missing := filepath.Join(dir, "phase2e-missing-secret.txt")
+	missingSource := `(cli_app (write_file "` + missing + `" "` + secretBody + `"))`
+	missingNode, _ := parseAndCompile(t, missingSource)
+	var stdout, stderr bytes.Buffer
+	exitCode := Interpret(missingNode, nil, nil, strings.NewReader(""), &stdout, &stderr)
+	if exitCode == 0 {
+		t.Fatal("missing path was written without filesystem")
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("denial created %s", missing)
+	}
+	if strings.Contains(stderr.String(), "phase2e-missing-secret") || strings.Contains(stderr.String(), secretBody) {
+		t.Fatalf("denial reached the filesystem: %s", stderr.String())
+	}
+}
+
+func TestInterpretWriteFileGrantedWrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "phase2e-write.txt")
+	source := `(cli_app (write_file "` + path + `" "phase2e-write-marker") (print "phase2e-wrote"))`
+	node, _ := parseAndCompile(t, source)
+
+	var stdout, stderr bytes.Buffer
+	allowed := []capability.Capability{capability.Filesystem}
+	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected Interpret to write with filesystem, got exit %d; stderr=%s", exitCode, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "phase2e-wrote" {
+		t.Fatalf("stdout = %q, want phase2e-wrote", stdout.String())
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "phase2e-write-marker" {
+		t.Fatalf("file = %q, want phase2e-write-marker", body)
+	}
+}
+
+func TestInterpretMkdirDeniedBeforeCreate(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "phase2e-secret-dir")
+	source := `(cli_app (mkdir "` + missing + `") (print "phase2e-made"))`
+	node, _ := parseAndCompile(t, source)
+
+	assertDenied := func(label string, caps []capability.Capability) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		exitCode := Interpret(node, nil, caps, strings.NewReader(""), &stdout, &stderr)
+		if exitCode == 0 {
+			t.Fatalf("%s: expected Interpret to deny mkdir, got exit 0; stdout=%q", label, stdout.String())
+		}
+		errStr := stderr.String()
+		if !strings.Contains(errStr, "capability denied: filesystem") {
+			t.Fatalf("%s: expected 'capability denied: filesystem' in stderr, got: %s", label, errStr)
+		}
+		if strings.Contains(errStr+stdout.String(), "phase2e-secret-dir") || strings.Contains(stdout.String(), "phase2e-made") {
+			t.Fatalf("%s: denial leaked the directory: stdout=%q stderr=%q", label, stdout.String(), errStr)
+		}
+		if _, err := os.Stat(missing); !os.IsNotExist(err) {
+			t.Fatalf("%s: mkdir created %s", label, missing)
+		}
+	}
+
+	assertDenied("empty grant", nil)
+	assertDenied("process grant", []capability.Capability{capability.Process})
+}
+
+func TestInterpretMkdirGrantedCreates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "phase2e-dir")
+	source := `(cli_app (mkdir "` + path + `") (print "phase2e-made"))`
+	node, _ := parseAndCompile(t, source)
+
+	var stdout, stderr bytes.Buffer
+	allowed := []capability.Capability{capability.Filesystem}
+	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected Interpret to mkdir with filesystem, got exit %d; stderr=%s", exitCode, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "phase2e-made" {
+		t.Fatalf("stdout = %q, want phase2e-made", stdout.String())
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("%s is not a directory", path)
+	}
+}
+
 func TestInterpretFetchDeniedBeforeRequest(t *testing.T) {
 	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
 	t.Setenv("no_proxy", "127.0.0.1,localhost")

@@ -74,6 +74,14 @@ var jsNeedsReadFile bool
 // the runner grant before any HTTP request. It is reset on every call.
 var jsNeedsFetch bool
 
+// jsNeedsWriteFile is set when GenerateJSCode emits write_file. The helper
+// checks the runner grant before any filesystem write. It is reset on every call.
+var jsNeedsWriteFile bool
+
+// jsNeedsMkdir is set when GenerateJSCode emits mkdir. The helper checks
+// the runner grant before any directory creation. It is reset on every call.
+var jsNeedsMkdir bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -354,8 +362,41 @@ func fetchJSHelper() string {
 `
 }
 
+// writeFileJSHelper mediates (write_file path data). The grant name is
+// filesystem, the same name as capability.ForConstruct("write_file") and
+// OpWriteFile. writeFileSync runs only after that grant is present, so a
+// denial cannot write the file or put the path in the error. The mode matches
+// the Go backend's 0644. A failure after the grant throws, which is
+// writeFileSync.
+func writeFileJSHelper() string {
+	return `function howlFrameWriteFile(path, data) {
+  if (!howlFrameGrantHas("filesystem")) {
+    throw new Error("CAPABILITY_DENIED: capability denied: filesystem");
+  }
+  require("fs").writeFileSync(path, data, { encoding: "utf8", mode: 0o644 });
+}
+
+`
+}
+
+// mkdirJSHelper mediates (mkdir path). The grant name is filesystem, the
+// same name as capability.ForConstruct("mkdir") and OpMkdir. mkdirSync runs
+// only after that grant is present, so a denial cannot create the directory
+// or put the path in the error. recursive matches os.MkdirAll. The mode
+// matches the Go backend's 0755.
+func mkdirJSHelper() string {
+	return `function howlFrameMkdir(path) {
+  if (!howlFrameGrantHas("filesystem")) {
+    throw new Error("CAPABILITY_DENIED: capability denied: filesystem");
+  }
+  require("fs").mkdirSync(path, { recursive: true, mode: 0o755 });
+}
+
+`
+}
+
 func jsHostHelpers() string {
-	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch {
+	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch && !jsNeedsWriteFile && !jsNeedsMkdir {
 		return ""
 	}
 	helper := grantJSHelper()
@@ -370,6 +411,12 @@ func jsHostHelpers() string {
 	}
 	if jsNeedsFetch {
 		helper += fetchJSHelper()
+	}
+	if jsNeedsWriteFile {
+		helper += writeFileJSHelper()
+	}
+	if jsNeedsMkdir {
+		helper += mkdirJSHelper()
 	}
 	return helper
 }
@@ -416,6 +463,25 @@ func jsFetchCall(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s))", urlStr, methodStr, bodyStr)
 	}
 	return fmt.Sprintf("(await howlFrameFetch(%s, %s))", urlStr, methodStr)
+}
+
+func jsWriteFileCall(node *ast.Node, reqVar string, depth int) string {
+	jsNeedsWriteFile = true
+	if node == nil || len(node.Children) != 3 {
+		return ""
+	}
+	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+	dataStr := generateJSExpression(node.Children[2], reqVar, depth+1)
+	return fmt.Sprintf("howlFrameWriteFile(%s, %s)", pathStr, dataStr)
+}
+
+func jsMkdirCall(node *ast.Node, reqVar string, depth int) string {
+	jsNeedsMkdir = true
+	if node == nil || len(node.Children) != 2 {
+		return ""
+	}
+	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+	return fmt.Sprintf("howlFrameMkdir(%s)", pathStr)
 }
 
 func sanitizeJSName(name string) string {
@@ -719,6 +785,8 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsExec = false
 	jsNeedsReadFile = false
 	jsNeedsFetch = false
+	jsNeedsWriteFile = false
+	jsNeedsMkdir = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -790,10 +858,11 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	// keeps them reachable as globals for inline event handlers.
 	code := funcsCode
 	if strings.TrimSpace(appCode) != "" {
-		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile || jsNeedsFetch {
-			// A denied env read, exec, read_file, or fetch throws. The async IIFE
-			// would otherwise turn that into an unhandled rejection and a zero exit.
-			// try_let still catches the throw before it reaches this handler.
+		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile || jsNeedsFetch || jsNeedsWriteFile || jsNeedsMkdir {
+			// A denied env read, exec, read_file, fetch, write_file, or mkdir throws.
+			// The async IIFE would otherwise turn that into an unhandled rejection
+			// and a zero exit. try_let still catches the throw before it reaches
+			// this handler.
 			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  process.exit(1);\n});\n", appCode)
 		} else {
 			code += fmt.Sprintf(";(async () => {\n%s\n})();\n", appCode)
@@ -970,6 +1039,10 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return jsExecCall(node, reqVar, depth)
 	} else if head == "read_file" {
 		return jsReadFileCall(node, reqVar, depth)
+	} else if head == "write_file" {
+		return jsWriteFileCall(node, reqVar, depth)
+	} else if head == "mkdir" {
+		return jsMkdirCall(node, reqVar, depth)
 	} else if head == "req_query" || head == "req_header" || head == "req_path" {
 		jsNeedsRequestRead = true
 		if len(node.Children) != 3 {

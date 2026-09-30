@@ -46,6 +46,14 @@ var gogenNeedsReadFile bool
 // the runner grant before any HTTP request. It is reset on every call.
 var gogenNeedsFetch bool
 
+// gogenNeedsWriteFile is set when GenerateCode emits write_file. The helper
+// checks the runner grant before any filesystem write. It is reset on every call.
+var gogenNeedsWriteFile bool
+
+// gogenNeedsMkdir is set when GenerateCode emits mkdir. The helper checks
+// the runner grant before any directory creation. It is reset on every call.
+var gogenNeedsMkdir bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -551,9 +559,43 @@ func howlFrameFetchBytes(url string, method string, body io.Reader) []byte {
 `
 }
 
+// writeFileHelperSource mediates (write_file path data). The grant name is
+// filesystem, the same name as capability.ForConstruct("write_file") and
+// OpWriteFile. os.WriteFile runs only after that grant is present, so a
+// denial cannot write the file or include the path in the error. The helper
+// returns the write error. The statement call site still discards it, which
+// is the call this backend already emitted.
+func writeFileHelperSource() string {
+	return `func howlFrameWriteFile(path string, data string) error {
+	if !howlFrameGrantHas("filesystem") {
+		panic("CAPABILITY_DENIED: capability denied: filesystem")
+	}
+	return os.WriteFile(path, []byte(data), 0644)
+}
+
+`
+}
+
+// mkdirHelperSource mediates (mkdir path). The grant name is filesystem,
+// the same name as capability.ForConstruct("mkdir") and OpMkdir.
+// os.MkdirAll runs only after that grant is present, so a denial cannot
+// create the directory or include the path in the error. The helper returns
+// the mkdir error. The statement call site still discards it, which is the
+// call this backend already emitted.
+func mkdirHelperSource() string {
+	return `func howlFrameMkdir(path string) error {
+	if !howlFrameGrantHas("filesystem") {
+		panic("CAPABILITY_DENIED: capability denied: filesystem")
+	}
+	return os.MkdirAll(path, 0755)
+}
+
+`
+}
+
 func goHostHelpers() string {
 	var code string
-	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile || gogenNeedsFetch {
+	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile || gogenNeedsFetch || gogenNeedsWriteFile || gogenNeedsMkdir {
 		code += grantHelperSource()
 	}
 	if gogenNeedsEnv {
@@ -567,6 +609,12 @@ func goHostHelpers() string {
 	}
 	if gogenNeedsFetch {
 		code += fetchHelperSource()
+	}
+	if gogenNeedsWriteFile {
+		code += writeFileHelperSource()
+	}
+	if gogenNeedsMkdir {
+		code += mkdirHelperSource()
 	}
 	return code
 }
@@ -630,6 +678,29 @@ func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
 	return fmt.Sprintf("%s(%s, %s, %s)", fn, urlStr, methodStr, bodyStr)
 }
 
+// goWriteFileCall emits the mediated write. The statement discards the error
+// return, the same way the previous os.WriteFile statement did.
+func goWriteFileCall(node *ast.Node, reqVar string, depth int) string {
+	gogenNeedsWriteFile = true
+	if node == nil || len(node.Children) != 3 {
+		return ""
+	}
+	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
+	dataStr := generateStatement(node.Children[2], reqVar, depth+1)
+	return fmt.Sprintf("		howlFrameWriteFile(%s, %s)", pathStr, dataStr)
+}
+
+// goMkdirCall emits the mediated directory creation. The statement discards
+// the error return, the same way the previous os.MkdirAll statement did.
+func goMkdirCall(node *ast.Node, reqVar string, depth int) string {
+	gogenNeedsMkdir = true
+	if node == nil || len(node.Children) != 2 {
+		return ""
+	}
+	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
+	return fmt.Sprintf("		howlFrameMkdir(%s)", pathStr)
+}
+
 func GenerateCode(node *ast.Node) (string, string) {
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
@@ -640,6 +711,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenNeedsExec = false
 	gogenNeedsReadFile = false
 	gogenNeedsFetch = false
+	gogenNeedsWriteFile = false
+	gogenNeedsMkdir = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -1725,18 +1798,9 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	} else if head == "read_file" {
 		return goReadFileCall(node, reqVar, depth, false)
 	} else if head == "write_file" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("write_file expects (write_file path data)", node.Line, node.Column)
-		}
-		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
-		dataStr := generateStatement(node.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("		os.WriteFile(%s, []byte(%s), 0644)", pathStr, dataStr)
+		return goWriteFileCall(node, reqVar, depth)
 	} else if head == "mkdir" {
-		if len(node.Children) != 2 {
-			// ast.ReportError("mkdir expects (mkdir path)", node.Line, node.Column)
-		}
-		pathStr := generateStatement(node.Children[1], reqVar, depth+1)
-		return fmt.Sprintf("		os.MkdirAll(%s, 0755)", pathStr)
+		return goMkdirCall(node, reqVar, depth)
 	} else if head == "exec" {
 		return goExecCall(node, reqVar, depth)
 	} else if head == "rate_limit" {

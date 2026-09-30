@@ -346,6 +346,17 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("read_file expects (read_file path)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "write_file" {
+		if len(node.Children) != 3 {
+			ast.ReportError("write_file expects (write_file path data)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+		checkJSStatement(node.Children[2], depth+1)
+	} else if head == "mkdir" {
+		if len(node.Children) != 2 {
+			ast.ReportError("mkdir expects (mkdir path)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
 	} else {
 		ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	}

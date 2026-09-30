@@ -179,7 +179,7 @@ func (o RunOptions) capFlags() []string {
 }
 
 // hostGrantValue is the runner grant for generated Go and JavaScript.
-// Those hosts read HOWLFRAME_ALLOW_CAPS at env, exec, read_file, and fetch.
+// Those hosts read HOWLFRAME_ALLOW_CAPS at env, exec, read_file, fetch, write_file, and mkdir.
 // An empty value denies. Nil AllowCaps keeps the historical grant of every known capability.
 func (o RunOptions) hostGrantValue() string {
 	if o.DenyAll {
