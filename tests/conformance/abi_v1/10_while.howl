@@ -1,0 +1,7 @@
+(cli_app
+  (while false (print "no"))
+  (let (n 0)
+    (while (< n 3)
+      (do
+        (set n (+ n 1))
+        (print n)))))

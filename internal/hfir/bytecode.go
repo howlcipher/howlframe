@@ -69,7 +69,7 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 	}
 	// A defun registers a BCFunction. That side effect is not stored in the
 	// instruction cache, so a preserved defun is lowered again and the
-	// function table is rebuilt. while stays outside this subset.
+	// function table is rebuilt. while has no function-table side effect.
 	if node.Kind != "defun" {
 		if c.cachedNodes != nil && c.cachedNodes[node.ID] != nil {
 			if c.reusedNodes != nil {
@@ -452,6 +452,31 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			inst.IntOperand = int64(-(len(insts) - loopStart))
 		}))
 		return insts, nil
+	case "while":
+		condNode, bodyNode, shapeDiagnostic := c.whileSuccessors(node)
+		if shapeDiagnostic != nil {
+			return nil, shapeDiagnostic
+		}
+		condInsts, childDiagnostic := c.compile(condNode)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		bodyInsts, childDiagnostic := c.compile(bodyNode)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same relative jumps as bytecode.CompileToBytecode's while case.
+		// JUMP_IF_FALSE skips the body and the back edge. JUMP returns to
+		// the condition. No new opcode.
+		insts := append([]bytecode.BCInstruction{}, condInsts...)
+		insts = append(insts, instruction(bytecode.OpJumpIfFalse, "JUMP_IF_FALSE", func(inst *bytecode.BCInstruction) {
+			inst.IntOperand = int64(len(bodyInsts) + 2)
+		}))
+		insts = append(insts, bodyInsts...)
+		insts = append(insts, instruction(bytecode.OpJump, "JUMP", func(inst *bytecode.BCInstruction) {
+			inst.IntOperand = int64(-(len(condInsts) + 1 + len(bodyInsts)))
+		}))
+		return insts, nil
 	case "defun":
 		if node.Value == "" {
 			diagnostic := c.diagnostic(node, "defun requires a name")
@@ -535,6 +560,24 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		diagnostic := c.diagnostic(node, fmt.Sprintf("node kind %q is not in the Phase-1 executable subset", node.Kind))
 		return nil, &diagnostic
 	}
+}
+
+// whileSuccessors is the executable control-edge contract for a loop header.
+// ControlEdges[0] is the condition and ControlEdges[1] is the body. They must
+// be the same nodes as the named data edges. A while without those edges is
+// not executable.
+func (c *bytecodeLowerer) whileSuccessors(node *Node) (*Node, *Node, *Diagnostic) {
+	if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+		diagnostic := c.diagnostic(node, "while requires a condition control edge and a body control edge")
+		return nil, nil, &diagnostic
+	}
+	cond := c.graph.NodeByID(node.ControlEdges[0])
+	body := c.graph.NodeByID(node.ControlEdges[1])
+	if cond == nil || body == nil {
+		diagnostic := c.diagnostic(node, "while control edge references a missing node")
+		return nil, nil, &diagnostic
+	}
+	return cond, body, nil
 }
 
 func (c *bytecodeLowerer) children(node *Node) ([]*Node, *Diagnostic) {

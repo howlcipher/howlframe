@@ -721,6 +721,7 @@ func nodeRoles(kind string) []string {
 	default:
 		// defun, call, return, param, and while are not transport kinds.
 		// Phase 3a lowers defun and call from source on -compile-hfir-bc.
+		// Phase 3b lowers while from source on that same flag.
 		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil
 	}

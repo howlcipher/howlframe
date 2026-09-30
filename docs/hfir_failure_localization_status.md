@@ -15,12 +15,14 @@ and cannot be localized from that map.
 
 # Control-flow representation
 
-The existing persisted `ControlEdges` field is not used: it has no role,
-direction, ordering, lowering, or model-transport semantics. Phase 3 instead
-derives a read-only Phase-1 control view from validated canonical roles:
-program and sequence body order, let body continuation, and if then or else
-branch containment. No model-supplied control edge is accepted. `exit` remains
-terminal runtime behavior rather than an arbitrary graph edge.
+Phase 3b writes ordered control successors on a source-lowered `while`
+header: the condition, then the body. The experimental lowerer follows that
+pair. Localization does not. It still derives a read-only Phase-1 control
+view from validated canonical roles: program and sequence body order, let
+body continuation, if then or else branch containment, and a `while` only
+when those persisted successors match the condition and body roles. No
+model-supplied control edge is accepted. `exit` remains terminal runtime
+behavior rather than an arbitrary graph edge.
 
 # Runtime trace
 

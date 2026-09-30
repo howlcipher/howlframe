@@ -1239,10 +1239,12 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 	}
 }
 
-// TestCompileBcStaysASTWhileHfirBcRejectsWhile locks the production flag.
-// -compile-bc still emits AST bytecode for while. -compile-hfir-bc still
-// rejects while and writes no artifact. Phase 3a does not flip that flag.
-func TestCompileBcStaysASTWhileHfirBcRejectsWhile(t *testing.T) {
+// TestCompileBcStaysASTWhileHfirBcRunsWhile locks the production flag.
+// Both flags compile and run a tiny while to the same stdout. -compile-bc
+// is still the AST compiler: sleep is in that compiler and still outside
+// the experimental lowerer, so -compile-hfir-bc rejects it and writes no
+// artifact. Phase 3b does not flip -compile-bc.
+func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
 	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
 	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
@@ -1262,19 +1264,39 @@ func TestCompileBcStaysASTWhileHfirBcRejectsWhile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("-run-bc of production while artifact: %v\n%s", err, runOut)
 	}
-	if !strings.Contains(string(runOut), "1") {
+	if strings.TrimSpace(string(runOut)) != "1" {
 		t.Fatalf("production while stdout = %q", runOut)
 	}
 
 	hfirOut := filepath.Join(dir, "hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput()
-	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted while:\n%s", output)
+	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-hfir-bc rejected while: %v\n%s", err, output)
 	}
-	if !strings.Contains(string(output), "while") {
+	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of experimental while artifact: %v\n%s", err, hfirRun)
+	}
+	if string(hfirRun) != string(runOut) {
+		t.Fatalf("experimental while stdout = %q, production = %q", hfirRun, runOut)
+	}
+
+	sleepSource := filepath.Join(dir, "sleep.howl")
+	if err := os.WriteFile(sleepSource, []byte("(cli_app (sleep 0))\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sleepOut := filepath.Join(dir, "sleep.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", sleepSource, "-o", sleepOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected sleep, so production is not the AST compiler: %v\n%s", err, output)
+	}
+	rejected := filepath.Join(dir, "sleep-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", sleepSource, "-o", rejected).CombinedOutput()
+	if err == nil {
+		t.Fatalf("-compile-hfir-bc accepted sleep:\n%s", output)
+	}
+	if !strings.Contains(string(output), "sleep") {
 		t.Fatalf("experimental rejection = %s", output)
 	}
-	if _, statErr := os.Stat(hfirOut); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
 		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
 	}
 }

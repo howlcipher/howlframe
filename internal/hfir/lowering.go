@@ -377,9 +377,32 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			child *ast.Node
 		}{{"iterable", astNode.Children[2]}, {"body", astNode.Children[3]}})
 		return id, true, err
+	case "while":
+		// (while cond body). ControlEdges are the header successors: the
+		// test, then the body. The back edge is the JUMP the lowerer emits
+		// to the test. Other nodes stay without control edges.
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = "while"
+		id := ctx.Graph.AddNode(node)
+		condID, err := ctx.lowerNode(astNode.Children[1])
+		if err != nil {
+			return "", true, err
+		}
+		bodyID, err := ctx.lowerNode(astNode.Children[2])
+		if err != nil {
+			return "", true, err
+		}
+		node.DataInputs = append(node.DataInputs,
+			DataEdge{Name: "condition", SourceNode: condID},
+			DataEdge{Name: "body", SourceNode: bodyID},
+		)
+		node.ControlEdges = []NodeID{condID, bodyID}
+		return id, true, nil
 	case "defun":
 		// (defun name (params) [return-type-symbol] body...)
-		// type_hint forms in the body are erased. while is not this case.
+		// type_hint forms in the body are erased.
 		if len(astNode.Children) < 4 || astNode.Children[1].Type != "SYMBOL" || astNode.Children[1].Value == "" || astNode.Children[2].Type != "List" {
 			return "", false, nil
 		}
