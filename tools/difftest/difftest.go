@@ -148,7 +148,57 @@ func NormalizeError(errStr string) string {
 	}
 }
 
+const allKnownCaps = "network,filesystem,process,environment,database"
+
+// RunOptions controls one differential execution.
+// A nil AllowCaps keeps the historical grant of every known capability.
+// DenyAll is an explicit empty grant. JSRoot, when set, rewrites the first
+// cli_app root to that symbol before the JavaScript backend runs, so one
+// cli_app fixture can be compared on the web_app host.
+type RunOptions struct {
+	CLIArgs   []string
+	Input     string
+	AllowCaps *string
+	DenyAll   bool
+	JSRoot    string
+}
+
+func (o RunOptions) capFlags() []string {
+	if o.DenyAll {
+		return nil
+	}
+	caps := allKnownCaps
+	if o.AllowCaps != nil {
+		caps = *o.AllowCaps
+	}
+	if caps == "" {
+		return nil
+	}
+	return []string{"-allow-caps", caps}
+}
+
+// isStructuredRuntimeRejection reports runtime failures whose text is a
+// shared error class. Checker diagnostics also use a "reason" field, so
+// the interpreter path must not treat every JSON reason as a compile failure.
+func isStructuredRuntimeRejection(out string) bool {
+	s := strings.ToLower(out)
+	if strings.Contains(s, "type_error:") || strings.Contains(s, `"code":"type_error"`) {
+		return true
+	}
+	if strings.Contains(s, "capability denied") || strings.Contains(s, `"code":"capability_denied"`) {
+		return true
+	}
+	if strings.Contains(s, "division by zero") || strings.Contains(s, "divide by zero") {
+		return true
+	}
+	return false
+}
+
 func ExecuteBytecode(filePath string, cliArgs []string, input string) ExecutionResult {
+	return executeBytecode(filePath, RunOptions{CLIArgs: cliArgs, Input: input})
+}
+
+func executeBytecode(filePath string, opts RunOptions) ExecutionResult {
 	compiler, err := getCompiler()
 	if err != nil {
 		return ExecutionResult{Target: TargetBytecode, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
@@ -178,10 +228,12 @@ func ExecuteBytecode(filePath string, cliArgs []string, input string) ExecutionR
 		}
 	}
 
-	runArgs := append([]string{"-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath}, cliArgs...)
+	runArgs := append([]string{"-run-bc"}, opts.capFlags()...)
+	runArgs = append(runArgs, bcPath)
+	runArgs = append(runArgs, opts.CLIArgs...)
 	runCmd := exec.Command(compiler, runArgs...)
 	runCmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
-	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, input)
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	res := ExecutionResult{
 		Target:   TargetBytecode,
@@ -194,7 +246,7 @@ func ExecuteBytecode(filePath string, cliArgs []string, input string) ExecutionR
 		outAll := stderr + " " + stdout
 		res.ErrorMessage = strings.TrimSpace(outAll)
 		res.ErrorClass = NormalizeError(outAll)
-		if strings.Contains(outAll, `"phase":"runtime"`) || strings.Contains(outAll, "panic:") || strings.Contains(outAll, "division by zero") || strings.Contains(outAll, "VMError") {
+		if strings.Contains(outAll, `"phase":"runtime"`) || strings.Contains(outAll, "panic:") || strings.Contains(outAll, "division by zero") || strings.Contains(outAll, "VMError") || isStructuredRuntimeRejection(outAll) {
 			res.Status = StatusRuntimeFailure
 		} else if res.Stdout != "" || res.Stderr != "" {
 			res.Status = StatusPass
@@ -206,15 +258,21 @@ func ExecuteBytecode(filePath string, cliArgs []string, input string) ExecutionR
 }
 
 func ExecuteInterpreter(filePath string, cliArgs []string, input string) ExecutionResult {
+	return executeInterpreter(filePath, RunOptions{CLIArgs: cliArgs, Input: input})
+}
+
+func executeInterpreter(filePath string, opts RunOptions) ExecutionResult {
 	compiler, err := getCompiler()
 	if err != nil {
 		return ExecutionResult{Target: TargetInterpreter, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 
-	runArgs := append([]string{"-run", "-allow-caps", "network,filesystem,process,environment,database", filePath}, cliArgs...)
+	runArgs := append([]string{"-run"}, opts.capFlags()...)
+	runArgs = append(runArgs, filePath)
+	runArgs = append(runArgs, opts.CLIArgs...)
 	runCmd := exec.Command(compiler, runArgs...)
 	runCmd.Env = append(os.Environ(), "HOWLFRAME_TEST_TOKEN=expected-secret")
-	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, input)
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	outCombined := stdout + stderr
 	if strings.Contains(outCombined, "not supported under -run") || strings.Contains(outCombined, "-run only supports cli_app") {
@@ -238,7 +296,7 @@ func ExecuteInterpreter(filePath string, cliArgs []string, input string) Executi
 	if runErr != nil && exitCode != 0 {
 		res.ErrorMessage = strings.TrimSpace(outCombined)
 		res.ErrorClass = NormalizeError(outCombined)
-		if strings.Contains(outCombined, "division by zero") || strings.Contains(outCombined, "panic:") {
+		if isStructuredRuntimeRejection(outCombined) || strings.Contains(outCombined, "panic:") {
 			res.Status = StatusRuntimeFailure
 		} else if strings.Contains(outCombined, `"reason"`) {
 			res.Status = StatusCompileFailure
@@ -312,7 +370,7 @@ func ExecuteGoBackend(filePath string, cliArgs []string, input string) Execution
 		} else {
 			res.ErrorMessage = strings.TrimSpace(outAll)
 			res.ErrorClass = NormalizeError(outAll)
-			if strings.Contains(outAll, "panic:") || strings.Contains(outAll, "runtime error") {
+			if strings.Contains(outAll, "panic:") || strings.Contains(outAll, "runtime error") || isStructuredRuntimeRejection(outAll) {
 				res.Status = StatusRuntimeFailure
 			} else if res.Stdout != "" || res.Stderr != "" {
 				res.Status = StatusPass
@@ -325,6 +383,10 @@ func ExecuteGoBackend(filePath string, cliArgs []string, input string) Execution
 }
 
 func ExecuteJSBackend(filePath string, cliArgs []string, input string) ExecutionResult {
+	return executeJSBackend(filePath, RunOptions{CLIArgs: cliArgs, Input: input})
+}
+
+func executeJSBackend(filePath string, opts RunOptions) ExecutionResult {
 	compiler, err := getCompiler()
 	if err != nil {
 		return ExecutionResult{Target: TargetJavaScript, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
@@ -345,7 +407,28 @@ func ExecuteJSBackend(filePath string, cliArgs []string, input string) Execution
 	}
 	defer os.RemoveAll(tmpDir)
 
-	codegenCmd := exec.Command(compiler, filePath, "-o", tmpDir)
+	sourcePath := filePath
+	if opts.JSRoot != "" {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return ExecutionResult{Target: TargetJavaScript, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		}
+		rewritten := strings.Replace(string(data), "(cli_app", "("+opts.JSRoot, 1)
+		if rewritten == string(data) {
+			return ExecutionResult{
+				Target:       TargetJavaScript,
+				ExitCode:     1,
+				ErrorMessage: "fixture has no cli_app root to rewrite",
+				Status:       StatusCompileFailure,
+			}
+		}
+		sourcePath = filepath.Join(tmpDir, "app.howl")
+		if err := os.WriteFile(sourcePath, []byte(rewritten), 0o644); err != nil {
+			return ExecutionResult{Target: TargetJavaScript, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		}
+	}
+
+	codegenCmd := exec.Command(compiler, sourcePath, "-o", tmpDir)
 	codegenOut, codegenErr := codegenCmd.CombinedOutput()
 	if codegenErr != nil {
 		errMsg := strings.TrimSpace(string(codegenOut))
@@ -368,8 +451,8 @@ func ExecuteJSBackend(filePath string, cliArgs []string, input string) Execution
 		}
 	}
 
-	runCmd := exec.Command("node", append([]string{jsPath}, cliArgs...)...)
-	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, input)
+	runCmd := exec.Command("node", append([]string{jsPath}, opts.CLIArgs...)...)
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(runCmd, opts.Input)
 
 	res := ExecutionResult{
 		Target:   TargetJavaScript,
@@ -379,15 +462,66 @@ func ExecuteJSBackend(filePath string, cliArgs []string, input string) Execution
 		Status:   StatusPass,
 	}
 	if runErr != nil {
-		res.ErrorMessage = strings.TrimSpace(stderr)
-		res.ErrorClass = NormalizeError(stderr)
+		outAll := stderr + " " + stdout
+		res.ErrorMessage = strings.TrimSpace(outAll)
+		res.ErrorClass = NormalizeError(outAll)
 		res.Status = StatusRuntimeFailure
 	}
 	return res
 }
 
+// compareToCanonical returns the parity discrepancies between one target and
+// the bytecode canonical result. An unsupported target has no discrepancies.
+func compareToCanonical(canonical, candidate ExecutionResult, tgt Target) []string {
+	if candidate.Status == StatusBackendUnsupported {
+		return nil
+	}
+
+	var discrepancies []string
+	if canonical.Status == StatusCompileFailure {
+		if candidate.Status != StatusCompileFailure {
+			discrepancies = append(discrepancies, fmt.Sprintf("target %s succeeded compilation but canonical failed", tgt))
+		}
+		return discrepancies
+	}
+
+	if canonical.Status == StatusRuntimeFailure {
+		if candidate.Status != StatusRuntimeFailure {
+			discrepancies = append(discrepancies, fmt.Sprintf("target %s succeeded but canonical failed runtime", tgt))
+		} else if canonical.ErrorClass != "" && candidate.ErrorClass != "" && canonical.ErrorClass != candidate.ErrorClass {
+			discrepancies = append(discrepancies, fmt.Sprintf("target %s error class mismatch: got %s, want %s", tgt, candidate.ErrorClass, canonical.ErrorClass))
+		}
+		return discrepancies
+	}
+
+	if candidate.Status != StatusPass {
+		return []string{fmt.Sprintf("target %s failed (%s: %s) but canonical passed", tgt, candidate.Status, candidate.ErrorMessage)}
+	}
+
+	normCanonicalOut := NormalizeOutput(canonical.Stdout)
+	normCandidateOut := NormalizeOutput(candidate.Stdout)
+	if normCanonicalOut != normCandidateOut {
+		discrepancies = append(discrepancies, fmt.Sprintf("target %s stdout mismatch:\n--- canonical ---\n%s\n--- target ---\n%s", tgt, normCanonicalOut, normCandidateOut))
+	}
+
+	normCanonicalErr := NormalizeOutput(canonical.Stderr)
+	normCandidateErr := NormalizeOutput(candidate.Stderr)
+	if normCanonicalErr != normCandidateErr {
+		discrepancies = append(discrepancies, fmt.Sprintf("target %s stderr mismatch:\n--- canonical ---\n%s\n--- target ---\n%s", tgt, normCanonicalErr, normCandidateErr))
+	}
+
+	if canonical.ExitCode != candidate.ExitCode {
+		discrepancies = append(discrepancies, fmt.Sprintf("target %s exit code mismatch: got %d, want %d", tgt, candidate.ExitCode, canonical.ExitCode))
+	}
+	return discrepancies
+}
+
 func VerifyParity(filePath string, cliArgs []string, input string, targets []Target) (ParityReport, error) {
-	canonical := ExecuteBytecode(filePath, cliArgs, input)
+	return VerifyParityWithOptions(filePath, targets, RunOptions{CLIArgs: cliArgs, Input: input})
+}
+
+func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions) (ParityReport, error) {
+	canonical := executeBytecode(filePath, opts)
 	report := ParityReport{
 		FixturePath:     filePath,
 		CanonicalResult: canonical,
@@ -401,65 +535,18 @@ func VerifyParity(filePath string, cliArgs []string, input string, targets []Tar
 		case TargetBytecode:
 			candidate = canonical
 		case TargetInterpreter:
-			candidate = ExecuteInterpreter(filePath, cliArgs, input)
+			candidate = executeInterpreter(filePath, opts)
 		case TargetGo:
-			candidate = ExecuteGoBackend(filePath, cliArgs, input)
+			candidate = ExecuteGoBackend(filePath, opts.CLIArgs, opts.Input)
 		case TargetJavaScript:
-			candidate = ExecuteJSBackend(filePath, cliArgs, input)
+			candidate = executeJSBackend(filePath, opts)
 		default:
 			return report, fmt.Errorf("unsupported target: %s", tgt)
 		}
 		report.TargetResults[tgt] = candidate
-
-		// If candidate is explicitly unsupported, don't fail parity
-		if candidate.Status == StatusBackendUnsupported {
-			continue
-		}
-
-		// If canonical was a compile failure, candidate must also fail compilation
-		if canonical.Status == StatusCompileFailure {
-			if candidate.Status != StatusCompileFailure {
-				report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s succeeded compilation but canonical failed", tgt))
-				report.OverallStatus = StatusSemanticMismatch
-			}
-			continue
-		}
-
-		// If canonical was a runtime failure, candidate must also fail runtime
-		if canonical.Status == StatusRuntimeFailure {
-			if candidate.Status != StatusRuntimeFailure {
-				report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s succeeded but canonical failed runtime", tgt))
-				report.OverallStatus = StatusSemanticMismatch
-			} else if canonical.ErrorClass != "" && candidate.ErrorClass != "" && canonical.ErrorClass != candidate.ErrorClass {
-				report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s error class mismatch: got %s, want %s", tgt, candidate.ErrorClass, canonical.ErrorClass))
-				report.OverallStatus = StatusSemanticMismatch
-			}
-			continue
-		}
-
-		// Both must succeed and match stdout, stderr, and exit code
-		if candidate.Status != StatusPass {
-			report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s failed (%s: %s) but canonical passed", tgt, candidate.Status, candidate.ErrorMessage))
-			report.OverallStatus = StatusSemanticMismatch
-			continue
-		}
-
-		normCanonicalOut := NormalizeOutput(canonical.Stdout)
-		normCandidateOut := NormalizeOutput(candidate.Stdout)
-		if normCanonicalOut != normCandidateOut {
-			report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s stdout mismatch:\n--- canonical ---\n%s\n--- target ---\n%s", tgt, normCanonicalOut, normCandidateOut))
-			report.OverallStatus = StatusSemanticMismatch
-		}
-
-		normCanonicalErr := NormalizeOutput(canonical.Stderr)
-		normCandidateErr := NormalizeOutput(candidate.Stderr)
-		if normCanonicalErr != normCandidateErr {
-			report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s stderr mismatch:\n--- canonical ---\n%s\n--- target ---\n%s", tgt, normCanonicalErr, normCandidateErr))
-			report.OverallStatus = StatusSemanticMismatch
-		}
-
-		if canonical.ExitCode != candidate.ExitCode {
-			report.Discrepancies = append(report.Discrepancies, fmt.Sprintf("target %s exit code mismatch: got %d, want %d", tgt, candidate.ExitCode, canonical.ExitCode))
+		discrepancies := compareToCanonical(canonical, candidate, tgt)
+		if len(discrepancies) > 0 {
+			report.Discrepancies = append(report.Discrepancies, discrepancies...)
 			report.OverallStatus = StatusSemanticMismatch
 		}
 	}
