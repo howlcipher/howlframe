@@ -1,10 +1,14 @@
 package vm
 
 import (
+	"bytes"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
-	"reflect"
-	"testing"
 )
 
 func TestBytecodeStoreLifecycleAndNamedAttachment(t *testing.T) {
@@ -162,27 +166,68 @@ func TestBytecodeStoreKeysReflectsDeletesAndEmptyStore(t *testing.T) {
 }
 
 func TestBytecodeStoreKeysRequiresDatabaseCapability(t *testing.T) {
+	if got := bytecode.Registry[bytecode.OpStoreKeys].Capability; got != capability.Database {
+		t.Fatalf("OpStoreKeys capability = %q, want database", got)
+	}
+	if got := capability.ForConstruct("store_keys"); got != capability.Database {
+		t.Fatalf("ForConstruct(store_keys) = %q, want database", got)
+	}
+
 	vm := newStoreTestVM()
 	putStoreRecord(vm, "kv", "memory://session", "task:1", map[string]any{"status": "open"})
 	vm.AllowedCaps = []capability.Capability{capability.Filesystem}
 
-	failure := func() (failure *VMError) {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				if vmErr, ok := recovered.(*VMError); ok {
-					failure = vmErr
-					return
-				}
-				panic(recovered)
-			}
-		}()
+	failure := captureVMError(func() {
 		vm.run([]bytecode.BCInstruction{
 			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
 		}, vm.env)
-		return nil
-	}()
+	})
 
-	if failure == nil || failure.Code != "CAPABILITY_DENIED" {
-		t.Fatalf("STORE_KEYS without database capability = %v, want CAPABILITY_DENIED", failure)
+	if failure == nil || failure.Code != "CAPABILITY_DENIED" || !strings.Contains(failure.Message, "database") {
+		t.Fatalf("STORE_KEYS without database capability = %#v, want CAPABILITY_DENIED database", failure)
+	}
+}
+
+// TestFileStoreKeysDeniedWithDatabaseAlone fails if a file:// enumeration
+// succeeds without filesystem. The store is already open, so the denial is
+// the STORE_KEYS filesystem check and not only STORE_OPEN.
+func TestFileStoreKeysDeniedWithDatabaseAlone(t *testing.T) {
+	uri := fileStoreURI(t, "keys.json")
+	vm := newStoreTestVM()
+	vm.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
+	putStoreRecord(vm, "kv", uri, "task:1", map[string]any{"status": "open"})
+
+	path := strings.TrimPrefix(uri, "file://")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vm.AllowedCaps = []capability.Capability{capability.Database}
+	failure := captureVMError(func() {
+		vm.run([]bytecode.BCInstruction{
+			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+		}, vm.env)
+	})
+	if failure == nil || failure.Code != "CAPABILITY_DENIED" || !strings.Contains(failure.Message, "filesystem") {
+		t.Fatalf("file:// STORE_KEYS with database alone = %#v, want CAPABILITY_DENIED filesystem", failure)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatalf("denied file:// STORE_KEYS changed %s", path)
+	}
+
+	reader := newStoreTestVM()
+	reader.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
+	reader.run([]bytecode.BCInstruction{
+		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "kv", uri),
+		storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+	}, reader.env)
+	if got := reader.pop(bytecode.OpStoreKeys); !reflect.DeepEqual(got, []any{"task:1"}) {
+		t.Fatalf("file:// STORE_KEYS with database and filesystem = %#v, want [task:1]", got)
 	}
 }

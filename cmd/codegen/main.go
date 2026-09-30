@@ -119,6 +119,11 @@ func generateMarkdown(opcodes []bytecode.OpcodeSpec) {
 			spec.Name, opsStr, popsStr, spec.Pushes, spec.Capability, spec.Description))
 	}
 
+	md.WriteString("\n")
+	md.WriteString("The capability column is the opcode field from `internal/bytecode/opcode.go`. ")
+	md.WriteString("`MAP_KEYS` is pure (empty). `STORE_KEYS` is `database`, and a `file://` store additionally requires `filesystem`. ")
+	md.WriteString("The hand-written note for that URI grant is [bytecode capability notes](bytecode_capability_notes.md).\n")
+
 	writeGeneratedFile(
 		filepath.Join("docs", "reference", "bytecode_reference.md"),
 		[]byte(md.String()),
