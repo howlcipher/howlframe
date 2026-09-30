@@ -314,6 +314,27 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			return nil, childDiagnostic
 		}
 		return append(insts, instruction(bytecode.OpMkdir, "MKDIR", nil)), nil
+	case "exec":
+		if len(children) < 1 || node.DataInputs[0].Name != "cmd" {
+			diagnostic := c.diagnostic(node, "exec requires a command")
+			return nil, &diagnostic
+		}
+		for _, edge := range node.DataInputs[1:] {
+			if edge.Name != "arg" {
+				diagnostic := c.diagnostic(node, "exec requires a command and then arguments")
+				return nil, &diagnostic
+			}
+		}
+		insts, childDiagnostic := compileAll()
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same operand order as bytecode.CompileToBytecode: command, then
+		// each argument. EXEC's IntOperand is the argument count. The VM
+		// pops the arguments and then the command. No new opcode.
+		return append(insts, instruction(bytecode.OpExec, "EXEC", func(inst *bytecode.BCInstruction) {
+			inst.IntOperand = int64(len(children) - 1)
+		})), nil
 	case "parse_json":
 		if len(children) != 1 || node.DataInputs[0].Name != "content" {
 			diagnostic := c.diagnostic(node, "parse_json requires content")
