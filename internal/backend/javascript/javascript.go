@@ -403,7 +403,7 @@ func mkdirJSHelper() string {
 func numericJSHelper() string {
 	return `function howlFrameToInt(v) {
   if (typeof v === "number") {
-    if (!Number.isFinite(v) || !Number.isInteger(v)) {
+    if (!Number.isFinite(v)) {
       throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
     }
     if (v < Number.MIN_SAFE_INTEGER || v > Number.MAX_SAFE_INTEGER) {
@@ -433,6 +433,9 @@ function howlFrameToFloat(v) {
   }
   if (typeof v === "string") {
     var s = v.trim();
+    if (s === "") {
+      throw new Error("CONVERSION_ERROR: cannot convert \"\" to float");
+    }
     var n = Number(s);
     if (Number.isNaN(n) || !Number.isFinite(n)) {
       throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to float");

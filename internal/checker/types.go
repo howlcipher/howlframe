@@ -436,10 +436,13 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 				a.add(node, fmt.Sprintf("%s requires numeric operands, got %s and %s", head, typeName(left), typeName(right)))
 				return ast.Layout(ast.Unknown)
 			}
-			if left.Kind != right.Kind {
+			if left.Kind != right.Kind && head != "/" {
 				a.add(node, fmt.Sprintf("%s requires matching numeric types, got %s and %s", head, typeName(left), typeName(right)))
 				return ast.Layout(ast.Unknown)
 			}
+		}
+		if head == "/" {
+			return ast.Layout(ast.Float)
 		}
 		if left.Kind == ast.Float || right.Kind == ast.Float {
 			return ast.Layout(ast.Float)

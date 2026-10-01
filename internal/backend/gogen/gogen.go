@@ -632,7 +632,7 @@ func howlFrameToInt(v any) int {
 	case int64:
 		return int(x)
 	case float64:
-		if math.IsNaN(x) || math.IsInf(x, 0) || x < math.MinInt || x > math.MaxInt || math.Trunc(x) != x {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < math.MinInt || x > math.MaxInt {
 			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to int", x))
 		}
 		return int(x)
