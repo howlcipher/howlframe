@@ -120,6 +120,19 @@
         "interpreter": "parse_json is not supported under -run",
         "go": "generated Go decodes into a declared Go type; the undeclared Payload used by the VM is not a Go type"
       }
+    },
+    "11_integer_arithmetic_beyond_2_53.howl": {
+      "stdout": "ALLOW\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "RUNTIME_FAILURE"
+      },
+      "notes": {
+        "javascript": "computed integer beyond 2^53 fails closed instead of rounding to DENY"
+      }
     }
   },
   "reject": {

@@ -1,0 +1,4 @@
+(cli_app
+  (let (a 9007199254740991)
+    (let (b (+ a 2))
+      (if (> b (+ a 1)) (print "ALLOW") (print "DENY")))))

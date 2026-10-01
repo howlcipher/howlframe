@@ -425,6 +425,19 @@ func numericJSHelper() string {
   }
   throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to int");
 }
+function howlFrameSafeInt(v) {
+  if (!Number.isSafeInteger(v)) {
+    throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
+  }
+  return v;
+}
+function howlFrameArith(op, a, b) {
+  var v = op === "+" ? a + b : op === "-" ? a - b : a * b;
+  if (typeof v === "number" && !Number.isSafeInteger(v) && Number.isInteger(a) && Number.isInteger(b)) {
+    throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
+  }
+  return v;
+}
 function howlFrameParseJSON(text) {
   // JavaScript numbers cannot hold every int64. Where the engine exposes the
   // token source, reject integers that would silently lose precision.
@@ -571,6 +584,16 @@ func sanitizeJSName(name string) string {
 	return res
 }
 
+// jsMayBeInt reports whether a node could hold an integer: it is not
+// statically known to be a float, string, or other non-numeric value.
+func jsMayBeInt(node *ast.Node) bool {
+	switch node.Inferred.Kind {
+	case ast.Float, ast.String, ast.Bool, ast.List, ast.Dict, ast.Bytes, ast.Void, ast.Struct:
+		return false
+	}
+	return true
+}
+
 func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
@@ -579,6 +602,19 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		if ir.Op == "/" {
 			jsNumeric = true
 			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
+		}
+		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") &&
+			ir.Kids[0].Inferred.Kind == ast.Int && ir.Kids[1].Inferred.Kind == ast.Int {
+			// int64 arithmetic must not silently round once a binary64 result
+			// leaves the exact integer range (NUMERIC_CONTRACT sections 4 and 12).
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameSafeInt(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
+		}
+		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") && jsMayBeInt(ir.Kids[0]) && jsMayBeInt(ir.Kids[1]) {
+			// Operand types are not statically known to rule out ints. The
+			// helper checks at runtime and still concatenates strings.
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameArith(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":

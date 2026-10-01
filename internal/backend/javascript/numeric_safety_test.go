@@ -26,3 +26,38 @@ func TestJSToIntTruncatesAndParseJSONFailsClosed(t *testing.T) {
 		t.Fatalf("safe JSON integer: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 }
+
+// Computed int64 results beyond 2^53 must fail closed in JavaScript instead of
+// rounding and flipping a comparison-based decision.
+func TestJSIntegerArithmeticBeyondSafeRangeFailsClosed(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not available")
+	}
+	decision := `(web_app (let (a 9007199254740991) (let (b (+ a 2)) (if (> b (+ a 1)) (print "ALLOW") (print "DENY")))))`
+	stdout, stderr, err := runNode(t, generateCheckedJS(t, decision))
+	if err == nil || !strings.Contains(stderr, "RUNTIME_ERROR") || strings.Contains(stdout, "ALLOW") || strings.Contains(stdout, "DENY") {
+		t.Fatalf("unsafe integer arithmetic did not fail closed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	// Float arithmetic and in-range integer arithmetic are unaffected.
+	stdout, stderr, err = runNode(t, generateCheckedJS(t, `(web_app (print (* 100000000000000000000.0 2.0) (+ 9007199254740990 1) (- 1 2)))`))
+	if err != nil || strings.TrimSpace(stdout) != "200000000000000000000 9007199254740991 -1" {
+		t.Fatalf("in-range arithmetic changed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+}
+
+// Operands whose types are not statically known (for example JSON fields) are
+// range-checked at runtime, and string concatenation still works.
+func TestJSDynamicIntegerArithmeticFailsClosed(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not available")
+	}
+	body := `(web_app (let (raw "{\"a\":9007199254740991,\"b\":2,\"s\":\"x\"}") (let (obj (parse_json Doc raw)) %s)))`
+	stdout, stderr, err := runNode(t, generateCheckedJS(t, strings.Replace(body, "%s", `(print (+ (map_get obj "a") (map_get obj "b")))`, 1)))
+	if err == nil || !strings.Contains(stderr, "RUNTIME_ERROR") || stdout != "" {
+		t.Fatalf("dynamic unsafe sum did not fail closed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	stdout, stderr, err = runNode(t, generateCheckedJS(t, strings.Replace(body, "%s", `(print (+ (map_get obj "s") "y") (+ (map_get obj "b") 3))`, 1)))
+	if err != nil || strings.TrimSpace(stdout) != "xy 5" {
+		t.Fatalf("safe dynamic arithmetic changed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+}

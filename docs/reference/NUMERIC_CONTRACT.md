@@ -131,7 +131,7 @@ If a backend cannot represent a value or perform an operation in a way that pres
 
 ## 13. Target Limits
 
-* **Generated JavaScript** represents every number as binary64, so integers outside +/-(2^53-1) are not exact. In obedience to section 12, the checker rejects integer literals outside that range in `web_app` programs, and the generated `parse_json` rejects integer JSON tokens outside that range where the engine exposes token source. Arithmetic that overflows the exact range at runtime is not detected in generated JavaScript; this is a documented limitation, not parity.
+* **Generated JavaScript** represents every number as binary64, so integers outside +/-(2^53-1) are not exact. In obedience to section 12, the checker rejects integer literals outside that range in `web_app` programs, and the generated `parse_json` rejects integer JSON tokens outside that range where the engine exposes token source. Statically int-typed `+`, `-`, and `*` in generated JavaScript raise a runtime error when the result leaves that range instead of rounding. The VM, interpreter, and Go keep exact int64 results there, so such programs fail closed on JavaScript rather than agreeing with the other backends. Where operand types are not statically known (for example JSON fields), generated JavaScript applies the same range check at runtime when both operands are integer-valued, which also rejects whole-valued float results beyond 2^53; that is a deliberate fail-closed trade-off.
 * **Wasm** has no int-to-float promotion for `/`; integer division fails closed at serialization.
 
 ## 14. Version
