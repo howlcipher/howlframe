@@ -905,11 +905,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			name := sanitizeJSName(handlerNode.Children[1].Value)
 			argsNode := handlerNode.Children[2]
 
-			var argsList []string
-			for _, arg := range argsNode.Children {
-				argsList = append(argsList, arg.Value)
-			}
-			argsStr := strings.Join(argsList, ", ")
+			argsStr := strings.Join(ast.ParamNames(argsNode), ", ")
 
 			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
 			bodyCode := generateJSStatement(bodyNode, "", 0)

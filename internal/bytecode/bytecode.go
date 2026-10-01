@@ -832,16 +832,5 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 }
 
 func extractParamNames(paramsNode *ast.Node) []string {
-	if paramsNode == nil {
-		return nil
-	}
-	var params []string
-	for _, p := range paramsNode.Children {
-		if p.Type == "List" && len(p.Children) > 0 {
-			params = append(params, p.Children[0].Value)
-		} else {
-			params = append(params, p.Value)
-		}
-	}
-	return params
+	return ast.ParamNames(paramsNode)
 }
