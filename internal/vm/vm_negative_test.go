@@ -1056,12 +1056,12 @@ func TestVMNegativeHelperStructuredErrors(t *testing.T) {
 		}, nil, nil, "RUNTIME_ERROR", "division by zero")
 	})
 
-	t.Run("ToBCFloat non-number panics TYPE_ERROR", func(t *testing.T) {
+	t.Run("non-numeric binop operands panic TYPE_ERROR", func(t *testing.T) {
 		runVMExpectingPanicWithCaps(t, []bytecode.BCInstruction{
 			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "not a number"},
 			{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(1)},
 			{Op: bytecode.OpBinop, OpString: "BINOP", StringOperand: "+"},
-		}, nil, nil, "TYPE_ERROR", "expected number")
+		}, nil, nil, "TYPE_ERROR", "requires numeric operands")
 	})
 
 	t.Run("parse_json invalid JSON panics RUNTIME_ERROR", func(t *testing.T) {

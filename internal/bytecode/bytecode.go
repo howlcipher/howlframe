@@ -336,7 +336,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 	var insts []BCInstruction
 	if node.Type == "INT" {
 		val, _ := strconv.ParseInt(node.Value, 10, 64)
-		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: float64(val)})
+		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: val})
 		return insts
 	}
 	if node.Type == "FLOAT" {
