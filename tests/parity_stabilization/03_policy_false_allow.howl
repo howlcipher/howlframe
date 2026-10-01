@@ -1,0 +1,16 @@
+(cli_app
+  (do
+    (let (approvers (list))
+      (if (= (list_len approvers) 0) (print "empty-approvers: DENY") (print "empty-approvers: ALLOW")))
+    (let (denylist (list "mallory" "trent"))
+      (for who (list "alice" "mallory")
+        (let (blocked false)
+          (do
+            (for bad denylist (if (= who bad) (set blocked true)))
+            (if blocked (print who "DENY") (print who "ALLOW"))))))
+    (let (used 7)
+      (let (quota 10)
+        (if (> (/ used quota) 0.75) (print "threshold: DENY") (print "threshold: ALLOW"))))
+    (let (used 8)
+      (let (quota 10)
+        (if (> (/ used quota) 0.75) (print "threshold: DENY") (print "threshold: ALLOW"))))))

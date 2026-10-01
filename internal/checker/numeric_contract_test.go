@@ -197,3 +197,23 @@ func TestParseJSONExpressionOperandAllowedForWebApp(t *testing.T) {
 		t.Fatalf("web_app parse_json expression rejected: %v", d)
 	}
 }
+
+// JavaScript cannot represent every int64. A web_app program with an integer
+// literal outside the exact range is rejected instead of silently rounding.
+func TestWebAppRejectsUnsafeIntegerLiterals(t *testing.T) {
+	for _, src := range []string{
+		`(web_app (print (>= 9007199254740992 9007199254740993)))`,
+		`(web_app (print (- 0 9007199254740993)))`,
+	} {
+		if d := Analyze(parseTestProgram(t, src)).Diagnostics; len(d) == 0 {
+			t.Errorf("unsafe literal accepted: %s", src)
+		}
+	}
+	if d := Analyze(parseTestProgram(t, `(web_app (print 9007199254740991 (- 0 9007199254740991)))`)).Diagnostics; len(d) != 0 {
+		t.Errorf("safe boundary literal rejected: %v", d)
+	}
+	// Non-JavaScript targets keep exact int64 literals.
+	if d := Analyze(parseTestProgram(t, `(cli_app (print 9007199254740993))`)).Diagnostics; len(d) != 0 {
+		t.Errorf("cli_app int64 literal rejected: %v", d)
+	}
+}

@@ -403,13 +403,14 @@ func mkdirJSHelper() string {
 func numericJSHelper() string {
 	return `function howlFrameToInt(v) {
   if (typeof v === "number") {
-    if (!Number.isFinite(v) || !Number.isInteger(v)) {
+    if (!Number.isFinite(v)) {
       throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
     }
-    if (v < Number.MIN_SAFE_INTEGER || v > Number.MAX_SAFE_INTEGER) {
+    var t = Math.trunc(v);
+    if (t < Number.MIN_SAFE_INTEGER || t > Number.MAX_SAFE_INTEGER) {
       throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
     }
-    return Math.trunc(v);
+    return t;
   }
   if (typeof v === "string") {
     var s = v.trim();
@@ -423,6 +424,17 @@ func numericJSHelper() string {
     return n;
   }
   throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to int");
+}
+function howlFrameParseJSON(text) {
+  // JavaScript numbers cannot hold every int64. Where the engine exposes the
+  // token source, reject integers that would silently lose precision.
+  return JSON.parse(text, function (key, value, context) {
+    if (typeof value === "number" && context && typeof context.source === "string" &&
+        /^-?\d+$/.test(context.source) && !Number.isSafeInteger(value)) {
+      throw new Error("CONVERSION_ERROR: integer " + context.source + " is outside the exact JavaScript integer range");
+    }
+    return value;
+  });
 }
 function howlFrameToFloat(v) {
   if (typeof v === "number") {
@@ -625,7 +637,8 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 					valStr = fmt.Sprintf("{%s}", strings.Join(pairs, ", "))
 				} else if funcName == "parse_json" {
 					bodyVar := valNode.Children[2].Value
-					valStr = fmt.Sprintf("JSON.parse(%s)", bodyVar)
+					jsNumeric = true
+					valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 				} else {
 					valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
 				}
@@ -650,7 +663,8 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
 			bodyVar := generateJSStatementRaw(valNode.Children[2], reqVar, depth+1)
-			valStr = fmt.Sprintf("JSON.parse(%s)", bodyVar)
+			jsNumeric = true
+			valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 		} else {
 			valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
 		}

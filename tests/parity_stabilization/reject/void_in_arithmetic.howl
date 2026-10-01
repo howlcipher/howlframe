@@ -1,0 +1,2 @@
+(cli_app
+  (let (items (list)) (print (+ 1 (append items 6)))))

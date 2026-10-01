@@ -562,6 +562,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		case int64:
 			return typed
 		case float64:
+			if math.IsNaN(typed) || math.IsInf(typed, 0) || typed < -9223372036854775808.0 || typed >= 9223372036854775808.0 {
+				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to int", typed), node.Children[1])
+			}
 			return int64(typed)
 		case string:
 			parsed, err := strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
@@ -3140,7 +3143,8 @@ func BcConvert(target string, a any) any {
 	case "to_int":
 		switch t := a.(type) {
 		case float64:
-			if math.IsNaN(t) || math.IsInf(t, 0) || t < math.MinInt64 || t > math.MaxInt64 {
+			// 2^63 is exactly representable as float64 but does not fit int64.
+			if math.IsNaN(t) || math.IsInf(t, 0) || t < -9223372036854775808.0 || t >= 9223372036854775808.0 {
 				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %v to int", t))
 			}
 			return int64(t)

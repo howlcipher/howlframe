@@ -1,0 +1,6 @@
+(cli_app
+  (let (raw "{\"required\":9007199254740991,\"available\":9007199254740990,\"n\":37}")
+    (let (obj (parse_json Payload raw))
+      (do
+        (print (map_get obj "n"))
+        (if (>= (map_get obj "available") (map_get obj "required")) (print "ALLOW") (print "DENY"))))))

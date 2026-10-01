@@ -1,0 +1,134 @@
+{
+  "description": "Stabilization semantic parity corpus. Per fixture: canonical (bytecode VM) stdout/exit and the expected outcome per target. Outcomes: PASS, COMPILE_FAILURE (target rejected the program before running), RUNTIME_FAILURE (target failed closed while running), UNSUPPORTED (target does not implement the construct), NOT_RUN (runtime unavailable). A target outcome that differs from this table fails the test, so an unsupported target can never be silently counted as parity.",
+  "fixtures": {
+    "01_mixed_numeric.howl": {
+      "stdout": "add: 3.5 3.5 3\nsub: 2.5 2.5 2\nmul: 3 3 6\ndiv: 4.5 4.5 4.5 4.5\neq: true true\norder: true true true false\ntrunc: 4 3 7\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "PASS"
+      }
+    },
+    "02_exact_mixed_ordering.howl": {
+      "stdout": "eq: false true\norder: true true\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "COMPILE_FAILURE"
+      },
+      "notes": {
+        "javascript": "int literal 2^53+1 is not exactly representable in JS; rejected by the checker instead of rounding"
+      }
+    },
+    "03_policy_false_allow.howl": {
+      "stdout": "empty-approvers: DENY\nalice ALLOW\nmallory DENY\nthreshold: ALLOW\nthreshold: DENY\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "PASS"
+      }
+    },
+    "04_policy_precision_boundary.howl": {
+      "stdout": "precision: DENY\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "COMPILE_FAILURE"
+      },
+      "notes": {
+        "javascript": "fail closed: JS would otherwise round 2^53+1 and flip DENY to ALLOW"
+      }
+    },
+    "05_frames_and_discarded_values.howl": {
+      "stdout": "red hit\ngreen hit\nblue hit\nred\ngreen\nblue\n10\n20\n30\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "COMPILE_FAILURE",
+        "javascript": "PASS"
+      },
+      "notes": {
+        "go": "known gap: Go backend emits invalid Go for list-typed parameters and unused discarded expressions (loud build failure, not a silent divergence)"
+      }
+    },
+    "06_recovery_in_loop.howl": {
+      "stdout": "red caught\ngreen caught\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "UNSUPPORTED",
+        "go": "COMPILE_FAILURE",
+        "javascript": "PASS"
+      },
+      "notes": {
+        "interpreter": "try_let is not supported under -run",
+        "go": "known gap: list-typed parameter (see 05)"
+      }
+    },
+    "07_invalid_conversion.howl": {
+      "stdout": "",
+      "exit": 1,
+      "targets": {
+        "hfir_bytecode": "RUNTIME_FAILURE",
+        "interpreter": "COMPILE_FAILURE",
+        "go": "RUNTIME_FAILURE",
+        "javascript": "RUNTIME_FAILURE"
+      },
+      "notes": {
+        "interpreter": "the interpreter reports the CONVERSION_ERROR through its structured diagnostic path; it still fails closed with no output"
+      }
+    },
+    "08_builtin_calls.howl": {
+      "stdout": "3\na-b-c\n0\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "PASS",
+        "go": "PASS",
+        "javascript": "PASS"
+      }
+    },
+    "09_division_by_zero.howl": {
+      "stdout": "",
+      "exit": 1,
+      "targets": {
+        "hfir_bytecode": "RUNTIME_FAILURE",
+        "interpreter": "RUNTIME_FAILURE",
+        "go": "RUNTIME_FAILURE",
+        "javascript": "RUNTIME_FAILURE"
+      }
+    },
+    "10_parse_json_named_var.howl": {
+      "stdout": "37\nDENY\n",
+      "exit": 0,
+      "targets": {
+        "hfir_bytecode": "PASS",
+        "interpreter": "UNSUPPORTED",
+        "go": "COMPILE_FAILURE",
+        "javascript": "PASS"
+      },
+      "notes": {
+        "interpreter": "parse_json is not supported under -run",
+        "go": "generated Go decodes into a declared Go type; the undeclared Payload used by the VM is not a Go type"
+      }
+    }
+  },
+  "reject": {
+    "void_let_initializer.howl": "void expression",
+    "void_function_argument.howl": "void expression",
+    "void_in_arithmetic.howl": "void expression",
+    "builtin_str_split_nested.howl": "str_split argument 1 must be string",
+    "parse_json_expression.howl": "parse_json body must be a variable name",
+    "parse_json_literal.howl": "parse_json body must be a variable name",
+    "numeric_string_plus_int.howl": "requires numeric operands"
+  }
+}

@@ -1,0 +1,3 @@
+(cli_app
+  (defun take ((v int)) int (return v))
+  (let (items (list)) (print (call take (append items 6)))))

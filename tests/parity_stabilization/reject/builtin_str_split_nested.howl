@@ -1,0 +1,2 @@
+(cli_app
+  (print (str_split (str_split "a,b" ",") ";")))

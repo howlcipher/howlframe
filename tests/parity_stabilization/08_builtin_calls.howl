@@ -1,0 +1,5 @@
+(cli_app
+  (do
+    (print (list_len (str_split "a,b,c" ",")))
+    (print (str_join (str_split "a,b,c" ",") "-"))
+    (print (list_len (list)))))

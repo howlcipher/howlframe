@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/ir"
+	"strconv"
 	"strings"
 )
 
@@ -353,6 +354,14 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 	switch node.Type {
 	case "INT":
 		result = ast.Layout(ast.Int)
+		if a.jsTarget {
+			// JavaScript numbers are binary64. A literal outside +/-(2^53-1)
+			// would silently round and could flip a comparison-based policy
+			// decision, so fail closed (NUMERIC_CONTRACT section 12).
+			if v, err := strconv.ParseInt(node.Value, 10, 64); err == nil && (v > 1<<53-1 || v < -(1<<53-1)) {
+				a.add(node, fmt.Sprintf("integer literal %s exceeds the exact integer range of JavaScript (+/-9007199254740991); web_app cannot represent it without precision loss", node.Value))
+			}
+		}
 	case "FLOAT":
 		result = ast.Layout(ast.Float)
 	case "STRING":
