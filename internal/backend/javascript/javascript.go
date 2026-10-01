@@ -439,12 +439,16 @@ function howlFrameArith(op, a, b) {
   return v;
 }
 function howlFrameParseJSON(text) {
-  // JavaScript numbers cannot hold every int64. Where the engine exposes the
-  // token source, reject integers that would silently lose precision.
+  // JavaScript numbers cannot hold every int64. When the engine exposes the
+  // token source, reject only integer tokens that would lose precision. Without
+  // it, fail closed on any integer-valued number outside the exact range:
+  // an integer beyond 2^53 always decodes to such a value.
   return JSON.parse(text, function (key, value, context) {
-    if (typeof value === "number" && context && typeof context.source === "string" &&
-        /^-?\d+$/.test(context.source) && !Number.isSafeInteger(value)) {
-      throw new Error("CONVERSION_ERROR: integer " + context.source + " is outside the exact JavaScript integer range");
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      var unsafe = context && typeof context.source === "string" ? /^-?\d+$/.test(context.source) : Number.isInteger(value);
+      if (unsafe) {
+        throw new Error("CONVERSION_ERROR: integer is outside the exact JavaScript integer range");
+      }
     }
     return value;
   });

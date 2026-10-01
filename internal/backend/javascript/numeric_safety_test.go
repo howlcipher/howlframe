@@ -61,3 +61,17 @@ func TestJSDynamicIntegerArithmeticFailsClosed(t *testing.T) {
 		t.Fatalf("safe dynamic arithmetic changed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 }
+
+// Engines without JSON.parse source access cannot tell integer tokens from
+// whole-valued floats, so the helper must fail closed rather than round.
+func TestJSParseJSONFailsClosedWithoutSourceAccess(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not available")
+	}
+	src := `(web_app (let (raw "{\"a\":9007199254740993}") (let (obj (parse_json Doc raw)) (print (map_get obj "a")))))`
+	shim := "const nativeParse = JSON.parse;\nJSON.parse = function (text, reviver) { return nativeParse(text, function (k, v) { return reviver.call(this, k, v); }); };\n"
+	stdout, stderr, err := runNode(t, shim+generateCheckedJS(t, src))
+	if err == nil || !strings.Contains(stderr, "CONVERSION_ERROR") {
+		t.Fatalf("source-less engine accepted an unsafe integer: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+}
