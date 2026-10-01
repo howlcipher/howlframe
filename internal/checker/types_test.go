@@ -378,15 +378,13 @@ func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
 		(call choose)
 		(call choose 1 2)
 		(if true 1 (to_float 2))
-		(+ true false)
-		(+ 1 (to_float 2)))`)
+		(+ true false))`)
 
 	assertDiagnosticReasons(t, Analyze(root).Diagnostics, []string{
 		`function "choose" expects 1 argument, got 0`,
 		`function "choose" expects 1 argument, got 2`,
 		"if branches have incompatible types int and float64",
 		"+ requires numeric operands, got bool and bool",
-		"+ requires matching numeric types, got int and float64",
 	})
 }
 

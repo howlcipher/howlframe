@@ -412,7 +412,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		return ast.Layout(ast.Unknown)
 	}
 	if isBinary(head) {
-		left, right := a.inferChild(node, 1, env), a.inferChild(node, 2, env)
+		left, right := a.inferValue(node, 1, env, head+" operand"), a.inferValue(node, 2, env, head+" operand")
 		if head == "and" || head == "or" {
 			if known(left) && left.Kind != ast.Bool {
 				a.add(node, fmt.Sprintf("%s requires bool operands, got %s", head, typeName(left)))
@@ -423,11 +423,14 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			return ast.Layout(ast.Bool)
 		}
 		if head == "<" || head == ">" || head == "<=" || head == ">=" || head == "==" || head == "!=" || head == "=" {
-			if known(left) && known(right) && !compatible(left, right) {
+			// NUMERIC_CONTRACT sections 6.1 and 6.2: int64 and float64 compare
+			// exactly across representations, so the pair is statically valid.
+			if known(left) && known(right) && !compatible(left, right) && !(numeric(left) && numeric(right)) {
 				a.add(node, fmt.Sprintf("%s compares incompatible types %s and %s", head, typeName(left), typeName(right)))
 			}
 			return ast.Layout(ast.Bool)
 		}
+		// Arithmetic follows NUMERIC_CONTRACT sections 4 and 5.
 		if known(left) && known(right) {
 			if head == "+" && left.Kind == ast.String && right.Kind == ast.String {
 				return ast.Layout(ast.String)
@@ -436,10 +439,9 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 				a.add(node, fmt.Sprintf("%s requires numeric operands, got %s and %s", head, typeName(left), typeName(right)))
 				return ast.Layout(ast.Unknown)
 			}
-			if left.Kind != right.Kind {
-				a.add(node, fmt.Sprintf("%s requires matching numeric types, got %s and %s", head, typeName(left), typeName(right)))
-				return ast.Layout(ast.Unknown)
-			}
+		}
+		if head == "/" {
+			return ast.Layout(ast.Float)
 		}
 		if left.Kind == ast.Float || right.Kind == ast.Float {
 			return ast.Layout(ast.Float)
@@ -448,6 +450,9 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			return ast.Layout(ast.Int)
 		}
 		return ast.Layout(ast.Unknown)
+	}
+	if sig, ok := builtinSignatures[head]; ok {
+		return a.checkBuiltin(node, head, sig, env)
 	}
 	switch head {
 	case "let":
@@ -562,7 +567,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		return ast.Layout(ast.Unknown)
 	case "set":
 		if len(node.Children) >= 3 {
-			value := a.infer(node.Children[2], env)
+			value := a.inferValue(node, 2, env, fmt.Sprintf("value assigned to %q", node.Children[1].Value))
 			if current, ok := env[node.Children[1].Value]; ok && known(current) && known(value) && !compatible(current, value) {
 				a.add(node, fmt.Sprintf("cannot assign %s to %s of type %s", typeName(value), node.Children[1].Value, typeName(current)))
 			}
@@ -572,7 +577,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "list":
 		result := ast.Layout(ast.List)
 		for index, child := range node.Children[1:] {
-			value := a.infer(child, env)
+			value := a.requireValue(child, a.infer(child, env), fmt.Sprintf("list element %d", index+1))
 			if result.Element == nil && known(value) {
 				copy := value
 				result.Element = &copy
@@ -653,7 +658,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		return ast.Layout(ast.String)
 	case "append":
 		list := a.inferChild(node, 1, env)
-		item := a.inferChild(node, 2, env)
+		item := a.inferValue(node, 2, env, "append item")
 		if known(list) && list.Kind != ast.List {
 			a.add(node, fmt.Sprintf("append target must be list, got %s", typeName(list)))
 		} else if list.Element != nil && known(item) && !compatible(*list.Element, item) {
@@ -663,7 +668,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "map_set":
 		dict := a.inferChild(node, 1, env)
 		key := a.inferChild(node, 2, env)
-		value := a.inferChild(node, 3, env)
+		value := a.inferValue(node, 3, env, "map_set value")
 		if known(dict) && dict.Kind != ast.Dict {
 			a.add(node, fmt.Sprintf("map_set target must be dict, got %s", typeName(dict)))
 		}
@@ -795,7 +800,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Bytes)
 	case "print", "sleep", "test":
-		for _, child := range node.Children[1:] {
+		for index, child := range node.Children[1:] {
+			if head == "print" {
+				a.requireValue(child, a.infer(child, env), fmt.Sprintf("print argument %d", index+1))
+				continue
+			}
 			a.infer(child, env)
 		}
 		return ast.Layout(ast.Void)
@@ -937,7 +946,7 @@ func (a *Analysis) inferLetChain(node *ast.Node, env typeEnv) ast.TypeInfo {
 	current := node
 	childEnv := env
 	for _, binding := range bindings {
-		value := a.infer(binding.Children[1], childEnv)
+		value := a.requireValue(binding.Children[1], a.infer(binding.Children[1], childEnv), fmt.Sprintf("initializer of %q", binding.Children[0].Value))
 		childEnv = cloneEnv(childEnv)
 		childEnv[binding.Children[0].Value] = value
 		chain = append(chain, current)
@@ -960,11 +969,30 @@ func (a *Analysis) checkCall(node *ast.Node, name string, args []*ast.Node, info
 		a.add(node, fmt.Sprintf("function %q expects %d %s, got %d", name, len(info.Params), noun, len(args)))
 	}
 	for i, arg := range args {
-		got := a.infer(arg, env)
+		got := a.requireValue(arg, a.infer(arg, env), fmt.Sprintf("argument %d to %q", i+1, name))
 		if i < len(info.Params) && known(got) && known(info.Params[i]) && !compatible(info.Params[i], got) {
 			a.add(node, fmt.Sprintf("argument %d to %q has type %s, want %s", i+1, name, typeName(got), typeName(info.Params[i])))
 		}
 	}
+}
+
+// inferValue infers a child that must produce a value. A void expression in
+// that position is rejected here rather than surfacing as a VM stack underflow.
+func (a *Analysis) inferValue(node *ast.Node, index int, env typeEnv, use string) ast.TypeInfo {
+	if index < 0 || index >= len(node.Children) {
+		return ast.Layout(ast.Unknown)
+	}
+	return a.requireValue(node.Children[index], a.infer(node.Children[index], env), use)
+}
+
+// requireValue reports a void expression used where a value is required and
+// returns Unknown for it so the error does not cascade.
+func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) ast.TypeInfo {
+	if got.Kind == ast.Void && node.Type == "List" {
+		a.add(node, fmt.Sprintf("%s is a void expression and produces no value", use))
+		return ast.Layout(ast.Unknown)
+	}
+	return got
 }
 
 func (a *Analysis) inferChild(node *ast.Node, index int, env typeEnv) ast.TypeInfo {

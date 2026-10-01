@@ -50,8 +50,6 @@ func TestJSCollectionOpsFailClosed(t *testing.T) {
 		{name: "list_get bad index", source: dynamicCollectionJS(`(print (list_get xs s))`), want: "TYPE_ERROR: list_get index must be a number"},
 		{name: "list_len string", source: dynamicCollectionJS(`(print (list_len s))`), want: "TYPE_ERROR: list_len expected list"},
 		{name: "list_len dict", source: dynamicCollectionJS(`(print (list_len d))`), want: "TYPE_ERROR: list_len expected list"},
-		{name: "list_len string literal", source: `(web_app (let (s "hello") (print (list_len s))))`, want: "TYPE_ERROR: list_len expected list, got string"},
-		{name: "list_len dict literal", source: `(web_app (let (d (dict ("a" "b"))) (print (list_len d))))`, want: "TYPE_ERROR: list_len expected list"},
 		{name: "map_keys string", source: dynamicCollectionJS(`(print (map_keys s))`), want: "TYPE_ERROR: map_keys expected dict"},
 	}
 	for _, tc := range cases {
