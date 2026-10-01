@@ -59,6 +59,9 @@ type Analysis struct {
 	OptimizationSignatures []OptimizationSignature
 	Diagnostics            []Diagnostic
 	Private                map[string]bool
+	// jsTarget is true for web_app programs, whose generated JavaScript
+	// evaluates a parse_json body expression directly.
+	jsTarget bool
 }
 
 type typeEnv map[string]ast.TypeInfo
@@ -76,6 +79,7 @@ func Analyze(root *ast.Node) *Analysis {
 	if root == nil {
 		return a
 	}
+	a.jsTarget = root.Type == "List" && len(root.Children) > 0 && root.Children[0].Value == "web_app"
 	a.resolveNamespaces(root, "", false)
 	a.collectStructs(root)
 	a.collectFunctions(root)
@@ -706,7 +710,22 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
 	case "parse_json":
-		a.inferChild(node, 2, env)
+		if len(node.Children) != 3 {
+			a.add(node, fmt.Sprintf("parse_json expects (parse_json type body), got %d arguments", len(node.Children)-1))
+			return ast.Layout(ast.Unknown)
+		}
+		// The bytecode VM and generated Go lower the body operand by variable
+		// name. An expression or literal would compile and then fail at runtime
+		// as an undefined variable, so reject it here and require a let
+		// binding. Generated JavaScript evaluates the expression itself.
+		if body := node.Children[2]; body.Type != "SYMBOL" && !a.jsTarget {
+			a.infer(body, env)
+			a.add(body, "parse_json body must be a variable name, not an expression or literal; bind it with let first")
+			return ast.Layout(ast.Unknown)
+		}
+		if body := a.inferChild(node, 2, env); node.Children[2].Type == "SYMBOL" && known(body) && body.Kind != ast.String && body.Kind != ast.Bytes && body.Kind != ast.List {
+			a.add(node.Children[2], fmt.Sprintf("parse_json body must be string or bytes, got %s", typeName(body)))
+		}
 		if len(node.Children) >= 2 {
 			if result, ok := a.Structs[node.Children[1].Value]; ok {
 				return result

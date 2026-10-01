@@ -157,3 +157,43 @@ func TestBuiltinSignaturesRejectProvableMismatch(t *testing.T) {
 		})
 	}
 }
+
+// HFREC-004: parse_json lowers its body operand by variable name in every
+// backend, so non-symbol operands must fail in the checker.
+func TestParseJSONOperandForms(t *testing.T) {
+	invalid := map[string]string{
+		"literal string":  `(print (encode_json (parse_json Payload "{\"a\":1}")))`,
+		"nested call":     `(print (encode_json (parse_json Payload (read_line))))`,
+		"function result": `(defun body () string (return "{}")) (print (encode_json (parse_json Payload (call body))))`,
+		"expression":      `(print (encode_json (parse_json Payload (+ "{" "}"))))`,
+		"wrong arity":     `(print (encode_json (parse_json Payload)))`,
+		"non-text var":    `(let (n 1) (print (encode_json (parse_json Payload n))))`,
+	}
+	for name, src := range invalid {
+		t.Run(name, func(t *testing.T) {
+			if d := analyzeExpr(t, src).Diagnostics; len(d) == 0 {
+				t.Fatal("invalid parse_json accepted")
+			}
+		})
+	}
+	valid := map[string]string{
+		"named variable": `(let (raw (read_line)) (let (obj (parse_json Payload raw)) (print (encode_json obj))))`,
+		"bytes variable": `(let (raw (read_file "x")) (let (obj (parse_json Payload raw)) (print (encode_json obj))))`,
+	}
+	for name, src := range valid {
+		t.Run(name, func(t *testing.T) {
+			if d := analyzeExpr(t, src).Diagnostics; len(d) != 0 {
+				t.Fatalf("valid parse_json rejected: %v", d)
+			}
+		})
+	}
+}
+
+// Generated JavaScript evaluates the parse_json body expression itself, so
+// web_app programs keep accepting expression operands.
+func TestParseJSONExpressionOperandAllowedForWebApp(t *testing.T) {
+	root := parseTestProgram(t, `(web_app (try_let (data (parse_json Map "{}")) (catch err (print err)) (print data)))`)
+	if d := Analyze(root).Diagnostics; len(d) != 0 {
+		t.Fatalf("web_app parse_json expression rejected: %v", d)
+	}
+}
