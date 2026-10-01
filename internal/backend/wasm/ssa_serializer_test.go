@@ -409,3 +409,18 @@ func TestSerializeSSAProgramRejectsDuplicateFunctionName(t *testing.T) {
 		t.Fatalf("SerializeSSAProgram() error = %v, want a clear duplicate function diagnostic", err)
 	}
 }
+
+// NUMERIC_CONTRACT section 5 makes "/" real division. The Wasm backend has no
+// int-to-float promotion for it, so integer division must fail closed instead
+// of silently emitting truncating i64.div_s.
+func TestSerializeSSAIntegerDivisionFailsClosed(t *testing.T) {
+	expr := serializerList("/", serializerInt("8"), serializerInt("2"))
+	checker.Analyze(serializerList("cli_app", expr))
+	graph, err := ir.LowerSSA(expr)
+	if err != nil {
+		return
+	}
+	if wat, err := SerializeSSA(graph); err == nil {
+		t.Fatalf("integer division serialized without error:\n%s", wat)
+	}
+}

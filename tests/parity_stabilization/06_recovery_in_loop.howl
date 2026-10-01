@@ -1,0 +1,6 @@
+(cli_app
+  (defun fail ((items list)) int (do (for x items (return (/ 1 0))) (return 0)))
+  (for outer (list "red" "green")
+    (try_let (r (call fail (list 8)))
+      (catch err (print outer "caught"))
+      (print r))))

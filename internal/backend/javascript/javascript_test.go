@@ -83,7 +83,7 @@ func TestGenerateJSTryLetParseJson(t *testing.T) {
 	root := parser.NewParser(lexer.NewLexer(`(web_app (try_let (data (parse_json Map "{}")) (catch err (print err)) (print data)))`), "test.howl").ParseExpression()
 	checker.Check(root)
 	appCode, _ := GenerateJSCode(root)
-	if !strings.Contains(appCode, `JSON.parse("{}")`) {
+	if !strings.Contains(appCode, `howlFrameParseJSON("{}")`) {
 		t.Fatalf("generated code did not compile parse_json correctly:\n%s", appCode)
 	}
 }
@@ -104,7 +104,7 @@ func TestGenerateJSFetchWithBody(t *testing.T) {
 	for _, want := range []string{
 		`howlFrameFetch("http://example.test/tasks", "POST", "{\"title\":\"Ship\"}")`,
 		`return fetch(url, init).then(function (r) { return r.text(); })`,
-		`JSON.parse(response)`,
+		`howlFrameParseJSON(response)`,
 	} {
 		if !strings.Contains(appCode, want) {
 			t.Fatalf("generated code is missing %q:\n%s", want, appCode)
