@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+* Checker enforces `docs/reference/NUMERIC_CONTRACT.md`: mixed int/float `+`, `-`, `*` are valid and typed float, `/` always types float, and int/float comparisons are valid (HFREC-063). Void expressions in value position (`let`, `set`, call/print/list arguments, `append`/`map_set` values) and statically provable builtin argument mismatches (`str_split`, `str_join`, `regex_match`, `list_len`) are rejected before any backend runs (HFREC-009, HFREC-010). `parse_json` bodies must be variable names outside `web_app` (HFREC-004). Generated JavaScript keeps typed parameter names (HFREC-049). Go and JavaScript `to_int` truncate toward zero like the VM; `web_app` rejects integer literals and JSON integers outside +/-(2^53-1) instead of rounding. Wasm integer `/` fails closed. Artifact format version 2 (sorted function table, deterministic bytes) still reads version 1 artifacts; version 1 readers cannot read version 2 artifacts. New corpus: `tests/parity_stabilization/`.
+
 ### Changed
 * `README.md` and the GitHub Pages page `docs/index.html` name experimental `-compile-hfir-bc`, the mediated host effects, the deferred production flip, tip-lock `4d74dbcf` (Overall PASS, Promote DEFERRED), and point at `docs/reference/fetch_body_bytecode_design.md` and `docs/reference/lowered_hfir_prod_flip_criteria.md`. Docs only. #90 stays Partial.
 * Design spike for a later `(fetch url method body)` change on both bytecode compilers together. The note is `docs/reference/fetch_body_bytecode_design.md`. Docs only. No opcode, no capability, and no production `-compile-bc` flip. The Assurance tip-lock stays `4d74dbcf9654caa05e0b1d9212b15bc5398359e3`. #90 stays Partial. Promote stays DEFERRED. Journal: `docs/journals/2026-09-30_fetch_body_bytecode_design.md`.

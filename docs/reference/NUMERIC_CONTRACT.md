@@ -129,6 +129,11 @@ Each supported backend must implement the contract above, not merely mirror the 
 
 If a backend cannot represent a value or perform an operation in a way that preserves this contract, it must raise a structured runtime error rather than silently approximate. Static checks should reject constructs that are known to be unsupported on the target.
 
-## 13. Version
+## 13. Target Limits
+
+* **Generated JavaScript** represents every number as binary64, so integers outside +/-(2^53-1) are not exact. In obedience to section 12, the checker rejects integer literals outside that range in `web_app` programs, and the generated `parse_json` rejects integer JSON tokens outside that range where the engine exposes token source. Arithmetic that overflows the exact range at runtime is not detected in generated JavaScript; this is a documented limitation, not parity.
+* **Wasm** has no int-to-float promotion for `/`; integer division fails closed at serialization.
+
+## 14. Version
 
 This contract applies to the numeric parity mission run `20261001-001` and supersedes any undocumented host-language behavior that previously differed across backends.
