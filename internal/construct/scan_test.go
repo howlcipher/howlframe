@@ -183,6 +183,11 @@ func TestScanRejectsUnsupportedConstructs(t *testing.T) {
 			source: `(cli_app (do (print "before") (totally_made_up_head "x" 42) (print "after")))`,
 			want:   "totally_made_up_head",
 		},
+		{
+			name:   "parse_json expression operand",
+			source: `(cli_app (let (data (parse_json Context (bytes_to_string (read_file "input.json")))) (print data)))`,
+			want:   "parse_json",
+		},
 	}
 
 	for _, tc := range cases {

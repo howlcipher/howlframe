@@ -82,6 +82,11 @@ var jsNeedsWriteFile bool
 // the runner grant before any directory creation. It is reset on every call.
 var jsNeedsMkdir bool
 
+// jsNumeric is set when GenerateJSCode emits a numeric operation that must not
+// inherit host-language semantics (division, checked conversion). The helper is
+// prepended once. It is reset on every call.
+var jsNumeric bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -395,6 +400,62 @@ func mkdirJSHelper() string {
 `
 }
 
+func numericJSHelper() string {
+	return `function howlFrameToInt(v) {
+  if (typeof v === "number") {
+    if (!Number.isFinite(v) || !Number.isInteger(v)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
+    }
+    if (v < Number.MIN_SAFE_INTEGER || v > Number.MAX_SAFE_INTEGER) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
+    }
+    return Math.trunc(v);
+  }
+  if (typeof v === "string") {
+    var s = v.trim();
+    if (!/^[+-]?\d+$/.test(s)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to int");
+    }
+    var n = Number(s);
+    if (!Number.isInteger(n) || n < Number.MIN_SAFE_INTEGER || n > Number.MAX_SAFE_INTEGER) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to int");
+    }
+    return n;
+  }
+  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to int");
+}
+function howlFrameToFloat(v) {
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to float");
+    }
+    return v;
+  }
+  if (typeof v === "string") {
+    var s = v.trim();
+    var n = Number(s);
+    if (Number.isNaN(n) || !Number.isFinite(n)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to float");
+    }
+    return n;
+  }
+  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to float");
+}
+function howlFrameDiv(a, b) {
+  var af = howlFrameToFloat(a);
+  var bf = howlFrameToFloat(b);
+  if (bf === 0) {
+    throw new Error("RUNTIME_ERROR: division by zero");
+  }
+  var res = af / bf;
+  if (!Number.isFinite(res)) {
+    throw new Error("RUNTIME_ERROR: division produced an invalid floating-point result");
+  }
+  return res;
+}
+`
+}
+
 func jsHostHelpers() string {
 	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch && !jsNeedsWriteFile && !jsNeedsMkdir {
 		return ""
@@ -503,6 +564,10 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "binop":
 		arg1 := generateJSExpression(ir.Kids[0], reqVar, depth+1)
 		arg2 := generateJSExpression(ir.Kids[1], reqVar, depth+1)
+		if ir.Op == "/" {
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
+		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":
 		var letPrefix strings.Builder
@@ -659,11 +724,13 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		msStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(await new Promise(r => setTimeout(r, %s)))", msStr)
 	case "to_int":
+		jsNumeric = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("parseInt(%s, 10)", valStr)
+		return fmt.Sprintf("howlFrameToInt(%s)", valStr)
 	case "to_float":
+		jsNumeric = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("parseFloat(%s)", valStr)
+		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("String(%s)", valStr)
@@ -787,6 +854,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsFetch = false
 	jsNeedsWriteFile = false
 	jsNeedsMkdir = false
+	jsNumeric = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -898,6 +966,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsMapKeyOrder {
 		helper := mapKeyOrderJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNumeric {
+		helper := numericJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

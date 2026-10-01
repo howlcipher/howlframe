@@ -17,6 +17,8 @@ import (
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
+	"math"
+	"math/bits"
 	"net/http"
 	"os"
 	"os/exec"
@@ -555,14 +557,40 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if len(node.Children) != 2 {
 			InterpErr("to_int expects (to_int val)", node)
 		}
-		v, _ := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(interp.eval(node.Children[1], env))), 10, 64)
-		return v
+		value := interp.eval(node.Children[1], env)
+		switch typed := value.(type) {
+		case int64:
+			return typed
+		case float64:
+			return int64(typed)
+		case string:
+			parsed, err := strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
+			if err != nil {
+				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to int", typed), node.Children[1])
+			}
+			return parsed
+		default:
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to int", value), node.Children[1])
+		}
 	case "to_float":
 		if len(node.Children) != 2 {
 			InterpErr("to_float expects (to_float val)", node)
 		}
-		v, _ := strconv.ParseFloat(strings.TrimSpace(fmt.Sprint(interp.eval(node.Children[1], env))), 64)
-		return v
+		value := interp.eval(node.Children[1], env)
+		switch typed := value.(type) {
+		case int64:
+			return float64(typed)
+		case float64:
+			return typed
+		case string:
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+			if err != nil {
+				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", typed), node.Children[1])
+			}
+			return parsed
+		default:
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to float", value), node.Children[1])
+		}
 	case "to_string":
 		if len(node.Children) != 2 {
 			InterpErr("to_string expects (to_string val)", node)
@@ -1085,34 +1113,33 @@ func (interp *Interpreter) evalBinop(op string, node *ast.Node, env *InterpEnv) 
 }
 
 func NumericBinop(op string, a, b any, node *ast.Node) any {
-	ai, aIsInt := a.(int64)
-	bi, bIsInt := b.(int64)
+	switch op {
+	case "+", "-", "*":
+		return interpNumericArithmetic(op, a, b, node)
+	case "/":
+		return interpNumericDiv(a, b, node)
+	case "<", ">", "<=", ">=":
+		return interpNumericRelational(op, a, b, node)
+	}
+	InterpErr(fmt.Sprintf("unknown numeric operator: %s", op), node)
+	return nil
+}
+
+func interpNumericArithmetic(op string, a, b any, node *ast.Node) any {
+	ai, aIsInt := asInt64(a)
+	bi, bIsInt := asInt64(b)
 	if aIsInt && bIsInt {
 		switch op {
 		case "+":
-			return ai + bi
+			return checkedAddInt64(ai, bi, node)
 		case "-":
-			return ai - bi
+			return checkedSubInt64(ai, bi, node)
 		case "*":
-			return ai * bi
-		case "/":
-			if bi == 0 {
-				InterpErr("division by zero", node)
-			}
-			return ai / bi
-		case "<":
-			return ai < bi
-		case ">":
-			return ai > bi
-		case "<=":
-			return ai <= bi
-		case ">=":
-			return ai >= bi
+			return checkedMulInt64(ai, bi, node)
 		}
 	}
-
-	af, aOk := ToFloat(a)
-	bf, bOk := ToFloat(b)
+	af, aOk := toFloat64(a)
+	bf, bOk := toFloat64(b)
 	if !aOk || !bOk {
 		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
 	}
@@ -1123,21 +1150,136 @@ func NumericBinop(op string, a, b any, node *ast.Node) any {
 		return af - bf
 	case "*":
 		return af * bf
-	case "/":
-		if bf == 0 {
-			InterpErr("division by zero", node)
-		}
-		return af / bf
-	case "<":
-		return af < bf
-	case ">":
-		return af > bf
-	case "<=":
-		return af <= bf
-	case ">=":
-		return af >= bf
 	}
 	return nil
+}
+
+func interpNumericDiv(a, b any, node *ast.Node) any {
+	af, aOk := toFloat64(a)
+	bf, bOk := toFloat64(b)
+	if !aOk || !bOk {
+		InterpErr(fmt.Sprintf("/ requires numeric operands, got %T and %T", a, b), node)
+	}
+	if bf == 0 {
+		InterpErr("division by zero", node)
+	}
+	res := af / bf
+	if math.IsNaN(res) || math.IsInf(res, 0) {
+		InterpErr("division produced an invalid floating-point result", node)
+	}
+	return res
+}
+
+func interpNumericRelational(op string, a, b any, node *ast.Node) bool {
+	cmp, numeric := compareNumeric(a, b)
+	if !numeric {
+		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
+	}
+	switch op {
+	case "<":
+		return cmp < 0
+	case ">":
+		return cmp > 0
+	case "<=":
+		return cmp <= 0
+	case ">=":
+		return cmp >= 0
+	}
+	return false
+}
+
+func checkedAddInt64(a, b int64, node *ast.Node) int64 {
+	if (b > 0 && a > math.MaxInt64-b) || (b < 0 && a < math.MinInt64-b) {
+		InterpErr("integer overflow", node)
+	}
+	return a + b
+}
+
+func checkedSubInt64(a, b int64, node *ast.Node) int64 {
+	if (b > 0 && a < math.MinInt64+b) || (b < 0 && a > math.MaxInt64+b) {
+		InterpErr("integer overflow", node)
+	}
+	return a - b
+}
+
+func checkedMulInt64(a, b int64, node *ast.Node) int64 {
+	hi, lo := bits.Mul64(uint64(a), uint64(b))
+	// sign-extend the low 63 bits; the high word must equal either all 0s or all 1s of that extension
+	expectedHi := uint64(lo>>63) * ^uint64(0)
+	if hi != expectedHi {
+		InterpErr("integer overflow", node)
+	}
+	return int64(lo)
+}
+
+// compareNumeric compares two numeric values. It returns the signed comparison
+// result (-1, 0, 1) and true when both operands are numeric. Mixed comparisons
+// never round an exact integer through float64; they are compared as int64 when
+// the float operand is a whole number inside the int64 range.
+func compareNumeric(a, b any) (int, bool) {
+	ai, aInt := asInt64(a)
+	bi, bInt := asInt64(b)
+	if aInt && bInt {
+		switch {
+		case ai < bi:
+			return -1, true
+		case ai > bi:
+			return 1, true
+		}
+		return 0, true
+	}
+	af, aFloat := toFloat64(a)
+	bf, bFloat := toFloat64(b)
+	if !aFloat || !bFloat {
+		return 0, false
+	}
+	// Mixed int/float: keep precision by comparing as integers when possible.
+	if aInt && bFloat && floatIsWholeInt64(bf) {
+		bi2 := int64(bf)
+		switch {
+		case ai < bi2:
+			return -1, true
+		case ai > bi2:
+			return 1, true
+		}
+		return 0, true
+	}
+	if aFloat && bInt && floatIsWholeInt64(af) {
+		ai2 := int64(af)
+		switch {
+		case ai2 < bi:
+			return -1, true
+		case ai2 > bi:
+			return 1, true
+		}
+		return 0, true
+	}
+	switch {
+	case af < bf:
+		return -1, true
+	case af > bf:
+		return 1, true
+	}
+	return 0, true
+}
+
+func floatIsWholeInt64(f float64) bool {
+	if math.IsNaN(f) || math.IsInf(f, 0) || f < math.MinInt64 || f > math.MaxInt64 {
+		return false
+	}
+	return math.Trunc(f) == f
+}
+
+func toFloat64(v any) (float64, bool) {
+	switch t := v.(type) {
+	case int64:
+		return float64(t), true
+	case float64:
+		return t, true
+	case int:
+		return float64(t), true
+	}
+	return 0, false
 }
 
 func ToFloat(v any) (float64, bool) {
@@ -1181,7 +1323,52 @@ func ValuesEqual(a, b any) bool {
 	case []any, map[string]any:
 		return false
 	}
+	if eq, ok := numericEqual(a, b); ok {
+		return eq
+	}
 	return a == b
+}
+
+// numericEqual compares two numeric operands by value regardless of their Go
+// representation. The VM produces float64 for literals, arithmetic and JSON,
+// but int64 for list_len and time_now, so interface equality would report
+// int64(0) != float64(0). ok is false when either operand is not numeric.
+func numericEqual(a, b any) (eq bool, ok bool) {
+	ai, aInt := asInt64(a)
+	bi, bInt := asInt64(b)
+	if aInt && bInt {
+		return ai == bi, true
+	}
+	af, aFloat := a.(float64)
+	bf, bFloat := b.(float64)
+	switch {
+	case aFloat && bFloat:
+		return af == bf, true
+	case aInt && bFloat:
+		return intEqualsFloat(ai, bf), true
+	case aFloat && bInt:
+		return intEqualsFloat(bi, af), true
+	}
+	return false, false
+}
+
+func asInt64(v any) (int64, bool) {
+	switch t := v.(type) {
+	case int64:
+		return t, true
+	case int:
+		return int64(t), true
+	}
+	return 0, false
+}
+
+// intEqualsFloat is exact: it never rounds the integer through float64, so
+// 2^53+1 is not equal to 2^53.
+func intEqualsFloat(i int64, f float64) bool {
+	if f != math.Trunc(f) || f < -9.223372036854775808e18 || f >= 9.223372036854775808e18 {
+		return false
+	}
+	return int64(f) == i
 }
 
 func SliceToAny(strs []string) []any {
@@ -1510,6 +1697,15 @@ func (vm *BCVM) push(v any) {
 	vm.stack = append(vm.stack, v)
 }
 
+// truncateStack drops operands above height. It never grows the stack, so a
+// frame that already consumed below height is left for pop to report.
+func (vm *BCVM) truncateStack(height int) {
+	if height >= 0 && len(vm.stack) > height {
+		clear(vm.stack[height:])
+		vm.stack = vm.stack[:height]
+	}
+}
+
 func (vm *BCVM) pop(inst bytecode.Opcode) any {
 	if len(vm.stack) == 0 {
 		panic(NewRuntimeError("STACK_UNDERFLOW", "main", vm.ip, inst, "stack underflow at %s", bytecode.Registry[inst].Name))
@@ -1718,6 +1914,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 	}
 
 	ip := 0
+	// loopBases records the operand stack height at each active FOR_INIT in
+	// this frame. FOR_NEXT trims anything the loop body left behind, so a
+	// discarded value can never be mistaken for the iterator state.
+	var loopBases []int
 	for ip < len(insts) {
 		vm.ip = ip
 		inst := insts[ip]
@@ -1749,6 +1949,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			successInsts := insts[ip+1+valLen+catchLen : ip+1+valLen+catchLen+successLen]
 
 			var tryErr error
+			tryHeight := len(vm.stack)
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -1762,10 +1963,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}()
 
 			if tryErr != nil {
+				// Drop partial operands the failed expression pushed.
+				vm.truncateStack(tryHeight)
 				env.vars[errVar] = tryErr.Error()
 				vm.run(catchInsts, env)
 			} else {
 				env.vars[varName] = vm.pop(inst.Op)
+				vm.truncateStack(tryHeight)
 				vm.run(successInsts, env)
 			}
 			ip += 1 + valLen + catchLen + successLen
@@ -1996,8 +2200,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					data = bytesFromNumberList(b, ip, inst, "parse_json")
 				}
 			}
-			var result any
-			err := json.Unmarshal(data, &result)
+			result, err := decodeJSONValue(data)
 			if err != nil {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "parse_json failed: %v", err))
 			}
@@ -2371,12 +2574,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", list))
 			}
+			loopBases = append(loopBases, len(vm.stack))
 			vm.push(items)
 			vm.push(0.0) // index
 		case bytecode.OpForNext:
 			varName := inst.StringOperand
 			offset := int(inst.IntOperand)
 
+			if n := len(loopBases); n > 0 {
+				vm.truncateStack(loopBases[n-1] + 2)
+			}
 			idxAny := vm.pop(inst.Op)
 			itemsAny := vm.pop(inst.Op)
 
@@ -2396,6 +2603,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index %d out of range [0,%d)", idx, len(items)))
 			}
 			if idx == int64(len(items)) {
+				if n := len(loopBases); n > 0 {
+					loopBases = loopBases[:n-1]
+				}
 				ip += offset
 				continue
 			}
@@ -2477,6 +2687,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				callEnv.vars[p] = argVals[i]
 			}
 
+			// The callee shares the operand stack. Restore the caller's height
+			// after it returns, so values it discarded, or loop state left by a
+			// return from inside a for, never leak into the caller's operands.
+			callerHeight := len(vm.stack)
 			var result any
 			func() {
 				defer func() {
@@ -2490,6 +2704,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				}()
 				vm.run(fn.Instructions, callEnv)
 			}()
+			vm.truncateStack(callerHeight)
 			vm.push(result)
 		case bytecode.OpReturn:
 			panic(VmReturn{val: vm.pop(inst.Op)})
@@ -2810,32 +3025,87 @@ func BcBinop(op string, a, b any) any {
 }
 
 func bcNumericBinop(op string, a, b any) any {
-	// try to coerce float64 since JSON uses float64
-	af := ToBCFloat(a)
-	bf := ToBCFloat(b)
-
 	switch op {
-	case "+":
-		return af + bf
-	case "-":
-		return af - bf
-	case "*":
-		return af * bf
+	case "+", "-", "*":
+		ai, aIsInt := asInt64(a)
+		bi, bIsInt := asInt64(b)
+		if aIsInt && bIsInt {
+			switch op {
+			case "+":
+				return bcCheckedAddInt64(ai, bi)
+			case "-":
+				return bcCheckedSubInt64(ai, bi)
+			case "*":
+				return bcCheckedMulInt64(ai, bi)
+			}
+		}
+		af, aOk := toFloat64(a)
+		bf, bOk := toFloat64(b)
+		if !aOk || !bOk {
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
+		}
+		switch op {
+		case "+":
+			return af + bf
+		case "-":
+			return af - bf
+		case "*":
+			return af * bf
+		}
 	case "/":
+		af, aOk := toFloat64(a)
+		bf, bOk := toFloat64(b)
+		if !aOk || !bOk {
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "/ requires numeric operands, got %T and %T", a, b))
+		}
 		if bf == 0 {
 			panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "division by zero"))
 		}
-		return af / bf
-	case "<":
-		return af < bf
-	case ">":
-		return af > bf
-	case "<=":
-		return af <= bf
-	case ">=":
-		return af >= bf
+		res := af / bf
+		if math.IsNaN(res) || math.IsInf(res, 0) {
+			panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "division produced an invalid floating-point result"))
+		}
+		return res
+	case "<", ">", "<=", ">=":
+		cmp, numeric := compareNumeric(a, b)
+		if !numeric {
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
+		}
+		switch op {
+		case "<":
+			return cmp < 0
+		case ">":
+			return cmp > 0
+		case "<=":
+			return cmp <= 0
+		case ">=":
+			return cmp >= 0
+		}
 	}
 	panic(NewRuntimeError("VM_INTERNAL", "main", 0, 0, "unknown binop: %s", op))
+}
+
+func bcCheckedAddInt64(a, b int64) int64 {
+	if (b > 0 && a > math.MaxInt64-b) || (b < 0 && a < math.MinInt64-b) {
+		panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "integer overflow"))
+	}
+	return a + b
+}
+
+func bcCheckedSubInt64(a, b int64) int64 {
+	if (b > 0 && a < math.MinInt64+b) || (b < 0 && a > math.MaxInt64+b) {
+		panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "integer overflow"))
+	}
+	return a - b
+}
+
+func bcCheckedMulInt64(a, b int64) int64 {
+	hi, lo := bits.Mul64(uint64(a), uint64(b))
+	expectedHi := uint64(lo>>63) * ^uint64(0)
+	if hi != expectedHi {
+		panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "integer overflow"))
+	}
+	return int64(lo)
 }
 
 func ToBCFloat(v any) float64 {
@@ -2859,6 +3129,9 @@ func BcValuesEqual(a, b any) bool {
 	case []any, map[string]any:
 		return false
 	}
+	if eq, ok := numericEqual(a, b); ok {
+		return eq
+	}
 	return a == b
 }
 
@@ -2867,18 +3140,35 @@ func BcConvert(target string, a any) any {
 	case "to_int":
 		switch t := a.(type) {
 		case float64:
-			return float64(int64(t))
+			if math.IsNaN(t) || math.IsInf(t, 0) || t < math.MinInt64 || t > math.MaxInt64 {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %v to int", t))
+			}
+			return int64(t)
 		case string:
-			v, _ := strconv.ParseInt(t, 10, 64)
-			return float64(v)
+			v, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+			if err != nil {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %q to int", t))
+			}
+			return v
+		case int64:
+			return t
+		default:
+			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %T to int", a))
 		}
 	case "to_float":
 		switch t := a.(type) {
 		case string:
-			v, _ := strconv.ParseFloat(t, 64)
+			v, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+			if err != nil {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %q to float", t))
+			}
 			return v
 		case float64:
 			return t
+		case int64:
+			return float64(t)
+		default:
+			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %T to float", a))
 		}
 	case "to_string":
 		return fmt.Sprint(a)
@@ -2898,6 +3188,53 @@ func BcSliceToAny(strs []string) []any {
 		out[i] = s
 	}
 	return out
+}
+
+func decodeJSONValue(data []byte) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("multiple JSON values")
+		}
+		return nil, err
+	}
+	return normalizeJSONNumbers(value)
+}
+
+func normalizeJSONNumbers(value any) (any, error) {
+	switch typed := value.(type) {
+	case json.Number:
+		if integer, err := typed.Int64(); err == nil {
+			return integer, nil
+		}
+		float, err := typed.Float64()
+		if err != nil {
+			return nil, err
+		}
+		return float, nil
+	case []any:
+		for index, item := range typed {
+			normalized, err := normalizeJSONNumbers(item)
+			if err != nil {
+				return nil, err
+			}
+			typed[index] = normalized
+		}
+	case map[string]any:
+		for key, item := range typed {
+			normalized, err := normalizeJSONNumbers(item)
+			if err != nil {
+				return nil, err
+			}
+			typed[key] = normalized
+		}
+	}
+	return value, nil
 }
 
 func normalizeForJSON(v any) any {
