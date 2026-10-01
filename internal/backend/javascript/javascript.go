@@ -462,6 +462,9 @@ function howlFrameToFloat(v) {
   }
   if (typeof v === "string") {
     var s = v.trim();
+    if (s === "") {
+      throw new Error("CONVERSION_ERROR: cannot convert \"\" to float");
+    }
     var n = Number(s);
     if (Number.isNaN(n) || !Number.isFinite(n)) {
       throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to float");
