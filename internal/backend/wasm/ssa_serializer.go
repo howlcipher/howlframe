@@ -780,17 +780,6 @@ func (serializer *ssaSerializer) binary(instruction *ir.Instruction) (string, st
 		return "", "", err
 	}
 
-	if instruction.Op == ir.OpDivide {
-		if leftType == "i64" {
-			left = fmt.Sprintf("(f64.convert_i64_s %s)", left)
-			leftType = "f64"
-		}
-		if rightType == "i64" {
-			right = fmt.Sprintf("(f64.convert_i64_s %s)", right)
-			rightType = "f64"
-		}
-	}
-
 	operator, operandType, resultType := ssaWasmOperator(instruction.Op, leftType)
 	if operator == "" {
 		return "", "", serializer.unsupported(instruction)
