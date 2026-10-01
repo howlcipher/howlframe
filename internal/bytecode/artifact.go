@@ -8,12 +8,54 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 )
 
 const (
-	ArtifactMagic   = "HFBC"
-	ArtifactVersion = uint32(1)
+	ArtifactMagic = "HFBC"
+	// ArtifactVersion is the version WriteArtifact emits. Version 2 stores
+	// functions as a name-sorted list, so identical programs serialize to
+	// identical bytes. Version 1 gob-encoded the Functions map directly, and
+	// gob writes maps in Go's randomized iteration order.
+	ArtifactVersion = uint32(2)
+	// artifactVersionMapPayload is still accepted by ReadArtifact.
+	artifactVersionMapPayload = uint32(1)
 )
+
+// artifactPayload is the version 2 wire form of a BCProgram.
+type artifactPayload struct {
+	Version   int
+	Functions []*BCFunction
+	Names     []string
+	Main      []BCInstruction
+}
+
+func newArtifactPayload(prog *BCProgram) artifactPayload {
+	names := make([]string, 0, len(prog.Functions))
+	for name := range prog.Functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	fns := make([]*BCFunction, len(names))
+	for i, name := range names {
+		fns[i] = prog.Functions[name]
+	}
+	return artifactPayload{Version: prog.Version, Functions: fns, Names: names, Main: prog.Main}
+}
+
+func (p artifactPayload) program() (*BCProgram, error) {
+	if len(p.Names) != len(p.Functions) {
+		return nil, fmt.Errorf("function table has %d names for %d functions", len(p.Names), len(p.Functions))
+	}
+	prog := &BCProgram{Version: p.Version, Main: p.Main, Functions: make(map[string]*BCFunction, len(p.Names))}
+	for i, name := range p.Names {
+		if _, dup := prog.Functions[name]; dup {
+			return nil, fmt.Errorf("duplicate function %q", name)
+		}
+		prog.Functions[name] = p.Functions[i]
+	}
+	return prog, nil
+}
 
 var (
 	ErrInvalidMagic   = errors.New("invalid artifact magic identifier")
@@ -35,7 +77,7 @@ const (
 func WriteArtifact(w io.Writer, prog *BCProgram) error {
 	var payload bytes.Buffer
 	enc := gob.NewEncoder(&payload)
-	if err := enc.Encode(prog); err != nil {
+	if err := enc.Encode(newArtifactPayload(prog)); err != nil {
 		return err
 	}
 
@@ -90,8 +132,8 @@ func ReadArtifact(r io.Reader) (*BCProgram, error) {
 		}
 		return nil, err
 	}
-	if version != ArtifactVersion {
-		return nil, fmt.Errorf("%w: expected %d, got %d", ErrUnsupportedVer, ArtifactVersion, version)
+	if version != ArtifactVersion && version != artifactVersionMapPayload {
+		return nil, fmt.Errorf("%w: expected %d or %d, got %d", ErrUnsupportedVer, artifactVersionMapPayload, ArtifactVersion, version)
 	}
 
 	var payloadLen uint32
@@ -132,17 +174,30 @@ func ReadArtifact(r io.Reader) (*BCProgram, error) {
 		return nil, ErrCorrupt // Trailing garbage is treated as corruption
 	}
 
-	var prog BCProgram
 	dec := gob.NewDecoder(bytes.NewReader(payloadBytes))
-	if err := dec.Decode(&prog); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+	var prog *BCProgram
+	if version == artifactVersionMapPayload {
+		prog = &BCProgram{}
+		if err := dec.Decode(prog); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		}
+	} else {
+		var wire artifactPayload
+		if err := dec.Decode(&wire); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		}
+		decoded, err := wire.program()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		}
+		prog = decoded
 	}
 
-	if err := ValidateProgram(&prog); err != nil {
+	if err := ValidateProgram(prog); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidProgram, err)
 	}
 
-	return &prog, nil
+	return prog, nil
 }
 
 var ErrInvalidProgram = errors.New("structurally invalid bytecode program")

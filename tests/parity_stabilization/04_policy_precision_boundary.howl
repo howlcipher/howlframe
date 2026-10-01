@@ -1,0 +1,4 @@
+(cli_app
+  (let (needed 9007199254740993)
+    (let (have 9007199254740992)
+      (if (>= have needed) (print "precision: ALLOW") (print "precision: DENY")))))

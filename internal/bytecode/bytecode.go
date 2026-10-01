@@ -336,7 +336,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 	var insts []BCInstruction
 	if node.Type == "INT" {
 		val, _ := strconv.ParseInt(node.Value, 10, 64)
-		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: float64(val)})
+		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: val})
 		return insts
 	}
 	if node.Type == "FLOAT" {
@@ -832,16 +832,5 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 }
 
 func extractParamNames(paramsNode *ast.Node) []string {
-	if paramsNode == nil {
-		return nil
-	}
-	var params []string
-	for _, p := range paramsNode.Children {
-		if p.Type == "List" && len(p.Children) > 0 {
-			params = append(params, p.Children[0].Value)
-		} else {
-			params = append(params, p.Value)
-		}
-	}
-	return params
+	return ast.ParamNames(paramsNode)
 }

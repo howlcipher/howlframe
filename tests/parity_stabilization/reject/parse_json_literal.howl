@@ -1,0 +1,2 @@
+(cli_app
+  (print (encode_json (parse_json Payload "{\"answer\":37}"))))

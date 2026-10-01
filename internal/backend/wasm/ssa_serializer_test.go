@@ -63,7 +63,7 @@ func TestSerializeSSASupportedOperators(t *testing.T) {
 		{"add", serializerList("+", serializerInt("8"), serializerInt("2")), "i64.add", "i64"},
 		{"subtract", serializerList("-", serializerInt("8"), serializerInt("2")), "i64.sub", "i64"},
 		{"multiply", serializerList("*", serializerInt("8"), serializerInt("2")), "i64.mul", "i64"},
-		{"divide", serializerList("/", serializerInt("8"), serializerInt("2")), "i64.div_s", "i64"},
+		{"divide", serializerList("/", serializerFloat("8.0"), serializerFloat("2.0")), "f64.div", "f64"},
 		{"less", serializerList("<", serializerInt("8"), serializerInt("2")), "i64.lt_s", "i32"},
 		{"greater", serializerList(">", serializerInt("8"), serializerInt("2")), "i64.gt_s", "i32"},
 		{"less equal", serializerList("<=", serializerInt("8"), serializerInt("2")), "i64.le_s", "i32"},
@@ -406,5 +406,20 @@ func TestSerializeSSAProgramRejectsDuplicateFunctionName(t *testing.T) {
 	}, entryGraph)
 	if err == nil || !strings.Contains(err.Error(), `duplicate function "dup"`) {
 		t.Fatalf("SerializeSSAProgram() error = %v, want a clear duplicate function diagnostic", err)
+	}
+}
+
+// NUMERIC_CONTRACT section 5 makes "/" real division. The Wasm backend has no
+// int-to-float promotion for it, so integer division must fail closed instead
+// of silently emitting truncating i64.div_s.
+func TestSerializeSSAIntegerDivisionFailsClosed(t *testing.T) {
+	expr := serializerList("/", serializerInt("8"), serializerInt("2"))
+	checker.Analyze(serializerList("cli_app", expr))
+	graph, err := ir.LowerSSA(expr)
+	if err != nil {
+		return
+	}
+	if wat, err := SerializeSSA(graph); err == nil {
+		t.Fatalf("integer division serialized without error:\n%s", wat)
 	}
 }

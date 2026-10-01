@@ -341,6 +341,9 @@ func scanNode(node *ast.Node, parentHead string, out *[]Violation) {
 	}
 
 	if entry.Opaque {
+		if entry.Name == "parse_json" {
+			scanSupported(node, entry.Name, out)
+		}
 		return
 	}
 	scanSupported(node, entry.Name, out)
@@ -391,6 +394,16 @@ func scanSupported(node *ast.Node, head string, out *[]Violation) {
 			scanChildren(node.Children[1], head, out, 0)
 		}
 		scanChildren(node, head, out, 2)
+	case "parse_json":
+		if len(node.Children) > 2 && node.Children[2] != nil && node.Children[2].Type != "SYMBOL" {
+			*out = append(*out, Violation{
+				Name:   "parse_json",
+				Reason: "the second argument to parse_json must be a variable name symbol, not an expression",
+				Line:   node.Children[2].Line,
+				Column: node.Children[2].Column,
+			})
+			return
+		}
 	default:
 		scanChildren(node, head, out, 1)
 	}

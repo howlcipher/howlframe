@@ -1,0 +1,7 @@
+(cli_app
+  (defun first ((values list)) string (do (for member values (return member)) (return "none")))
+  (defun score ((word string)) int (return 42))
+  (do
+    (for outer (list "red" "green" "blue") (print outer (call first (list "hit"))))
+    (for outer (list "red" "green" "blue") (do (call score outer) (print outer)))
+    (for x (list 10 20 30) (do (+ 2 3) (print x)))))

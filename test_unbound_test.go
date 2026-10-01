@@ -21,7 +21,7 @@ func TestUnboundVariablesChecker(t *testing.T) {
 		{"try_let catch", `(cli_app (try_let (x 1) (catch err (print unbound_var)) (print x)))`, "undefined reference"},
 		// Legitimately bound dynamic values should not error:
 		{"try_let bound", `(cli_app (try_let (x (read_file "foo")) (catch err (print err)) (print x)))`, ""},
-		{"parse_json", `(cli_app (let (x (parse_json "{}")) (print x)))`, ""},
+		{"parse_json", `(cli_app (let (raw "{}") (let (x (parse_json Doc raw)) (print x))))`, ""},
 		{"map get", `(cli_app (let (x (dict)) (let (y (map_get x "key")) (print y))))`, ""},
 	}
 

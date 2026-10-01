@@ -82,6 +82,11 @@ var jsNeedsWriteFile bool
 // the runner grant before any directory creation. It is reset on every call.
 var jsNeedsMkdir bool
 
+// jsNumeric is set when GenerateJSCode emits a numeric operation that must not
+// inherit host-language semantics (division, checked conversion). The helper is
+// prepended once. It is reset on every call.
+var jsNumeric bool
+
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
 	// still "". list_get of an in-range element returns that element. An
@@ -395,6 +400,91 @@ func mkdirJSHelper() string {
 `
 }
 
+func numericJSHelper() string {
+	return `function howlFrameToInt(v) {
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
+    }
+    var t = Math.trunc(v);
+    if (t < Number.MIN_SAFE_INTEGER || t > Number.MAX_SAFE_INTEGER) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to int");
+    }
+    return t;
+  }
+  if (typeof v === "string") {
+    var s = v.trim();
+    if (!/^[+-]?\d+$/.test(s)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to int");
+    }
+    var n = Number(s);
+    if (!Number.isInteger(n) || n < Number.MIN_SAFE_INTEGER || n > Number.MAX_SAFE_INTEGER) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to int");
+    }
+    return n;
+  }
+  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to int");
+}
+function howlFrameSafeInt(v) {
+  if (!Number.isSafeInteger(v)) {
+    throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
+  }
+  return v;
+}
+function howlFrameArith(op, a, b) {
+  var v = op === "+" ? a + b : op === "-" ? a - b : a * b;
+  if (typeof v === "number" && !Number.isSafeInteger(v) && Number.isInteger(a) && Number.isInteger(b)) {
+    throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
+  }
+  return v;
+}
+function howlFrameParseJSON(text) {
+  // JavaScript numbers cannot hold every int64. When the engine exposes the
+  // token source, reject only integer tokens that would lose precision. Without
+  // it, fail closed on any integer-valued number outside the exact range:
+  // an integer beyond 2^53 always decodes to such a value.
+  return JSON.parse(text, function (key, value, context) {
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      var unsafe = context && typeof context.source === "string" ? /^-?\d+$/.test(context.source) : Number.isInteger(value);
+      if (unsafe) {
+        throw new Error("CONVERSION_ERROR: integer is outside the exact JavaScript integer range");
+      }
+    }
+    return value;
+  });
+}
+function howlFrameToFloat(v) {
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + v + " to float");
+    }
+    return v;
+  }
+  if (typeof v === "string") {
+    var s = v.trim();
+    var n = Number(s);
+    if (Number.isNaN(n) || !Number.isFinite(n)) {
+      throw new Error("CONVERSION_ERROR: cannot convert " + JSON.stringify(v) + " to float");
+    }
+    return n;
+  }
+  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to float");
+}
+function howlFrameDiv(a, b) {
+  var af = howlFrameToFloat(a);
+  var bf = howlFrameToFloat(b);
+  if (bf === 0) {
+    throw new Error("RUNTIME_ERROR: division by zero");
+  }
+  var res = af / bf;
+  if (!Number.isFinite(res)) {
+    throw new Error("RUNTIME_ERROR: division produced an invalid floating-point result");
+  }
+  return res;
+}
+`
+}
+
 func jsHostHelpers() string {
 	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch && !jsNeedsWriteFile && !jsNeedsMkdir {
 		return ""
@@ -498,11 +588,38 @@ func sanitizeJSName(name string) string {
 	return res
 }
 
+// jsMayBeInt reports whether a node could hold an integer: it is not
+// statically known to be a float, string, or other non-numeric value.
+func jsMayBeInt(node *ast.Node) bool {
+	switch node.Inferred.Kind {
+	case ast.Float, ast.String, ast.Bool, ast.List, ast.Dict, ast.Bytes, ast.Void, ast.Struct:
+		return false
+	}
+	return true
+}
+
 func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
 		arg1 := generateJSExpression(ir.Kids[0], reqVar, depth+1)
 		arg2 := generateJSExpression(ir.Kids[1], reqVar, depth+1)
+		if ir.Op == "/" {
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
+		}
+		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") &&
+			ir.Kids[0].Inferred.Kind == ast.Int && ir.Kids[1].Inferred.Kind == ast.Int {
+			// int64 arithmetic must not silently round once a binary64 result
+			// leaves the exact integer range (NUMERIC_CONTRACT sections 4 and 12).
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameSafeInt(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
+		}
+		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") && jsMayBeInt(ir.Kids[0]) && jsMayBeInt(ir.Kids[1]) {
+			// Operand types are not statically known to rule out ints. The
+			// helper checks at runtime and still concatenates strings.
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameArith(%q, %s, %s)", ir.Op, arg1, arg2)
+		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":
 		var letPrefix strings.Builder
@@ -560,7 +677,8 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 					valStr = fmt.Sprintf("{%s}", strings.Join(pairs, ", "))
 				} else if funcName == "parse_json" {
 					bodyVar := valNode.Children[2].Value
-					valStr = fmt.Sprintf("JSON.parse(%s)", bodyVar)
+					jsNumeric = true
+					valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 				} else {
 					valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
 				}
@@ -585,7 +703,8 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
 			bodyVar := generateJSStatementRaw(valNode.Children[2], reqVar, depth+1)
-			valStr = fmt.Sprintf("JSON.parse(%s)", bodyVar)
+			jsNumeric = true
+			valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 		} else {
 			valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
 		}
@@ -659,11 +778,13 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		msStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(await new Promise(r => setTimeout(r, %s)))", msStr)
 	case "to_int":
+		jsNumeric = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("parseInt(%s, 10)", valStr)
+		return fmt.Sprintf("howlFrameToInt(%s)", valStr)
 	case "to_float":
+		jsNumeric = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("parseFloat(%s)", valStr)
+		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("String(%s)", valStr)
@@ -787,6 +908,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsFetch = false
 	jsNeedsWriteFile = false
 	jsNeedsMkdir = false
+	jsNumeric = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -837,11 +959,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			name := sanitizeJSName(handlerNode.Children[1].Value)
 			argsNode := handlerNode.Children[2]
 
-			var argsList []string
-			for _, arg := range argsNode.Children {
-				argsList = append(argsList, arg.Value)
-			}
-			argsStr := strings.Join(argsList, ", ")
+			argsStr := strings.Join(ast.ParamNames(argsNode), ", ")
 
 			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
 			bodyCode := generateJSStatement(bodyNode, "", 0)
@@ -898,6 +1016,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsMapKeyOrder {
 		helper := mapKeyOrderJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNumeric {
+		helper := numericJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

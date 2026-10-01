@@ -54,6 +54,11 @@ var gogenNeedsWriteFile bool
 // the runner grant before any directory creation. It is reset on every call.
 var gogenNeedsMkdir bool
 
+// gogenNumeric is set when GenerateCode emits a numeric operation that needs
+// runtime mediation (division, checked conversion). The helper is written
+// once into the generated file. It is reset on every call.
+var gogenNumeric bool
+
 // gogenVarTypes records the Go type of names emitted in the current
 // GenerateCode call. An untracked name stays on the historical direct
 // operation. A dynamic any value goes through the fail-closed helpers.
@@ -593,6 +598,72 @@ func mkdirHelperSource() string {
 `
 }
 
+// numericHelperSource mediates numeric operations that must not inherit
+// host-language semantics. Division is always real division with an explicit
+// zero check. Checked conversions fail closed rather than silently wrap or
+// produce infinities.
+func numericHelperSource() string {
+	return `func howlFrameToFloat(v any) float64 {
+	switch x := v.(type) {
+	case int:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case float64:
+		return x
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
+		if err != nil {
+			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", x))
+		}
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			panic("CONVERSION_ERROR: cannot convert to float")
+		}
+		return f
+	default:
+		panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to float", v))
+	}
+}
+
+func howlFrameToInt(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		// NUMERIC_CONTRACT 8.1: truncate toward zero when finite and in int64 range.
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < -9223372036854775808.0 || x >= 9223372036854775808.0 {
+			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to int", x))
+		}
+		return int(x)
+	case string:
+		i, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64)
+		if err != nil {
+			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to int", x))
+		}
+		return int(i)
+	default:
+		panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to int", v))
+	}
+}
+
+func howlFrameDiv(a, b any) float64 {
+	af := howlFrameToFloat(a)
+	bf := howlFrameToFloat(b)
+	if bf == 0 {
+		panic("RUNTIME_ERROR: division by zero")
+	}
+	res := af / bf
+	if math.IsNaN(res) || math.IsInf(res, 0) {
+		panic("RUNTIME_ERROR: division produced an invalid floating-point result")
+	}
+	return res
+}
+
+`
+}
+
 func goHostHelpers() string {
 	var code string
 	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile || gogenNeedsFetch || gogenNeedsWriteFile || gogenNeedsMkdir {
@@ -713,6 +784,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	gogenNeedsFetch = false
 	gogenNeedsWriteFile = false
 	gogenNeedsMkdir = false
+	gogenNumeric = false
 	resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
@@ -1147,10 +1219,16 @@ import (
 	for _, imp := range extraImports {
 		code += fmt.Sprintf("\t%q\n", imp)
 	}
+	if gogenNumeric {
+		code += "\t\"math\"\n"
+	}
 	code += `)
 `
 	if gogenMapGet {
 		code += mapGetHelperSource()
+	}
+	if gogenNumeric {
+		code += numericHelperSource()
 	}
 	if gogenCollection {
 		code += collectionHelperSource()
@@ -1242,6 +1320,9 @@ import (
 				fullTestCode += fmt.Sprintf("\t%q\n", imp)
 			}
 		}
+		if gogenNumeric {
+			fullTestCode += "\t\"math\"\n"
+		}
 		fullTestCode += `)
 
 var _ = bufio.NewReader
@@ -1266,6 +1347,9 @@ var _ = observer.Trace
 		}
 		if gogenMapGet {
 			fullTestCode += mapGetHelperSource()
+		}
+		if gogenNumeric {
+			fullTestCode += numericHelperSource()
 		}
 		if gogenCollection {
 			fullTestCode += collectionHelperSource()
@@ -1321,6 +1405,10 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		arg1 := generateExpression(ir.Kids[0], reqVar, depth+1)
 		arg2 := generateExpression(ir.Kids[1], reqVar, depth+1)
+		if ir.Op == "/" {
+			gogenNumeric = true
+			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
+		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpGoToken(ir.Op), arg2)
 	case "let":
 		var letPrefix strings.Builder
@@ -1535,11 +1623,13 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		msStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("		time.Sleep(time.Duration(%s) * time.Millisecond)", msStr)
 	case "to_int":
+		gogenNumeric = true
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("func() int { v, _ := strconv.Atoi(fmt.Sprint(%s)); return v }()", valStr)
+		return fmt.Sprintf("howlFrameToInt(%s)", valStr)
 	case "to_float":
+		gogenNumeric = true
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("func() float64 { v, _ := strconv.ParseFloat(fmt.Sprint(%s), 64); return v }()", valStr)
+		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("fmt.Sprint(%s)", valStr)

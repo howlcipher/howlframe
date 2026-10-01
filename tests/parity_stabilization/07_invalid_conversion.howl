@@ -1,0 +1,2 @@
+(cli_app
+  (if (= (to_int "invalid-age") 0) (print "ALLOW") (print "DENY")))

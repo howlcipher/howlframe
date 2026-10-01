@@ -770,7 +770,7 @@ func literalValue(node *Node) (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid integer literal %q", node.Value)
 		}
-		return float64(value), nil
+		return value, nil
 	case "FLOAT":
 		value, err := strconv.ParseFloat(node.Value, 64)
 		if err != nil {

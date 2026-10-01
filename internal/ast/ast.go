@@ -292,3 +292,22 @@ func Stringify(node *Node) string {
 	}
 	return node.Value
 }
+
+// ParamNames returns the parameter names of a defun or lambda parameter list.
+// A parameter is either a bare symbol or a (name type) pair; this is the
+// canonical extraction every backend must use so typed and untyped parameters
+// keep their names.
+func ParamNames(paramsNode *Node) []string {
+	if paramsNode == nil {
+		return nil
+	}
+	var params []string
+	for _, p := range paramsNode.Children {
+		if p.Type == "List" && len(p.Children) > 0 {
+			params = append(params, p.Children[0].Value)
+		} else {
+			params = append(params, p.Value)
+		}
+	}
+	return params
+}

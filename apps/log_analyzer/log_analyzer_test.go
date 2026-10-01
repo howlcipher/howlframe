@@ -58,12 +58,33 @@ func TestLogAnalyzer(t *testing.T) {
 		t.Errorf("expected filesystem capability denied, got: %s", out)
 	}
 
-	// Type error test
-	badScript := `(cli_app
+	// A provably wrong builtin argument (bytes from read_file into str_split)
+	// is rejected by the checker before any bytecode exists (HFREC-010).
+	staticScript := `(cli_app
 		(let (content (read_file "clean.log"))
 			(let (lines (str_split content "\n"))
 				(print "should fail")
 			)
+		)
+	)`
+	os.WriteFile("static.howl", []byte(staticScript), 0644)
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "static.howl")
+	cmd.Dir = "."
+	out, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "str_split argument 1 must be string") {
+		t.Errorf("expected static str_split rejection, got err=%v out=%s", err, out)
+	}
+	if _, statErr := os.Stat("static.howl.bc.bin"); statErr == nil {
+		t.Errorf("a rejected program must not emit bytecode")
+	}
+	os.Remove("static.howl")
+
+	// The runtime guard still fails closed when the type is hidden from the
+	// checker behind an untyped (any) parameter.
+	badScript := `(cli_app
+		(defun split_lines ((value any)) list (return (str_split value "\n")))
+		(let (content (read_file "clean.log"))
+			(print (call split_lines content))
 		)
 	)`
 	os.WriteFile("bad.howl", []byte(badScript), 0644)

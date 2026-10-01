@@ -1,0 +1,2 @@
+(cli_app
+  (let (items (list)) (let (copy (append items 6)) (print copy))))
