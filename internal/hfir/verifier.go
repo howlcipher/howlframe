@@ -101,6 +101,9 @@ func (v *Verifier) Verify() []Diagnostic {
 			checkRole("content", true)
 		case "is_nil", "html_escape", "attr_escape":
 			checkRole("value", true)
+		case "regex_match":
+			checkRole("pattern", true)
+			checkRole("string", true)
 		case "cli_args":
 			checkRole("index", false)
 		}

@@ -361,6 +361,23 @@
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "TYPE_ERROR"
+    },
+    {
+      "name": "regex_match",
+      "fixture": "tests/conformance/abi_v1/26_regex_match.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "true\nfalse\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue",
+      "forbid": "untaken"
+    },
+    {
+      "name": "regex_match_type_error",
+      "fixture": "tests/conformance/abi_v1/27_regex_match_type_error.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode"],
+      "expect": "TYPE_ERROR"
     }
   ]
 }

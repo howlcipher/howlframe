@@ -350,7 +350,7 @@ func TestLowerASTHTMLEscapeRejectsSiblings(t *testing.T) {
 	}{
 		{name: "missing text", source: `(cli_app (print (html_escape)))`, kind: "html_escape"},
 		{name: "extra text", source: `(cli_app (print (html_escape "a" "b")))`, kind: "html_escape"},
-		{name: "regex_match", source: `(cli_app (print (regex_match "^a$" "a")))`, kind: "regex_match"},
+		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -432,7 +432,7 @@ func TestLowerASTAttrEscapeRejectsSiblings(t *testing.T) {
 	}{
 		{name: "missing text", source: `(cli_app (print (attr_escape)))`, kind: "attr_escape"},
 		{name: "extra text", source: `(cli_app (print (attr_escape "a" "b")))`, kind: "attr_escape"},
-		{name: "regex_match", source: `(cli_app (print (regex_match "^a$" "a")))`, kind: "regex_match"},
+		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -447,6 +447,104 @@ func TestLowerASTAttrEscapeRejectsSiblings(t *testing.T) {
 			}
 			want := "attr_escape requires value"
 			if tc.kind != "attr_escape" {
+				want = "node kind \"" + tc.kind + "\" is not in the Phase-1 executable subset"
+			}
+			if diagnostics[0].Message != want {
+				t.Fatalf("message = %q, want %q", diagnostics[0].Message, want)
+			}
+		})
+	}
+}
+
+func TestLowerToBytecodeRegexMatchEmitsExistingOpcode(t *testing.T) {
+	spec := bytecode.Registry[bytecode.OpRegexMatch]
+	if spec.Name != "REGEX_MATCH" || spec.Pops != 2 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != "" {
+		t.Fatalf("REGEX_MATCH = %+v, want pops 2, pushes 1, no operands, no capability", spec)
+	}
+	graph := NewGraph()
+	pattern := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "^a$"})
+	text := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "a"})
+	entry := graph.AddNode(&Node{
+		Kind: "regex_match",
+		DataInputs: []DataEdge{
+			{Name: "pattern", SourceNode: pattern},
+			{Name: "string", SourceNode: text},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Main) != 3 {
+		t.Fatalf("instructions = %#v, want pattern, string, then REGEX_MATCH", program.Main)
+	}
+	if program.Main[0].Op != bytecode.OpLoadConst || program.Main[0].ValueOperand != "^a$" {
+		t.Fatalf("pattern operand = %#v", program.Main[0])
+	}
+	if program.Main[1].Op != bytecode.OpLoadConst || program.Main[1].ValueOperand != "a" {
+		t.Fatalf("string operand = %#v", program.Main[1])
+	}
+	last := program.Main[2]
+	if last.Op != bytecode.OpRegexMatch || last.OpString != "REGEX_MATCH" || last.StringOperand != "" || last.IntOperand != 0 {
+		t.Fatalf("last instruction = %#v, want bare REGEX_MATCH", last)
+	}
+	if bytecode.Registry[last.Op].Capability != "" {
+		t.Fatalf("REGEX_MATCH capability = %q, want none", bytecode.Registry[last.Op].Capability)
+	}
+}
+
+func TestLowerToBytecodeRegexMatchRequiresPatternAndString(t *testing.T) {
+	graph := NewGraph()
+	pattern := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "^a$"})
+	text := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "a"})
+	entry := graph.AddNode(&Node{
+		Kind:       "regex_match",
+		Provenance: Provenance{Filename: "match.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{
+			{Name: "string", SourceNode: text},
+			{Name: "pattern", SourceNode: pattern},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+	if diagnostics[0].Message != "regex_match requires pattern and string" {
+		t.Fatalf("message = %q", diagnostics[0].Message)
+	}
+}
+
+func TestLowerASTRegexMatchRejectsSiblings(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		kind   string
+	}{
+		{name: "missing args", source: `(cli_app (print (regex_match)))`, kind: "regex_match"},
+		{name: "one arg", source: `(cli_app (print (regex_match "^a$")))`, kind: "regex_match"},
+		{name: "extra arg", source: `(cli_app (print (regex_match "^a$" "a" "b")))`, kind: "regex_match"},
+		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := parser.NewParser(lexer.NewLexer(tc.source), "match.howl").ParseExpression()
+			graph, err := LowerAST(root, "match.howl")
+			if err != nil {
+				t.Fatal(err)
+			}
+			program, diagnostics := LowerToBytecode(graph)
+			if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode {
+				t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+			}
+			want := "regex_match requires pattern and string"
+			if tc.kind != "regex_match" {
 				want = "node kind \"" + tc.kind + "\" is not in the Phase-1 executable subset"
 			}
 			if diagnostics[0].Message != want {

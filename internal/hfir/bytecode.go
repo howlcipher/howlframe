@@ -402,6 +402,20 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		// Same operand as bytecode.CompileToBytecode: the text, then
 		// ATTR_ESCAPE. No string operand. No new opcode and no capability.
 		return append(insts, instruction(bytecode.OpAttrEscape, "ATTR_ESCAPE", nil)), nil
+	case "regex_match":
+		if len(children) != 2 || node.DataInputs[0].Name != "pattern" || node.DataInputs[1].Name != "string" {
+			diagnostic := c.diagnostic(node, "regex_match requires pattern and string")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileAll()
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same operand order as bytecode.CompileToBytecode: the pattern,
+		// then the string, then REGEX_MATCH. The opcode pops the string
+		// and then the pattern. No string operand. No new opcode and no
+		// capability.
+		return append(insts, instruction(bytecode.OpRegexMatch, "REGEX_MATCH", nil)), nil
 	case "cli_args":
 		if len(children) == 1 && node.DataInputs[0].Name == "index" {
 			insts, childDiagnostic := compileChild(0)

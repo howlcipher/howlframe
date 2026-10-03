@@ -470,6 +470,189 @@ func TestHFIRBytecodeMixedEscapeParityFile(t *testing.T) {
 	}
 }
 
+const regexMatchFixtureStdout = "true\n" +
+	"false\n" +
+	"true\n" +
+	"true\n" +
+	"true\n" +
+	"false\n" +
+	"true\n" +
+	"true\n" +
+	"true\n" +
+	"true\n" +
+	"true\n"
+
+// TestHFIRBytecodeRegexMatchFixture compares production AST bytecode with
+// the experimental HFIR lowerer on regex_match. The conformance harness
+// runs the same file through -compile-bc and -compile-hfir-bc. Both
+// compilers must emit REGEX_MATCH, pattern then string, and the same
+// artifact. html_escape and attr_escape are not in this fixture.
+func TestHFIRBytecodeRegexMatchFixture(t *testing.T) {
+	source := readAbiFixture(t, "26_regex_match.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	var matches int
+	for _, node := range graph.Nodes {
+		if node.Kind != "regex_match" {
+			if node.Kind == "html_escape" || node.Kind == "attr_escape" {
+				t.Fatalf("fixture lowered %s", node.Kind)
+			}
+			continue
+		}
+		matches++
+		if len(node.DataInputs) != 2 || node.DataInputs[0].Name != "pattern" || node.DataInputs[1].Name != "string" || len(node.ControlEdges) != 0 {
+			t.Fatalf("regex_match %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+	}
+	if matches != 12 {
+		t.Fatalf("regex_match nodes = %d, want 12", matches)
+	}
+	if caps := graphCapabilities(graph); len(caps) != 0 {
+		t.Fatalf("graph capabilities = %v, want none", caps)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
+		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
+	}
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v", legacy.Main, direct.Main)
+	}
+	if got := countOpcode(direct, bytecode.OpRegexMatch); got != matches {
+		t.Fatalf("REGEX_MATCH count = %d, want %d", got, matches)
+	}
+	if countOpcode(direct, bytecode.OpHTMLEscape) != 0 || countOpcode(direct, bytecode.OpAttrEscape) != 0 {
+		t.Fatal("regex_match fixture emitted HTML_ESCAPE or ATTR_ESCAPE")
+	}
+	spec := bytecode.Registry[bytecode.OpRegexMatch]
+	if spec.Pops != 2 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+		t.Fatalf("REGEX_MATCH = %+v, want pops 2, pushes 1, no operands, no capability", spec)
+	}
+	for _, inst := range regexMatchInstructions(direct) {
+		if inst.StringOperand != "" || inst.IntOperand != 0 || bytecode.Registry[inst.Op].Capability != capability.None {
+			t.Fatalf("REGEX_MATCH = %#v, want a bare instruction with no capability", inst)
+		}
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.stdout != regexMatchFixtureStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
+		t.Fatalf("outcome = %#v, want the match lines", legacyOutcome)
+	}
+	if strings.Contains(legacyOutcome.stdout, "untaken") {
+		t.Fatalf("untaken branch printed:\n%s", legacyOutcome.stdout)
+	}
+}
+
+// TestHFIRBytecodeRegexMatchTypeErrorMatchesAST compares the two bytecode
+// compilers on a value the checker cannot prove. A mixed dict makes map_get
+// return a non-string. Both compilers emit REGEX_MATCH, and the VM rejects
+// it with the same TYPE_ERROR. The interpreter stringifies, generated Go
+// does not compile that dict into MatchString, and JavaScript coerces, so
+// this comparison is the two bytecode compilers only.
+func TestHFIRBytecodeRegexMatchTypeErrorMatchesAST(t *testing.T) {
+	source := readAbiFixture(t, "27_regex_match_type_error.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	var matches int
+	for _, node := range graph.Nodes {
+		if node.Kind != "regex_match" {
+			continue
+		}
+		matches++
+		if len(node.DataInputs) != 2 || node.DataInputs[0].Name != "pattern" || node.DataInputs[1].Name != "string" {
+			t.Fatalf("regex_match %s edges %#v", node.ID, node.DataInputs)
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("regex_match nodes = %d, want 1", matches)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatal("AST and HFIR bytecode disagree on regex_match type error")
+	}
+	if countOpcode(direct, bytecode.OpRegexMatch) != 1 {
+		t.Fatalf("REGEX_MATCH count = %d, want 1", countOpcode(direct, bytecode.OpRegexMatch))
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST error outcome = %#v\nHFIR error outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.vmError == nil || legacyOutcome.vmError.Code != "TYPE_ERROR" || legacyOutcome.vmError.Opcode != "REGEX_MATCH" || !strings.Contains(legacyOutcome.vmError.Message, "regex_match expected string pattern and string") || legacyOutcome.stdout != "" {
+		t.Fatalf("outcome = %#v, want TYPE_ERROR on REGEX_MATCH", legacyOutcome)
+	}
+}
+
+// TestHFIRBytecodeStringsParityFile compares the two bytecode compilers on
+// tests/parity/07_strings.howl. That file calls regex_match twice, after
+// str_split and str_join. The instruction streams must match.
+func TestHFIRBytecodeStringsParityFile(t *testing.T) {
+	path := filepath.Join("..", "..", "tests", "parity", "07_strings.howl")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, graph := checkedHFIRGraph(t, string(source))
+	var matches int
+	for _, node := range graph.Nodes {
+		if node.Kind != "regex_match" {
+			continue
+		}
+		matches++
+		if len(node.DataInputs) != 2 || node.DataInputs[0].Name != "pattern" || node.DataInputs[1].Name != "string" || len(node.ControlEdges) != 0 {
+			t.Fatalf("regex_match %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+	}
+	if matches != 2 {
+		t.Fatalf("regex_match nodes = %d, want 2", matches)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatal("AST and HFIR bytecode disagree on 07_strings.howl")
+	}
+	if countOpcode(direct, bytecode.OpRegexMatch) != matches {
+		t.Fatalf("REGEX_MATCH count = %d, want %d", countOpcode(direct, bytecode.OpRegexMatch), matches)
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+}
+
+func regexMatchInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
+	var found []bytecode.BCInstruction
+	scan := func(insts []bytecode.BCInstruction) {
+		for _, inst := range insts {
+			if inst.Op == bytecode.OpRegexMatch {
+				found = append(found, inst)
+			}
+		}
+	}
+	scan(program.Main)
+	for _, fn := range program.Functions {
+		if fn != nil {
+			scan(fn.Instructions)
+		}
+	}
+	return found
+}
+
 func attrEscapeInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
 	var found []bytecode.BCInstruction
 	scan := func(insts []bytecode.BCInstruction) {

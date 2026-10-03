@@ -127,26 +127,6 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		})
 	}
 
-	for _, sample := range []struct {
-		name, source string
-		op           bytecode.Opcode
-	}{
-		{"regex_match", `(cli_app (print (regex_match "^a$" "a")))`, bytecode.OpRegexMatch},
-	} {
-		sample := sample
-		t.Run(sample.name, func(t *testing.T) {
-			graph := mustGraph(t, sample.source)
-			program, diags := hfir.LowerToBytecode(graph)
-			if program != nil || len(diags) != 1 || diags[0].Code != hfir.BytecodeUnsupportedCode {
-				t.Fatalf("LowerToBytecode() program=%v diags=%#v, want one %s", program != nil, diags, hfir.BytecodeUnsupportedCode)
-			}
-			astProgram := bytecode.CompileToBytecode(mustAST(t, sample.source))
-			if !programHasOpcode(astProgram, sample.op) {
-				t.Fatalf("production bytecode missing %s", bytecode.Registry[sample.op].Name)
-			}
-		})
-	}
-
 	t.Run("html_escape", func(t *testing.T) {
 		const source = `(cli_app (print (html_escape "a<b")))`
 		graph := mustGraph(t, source)
@@ -170,6 +150,23 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
 		if !programHasOpcode(astProgram, bytecode.OpAttrEscape) {
 			t.Fatal("production bytecode missing ATTR_ESCAPE")
+		}
+	})
+
+	t.Run("regex_match", func(t *testing.T) {
+		const source = `(cli_app (print (regex_match "^a$" "a")))`
+		spec := bytecode.Registry[bytecode.OpRegexMatch]
+		if spec.Name != "REGEX_MATCH" || spec.Pops != 2 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+			t.Fatalf("OpRegexMatch = %+v, want REGEX_MATCH popping 2, pushing 1, granting nothing", spec)
+		}
+		graph := mustGraph(t, source)
+		program, diags := hfir.LowerToBytecode(graph)
+		if len(diags) != 0 || program == nil || !programHasOpcode(program, bytecode.OpRegexMatch) {
+			t.Fatalf("LowerToBytecode() program=%v diags=%#v, want REGEX_MATCH", program != nil, diags)
+		}
+		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
+		if !programHasOpcode(astProgram, bytecode.OpRegexMatch) {
+			t.Fatal("production bytecode missing REGEX_MATCH")
 		}
 	})
 
