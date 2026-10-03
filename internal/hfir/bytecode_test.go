@@ -350,7 +350,6 @@ func TestLowerASTHTMLEscapeRejectsSiblings(t *testing.T) {
 	}{
 		{name: "missing text", source: `(cli_app (print (html_escape)))`, kind: "html_escape"},
 		{name: "extra text", source: `(cli_app (print (html_escape "a" "b")))`, kind: "html_escape"},
-		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -432,7 +431,6 @@ func TestLowerASTAttrEscapeRejectsSiblings(t *testing.T) {
 	}{
 		{name: "missing text", source: `(cli_app (print (attr_escape)))`, kind: "attr_escape"},
 		{name: "extra text", source: `(cli_app (print (attr_escape "a" "b")))`, kind: "attr_escape"},
-		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -530,7 +528,6 @@ func TestLowerASTRegexMatchRejectsSiblings(t *testing.T) {
 		{name: "missing args", source: `(cli_app (print (regex_match)))`, kind: "regex_match"},
 		{name: "one arg", source: `(cli_app (print (regex_match "^a$")))`, kind: "regex_match"},
 		{name: "extra arg", source: `(cli_app (print (regex_match "^a$" "a" "b")))`, kind: "regex_match"},
-		{name: "time_now", source: `(cli_app (print (time_now)))`, kind: "time_now"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -551,6 +548,108 @@ func TestLowerASTRegexMatchRejectsSiblings(t *testing.T) {
 				t.Fatalf("message = %q, want %q", diagnostics[0].Message, want)
 			}
 		})
+	}
+}
+
+func TestLowerToBytecodeTimeNowEmitsExistingOpcode(t *testing.T) {
+	spec := bytecode.Registry[bytecode.OpTimeNow]
+	if spec.Name != "TIME_NOW" || spec.Pops != 0 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != "" {
+		t.Fatalf("TIME_NOW = %+v, want pops 0, pushes 1, no operands, no capability", spec)
+	}
+	graph := NewGraph()
+	entry := graph.AddNode(&Node{Kind: "time_now"})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Main) != 1 {
+		t.Fatalf("instructions = %#v, want one TIME_NOW", program.Main)
+	}
+	inst := program.Main[0]
+	if inst.Op != bytecode.OpTimeNow || inst.OpString != "TIME_NOW" || inst.StringOperand != "" || inst.IntOperand != 0 || inst.ValueOperand != nil {
+		t.Fatalf("instruction = %#v, want bare TIME_NOW", inst)
+	}
+	if bytecode.Registry[inst.Op].Capability != "" {
+		t.Fatalf("TIME_NOW capability = %q, want none", bytecode.Registry[inst.Op].Capability)
+	}
+}
+
+func TestLowerToBytecodeTimeNowRejectsDataEdge(t *testing.T) {
+	graph := NewGraph()
+	extra := graph.AddNode(&Node{Kind: "const", LiteralKind: "INT", Value: "1"})
+	entry := graph.AddNode(&Node{
+		Kind:       "time_now",
+		Provenance: Provenance{Filename: "time.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "value", SourceNode: extra}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+	if diagnostics[0].Message != "time_now takes no arguments" {
+		t.Fatalf("message = %q", diagnostics[0].Message)
+	}
+}
+
+func TestLowerASTTimeNowHasNoDataEdge(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(cli_app (print (time_now)))`), "time.howl").ParseExpression()
+	graph, err := LowerAST(root, "time.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found int
+	for _, node := range graph.Nodes {
+		if node.Kind != "time_now" {
+			continue
+		}
+		found++
+		if len(node.DataInputs) != 0 || len(node.ControlEdges) != 0 {
+			t.Fatalf("time_now edges %#v control %v, want none", node.DataInputs, node.ControlEdges)
+		}
+	}
+	if found != 1 {
+		t.Fatalf("time_now nodes = %d, want 1", found)
+	}
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 || program == nil {
+		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+	}
+	var clocks int
+	for _, inst := range program.Main {
+		if inst.Op == bytecode.OpTimeNow {
+			clocks++
+			if inst.StringOperand != "" || inst.IntOperand != 0 || inst.ValueOperand != nil {
+				t.Fatalf("TIME_NOW = %#v, want a bare instruction", inst)
+			}
+		}
+		if inst.Op == bytecode.OpLoadConst {
+			t.Fatalf("program loaded a constant %#v", inst)
+		}
+	}
+	if clocks != 1 {
+		t.Fatalf("TIME_NOW count = %d, want 1", clocks)
+	}
+}
+
+func TestLowerASTTimeNowRejectsArgument(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(cli_app (print (time_now 1)))`), "time.howl").ParseExpression()
+	graph, err := LowerAST(root, "time.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode {
+		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+	}
+	if diagnostics[0].Message != "time_now takes no arguments" {
+		t.Fatalf("message = %q", diagnostics[0].Message)
 	}
 }
 

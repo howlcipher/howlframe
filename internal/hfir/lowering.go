@@ -298,6 +298,14 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			child *ast.Node
 		}{{"pattern", astNode.Children[1]}, {"string", astNode.Children[2]}})
 		return id, true, err
+	case "time_now":
+		// (time_now). Existing TIME_NOW opcode. No data edge. Experimental
+		// -compile-hfir-bc only. No new opcode and no new capability.
+		if len(astNode.Children) != 1 {
+			return "", false, nil
+		}
+		node.Kind = head
+		return ctx.Graph.AddNode(node), true, nil
 	case "req_query", "req_header", "req_path":
 		if len(astNode.Children) != 3 {
 			return "", false, nil

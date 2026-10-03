@@ -116,7 +116,7 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 	for _, kind := range []string{
 		"defun", "call", "return", "while", "for",
 		"read_file", "write_file", "mkdir", "exec", "fetch",
-		"regex_match", "html_escape", "attr_escape", "match", "try",
+		"regex_match", "html_escape", "attr_escape", "time_now", "match", "try",
 	} {
 		kind := kind
 		t.Run("transport/"+kind, func(t *testing.T) {
@@ -167,6 +167,39 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
 		if !programHasOpcode(astProgram, bytecode.OpRegexMatch) {
 			t.Fatal("production bytecode missing REGEX_MATCH")
+		}
+	})
+
+	t.Run("time_now", func(t *testing.T) {
+		const source = `(cli_app (print (time_now)))`
+		spec := bytecode.Registry[bytecode.OpTimeNow]
+		if spec.Name != "TIME_NOW" || spec.Pops != 0 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+			t.Fatalf("OpTimeNow = %+v, want TIME_NOW popping 0, pushing 1, granting nothing", spec)
+		}
+		if capability.ForConstruct("time_now") != capability.None {
+			t.Fatalf("ForConstruct(time_now) = %q, want none", capability.ForConstruct("time_now"))
+		}
+		graph := mustGraph(t, source)
+		var clocks int
+		for _, node := range graph.Nodes {
+			if node.Kind != "time_now" {
+				continue
+			}
+			clocks++
+			if len(node.DataInputs) != 0 || len(node.ControlEdges) != 0 {
+				t.Fatalf("time_now edges %#v control %v, want none", node.DataInputs, node.ControlEdges)
+			}
+		}
+		if clocks != 1 {
+			t.Fatalf("time_now nodes = %d, want 1", clocks)
+		}
+		program, diags := hfir.LowerToBytecode(graph)
+		if len(diags) != 0 || program == nil || !programHasOpcode(program, bytecode.OpTimeNow) {
+			t.Fatalf("LowerToBytecode() program=%v diags=%#v, want TIME_NOW", program != nil, diags)
+		}
+		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
+		if !programHasOpcode(astProgram, bytecode.OpTimeNow) {
+			t.Fatal("production bytecode missing TIME_NOW")
 		}
 	})
 
