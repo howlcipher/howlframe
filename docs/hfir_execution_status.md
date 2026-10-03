@@ -15,7 +15,7 @@ flowchart LR
     Artifact --> VM[Bytecode VM]
 ```
 
-The production path (`-compile-bc` / `howlframe build`) runs the full semantic verification gate ahead of bytecode emission. The direct path (`-compile-hfir-bc`) is an internal experimental API for graph-lowering research. The checklist for a later flip of `-compile-bc` onto `hfir.LowerToBytecode` is `docs/reference/lowered_hfir_prod_flip_criteria.md`. That checklist defers the flip. `-compile-hfir-bc` stays the dogfood path until the Owner authorizes a flip PR. #90 stays Partial.
+The production path (`-compile-bc` / `howlframe build`) runs the full semantic verification gate ahead of bytecode emission. The direct path (`-compile-hfir-bc`) is an internal experimental API for graph-lowering research. The checklist for a later flip of `-compile-bc` onto `hfir.LowerToBytecode` is `docs/reference/lowered_hfir_prod_flip_criteria.md`. That checklist defers the flip. `-compile-hfir-bc` stays the dogfood path until the Owner authorizes a flip PR. #90 stays Partial. A fence inventory of `ffb753b970c385aadef1a05ebaa253c9186e6dbc` sorts the 27 promote-blocker names and is not a flip verdict: `docs/journals/2026-10-03_lowered_hfir_fence_inventory_ffb753b.md`.
 
 ## What HFIR actually owns now
 

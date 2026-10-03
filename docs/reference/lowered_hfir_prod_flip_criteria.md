@@ -16,6 +16,8 @@ A readiness score of `main` at `33cb13252bc8e29f4a1bb9d58ce95a82ef6c7358` is `do
 
 A readiness score of `main` at `2e5c8e98b5881d202aca7b4d138460aaab3c129d` is `docs/journals/2026-10-03_lowered_hfir_prod_flip_score_2e5c8e98.md`. Verdict: flip deferred. #90 stays Partial. The score is not a promote. It does not authorize a flip. It does not refresh the Assurance tip-lock named above. It does not replace the `33cb132` score. That score is of `2e5c8e98`. Experimental `regex_match` lowers onto the existing `REGEX_MATCH` opcode. `hfirRejectedParity` is empty. The promote-blocker fence is still non-empty, so that empty list is not a production flip.
 
+A fence inventory of this tree at `ffb753b970c385aadef1a05ebaa253c9186e6dbc` is `docs/journals/2026-10-03_lowered_hfir_fence_inventory_ffb753b.md`. It sorts the 27 promote-blocker names. It is not a flip verdict and not a score of a newer tip. It does not replace the `2e5c8e98` score. It does not authorize a flip. It does not refresh the Assurance tip-lock named above. #90 stays Partial.
+
 The ABI text is `docs/reference/lowered_hfir_abi_v1.md`. The suite is `tests/conformance/lowered_hfir_abi_v1.json`. The journal for the checklist spike is `docs/journals/2026-09-30_lowered_hfir_prod_flip_criteria.md`.
 
 ## Promote
