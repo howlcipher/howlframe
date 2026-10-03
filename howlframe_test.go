@@ -42,7 +42,7 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(source.String()), 0o644); err != nil {
 		t.Fatalf("failed to write deep let chain: %v", err)
 	}
-	if output, err := exec.Command(howlframeBinary, "-o", outDir, inputFile).CombinedOutput(); err != nil {
+	if output, err := exec.Command(howlframeBinary, "build", "--target=go", "-o", outDir, inputFile).CombinedOutput(); err != nil {
 		t.Fatalf("deep let chain failed to transpile: %v\n%s", err, output)
 	}
 
@@ -61,11 +61,11 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 
 func TestOutputDirectoryFlag(t *testing.T) {
 	// Build the HowlFrame binary
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
+	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
+	cmd := exec.Command("go", "build", "-o", howlframeBinary, ".")
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to build HowlFrame binary: %v", err)
 	}
-	defer os.Remove("howlframe")
 
 	// Create a temporary directory for output
 	outDir, err := os.MkdirTemp("", "howlframe-test-out-*")
@@ -81,15 +81,18 @@ func TestOutputDirectoryFlag(t *testing.T) {
 	}
 
 	// Run the HowlFrame binary with -o flag
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command(howlframeBinary, "-o", outDir, inputFile)
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to run HowlFrame binary: %v", err)
 	}
 
-	// Check if server.go was created in the output directory
-	serverFile := filepath.Join(outDir, "server.go")
-	if _, err := os.Stat(serverFile); os.IsNotExist(err) {
-		t.Errorf("Expected server.go to be created in %s, but it was not", outDir)
+	if _, err := os.Stat(filepath.Join(outDir, "dummy.hfbc")); err != nil {
+		t.Fatalf("expected dummy.hfbc in output directory: %v", err)
+	}
+	for _, name := range []string{"server.go", "server_test.go"} {
+		if _, err := os.Stat(filepath.Join(outDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected %s: %v", name, err)
+		}
 	}
 }
 
@@ -105,9 +108,9 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 		artifact string
 	}{
 		{
-			name:     "go",
+			name:     "bytecode",
 			source:   `(cli_app (print "Hello"))`,
-			artifact: "server.go",
+			artifact: "bytecode.hfbc",
 		},
 		{
 			name:     "javascript",
@@ -137,6 +140,13 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 			}
 			if _, err := os.Stat(filepath.Join(outputDir, test.artifact)); err != nil {
 				t.Fatalf("expected %s in requested output directory: %v", test.artifact, err)
+			}
+			if test.name == "bytecode" {
+				for _, name := range []string{"server.go", "server_test.go"} {
+					if _, err := os.Stat(filepath.Join(outputDir, name)); !os.IsNotExist(err) {
+						t.Fatalf("unexpected %s: %v", name, err)
+					}
+				}
 			}
 			if _, err := os.Stat(filepath.Join(workDir, test.artifact)); !os.IsNotExist(err) {
 				t.Fatalf("unexpected artifact in working directory: %v", err)
@@ -352,7 +362,7 @@ func TestCrashStateSerialization(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=go", "-o", outDir, inputFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to transpilation: %v\n%s", err, string(out))
@@ -888,7 +898,7 @@ func TestSchemaBridgeEmitsWrappedSourceExpression(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	command := exec.Command("go", "run", "howlframe.go", "-o", outDir, input)
+	command := exec.Command("go", "run", "howlframe.go", "build", "--target=go", "-o", outDir, input)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("transpile schema_bridge: %v\n%s", err, output)
 	}
@@ -982,7 +992,7 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
-	if output, err := exec.Command("go", "run", "howlframe.go", "-o", outDir, fixture).CombinedOutput(); err != nil {
+	if output, err := exec.Command("go", "run", "howlframe.go", "build", "--target=go", "-o", outDir, fixture).CombinedOutput(); err != nil {
 		t.Fatalf("Go codegen failed: %v\n%s", err, output)
 	}
 	generatedBinary := filepath.Join(outDir, "optimization-signature")
