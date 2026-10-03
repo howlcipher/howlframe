@@ -1241,9 +1241,10 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 
 // TestCompileBcStaysASTWhileHfirBcRunsWhile locks the production flag.
 // Both flags compile and run a tiny while to the same stdout. -compile-bc
-// is still the AST compiler: sleep is in that compiler and still outside
+// is still the AST compiler: read_line is in that compiler and still outside
 // the experimental lowerer, so -compile-hfir-bc rejects it and writes no
-// artifact. Phase 3b does not flip -compile-bc.
+// artifact. This probe is not a read_line lowering. Phase 3b does not flip
+// -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
 	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
 	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
@@ -1280,20 +1281,20 @@ func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
 		t.Fatalf("experimental while stdout = %q, production = %q", hfirRun, runOut)
 	}
 
-	sleepSource := filepath.Join(dir, "sleep.howl")
-	if err := os.WriteFile(sleepSource, []byte("(cli_app (sleep 0))\n"), 0o644); err != nil {
+	lineSource := filepath.Join(dir, "read_line.howl")
+	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sleepOut := filepath.Join(dir, "sleep.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", sleepSource, "-o", sleepOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected sleep, so production is not the AST compiler: %v\n%s", err, output)
+	lineOut := filepath.Join(dir, "read_line.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
 	}
-	rejected := filepath.Join(dir, "sleep-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", sleepSource, "-o", rejected).CombinedOutput()
+	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
 	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted sleep:\n%s", output)
+		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
 	}
-	if !strings.Contains(string(output), "sleep") {
+	if !strings.Contains(string(output), "read_line") {
 		t.Fatalf("experimental rejection = %s", output)
 	}
 	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
@@ -1303,8 +1304,9 @@ func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
 
 // TestCompileBcStaysASTWhileHfirBcRunsIf locks the production flag for the
 // branch slice. Both flags compile and run a small if to the same stdout.
-// -compile-bc is still the AST compiler: sleep is in that compiler and still
-// outside the experimental lowerer. Phase 3c does not flip -compile-bc.
+// -compile-bc is still the AST compiler: read_line is in that compiler and
+// still outside the experimental lowerer. This probe is not a read_line
+// lowering. Phase 3c does not flip -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
 	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
 	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
@@ -1344,20 +1346,20 @@ func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
 		t.Fatalf("experimental if stdout = %q, production = %q", hfirRun, runOut)
 	}
 
-	sleepSource := filepath.Join(dir, "sleep.howl")
-	if err := os.WriteFile(sleepSource, []byte("(cli_app (sleep 0))\n"), 0o644); err != nil {
+	lineSource := filepath.Join(dir, "read_line.howl")
+	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sleepOut := filepath.Join(dir, "sleep.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", sleepSource, "-o", sleepOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected sleep, so production is not the AST compiler: %v\n%s", err, output)
+	lineOut := filepath.Join(dir, "read_line.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
 	}
-	rejected := filepath.Join(dir, "sleep-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", sleepSource, "-o", rejected).CombinedOutput()
+	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
 	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted sleep:\n%s", output)
+		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
 	}
-	if !strings.Contains(string(output), "sleep") {
+	if !strings.Contains(string(output), "read_line") {
 		t.Fatalf("experimental rejection = %s", output)
 	}
 	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
@@ -1367,8 +1369,9 @@ func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
 
 // TestCompileBcStaysASTWhileHfirBcRunsFor locks the production flag for the
 // iterator slice. Both flags compile and run a small for to the same stdout.
-// -compile-bc is still the AST compiler: sleep is in that compiler and still
-// outside the experimental lowerer. Phase 3d does not flip -compile-bc.
+// -compile-bc is still the AST compiler: read_line is in that compiler and
+// still outside the experimental lowerer. This probe is not a read_line
+// lowering. Phase 3d does not flip -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsFor(t *testing.T) {
 	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
 	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
@@ -1408,20 +1411,20 @@ func TestCompileBcStaysASTWhileHfirBcRunsFor(t *testing.T) {
 		t.Fatalf("experimental for stdout = %q, production = %q", hfirRun, runOut)
 	}
 
-	sleepSource := filepath.Join(dir, "sleep.howl")
-	if err := os.WriteFile(sleepSource, []byte("(cli_app (sleep 0))\n"), 0o644); err != nil {
+	lineSource := filepath.Join(dir, "read_line.howl")
+	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sleepOut := filepath.Join(dir, "sleep.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", sleepSource, "-o", sleepOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected sleep, so production is not the AST compiler: %v\n%s", err, output)
+	lineOut := filepath.Join(dir, "read_line.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
 	}
-	rejected := filepath.Join(dir, "sleep-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", sleepSource, "-o", rejected).CombinedOutput()
+	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
 	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted sleep:\n%s", output)
+		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
 	}
-	if !strings.Contains(string(output), "sleep") {
+	if !strings.Contains(string(output), "read_line") {
 		t.Fatalf("experimental rejection = %s", output)
 	}
 	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {

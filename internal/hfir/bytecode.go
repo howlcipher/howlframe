@@ -424,6 +424,19 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		// Same instruction as bytecode.CompileToBytecode: a bare TIME_NOW.
 		// Pops 0, pushes 1, no operand. No new opcode and no capability.
 		return []bytecode.BCInstruction{instruction(bytecode.OpTimeNow, "TIME_NOW", nil)}, nil
+	case "sleep":
+		if len(children) != 1 || node.DataInputs[0].Name != "" {
+			diagnostic := c.diagnostic(node, "sleep requires one duration")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same shape as bytecode.CompileToBytecode: the duration child,
+		// then SLEEP. The edge name stays empty because SLEEP's operand
+		// list is empty. Pops 1, pushes 0. No new opcode and no capability.
+		return append(insts, instruction(bytecode.OpSleep, "SLEEP", nil)), nil
 	case "cli_args":
 		if len(children) == 1 && node.DataInputs[0].Name == "index" {
 			insts, childDiagnostic := compileChild(0)

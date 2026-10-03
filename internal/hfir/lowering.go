@@ -306,6 +306,17 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		}
 		node.Kind = head
 		return ctx.Graph.AddNode(node), true, nil
+	case "sleep":
+		// (sleep duration). Existing SLEEP opcode. The duration edge keeps
+		// the empty name: SLEEP's operand list is empty, and the child is
+		// the pop. Experimental -compile-hfir-bc only. No new opcode and
+		// no new capability.
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addChildren(1, "")
+		return id, true, err
 	case "req_query", "req_header", "req_path":
 		if len(astNode.Children) != 3 {
 			return "", false, nil
