@@ -728,7 +728,9 @@ func TestLegacyCLIAppWritesRunnableBuildBytecode(t *testing.T) {
 		}
 		return output
 	}
-	run(input)
+	if output := run(input); string(output) != "ok\n" {
+		t.Fatalf("default invocation output = %q, want ok newline", output)
+	}
 	artifact := filepath.Join(workDir, "cli.hfbc")
 	legacyBytes, err := os.ReadFile(artifact)
 	if err != nil {
@@ -764,5 +766,46 @@ func TestLegacyCLIAppWritesRunnableBuildBytecode(t *testing.T) {
 	}
 	if output, err := exec.Command("go", "run", filepath.Join(workDir, "server.go")).CombinedOutput(); err != nil || string(output) != "ok\n" {
 		t.Fatalf("generated Go execution: %v, output %q", err, output)
+	}
+}
+
+func TestLegacyCLIAppExitStatusAndFlaggedWriteOnly(t *testing.T) {
+	binaryPath := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
+	input := filepath.Join(t.TempDir(), "exit.howl")
+	if err := os.WriteFile(input, []byte(`(cli_app (print "ok") (stderr "halt\n") (exit 7) (print "unreachable"))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"no flags", "output before input", "output after input"} {
+		t.Run(mode, func(t *testing.T) {
+			workDir := t.TempDir()
+			args := []string{input}
+			if mode == "output before input" {
+				args = []string{"-o", workDir, input}
+			} else if mode == "output after input" {
+				args = []string{input, "-o", workDir}
+			}
+			cmd := exec.Command(binaryPath, args...)
+			cmd.Dir = workDir
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			err := cmd.Run()
+			if mode == "no flags" {
+				exitErr, ok := err.(*exec.ExitError)
+				if !ok || exitErr.ExitCode() != 7 {
+					t.Fatalf("exit = %v, want status 7; stderr: %s", err, &stderr)
+				}
+				if stdout.String() != "ok\n" || stderr.String() != "halt\n" {
+					t.Fatalf("stdout = %q, stderr = %q", &stdout, &stderr)
+				}
+			} else if err != nil || stdout.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("flagged invocation executed program: exit %v, stdout %q, stderr %q", err, &stdout, &stderr)
+			}
+			if artifact, err := os.ReadFile(filepath.Join(workDir, "exit.hfbc")); err != nil || len(artifact) == 0 {
+				t.Fatalf("expected nonempty artifact after invocation: %v", err)
+			}
+		})
 	}
 }

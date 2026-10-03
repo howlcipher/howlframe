@@ -267,6 +267,14 @@ func main() {
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
+		if flag.NFlag() == 0 && len(setAfterInput) == 0 {
+			prog, err := bytecode.ReadArtifact(bytes.NewReader(buf.Bytes()))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot parse bytecode: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(vm.RunBytecodeWithPolicy(prog, nil, vm.DefaultExecutionPolicy(), nil, os.Stdin, os.Stdout, os.Stderr))
+		}
 	} else {
 		runHFIRGate(root, hfirModule, hfirTargetGo)
 		goCode, testCode := gogen.GenerateCode(root)
