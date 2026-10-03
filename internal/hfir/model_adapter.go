@@ -727,7 +727,8 @@ func nodeRoles(kind string) []string {
 		// write_file, mkdir, exec, and fetch are lowered from source on that
 		// same flag and stay outside this allow-list, with read_file.
 		// html_escape is lowered from source on that flag onto HTML_ESCAPE
-		// and stays outside this allow-list. attr_escape does not lower.
+		// and stays outside this allow-list. attr_escape is lowered from
+		// source onto ATTR_ESCAPE and stays outside this allow-list.
 		// The transport still has no control-edge field.
 		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil

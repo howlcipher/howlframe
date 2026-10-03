@@ -343,6 +343,24 @@
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "TYPE_ERROR"
+    },
+    {
+      "name": "attr_escape",
+      "fixture": "tests/conformance/abi_v1/24_attr_escape.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "PASS",
+      "stdout": "&amp;\n&lt;\n&gt;\n&#34;\n&#39;\n&amp;&lt;&gt;&#34;&#39;\n[]\nx&lt;y&amp;z\na&amp;b\nc&lt;d\ne&gt;f\ng&#34;h",
+      "forbid": "untaken"
+    },
+    {
+      "name": "attr_escape_type_error",
+      "fixture": "tests/conformance/abi_v1/25_attr_escape_type_error.howl",
+      "deny_all": true,
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "TYPE_ERROR"
     }
   ]
 }

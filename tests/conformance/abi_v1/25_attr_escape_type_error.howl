@@ -1,0 +1,2 @@
+(cli_app
+  (print (attr_escape (list "a"))))

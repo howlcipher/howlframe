@@ -262,7 +262,19 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 	case "html_escape":
 		// (html_escape text). Existing HTML_ESCAPE opcode. Experimental
 		// -compile-hfir-bc only. No new opcode and no new capability.
-		// attr_escape stays on the generic fallback.
+		if len(astNode.Children) != 2 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"value", astNode.Children[1]}})
+		return id, true, err
+	case "attr_escape":
+		// (attr_escape text). Existing ATTR_ESCAPE opcode. Same shape as
+		// html_escape. Experimental -compile-hfir-bc only. No new opcode
+		// and no new capability.
 		if len(astNode.Children) != 2 {
 			return "", false, nil
 		}

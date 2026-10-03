@@ -132,7 +132,6 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		op           bytecode.Opcode
 	}{
 		{"regex_match", `(cli_app (print (regex_match "^a$" "a")))`, bytecode.OpRegexMatch},
-		{"attr_escape", `(cli_app (print (attr_escape "a<b")))`, bytecode.OpAttrEscape},
 	} {
 		sample := sample
 		t.Run(sample.name, func(t *testing.T) {
@@ -158,6 +157,19 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
 		if !programHasOpcode(astProgram, bytecode.OpHTMLEscape) {
 			t.Fatal("production bytecode missing HTML_ESCAPE")
+		}
+	})
+
+	t.Run("attr_escape", func(t *testing.T) {
+		const source = `(cli_app (print (attr_escape "a<b")))`
+		graph := mustGraph(t, source)
+		program, diags := hfir.LowerToBytecode(graph)
+		if len(diags) != 0 || program == nil || !programHasOpcode(program, bytecode.OpAttrEscape) {
+			t.Fatalf("LowerToBytecode() program=%v diags=%#v, want ATTR_ESCAPE", program != nil, diags)
+		}
+		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
+		if !programHasOpcode(astProgram, bytecode.OpAttrEscape) {
+			t.Fatal("production bytecode missing ATTR_ESCAPE")
 		}
 	})
 
