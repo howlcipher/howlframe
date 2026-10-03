@@ -116,7 +116,7 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 	for _, kind := range []string{
 		"defun", "call", "return", "while", "for",
 		"read_file", "write_file", "mkdir", "exec", "fetch",
-		"regex_match", "html_escape", "attr_escape", "time_now", "match", "try",
+		"regex_match", "html_escape", "attr_escape", "time_now", "sleep", "match", "try",
 	} {
 		kind := kind
 		t.Run("transport/"+kind, func(t *testing.T) {
@@ -200,6 +200,39 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
 		if !programHasOpcode(astProgram, bytecode.OpTimeNow) {
 			t.Fatal("production bytecode missing TIME_NOW")
+		}
+	})
+
+	t.Run("sleep", func(t *testing.T) {
+		const source = `(cli_app (sleep 0) (print "ok"))`
+		spec := bytecode.Registry[bytecode.OpSleep]
+		if spec.Name != "SLEEP" || spec.Pops != 1 || spec.Pushes != 0 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+			t.Fatalf("OpSleep = %+v, want SLEEP popping 1, pushing 0, granting nothing", spec)
+		}
+		if capability.ForConstruct("sleep") != capability.None {
+			t.Fatalf("ForConstruct(sleep) = %q, want none", capability.ForConstruct("sleep"))
+		}
+		graph := mustGraph(t, source)
+		var sleeps int
+		for _, node := range graph.Nodes {
+			if node.Kind != "sleep" {
+				continue
+			}
+			sleeps++
+			if len(node.DataInputs) != 1 || node.DataInputs[0].Name != "" || len(node.ControlEdges) != 0 {
+				t.Fatalf("sleep edges %#v control %v, want one unnamed duration", node.DataInputs, node.ControlEdges)
+			}
+		}
+		if sleeps != 1 {
+			t.Fatalf("sleep nodes = %d, want 1", sleeps)
+		}
+		program, diags := hfir.LowerToBytecode(graph)
+		if len(diags) != 0 || program == nil || !programHasOpcode(program, bytecode.OpSleep) {
+			t.Fatalf("LowerToBytecode() program=%v diags=%#v, want SLEEP", program != nil, diags)
+		}
+		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
+		if !programHasOpcode(astProgram, bytecode.OpSleep) {
+			t.Fatal("production bytecode missing SLEEP")
 		}
 	})
 

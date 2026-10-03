@@ -653,6 +653,126 @@ func TestLowerASTTimeNowRejectsArgument(t *testing.T) {
 	}
 }
 
+func TestLowerToBytecodeSleepEmitsExistingOpcode(t *testing.T) {
+	spec := bytecode.Registry[bytecode.OpSleep]
+	if spec.Name != "SLEEP" || spec.Pops != 1 || spec.Pushes != 0 || len(spec.Operands) != 0 || spec.Capability != "" {
+		t.Fatalf("SLEEP = %+v, want pops 1, pushes 0, no operands, no capability", spec)
+	}
+	graph := NewGraph()
+	duration := graph.AddNode(&Node{Kind: "const", LiteralKind: "INT", Value: "0"})
+	entry := graph.AddNode(&Node{
+		Kind: "sleep",
+		DataInputs: []DataEdge{
+			{Name: "", SourceNode: duration},
+		},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	if err := bytecode.ValidateProgram(program); err != nil {
+		t.Fatal(err)
+	}
+	if len(program.Main) != 2 {
+		t.Fatalf("instructions = %#v, want the duration, then SLEEP", program.Main)
+	}
+	if program.Main[0].Op != bytecode.OpLoadConst || program.Main[0].ValueOperand != int64(0) {
+		t.Fatalf("duration operand = %#v, want const 0", program.Main[0])
+	}
+	last := program.Main[1]
+	if last.Op != bytecode.OpSleep || last.OpString != "SLEEP" || last.StringOperand != "" || last.StringOperand2 != "" || last.StringOperand3 != "" || last.IntOperand != 0 || last.IntOperand2 != 0 || last.IntOperand3 != 0 || last.ValueOperand != nil {
+		t.Fatalf("last instruction = %#v, want SLEEP with empty operands", last)
+	}
+	if bytecode.Registry[last.Op].Capability != "" || bytecode.Registry[last.Op].Pops != 1 || bytecode.Registry[last.Op].Pushes != 0 || len(bytecode.Registry[last.Op].Operands) != 0 {
+		t.Fatalf("SLEEP spec = %+v", bytecode.Registry[last.Op])
+	}
+}
+
+func TestLowerToBytecodeSleepRejectsNamedEdge(t *testing.T) {
+	graph := NewGraph()
+	duration := graph.AddNode(&Node{Kind: "const", LiteralKind: "INT", Value: "0"})
+	entry := graph.AddNode(&Node{
+		Kind:       "sleep",
+		Provenance: Provenance{Filename: "sleep.howl", Line: 2, Column: 3},
+		DataInputs: []DataEdge{{Name: "duration", SourceNode: duration}},
+	})
+	graph.EntryNode = entry
+
+	program, diagnostics := LowerToBytecode(graph)
+	if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode || diagnostics[0].RelatedNode != entry {
+		t.Fatalf("LowerToBytecode() = (%#v, %#v)", program, diagnostics)
+	}
+	if diagnostics[0].Message != "sleep requires one duration" {
+		t.Fatalf("message = %q", diagnostics[0].Message)
+	}
+}
+
+func TestLowerASTSleepKeepsDurationEdgeUnnamed(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(cli_app (sleep (+ 0 0)) (print "ok"))`), "sleep.howl").ParseExpression()
+	graph, err := LowerAST(root, "sleep.howl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found int
+	for _, node := range graph.Nodes {
+		if node.Kind != "sleep" {
+			continue
+		}
+		found++
+		if len(node.DataInputs) != 1 || node.DataInputs[0].Name != "" || len(node.ControlEdges) != 0 {
+			t.Fatalf("sleep edges %#v control %v, want one unnamed duration", node.DataInputs, node.ControlEdges)
+		}
+	}
+	if found != 1 {
+		t.Fatalf("sleep nodes = %d, want 1", found)
+	}
+	program, diagnostics := LowerToBytecode(graph)
+	if len(diagnostics) != 0 || program == nil {
+		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+	}
+	want := []bytecode.Opcode{bytecode.OpLoadConst, bytecode.OpLoadConst, bytecode.OpBinop, bytecode.OpSleep, bytecode.OpLoadConst, bytecode.OpPrint}
+	if len(program.Main) != len(want) {
+		t.Fatalf("instructions = %#v, want duration binop, SLEEP, then print", program.Main)
+	}
+	for index, op := range want {
+		if program.Main[index].Op != op {
+			t.Fatalf("instruction %d = %#v, want %v", index, program.Main[index], op)
+		}
+	}
+	sleep := program.Main[3]
+	if sleep.OpString != "SLEEP" || sleep.StringOperand != "" || sleep.IntOperand != 0 || sleep.ValueOperand != nil {
+		t.Fatalf("SLEEP = %#v, want empty operands after the duration", sleep)
+	}
+}
+
+func TestLowerASTSleepRejectsArity(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+	}{
+		{name: "missing duration", source: `(cli_app (sleep))`},
+		{name: "extra duration", source: `(cli_app (sleep 0 1))`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := parser.NewParser(lexer.NewLexer(tc.source), "sleep.howl").ParseExpression()
+			graph, err := LowerAST(root, "sleep.howl")
+			if err != nil {
+				t.Fatal(err)
+			}
+			program, diagnostics := LowerToBytecode(graph)
+			if program != nil || len(diagnostics) != 1 || diagnostics[0].Code != BytecodeUnsupportedCode {
+				t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diagnostics)
+			}
+			if diagnostics[0].Message != "sleep requires one duration" {
+				t.Fatalf("message = %q", diagnostics[0].Message)
+			}
+		})
+	}
+}
+
 func TestLowerToBytecodeRejectsMissingDataInput(t *testing.T) {
 	graph := NewGraph()
 	entry := graph.AddNode(&Node{

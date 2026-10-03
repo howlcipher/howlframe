@@ -731,7 +731,8 @@ func nodeRoles(kind string) []string {
 		// source onto ATTR_ESCAPE and stays outside this allow-list.
 		// regex_match is lowered from source onto REGEX_MATCH and stays
 		// outside this allow-list. time_now is lowered from source onto
-		// TIME_NOW and stays outside this allow-list.
+		// TIME_NOW and stays outside this allow-list. sleep is lowered
+		// from source onto SLEEP and stays outside this allow-list.
 		// The transport still has no control-edge field.
 		// This allow-list stays the Phase-1 adapter subset (#88).
 		return nil

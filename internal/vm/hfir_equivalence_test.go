@@ -744,6 +744,112 @@ func assertNoTimestampConstant(t *testing.T, program *bytecode.BCProgram) {
 	}
 }
 
+// TestHFIRBytecodeSleepMatchesAST compares production AST bytecode with
+// the experimental HFIR lowerer on sleep. The oracle is instruction
+// identity: the compiled duration child, then one SLEEP. SLEEP pops 1,
+// pushes 0, has an empty operand list, and grants nothing. The duration
+// edge name stays empty. The test does not run either artifact, so it
+// does not sleep.
+func TestHFIRBytecodeSleepMatchesAST(t *testing.T) {
+	spec := bytecode.Registry[bytecode.OpSleep]
+	if spec.Name != "SLEEP" || spec.Pops != 1 || spec.Pushes != 0 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+		t.Fatalf("SLEEP = %+v, want pops 1, pushes 0, no operands, no capability", spec)
+	}
+	if capability.ForConstruct("sleep") != capability.None {
+		t.Fatalf("ForConstruct(sleep) = %q, want none", capability.ForConstruct("sleep"))
+	}
+
+	t.Run("print", func(t *testing.T) {
+		assertSleepInstructionIdentity(t, `(cli_app (sleep 0) (print "ok"))`, 1)
+	})
+	t.Run("nested", func(t *testing.T) {
+		const source = `(cli_app
+  (sleep 0)
+  (print "ok")
+  (let (ms 0)
+    (sleep ms))
+  (if true
+    (sleep (+ 0 0))
+    (print "untaken"))
+  (defun nap () void
+    (sleep 0))
+  (call nap)
+  (let (n 0)
+    (while (< n 1)
+      (do
+        (sleep 0)
+        (set n (+ n 1)))))
+  (for item (list "a")
+    (sleep 0)))`
+		assertSleepInstructionIdentity(t, source, 6)
+	})
+}
+
+func assertSleepInstructionIdentity(t *testing.T, source string, want int) {
+	t.Helper()
+	root, graph := checkedHFIRGraph(t, source)
+	var sleeps int
+	for _, node := range graph.Nodes {
+		if node.Kind != "sleep" {
+			continue
+		}
+		sleeps++
+		if len(node.DataInputs) != 1 || node.DataInputs[0].Name != "" || len(node.ControlEdges) != 0 {
+			t.Fatalf("sleep %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+	}
+	if sleeps != want {
+		t.Fatalf("sleep nodes = %d, want %d", sleeps, want)
+	}
+	if caps := graphCapabilities(graph); len(caps) != 0 {
+		t.Fatalf("graph capabilities = %v, want none", caps)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
+		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
+	}
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v\nAST functions %#v\nHFIR functions %#v", legacy.Main, direct.Main, legacy.Functions, direct.Functions)
+	}
+	if got := countOpcode(direct, bytecode.OpSleep); got != want {
+		t.Fatalf("SLEEP count = %d, want %d", got, want)
+	}
+	assertSleepFollowsDuration(t, direct)
+	assertSleepFollowsDuration(t, legacy)
+}
+
+func assertSleepFollowsDuration(t *testing.T, program *bytecode.BCProgram) {
+	t.Helper()
+	scan := func(insts []bytecode.BCInstruction) {
+		for index, inst := range insts {
+			if inst.Op != bytecode.OpSleep {
+				continue
+			}
+			if index == 0 {
+				t.Fatal("SLEEP has no compiled duration child before it")
+			}
+			if inst.OpString != "SLEEP" || inst.StringOperand != "" || inst.StringOperand2 != "" || inst.StringOperand3 != "" || inst.IntOperand != 0 || inst.IntOperand2 != 0 || inst.IntOperand3 != 0 || inst.ValueOperand != nil {
+				t.Fatalf("SLEEP = %#v, want empty operands", inst)
+			}
+			spec := bytecode.Registry[inst.Op]
+			if spec.Capability != capability.None || spec.Pops != 1 || spec.Pushes != 0 || len(spec.Operands) != 0 {
+				t.Fatalf("SLEEP spec = %+v", spec)
+			}
+		}
+	}
+	scan(program.Main)
+	for _, fn := range program.Functions {
+		if fn != nil {
+			scan(fn.Instructions)
+		}
+	}
+}
+
 func regexMatchInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
 	var found []bytecode.BCInstruction
 	scan := func(insts []bytecode.BCInstruction) {
