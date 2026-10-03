@@ -635,6 +635,115 @@ func TestHFIRBytecodeStringsParityFile(t *testing.T) {
 	}
 }
 
+// TestHFIRBytecodeTimeNowMatchesAST compares production AST bytecode with
+// the experimental HFIR lowerer on time_now. The oracle is instruction
+// identity: one bare TIME_NOW per call, pops 0, pushes 1, no operand, and
+// no timestamp constant. The test does not run either artifact, so it does
+// not compare two live Unix timestamps.
+func TestHFIRBytecodeTimeNowMatchesAST(t *testing.T) {
+	spec := bytecode.Registry[bytecode.OpTimeNow]
+	if spec.Name != "TIME_NOW" || spec.Pops != 0 || spec.Pushes != 1 || len(spec.Operands) != 0 || spec.Capability != capability.None {
+		t.Fatalf("TIME_NOW = %+v, want pops 0, pushes 1, no operands, no capability", spec)
+	}
+	if capability.ForConstruct("time_now") != capability.None {
+		t.Fatalf("ForConstruct(time_now) = %q, want none", capability.ForConstruct("time_now"))
+	}
+
+	t.Run("print", func(t *testing.T) {
+		assertTimeNowInstructionIdentity(t, `(cli_app (print (time_now)))`, 1)
+	})
+	t.Run("nested", func(t *testing.T) {
+		const source = `(cli_app
+  (print (time_now))
+  (let (now (time_now))
+    (print now))
+  (if true
+    (print (time_now))
+    (print "untaken"))
+  (defun stamp () int
+    (return (time_now)))
+  (print (call stamp))
+  (let (n 0)
+    (while (< n 1)
+      (do
+        (print (time_now))
+        (set n (+ n 1)))))
+  (for item (list "a")
+    (print (time_now))))`
+		assertTimeNowInstructionIdentity(t, source, 6)
+	})
+}
+
+func assertTimeNowInstructionIdentity(t *testing.T, source string, want int) {
+	t.Helper()
+	root, graph := checkedHFIRGraph(t, source)
+	var clocks int
+	for _, node := range graph.Nodes {
+		if node.Kind != "time_now" {
+			continue
+		}
+		clocks++
+		if len(node.DataInputs) != 0 || len(node.ControlEdges) != 0 {
+			t.Fatalf("time_now %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+	}
+	if clocks != want {
+		t.Fatalf("time_now nodes = %d, want %d", clocks, want)
+	}
+	if caps := graphCapabilities(graph); len(caps) != 0 {
+		t.Fatalf("graph capabilities = %v, want none", caps)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
+		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
+	}
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v\nAST functions %#v\nHFIR functions %#v", legacy.Main, direct.Main, legacy.Functions, direct.Functions)
+	}
+	if got := countOpcode(direct, bytecode.OpTimeNow); got != want {
+		t.Fatalf("TIME_NOW count = %d, want %d", got, want)
+	}
+	assertNoTimestampConstant(t, direct)
+	assertNoTimestampConstant(t, legacy)
+}
+
+func assertNoTimestampConstant(t *testing.T, program *bytecode.BCProgram) {
+	t.Helper()
+	scan := func(insts []bytecode.BCInstruction) {
+		for _, inst := range insts {
+			if inst.Op == bytecode.OpTimeNow {
+				if inst.OpString != "TIME_NOW" || inst.StringOperand != "" || inst.StringOperand2 != "" || inst.StringOperand3 != "" || inst.IntOperand != 0 || inst.IntOperand2 != 0 || inst.IntOperand3 != 0 || inst.ValueOperand != nil {
+					t.Fatalf("TIME_NOW = %#v, want a bare instruction", inst)
+				}
+				if bytecode.Registry[inst.Op].Capability != capability.None || bytecode.Registry[inst.Op].Pops != 0 || bytecode.Registry[inst.Op].Pushes != 1 || len(bytecode.Registry[inst.Op].Operands) != 0 {
+					t.Fatalf("TIME_NOW spec = %+v", bytecode.Registry[inst.Op])
+				}
+			}
+			switch value := inst.ValueOperand.(type) {
+			case int64:
+				if value < 0 || value > 10 {
+					t.Fatalf("integer constant %d, want no timestamp", value)
+				}
+			case int:
+				if value < 0 || value > 10 {
+					t.Fatalf("integer constant %d, want no timestamp", value)
+				}
+			}
+		}
+	}
+	scan(program.Main)
+	for _, fn := range program.Functions {
+		if fn != nil {
+			scan(fn.Instructions)
+		}
+	}
+}
+
 func regexMatchInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
 	var found []bytecode.BCInstruction
 	scan := func(insts []bytecode.BCInstruction) {

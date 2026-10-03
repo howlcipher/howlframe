@@ -18,6 +18,8 @@ A readiness score of `main` at `2e5c8e98b5881d202aca7b4d138460aaab3c129d` is `do
 
 A fence inventory of this tree at `ffb753b970c385aadef1a05ebaa253c9186e6dbc` is `docs/journals/2026-10-03_lowered_hfir_fence_inventory_ffb753b.md`. It sorts the 27 promote-blocker names. It is not a flip verdict and not a score of a newer tip. It does not replace the `2e5c8e98` score. It does not authorize a flip. It does not refresh the Assurance tip-lock named above. #90 stays Partial.
 
+A later experimental slice lowers `time_now` onto the existing `TIME_NOW` opcode on `-compile-hfir-bc` only. Parity is one identical `TIME_NOW` (pops 0, pushes 1, no operand) and no timestamp constant. That slice does not compare two live Unix timestamps. The inventory journal stays a record of `ffb753b` and is not rewritten. The decision stays Defer the production flip. #90 stays Partial. No new Assurance tip-lock. Journal: `docs/journals/2026-10-03_lowered_hfir_abi_time_now.md`.
+
 The ABI text is `docs/reference/lowered_hfir_abi_v1.md`. The suite is `tests/conformance/lowered_hfir_abi_v1.json`. The journal for the checklist spike is `docs/journals/2026-09-30_lowered_hfir_prod_flip_criteria.md`.
 
 ## Promote
@@ -31,7 +33,7 @@ The experimental artifact and the production artifact match on every program pro
 * Every case in `tests/conformance/lowered_hfir_abi_v1.json` that lists `hfir_bytecode` matches the `bytecode` host on normalized stdout, stderr, and exit. That includes the nested `if` / `while` / `defun` fixture, the nested `for` fixture, and `nested_multi_effect` under the empty grant, the grant that omits `network`, and the full grant.
 * `TestHFIRBytecodeSupportedParity` passes, and every file in `tests/parity` is classified as supported or rejected. An unclassified file blocks.
 * `hfirRejectedParity` is empty. `07_strings.howl` runs on `-compile-hfir-bc` because `regex_match` lowers onto `REGEX_MATCH`. `13_html_escape.howl` runs because both `html_escape` and `attr_escape` lower. The promote-blocker fence below is still non-empty, so this row alone does not flip.
-* Operand order stays the AST order on the existing opcodes: `EXEC` is command then arguments, with `IntOperand` equal to the argument count; `FETCH` is URL then method; `REGEX_MATCH` is the pattern, then the string. `JUMP_IF_FALSE`, `JUMP`, `FOR_INIT`, `FOR_NEXT`, `CALL`, and `RETURN` keep the relative offsets the AST compiler already emits.
+* Operand order stays the AST order on the existing opcodes: `EXEC` is command then arguments, with `IntOperand` equal to the argument count; `FETCH` is URL then method; `REGEX_MATCH` is the pattern, then the string. `TIME_NOW` pops 0, pushes 1, and has no operand. `JUMP_IF_FALSE`, `JUMP`, `FOR_INIT`, `FOR_NEXT`, `CALL`, and `RETURN` keep the relative offsets the AST compiler already emits.
 * The promote-blocker fence below is empty. Each name leaves the fence only after `LowerToBytecode` emits that construct's existing opcode and a parity case matches production `-compile-bc` on grant and on denial when the construct has a capability.
 
 These names already lower under a different HFIR kind, so they are outside the fence: `cli_app` is `program`, `do` is `sequence`, `try_let` is `try`, the arithmetic and comparison heads are `binary`, and `to_int`, `to_float`, `to_string`, `bytes_to_string`, and `encode_json` are `convert`.
@@ -85,9 +87,9 @@ The production-emission edit is the `*compileBc` branch. After `runHFIRGate` ret
 
 These `construct.Supported` names have a `compileNode` case and no `LowerToBytecode` case. Production `-compile-bc` emits an artifact. The experimental lowerer returns one `HFIR_BYTECODE_UNSUPPORTED` diagnostic and no `BCProgram`. A flip fails those programs closed. Each name stays a blocker until the experimental path emits the existing opcode and parity matches. Adding a new opcode to clear a name is a kill, below.
 
-`html_escape` left this fence when experimental `-compile-hfir-bc` started emitting the existing `HTML_ESCAPE` opcode with parity against production `-compile-bc`. `attr_escape` left it the same way onto the existing `ATTR_ESCAPE` opcode. `regex_match` left it the same way onto the existing `REGEX_MATCH` opcode, pattern then string. `tests/parity/07_strings.howl` and `tests/parity/13_html_escape.howl` are in the supported parity set. The same fence holds the other production bytecode constructs the dogfood subset never emitted: stores, the HTTP server, spawn, database, model calls, `time_now`, `sleep`, and `read_line`.
+`html_escape` left this fence when experimental `-compile-hfir-bc` started emitting the existing `HTML_ESCAPE` opcode with parity against production `-compile-bc`. `attr_escape` left it the same way onto the existing `ATTR_ESCAPE` opcode. `regex_match` left it the same way onto the existing `REGEX_MATCH` opcode, pattern then string. `time_now` left it the same way onto the existing `TIME_NOW` opcode. That instruction pops 0, pushes 1, and has no operand. Parity is one identical `TIME_NOW` in both artifacts and no timestamp constant. The comparison does not match two live Unix timestamps. `tests/parity/07_strings.howl` and `tests/parity/13_html_escape.howl` are in the supported parity set. The same fence holds the other production bytecode constructs the dogfood subset never emitted: stores, the HTTP server, spawn, database, model calls, `sleep`, and `read_line`.
 
-`TestProdFlipCriteriaLock` recomputes this fence from `internal/construct`, `internal/bytecode/bytecode.go`, and `internal/hfir/bytecode.go`. The list below is the living fence. `html_escape`, `attr_escape`, and `regex_match` are outside it. The Assurance tip-lock `4d74dbcf9654caa05e0b1d9212b15bc5398359e3` recorded an earlier fence that still included `attr_escape` and `regex_match`. The baseline the checklist was written against remains `a9f00bcc91680abe505616fb9b9ed6e643ffa3bc`. The fence moves when a later dogfood slice teaches `LowerToBytecode` an existing opcode, and that move expires the named lock. This slice does not take a new Assurance tip-lock.
+`TestProdFlipCriteriaLock` recomputes this fence from `internal/construct`, `internal/bytecode/bytecode.go`, and `internal/hfir/bytecode.go`. The list below is the living fence. `html_escape`, `attr_escape`, `regex_match`, and `time_now` are outside it. The Assurance tip-lock `4d74dbcf9654caa05e0b1d9212b15bc5398359e3` recorded an earlier fence that still included `attr_escape` and `regex_match`. The baseline the checklist was written against remains `a9f00bcc91680abe505616fb9b9ed6e643ffa3bc`. The fence moves when a later dogfood slice teaches `LowerToBytecode` an existing opcode, and that move expires the named lock. This slice does not take a new Assurance tip-lock.
 
 ```promote-blockers
 achieve
@@ -116,7 +118,6 @@ store_keys
 store_open
 store_put
 task
-time_now
 ```
 
 ### Accepted limits
@@ -130,7 +131,7 @@ These stay as they are on both bytecode compilers. A flip PR that implements one
 | `try` control edges | `try_let` lowers to kind `try` and emits the existing `TRY_LET` opcode from data edges (`expression`, `success_body`, `catch`). `ControlEdges` stay empty. `tests/parity/08_io_cli.howl` is in the supported parity set. | Accepted graph limit. Parity on `TRY_LET` must hold. Filling `ControlEdges` is later CFG work. A promote that claims SSA while `try` edges are empty is refused. #90 stays Partial. |
 | Wasm | Wasm is not an execution host in v1. `hfir.WasmInfeasibleKinds` is `exec`, `spawn_agent`, and `http_server_start`. The diagnostic is `HFIR_TARGET_INFEASIBLE`. | Accepted limit. The flip PR leaves Wasm on that closed set. |
 | Module linker | #106 stays the do-not-build decision. `use`, `export`, and `module` stay `CompileTimeOnly`. `ast.ResolveModules` runs before either bytecode compiler. The VM has no module opcode. | Accepted limit. The flip PR leaves linking on the AST. |
-| Model-adapter transport | `DecodeCandidate` rejects a kind outside `nodeRoles` with `HFIR_TRANSPORT_KIND` and no graph. The rejected kinds include `defun`, `call`, `return`, `while`, `for`, `read_file`, `write_file`, `mkdir`, `exec`, `fetch`, `regex_match`, `html_escape`, `attr_escape`, `match`, and `try`. `if` stays accepted. The transport schema has no control-edge field. #88 stays Pending. | Accepted limit. The flip reads source through `LowerAST`. It leaves the transport allow-list on the Phase-1 adapter subset. |
+| Model-adapter transport | `DecodeCandidate` rejects a kind outside `nodeRoles` with `HFIR_TRANSPORT_KIND` and no graph. The rejected kinds include `defun`, `call`, `return`, `while`, `for`, `read_file`, `write_file`, `mkdir`, `exec`, `fetch`, `regex_match`, `html_escape`, `attr_escape`, `time_now`, `match`, and `try`. `if` stays accepted. The transport schema has no control-edge field. #88 stays Pending. | Accepted limit. The flip reads source through `LowerAST`. It leaves the transport allow-list on the Phase-1 adapter subset. |
 
 ## Kill
 
@@ -141,7 +142,7 @@ End the flip track, and keep production emission on `bytecode.CompileToBytecode`
 * A bytecode import section, a VM module opcode, or an HFIR module linker (#106).
 * An `OpFetch` body operand, or any other fetch-body implementation.
 * Two production emitters inside `-compile-bc`, with some constructs left on `bytecode.CompileToBytecode`.
-* Dropping a promote-blocker construct out of production so the experimental subset fits. `html_escape` already lowers onto `HTML_ESCAPE`, `attr_escape` already lowers onto `ATTR_ESCAPE`, and `regex_match` already lowers onto `REGEX_MATCH` on the experimental path, and all three still work on `-compile-bc`.
+* Dropping a promote-blocker construct out of production so the experimental subset fits. `html_escape` already lowers onto `HTML_ESCAPE`, `attr_escape` already lowers onto `ATTR_ESCAPE`, `regex_match` already lowers onto `REGEX_MATCH`, and `time_now` already lowers onto `TIME_NOW` on the experimental path, and all four still work on `-compile-bc`.
 * Widening `nodeRoles` so the model-adapter transport accepts kinds the source lowerer already emits. That widening is #88.
 * Marking #90 Done because the current dogfood subset matches. One lowered graph for every host is still open.
 * Treating this checklist, or any dogfood journal, as the Owner's flip PR.
@@ -162,7 +163,7 @@ The tip-lock named above is present for `4d74dbcf9654caa05e0b1d9212b15bc5398359e
 
 While deferred, further dogfood lands on `-compile-hfir-bc` only. A slice that teaches the lowerer an existing opcode for a fenced name may shrink the fence. That slice still leaves `*compileBc` on `bytecode.CompileToBytecode`, and #90 stays Partial.
 
-Clearing the fence is the promote path for the names still in it. `html_escape` has left the fence onto `HTML_ESCAPE`, `attr_escape` has left the fence onto `ATTR_ESCAPE`, and `regex_match` has left the fence onto `REGEX_MATCH`, each with parity on `-compile-hfir-bc`. That work is dogfood. It is not permission to flip.
+Clearing the fence is the promote path for the names still in it. `html_escape` has left the fence onto `HTML_ESCAPE`, `attr_escape` has left the fence onto `ATTR_ESCAPE`, `regex_match` has left the fence onto `REGEX_MATCH`, and `time_now` has left the fence onto `TIME_NOW`, each with parity on `-compile-hfir-bc`. That work is dogfood. It is not permission to flip.
 
 ## Dogfood path
 
@@ -170,13 +171,13 @@ Experimental `-compile-hfir-bc` stays the dogfood path until the Owner authorize
 
 ## What this spike does
 
-It records the checklist and locks it with `TestProdFlipCriteriaLock`. The test recomputes the promote-blocker fence, checks the `*compileBc` branch still calls `bytecode.CompileToBytecode`, checks `OpFetch` still pops 2 with no body operand, checks the fetch body string is absent from both compilers' artifacts, checks `regex_match` emits `REGEX_MATCH` on both paths and sits outside the fence, checks `html_escape` emits `HTML_ESCAPE` and `attr_escape` emits `ATTR_ESCAPE` on both paths and both sit outside the fence, checks the model-adapter transport still rejects `html_escape`, `attr_escape`, and `regex_match`, checks `match` and `try` control edges stay empty, checks the model-adapter transport still rejects the kinds in the accepted-limit row, and checks `hfir.WasmInfeasibleKinds` stays the three Wasm host effects.
+It records the checklist and locks it with `TestProdFlipCriteriaLock`. The test recomputes the promote-blocker fence, checks the `*compileBc` branch still calls `bytecode.CompileToBytecode`, checks `OpFetch` still pops 2 with no body operand, checks the fetch body string is absent from both compilers' artifacts, checks `regex_match` emits `REGEX_MATCH` on both paths and sits outside the fence, checks `html_escape` emits `HTML_ESCAPE` and `attr_escape` emits `ATTR_ESCAPE` on both paths and both sit outside the fence, checks `time_now` emits `TIME_NOW` on both paths and sits outside the fence, checks the model-adapter transport still rejects `html_escape`, `attr_escape`, `regex_match`, and `time_now`, checks `match` and `try` control edges stay empty, checks the model-adapter transport still rejects the kinds in the accepted-limit row, and checks `hfir.WasmInfeasibleKinds` stays the three Wasm host effects.
 
 ## Acceptance criteria
 
 1. The decision is defer. #90 stays Partial.
 2. Promote names HFIR↔AST parity, mediated host effects, and the Assurance tip-lock.
-3. The promote-blocker fence lists every production-supported construct the experimental lowerer does not emit. `html_escape`, `attr_escape`, and `regex_match` are outside the fence.
+3. The promote-blocker fence lists every production-supported construct the experimental lowerer does not emit. `html_escape`, `attr_escape`, `regex_match`, and `time_now` are outside the fence.
 4. Fetch body, `match` / `try` control edges, Wasm, the module linker, and the model-adapter transport rejects are accepted limits with an explicit promote rule.
 5. Kill and defer each have their own conditions. The dogfood path stays `-compile-hfir-bc` until the Owner authorizes a flip PR.
 6. Production `-compile-bc` behavior is unchanged.

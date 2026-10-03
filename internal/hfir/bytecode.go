@@ -416,6 +416,14 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		// and then the pattern. No string operand. No new opcode and no
 		// capability.
 		return append(insts, instruction(bytecode.OpRegexMatch, "REGEX_MATCH", nil)), nil
+	case "time_now":
+		if len(children) != 0 {
+			diagnostic := c.diagnostic(node, "time_now takes no arguments")
+			return nil, &diagnostic
+		}
+		// Same instruction as bytecode.CompileToBytecode: a bare TIME_NOW.
+		// Pops 0, pushes 1, no operand. No new opcode and no capability.
+		return []bytecode.BCInstruction{instruction(bytecode.OpTimeNow, "TIME_NOW", nil)}, nil
 	case "cli_args":
 		if len(children) == 1 && node.DataInputs[0].Name == "index" {
 			insts, childDiagnostic := compileChild(0)
