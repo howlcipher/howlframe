@@ -1,0 +1,3 @@
+(cli_app
+  (let (d (dict ("k" 1) ("m" "x")))
+    (print (regex_match (map_get d "k") "a"))))

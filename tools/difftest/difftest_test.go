@@ -56,6 +56,7 @@ var hfirSupportedParity = []string{
 	"04_conversions.howl",
 	"05_collections.howl",
 	"06_control_flow.howl",
+	"07_strings.howl",
 	"08_io_cli.howl",
 	"09_boundary_values.howl",
 	"10_governed_policy.howl",
@@ -64,9 +65,10 @@ var hfirSupportedParity = []string{
 	"13_html_escape.howl",
 }
 
-var hfirRejectedParity = []string{
-	"07_strings.howl",
-}
+// hfirRejectedParity is empty. 07_strings.howl left it when regex_match
+// lowered onto the existing REGEX_MATCH opcode and the difftest matched.
+// A new parity file still has to join one list.
+var hfirRejectedParity []string
 
 // TestHFIRBytecodeSupportedParity compares -compile-hfir-bc with the AST
 // hosts already in TestParityCorpus. Unsupported parity files must fail

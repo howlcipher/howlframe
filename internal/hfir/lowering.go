@@ -284,6 +284,20 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 			child *ast.Node
 		}{{"value", astNode.Children[1]}})
 		return id, true, err
+	case "regex_match":
+		// (regex_match pattern text). Existing REGEX_MATCH opcode. Pattern
+		// then text, the same order as bytecode.CompileToBytecode.
+		// Experimental -compile-hfir-bc only. No new opcode and no new
+		// capability.
+		if len(astNode.Children) != 3 {
+			return "", false, nil
+		}
+		node.Kind = head
+		id, err := addNamed([]struct {
+			name  string
+			child *ast.Node
+		}{{"pattern", astNode.Children[1]}, {"string", astNode.Children[2]}})
+		return id, true, err
 	case "req_query", "req_header", "req_path":
 		if len(astNode.Children) != 3 {
 			return "", false, nil

@@ -1,0 +1,23 @@
+(cli_app
+  (print (regex_match "^[a-z]+$" "hello"))
+  (print (regex_match "^[0-9]+$" "notanumber"))
+  (print (regex_match "a+" "aaa"))
+  (print (regex_match "^$" ""))
+  (print (regex_match "foo" "foobar"))
+  (print (regex_match "^z" "abc"))
+  (let (pat "^ok$")
+    (print (regex_match pat "ok")))
+  (if false
+    (print (regex_match "untaken" "untaken"))
+    (print (regex_match "^taken$" "taken")))
+  (defun matched (pat text)
+    (type_hint return "bool")
+    (return (regex_match pat text)))
+  (print (call matched "c" "cat"))
+  (let (n 0)
+    (while (< n 1)
+      (do
+        (print (regex_match "e" "e>f"))
+        (set n (+ n 1)))))
+  (for item (list "g\"h")
+    (print (regex_match "g" item))))
