@@ -10,6 +10,8 @@ This note is the kill, defer, and promote checklist for that future PR. Publishi
 
 The Assurance tip-lock is `4d74dbcf9654caa05e0b1d9212b15bc5398359e3` on `main`. That commit is PR #71: experimental `-compile-hfir-bc` lowers `html_escape` onto the existing `HTML_ESCAPE` opcode. At the lock, `git rev-parse origin/main` was that SHA. On it, the `*compileBc` branch still calls `bytecode.CompileToBytecode(root)` and the `*compileHfirBc` branch still calls `hfir.LowerToBytecode(graph)`. The measurement record is `docs/journals/2026-09-30_lowered_hfir_prod_flip_tip_lock.md`. Assurance (Lain) on that SHA: Overall: PASS. Promote: DEFERRED. The verdict is `docs/journals/2026-09-30_assurance_tip_lock_4d74dbcf.md`, with logs in `evidence/howl-90-assurance-tip-lock-4d74dbcf/`. The lock is not a promote. It does not authorize a flip. #90 stays Partial.
 
+A readiness score of `main` at `5a229d6553588f6916f9fe4d6b596cd1e6fa0de6` is `docs/journals/2026-10-03_lowered_hfir_prod_flip_score_5a229d65.md`. Verdict: flip deferred. #90 stays Partial. The score is not a promote. It does not authorize a flip. It does not refresh the Assurance tip-lock named above.
+
 The ABI text is `docs/reference/lowered_hfir_abi_v1.md`. The suite is `tests/conformance/lowered_hfir_abi_v1.json`. The journal for the checklist spike is `docs/journals/2026-09-30_lowered_hfir_prod_flip_criteria.md`.
 
 ## Promote
