@@ -89,7 +89,7 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 	}
 	defer os.RemoveAll(outDir)
 
-	out2, err := runCommand("go", "run", "howlframe.go", "-o", outDir, file)
+	out2, err := runCommand("go", "run", "howlframe.go", "build", "--target=go", "-o", outDir, file)
 	if err != nil {
 		return false, "", fmt.Sprintf("(codegen): %v\n%s", err, out2)
 	}

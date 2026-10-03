@@ -382,7 +382,7 @@ func executeGoBackend(filePath string, opts RunOptions) ExecutionResult {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	codegenCmd := exec.Command(compiler, filePath, "-o", tmpDir)
+	codegenCmd := exec.Command(compiler, "build", "--target=go", filePath, "-o", tmpDir)
 	codegenOut, codegenErr := codegenCmd.CombinedOutput()
 	if codegenErr != nil {
 		errMsg := strings.TrimSpace(string(codegenOut))

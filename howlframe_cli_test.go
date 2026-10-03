@@ -157,6 +157,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 			if after != before {
 				t.Errorf("%s after input printed %q, want the same plan it prints before the input, %q", mode, after, before)
 			}
+			for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+				if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+					t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+				}
+			}
 			if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 				t.Fatalf("%s after input wrote server.go, so it fell through to the default Go backend", mode)
 			}
@@ -170,6 +175,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 	t.Run("validation and compilation modes accept the flag after the input", func(t *testing.T) {
 		noServerGo := func(t *testing.T, mode string) {
 			t.Helper()
+			for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+				if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+					t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+				}
+			}
 			if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 				t.Fatalf("%s after input wrote server.go, so it fell through to the default Go backend", mode)
 			}
@@ -254,6 +264,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 			if !strings.Contains(out, trailing) && !strings.Contains(out, "flag provided but not defined") {
 				t.Errorf("%q after input produced %q, want a diagnostic naming it", trailing, out)
 			}
+			for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+				if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+					t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+				}
+			}
 			if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 				t.Fatalf("%q after input wrote server.go instead of failing", trailing)
 			}
@@ -277,6 +292,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 			if !strings.Contains(out, "flag needs an argument") {
 				t.Errorf("%v after input produced %q, want diagnostic naming missing argument", badArg.args, out)
 			}
+			for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+				if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+					t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+				}
+			}
 			if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 				t.Fatalf("%v after input wrote server.go instead of failing", badArg.args)
 			}
@@ -293,6 +313,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 		}
 		if !strings.Contains(out, "-validate") {
 			t.Errorf("-- followed by -validate produced %q, want diagnostic naming argument", out)
+		}
+		for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+			if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+				t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+			}
 		}
 		if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 			t.Fatalf("-- followed by -validate wrote server.go instead of failing")
@@ -316,6 +341,11 @@ func TestCLIFlagPositionRelativeToInput(t *testing.T) {
 			}
 			if after != before {
 				t.Errorf("%s after input printed %q, want the usage it prints before the input, %q", help, after, before)
+			}
+			for _, artifact := range []string{"cli.hfbc", "wasm.hfbc"} {
+				if _, err := os.Stat(filepath.Join(workDir, artifact)); !os.IsNotExist(err) {
+					t.Fatalf("unexpected default artifact %s: %v", artifact, err)
+				}
 			}
 			if _, err := os.Stat(filepath.Join(workDir, "server.go")); err == nil {
 				t.Fatalf("%s after input wrote server.go, so it fell through to the default Go backend", help)
@@ -675,5 +705,64 @@ func TestCLI_TargetUnification(t *testing.T) {
 	}
 	if !strings.Contains(out, "Unknown target") {
 		t.Errorf("expected 'Unknown target' error message, got: %s", out)
+	}
+}
+
+func TestLegacyCLIAppWritesRunnableBuildBytecode(t *testing.T) {
+	workDir := t.TempDir()
+	binaryPath := filepath.Join(t.TempDir(), "howlframe")
+	if output, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
+	input := filepath.Join(t.TempDir(), "cli.howl")
+	if err := os.WriteFile(input, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) []byte {
+		t.Helper()
+		cmd := exec.Command(binaryPath, args...)
+		cmd.Dir = workDir
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v failed: %v\n%s", args, err, output)
+		}
+		return output
+	}
+	run(input)
+	artifact := filepath.Join(workDir, "cli.hfbc")
+	legacyBytes, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("read default artifact: %v", err)
+	}
+	for _, name := range []string{"server.go", "server_test.go"} {
+		if _, err := os.Stat(filepath.Join(workDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected %s: %v", name, err)
+		}
+	}
+	if output := run("run", artifact); string(output) != "ok\n" {
+		t.Fatalf("bytecode output = %q, want ok newline", output)
+	}
+	// Removing the artifact proves build's default filename as well as byte parity.
+	if err := os.Remove(artifact); err != nil {
+		t.Fatal(err)
+	}
+	run("build", input)
+	buildBytes, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(legacyBytes, buildBytes) {
+		t.Fatal("legacy artifact differs from build's default bytecode")
+	}
+	run("build", "--target=go", input)
+	generated, err := os.ReadFile(filepath.Join(workDir, "server.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generated, []byte(`fmt.Println("ok")`)) {
+		t.Fatalf("explicit Go target omitted print: %s", generated)
+	}
+	if output, err := exec.Command("go", "run", filepath.Join(workDir, "server.go")).CombinedOutput(); err != nil || string(output) != "ok\n" {
+		t.Fatalf("generated Go execution: %v, output %q", err, output)
 	}
 }

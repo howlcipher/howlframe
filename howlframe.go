@@ -256,6 +256,17 @@ func main() {
 		} else {
 			os.Remove(appTestFile)
 		}
+	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "cli_app" {
+		runHFIRGate(root, hfirModule, hfirTargetBytecode)
+		prog := bytecode.CompileToBytecode(root)
+		var buf bytes.Buffer
+		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
+		}
+		outFile := filepath.Join(outputDir, strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))+".hfbc")
+		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
+			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
+		}
 	} else {
 		runHFIRGate(root, hfirModule, hfirTargetGo)
 		goCode, testCode := gogen.GenerateCode(root)
