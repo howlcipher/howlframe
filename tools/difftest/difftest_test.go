@@ -61,11 +61,11 @@ var hfirSupportedParity = []string{
 	"10_governed_policy.howl",
 	"11_error_undefined_var.howl",
 	"12_error_div_zero.howl",
+	"13_html_escape.howl",
 }
 
 var hfirRejectedParity = []string{
 	"07_strings.howl",
-	"13_html_escape.howl",
 }
 
 // TestHFIRBytecodeSupportedParity compares -compile-hfir-bc with the AST

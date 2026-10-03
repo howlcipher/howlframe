@@ -389,8 +389,19 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		}
 		// Same operand as bytecode.CompileToBytecode: the text, then
 		// HTML_ESCAPE. No string operand. No new opcode and no capability.
-		// attr_escape stays outside this subset.
 		return append(insts, instruction(bytecode.OpHTMLEscape, "HTML_ESCAPE", nil)), nil
+	case "attr_escape":
+		if len(children) != 1 || node.DataInputs[0].Name != "value" {
+			diagnostic := c.diagnostic(node, "attr_escape requires value")
+			return nil, &diagnostic
+		}
+		insts, childDiagnostic := compileChild(0)
+		if childDiagnostic != nil {
+			return nil, childDiagnostic
+		}
+		// Same operand as bytecode.CompileToBytecode: the text, then
+		// ATTR_ESCAPE. No string operand. No new opcode and no capability.
+		return append(insts, instruction(bytecode.OpAttrEscape, "ATTR_ESCAPE", nil)), nil
 	case "cli_args":
 		if len(children) == 1 && node.DataInputs[0].Name == "index" {
 			insts, childDiagnostic := compileChild(0)

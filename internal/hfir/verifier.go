@@ -99,7 +99,7 @@ func (v *Verifier) Verify() []Diagnostic {
 			checkRole("data", true)
 		case "parse_json":
 			checkRole("content", true)
-		case "is_nil", "html_escape":
+		case "is_nil", "html_escape", "attr_escape":
 			checkRole("value", true)
 		case "cli_args":
 			checkRole("index", false)

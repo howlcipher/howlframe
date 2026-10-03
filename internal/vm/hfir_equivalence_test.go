@@ -335,6 +335,159 @@ func TestHFIRBytecodeHTMLEscapeTypeErrorMatchesAST(t *testing.T) {
 	}
 }
 
+// TestHFIRBytecodeAttrEscapeFixture compares production AST bytecode with
+// the experimental HFIR lowerer on attr_escape. The conformance harness
+// runs the same file through -compile-bc and -compile-hfir-bc. Both
+// compilers must emit ATTR_ESCAPE and the same artifact. html_escape is
+// not in this fixture.
+func TestHFIRBytecodeAttrEscapeFixture(t *testing.T) {
+	source := readAbiFixture(t, "24_attr_escape.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	var escapes int
+	for _, node := range graph.Nodes {
+		if node.Kind != "attr_escape" {
+			if node.Kind == "html_escape" || node.Kind == "regex_match" {
+				t.Fatalf("fixture lowered %s", node.Kind)
+			}
+			continue
+		}
+		escapes++
+		if len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" || len(node.ControlEdges) != 0 {
+			t.Fatalf("attr_escape %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+	}
+	if escapes != 13 {
+		t.Fatalf("attr_escape nodes = %d, want 13", escapes)
+	}
+	if caps := graphCapabilities(graph); len(caps) != 0 {
+		t.Fatalf("graph capabilities = %v, want none", caps)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
+		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
+	}
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v", legacy.Main, direct.Main)
+	}
+	if got := countOpcode(direct, bytecode.OpAttrEscape); got != escapes {
+		t.Fatalf("ATTR_ESCAPE count = %d, want %d", got, escapes)
+	}
+	if countOpcode(direct, bytecode.OpHTMLEscape) != 0 || countOpcode(direct, bytecode.OpRegexMatch) != 0 {
+		t.Fatal("attr_escape fixture emitted HTML_ESCAPE or REGEX_MATCH")
+	}
+	for _, inst := range attrEscapeInstructions(direct) {
+		if inst.StringOperand != "" || inst.IntOperand != 0 || bytecode.Registry[inst.Op].Capability != capability.None {
+			t.Fatalf("ATTR_ESCAPE = %#v, want a bare instruction with no capability", inst)
+		}
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.stdout != htmlEscapeFixtureStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
+		t.Fatalf("outcome = %#v, want the escaped lines", legacyOutcome)
+	}
+	if strings.Contains(legacyOutcome.stdout, "untaken") || strings.Contains(legacyOutcome.stdout, "<") {
+		t.Fatalf("raw or untaken markup survived:\n%s", legacyOutcome.stdout)
+	}
+}
+
+func TestHFIRBytecodeAttrEscapeTypeErrorMatchesAST(t *testing.T) {
+	source := readAbiFixture(t, "25_attr_escape_type_error.howl")
+	root, graph := checkedHFIRGraph(t, source)
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatal("AST and HFIR bytecode disagree on attr_escape type error")
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST error outcome = %#v\nHFIR error outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.vmError == nil || legacyOutcome.vmError.Code != "TYPE_ERROR" || legacyOutcome.vmError.Opcode != "ATTR_ESCAPE" || !strings.Contains(legacyOutcome.vmError.Message, "attr_escape expected string") || legacyOutcome.stdout != "" {
+		t.Fatalf("outcome = %#v, want TYPE_ERROR on ATTR_ESCAPE", legacyOutcome)
+	}
+}
+
+// TestHFIRBytecodeMixedEscapeParityFile compares the two bytecode compilers
+// on tests/parity/13_html_escape.howl. That file calls both html_escape and
+// attr_escape. The encodings match, so stdout alone does not show which
+// opcode each call used. The instruction streams must match, including
+// both existing opcodes.
+func TestHFIRBytecodeMixedEscapeParityFile(t *testing.T) {
+	path := filepath.Join("..", "..", "tests", "parity", "13_html_escape.howl")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, graph := checkedHFIRGraph(t, string(source))
+	var htmlNodes, attrNodes int
+	for _, node := range graph.Nodes {
+		switch node.Kind {
+		case "html_escape":
+			htmlNodes++
+		case "attr_escape":
+			attrNodes++
+		case "regex_match":
+			t.Fatal("parity file lowered regex_match")
+		}
+		if node.Kind == "html_escape" || node.Kind == "attr_escape" {
+			if len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" || len(node.ControlEdges) != 0 {
+				t.Fatalf("%s %s edges %#v control %v", node.Kind, node.ID, node.DataInputs, node.ControlEdges)
+			}
+		}
+	}
+	if htmlNodes != 8 || attrNodes != 3 {
+		t.Fatalf("escape nodes html=%d attr=%d, want 8 and 3", htmlNodes, attrNodes)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatal("AST and HFIR bytecode disagree on 13_html_escape.howl")
+	}
+	if countOpcode(direct, bytecode.OpHTMLEscape) != htmlNodes || countOpcode(direct, bytecode.OpAttrEscape) != attrNodes || countOpcode(direct, bytecode.OpRegexMatch) != 0 {
+		t.Fatalf("opcodes HTML_ESCAPE=%d ATTR_ESCAPE=%d REGEX_MATCH=%d", countOpcode(direct, bytecode.OpHTMLEscape), countOpcode(direct, bytecode.OpAttrEscape), countOpcode(direct, bytecode.OpRegexMatch))
+	}
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+}
+
+func attrEscapeInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
+	var found []bytecode.BCInstruction
+	scan := func(insts []bytecode.BCInstruction) {
+		for _, inst := range insts {
+			if inst.Op == bytecode.OpAttrEscape {
+				found = append(found, inst)
+			}
+		}
+	}
+	scan(program.Main)
+	for _, fn := range program.Functions {
+		if fn != nil {
+			scan(fn.Instructions)
+		}
+	}
+	return found
+}
+
 func countOpcode(program *bytecode.BCProgram, op bytecode.Opcode) int {
 	count := 0
 	scan := func(insts []bytecode.BCInstruction) {
