@@ -256,7 +256,8 @@ func main() {
 		} else {
 			os.Remove(appTestFile)
 		}
-	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "cli_app" {
+	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && (root.Children[0].Value == "cli_app" ||
+		(root.Children[0].Value == "http_server" && flag.NFlag() == 0 && len(setAfterInput) == 0)) {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
@@ -266,6 +267,9 @@ func main() {
 		outFile := filepath.Join(outputDir, strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))+".hfbc")
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
+		}
+		if root.Children[0].Value == "http_server" {
+			return
 		}
 		if flag.NFlag() == 0 && len(setAfterInput) == 0 {
 			prog, err := bytecode.ReadArtifact(bytes.NewReader(buf.Bytes()))
