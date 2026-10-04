@@ -257,7 +257,7 @@ func main() {
 			os.Remove(appTestFile)
 		}
 	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && (root.Children[0].Value == "cli_app" ||
-		(root.Children[0].Value == "http_server" && flag.NFlag() == 0 && len(setAfterInput) == 0)) {
+		root.Children[0].Value == "http_server") {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
