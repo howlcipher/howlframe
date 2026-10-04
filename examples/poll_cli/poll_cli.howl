@@ -1,0 +1,19 @@
+(cli_app
+  (let (started (time_now))
+    (let (attempt 0)
+      (let (limit 3)
+        (let (seen 0)
+          (do
+            (while (and (< attempt limit) (= seen 0))
+              (do
+                (sleep 400)
+                (set attempt (+ attempt 1))
+                (if (> (time_now) started)
+                  (set seen 1))))
+            (if (= seen 1)
+              (do
+                (print "poll ready" attempt)
+                (exit 0))
+              (do
+                (print "poll timeout" attempt)
+                (exit 1)))))))))
