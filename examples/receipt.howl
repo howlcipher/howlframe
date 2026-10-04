@@ -1,0 +1,73 @@
+; receipt: total a short cash receipt on the no-flag bytecode path.
+; Command: howlframe examples/receipt.howl
+; Stdin is one item per line: "<name> <qty> <unit_cents>".
+; name is one non-empty token. qty and unit_cents are non-negative
+; base-10 integers (leading zeros allowed; a sign or other character
+; is rejected). Fields are separated by a single space, so the line
+; splits into exactly three non-empty fields.
+; An empty line ends the receipt. End of stdin is reported as an
+; empty line and ends it the same way. That empty line is not an item.
+; A line that does not match is not an item: the program writes
+; "bad line: " plus the line plus a newline to stderr and exits 2
+; without printing the summary. Lines already accepted stay printed.
+; For each accepted line it prints "<name> <extension>" where
+; extension is qty * unit_cents. After the items it prints
+; "lines: <n>", "units: <sum of qty>", and "total_cents: <sum of extensions>".
+(cli_app
+	(defun line_cents (qty unit)
+		(type_hints (qty int) (unit int) (return int))
+		(return (* qty unit))
+	)
+	(let (line (read_line))
+		(let (lines 0)
+			(let (units 0)
+				(let (total 0)
+					(do
+						(while (!= line "")
+							(let (parts (str_split line " "))
+								(if (!= (list_len parts) 3)
+									(do
+										(stderr (+ (+ "bad line: " line) "\n"))
+										(exit 2)
+									)
+									(let (name (list_get parts 0))
+										(let (qty_s (list_get parts 1))
+											(let (cents_s (list_get parts 2))
+												(if (or (= name "") (or (= qty_s "") (= cents_s "")))
+													(do
+														(stderr (+ (+ "bad line: " line) "\n"))
+														(exit 2)
+													)
+													(if (and (regex_match "^[0-9]+$" qty_s) (regex_match "^[0-9]+$" cents_s))
+														(let (qty (to_int qty_s))
+															(let (cents (to_int cents_s))
+																(do
+																	(set lines (+ lines 1))
+																	(set units (+ units qty))
+																	(set total (+ total (call line_cents qty cents)))
+																	(print name (call line_cents qty cents))
+																	(set line (read_line))
+																)
+															)
+														)
+														(do
+															(stderr (+ (+ "bad line: " line) "\n"))
+															(exit 2)
+														)
+													)
+												)
+											)
+										)
+									)
+								)
+							)
+						)
+						(print "lines:" lines)
+						(print "units:" units)
+						(print "total_cents:" total)
+					)
+				)
+			)
+		)
+	)
+)
