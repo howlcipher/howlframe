@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -81,6 +82,18 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 			exit:   0,
 			stdout: "apples 300\nbread 325\nmilk 7\nlines: 3\nunits: 4\ntotal_cents: 632\n",
 		},
+		// poll_cli prints "poll ready" and the attempt count, then exits 0.
+		// time_now is unix seconds and each sleep is 400ms, with a bound of 3,
+		// so the count is 1, 2, or 3 depending on the wall clock. That integer
+		// is the clock, not a bytecode bug. The program is not rewritten, and
+		// the count stays in the match.
+		{
+			source:        "examples/poll_cli/poll_cli.howl",
+			stdin:         "",
+			exit:          0,
+			stderr:        "",
+			stdoutPattern: "^poll ready [123]\n$",
+		},
 	}
 
 	found := cliAppSources(t, repoRoot)
@@ -144,7 +157,12 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 			if info.Size() == 0 {
 				t.Fatalf("%s.hfbc is empty", base)
 			}
-			if exit != c.exit || outBuf.String() != c.stdout || errBuf.String() != c.stderr {
+			if c.stdoutPattern != "" {
+				if exit != c.exit || !regexp.MustCompile(c.stdoutPattern).MatchString(outBuf.String()) || errBuf.String() != c.stderr {
+					t.Fatalf("exit %d stdout %q stderr %q, want exit %d stdout matching %q stderr %q",
+						exit, outBuf.String(), errBuf.String(), c.exit, c.stdoutPattern, c.stderr)
+				}
+			} else if exit != c.exit || outBuf.String() != c.stdout || errBuf.String() != c.stderr {
 				t.Fatalf("exit %d stdout %q stderr %q, want exit %d stdout %q stderr %q",
 					exit, outBuf.String(), errBuf.String(), c.exit, c.stdout, c.stderr)
 			}
@@ -158,6 +176,9 @@ type cliAppNoFlagCase struct {
 	exit   int
 	stdout string
 	stderr string
+	// stdoutPattern, when set, is matched against stdout instead of exact
+	// equality. Empty means the exact stdout string above.
+	stdoutPattern string
 }
 
 func cliAppSources(t *testing.T, repoRoot string) []string {
