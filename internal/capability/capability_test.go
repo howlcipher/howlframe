@@ -33,6 +33,9 @@ func TestForConstruct_Known(t *testing.T) {
 		{"read_file", Filesystem},
 		{"exec", Process},
 		{"env", Environment},
+		{"confidence", Network},
+		{"neural_circuit", Network},
+		{"ephemeral_circuit", Network},
 	}
 	for _, tc := range cases {
 		if got := ForConstruct(tc.construct); got != tc.expected {

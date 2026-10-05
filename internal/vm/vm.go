@@ -906,6 +906,10 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 	}
 
 	if fn.lazySynthesize {
+		// Synthesis sends a model request, so it needs the same network grant
+		// the bytecode VM requires for a lazy_synthesize CALL. Check before
+		// the request is built so a denied run never reaches the model host.
+		interp.requireCapability(capability.Network, node)
 		promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
 		reqBody, _ := json.Marshal(map[string]any{
 			"model":  "llama3",

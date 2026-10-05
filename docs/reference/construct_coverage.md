@@ -24,14 +24,14 @@
 | `call` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_args` | Yes | None | No | No | - | AUTHORITATIVE |
-| `confidence` | Yes | None | No | No | - | AUTHORITATIVE |
+| `confidence` | Yes | network | No | No | - | AUTHORITATIVE |
 | `db_connect` | Yes | database | No | No | - | AUTHORITATIVE |
 | `defun` | Yes | None | No | No | - | AUTHORITATIVE |
 | `dict` | Yes | None | No | No | - | AUTHORITATIVE |
 | `do` | Yes | None | No | No | - | AUTHORITATIVE |
 | `encode_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `env` | Yes | environment | No | No | - | AUTHORITATIVE |
-| `ephemeral_circuit` | Yes | None | No | No | - | AUTHORITATIVE |
+| `ephemeral_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
 | `exec` | Yes | process | No | No | - | AUTHORITATIVE |
 | `exit` | Yes | None | No | No | - | AUTHORITATIVE |
 | `export` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -59,7 +59,7 @@
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
-| `neural_circuit` | Yes | None | No | No | - | AUTHORITATIVE |
+| `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
 | `optimize_block` | Yes | None | No | No | - | AUTHORITATIVE |
 | `optimize_signature` | Yes | None | No | No | - | AUTHORITATIVE |
 | `or` | Yes | None | No | No | - | AUTHORITATIVE |
