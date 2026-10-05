@@ -9,12 +9,12 @@
 | `CALL` | string, int64 | var | 1 |  | Calls a function |
 | `CLI_ARGS` |  | 0 | 1 |  | Gets command line arguments |
 | `CLI_ARGS_GET` |  | 1 | 1 |  | Gets a specific command line argument |
-| `CONFIDENCE` |  | 1 | 1 |  | Returns confidence score for LLM generate |
+| `CONFIDENCE` |  | 1 | 1 | network | Returns confidence score for LLM generate |
 | `CONVERT` | string | 1 | 1 |  | Type conversion |
 | `DB_CONNECT` | string, string, string | 0 | 0 | database | Connects to a database |
 | `ENCODE_JSON` |  | 1 | 1 |  | Encodes a value as a JSON string |
 | `ENV` |  | 1 | 1 | environment | Gets an environment variable |
-| `EPHEMERAL_CIRCUIT` | int64 | var | 1 |  | Generates an ephemeral specialized model, executes it, and discards it |
+| `EPHEMERAL_CIRCUIT` | int64 | var | 1 | network | Generates an ephemeral specialized model, executes it, and discards it |
 | `EXEC` | int64 | var | 1 | process | Executes a shell command |
 | `EXIT` |  | 1 | 0 |  | Exits the process with a given status code |
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
@@ -44,7 +44,7 @@
 | `MAP_KEYS` |  | 1 | 1 |  | Returns every key in a dictionary, sorted |
 | `MAP_SET` | string | 2 | 0 |  | Sets a key in a dictionary |
 | `MKDIR` |  | 1 | 0 | filesystem | Creates a directory |
-| `NEURAL_CIRCUIT` | int64 | var | 1 |  | Executes an LLM logic circuit with a given number of inputs and an instruction |
+| `NEURAL_CIRCUIT` | int64 | var | 1 | network | Executes an LLM logic circuit with a given number of inputs and an instruction |
 | `PARSE_JSON` | string | 0 | 1 |  | Parses JSON from a string variable |
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |

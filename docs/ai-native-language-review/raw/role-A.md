@@ -1,0 +1,2 @@
+## Your specialized role: A — Compiler & runtime architect
+Focus: pipeline ownership (AST, checker, HFIR verifier, AST->bytecode compiler, HFIR->bytecode experimental lowering, interpreter, VM, Go/JS/WAT backends). Where are semantics defined more than once? Is HFIR a real canonical artifact or a gate? Is the .hfbc artifact (gob payload in an HFBC envelope) a sound auditable format? What is the smallest architecture that serves the thesis? Identify concrete semantic-divergence risks between interpreter, VM, and generated Go.
