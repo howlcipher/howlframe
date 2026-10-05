@@ -492,7 +492,7 @@ func executeJSBackend(filePath string, opts RunOptions) ExecutionResult {
 		}
 	}
 
-	codegenCmd := exec.Command(compiler, sourcePath, "-o", tmpDir)
+	codegenCmd := exec.Command(compiler, "build", "--target=js", sourcePath, "-o", tmpDir)
 	codegenOut, codegenErr := codegenCmd.CombinedOutput()
 	if codegenErr != nil {
 		errMsg := strings.TrimSpace(string(codegenOut))

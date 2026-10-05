@@ -360,7 +360,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 	if node.Type == "List" && len(node.Children) > 0 {
 		head := node.Children[0].Value
 		switch head {
-		case "cli_app":
+		case "cli_app", "web_app":
 			for _, child := range node.Children[1:] {
 				insts = append(insts, c.compileNode(child)...)
 			}

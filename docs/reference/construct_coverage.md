@@ -107,7 +107,7 @@
 | `type_param` | No | None | Yes | No | - | AUTHORITATIVE |
 | `use` | No | None | Yes | No | - | AUTHORITATIVE |
 | `wasm_app` | No | None | No | Yes | - | AUTHORITATIVE |
-| `web_app` | No | None | No | Yes | - | AUTHORITATIVE |
+| `web_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `while` | Yes | None | No | No | - | AUTHORITATIVE |
 | `with_context` | No | None | Yes | No | - | AUTHORITATIVE |
 | `write_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
