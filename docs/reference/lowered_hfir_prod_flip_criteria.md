@@ -119,6 +119,7 @@ store_keys
 store_open
 store_put
 task
+wasm_app
 web_app
 ```
 

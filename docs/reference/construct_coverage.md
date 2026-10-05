@@ -106,7 +106,7 @@
 | `type_hints` | No | None | Yes | No | - | AUTHORITATIVE |
 | `type_param` | No | None | Yes | No | - | AUTHORITATIVE |
 | `use` | No | None | Yes | No | - | AUTHORITATIVE |
-| `wasm_app` | No | None | No | Yes | - | AUTHORITATIVE |
+| `wasm_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `web_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `while` | Yes | None | No | No | - | AUTHORITATIVE |
 | `with_context` | No | None | Yes | No | - | AUTHORITATIVE |

@@ -181,7 +181,7 @@ var table = []Entry{
 	{Name: "type_hints", Support: CompileTimeOnly, Opaque: true, Note: "pure annotation; children are type names, not code"},
 	{Name: "type_param", Support: CompileTimeOnly, Opaque: true, Note: "generic parameter annotation; children are type names, not code"},
 	{Name: "use", Support: CompileTimeOnly, Note: "resolved by parser.ExpandIncludes/ast.ResolveModules before checker.Check or lowering ever run (improvements.md #95); nested use inside an already-used module is rejected at parse time instead"},
-	{Name: "wasm_app", Support: Unsupported, Note: "a Wasm program root, not a bytecode program root"},
+	{Name: "wasm_app", Support: Supported, Note: "compiles every child in sequence"},
 	{Name: "web_app", Support: Supported, Note: "compiles every child in sequence"},
 	{Name: "while", Support: Supported, Note: "JUMP_IF_FALSE / JUMP"},
 	{Name: "with_context", Support: CompileTimeOnly, Opaque: true, Note: "eliminated by ast.ApplyWithContext before lowering; its variable list is structural, not code"},
