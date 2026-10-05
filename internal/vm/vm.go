@@ -2996,8 +2996,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpEnv:
 			name := vm.popCheckedString(inst, ip, "env expected string name")
 			vm.push(os.Getenv(name))
-		case bytecode.OpSpawnAgent, bytecode.OpTask:
-			panic(NewRuntimeError("UNSUPPORTED_CONSTRUCT", "main", vm.ip, inst.Op, "unsupported construct: %s", inst.OpString))
+		case bytecode.OpTask:
+			vm.push(inst.StringOperand)
+		case bytecode.OpSpawnAgent:
+			v := vm.pop(inst.Op)
+			task, ok := v.(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "spawn_agent expected string task, got %T", v))
+			}
+			name := inst.StringOperand
+			fmt.Fprintf(vm.Out, "[Swarm VM] Spawning agent %q for task: %q\n", name, task)
+			fmt.Fprintf(vm.Out, "[Swarm VM] Agent %q completed task: %q\n", name, task)
 		default:
 			panic(NewRuntimeError("VM_INTERNAL", "main", ip, inst.Op, "unknown opcode: %s", bytecode.Registry[inst.Op].Name))
 		}

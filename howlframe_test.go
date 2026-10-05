@@ -1941,54 +1941,45 @@ func runCompiledBytecodeForTest(t *testing.T, binary, sourcePath string, caps []
 	return exec.Command(binary, args...).CombinedOutput()
 }
 
-func assertSwarmUnsupportedConstruct(t *testing.T, caps []string) {
-	t.Helper()
+func TestBytecodeRunSwarmFixtureRunsWithProcess(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
-	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_swarm.howl", caps, nil)
-	if err == nil {
-		t.Fatalf("expected -run-bc on test_swarm.howl to fail, but exited 0")
-	}
-	msg := string(out)
-	if strings.Contains(msg, "VM_INTERNAL") {
-		t.Fatalf("expected unsupported-construct code, got VM_INTERNAL: %s", msg)
-	}
-	if !strings.Contains(msg, "UNSUPPORTED_CONSTRUCT") || !strings.Contains(msg, "TASK") {
-		t.Fatalf("expected UNSUPPORTED_CONSTRUCT and TASK in output, got: %s", msg)
-	}
-
-	var failure struct {
-		Code    string `json:"code"`
-		Opcode  string `json:"opcode"`
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &failure); err != nil {
-		t.Fatalf("expected structured JSON runtime failure, got parse error %v on output: %s", err, msg)
-	}
-	if failure.Code != "UNSUPPORTED_CONSTRUCT" || failure.Opcode != "TASK" {
-		t.Fatalf("expected UNSUPPORTED_CONSTRUCT for TASK, got %#v", failure)
-	}
-	if !strings.Contains(failure.Message, "TASK") {
-		t.Fatalf("expected failure message citing TASK, got %q", failure.Message)
+	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_swarm.howl", []string{"process"}, nil)
+	const want = "[Swarm VM] Spawning agent \"Researcher\" for task: \"find sources on quantum computing\"\n[Swarm VM] Agent \"Researcher\" completed task: \"find sources on quantum computing\"\n[Swarm VM] Spawning agent \"Writer\" for task: \"summarize the findings\"\n[Swarm VM] Agent \"Writer\" completed task: \"summarize the findings\"\n"
+	if err != nil || string(out) != want {
+		t.Fatalf("run: %v, output %q, want %q", err, out, want)
 	}
 }
 
-func TestBytecodeRunSwarmFixtureReportsUnsupportedConstruct(t *testing.T) {
-	assertSwarmUnsupportedConstruct(t, []string{"process"})
+func TestBytecodeRunSwarmFixtureDeniedWithoutProcess(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	for _, source := range []string{"tests/test_swarm.howl", "tests/test_malformed_opcode.howl"} {
+		t.Run(source, func(t *testing.T) {
+			out, err := runCompiledBytecodeForTest(t, binary, source, nil, nil)
+			if err == nil {
+				t.Fatal("expected capability denial")
+			}
+			var failure struct {
+				Phase   string
+				Code    string
+				Opcode  string
+				Message string
+			}
+			if err := json.Unmarshal(out, &failure); err != nil {
+				t.Fatalf("invalid JSON failure: %v: %s", err, out)
+			}
+			if failure.Phase != "runtime" || failure.Code != "CAPABILITY_DENIED" || failure.Opcode != "SPAWN_AGENT" || failure.Message != "capability denied: process" {
+				t.Fatalf("unexpected failure: %#v", failure)
+			}
+		})
+	}
 }
 
-func TestBytecodeRunSwarmFixtureWithoutCapabilities(t *testing.T) {
-	assertSwarmUnsupportedConstruct(t, nil)
-}
-
-func TestBytecodeRunWithMalformedOpcode(t *testing.T) {
+func TestBytecodeRunSingleSpawnAgentFixture(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
 	out, err := runCompiledBytecodeForTest(t, binary, "tests/test_malformed_opcode.howl", []string{"process"}, nil)
-	if err == nil {
-		t.Fatalf("expected -run-bc on test_malformed_opcode.howl to fail, but exited 0")
-	}
-	msg := string(out)
-	if !strings.Contains(msg, "UNSUPPORTED_CONSTRUCT") {
-		t.Fatalf("expected UNSUPPORTED_CONSTRUCT in output, got: %s", msg)
+	const want = "[Swarm VM] Spawning agent \"Researcher\" for task: \"find sources on quantum computing\"\n[Swarm VM] Agent \"Researcher\" completed task: \"find sources on quantum computing\"\n"
+	if err != nil || string(out) != want {
+		t.Fatalf("run: %v, output %q, want %q", err, out, want)
 	}
 }
 
