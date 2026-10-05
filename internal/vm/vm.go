@@ -3006,7 +3006,22 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			name := inst.StringOperand
 			fmt.Fprintf(vm.Out, "[Swarm VM] Spawning agent %q for task: %q\n", name, task)
+			bodyLen := int(inst.IntOperand)
+			if bodyLen > 0 {
+				bodyInsts := insts[ip+1 : ip+1+bodyLen]
+				capturedEnv := NewBcEnv(nil)
+				for e := env; e != nil; e = e.parent {
+					for k, v := range e.vars {
+						if _, exists := capturedEnv.vars[k]; !exists {
+							capturedEnv.vars[k] = v
+						}
+					}
+				}
+				childVM := &BCVM{prog: vm.prog, env: capturedEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM.run(bodyInsts, capturedEnv)
+			}
 			fmt.Fprintf(vm.Out, "[Swarm VM] Agent %q completed task: %q\n", name, task)
+			ip += bodyLen
 		default:
 			panic(NewRuntimeError("VM_INTERNAL", "main", ip, inst.Op, "unknown opcode: %s", bytecode.Registry[inst.Op].Name))
 		}

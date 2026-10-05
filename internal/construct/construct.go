@@ -169,7 +169,7 @@ var table = []Entry{
 	{Name: "str_join", Support: Supported, Note: "STR_JOIN"},
 	{Name: "str_split", Support: Supported, Note: "STR_SPLIT"},
 	{Name: "struct", Support: Unsupported, Note: "the VM has no struct representation; accepting the declaration would hide the gap"},
-	{Name: "task", Support: Supported, Opaque: true, Note: "TASK; reads child .Value directly"},
+	{Name: "task", Support: Supported, Opaque: true, Note: "TASK; reads description child .Value directly; optional body forms execute through SPAWN_AGENT"},
 	{Name: "test", Support: Unsupported, Tracker: "improvements.md #96", Note: "test blocks are extracted into Go _test.go output; the VM cannot run them"},
 	{Name: "time_now", Support: Supported, Note: "TIME_NOW"},
 	{Name: "to_float", Support: Supported, Note: "CONVERT"},

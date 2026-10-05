@@ -319,10 +319,13 @@ func checkJSStatement(node *ast.Node, depth int) {
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
 	} else if head == "task" {
-		if len(node.Children) != 2 {
-			ast.ReportError("task expects (task desc)", node.Line, node.Column)
+		if len(node.Children) < 2 {
+			ast.ReportError("task expects (task desc body...)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+		for _, stmt := range node.Children[2:] {
+			checkJSStatement(stmt, depth+1)
+		}
 	} else if head == "time_now" {
 		if len(node.Children) != 1 {
 			ast.ReportError("time_now expects (time_now)", node.Line, node.Column)
