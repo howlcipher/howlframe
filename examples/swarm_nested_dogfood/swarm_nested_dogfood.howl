@@ -1,0 +1,10 @@
+(cli_app
+  (print "swarm start")
+  (spawn_agent "Outer" (task "outer work"
+    (print "outer before")
+    (spawn_agent "Inner" (task "inner work"
+      (print "inner body")))
+    (print "outer after")))
+  (spawn_agent "Denied" (task "read environment"
+    (env "HOME")))
+  (print "swarm done"))

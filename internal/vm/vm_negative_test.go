@@ -715,21 +715,13 @@ func TestVMTaskAndSpawnAgent(t *testing.T) {
 			t.Fatalf("failure %#v, stdout %q; want %q", ev.RuntimeFailure, out.String(), want)
 		}
 	})
-	t.Run("body capability failure propagates", func(t *testing.T) {
-		spawnWithEnv := spawn
-		spawnWithEnv.IntOperand = 2
-		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
-			task, spawnWithEnv,
-			{Op: bytecode.OpLoadConst, ValueOperand: "PATH"},
-			{Op: bytecode.OpEnv},
-		}}
-		var out bytes.Buffer
-		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, nil, 0)
-		if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" || ev.RuntimeFailure.Opcode != "ENV" {
-			t.Fatalf("expected body capability failure, got %#v", ev.RuntimeFailure)
-		}
-		if out.String() != "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\n" {
-			t.Fatalf("unexpected stdout %q", out.String())
+	t.Run("body capability failure is isolated", func(t *testing.T) {
+		insts := append(append([]bytecode.BCInstruction{}, body[:2]...), bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: "PATH"}, bytecode.BCInstruction{Op: bytecode.OpEnv})
+		insts = append(insts, spawnTestPrint("parent after")...)
+		var out, err bytes.Buffer
+		ev := RunBytecodeWithEvidence(&bytecode.BCProgram{Main: insts}, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, &err, 0)
+		if ev.RuntimeFailure != nil || out.String() != spawnTestStart("Worker")+"parent after\n" || err.String() != "[Swarm VM] Agent \"Worker\" failed task: \"work\": CAPABILITY_DENIED: capability denied: environment\n" {
+			t.Fatalf("failure %#v stdout %q stderr %q", ev.RuntimeFailure, out.String(), err.String())
 		}
 	})
 	t.Run("try_let catches type error", func(t *testing.T) {
