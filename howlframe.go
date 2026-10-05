@@ -254,25 +254,21 @@ func main() {
 			os.Exit(vm.RunBytecodeWithPolicy(prog, nil, vm.DefaultExecutionPolicy(), nil, os.Stdin, os.Stdout, os.Stderr))
 		}
 	} else {
-		runHFIRGate(root, hfirModule, hfirTargetGo)
-		goCode, testCode := gogen.GenerateCode(root)
-
-		serverFile := filepath.Join(outputDir, "server.go")
-		serverTestFile := filepath.Join(outputDir, "server_test.go")
-
-		err = writeArtifact(serverFile, []byte(goCode))
-		if err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", serverFile, err), 0, 0)
-		}
-
-		if testCode != "" {
-			err = writeArtifact(serverTestFile, []byte(testCode))
-			if err != nil {
-				ast.ReportError(fmt.Sprintf("Failed to write %s: %v", serverTestFile, err), 0, 0)
+		// Named roots (cli_app, http_server, web_app, wasm_app) write .hfbc above.
+		// Anything else used to fall through to gogen/server.go on this bare path;
+		// fail closed instead. Explicit Go emission remains: howlframe build --target=go.
+		line, column := 0, 0
+		got := "invalid root"
+		if root != nil {
+			line, column = root.Line, root.Column
+			if root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" {
+				got = root.Children[0].Value
+				line, column = root.Children[0].Line, root.Children[0].Column
+			} else if root.Type != "List" {
+				got = root.Type
 			}
-		} else {
-			os.Remove(serverTestFile)
 		}
+		ast.ReportError(fmt.Sprintf("bare path requires cli_app, http_server, web_app, or wasm_app root (got %s); use howlframe build --target=go for explicit Go emission", got), line, column)
 	}
 }
 
