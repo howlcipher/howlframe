@@ -1391,6 +1391,7 @@ type BCVM struct {
 	insts       []bytecode.BCInstruction
 	args        []string
 	executed    int
+	spawnDepth  int
 	Limits      VMLimits
 	AllowedCaps []capability.Capability
 	In          io.Reader
@@ -3005,6 +3006,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "spawn_agent expected string task, got %T", v))
 			}
 			name := inst.StringOperand
+			if vm.spawnDepth >= vm.Limits.MaxCallDepth {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "spawn nesting depth limit exceeded"))
+			}
+			stackHeight := len(vm.stack)
+			failed := false
 			fmt.Fprintf(vm.Out, "[Swarm VM] Spawning agent %q for task: %q\n", name, task)
 			bodyLen := int(inst.IntOperand)
 			if bodyLen > 0 {
@@ -3013,14 +3019,39 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				for e := env; e != nil; e = e.parent {
 					for k, v := range e.vars {
 						if _, exists := capturedEnv.vars[k]; !exists {
-							capturedEnv.vars[k] = v
+							capturedEnv.vars[k] = cloneStoreValue(v)
 						}
 					}
 				}
-				childVM := &BCVM{prog: vm.prog, env: capturedEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
-				childVM.run(bodyInsts, capturedEnv)
+				childVM := &BCVM{prog: vm.prog, env: capturedEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1}
+				func() {
+					defer func() {
+						// Account for all child work even when it exits through a panic.
+						vm.executed = childVM.executed
+						vm.truncateStack(stackHeight)
+						if r := recover(); r != nil {
+							switch e := r.(type) {
+							case VmReturn:
+								panic(r)
+							case VmExit:
+								panic(r)
+							case *VMError:
+								if e.Code == "LIMIT_EXCEEDED" {
+									panic(r)
+								}
+								fmt.Fprintf(vm.ErrOut, "[Swarm VM] Agent %q failed task: %q: %s: %s\n", name, task, e.Code, e.Message)
+							default:
+								fmt.Fprintf(vm.ErrOut, "[Swarm VM] Agent %q failed task: %q: VM_INTERNAL: %v\n", name, task, r)
+							}
+							failed = true
+						}
+					}()
+					childVM.run(bodyInsts, capturedEnv)
+				}()
 			}
-			fmt.Fprintf(vm.Out, "[Swarm VM] Agent %q completed task: %q\n", name, task)
+			if !failed {
+				fmt.Fprintf(vm.Out, "[Swarm VM] Agent %q completed task: %q\n", name, task)
+			}
 			ip += bodyLen
 		default:
 			panic(NewRuntimeError("VM_INTERNAL", "main", ip, inst.Op, "unknown opcode: %s", bytecode.Registry[inst.Op].Name))

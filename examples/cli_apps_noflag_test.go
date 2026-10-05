@@ -41,6 +41,12 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 	// A program that is not listed fails the test instead of being skipped.
 	want := []cliAppNoFlagCase{
 		{
+			source: "examples/swarm_nested_dogfood/swarm_nested_dogfood.howl",
+			exit:   1,
+			stdout: "swarm start\n",
+			stderr: "{\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
+		},
+		{
 			source: "examples/swarm_dogfood/swarm_dogfood.howl",
 			exit:   1,
 			stdout: "swarm start\n",
