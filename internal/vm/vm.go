@@ -1676,6 +1676,14 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 		if r := recover(); r != nil {
 			if exit, ok := r.(VmExit); ok {
 				evidence.ExitCode = exit.code
+			} else if ret, ok := r.(VmReturn); ok {
+				// Top-level RETURN matches Interpret's returnSignal: an int64
+				// becomes the process exit code; other values exit 0.
+				if ret.val != nil {
+					if num, ok := ret.val.(int64); ok {
+						evidence.ExitCode = int(num)
+					}
+				}
 			} else if vmerr, ok := r.(*VMError); ok {
 				if nodeID, ok := prog.TrustedMainOriginAt(vmerr.Instruction); ok {
 					vmerr.NodeID = nodeID

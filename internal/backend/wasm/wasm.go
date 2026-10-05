@@ -187,6 +187,10 @@ func (g *wasmGenerator) emitIR(ir *ir.IRNode, source *ast.Node) string {
 		return fmt.Sprintf("(block (result %s) %s)", wasmType(ir.Kids[len(ir.Kids)-1].Inferred), strings.Join(parts, " "))
 	case "return":
 		return fmt.Sprintf("(return %s)", g.expression(ir.Kids[0]))
+	case "print":
+		// Host print is available on the HFBC/-run-bc path; WAT has no stdout import.
+		ast.ReportError("Wasm backend does not support \"print\"", source.Line, source.Column)
+		return ""
 	case "list":
 		region := g.aggregateRegion(source)
 		dataPointer := region.base + 8
