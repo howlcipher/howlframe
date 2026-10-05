@@ -133,7 +133,11 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 				t.Fatalf("failed to write input: %v", err)
 			}
 
-			command := exec.Command(howlframeBinary, inputFile, "-o", outputDir)
+			args := []string{inputFile, "-o", outputDir}
+			if test.name == "javascript" {
+				args = append([]string{"build", "--target=js"}, args...)
+			}
+			command := exec.Command(howlframeBinary, args...)
 			command.Dir = workDir
 			if output, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("transpilation failed: %v\n%s", err, output)

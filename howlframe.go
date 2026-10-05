@@ -237,27 +237,8 @@ func main() {
 		if err = writeArtifact(wasmFile, []byte(wasmCode)); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", wasmFile, err), 0, 0)
 		}
-	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "web_app" {
-		runHFIRGate(root, hfirModule, hfirTargetJavaScript)
-		jsCode, testCode := javascript.GenerateJSCode(root)
-
-		appFile := filepath.Join(outputDir, "app.js")
-		appTestFile := filepath.Join(outputDir, "app.test.js")
-
-		err = writeArtifact(appFile, []byte(jsCode))
-		if err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", appFile, err), 0, 0)
-		}
-		if testCode != "" {
-			err = writeArtifact(appTestFile, []byte(testCode))
-			if err != nil {
-				ast.ReportError(fmt.Sprintf("Failed to write %s: %v", appTestFile, err), 0, 0)
-			}
-		} else {
-			os.Remove(appTestFile)
-		}
 	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && (root.Children[0].Value == "cli_app" ||
-		root.Children[0].Value == "http_server") {
+		root.Children[0].Value == "http_server" || root.Children[0].Value == "web_app") {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
@@ -268,7 +249,7 @@ func main() {
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
-		if root.Children[0].Value == "http_server" {
+		if root.Children[0].Value == "http_server" || root.Children[0].Value == "web_app" {
 			return
 		}
 		if flag.NFlag() == 0 && len(setAfterInput) == 0 {
