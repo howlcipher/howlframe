@@ -1,0 +1,2 @@
+## Your specialized role: D — Skeptic / devil's advocate
+Focus: argue the strongest honest case that this project should be narrowed sharply, pivoted, or stopped. Why wouldn't a team just use WASM+WASI, Starlark, CEL, or OPA, or plain JSON action schemas with a policy engine? Where is the repo's self-description ahead of its evidence? Which "AI-native" features are demo-ware? Then — only after that — state the narrowest version of HowlFrame you would still fund, and what evidence would change your mind.
