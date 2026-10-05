@@ -1,6 +1,9 @@
 (cli_app
   (print "swarm start")
-  (spawn_agent "Researcher" (task "collect sources"))
-  (spawn_agent "Writer" (task "draft summary"))
-  (spawn_agent "Reviewer" (task "check summary"))
+  (spawn_agent "Researcher" (task "collect sources"
+    (print "researcher-body")))
+  (spawn_agent "Writer" (task "draft summary"
+    (print "writer-body")))
+  (spawn_agent "Reviewer" (task "check summary"
+    (print "reviewer-body")))
   (print "swarm done"))

@@ -61,8 +61,8 @@ func TestSwarmDogfoodHFBC(t *testing.T) {
 	}
 	source := filepath.Join(repoRoot, "examples", "swarm_dogfood", "swarm_dogfood.howl")
 	want := "swarm start\n"
-	for _, pair := range [][2]string{{"Researcher", "collect sources"}, {"Writer", "draft summary"}, {"Reviewer", "check summary"}} {
-		want += fmt.Sprintf("[Swarm VM] Spawning agent %q for task: %q\n[Swarm VM] Agent %q completed task: %q\n", pair[0], pair[1], pair[0], pair[1])
+	for _, pair := range [][3]string{{"Researcher", "collect sources", "researcher-body"}, {"Writer", "draft summary", "writer-body"}, {"Reviewer", "check summary", "reviewer-body"}} {
+		want += fmt.Sprintf("[Swarm VM] Spawning agent %q for task: %q\n%s\n[Swarm VM] Agent %q completed task: %q\n", pair[0], pair[1], pair[2], pair[0], pair[1])
 	}
 	want += "swarm done\n"
 	for _, mode := range []string{"compile-bc", "build"} {
@@ -87,15 +87,16 @@ func TestSwarmDogfoodHFBC(t *testing.T) {
 				t.Fatalf("denied run: exit %d stdout %q stderr %q", code, out, stderr)
 			}
 			var failure struct {
-				Phase   string
-				Code    string
-				Opcode  string
-				Message string
+				Instruction int
+				Phase       string
+				Code        string
+				Opcode      string
+				Message     string
 			}
 			if err := json.Unmarshal([]byte(stderr), &failure); err != nil {
 				t.Fatalf("invalid JSON: %v: %q", err, stderr)
 			}
-			if failure.Phase != "runtime" || failure.Code != "CAPABILITY_DENIED" || failure.Opcode != "SPAWN_AGENT" || failure.Message != "capability denied: process" {
+			if failure.Instruction != 3 || failure.Phase != "runtime" || failure.Code != "CAPABILITY_DENIED" || failure.Opcode != "SPAWN_AGENT" || failure.Message != "capability denied: process" {
 				t.Fatalf("unexpected failure: %#v", failure)
 			}
 		})

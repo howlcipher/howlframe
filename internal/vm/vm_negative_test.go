@@ -665,6 +665,9 @@ func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
 func TestVMTaskAndSpawnAgent(t *testing.T) {
 	task := bytecode.BCInstruction{Op: bytecode.OpTask, OpString: "TASK", StringOperand: "work"}
 	spawn := bytecode.BCInstruction{Op: bytecode.OpSpawnAgent, OpString: "SPAWN_AGENT", StringOperand: "Worker"}
+	spawnBody := spawn
+	spawnBody.IntOperand = 2
+	body := []bytecode.BCInstruction{task, spawnBody, {Op: bytecode.OpLoadConst, ValueOperand: "worker-body"}, {Op: bytecode.OpPrint, IntOperand: 1}}
 	number := bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(123)}
 	for _, tc := range []struct {
 		name         string
@@ -674,6 +677,7 @@ func TestVMTaskAndSpawnAgent(t *testing.T) {
 	}{
 		{"task pushes description without capabilities", []bytecode.BCInstruction{task, {Op: bytecode.OpPrint, IntOperand: 1}}, nil, "work\n", ""},
 		{"spawn completes synchronously", []bytecode.BCInstruction{task, spawn}, []capability.Capability{capability.Process}, "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\n[Swarm VM] Agent \"Worker\" completed task: \"work\"\n", ""},
+		{"spawn executes body synchronously", body, []capability.Capability{capability.Process}, "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\nworker-body\n[Swarm VM] Agent \"Worker\" completed task: \"work\"\n", ""},
 		{"capability check precedes stack pop", []bytecode.BCInstruction{spawn}, nil, "", "CAPABILITY_DENIED"},
 		{"capability check precedes type check", []bytecode.BCInstruction{number, spawn}, nil, "", "CAPABILITY_DENIED"},
 		{"non-string task", []bytecode.BCInstruction{number, spawn}, []capability.Capability{capability.Process}, "", "TYPE_ERROR"},
@@ -696,6 +700,38 @@ func TestVMTaskAndSpawnAgent(t *testing.T) {
 			}
 		})
 	}
+	t.Run("body captures environment", func(t *testing.T) {
+		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+			{Op: bytecode.OpLoadConst, ValueOperand: "captured"},
+			{Op: bytecode.OpStoreVar, StringOperand: "message"},
+			task, spawnBody,
+			{Op: bytecode.OpLoadVar, StringOperand: "message"},
+			{Op: bytecode.OpPrint, IntOperand: 1},
+		}}
+		var out bytes.Buffer
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, nil, 0)
+		want := "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\ncaptured\n[Swarm VM] Agent \"Worker\" completed task: \"work\"\n"
+		if ev.RuntimeFailure != nil || out.String() != want {
+			t.Fatalf("failure %#v, stdout %q; want %q", ev.RuntimeFailure, out.String(), want)
+		}
+	})
+	t.Run("body capability failure propagates", func(t *testing.T) {
+		spawnWithEnv := spawn
+		spawnWithEnv.IntOperand = 2
+		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+			task, spawnWithEnv,
+			{Op: bytecode.OpLoadConst, ValueOperand: "PATH"},
+			{Op: bytecode.OpEnv},
+		}}
+		var out bytes.Buffer
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, nil, 0)
+		if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" || ev.RuntimeFailure.Opcode != "ENV" {
+			t.Fatalf("expected body capability failure, got %#v", ev.RuntimeFailure)
+		}
+		if out.String() != "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\n" {
+			t.Fatalf("unexpected stdout %q", out.String())
+		}
+	})
 	t.Run("try_let catches type error", func(t *testing.T) {
 		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
 			tryLetInstruction(2), number, spawn,

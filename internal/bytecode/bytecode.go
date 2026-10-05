@@ -507,9 +507,20 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, bodyInsts...)
 		case "spawn_agent":
 			agentName := node.Children[1].Value
-			taskInsts := c.compileNode(node.Children[2])
-			insts = append(insts, taskInsts...)
-			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName})
+			taskNode := node.Children[2]
+			var bodyInsts []BCInstruction
+			if taskNode.Type == "List" && len(taskNode.Children) >= 2 && taskNode.Children[0].Value == "task" {
+				insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: taskNode.Children[1].Value})
+				for _, stmt := range taskNode.Children[2:] {
+					bodyInsts = append(bodyInsts, c.compileNode(stmt)...)
+				}
+			} else {
+				// Fail closed on unexpected shapes by compiling the expression
+				// onto the stack; SPAWN_AGENT still type-checks a string task.
+				insts = append(insts, c.compileNode(taskNode)...)
+			}
+			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName, IntOperand: int64(len(bodyInsts))})
+			insts = append(insts, bodyInsts...)
 		case "task":
 			insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: node.Children[1].Value})
 		case "res":
