@@ -129,3 +129,38 @@ func TestWasmAppBuildTargetWasmStillEmitsWAT(t *testing.T) {
 		t.Fatalf("generated WAT is missing module content:\n%s", wat)
 	}
 }
+
+func TestWasmAppBuildTargetWasmRefusesPrint(t *testing.T) {
+	repoRoot, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binaryPath := filepath.Join(t.TempDir(), "howlframe")
+	build := exec.Command("go", "build", "-o", binaryPath, ".")
+	build.Dir = repoRoot
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, output)
+	}
+
+	workDir := t.TempDir()
+	outputDir := filepath.Join(workDir, "wat")
+	source := filepath.Join(repoRoot, "examples", "wasm_app_print.howl")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binaryPath, "build", "--target=wasm", source, "-o", outputDir)
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("build --target=wasm did not return before timeout: %v\n%s", ctx.Err(), output)
+	}
+	if err == nil {
+		t.Fatalf("expected build --target=wasm to refuse print, got success:\n%s", output)
+	}
+	out := string(output)
+	if !strings.Contains(out, "Wasm backend does not support") || !strings.Contains(out, "print") {
+		t.Fatalf("expected print fail-closed diagnostic, got: %s", output)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "app.wat")); !os.IsNotExist(err) {
+		t.Fatalf("print refusal unexpectedly wrote app.wat: %v", err)
+	}
+}
