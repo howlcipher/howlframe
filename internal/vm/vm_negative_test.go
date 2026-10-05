@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -659,6 +660,52 @@ func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
 		}, func(env *BcEnv) {
 			env.vars["w"] = 12345
 		}, "TYPE_ERROR")
+	})
+}
+
+func TestVMSpawnAgentBodyLengthBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		bodyLen int64
+	}{
+		{"negative", -1},
+		{"past end", 5},
+		{"int64 maximum", math.MaxInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("host panic: %v", r)
+				}
+			}()
+			prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+				{Op: bytecode.OpTask, StringOperand: "work"},
+				{Op: bytecode.OpSpawnAgent, StringOperand: "Worker", IntOperand: tc.bodyLen},
+				{Op: bytecode.OpTask, StringOperand: "trailing"},
+			}}
+			var out, err bytes.Buffer
+			ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, &err, 0)
+			if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "RUNTIME_ERROR" || ev.RuntimeFailure.Opcode != "SPAWN_AGENT" || ev.RuntimeFailure.Instruction != 1 {
+				t.Fatalf("expected RUNTIME_ERROR at SPAWN_AGENT instruction 1, got %#v", ev.RuntimeFailure)
+			}
+			if out.Len() != 0 {
+				t.Fatalf("unexpected partial stdout: %q", out.String())
+			}
+		})
+	}
+	t.Run("exact remaining length", func(t *testing.T) {
+		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+			{Op: bytecode.OpTask, StringOperand: "work"},
+			{Op: bytecode.OpSpawnAgent, StringOperand: "Worker", IntOperand: 2},
+			{Op: bytecode.OpLoadConst, ValueOperand: "worker-body"},
+			{Op: bytecode.OpPrint, IntOperand: 1},
+		}}
+		var out, err bytes.Buffer
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, nil, &out, &err, 0)
+		want := "[Swarm VM] Spawning agent \"Worker\" for task: \"work\"\nworker-body\n[Swarm VM] Agent \"Worker\" completed task: \"work\"\n"
+		if ev.RuntimeFailure != nil || ev.ExitCode != 0 || out.String() != want || err.Len() != 0 {
+			t.Fatalf("failure %#v, exit %d, stdout %q, stderr %q; want stdout %q", ev.RuntimeFailure, ev.ExitCode, out.String(), err.String(), want)
+		}
 	})
 }
 

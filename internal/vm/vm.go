@@ -3009,10 +3009,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if vm.spawnDepth >= vm.Limits.MaxCallDepth {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "spawn nesting depth limit exceeded"))
 			}
+			remaining := len(insts) - ip - 1
+			if inst.IntOperand < 0 || inst.IntOperand > int64(remaining) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "spawn_agent body length %d out of range [0,%d]", inst.IntOperand, remaining))
+			}
+			bodyLen := int(inst.IntOperand)
 			stackHeight := len(vm.stack)
 			failed := false
 			fmt.Fprintf(vm.Out, "[Swarm VM] Spawning agent %q for task: %q\n", name, task)
-			bodyLen := int(inst.IntOperand)
 			if bodyLen > 0 {
 				bodyInsts := insts[ip+1 : ip+1+bodyLen]
 				capturedEnv := NewBcEnv(nil)
