@@ -137,6 +137,9 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 			if test.name == "javascript" {
 				args = append([]string{"build", "--target=js"}, args...)
 			}
+			if test.name == "wasm" {
+				args = append([]string{"build", "--target=wasm"}, args...)
+			}
 			command := exec.Command(howlframeBinary, args...)
 			command.Dir = workDir
 			if output, err := command.CombinedOutput(); err != nil {
@@ -408,7 +411,7 @@ func TestWasmBackendWritesPortableWAT(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 	}
@@ -439,7 +442,7 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("Expected unsupported wasm node to fail")
@@ -485,7 +488,7 @@ func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
 
-			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 			output, err := cmd.CombinedOutput()
 			if err == nil {
 				t.Fatalf("Expected semantic validation to fail")
@@ -514,7 +517,7 @@ func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate multi aggregate WAT: %v: %s", err, output)
 	}
@@ -549,7 +552,7 @@ func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to generate WAT for dict key named list: %v: %s", err, output)
@@ -573,7 +576,7 @@ func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate float WAT: %v: %s", err, output)
 	}
@@ -603,7 +606,7 @@ func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list 1 2))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list WAT: %v: %s", err, output)
 	}
@@ -632,7 +635,7 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list 10 20) 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list_get WAT: %v: %s", err, output)
 	}
@@ -685,7 +688,7 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate aggregate WAT: %v: %s", err, output)
 			}
@@ -751,7 +754,7 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 			}
@@ -780,7 +783,7 @@ func TestWasmBackendReadsStringListPointers(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list "alpha" "beta") 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate string-list WAT: %v: %s", err, output)
 	}
@@ -809,7 +812,7 @@ func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate dict WAT: %v: %s", err, output)
 	}
@@ -838,7 +841,7 @@ func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" 10) ("b" 20)) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "-o", outDir, inputFile)
+	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate integer dict WAT: %v: %s", err, output)
 	}

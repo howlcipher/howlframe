@@ -230,15 +230,8 @@ func main() {
 		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
-	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && root.Children[0].Value == "wasm_app" {
-		runHFIRGate(root, hfirModule, hfirTargetWasm)
-		wasmCode := wasm.GenerateWasmCode(root)
-		wasmFile := filepath.Join(outputDir, "app.wat")
-		if err = writeArtifact(wasmFile, []byte(wasmCode)); err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", wasmFile, err), 0, 0)
-		}
-	} else if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && (root.Children[0].Value == "cli_app" ||
-		root.Children[0].Value == "http_server" || root.Children[0].Value == "web_app") {
+	if root != nil && root.Type == "List" && len(root.Children) > 0 && root.Children[0].Type == "SYMBOL" && (root.Children[0].Value == "cli_app" ||
+		root.Children[0].Value == "http_server" || root.Children[0].Value == "wasm_app" || root.Children[0].Value == "web_app") {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
@@ -249,7 +242,7 @@ func main() {
 		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
 		}
-		if root.Children[0].Value == "http_server" || root.Children[0].Value == "web_app" {
+		if root.Children[0].Value == "http_server" || root.Children[0].Value == "wasm_app" || root.Children[0].Value == "web_app" {
 			return
 		}
 		if flag.NFlag() == 0 && len(setAfterInput) == 0 {
@@ -450,7 +443,7 @@ type hfirTarget string
 const (
 	hfirTargetNone        hfirTarget = ""            // -validate: target-independent
 	hfirTargetBytecode    hfirTarget = "bytecode"    // -compile-bc
-	hfirTargetWasm        hfirTarget = "wasm"        // -compile-wasm and legacy wasm_app
+	hfirTargetWasm        hfirTarget = "wasm"        // -compile-wasm and build --target=wasm
 	hfirTargetInterpreter hfirTarget = "interpreter" // -run
 	hfirTargetJavaScript  hfirTarget = "javascript"  // web_app
 	hfirTargetGo          hfirTarget = "go"          // default cli_app/http_server backend
@@ -782,6 +775,8 @@ func buildSource() {
 		outFile := *outPath
 		if outFile == "" {
 			outFile = artifactOutputPath(inputFile, *outPath, setAfterInput["o"], ".ssa.wat")
+		} else if !strings.HasSuffix(outFile, ".wat") && !strings.HasSuffix(outFile, ".wasm") && !strings.HasSuffix(outFile, ".ssa.wat") {
+			outFile = filepath.Join(outFile, "app.wat")
 		}
 		if err := writeArtifact(outFile, []byte(wasmCode)); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", outFile, err)
