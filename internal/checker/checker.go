@@ -131,6 +131,10 @@ func checkWasmExpression(node *ast.Node) {
 		checkWasmExpression(irNode.Kids[1])
 	case "return":
 		checkWasmExpression(irNode.Kids[0])
+	case "print":
+		for _, kid := range irNode.Kids {
+			checkWasmExpression(kid)
+		}
 	case "to_float":
 		if len(irNode.Kids) != 1 || (irNode.Kids[0].Inferred.Kind != ast.Int && irNode.Kids[0].Inferred.Kind != ast.Float) {
 			ast.ReportError("Wasm to_float requires an int or float operand", node.Line, node.Column)

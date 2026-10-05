@@ -1,0 +1,4 @@
+(wasm_app
+  (do
+    (print (* 6 7))
+    0))
