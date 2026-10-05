@@ -3032,7 +3032,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						if r := recover(); r != nil {
 							switch e := r.(type) {
 							case VmReturn:
-								panic(r)
+								fmt.Fprintf(vm.ErrOut, "[Swarm VM] Agent %q failed task: %q: RETURN: return from spawn agent body\n", name, task)
 							case VmExit:
 								panic(r)
 							case *VMError:

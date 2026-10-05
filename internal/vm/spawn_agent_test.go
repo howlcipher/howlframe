@@ -23,6 +23,7 @@ func spawnTestDone(name string) string {
 }
 
 func TestVMSpawnAgentNesting(t *testing.T) {
+	returnBody := []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: int64(7)}, {Op: bytecode.OpReturn}}
 	failure := []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: "HOME"}, {Op: bytecode.OpEnv}}
 	three := spawnTestBody("Outer", spawnTestBody("Middle", spawnTestBody("Inner", spawnTestPrint("leaf")...)...)...)
 	nestedFailure := spawnTestBody("Outer", append(spawnTestBody("Inner", failure...), spawnTestPrint("outer after")...)...)
@@ -56,7 +57,8 @@ func TestVMSpawnAgentNesting(t *testing.T) {
 		{"failed work counts", append(spawnTestBody("Bad", failure...), spawnTestPrint("after")...), spawnTestStart("Bad"), "[Swarm VM] Agent \"Bad\" failed task: \"work\": CAPABILITY_DENIED: capability denied: environment\n", "LIMIT_EXCEEDED", 4, 0},
 		{"shared budget", three, spawnTestStart("Outer") + spawnTestStart("Middle") + spawnTestStart("Inner"), "", "LIMIT_EXCEEDED", 6, 0},
 		{"depth guard", three, spawnTestStart("Outer") + spawnTestStart("Middle"), "", "LIMIT_EXCEEDED", 0, 2},
-		{"return escapes", spawnTestBody("Return", bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: int64(7)}, bytecode.BCInstruction{Op: bytecode.OpReturn}), spawnTestStart("Return"), "", "", 0, 0},
+		{"body return isolated", append(spawnTestBody("Return", returnBody...), spawnTestPrint("after")...), spawnTestStart("Return") + "after\n", "[Swarm VM] Agent \"Return\" failed task: \"work\": RETURN: return from spawn agent body\n", "", 0, 0},
+		{"nested return isolated", spawnTestBody("Outer", append(spawnTestBody("Inner", returnBody...), spawnTestPrint("outer after")...)...), spawnTestStart("Outer") + spawnTestStart("Inner") + "outer after\n" + spawnTestDone("Outer"), "[Swarm VM] Agent \"Inner\" failed task: \"work\": RETURN: return from spawn agent body\n", "", 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			policy := DefaultExecutionPolicy()
@@ -79,8 +81,8 @@ func TestVMSpawnAgentNesting(t *testing.T) {
 			if code != tc.code || out.String() != tc.out || err.String() != tc.err {
 				t.Fatalf("failure %#v stdout %q stderr %q; want code %q stdout %q stderr %q", ev.RuntimeFailure, out.String(), err.String(), tc.code, tc.out, tc.err)
 			}
-			if tc.name == "return escapes" && ev.ExitCode != 7 {
-				t.Fatalf("exit %d, want 7", ev.ExitCode)
+			if tc.code == "" && ev.ExitCode != 0 {
+				t.Fatalf("exit %d, want 0", ev.ExitCode)
 			}
 		})
 	}
