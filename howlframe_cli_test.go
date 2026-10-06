@@ -809,3 +809,46 @@ func TestLegacyCLIAppExitStatusAndFlaggedWriteOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestCLIPathScopedFilesystemGrants(t *testing.T) {
+	root := t.TempDir()
+	binary := filepath.Join(root, "howlframe")
+	if out, err := exec.Command("go", "build", "-o", binary, "howlframe.go").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, out)
+	}
+	input := filepath.Join(root, "input")
+	if err := os.WriteFile(input, []byte("scope fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "app.howl")
+	if err := os.WriteFile(source, []byte(`(cli_app (print (read_file "input")))`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		grant            string
+		allowed, invalid bool
+	}{
+		{"filesystem:read=.", true, false},
+		{"filesystem:read=.,filesystem:write=.", true, false},
+		{"filesystem", true, false},
+		{"filesystem:write=.", false, false},
+		{"filesystem:read=", false, true},
+		{"filesystem:unknown=.", false, true},
+		{"network:read=.", false, true},
+	} {
+		t.Run(tc.grant, func(t *testing.T) {
+			cmd := exec.Command(binary, "-run", "-allow-caps", tc.grant, source)
+			cmd.Dir = root
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != tc.allowed {
+				t.Fatalf("err=%v output=%s", err, out)
+			}
+			if tc.invalid && !strings.Contains(string(out), "unknown capability in -allow-caps") {
+				t.Fatalf("invalid grant: %s", out)
+			}
+			if !tc.allowed && !tc.invalid && !strings.Contains(string(out), "capability denied: filesystem") {
+				t.Fatalf("expected denial: %s", out)
+			}
+		})
+	}
+}

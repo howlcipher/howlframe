@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -94,7 +95,7 @@ type Interpreter struct {
 
 func (interp *Interpreter) requireCapability(cap capability.Capability, node *ast.Node) {
 	for _, allowed := range interp.AllowedCaps {
-		if allowed == cap {
+		if capability.Grants([]capability.Capability{allowed}).Has(cap) {
 			return
 		}
 	}
@@ -759,6 +760,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr("read_file expects (read_file path)", node)
 		}
 		path := fmt.Sprint(interp.eval(node.Children[1], env))
+		path = interp.requireFilesystem(path, false, node)
 		b, err := os.ReadFile(path)
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
@@ -780,6 +782,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			default:
 				InterpErr(fmt.Sprintf("TYPE_ERROR: write_file expected string data, got %T", v), node)
 			}
+			writePath = interp.requireFilesystem(writePath, true, node)
 			if err := os.WriteFile(writePath, data, 0644); err != nil {
 				InterpErr(fmt.Sprintf("IO_ERROR: write_file failed: %v", err), node)
 			}
@@ -792,6 +795,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 				InterpErr("mkdir expects (mkdir path)", node)
 			}
 			dirPath := fmt.Sprint(interp.eval(node.Children[1], env))
+			dirPath = interp.requireFilesystem(dirPath, true, node)
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				InterpErr(fmt.Sprintf("IO_ERROR: mkdir failed: %v", err), node)
 			}
@@ -1782,13 +1786,22 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 			name,
 		))
 	}
+	if store.file != "" {
+		vm.requireFilesystem(store.file, false, op)
+		if op == bytecode.OpStorePut || op == bytecode.OpStoreDelete {
+			vm.requireFilesystem(store.file, true, op)
+		}
+	}
 	return store
 }
 
 func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
 	for _, allowed := range vm.AllowedCaps {
-		if allowed == cap {
-			vm.recordEffect(cap, op, "allowed")
+		if capability.Grants([]capability.Capability{allowed}).Has(cap) {
+			// A scoped filesystem class check is provisional until its path check.
+			if cap != capability.Filesystem || capability.Grants(vm.AllowedCaps).HasUnrestrictedFilesystem() {
+				vm.recordEffect(cap, op, "allowed")
+			}
 			return
 		}
 	}
@@ -2084,6 +2097,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpStoreOpen:
 			uri := inst.StringOperand2
 			vm.requireStoreCapabilities(uri, inst.Op)
+			if strings.HasPrefix(uri, "file://") {
+				uri = "file://" + vm.requireFilesystem(strings.TrimPrefix(uri, "file://"), false, inst.Op)
+			}
 			store, err := vm.stores.open(uri)
 			if err != nil {
 				code := "STORE_PERSISTENCE_READ_FAILED"
@@ -2198,6 +2214,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(bytesToAnySlice(b))
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
+			path = vm.requireFilesystem(path, false, inst.Op)
 			b, err := os.ReadFile(path)
 			if err != nil {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
@@ -2207,6 +2224,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpWriteFile:
 			dataAny := vm.pop(inst.Op)
 			path := vm.popCheckedString(inst, ip, "write_file expected string path")
+			path = vm.requireFilesystem(path, true, inst.Op)
 			var data []byte
 			switch v := dataAny.(type) {
 			case string:
@@ -2224,6 +2242,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpMkdir:
 			path := vm.popCheckedString(inst, ip, "mkdir expected string")
+			path = vm.requireFilesystem(path, true, inst.Op)
 			err := os.MkdirAll(path, 0755)
 			if err != nil {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "mkdir failed: %v", err))
@@ -3578,4 +3597,44 @@ func (b *limitedOutput) Write(p []byte) (int, error) {
 		return 0, io.ErrShortWrite
 	}
 	return b.buffer.Write(p)
+}
+
+func (vm *BCVM) requireFilesystem(path string, write bool, op bytecode.Opcode) string {
+	grants := capability.Grants(vm.AllowedCaps)
+	allowed := grants.AllowsRead(path)
+	if write {
+		allowed = grants.AllowsWrite(path)
+	}
+	if !allowed {
+		vm.recordEffect(capability.Filesystem, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", capability.Filesystem))
+	}
+	// Mutating stores must pass both scopes before recording authorization.
+	if write || op != bytecode.OpStorePut && op != bytecode.OpStoreDelete {
+		vm.recordEffect(capability.Filesystem, op, "allowed")
+	}
+	return filesystemIOPath(path, grants)
+}
+func (interp *Interpreter) requireFilesystem(path string, write bool, node *ast.Node) string {
+	grants := capability.Grants(interp.AllowedCaps)
+	allowed := grants.AllowsRead(path)
+	if write {
+		allowed = grants.AllowsWrite(path)
+	}
+	if !allowed {
+		InterpErr("capability denied: filesystem", node)
+	}
+	return filesystemIOPath(path, grants)
+}
+
+// Use exactly the normalized path checked by scoped grants, so symlink/.. OS
+// traversal cannot disagree with lexical containment. Preserve coarse behavior.
+func filesystemIOPath(path string, grants capability.Grants) string {
+	for _, grant := range grants {
+		if grant == capability.Filesystem {
+			return path
+		}
+	}
+	normalized, _ := filepath.Abs(path) // authorization already checked this error
+	return normalized
 }

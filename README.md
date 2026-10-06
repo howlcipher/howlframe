@@ -440,6 +440,18 @@ Pass an allow-list with `-allow-caps`, a comma-separated list of capability name
 go run howlframe.go -run-bc -allow-caps network,filesystem examples/cli_hello.howl.bc.bin
 ```
 
+For native bytecode and `-run`, use repeatable path grants such as
+`-allow-caps filesystem:read=/data,filesystem:write=/out`. Read grants permit
+reads only; write grants permit writes and `mkdir` only. `filesystem` remains
+an unrestricted alias. Roots are cleaned and made absolute relative to the
+runner's cwd when parsed. Targets must stay within a matching root, including
+after symlink resolution. A `file://` store also needs `database`: open/load,
+get, and keys need read coverage; put/delete need both read and write coverage.
+Empty roots, unknown filesystem sub-keys, and scoped forms of other
+capabilities are rejected. Checks precede I/O, but concurrent symlink changes
+remain a TOCTOU risk. Generated Go and JavaScript still accept coarse grants
+through `HOWLFRAME_ALLOW_CAPS`; they do not enforce these path scopes.
+
 An unrecognized capability name in `-allow-caps` is rejected outright rather than silently granting nothing. See `docs/reference/bytecode_reference.md` for the full opcode-to-capability mapping.
 
 Generated Go and JavaScript mediate `(env "KEY")`, `(exec cmd args...)`, `(read_file path)`, `(fetch url method)`, `(write_file path data)`, and `(mkdir path)` the same way. The runner grant is the `HOWLFRAME_ALLOW_CAPS` environment variable, a comma-separated list of the same names. An empty or unset value denies the effect with `CAPABILITY_DENIED` before the variable is fetched, a process is spawned, a file is read or written, a directory is created, or an HTTP request is sent. `environment` returns the value. `process` runs the command. `filesystem` reads a file, writes a file, or creates a directory. `network` performs the request. Other generated host effects are not on this gate yet. An optional `(fetch)` body is still sent by the interpreter, Go, and JavaScript when that call runs. Both bytecode compilers leave it off `OpFetch`. The design for a later change on those two compilers together is [fetch-body bytecode design](docs/reference/fetch_body_bytecode_design.md). The flip checklist is [production flip criteria](docs/reference/lowered_hfir_prod_flip_criteria.md).

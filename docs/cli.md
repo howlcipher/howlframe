@@ -22,7 +22,7 @@ Executes a compiled HowlFrame bytecode artifact.
 **Important**: Capabilities are denied by default. You must explicitly grant capabilities to the runtime.
 
 ### Options
-* `--allow-caps` : Comma-separated capabilities to allow (e.g., `network,filesystem,process,environment,database`). Instructions requiring an unlisted capability are denied and will cause the VM to panic.
+* `--allow-caps` : Comma-separated capabilities to allow (e.g., `network,filesystem,process,environment,database`). Repeatable `filesystem:read=<root>` grants permit reads; `filesystem:write=<root>` grants permit writes and `mkdir`, without granting reads. `filesystem` remains unrestricted. Roots are cleaned and anchored to the runner cwd at parse time. Targets must remain within a matching root after lexical normalization and symlink resolution. `file://` stores require `database` plus read coverage for open/get/keys and both read/write coverage for put/delete. Empty roots, unknown sub-keys, and scoped forms of other capabilities are unknown-capability errors. Denials occur before I/O with `CAPABILITY_DENIED`. Concurrent symlink changes remain a TOCTOU caveat. Generated Go/JavaScript remain coarse.
 * `--max-instructions` : A finite instruction ceiling (default `100000`). Once the ceiling is reached, execution halts to prevent infinite loops and runaway resource consumption.
 * `--max-call-depth` : Positive CALL recursion and SPAWN_AGENT nesting ceiling (default `1000`).
 * `--max-memory-bytes` : Positive cumulative allocation charge ceiling (default `67108864`, 64 MiB). Charges approximate storage; they are not a measured live heap limit and are never reclaimed.

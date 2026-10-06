@@ -59,7 +59,7 @@ func main() {
 	requiredCaps := flag.Bool("required-caps", false, "report required capabilities as compact JSON without execution")
 	receiptPath := flag.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
-	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
+	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
 	maxCallDepth := flag.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting for -run-bc (default 1000)")
 	maxMemory := flag.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
@@ -566,14 +566,6 @@ func reportHFIRDiagnostics(diags []hfir.Diagnostic) {
 	os.Exit(1)
 }
 
-var knownCapabilities = map[capability.Capability]bool{
-	capability.Network:     true,
-	capability.Filesystem:  true,
-	capability.Process:     true,
-	capability.Environment: true,
-	capability.Database:    true,
-}
-
 // parseAllowedCaps turns -allow-caps into a capability allow-list. An empty
 // or unset flag denies every capability-gated instruction (fail-closed
 // default); RunBytecode always permits CapNone regardless of this list.
@@ -587,8 +579,8 @@ func parseAllowedCaps(raw string) []capability.Capability {
 		if part == "" {
 			continue
 		}
-		cap := capability.Capability(part)
-		if !knownCapabilities[cap] {
+		cap, err := capability.ParseGrant(part)
+		if err != nil {
 			ast.ReportError(fmt.Sprintf("unknown capability in -allow-caps: %q", part), 0, 0)
 		}
 		caps = append(caps, cap)
@@ -909,7 +901,7 @@ func runArtifact() {
 	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
 	receiptPath := runFlags.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	target := runFlags.String("target", "bytecode", "execution target: bytecode (or bc), interpreter (or run)")
-	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,process,environment,database)")
+	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
 
 	maxCallDepth := runFlags.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting (default 1000)")

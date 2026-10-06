@@ -34,7 +34,7 @@ the artifact format.
 
 | # | Item | Size |
 | --- | --- | --- |
-| P2.1 | Resource-scoped grants: `filesystem:read=/data`, `filesystem:write=/out`, `network=host[:port]`, `process=<allow-listed action id>`, `environment=VAR`. Keep the coarse names as aliases. | L |
+| P2.1 | Resource-scoped grants: `filesystem:read=/data`, `filesystem:write=/out`, `network=host[:port]`, `process=<allow-listed action id>`, `environment=VAR`. Keep the coarse names as aliases. Filesystem portion implemented in native VM/interpreter (read and write independent); remaining scopes OPEN. See [journal](../journals/2026-10-06_path_scoped_filesystem.md). | L |
 | P2.2 | Grant attenuation for `SPAWN_AGENT` children. Fold legacy `SPAWN` accounting into the parent budget. | M |
 | P2.3 | Full artifact validation (stack-height, operand types, embedded body lengths) for artifacts from outside | L |
 | P2.4 | Rooted / hash-pinned `include` and `use` for the governed profile | M |
