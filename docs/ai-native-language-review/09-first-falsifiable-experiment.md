@@ -2,9 +2,9 @@
 
 ## Status (2026-10-06)
 
-Harness scaffold landed at `experiments/falsifiable-v0/`. No experiment runs
-have been performed; H1 has neither passed nor been killed. Placeholder
-oracles must be completed and frozen before offline operator trials. The
+Harness at `experiments/falsifiable-v0/` has all 60 reference oracles filled
+and is ready for offline operator trials after protocol review and freezing.
+No experiment runs have been performed; H1 has neither passed nor been killed. The
 filesystem grant is not path-scoped; external auditing and a throwaway
 container/VM are required.
 

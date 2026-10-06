@@ -52,6 +52,15 @@ func TestManifest(t *testing.T) {
 	if len(m.Tasks) != 30 || len(m.Adversarial) != 30 {
 		t.Fatal("counts")
 	}
+	for _, task := range m.All() {
+		oracle, err := loadOracle(root, task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if task.Oracle.Status != "reference" || oracle.Status != "reference" {
+			t.Fatalf("%s: oracle must be reference", task.ID)
+		}
+	}
 	m.Tasks[0].AllowedEffects.Writes = []string{"../escape"}
 	if e := m.Validate(root); e == nil {
 		t.Fatal("invalid write accepted")
@@ -404,7 +413,7 @@ func exerciseFetchDenied(t *testing.T, bin string, rec *HTTPRecorder) {
 		t.Fatal(rec.Requests())
 	}
 }
-func TestArmBRepairAndPlaceholder(t *testing.T) {
+func TestArmBRepairAndMismatchingOracle(t *testing.T) {
 	root, m := corpus(t)
 	repairs := t.TempDir()
 	write(t, filepath.Join(repairs, "t01.repair1.plan.json"), read(t, filepath.Join(root, "reference", "arm_b", "t01.plan.json")))
@@ -421,7 +430,7 @@ func TestArmBRepairAndPlaceholder(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if result.Comparison.Status != "oracle_placeholder" || result.Comparison.Success {
+	if result.Comparison.Status != "evaluated" || result.Comparison.OutputMatch || !result.Comparison.EffectsMatch || result.Comparison.Success {
 		t.Fatal(result)
 	}
 }

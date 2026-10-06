@@ -1,0 +1,12 @@
+{
+  "reason": "release review",
+  "summary": {
+    "batch": "21",
+    "selected": [
+      {
+        "name": "unit",
+        "status": "FAIL"
+      }
+    ]
+  }
+}

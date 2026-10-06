@@ -13,9 +13,9 @@ that container. No model adapter belongs in CI or this harness.
    one bounded mutation, identical grants and write permissions in each pair.
    Review the synthetic starter corpus for sufficient diversity/difficulty and
    genuine held-out status. Preserve the documented 09 thresholds.
-2. Fill all 54 placeholder oracles before generation. Author exact expected
-   outputs in `tasks/<id>/oracle/expected/out/...`, set `oracle.status` and
-   expected-effects status to `reference`, and replace effect sets as needed.
+2. Verify the 60 filled reference oracles before generation. Exact expected
+   outputs and effects are authored in `tasks/<id>/oracle/`; all manifest and
+   expected-effects statuses are `reference`. Preserve these frozen values.
    Effects use `{kind:"created"|"modified"|"deleted",path:"out/..."}`. The
    empty initial output directory normally means `created`. Expected outputs
    are bytes except `.json`, which compares canonical decoded JSON. Freeze and
