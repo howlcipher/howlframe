@@ -45,7 +45,8 @@
    and VM, all written in about 10 weeks.
 3. **"Verified" means less than it sounds.** The production gate blocks on
    two diagnostic codes. There is no stack or type validation of artifacts,
-   no execution receipt, and no signed provenance.
+   at review no execution receipt, and no signed provenance. C5 now supplies
+   optional bytecode receipts; signing/attestation remains open.
 4. **No demonstrated user.** The best candidate job, the Release Authority
    / Action Executor pattern, can be built today with a JSON action schema
    and a 300-line Go executor. Nobody has shown that programmability beats

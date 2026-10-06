@@ -24,7 +24,7 @@ the artifact format.
 | # | Item | Size | Why |
 | --- | --- | --- | --- |
 | P1.1 | **Resource limits that exist**: enforce a memory or allocation budget (string, list, and dict growth accounting), `MaxCallDepth` on `CALL`, output-byte cap, `fetch`/`exec` response caps, and a runner wall-clock deadline (context cancellation for host calls) | M/L | S4 to S7. Instruction count alone is not "bounded". |
-| P1.2 | **Execution receipt v0**: one JSON line per run with artifact SHA-256, compiler version, grant, budget, instructions used, each effect attempted (kind, target, allowed or denied), exit status | M | Turns "auditable" from a slogan into a file |
+| P1.2 | **Execution receipt v0**: one indented JSON file per run with artifact SHA-256, compiler version, grant, budget, instructions used, each effect attempted (kind, target, allowed or denied), exit status | M | Implemented C5 v0 for bytecode (2026-10-06); signing/attestation and interpreter receipts remain open |
 | P1.3 | **Verification report v0**: replace the bare `Verified` boolean with named checks, versions, and pass/fail (checker, construct registry, HFIR codes, artifact validation) | S/M | S15 |
 | P1.4 | **Decide `and`/`or` semantics** (short-circuit everywhere is the conventional choice) and add a differential test across interpreter, VM, and Go | S/M | S10 changes effects between backends |
 | P1.5 | **Run the first falsifiable experiment** (09) | M | Decides whether P2+ is worth doing |

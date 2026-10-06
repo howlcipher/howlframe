@@ -56,7 +56,7 @@ Other paths that are still in the binary:
 | Deterministic artifacts | EXISTS (v2 sorted function table) | `artifact_determinism_test.go` |
 | Model-facing contract | PROTOTYPE, library only. Strict JSON candidate transport (128 nodes, 64 KiB), verifier, direct lowering, bounded `replace_node` repair with hash preconditions. It is not wired to the CLI. | `internal/hfir/model_adapter.go`, `docs/hfir_model_adapter_status.md` |
 | Build manifest and CAS | PROTOTYPE, library only. `hfir-manifest/v1` has graph, node, and module hashes, dependency maps, evidence hash, and artifact hash. It has no compiler version, policy, or grant. Disk and memory CAS. Incremental compiler. | `internal/hfir/manifest.go`, `storage.go`, `incremental.go` |
-| Execution receipt (what ran, with which grant, what effects happened) | ABSENT | none |
+| Execution receipt (what ran, with which grant, what effects happened) | PARTIAL (C5, 2026-10-06): runner-written bytecode v0; no signing/attestation or interpreter receipt | `internal/vm/receipt_test.go`, `receipt_cli_test.go`; C5 journal |
 | Static "what does this artifact need" report | ABSENT from the CLI. The data exists: per-opcode capabilities plus store URIs. | `opcode.go` |
 | Signed or attested artifacts | ABSENT | none |
 
