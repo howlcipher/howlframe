@@ -206,6 +206,10 @@ checks Z (P1.3).
 See the table below and 08.
 
 ### 13. First falsifiable experiment
+
+Status (2026-10-06): harness scaffold landed at `experiments/falsifiable-v0/`;
+not run. No H1 result or PASS/KILL claim. Placeholder oracles and operator
+metrics remain required.
 - **Comparison:** HowlFrame programs against JSON action plans run by a
   trusted Go broker. Optionally add Starlark as a third arm.
 - **Tasks:** 30 held-out multi-step release-evidence tasks, plus 30
@@ -253,7 +257,7 @@ See the table below and 08.
 | P1 | Execution receipt v0, written by the runner | M | Implemented C5 v0 for bytecode; signing/attestation and interpreter receipts deferred |
 | P1 | Verification report instead of the bare boolean | S/M | Planned |
 | P1 | `and`/`or` semantics decision plus a differential test | S/M | Planned (C6) |
-| P1 | **Run the first falsifiable experiment** | M | Designed (09) |
+| P1 | **Run the first falsifiable experiment** | M | Harness scaffold landed (09); not run; experiment remains open |
 | P1 | Regenerate codegen drift (`SPAWN_AGENT` row, orchestrator schema) | S | Noted (pre-existing) |
 | **P2** | Resource-scoped grants, child attenuation, a `model` effect | L | After the experiment says go |
 | P2 | Full artifact validation, rooted includes | M/L | After the experiment |
