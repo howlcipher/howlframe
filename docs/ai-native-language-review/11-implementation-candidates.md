@@ -89,7 +89,7 @@ C4a+C4b bytecode runner limits are implemented. AST interpreter memory,
 deadline, and recursion limits remain open; print output remains uncapped.
 No HFBC or production compiler change; #90 remains Partial.
 
-## C5. Execution receipt v0 (P1.2): M
+## C5. Execution receipt v0 (P1.2): M — v0 implemented
 
 - `-run-bc --receipt out.json`. The receipt holds `{schema:"howlframe.receipt/v0",
   artifact_sha256, compiler_version, grant, limits, instructions_used,
@@ -98,6 +98,14 @@ No HFBC or production compiler change; #90 remains Partial.
   host but not the query, and `env` records the variable name but not its
   value.
 - Written by the runner, never by program code, so `print` cannot forge it.
+
+**Status (C5, 2026-10-06):** implemented on legacy `-run-bc` and
+`run --target bytecode/bc`, including in-process source compilation. Receipts
+are host-written before process exit on normal and failed execution, with
+bounded redacted allowed/denied decisions and shared child recording. No
+signing/attestation, sealed ExecutionEvidence binding, AST interpreter receipt,
+or harness in v0; no HFBC/compiler flip. #90 remains Partial. See
+[C5 journal](../journals/2026-10-06_c5_execution_receipt.md).
 
 ## C6. `and`/`or` semantics (P1.4): S/M, needs a decision
 

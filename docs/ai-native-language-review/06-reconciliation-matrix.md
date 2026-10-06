@@ -49,7 +49,7 @@ reviewer, checked against `d496d97` plus this PR's fix. Statuses:
 | Model synthesis evidence | **PARTIAL** (tiny) | 11 stored candidates. HFIR 10/10 against `.howl` 3/10, from one author (`hfir_model_adapter_status.md:35-43`). Benchmarks: v1 has 3 tasks; v2 has a harness and no results. | D, E, F |
 | Token-density advantage over Python | **CONFLICTS** | v1 CSV: HowlFrame used fewer tokens than Python in 1 of 3 tasks | C |
 | Required-capabilities inspection | **ABSENT** (CLI) | Effect inference exists in the HFIR verifier, but nothing is exposed for artifacts | F, executor |
-| Execution receipt / audit record | **ABSENT** | The CLI throws away the bounded evidence object (`vm.go:1629-1644`) | A, F, executor |
+| Execution receipt / audit record | **PARTIAL (C5, 2026-10-06)** | Optional runner-written bytecode v0 receipt; no signing/attestation, interpreter receipt, or sealed evidence binding | A, F, executor; C5 VM/CLI tests and journal |
 | CAS manifest and incremental compile | **PROTOTYPE** | `internal/hfir/manifest.go`, `storage.go`, `incremental.go`. Library only. No issuer, compiler version, or grant binding. | A, D |
 | Governed profile (construct allow-list for model-authored code) | **ABSENT** | None. See 11, C2. | D, F, executor |
 

@@ -136,7 +136,7 @@ Not for the thesis.
      authority-preserving, hash-preconditioned local repair;
   2. effect-requirement inference before running;
   3. "intent is not authority" built into the runner;
-  4. (planned) runner-written receipts.
+  4. runner-written bytecode receipts (C5 v0; signing/attestation deferred).
 - **CaMeL-style provenance tracking** is the most relevant research to
   borrow. See 05.
 
@@ -250,7 +250,7 @@ See the table below and 08.
 | P0 | Honest wording: what "verified", "bounded", and "atomic" mean; mark extreme paradigms superseded; fix the stale roadmap | S | Planned (docs) |
 | P0 | Demo-app output integrity (`encode_json`) and pre-flight or "ordered, not atomic" | S | Done in this change (C7: JSON integrity + pre-flight, ordered effects) |
 | **P1** | Memory/allocation, call-depth, deadline, and byte limits | M/L | Planned (C4) |
-| P1 | Execution receipt v0, written by the runner | M | Planned (C5) |
+| P1 | Execution receipt v0, written by the runner | M | Implemented C5 v0 for bytecode; signing/attestation and interpreter receipts deferred |
 | P1 | Verification report instead of the bare boolean | S/M | Planned |
 | P1 | `and`/`or` semantics decision plus a differential test | S/M | Planned (C6) |
 | P1 | **Run the first falsifiable experiment** | M | Designed (09) |

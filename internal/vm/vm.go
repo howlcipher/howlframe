@@ -1388,6 +1388,9 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
+	receipt         *receiptRecorder
+	receiptDecision *effectDecision
+
 	ctx         context.Context
 	allocations *allocationBudget
 	prog        *bytecode.BCProgram
@@ -1650,6 +1653,10 @@ func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy Ex
 // returns a bounded runner-owned trace for trusted consumers such as HFIR
 // failure localization. traceLimit is a runner policy, never program input.
 func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer, traceLimit int) (evidence bytecode.ExecutionEvidence) {
+	return runBytecodeEvidence(prog, cliArgs, policy, allowedCaps, in, out, errOut, traceLimit, nil)
+}
+
+func runBytecodeEvidence(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer, traceLimit int, recorder *receiptRecorder) (evidence bytecode.ExecutionEvidence) {
 	ctx := context.Background()
 	if policy.Deadline > 0 {
 		var cancel context.CancelFunc
@@ -1657,7 +1664,7 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 		defer cancel()
 	}
 	vm := &BCVM{
-		ctx: ctx, allocations: &allocationBudget{},
+		ctx: ctx, allocations: &allocationBudget{}, receipt: recorder,
 		prog:        prog,
 		env:         NewBcEnv(nil),
 		insts:       prog.Main,
@@ -1709,11 +1716,21 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 				evidence.RuntimeFailure = &bytecode.RuntimeFailure{Code: "VM_INTERNAL", Instruction: vm.ip, Message: fmt.Sprintf("%v", r)}
 			}
 		}
+		if recorder != nil {
+			recorder.finish(vm.executed)
+		}
 		bytecode.SealExecutionEvidence(prog, &evidence)
 	}()
 
 	vm.run(vm.insts, vm.env)
 	return evidence
+}
+
+func writeRuntimeFailure(errOut io.Writer, failure *bytecode.RuntimeFailure) {
+	if errOut == nil {
+		errOut = os.Stderr
+	}
+	fmt.Fprintln(errOut, mustVMErrorString(failure))
 }
 
 func mustVMErrorString(failure *bytecode.RuntimeFailure) string {
@@ -1771,9 +1788,11 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
 	for _, allowed := range vm.AllowedCaps {
 		if allowed == cap {
+			vm.recordEffect(cap, op, "allowed")
 			return
 		}
 	}
+	vm.recordEffect(cap, op, "denied")
 	panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", cap))
 }
 
@@ -1963,6 +1982,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
 		}
 		vm.executed++
+		if vm.receipt != nil {
+			vm.receiptDecision = &effectDecision{summary: vm.effectSummary(inst, env)}
+		}
 
 		spec := bytecode.Registry[inst.Op]
 		if spec.Capability != capability.None {
@@ -2300,7 +2322,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
@@ -2377,7 +2399,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
 						recovered := recover()
@@ -3170,7 +3192,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.

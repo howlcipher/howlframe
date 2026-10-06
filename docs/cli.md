@@ -30,6 +30,39 @@ Executes a compiled HowlFrame bytecode artifact.
 * `--max-exec-output-bytes` : Positive combined stdout/stderr ceiling for exec (default `10485760`, 10 MiB).
 * `--deadline` : Optional positive duration such as `5s` or `100ms`; absent means no wall-clock deadline. Explicit `0s`, negative durations, and invalid durations are rejected. Cancels bytecode fetch, exec, sleep, and model requests and checks between instructions.
 
+* `--receipt <path>` : Optional runner-written `howlframe.receipt/v0` JSON file,
+  supported by `run --target bytecode`/`bc` for artifacts and `.howl` source,
+  and by legacy `-run-bc --receipt <path> <artifact>`. Interpreter targets
+  reject this option. Absent or empty means no receipt and unchanged output.
+
+The receipt records the exact artifact file SHA-256; for source compiled in
+process it hashes canonical `bytecode.WriteArtifact` bytes. HFBC carries a
+format version but no compiler identity, so `compiler_version` is the runner's
+HowlFrame Version. It includes sorted unique grants, configured limits, executed
+instructions (including synchronous SPAWN_AGENT work), bounded capability
+decisions, and exit status/error. JSON uses fixed field order, two-space indent,
+and a trailing newline; grant/effects are always arrays. No fields are omitted.
+A nonzero exit/return has status `error` with `error: null`; runtime traps have
+code 1 and a structured error. Zero deadline_ms means none (positive durations are
+rounded up to whole milliseconds).
+
+Targets exclude URL paths/query/fragment/userinfo, env values, command arguments,
+DSNs, SQL, store keys/values, response bodies, and model prompts. Filesystem
+paths are recorded as given; resource names may still be sensitive. Summaries
+are bounded to 256 bytes. Host failure messages are replaced by a code-only
+message, except safe limit/capability messages; stderr diagnostics are unchanged.
+Ambient print/stderr/sleep/time/read_line/exit are omitted. The first 10,000
+capability decisions are retained; `effects_truncated` reports overflow. Children
+share the recorder; detached SPAWN effects after finalization are dropped.
+
+The runner writes after execution and before exit using a same-directory temp
+file (0600 permissions) and rename. Program stdout/stderr are unchanged and
+cannot forge the receipt through print. If writing fails, a diagnostic goes to
+stderr: successful execution becomes exit 1; an existing failure code is kept.
+Parent directories must exist. Receipts have no signature or attestation and
+are independent of sealed ExecutionEvidence. See the
+[C5 journal](journals/2026-10-06_c5_execution_receipt.md).
+
 These limits also apply to legacy `-run-bc`. The new flags apply to `run` targets `bytecode`/`bc`; AST interpreter memory and deadline behavior is unchanged. Exceeded ceilings produce structured `LIMIT_EXCEEDED`. Blocking `read_line` and HTTP serving are not cancelled by the deadline; print output remains uncapped.
 
 

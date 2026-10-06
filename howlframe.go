@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
@@ -56,6 +57,7 @@ func main() {
 	compileHfirBc := flag.Bool("compile-hfir-bc", false, "EXPERIMENTAL: compile directly from semantic HFIR to bytecode JSON")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	requiredCaps := flag.Bool("required-caps", false, "report required capabilities as compact JSON without execution")
+	receiptPath := flag.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
@@ -68,6 +70,10 @@ func main() {
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
+	if *receiptPath != "" && !*runBc {
+		fmt.Fprintln(os.Stderr, "--receipt requires -run-bc; interpreter receipts are unsupported")
+		os.Exit(1)
+	}
 	if *runBc {
 		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline); err != nil {
 			ast.ReportError(err.Error(), 0, 0)
@@ -154,7 +160,7 @@ func main() {
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
-		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
 	}
 
 	lx := lexer.NewLexer(string(content))
@@ -901,6 +907,7 @@ func buildSource() {
 
 func runArtifact() {
 	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
+	receiptPath := runFlags.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	target := runFlags.String("target", "bytecode", "execution target: bytecode (or bc), interpreter (or run)")
 	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
@@ -953,6 +960,10 @@ func runArtifact() {
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	switch targetVal {
 	case "interpreter", "run":
+		if *receiptPath != "" {
+			fmt.Fprintln(os.Stderr, "--receipt requires bytecode target; interpreter receipts are unsupported")
+			os.Exit(1)
+		}
 		lx := lexer.NewLexer(string(content))
 		p := parser.NewParser(lx, filepath.Base(inputFile))
 		root := p.ParseExpression()
@@ -995,6 +1006,14 @@ func runArtifact() {
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
 			prog = bytecode.CompileToBytecode(root)
+			if *receiptPath != "" {
+				var canonical bytes.Buffer
+				if err := bytecode.WriteArtifact(&canonical, prog); err != nil {
+					fmt.Fprintf(os.Stderr, "Cannot serialize receipt artifact: %v\n", err)
+					os.Exit(1)
+				}
+				content = canonical.Bytes()
+			}
 		} else {
 			var err error
 			prog, err = bytecode.ReadArtifact(bytes.NewReader(content))
@@ -1003,7 +1022,7 @@ func runArtifact() {
 				os.Exit(1)
 			}
 		}
-		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
+		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown target %q: valid run targets are bytecode, interpreter\n", *target)
@@ -1061,4 +1080,41 @@ func resourcePolicy(memory, fetch, output int, deadline string) (vm.ExecutionPol
 		policy.Deadline = d
 	}
 	return policy, nil
+}
+
+// runBytecodeArtifact keeps the legacy path unchanged when reporting is absent.
+func runBytecodeArtifact(prog *bytecode.BCProgram, artifact []byte, args []string, policy vm.ExecutionPolicy, caps []capability.Capability, receiptPath string) int {
+	if receiptPath == "" {
+		return vm.RunBytecodeWithPolicy(prog, args, policy, caps, os.Stdin, os.Stdout, os.Stderr)
+	}
+	digest := sha256.Sum256(artifact)
+	code, receipt := vm.RunBytecodeWithReceipt(prog, args, policy, caps, os.Stdin, os.Stdout, os.Stderr, fmt.Sprintf("%x", digest), Version)
+	if err := writeExecutionReceipt(receiptPath, receipt); err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot write execution receipt: %v\n", err)
+		if code == 0 {
+			code = 1
+		}
+	}
+	return code
+}
+
+func writeExecutionReceipt(path string, receipt vm.ExecutionReceipt) error {
+	data, err := receipt.JSON()
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".howlframe-receipt-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	// CreateTemp uses 0600; receipts may contain sensitive resource names.
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
