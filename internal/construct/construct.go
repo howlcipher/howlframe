@@ -262,8 +262,9 @@ type Violation struct {
 	// Reason states why the construct cannot be compiled.
 	Reason string
 
-	Line   int
-	Column int
+	Filename string
+	Line     int
+	Column   int
 }
 
 // Message renders the violation as a single human-readable sentence,
@@ -286,11 +287,11 @@ func (v Violation) Message() string {
 // form does not cascade into a violation for every identifier inside it.
 func Scan(root *ast.Node) []Violation {
 	var out []Violation
-	scanNode(root, "", &out)
+	scanNode(root, "", &out, ProfileDefault)
 	return out
 }
 
-func scanNode(node *ast.Node, parentHead string, out *[]Violation) {
+func scanNode(node *ast.Node, parentHead string, out *[]Violation, profile Profile) {
 	if node == nil || node.Type != "List" || len(node.Children) == 0 {
 		return
 	}
@@ -299,7 +300,7 @@ func scanNode(node *ast.Node, parentHead string, out *[]Violation) {
 	if head.Type != "SYMBOL" {
 		// A computed head, or a dict pair keyed by a literal or an
 		// expression. Not a construct; its children still are.
-		scanChildren(node, parentHead, out, 0)
+		scanChildren(node, parentHead, out, 0, profile)
 		return
 	}
 
@@ -307,10 +308,14 @@ func scanNode(node *ast.Node, parentHead string, out *[]Violation) {
 	// compileNode case, so it is never classified - but its body is real
 	// code and must still be scanned.
 	if isSubForm(head.Value, parentHead) {
-		scanSubForm(node, head.Value, out)
+		scanSubForm(node, head.Value, out, profile)
 		return
 	}
 
+	if profile == ProfileGoverned && !Allowed(profile, head.Value) {
+		*out = append(*out, Violation{Name: head.Value, Reason: "forbidden by governed profile", Filename: node.Filename, Line: head.Line, Column: head.Column})
+		return
+	}
 	entry, known := Lookup(head.Value)
 	if !known {
 		*out = append(*out, Violation{
@@ -333,39 +338,47 @@ func scanNode(node *ast.Node, parentHead string, out *[]Violation) {
 		})
 		return
 	case CompileTimeOnly:
+		if profile == ProfileGoverned && entry.Name == "with_context" {
+			scanChildren(node, entry.Name, out, 2, profile)
+			return
+		}
 		if entry.Opaque {
 			return
 		}
-		scanChildren(node, entry.Name, out, 1)
+		scanChildren(node, entry.Name, out, 1, profile)
 		return
 	}
 
 	if entry.Opaque {
+		if profile == ProfileGoverned && entry.Name == "task" {
+			scanChildren(node, entry.Name, out, 2, profile)
+			return
+		}
 		if entry.Name == "parse_json" {
-			scanSupported(node, entry.Name, out)
+			scanSupported(node, entry.Name, out, profile)
 		}
 		return
 	}
-	scanSupported(node, entry.Name, out)
+	scanSupported(node, entry.Name, out, profile)
 }
 
 // scanSupported descends into the child positions of a supported construct
 // that compileNode actually compiles. The special cases below are the shapes
 // where a child list is structural rather than a construct - each one mirrors
 // a specific destructuring in internal/bytecode's compileNode.
-func scanSupported(node *ast.Node, head string, out *[]Violation) {
+func scanSupported(node *ast.Node, head string, out *[]Violation, profile Profile) {
 	switch head {
 	case "let":
 		// (let (var val) body): the binding list's head is the variable
 		// name, not a construct.
-		scanBinding(node, 1, out)
+		scanBinding(node, 1, out, profile)
 		if len(node.Children) > 2 {
-			scanNode(node.Children[2], head, out)
+			scanNode(node.Children[2], head, out, profile)
 		}
 	case "try_let":
 		// (try_let (var val) (catch err body) body)
-		scanBinding(node, 1, out)
-		scanChildren(node, head, out, 2)
+		scanBinding(node, 1, out, profile)
+		scanChildren(node, head, out, 2, profile)
 	case "defun":
 		// (defun name (params) body...): children 1 and 2 are the name
 		// and the parameter list, whose entries are identifiers or
@@ -375,25 +388,25 @@ func scanSupported(node *ast.Node, head string, out *[]Violation) {
 		if len(node.Children) > 4 && node.Children[3].Type == "SYMBOL" {
 			bodyStart = 4
 		}
-		scanChildren(node, head, out, bodyStart)
+		scanChildren(node, head, out, bodyStart, profile)
 	case "lambda":
 		// (lambda (params) body...)
-		scanChildren(node, head, out, 2)
+		scanChildren(node, head, out, 2, profile)
 	case "dict":
 		// (dict (key value)...): each child is a pair, not a construct.
 		for _, pair := range node.Children[1:] {
 			if pair == nil || pair.Type != "List" {
 				continue
 			}
-			scanChildren(pair, head, out, 0)
+			scanChildren(pair, head, out, 0, profile)
 		}
 	case "neural_circuit", "ephemeral_circuit":
 		// ((args...) "instruction"): the argument list is structural,
 		// but each argument is a compiled expression.
 		if len(node.Children) > 1 && node.Children[1] != nil && node.Children[1].Type == "List" {
-			scanChildren(node.Children[1], head, out, 0)
+			scanChildren(node.Children[1], head, out, 0, profile)
 		}
-		scanChildren(node, head, out, 2)
+		scanChildren(node, head, out, 2, profile)
 	case "parse_json":
 		if len(node.Children) > 2 && node.Children[2] != nil && node.Children[2].Type != "SYMBOL" {
 			*out = append(*out, Violation{
@@ -405,33 +418,33 @@ func scanSupported(node *ast.Node, head string, out *[]Violation) {
 			return
 		}
 	default:
-		scanChildren(node, head, out, 1)
+		scanChildren(node, head, out, 1, profile)
 	}
 }
 
 // scanSubForm descends into the body of a parent-destructured sub-form. The
 // parent passed down is the sub-form's own head so nested sub-forms (a lambda
 // inside a route) still resolve.
-func scanSubForm(node *ast.Node, head string, out *[]Violation) {
+func scanSubForm(node *ast.Node, head string, out *[]Violation, profile Profile) {
 	switch head {
 	case "catch":
 		// (catch err body)
-		scanChildren(node, head, out, 2)
+		scanChildren(node, head, out, 2, profile)
 	case "lambda":
 		// (lambda (req) body)
-		scanChildren(node, head, out, 2)
+		scanChildren(node, head, out, 2, profile)
 	case "route":
 		// (route "path" (lambda ...))
-		scanChildren(node, head, out, 2)
+		scanChildren(node, head, out, 2, profile)
 	case "metric", "candidate", "test", "column":
 		// Pure metadata for their parent; no code inside.
 	default:
-		scanChildren(node, head, out, 1)
+		scanChildren(node, head, out, 1, profile)
 	}
 }
 
 // scanBinding descends into the value half of a (var value) binding list.
-func scanBinding(node *ast.Node, index int, out *[]Violation) {
+func scanBinding(node *ast.Node, index int, out *[]Violation, profile Profile) {
 	if len(node.Children) <= index {
 		return
 	}
@@ -439,12 +452,12 @@ func scanBinding(node *ast.Node, index int, out *[]Violation) {
 	if binding == nil || binding.Type != "List" || len(binding.Children) != 2 {
 		return
 	}
-	scanNode(binding.Children[1], "", out)
+	scanNode(binding.Children[1], "", out, profile)
 }
 
-func scanChildren(node *ast.Node, head string, out *[]Violation, from int) {
+func scanChildren(node *ast.Node, head string, out *[]Violation, from int, profile Profile) {
 	for i := from; i < len(node.Children); i++ {
-		scanNode(node.Children[i], head, out)
+		scanNode(node.Children[i], head, out, profile)
 	}
 }
 

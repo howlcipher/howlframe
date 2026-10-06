@@ -14,6 +14,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/construct"
 	"github.com/howlcipher/howlframe/internal/hfir"
 	"github.com/howlcipher/howlframe/internal/ir"
 	"github.com/howlcipher/howlframe/internal/lexer"
@@ -38,7 +39,7 @@ func init() {
 func main() {
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if !strings.HasPrefix(cmd, "-") && (cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help") {
+		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help") {
 			runSubcommand()
 			return
 		}
@@ -53,6 +54,7 @@ func main() {
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	compileHfirBc := flag.Bool("compile-hfir-bc", false, "EXPERIMENTAL: compile directly from semantic HFIR to bytecode JSON")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
+	requiredCaps := flag.Bool("required-caps", false, "report required capabilities as compact JSON without execution")
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
@@ -119,6 +121,11 @@ func main() {
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
 		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
+	}
+
+	if *requiredCaps {
+		printRequiredCapabilities(content)
+		return
 	}
 
 	if *runBc {
@@ -464,8 +471,9 @@ const (
 // lives only in the production gate's failure policy, not in the verifier
 // itself, so nothing here silently skips verification.
 var hfirBlockingCodes = map[string]bool{
-	"HFIR_INVALID_REF":       true,
-	"HFIR_TARGET_INFEASIBLE": true,
+	"PROFILE_FORBIDDEN_CONSTRUCT": true,
+	"HFIR_INVALID_REF":            true,
+	"HFIR_TARGET_INFEASIBLE":      true,
 }
 
 // runHFIRGate executes the canonical ahead-of-time semantic verification and contract gate.
@@ -595,6 +603,8 @@ func runSubcommand() {
 		}
 	case "version":
 		fmt.Printf("HowlFrame %s\nHFBC format: %s\n", Version, HFBCFormatVersion)
+	case "inspect":
+		inspectArtifact()
 	case "check":
 		checkSource()
 	case "build":
@@ -614,6 +624,7 @@ Usage:
   howlframe <command> [arguments]
 
 Commands:
+  inspect   Report artifact capabilities (--caps), as compact JSON, without executing.
   check     Parse, type-check, and verify a .howl file without emitting an artifact.
   build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
   run       Execute a bytecode artifact or source script (--target=bytecode|interpreter).
@@ -627,8 +638,9 @@ Example: howlframe run --allow-caps filesystem,network app.hfbc arg1 arg2`)
 func checkSource() {
 	checkFlags := flag.NewFlagSet("check", flag.ExitOnError)
 	checkFlags.Usage = func() {
-		fmt.Println("Usage: howlframe check <source.howl>")
+		fmt.Println("Usage: howlframe check [--profile=default|governed] <source.howl>")
 	}
+	profileName := checkFlags.String("profile", "default", "construct profile: default or governed")
 	checkFlags.Parse(os.Args[2:])
 
 	if checkFlags.NArg() < 1 {
@@ -638,6 +650,7 @@ func checkSource() {
 	}
 
 	inputFile := checkFlags.Arg(0)
+
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read file: %v\n", err)
@@ -651,11 +664,22 @@ func checkSource() {
 		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
 	}
 
+	profile, profileErr := construct.LookupProfile(*profileName)
+	if profileErr != nil {
+		ast.ReportError(profileErr.Error(), 0, 0)
+	}
+	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
+		reportHFIRDiagnostics(diags)
+	}
 	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
 	ast.ResolveModules(root)
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
+		reportHFIRDiagnostics(diags)
+	}
+
 	_ = checker.Check(root)
 
 	hfirModule := filepath.Base(inputFile)
@@ -667,6 +691,7 @@ func checkSource() {
 func buildSource() {
 	buildFlags := flag.NewFlagSet("build", flag.ExitOnError)
 	outPath := buildFlags.String("o", "", "output artifact file path")
+	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
 	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm")
 
 	buildFlags.Usage = func() {
@@ -733,11 +758,22 @@ func buildSource() {
 		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
 	}
 
+	profile, profileErr := construct.LookupProfile(*profileName)
+	if profileErr != nil {
+		ast.ReportError(profileErr.Error(), 0, 0)
+	}
+	if diags := hfir.VerifyProfile(root, profile, inputFile, strings.ToLower(strings.TrimSpace(*target))); len(diags) > 0 {
+		reportHFIRDiagnostics(diags)
+	}
 	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
 	ast.ResolveModules(root)
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
+		reportHFIRDiagnostics(diags)
+	}
+
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
 
@@ -938,4 +974,30 @@ func runArtifact() {
 		fmt.Fprintf(os.Stderr, "Unknown target %q: valid run targets are bytecode, interpreter\n", *target)
 		os.Exit(1)
 	}
+}
+
+func printRequiredCapabilities(content []byte) {
+	prog, err := bytecode.ReadArtifact(bytes.NewReader(content))
+	if err != nil {
+		ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
+	}
+	data, err := json.Marshal(bytecode.RequiredCapabilities(prog))
+	if err != nil {
+		ast.ReportError(err.Error(), 0, 0)
+	}
+	fmt.Println(string(data))
+}
+func inspectArtifact() {
+	flags := flag.NewFlagSet("inspect", flag.ExitOnError)
+	caps := flags.Bool("caps", false, "report required capabilities as compact JSON without execution")
+	flags.Parse(os.Args[2:])
+	if !*caps || flags.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "Usage: howlframe inspect --caps <artifact.hfbc>")
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(flags.Arg(0))
+	if err != nil {
+		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
+	}
+	printRequiredCapabilities(data)
 }

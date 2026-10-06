@@ -1,6 +1,6 @@
 # 11: Implementation candidates
 
-**Done:** C0; C3 and C7 in this change. Remaining candidates are plans with enough detail to
+**Done:** C0; C1, C2, C3 and C7 in this change. Remaining candidates are plans with enough detail to
 start, in priority order. Each is small, keeps artifacts compatible, and
 leaves the production compiler, #90, and the tip-lock alone.
 
@@ -16,13 +16,13 @@ leaves the production compiler, #90, and the tip-lock alone.
   `TestForConstruct_Known`. On the old code the new tests fail.
 - bugs.md #57. Journal `docs/journals/2026-10-05_model_call_capability_gates.md`.
 
-## C1. Required-capabilities report (P0.5): S
+## C1. Required-capabilities report (P0.5): S — DONE in this change
 
 - **API:** `bytecode.RequiredCapabilities(prog *BCProgram) Report`, where
   `Report{Capabilities []string; Sites []Site}` and
   `Site{Function string; Index int; Opcode string; Capability string; Reason string}`.
 - **CLI:** `howlframe inspect --caps app.hfbc` (or `-required-caps`)
-  prints deterministic JSON. It never executes anything.
+  prints deterministic compact JSON (one line). It never executes anything.
 - **Soundness rule:** the report must cover every `requireCapability`
   call site in `internal/vm/vm.go`:
   1. `spec.Capability` for each instruction in `Main` and every function.
@@ -30,7 +30,8 @@ leaves the production compiler, #90, and the tip-lock alone.
      linear scan covers them.
   2. `STORE_OPEN` operand URI through `capability.StoreRequirements`
      (`file://` adds `filesystem`).
-  3. `CALL` to a function with `LazySynthesize` adds `network`.
+  3. Lazy or unknown `CALL` adds all capabilities: the network response
+     is compiled and executed, so its effects are not statically bounded.
   4. File-backed store ops (`STORE_PUT`/`GET`/`DELETE`/`KEYS` on a
      `file://` handle) are covered by rule 2.
 - **Test:** for every fixture in `tests/` and `apps/` that compiles, run
@@ -41,7 +42,7 @@ leaves the production compiler, #90, and the tip-lock alone.
   `requireCapability(` sites in `vm.go` matches the rules above, so a new
   site forces an update.
 
-## C2. Governed profile v0 (P0.3): S/M
+## C2. Governed profile v0 (P0.3): S/M — DONE in this change
 
 - `internal/construct`: add `Profile` sets (`default`, `governed`). The
   governed set is the Supported constructs minus the list in 08 P0.3.
