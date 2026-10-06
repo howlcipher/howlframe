@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -83,6 +84,41 @@ func TestVMSpawnAgentNesting(t *testing.T) {
 			}
 			if tc.code == "" && ev.ExitCode != 0 {
 				t.Fatalf("exit %d, want 0", ev.ExitCode)
+			}
+		})
+	}
+}
+
+func TestVMSpawnAgentInheritsArgvAndStdin(t *testing.T) {
+	printValue := func(op bytecode.Opcode) []bytecode.BCInstruction {
+		return []bytecode.BCInstruction{{Op: op}, {Op: bytecode.OpPrint, IntOperand: 1}}
+	}
+	argv := printValue(bytecode.OpCliArgs)
+	argv = append(argv, bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: int64(0)}, bytecode.BCInstruction{Op: bytecode.OpCliArgsGet}, bytecode.BCInstruction{Op: bytecode.OpPrint, IntOperand: 1})
+	read := printValue(bytecode.OpReadLine)
+	interleaved := append([]bytecode.BCInstruction{}, read...)
+	child := append([]bytecode.BCInstruction{}, read...)
+	child = append(child, spawnTestBody("Inner", read...)...)
+	interleaved = append(interleaved, spawnTestBody("Outer", child...)...)
+	interleaved = append(interleaved, read...)
+	for _, tc := range []struct {
+		name        string
+		insts       []bytecode.BCInstruction
+		stdin, want string
+	}{
+		{"child argv", spawnTestBody("Outer", argv...), "", spawnTestStart("Outer") + "[alpha --beta]\nalpha\n" + spawnTestDone("Outer")},
+		{"nested argv", spawnTestBody("Outer", spawnTestBody("Inner", argv...)...), "", spawnTestStart("Outer") + spawnTestStart("Inner") + "[alpha --beta]\nalpha\n" + spawnTestDone("Inner") + spawnTestDone("Outer")},
+		{"child reads next line", append(append([]bytecode.BCInstruction{}, read...), spawnTestBody("Outer", read...)...), "line1\nline2\n", "line1\n" + spawnTestStart("Outer") + "line2\n" + spawnTestDone("Outer")},
+		{"shared stream interleaving", interleaved, "line1\nline2\nline3\nline4\n", "line1\n" + spawnTestStart("Outer") + "line2\n" + spawnTestStart("Inner") + "line3\n" + spawnTestDone("Inner") + spawnTestDone("Outer") + "line4\n"},
+		{"child EOF", spawnTestBody("Outer", read...), "", spawnTestStart("Outer") + "\n" + spawnTestDone("Outer")},
+		{"parent reads after child", append(spawnTestBody("Outer", read...), read...), "line1\nline2\n", spawnTestStart("Outer") + "line1\n" + spawnTestDone("Outer") + "line2\n"},
+		{"parent EOF after child drains", append(spawnTestBody("Outer", read...), read...), "only\n", spawnTestStart("Outer") + "only\n" + spawnTestDone("Outer") + "\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, stderr bytes.Buffer
+			ev := RunBytecodeWithEvidence(&bytecode.BCProgram{Main: tc.insts}, []string{"alpha", "--beta"}, DefaultExecutionPolicy(), []capability.Capability{capability.Process}, strings.NewReader(tc.stdin), &out, &stderr, 0)
+			if ev.RuntimeFailure != nil || ev.ExitCode != 0 || out.String() != tc.want || stderr.String() != "" {
+				t.Fatalf("failure %#v exit %d stdout %q stderr %q; want exit 0 stdout %q stderr empty", ev.RuntimeFailure, ev.ExitCode, out.String(), stderr.String(), tc.want)
 			}
 		})
 	}
