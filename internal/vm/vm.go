@@ -1956,6 +1956,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpTryLet:
 			varName := inst.StringOperand
 			errVar := inst.StringOperand2
+			remaining := int64(len(insts) - ip - 1)
+			for segment, length := range []int64{inst.IntOperand, inst.IntOperand2, inst.IntOperand3} {
+				if length < 0 || length > remaining {
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "try_let %s length %d out of range [0,%d]", [...]string{"value", "catch", "success"}[segment], length, remaining))
+				}
+				remaining -= length
+			}
 			valLen := int(inst.IntOperand)
 			catchLen := int(inst.IntOperand2)
 			successLen := int(inst.IntOperand3)
@@ -2222,6 +2229,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			vm.push(result)
 		case bytecode.OpSpawn:
+			remaining := len(insts) - ip - 1
+			if inst.IntOperand < 0 || inst.IntOperand > int64(remaining) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "spawn body length %d out of range [0,%d]", inst.IntOperand, remaining))
+			}
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 			capturedEnv := NewBcEnv(nil)
@@ -2286,6 +2297,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpHttpRoute:
 			path := inst.StringOperand
 			reqVar := inst.StringOperand2
+			remaining := len(insts) - ip - 1
+			if inst.IntOperand < 0 || inst.IntOperand > int64(remaining) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http_route body length %d out of range [0,%d]", inst.IntOperand, remaining))
+			}
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 

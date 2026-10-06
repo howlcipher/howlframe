@@ -663,6 +663,136 @@ func TestVMNetworkEnvironmentTypeAssertions(t *testing.T) {
 	})
 }
 
+// These programs deliberately bypass ValidateProgram to exercise runtime guards.
+func TestVMSpawnAndHTTPRouteBodyLengthBounds(t *testing.T) {
+	for _, op := range []struct {
+		name string
+		op   bytecode.Opcode
+		cap  capability.Capability
+	}{
+		{"SPAWN", bytecode.OpSpawn, capability.Process},
+		{"HTTP_ROUTE", bytecode.OpHttpRoute, capability.Network},
+	} {
+		t.Run(op.name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name   string
+				length int64
+			}{
+				{"negative", -1},
+				{"past end", 3},
+				{"int64 maximum", math.MaxInt64},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					defer func() {
+						if r := recover(); r != nil {
+							t.Fatalf("host panic: %v", r)
+						}
+					}()
+					prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+						{Op: bytecode.OpLoadConst, ValueOperand: "prefix"},
+						{Op: op.op, StringOperand: "/test", StringOperand2: "req", IntOperand: tc.length},
+						{Op: bytecode.OpLoadConst, ValueOperand: "unexpected body"},
+						{Op: bytecode.OpPrint, IntOperand: 1},
+					}}
+					var out, stderr bytes.Buffer
+					ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{op.cap}, nil, &out, &stderr, 0)
+					if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "RUNTIME_ERROR" || ev.RuntimeFailure.Opcode != op.name || ev.RuntimeFailure.Instruction != 1 {
+						t.Fatalf("expected RUNTIME_ERROR at %s instruction 1, got %#v", op.name, ev.RuntimeFailure)
+					}
+					if !strings.Contains(ev.RuntimeFailure.Message, "body length") {
+						t.Fatalf("unexpected failure: %#v", ev.RuntimeFailure)
+					}
+					if out.Len() != 0 {
+						t.Fatalf("unexpected partial stdout: %q", out.String())
+					}
+				})
+			}
+			t.Run("exact remaining length", func(t *testing.T) {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("host panic: %v", r)
+					}
+				}()
+				insts := []bytecode.BCInstruction{}
+				if op.op == bytecode.OpHttpRoute {
+					insts = append(insts, bytecode.BCInstruction{Op: bytecode.OpHttpServerStart, StringOperand: "0"})
+				}
+				// A const-only spawn body avoids asynchronous writes to test buffers.
+				insts = append(insts, bytecode.BCInstruction{Op: op.op, StringOperand: "/test", StringOperand2: "req", IntOperand: 1}, bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: "body"})
+				var out, stderr bytes.Buffer
+				ev := RunBytecodeWithEvidence(&bytecode.BCProgram{Main: insts}, nil, DefaultExecutionPolicy(), []capability.Capability{op.cap}, nil, &out, &stderr, 0)
+				if ev.RuntimeFailure != nil || ev.ExitCode != 0 || out.Len() != 0 || stderr.Len() != 0 {
+					t.Fatalf("failure %#v, exit %d, stdout %q, stderr %q", ev.RuntimeFailure, ev.ExitCode, out.String(), stderr.String())
+				}
+			})
+		})
+	}
+}
+
+func TestVMTryLetSegmentLengthBounds(t *testing.T) {
+	for segment, name := range []string{"value", "catch", "success"} {
+		for _, tc := range []struct {
+			name   string
+			length int64
+		}{
+			{"negative", -1},
+			{"past end", 5},
+			{"int64 maximum", math.MaxInt64},
+		} {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("host panic: %v", r)
+					}
+				}()
+				lengths := [3]int64{2, 2, 0}
+				// Catch and success each fit individually but exceed the cumulative remainder.
+				if tc.name == "past end" && segment > 0 {
+					tc.length = 3
+				}
+				lengths[segment] = tc.length
+				prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+					{Op: bytecode.OpLoadConst, ValueOperand: "prefix"},
+					{Op: bytecode.OpTryLet, StringOperand: "result", StringOperand2: "err", IntOperand: lengths[0], IntOperand2: lengths[1], IntOperand3: lengths[2]},
+					{Op: bytecode.OpLoadConst, ValueOperand: "unexpected value body"},
+					{Op: bytecode.OpPrint, IntOperand: 1},
+					{Op: bytecode.OpLoadConst, ValueOperand: "unexpected catch body"},
+					{Op: bytecode.OpPrint, IntOperand: 1},
+				}}
+				var out, stderr bytes.Buffer
+				ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, &out, &stderr, 0)
+				if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "RUNTIME_ERROR" || ev.RuntimeFailure.Opcode != "TRY_LET" || ev.RuntimeFailure.Instruction != 1 {
+					t.Fatalf("expected RUNTIME_ERROR at TRY_LET instruction 1, got %#v", ev.RuntimeFailure)
+				}
+				if !strings.Contains(ev.RuntimeFailure.Message, "try_let "+name+" length") {
+					t.Fatalf("unexpected segment failure: %#v", ev.RuntimeFailure)
+				}
+				if out.Len() != 0 {
+					t.Fatalf("unexpected partial stdout: %q", out.String())
+				}
+			})
+		}
+	}
+	t.Run("exact remaining length", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("host panic: %v", r)
+			}
+		}()
+		prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
+			{Op: bytecode.OpTryLet, StringOperand: "result", StringOperand2: "err", IntOperand: 1, IntOperand3: 2},
+			{Op: bytecode.OpLoadConst, ValueOperand: "value"},
+			{Op: bytecode.OpLoadVar, StringOperand: "result"},
+			{Op: bytecode.OpPrint, IntOperand: 1},
+		}}
+		var out, stderr bytes.Buffer
+		ev := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, nil, &out, &stderr, 0)
+		if ev.RuntimeFailure != nil || ev.ExitCode != 0 || out.String() != "value\n" || stderr.Len() != 0 {
+			t.Fatalf("failure %#v, exit %d, stdout %q, stderr %q", ev.RuntimeFailure, ev.ExitCode, out.String(), stderr.String())
+		}
+	})
+}
+
 func TestVMSpawnAgentBodyLengthBounds(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
