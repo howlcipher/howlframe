@@ -24,6 +24,7 @@ func spawnTestDone(name string) string {
 }
 
 func TestVMSpawnAgentNesting(t *testing.T) {
+	exitBody := []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: int64(7)}, {Op: bytecode.OpExit}}
 	returnBody := []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: int64(7)}, {Op: bytecode.OpReturn}}
 	failure := []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: "HOME"}, {Op: bytecode.OpEnv}}
 	three := spawnTestBody("Outer", spawnTestBody("Middle", spawnTestBody("Inner", spawnTestPrint("leaf")...)...)...)
@@ -59,7 +60,9 @@ func TestVMSpawnAgentNesting(t *testing.T) {
 		{"shared budget", three, spawnTestStart("Outer") + spawnTestStart("Middle") + spawnTestStart("Inner"), "", "LIMIT_EXCEEDED", 6, 0},
 		{"depth guard", three, spawnTestStart("Outer") + spawnTestStart("Middle"), "", "LIMIT_EXCEEDED", 0, 2},
 		{"body return isolated", append(spawnTestBody("Return", returnBody...), spawnTestPrint("after")...), spawnTestStart("Return") + "after\n", "[Swarm VM] Agent \"Return\" failed task: \"work\": RETURN: return from spawn agent body\n", "", 0, 0},
+		{"body exit isolated", append(spawnTestBody("Exit", exitBody...), spawnTestPrint("after")...), spawnTestStart("Exit") + "after\n", "[Swarm VM] Agent \"Exit\" failed task: \"work\": EXIT: exit 7 from spawn agent body\n", "", 0, 0},
 		{"nested return isolated", spawnTestBody("Outer", append(spawnTestBody("Inner", returnBody...), spawnTestPrint("outer after")...)...), spawnTestStart("Outer") + spawnTestStart("Inner") + "outer after\n" + spawnTestDone("Outer"), "[Swarm VM] Agent \"Inner\" failed task: \"work\": RETURN: return from spawn agent body\n", "", 0, 0},
+		{"nested exit isolated", spawnTestBody("Outer", append(spawnTestBody("Inner", exitBody...), spawnTestPrint("outer after")...)...), spawnTestStart("Outer") + spawnTestStart("Inner") + "outer after\n" + spawnTestDone("Outer"), "[Swarm VM] Agent \"Inner\" failed task: \"work\": EXIT: exit 7 from spawn agent body\n", "", 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			policy := DefaultExecutionPolicy()

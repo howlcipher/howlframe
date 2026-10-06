@@ -3058,7 +3058,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							case VmReturn:
 								fmt.Fprintf(vm.ErrOut, "[Swarm VM] Agent %q failed task: %q: RETURN: return from spawn agent body\n", name, task)
 							case VmExit:
-								panic(r)
+								fmt.Fprintf(vm.ErrOut, "[Swarm VM] Agent %q failed task: %q: EXIT: exit %d from spawn agent body\n", name, task, e.code)
 							case *VMError:
 								if e.Code == "LIMIT_EXCEEDED" {
 									panic(r)
