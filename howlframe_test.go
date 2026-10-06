@@ -1999,3 +1999,44 @@ func TestBytecodeRunWithTimeout(t *testing.T) {
 		t.Fatalf("expected context deadline exceeded in output, got: %s", msg)
 	}
 }
+
+func TestRunBytecodeMaxCallDepthFlag(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	source := filepath.Join(dir, "recursion.howl")
+	artifact := filepath.Join(dir, "recursion.hfbc")
+	if err := os.WriteFile(source, []byte(`(cli_app (defun down (n) (type_hints (n int) (return int)) (if (> n 0) (return (call down (- n 1))) (return 42))) (print (call down 49)))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(binary, "-compile-bc", source, "-o", artifact).CombinedOutput(); err != nil {
+		t.Fatalf("compile: %v\n%s", err, output)
+	}
+	for _, runner := range []string{"-run-bc", "run"} {
+		for _, limit := range []string{"", "3", "0", "-1"} {
+			t.Run(runner+"/"+limit, func(t *testing.T) {
+				args := []string{runner}
+				if limit != "" {
+					args = append(args, "--max-call-depth", limit)
+				}
+				args = append(args, artifact)
+				output, err := exec.Command(binary, args...).CombinedOutput()
+				if limit == "" {
+					if err != nil || string(output) != "42\n" {
+						t.Fatalf("default: %v output %q", err, output)
+					}
+					return
+				}
+				want := "-max-call-depth must be greater than zero"
+				if limit == "3" {
+					want = `"code":"LIMIT_EXCEEDED"`
+				}
+				if err == nil || !strings.Contains(string(output), want) {
+					t.Fatalf("error %v output %q; want %q", err, output, want)
+				}
+				if limit == "3" && !strings.Contains(string(output), "call depth limit exceeded") {
+					t.Fatalf("wrong limit: %s", output)
+				}
+			})
+		}
+	}
+}

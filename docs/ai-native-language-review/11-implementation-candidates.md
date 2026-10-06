@@ -69,6 +69,8 @@ leaves the production compiler, #90, and the tip-lock alone.
 - Enforce `MaxCallDepth` on `CALL`. **Decision needed**: 128 may break
   legitimate recursion. The suggestion is to make it runner-configurable
   like `--max-instructions`, with a default of 1,000.
+  **Status (C4a, 2026-10-06):** implemented for bytecode CALL with default
+  1000 and `--max-call-depth`; remaining C4 bullets (C4b) still open.
 - Allocation accounting on string concat, `append`, `MAKE_LIST`,
   `MAKE_DICT`, `str_split`, `str_join`, `read_file`, and `fetch` bodies
   against `MaxMemoryBytes` (runner-configurable). Fail with structured

@@ -58,12 +58,16 @@ func main() {
 	runBc := flag.Bool("run-bc", false, "run bytecode from JSON file")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
+	maxCallDepth := flag.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting for -run-bc (default 1000)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
 	if *runBc && *maxInstructions <= 0 {
 		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
+	}
+	if *runBc && *maxCallDepth <= 0 {
+		ast.ReportError("-max-call-depth must be greater than zero; unlimited recursion is not supported", 0, 0)
 	}
 	if *outDir != "" && strings.HasPrefix(*outDir, "-") {
 		ast.ReportError("flag needs an argument: -o", 0, 0)
@@ -135,6 +139,7 @@ func main() {
 		}
 		executionPolicy := vm.DefaultExecutionPolicy()
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 	}
 
@@ -886,6 +891,8 @@ func runArtifact() {
 	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
 
+	maxCallDepth := runFlags.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting (default 1000)")
+
 	runFlags.Usage = func() {
 		fmt.Println("Usage: howlframe run [options] <artifact-or-source> [-- arguments...]")
 		runFlags.PrintDefaults()
@@ -920,6 +927,11 @@ func runArtifact() {
 		os.Exit(1)
 	}
 
+	if *maxCallDepth <= 0 {
+		fmt.Fprintln(os.Stderr, "-max-call-depth must be greater than zero")
+		os.Exit(1)
+	}
+
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	switch targetVal {
 	case "interpreter", "run":
@@ -942,6 +954,7 @@ func runArtifact() {
 	case "bytecode", "bc":
 		executionPolicy := vm.DefaultExecutionPolicy()
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 
 		var prog *bytecode.BCProgram
 		if strings.HasSuffix(inputFile, ".howl") {

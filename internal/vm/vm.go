@@ -1396,6 +1396,7 @@ type BCVM struct {
 	args        []string
 	executed    int
 	spawnDepth  int
+	callDepth   int
 	Limits      VMLimits
 	AllowedCaps []capability.Capability
 	In          io.Reader
@@ -2713,6 +2714,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				argVals = append([]any{vm.pop(inst.Op)}, argVals...)
 			}
 
+			if vm.Limits.MaxCallDepth <= 0 || vm.callDepth >= vm.Limits.MaxCallDepth {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "call depth limit exceeded (max %d)", vm.Limits.MaxCallDepth))
+			}
+			vm.callDepth++
+
 			callEnv := NewBcEnv(env)
 			for i, p := range fn.Params {
 				callEnv.vars[p] = argVals[i]
@@ -2724,6 +2730,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			callerHeight := len(vm.stack)
 			var result any
 			func() {
+				defer func() { vm.callDepth-- }()
 				defer func() {
 					if r := recover(); r != nil {
 						if ret, ok := r.(VmReturn); ok {
@@ -3047,7 +3054,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1}
+				childVM := &BCVM{prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
