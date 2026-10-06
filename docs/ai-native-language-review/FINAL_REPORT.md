@@ -156,7 +156,7 @@ Not for the thesis.
 
 ### 9. Top 5 risks, ranked
 1. **False authority assurance.** Effect paths bypass grants. One case is
-   fixed here, and there is no conformance test to stop recurrence.
+   fixed here; C3 now adds executable conformance checks against recurrence.
 2. **No advantage over the simple alternative.** JSON plans plus a broker
    may be enough.
 3. **Resource exhaustion.** Memory, recursion, wall-clock, and output are
@@ -244,11 +244,11 @@ See the table below and 08.
 | Pri | Item | Size | Status in this PR |
 | --- | --- | --- | --- |
 | **P0** | Gate model-call opcodes and interpreter `lazy_synthesize` behind `network` | S | **DONE** (commit 1, bugs.md #57) |
-| P0 | Effect-gate conformance test (no effectful opcode with an empty capability) | S | Planned (C3) |
+| P0 | Effect-gate conformance test (no effectful opcode with an empty capability) | S | Done in this change (C3: source scan + empty-grant coverage) |
 | P0 | Governed profile v0 (`--profile governed` construct allow-list) | S/M | Planned (C2) |
 | P0 | Required-capabilities report for artifacts | S | Planned (C1) |
 | P0 | Honest wording: what "verified", "bounded", and "atomic" mean; mark extreme paradigms superseded; fix the stale roadmap | S | Planned (docs) |
-| P0 | Demo-app output integrity (`encode_json`) and pre-flight or "ordered, not atomic" | S | Planned (C7) |
+| P0 | Demo-app output integrity (`encode_json`) and pre-flight or "ordered, not atomic" | S | Done in this change (C7: JSON integrity + pre-flight, ordered effects) |
 | **P1** | Memory/allocation, call-depth, deadline, and byte limits | M/L | Planned (C4) |
 | P1 | Execution receipt v0, written by the runner | M | Planned (C5) |
 | P1 | Verification report instead of the bare boolean | S/M | Planned |

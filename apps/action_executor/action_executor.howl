@@ -8,6 +8,7 @@
         (catch err
           (do
             (stderr "Failed to read proposal file")
+            (stderr err)
             (exit 3)))
         (let (content (bytes_to_string content_bytes))
           (try_let (proposal (parse_json Proposal content))
@@ -120,12 +121,12 @@
                                           )
                                         )
 
-                                        (print "{")
-                                        (print (str_join (list "  \"decision\": \"" decision "\",") ""))
-                                        (print (str_join (list "  \"action_id\": \"" trusted_action_id "\",") ""))
-                                        (print (str_join (list "  \"normalized_target\": \"" normalized_target "\",") ""))
-                                        (print (str_join (list "  \"reason\": \"" reason "\"") ""))
-                                        (print "}")
+                                        (print (encode_json (dict
+                                          ("decision" decision)
+                                          ("action_id" trusted_action_id)
+                                          ("normalized_target" normalized_target)
+                                          ("reason" reason)
+                                        )))
 
                                         (if (= decision "ALLOW")
                                           (do
@@ -159,8 +160,8 @@
                                                     (try_let (data (read_file fixture_path))
                                                       (catch err (do (stderr "Fixture not found") (exit 4)))
                                                       (do
-                                                        (write_file target_path data)
                                                         (store_open kv3 "memory://release_state")
+                                                        (write_file target_path data)
                                                         (store_put kv3 "status" (dict ("val" "staged")))
                                                       )
                                                     )
@@ -172,8 +173,8 @@
                                               (do
                                                 (let (marker_path (str_join (list sandbox_dir "/releases/current.txt") ""))
                                                   (do
-                                                    (write_file marker_path "production_deployed")
                                                     (store_open kv4 "memory://release_state")
+                                                    (write_file marker_path "production_deployed")
                                                     (store_put kv4 "status" (dict ("val" "production_deployed")))
                                                   )
                                                 )
@@ -183,8 +184,8 @@
                                               (do
                                                 (let (marker_path (str_join (list sandbox_dir "/releases/current.txt") ""))
                                                   (do
-                                                    (write_file marker_path "rolled_back")
                                                     (store_open kv5 "memory://release_state")
+                                                    (write_file marker_path "rolled_back")
                                                     (store_put kv5 "status" (dict ("val" "rolled_back")))
                                                   )
                                                 )

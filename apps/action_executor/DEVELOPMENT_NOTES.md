@@ -29,7 +29,7 @@ Deterministic state transitions are enforced:
 - A rollback can only occur if the system is currently `production_deployed`.
 
 ## Failure atomicity
-The executor correctly orders its operations: filesystem changes occur first, and only upon success is the simulated `memory://release_state` store updated to reflect the new state. This guarantees that failed side-effects do not falsely report as successful state transitions.
+Capability checks for each action are pre-flighted before the first write: the filesystem grant is checked by the proposal/fixture reads, and `store_open` checks database authority before `write_file`. Effects are ordered, not atomic: there is no transaction or rollback for a write failing partway through due to I/O, or for a later runtime error. The decision JSON is printed before execution; an ALLOW line followed by a non-zero exit means the authorized action did not complete.
 
 ## Adversarial findings
 Adversarial tests confirm:

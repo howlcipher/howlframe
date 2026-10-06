@@ -1,6 +1,6 @@
 # 11: Implementation candidates
 
-**Done in this PR:** C0. Everything else is a plan with enough detail to
+**Done:** C0; C3 and C7 in this change. Remaining candidates are plans with enough detail to
 start, in priority order. Each is small, keeps artifacts compatible, and
 leaves the production compiler, #90, and the tip-lock alone.
 
@@ -53,7 +53,7 @@ leaves the production compiler, #90, and the tip-lock alone.
   compiles under `default`. Apps that should be governed-clean (for
   example `action_executor`) pass.
 
-## C3. Effect-gate conformance test (P0.2): S
+## C3. Effect-gate conformance test (P0.2): S — DONE in this change
 
 - A Go test that parses `internal/vm/vm.go` with `go/ast`, maps each
   `case bytecode.OpX:` body to the set of selector calls it makes
@@ -94,7 +94,7 @@ leaves the production compiler, #90, and the tip-lock alone.
   Check the experimental lowerer as well (it must stay in parity, but
   production is unaffected by the experimental path).
 
-## C7. Demo-app output integrity (P0.6): S
+## C7. Demo-app output integrity (P0.6): S — DONE in this change
 
 - In `apps/release_authority` and `apps/action_executor`, build the
   decision as a `dict` and print it with `encode_json`, which escapes
@@ -105,11 +105,10 @@ leaves the production compiler, #90, and the tip-lock alone.
   must produce exactly one `decision` key, with the VM's real value.
   This was reproduced in this review: Python reads `ALLOW` when the VM
   decided `DENY`.
-- Optional: pre-flight `stage_artifact` capabilities (all grants checked
-  before the first effect), or reword the doc to say "ordered, not atomic".
-- This was not done in this PR because it changes demo-app output
-  formatting. That is a behavior change consumers might match on, so it
-  needs William's call.
+- Implemented: pre-flight action capabilities (all grants checked
+  before the first write), and document "ordered, not atomic".
+- This change uses JSON parsing in consumers and documents that pre-flight
+  capability checks do not provide transaction or rollback semantics.
 
 ## Not recommended now
 

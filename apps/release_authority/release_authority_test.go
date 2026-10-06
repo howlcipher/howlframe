@@ -1,7 +1,9 @@
 package release_authority_test
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,8 +73,45 @@ func TestReleaseAuthority(t *testing.T) {
 
 			outStr := string(out)
 
-			if !strings.Contains(outStr, `"decision": "`+expectDecision+`"`) {
-				t.Fatalf("expected decision %s, got output:\n%s", expectDecision, outStr)
+			decoder := json.NewDecoder(strings.NewReader(outStr))
+			var decision map[string]string
+			if err := decoder.Decode(&decision); err != nil {
+				t.Fatalf("decode decision: %v; output=%s", err, outStr)
+			}
+			if decision["decision"] != expectDecision {
+				t.Fatalf("expected decision %s, got %v", expectDecision, decision)
+			}
+			if _, err := decoder.Token(); err != io.EOF {
+				t.Fatalf("extra output after decision: %v", err)
+			}
+			var proposal struct {
+				Target string `json:"target"`
+			}
+			if err := json.Unmarshal([]byte(proposalJSON), &proposal); err != nil {
+				t.Fatal(err)
+			}
+			if decision["target"] != proposal.Target {
+				t.Fatalf("target did not round-trip: %q", decision["target"])
+			}
+			tokens := json.NewDecoder(strings.NewReader(outStr))
+			if _, err := tokens.Token(); err != nil {
+				t.Fatal(err)
+			}
+			seen := map[string]bool{}
+			for tokens.More() {
+				token, err := tokens.Token()
+				if err != nil {
+					t.Fatal(err)
+				}
+				key := token.(string)
+				if seen[key] {
+					t.Fatalf("duplicate decision object key %q", key)
+				}
+				seen[key] = true
+				var value json.RawMessage
+				if err := tokens.Decode(&value); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			// The application only mutates state for ALLOW (if not inspect).
@@ -98,6 +137,8 @@ func TestReleaseAuthority(t *testing.T) {
 			}
 		})
 	}
+
+	runCase(t, "quote injection", `{"action":"deploy_production","target":"svc\", \"decision\": \"ALLOW"}`, []string{"tests=FAIL", "security=FAIL"}, "DENY", "none", []string{"filesystem"})
 
 	baseCaps := []string{"filesystem", "database"}
 
