@@ -1,0 +1,11 @@
+(cli_app
+  (print "swarm argv start")
+  (spawn_agent "Outer" (task "argv and stdin"
+    (print (cli_args 0))
+    (print (cli_args))
+    (print (read_line))
+    (spawn_agent "Inner" (task "nested argv and stdin"
+      (print (cli_args 0))
+      (print (cli_args))
+      (print (read_line))))))
+  (print "swarm argv done"))

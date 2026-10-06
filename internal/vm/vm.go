@@ -3031,7 +3031,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						}
 					}
 				}
-				childVM := &BCVM{prog: vm.prog, env: capturedEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1}
+				// Synchronous children share the buffered reader to preserve stdin order.
+				childVM := &BCVM{prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
