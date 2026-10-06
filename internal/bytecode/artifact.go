@@ -241,10 +241,25 @@ func validateInstructions(insts []BCInstruction, prog *BCProgram) error {
 		}
 
 		// Jump targets
-		if op == OpJump || op == OpJumpIfFalse {
-			target := i + int(inst.IntOperand)
-			if target < 0 || target > len(insts) {
-				return fmt.Errorf("instruction %d: jump target %d out of bounds [0, %d]", i, target, len(insts))
+		if op == OpJump || op == OpJumpIfFalse || op == OpForNext {
+			// Check the offset before addition so even extreme int64 values cannot overflow.
+			if inst.IntOperand < -int64(i) || inst.IntOperand > int64(len(insts))-int64(i) {
+				return fmt.Errorf("instruction %d: jump offset %d puts target out of bounds [0, %d]", i, inst.IntOperand, len(insts))
+			}
+		}
+
+		remaining := int64(len(insts) - i - 1)
+		switch op {
+		case OpSpawnAgent, OpSpawn, OpHttpRoute:
+			if inst.IntOperand < 0 || inst.IntOperand > remaining {
+				return fmt.Errorf("instruction %d: %s body length %d out of range [0, %d]", i, Registry[op].Name, inst.IntOperand, remaining)
+			}
+		case OpTryLet:
+			for segment, length := range []int64{inst.IntOperand, inst.IntOperand2, inst.IntOperand3} {
+				if length < 0 || length > remaining {
+					return fmt.Errorf("instruction %d: TRY_LET %s length %d out of range [0, %d]", i, [...]string{"value", "catch", "success"}[segment], length, remaining)
+				}
+				remaining -= length
 			}
 		}
 
