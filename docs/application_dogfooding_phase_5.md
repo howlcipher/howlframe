@@ -21,10 +21,10 @@ This phase implements the Bounded Action Executor. It demonstrates that HowlFram
 **No.** Action processing only occurs when the authorization outcome is `ALLOW`. Otherwise, the script outputs the denial and completes execution cleanly without side effects.
 
 ## Did failed effects corrupt trusted state?
-**No.** Local filesystem operations execute first. Only after they succeed is the native runtime `memory://release_state` updated, ensuring failure atomicity. 
+Capability checks for each action are pre-flighted before the first write: the filesystem grant is checked by the proposal/fixture reads, and `store_open` checks database authority before `write_file`. Effects are ordered, not atomic: there is no transaction or rollback for a write failing partway through due to I/O, or for a later runtime error. The decision JSON is printed before execution; an ALLOW line followed by a non-zero exit means the authorized action did not complete.
 
 ## Did standalone bytecode execute all authority logic?
-**Yes.** The application and all of its security logic compile cleanly to `.hfbc` and execute on the HowlFrame VM. Security is guaranteed entirely outside the host Go backend.
+**Yes.** The application and all of its security logic compile cleanly to `.hfbc` and execute on the HowlFrame VM. Authority logic runs in the VM; capability grants are enforced by the Go VM runtime, which is part of the trusted computing base.
 
 ## Did any core changes become necessary?
 **No.** HowlFrame fully supported this phase without any core bug fixes or extensions. 

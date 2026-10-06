@@ -1,7 +1,9 @@
 package action_executor_test
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +42,11 @@ func TestActionExecutor(t *testing.T) {
 			os.MkdirAll(filepath.Join(sandboxDir, "staged"), 0o755)
 			os.MkdirAll(filepath.Join(sandboxDir, "releases"), 0o755)
 			os.MkdirAll(filepath.Join(sandboxDir, "fixtures"), 0o755)
+
+			markerPath := filepath.Join(sandboxDir, "releases", "current.txt")
+			if err := os.WriteFile(markerPath, []byte("kept"), 0o600); err != nil {
+				t.Fatal(err)
+			}
 
 			// Setup some basic fixtures
 			os.WriteFile(filepath.Join(sandboxDir, "fixtures", "app-v1.txt"), []byte("v1_content"), 0o600)
@@ -81,6 +88,16 @@ func TestActionExecutor(t *testing.T) {
 					}
 				}
 				if !hasFsCap || (!hasDbCap && expectStateMutation != "none" && expectStateMutation != "") {
+					if !strings.Contains(string(out), "CAPABILITY_DENIED") {
+						t.Fatalf("expected capability denial: %s", out)
+					}
+					if _, err := os.Stat(filepath.Join(sandboxDir, "staged", "app-v1.txt")); !os.IsNotExist(err) {
+						t.Fatalf("denied action created staged file: %v", err)
+					}
+					content, readErr := os.ReadFile(markerPath)
+					if readErr != nil || string(content) != "kept" {
+						t.Fatalf("denied action changed marker: %q, %v", content, readErr)
+					}
 					return
 				}
 				t.Fatalf("unexpected failure: %v\n%s", err, string(out))
@@ -92,8 +109,29 @@ func TestActionExecutor(t *testing.T) {
 
 			outStr := string(out)
 
-			if !strings.Contains(outStr, `"decision": "`+expectDecision+`"`) {
-				t.Fatalf("expected decision %s, got output:\n%s", expectDecision, outStr)
+			reader := strings.NewReader(outStr)
+			decoder := json.NewDecoder(reader)
+			var decision map[string]string
+			if err := decoder.Decode(&decision); err != nil {
+				t.Fatalf("decode decision: %v; output=%s", err, outStr)
+			}
+			if decision["decision"] != expectDecision {
+				t.Fatalf("expected decision %s, got %v", expectDecision, decision)
+			}
+			rest, err := io.ReadAll(io.MultiReader(decoder.Buffered(), reader))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Follow-up status/health lines remain outside the decision JSON.
+			trailing := strings.TrimSpace(string(rest))
+			if strings.Contains(proposalJSON, "read_release_status") && trailing != "status=idle" {
+				t.Fatalf("status output = %q", trailing)
+			}
+			if strings.Contains(proposalJSON, "run_health_check") && trailing != "health=ok_marker_kept" {
+				t.Fatalf("health output = %q", trailing)
+			}
+			if !strings.Contains(proposalJSON, "read_release_status") && !strings.Contains(proposalJSON, "run_health_check") && trailing != "" {
+				t.Fatalf("extra output: %q", trailing)
 			}
 
 			// Validate explicit filesystem boundaries for staging
@@ -200,4 +238,11 @@ func TestActionExecutor(t *testing.T) {
 		`{"action":"write_release_marker"}`,
 		[]string{"approved=yes"},
 		"ALLOW", "production_deployed", []string{"filesystem"}) // Expected to fail internally on store mutation
+	for _, caps := range [][]string{{"filesystem"}, {"database"}} {
+		runCase(t, "stage preflight "+caps[0], "idle", `{"action":"stage_artifact","artifact":"app-v1"}`, nil, "ALLOW", "staged", caps)
+		runCase(t, "marker preflight "+caps[0], "staged", `{"action":"write_release_marker"}`, []string{"approved=yes"}, "ALLOW", "production_deployed", caps)
+		runCase(t, "rollback preflight "+caps[0], "production_deployed", `{"action":"rollback_marker"}`, []string{"approved=yes"}, "ALLOW", "rolled_back", caps)
+	}
+	runCase(t, "health follow-up", "idle", `{"action":"run_health_check"}`, nil, "ALLOW", "none", baseCaps)
+
 }

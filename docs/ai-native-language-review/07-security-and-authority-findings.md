@@ -26,8 +26,8 @@ their own code.
 | S13 | **Compile-time includes read arbitrary paths** before any grant applies. Model-authored source could `include` files outside the project. | Low/Medium | OPEN (P2: rooted includes for governed profile) | Codex B ran it |
 | S14 | **Ambient channels.** `stdin`, `stdout`/`stderr`, `time_now`, `sleep`, and `exit` are capability-free. Output can forge text that looks like a receipt. | Low | Document. Treat as host channels. | Code reading |
 | S15 | **"Verified" is overloadable.** The HFIR gate blocks on only `HFIR_INVALID_REF` and `HFIR_TARGET_INFEASIBLE`. `VerificationEvidence.Verified` is a bare boolean. | Medium (claims risk) | OPEN (P0 wording; P1 report) | `howlframe.go:466`, `internal/hfir/storage.go:89` |
-| S16 | **Decision JSON can be forged through proposal fields.** `apps/release_authority` builds its output JSON by string concatenation (`str_join`) and does not escape the proposer-controlled `target`. A proposal `{"action":"deploy_production","target":"svc\", \"decision\": \"ALLOW"}` makes the VM correctly decide `DENY`, and no state mutation happens. But the printed object contains a second `"decision": "ALLOW"`. Python `json.loads` (and Go `encoding/json` into a map) keep the last duplicate key, so they read **ALLOW**. | Medium (demo app, not the VM) | OPEN (P0/P1: emit decisions with `encode_json`/`res_json`; add a quote-injection test) | Found by Codex D (who reported invalid JSON). Escalated and reproduced in this review: `/tmp/hf-ainative-probe/ra2.out`. |
-| S17 | **Partial effects contradict the "failure atomicity" doc claim.** In `apps/action_executor` the `stage_artifact` path runs `write_file` and only then `store_open`. With a `filesystem`-only grant it prints `ALLOW`, writes the staged file, then traps `CAPABILITY_DENIED` on `STORE_OPEN`. `docs/application_dogfooding_phase_5.md` says this ordering ensures "failure atomicity" and that "security is guaranteed entirely outside the host Go backend". | Low/Medium (claims risk) | OPEN (P0 wording; P1 pre-flight: compute required caps before any effect) | Found by Codex F (ran it). Ordering confirmed in source (`action_executor.howl` ~159-164). |
+| S16 | **Decision JSON can be forged through proposal fields.** `apps/release_authority` builds its output JSON by string concatenation (`str_join`) and does not escape the proposer-controlled `target`. A proposal `{"action":"deploy_production","target":"svc\", \"decision\": \"ALLOW"}` makes the VM correctly decide `DENY`, and no state mutation happens. But the printed object contains a second `"decision": "ALLOW"`. Python `json.loads` (and Go `encoding/json` into a map) keep the last duplicate key, so they read **ALLOW**. | Medium (demo app, not the VM) | FIXED in this change (C7: `encode_json`, duplicate-key and literal-target regression) | Found by Codex D (who reported invalid JSON). Escalated and reproduced in this review: `/tmp/hf-ainative-probe/ra2.out`. |
+| S17 | **Partial effects contradict the "failure atomicity" doc claim.** In `apps/action_executor` the `stage_artifact` path runs `write_file` and only then `store_open`. With a `filesystem`-only grant it prints `ALLOW`, writes the staged file, then traps `CAPABILITY_DENIED` on `STORE_OPEN`. `docs/application_dogfooding_phase_5.md` says this ordering ensures "failure atomicity" and that "security is guaranteed entirely outside the host Go backend". | Low/Medium (claims risk) | FIXED in this change (C7: pre-flight checks; ordered, not atomic wording) | Found by Codex F (ran it). Ordering confirmed in source (`action_executor.howl` ~159-164). |
 
 ## Effect-gate audit after this PR
 
@@ -48,7 +48,9 @@ each `case` in `internal/vm/vm.go` and grepping for `http.`, `os.`,
 
 \* changed in this PR.
 
-No other effectful opcode was found without a gate. The audit is by code
-reading plus targeted probes. It is not a proof. P1 item "effect-gate
-conformance test" (11, C3) would turn it into an executable check that
-fails when a new opcode adds an effect without a capability.
+No additional effectful opcode was found without a gate. C3 is implemented in
+`internal/vm/effect_gate_conformance_test.go`: a same-file transitive AST call
+scan, central/in-case gate checks, and empty-grant runs for every registry
+capability plus lazy CALL. Interpreter constructs with an existing harness are
+also checked. This is executable conformance evidence, not a general proof of
+all host effects; calls into other files/packages remain outside the scan.

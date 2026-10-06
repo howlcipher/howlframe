@@ -105,12 +105,12 @@
                                       )
                                     )
 
-                                    (print "{")
-                                    (print (str_join (list "  \"decision\": \"" decision "\",") ""))
-                                    (print (str_join (list "  \"action\": \"" (to_string action) "\",") ""))
-                                    (print (str_join (list "  \"target\": \"" (to_string target) "\",") ""))
-                                    (print (str_join (list "  \"reason\": \"" reason "\"") ""))
-                                    (print "}")
+                                    (print (encode_json (dict
+                                      ("decision" decision)
+                                      ("action" (to_string action))
+                                      ("target" (to_string target))
+                                      ("reason" reason)
+                                    )))
 
                                     (if (= decision "ALLOW")
                                       (if (!= action "inspect")
