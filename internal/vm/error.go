@@ -52,7 +52,7 @@ type ExecutionPolicy struct {
 var DefaultLimits = VMLimits{
 	MaxInstructions: 100000,
 	MaxMemoryBytes:  67108864,
-	MaxCallDepth:    128,
+	MaxCallDepth:    1000,
 }
 
 // DefaultExecutionPolicy returns a copy of the standalone VM's safe defaults.
