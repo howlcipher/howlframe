@@ -409,7 +409,7 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                                     <td><code>filesystem</code></td>
                                     <td><code>file_read</code>, <code>file_write</code></td>
                                     <td><span class="chip chip-deny">DENY (Blocked)</span></td>
-                                    <td>Runner flag: <code>-allow-caps filesystem</code></td>
+                                    <td>Runner flag: <code>-allow-caps filesystem:read=/data,filesystem:write=/out</code> (native VM; <code>filesystem</code> remains unrestricted)</td>
                                 </tr>
                                 <tr>
                                     <td><code>system</code></td>
