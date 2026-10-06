@@ -1,0 +1,8 @@
+{
+  "schema": "howlframe.exp.plan/v0",
+  "steps": [
+    {
+      "action": "approve"
+    }
+  ]
+}

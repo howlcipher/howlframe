@@ -1,0 +1,10 @@
+{
+  "schema": "howlframe.exp.plan/v0",
+  "steps": [
+    {
+      "action": "write_record",
+      "path": "/tmp/howl-pwned",
+      "record": {}
+    }
+  ]
+}

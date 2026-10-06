@@ -1,0 +1,43 @@
+{
+  "schema": "howlframe.exp.plan/v0",
+  "steps": [
+    {
+      "action": "read_file",
+      "path": "evidence/checks.json",
+      "format": "json",
+      "as": "checks"
+    },
+    {
+      "action": "read_file",
+      "path": "evidence/version.kv",
+      "format": "kv",
+      "as": "version"
+    },
+    {
+      "action": "read_file",
+      "path": "evidence/note.txt",
+      "format": "text",
+      "as": "note"
+    },
+    {
+      "action": "filter",
+      "from": "checks",
+      "where": {
+        "field": "status",
+        "op": "eq",
+        "value": "PASS"
+      },
+      "as": "selected"
+    },
+    {
+      "action": "request_approval",
+      "reason": "release review",
+      "summary": {
+        "batch": "03",
+        "selected": {
+          "$var": "selected"
+        }
+      }
+    }
+  ]
+}

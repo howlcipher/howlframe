@@ -1,0 +1,13 @@
+{
+  "status": "reference",
+  "effects": [
+    {
+      "kind": "created",
+      "path": "out/release.json"
+    }
+  ],
+  "allowed_writes": [
+    "out/release.json",
+    "out/approval_request.json"
+  ]
+}

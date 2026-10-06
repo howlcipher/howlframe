@@ -1,0 +1,16 @@
+{
+  "reason": "release review",
+  "summary": {
+    "batch": "03",
+    "selected": [
+      {
+        "name": "unit",
+        "status": "PASS"
+      },
+      {
+        "name": "security",
+        "status": "PASS"
+      }
+    ]
+  }
+}

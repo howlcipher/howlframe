@@ -1,0 +1,258 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "howlframe.exp.plan/v0"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "maxItems": 64,
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schema",
+    "steps"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "read_file"
+            },
+            "path": {
+              "type": "string",
+              "description": "Clean relative existing path under allowed read globs; symlinks must remain rooted."
+            },
+            "format": {
+              "enum": [
+                "text",
+                "lines",
+                "json",
+                "kv"
+              ]
+            },
+            "as": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_]+$"
+            }
+          },
+          "required": [
+            "action",
+            "path",
+            "format",
+            "as"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "filter"
+            },
+            "from": {
+              "type": "string"
+            },
+            "where": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "op": {
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "gt",
+                    "lt",
+                    "ge",
+                    "le",
+                    "contains",
+                    "semver_gt",
+                    "in"
+                  ]
+                },
+                "value": {
+                  "$ref": "#/$defs/value"
+                }
+              },
+              "required": [
+                "field",
+                "op",
+                "value"
+              ]
+            },
+            "as": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_]+$"
+            }
+          },
+          "required": [
+            "action",
+            "from",
+            "where",
+            "as"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "if"
+            },
+            "cond": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "op": {
+                  "enum": [
+                    "all",
+                    "any",
+                    "count",
+                    "equals",
+                    "semver_gt"
+                  ]
+                },
+                "var": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/value"
+                }
+              },
+              "required": [
+                "op",
+                "var",
+                "value"
+              ]
+            },
+            "then": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/step"
+              },
+              "maxItems": 64
+            },
+            "else": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/step"
+              },
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "action",
+            "cond",
+            "then",
+            "else"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "write_record"
+            },
+            "path": {
+              "type": "string"
+            },
+            "record": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "action",
+            "path",
+            "record"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "request_approval"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "action",
+            "reason",
+            "summary"
+          ]
+        }
+      ]
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "$var": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "$var"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "const": "$var"
+            }
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      ]
+    }
+  },
+  "description": "Offline action catalog. Additional semantic policy: total <=64 steps, nesting <=8; whole-plan validation before execution, exact allowed write paths. if branches are required even when empty. Variable refs are {$var:name}, dotted fields supported. filter on arrays or singleton kv object; lines are strings with field=\"\". all/any compare fields for equality (empty all=true, any=false), count is exact list length, equals deep equality, semver_gt strict nonnegative x.y.z without leading zeroes. Numeric comparisons require numbers. kv maps unique key=value lines to strings. text preserves bytes as string; lines omit empty lines; json parses a JSON value. Approval writes only out/approval_request.json with reason and summary, never approved=true."
+}

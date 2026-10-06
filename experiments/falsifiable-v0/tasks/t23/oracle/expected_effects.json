@@ -1,0 +1,12 @@
+{
+  "status": "placeholder",
+  "effects": [
+    {
+      "kind": "created",
+      "path": "out/approval_request.json"
+    }
+  ],
+  "allowed_writes": [
+    "out/approval_request.json"
+  ]
+}

