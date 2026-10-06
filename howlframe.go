@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const Version = "0.1.0"
@@ -59,10 +60,19 @@ func main() {
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
 	maxCallDepth := flag.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting for -run-bc (default 1000)")
+	maxMemory := flag.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
+	maxFetch := flag.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
+	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
 	optimizationPlan := flag.Bool("optimization-plan", false, "print the deterministic compile-time optimization plan and exit")
 	flag.Parse()
+	if *runBc {
+		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline); err != nil {
+			ast.ReportError(err.Error(), 0, 0)
+		}
+	}
 	if *runBc && *maxInstructions <= 0 {
 		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
 	}
@@ -137,7 +147,11 @@ func main() {
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		executionPolicy := vm.DefaultExecutionPolicy()
+		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline)
+		if policyErr != nil {
+			fmt.Fprintln(os.Stderr, policyErr)
+			os.Exit(1)
+		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(vm.RunBytecodeWithPolicy(prog, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
@@ -892,6 +906,10 @@ func runArtifact() {
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
 
 	maxCallDepth := runFlags.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting (default 1000)")
+	maxMemory := runFlags.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
+	maxFetch := runFlags.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
+	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
 	runFlags.Usage = func() {
 		fmt.Println("Usage: howlframe run [options] <artifact-or-source> [-- arguments...]")
@@ -952,7 +970,11 @@ func runArtifact() {
 		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 
 	case "bytecode", "bc":
-		executionPolicy := vm.DefaultExecutionPolicy()
+		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline)
+		if policyErr != nil {
+			fmt.Fprintln(os.Stderr, policyErr)
+			os.Exit(1)
+		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 
@@ -1013,4 +1035,30 @@ func inspectArtifact() {
 		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
 	}
 	printRequiredCapabilities(data)
+}
+
+func resourcePolicy(memory, fetch, output int, deadline string) (vm.ExecutionPolicy, error) {
+	policy := vm.DefaultExecutionPolicy()
+	for _, limit := range []struct {
+		name  string
+		value int
+	}{{"max-memory-bytes", memory}, {"max-fetch-bytes", fetch}, {"max-exec-output-bytes", output}} {
+		if limit.value <= 0 {
+			return policy, fmt.Errorf("-%s must be greater than zero; unlimited resource usage is not supported", limit.name)
+		}
+	}
+	policy.Limits.MaxMemoryBytes = memory
+	policy.Limits.MaxFetchBodyBytes = fetch
+	policy.Limits.MaxExecOutputBytes = output
+	if deadline != "" {
+		d, err := time.ParseDuration(deadline)
+		if err != nil {
+			return policy, fmt.Errorf("-deadline invalid duration: %w", err)
+		}
+		if d <= 0 {
+			return policy, fmt.Errorf("-deadline must be greater than zero")
+		}
+		policy.Deadline = d
+	}
+	return policy, nil
 }

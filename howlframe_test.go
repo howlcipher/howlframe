@@ -2040,3 +2040,53 @@ func TestRunBytecodeMaxCallDepthFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestRunBytecodeResourceFlags(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	artifacts := map[string]string{}
+	for name, source := range map[string]string{"concat": `(cli_app (print (+ "abcd" "efgh")))`, "sleep": `(cli_app (sleep 5000))`, "trivial": `(cli_app (print 42))`} {
+		path := filepath.Join(dir, name+".howl")
+		artifact := filepath.Join(dir, name+".hfbc")
+		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := exec.Command(binary, "-compile-bc", path, "-o", artifact).CombinedOutput(); err != nil {
+			t.Fatalf("compile: %v: %s", err, output)
+		}
+		artifacts[name] = artifact
+	}
+	for _, runner := range []string{"-run-bc", "run"} {
+		for _, tc := range []struct{ flag, value, artifact, want string }{
+			{"max-memory-bytes", "1", "concat", "memory limit exceeded"},
+			{"max-memory-bytes", "0", "trivial", "must be greater than zero"},
+			{"max-memory-bytes", "-1", "trivial", "must be greater than zero"},
+			{"max-fetch-bytes", "0", "trivial", "must be greater than zero"},
+			{"max-exec-output-bytes", "0", "trivial", "must be greater than zero"},
+			{"deadline", "50ms", "sleep", "wall-clock deadline exceeded"},
+			{"deadline", "0s", "trivial", "must be greater than zero"},
+			{"deadline", "invalid", "trivial", "invalid duration"},
+			{"", "", "trivial", "42\n"},
+		} {
+			t.Run(runner+"/"+tc.flag+"/"+tc.value, func(t *testing.T) {
+				args := []string{runner}
+				if tc.flag != "" {
+					args = append(args, "--"+tc.flag, tc.value)
+				}
+				args = append(args, artifacts[tc.artifact])
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
+				if ctx.Err() != nil {
+					t.Fatalf("runner ignored deadline: %s", output)
+				}
+				if (tc.flag == "" && err != nil) || (tc.flag != "" && err == nil) || !strings.Contains(string(output), tc.want) {
+					t.Fatalf("error %v output %q; want %q", err, output, tc.want)
+				}
+				if tc.artifact != "trivial" && !strings.Contains(string(output), `"code":"LIMIT_EXCEEDED"`) {
+					t.Fatalf("unstructured limit: %s", output)
+				}
+			})
+		}
+	}
+}

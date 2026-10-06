@@ -64,20 +64,30 @@ leaves the production compiler, #90, and the tip-lock alone.
   `TIME_NOW`, `READ_LINE`, `PRINT`, `STDERR`, `EXIT`).
 - Would have caught bugs.md #44 and #57.
 
-## C4. Resource limits (P1.1): M/L, needs a decision
+## C4. Resource limits (P1.1): M/L — bytecode runner implemented
 
 - Enforce `MaxCallDepth` on `CALL`. **Decision needed**: 128 may break
   legitimate recursion. The suggestion is to make it runner-configurable
   like `--max-instructions`, with a default of 1,000.
   **Status (C4a, 2026-10-06):** implemented for bytecode CALL with default
-  1000 and `--max-call-depth`; remaining C4 bullets (C4b) still open.
+  1000 and `--max-call-depth`; C4b completes the remaining bytecode runner bullets below.
 - Allocation accounting on string concat, `append`, `MAKE_LIST`,
   `MAKE_DICT`, `str_split`, `str_join`, `read_file`, and `fetch` bodies
   against `MaxMemoryBytes` (runner-configurable). Fail with structured
   `LIMIT_EXCEEDED`.
+  **Status (C4b, 2026-10-06):** implemented, default 64 MiB; cumulative
+  approximate charges shared across child VMs; includes exec and encode_json.
 - A `--deadline` runner flag. A `context.Context` threaded into `fetch`,
   `exec`, `sleep`, and model calls.
+  **Status (C4b, 2026-10-06):** implemented as optional positive duration,
+  including instruction-loop checks. Blocking read_line remains open.
 - Caps on `fetch` body bytes and `exec` output bytes.
+  **Status (C4b, 2026-10-06):** implemented, each default 10 MiB, with positive
+  runner-configurable ceilings and structured LIMIT_EXCEEDED.
+
+C4a+C4b bytecode runner limits are implemented. AST interpreter memory,
+deadline, and recursion limits remain open; print output remains uncapped.
+No HFBC or production compiler change; #90 remains Partial.
 
 ## C5. Execution receipt v0 (P1.2): M
 

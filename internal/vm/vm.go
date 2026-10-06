@@ -3,6 +3,7 @@ package vm
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -1387,6 +1388,8 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
+	ctx         context.Context
+	allocations *allocationBudget
 	prog        *bytecode.BCProgram
 	stack       []any
 	env         *BcEnv
@@ -1647,7 +1650,14 @@ func RunBytecodeWithPolicy(prog *bytecode.BCProgram, cliArgs []string, policy Ex
 // returns a bounded runner-owned trace for trusted consumers such as HFIR
 // failure localization. traceLimit is a runner policy, never program input.
 func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer, traceLimit int) (evidence bytecode.ExecutionEvidence) {
+	ctx := context.Background()
+	if policy.Deadline > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, policy.Deadline)
+		defer cancel()
+	}
 	vm := &BCVM{
+		ctx: ctx, allocations: &allocationBudget{},
 		prog:        prog,
 		env:         NewBcEnv(nil),
 		insts:       prog.Main,
@@ -1926,6 +1936,12 @@ func bytesFromNumberList(items []any, ip int, inst bytecode.BCInstruction, opNam
 }
 
 func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
+	if vm.ctx == nil {
+		vm.ctx = context.Background()
+	}
+	if vm.allocations == nil {
+		vm.allocations = &allocationBudget{}
+	}
 	if vm.stores == nil {
 		vm.stores = newBCStoreRegistry()
 	}
@@ -1938,6 +1954,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 	for ip < len(insts) {
 		vm.ip = ip
 		inst := insts[ip]
+		vm.checkDeadline(ip, inst.Op)
 		vm.trace.record(ip, inst, vm.prog)
 		// MaxInstructions is the maximum number of instructions allowed. Check
 		// before incrementing so an exact budget succeeds and even MaxInt cannot
@@ -2127,19 +2144,35 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpFetch:
 			method := vm.popCheckedString(inst, ip, "fetch expected string method")
 			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
-			req, err := http.NewRequest(method, urlStr, nil)
+			max := vm.Limits.MaxFetchBodyBytes
+			if max <= 0 {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
+			}
+			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, nil)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch request creation failed: %v", err))
 			}
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch failed: %v", err))
 			}
 			defer resp.Body.Close()
-			b, err := io.ReadAll(resp.Body)
+			readLimit := int64(max)
+			if readLimit < math.MaxInt64 {
+				readLimit++
+			}
+			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
+			vm.checkDeadline(ip, inst.Op)
+			if len(b) > max {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
+			}
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch body read failed: %v", err))
 			}
+			vm.chargeBytes(len(b), ip, inst.Op)
 			vm.push(bytesToAnySlice(b))
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
@@ -2147,6 +2180,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
 			}
+			vm.chargeBytes(len(b), ip, inst.Op)
 			vm.push(bytesToAnySlice(b))
 		case bytecode.OpWriteFile:
 			dataAny := vm.pop(inst.Op)
@@ -2179,10 +2213,30 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				args = append([]string{fmt.Sprint(vm.pop(inst.Op))}, args...)
 			}
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
-			out, err := exec.Command(cmdStr, args...).CombinedOutput()
+			max := vm.Limits.MaxExecOutputBytes
+			if max <= 0 {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
+			}
+			cmdCtx, cancel := context.WithCancel(vm.ctx)
+			cmd := exec.CommandContext(cmdCtx, cmdStr, args...)
+			output := &limitedOutput{max: max, cancel: cancel}
+			cmd.Stdout, cmd.Stderr = output, output
+			// Bound inherited pipe waits when the runner has a deadline.
+			if vm.ctx.Done() != nil {
+				cmd.WaitDelay = 100 * time.Millisecond
+			}
+			err := cmd.Run()
+			cancel()
+			vm.checkDeadline(ip, inst.Op)
+			if output.exceeded {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
+			}
+			out := output.buffer.Bytes()
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err))
 			}
+			vm.chargeBytes(len(out), ip, inst.Op)
 			vm.push(bytesToAnySlice(out))
 		case bytecode.OpParseJson:
 			bodyVar := inst.StringOperand
@@ -2246,7 +2300,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
@@ -2323,7 +2377,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
 						recovered := recover()
@@ -2429,8 +2483,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"prompt": prompt,
 				"stream": false,
 			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit request failed: %v", err))
 			}
 			defer resp.Body.Close()
@@ -2438,8 +2493,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit response decode failed: %v", err))
 			}
+			vm.chargeAlloc(len(res.Response), ip, inst.Op)
 			vm.push(res.Response)
 
 		case bytecode.OpEphemeralCircuit:
@@ -2464,15 +2521,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"modelfile": modelfile,
 				"stream":    false,
 			})
-			createResp, err := http.Post("http://localhost:11434/api/create", "application/json", bytes.NewReader(createReq))
+			createResp, err := vm.postModel("http://localhost:11434/api/create", createReq, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit model create failed: %v", err))
 			}
 			createResp.Body.Close()
 
 			func() {
 				delReq, _ := json.Marshal(map[string]any{"name": modelName})
-				req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
+				req, _ := http.NewRequestWithContext(vm.ctx, "DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
 				req.Header.Set("Content-Type", "application/json")
 				client := &http.Client{}
 				resp, _ := client.Do(req)
@@ -2486,17 +2544,20 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"prompt": prompt,
 				"stream": false,
 			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit request failed: %v", err))
 			}
 			var res struct {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit response decode failed: %v", err))
 			}
 			resp.Body.Close()
+			vm.chargeAlloc(len(res.Response), ip, inst.Op)
 			vm.push(res.Response)
 
 		case bytecode.OpAchieve:
@@ -2509,8 +2570,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
 				"stream": false,
 			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve request failed: %v", err))
 			}
 			defer resp.Body.Close()
@@ -2518,8 +2580,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve response decode failed: %v", err))
 			}
+			vm.chargeAlloc(len(res.Response), ip, inst.Op)
 			vm.push(res.Response)
 
 		case bytecode.OpConfidence:
@@ -2530,8 +2594,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
 				"stream": false,
 			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence request failed: %v", err))
 			}
 			defer resp.Body.Close()
@@ -2539,6 +2604,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence response decode failed: %v", err))
 			}
 			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
@@ -2556,8 +2622,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				"prompt": promptStr,
 				"stream": false,
 			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate request failed: %v", err))
 			}
 			defer resp.Body.Close()
@@ -2565,8 +2632,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				Response string `json:"response"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate response decode failed: %v", err))
 			}
+			vm.chargeAlloc(len(res.Response), ip, inst.Op)
 			vm.push(res.Response)
 
 		case bytecode.OpLoadConst:
@@ -2663,8 +2732,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					"prompt": promptStr,
 					"stream": false,
 				})
-				resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+				resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
 				if err != nil {
+					vm.checkDeadline(ip, inst.Op)
 					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis network request failed: %v", err))
 				}
 				var res struct {
@@ -2672,6 +2742,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				}
 				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 					resp.Body.Close()
+					vm.checkDeadline(ip, inst.Op)
 					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis response decode failed: %v", err))
 				}
 				resp.Body.Close()
@@ -2692,6 +2763,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
+							vm.checkDeadline(ip, inst.Op)
 							panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis compile failed: %v", r))
 						}
 					}()
@@ -2699,6 +2771,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				}()
 				synthFn, ok := newProg.Functions[fn.Name]
 				if !ok {
+					vm.checkDeadline(ip, inst.Op)
 					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis did not produce function: %s", fn.Name))
 				}
 				fn.Instructions = synthFn.Instructions
@@ -2788,11 +2861,19 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			b := vm.pop(inst.Op)
 			a := vm.pop(inst.Op)
 			op := inst.StringOperand
-			vm.push(BcBinop(op, a, b))
+			result := BcBinop(op, a, b)
+			if str, ok := result.(string); ok {
+				vm.chargeAlloc(len(str), ip, inst.Op)
+			}
+			vm.push(result)
 		case bytecode.OpConvert:
 			a := vm.pop(inst.Op)
 			target := inst.StringOperand
-			vm.push(BcConvert(target, a))
+			converted := BcConvert(target, a)
+			if str, ok := converted.(string); ok {
+				vm.chargeAlloc(len(str), ip, inst.Op)
+			}
+			vm.push(converted)
 		case bytecode.OpStrSplit:
 			sepVal := vm.pop(inst.Op)
 			sVal := vm.pop(inst.Op)
@@ -2801,7 +2882,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok1 || !ok2 {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_split expected string, got %T and %T", sVal, sepVal))
 			}
-			vm.push(BcSliceToAny(strings.Split(s, sep)))
+			parts := strings.Split(s, sep)
+			vm.chargeSlots(len(parts), 8, ip, inst.Op)
+			for _, part := range parts {
+				vm.chargeAlloc(len(part), ip, inst.Op)
+			}
+			vm.push(BcSliceToAny(parts))
 		case bytecode.OpStrJoin:
 			sepVal := vm.pop(inst.Op)
 			listVal := vm.pop(inst.Op)
@@ -2814,7 +2900,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			for _, item := range list {
 				strs = append(strs, fmt.Sprint(item))
 			}
-			vm.push(strings.Join(strs, sep))
+			joined := strings.Join(strs, sep)
+			vm.chargeAlloc(len(joined), ip, inst.Op)
+			vm.push(joined)
 		case bytecode.OpRegexMatch:
 			sVal := vm.pop(inst.Op)
 			patternVal := vm.pop(inst.Op)
@@ -2830,22 +2918,30 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(matched)
 		case bytecode.OpMakeList:
 			num := int(inst.IntOperand)
-			items := make([]any, 0, num)
+			vm.chargeSlots(num, 8, ip, inst.Op)
+			items := make([]any, num)
 			for i := 0; i < num; i++ {
-				items = append([]any{vm.pop(inst.Op)}, items...)
+				items[num-1-i] = vm.pop(inst.Op)
+				if str, ok := items[num-1-i].(string); ok {
+					vm.chargeAlloc(len(str), ip, inst.Op)
+				}
 			}
 			vm.push(items)
 		case bytecode.OpMakeDict:
 			num := int(inst.IntOperand)
 			dict := make(map[string]any)
 			// pop pairs: value then key
-			var pairs []any
+			pairs := make([]any, num*2)
 			for i := 0; i < num*2; i++ {
-				pairs = append([]any{vm.pop(inst.Op)}, pairs...)
+				pairs[num*2-1-i] = vm.pop(inst.Op)
 			}
 			for i := 0; i < num*2; i += 2 {
 				key := fmt.Sprint(pairs[i])
 				dict[key] = pairs[i+1]
+			}
+			vm.chargeSlots(len(dict), 16, ip, inst.Op)
+			for key := range dict {
+				vm.chargeAlloc(len(key), ip, inst.Op)
 			}
 			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 			vm.mapLedger.init(dict, ip, nodeID)
@@ -2863,6 +2959,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %T", current))
 			}
 			vm.trace.state("list:"+varName, len(items))
+			// Approximate list storage as eight bytes per slot, plus new string payload.
+			vm.chargeSlots(len(items)+1, 8, ip, inst.Op)
+			if str, ok := item.(string); ok {
+				vm.chargeAlloc(len(str), ip, inst.Op)
+			}
 			newItems := append(append([]any{}, items...), item)
 			env.set(varName, newItems)
 		case bytecode.OpMapSet:
@@ -2877,6 +2978,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			dict, ok := current.(map[string]any)
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_set expected dict, got %T", current))
+			}
+			if _, exists := dict[key]; !exists {
+				vm.chargeAlloc(16, ip, inst.Op)
+				vm.chargeAlloc(len(key), ip, inst.Op)
 			}
 			dict[key] = val
 			vm.trace.state("map:"+varName, key)
@@ -2972,7 +3077,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_keys expected dict, got %T", val))
 			}
-			vm.push(sortedMapKeys(dict))
+			keys := sortedMapKeys(dict)
+			vm.chargeSlots(len(keys), 8, ip, inst.Op)
+			vm.push(keys)
 		case bytecode.OpIsNil:
 			val := vm.pop(inst.Op)
 			vm.push(val == nil)
@@ -2984,6 +3091,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("ENCODE_JSON_ERROR", "main", ip, inst.Op, "%v", err))
 			}
+			vm.chargeAlloc(len(b), ip, inst.Op)
 			vm.push(string(b))
 		case bytecode.OpHTMLEscape, bytecode.OpAttrEscape:
 			opName := "html_escape"
@@ -2995,7 +3103,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "%s expected string, got %T", opName, val))
 			}
-			vm.push(htmlescape.Escape(s))
+			escaped := htmlescape.Escape(s)
+			vm.chargeAlloc(len(escaped), ip, inst.Op)
+			vm.push(escaped)
 		case bytecode.OpCliArgs:
 			var argsAny []any
 			for _, arg := range vm.args {
@@ -3019,7 +3129,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %T", msAny))
 			}
-			time.Sleep(time.Duration(ms) * time.Millisecond)
+			timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
+			select {
+			case <-timer.C:
+			case <-vm.ctx.Done():
+				timer.Stop()
+				vm.checkDeadline(ip, inst.Op)
+			}
 		case bytecode.OpEnv:
 			name := vm.popCheckedString(inst, ip, "env expected string name")
 			vm.push(os.Getenv(name))
@@ -3054,7 +3170,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
@@ -3372,4 +3488,72 @@ func (w *httpResponseRecorder) WriteHeader(status int) {
 func (w *httpResponseRecorder) Write(b []byte) (int, error) {
 	w.wrote = true
 	return w.ResponseWriter.Write(b)
+}
+
+// Shared across child VMs; charges are cumulative and never reclaimed.
+type allocationBudget struct {
+	sync.Mutex
+	memoryBytes int
+}
+
+func (vm *BCVM) chargeAlloc(n int, ip int, op bytecode.Opcode) {
+	if n <= 0 {
+		return
+	}
+	vm.allocations.Lock()
+	defer vm.allocations.Unlock()
+	max := vm.Limits.MaxMemoryBytes
+	if max <= 0 || vm.allocations.memoryBytes > max-n {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "memory limit exceeded (max %d bytes)", max))
+	}
+	vm.allocations.memoryBytes += n
+}
+
+func (vm *BCVM) chargeSlots(n, size, ip int, op bytecode.Opcode) {
+	// Avoid multiplication overflow before charging approximate storage.
+	if n > 0 && n > int(^uint(0)>>1)/size {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "memory limit exceeded (max %d bytes)", vm.Limits.MaxMemoryBytes))
+	}
+	vm.chargeAlloc(n*size, ip, op)
+}
+
+func (vm *BCVM) chargeBytes(n, ip int, op bytecode.Opcode) {
+	// Source bytes plus the converted any-slice representation (eight bytes/slot).
+	vm.chargeAlloc(n, ip, op)
+	vm.chargeSlots(n, 8, ip, op)
+}
+
+func (vm *BCVM) checkDeadline(ip int, op bytecode.Opcode) {
+	if vm.ctx != nil && vm.ctx.Err() != nil {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "wall-clock deadline exceeded"))
+	}
+}
+
+func (vm *BCVM) postModel(url string, body []byte, ip int, op bytecode.Opcode) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(vm.ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	vm.checkDeadline(ip, op)
+	return resp, err
+}
+
+// Returning an error stops copying; cancellation also stops a producing process.
+// stdout and stderr share this writer, so os/exec serializes their writes.
+type limitedOutput struct {
+	buffer   bytes.Buffer
+	max      int
+	exceeded bool
+	cancel   context.CancelFunc
+}
+
+func (b *limitedOutput) Write(p []byte) (int, error) {
+	if len(p) > b.max-b.buffer.Len() {
+		b.exceeded = true
+		b.cancel()
+		return 0, io.ErrShortWrite
+	}
+	return b.buffer.Write(p)
 }

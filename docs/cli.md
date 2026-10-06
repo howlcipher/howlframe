@@ -24,6 +24,14 @@ Executes a compiled HowlFrame bytecode artifact.
 ### Options
 * `--allow-caps` : Comma-separated capabilities to allow (e.g., `network,filesystem,process,environment,database`). Instructions requiring an unlisted capability are denied and will cause the VM to panic.
 * `--max-instructions` : A finite instruction ceiling (default `100000`). Once the ceiling is reached, execution halts to prevent infinite loops and runaway resource consumption.
+* `--max-call-depth` : Positive CALL recursion and SPAWN_AGENT nesting ceiling (default `1000`).
+* `--max-memory-bytes` : Positive cumulative allocation charge ceiling (default `67108864`, 64 MiB). Charges approximate storage; they are not a measured live heap limit and are never reclaimed.
+* `--max-fetch-bytes` : Positive fetch response body ceiling (default `10485760`, 10 MiB).
+* `--max-exec-output-bytes` : Positive combined stdout/stderr ceiling for exec (default `10485760`, 10 MiB).
+* `--deadline` : Optional positive duration such as `5s` or `100ms`; absent means no wall-clock deadline. Explicit `0s`, negative durations, and invalid durations are rejected. Cancels bytecode fetch, exec, sleep, and model requests and checks between instructions.
+
+These limits also apply to legacy `-run-bc`. The new flags apply to `run` targets `bytecode`/`bc`; AST interpreter memory and deadline behavior is unchanged. Exceeded ceilings produce structured `LIMIT_EXCEEDED`. Blocking `read_line` and HTTP serving are not cancelled by the deadline; print output remains uncapped.
+
 
 ## `howlframe version`
 Usage: `howlframe version`

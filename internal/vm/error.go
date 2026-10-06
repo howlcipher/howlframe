@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/bytecode"
+	"time"
 )
 
 type VMError struct {
@@ -37,9 +38,11 @@ func NewRuntimeError(code string, fn string, ip int, op bytecode.Opcode, msg str
 }
 
 type VMLimits struct {
-	MaxInstructions int
-	MaxMemoryBytes  int
-	MaxCallDepth    int
+	MaxInstructions    int
+	MaxMemoryBytes     int
+	MaxCallDepth       int
+	MaxFetchBodyBytes  int
+	MaxExecOutputBytes int
 }
 
 // ExecutionPolicy is authority supplied by the trusted bytecode runner. It
@@ -47,12 +50,16 @@ type VMLimits struct {
 // it. The zero value is fail-closed and permits no instruction execution.
 type ExecutionPolicy struct {
 	Limits VMLimits
+	// Deadline is an optional wall-clock duration; zero means no deadline.
+	Deadline time.Duration
 }
 
 var DefaultLimits = VMLimits{
-	MaxInstructions: 100000,
-	MaxMemoryBytes:  67108864,
-	MaxCallDepth:    1000,
+	MaxInstructions:    100000,
+	MaxMemoryBytes:     67108864,
+	MaxCallDepth:       1000,
+	MaxFetchBodyBytes:  10 * 1024 * 1024,
+	MaxExecOutputBytes: 10 * 1024 * 1024,
 }
 
 // DefaultExecutionPolicy returns a copy of the standalone VM's safe defaults.
