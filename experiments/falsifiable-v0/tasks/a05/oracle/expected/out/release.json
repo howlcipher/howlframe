@@ -1,0 +1,17 @@
+{
+  "batch": "05",
+  "selected": [
+    {
+      "name": "unit",
+      "status": "PASS"
+    },
+    {
+      "name": "security",
+      "status": "PASS"
+    },
+    {
+      "name": "package",
+      "status": "PASS"
+    }
+  ]
+}

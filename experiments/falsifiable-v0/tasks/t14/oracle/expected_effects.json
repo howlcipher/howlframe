@@ -1,9 +1,9 @@
 {
-  "status": "placeholder",
+  "status": "reference",
   "effects": [
     {
       "kind": "created",
-      "path": "out/release.json"
+      "path": "out/approval_request.json"
     }
   ],
   "allowed_writes": [

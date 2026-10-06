@@ -137,7 +137,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -171,7 +171,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -205,7 +205,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -239,7 +239,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -273,7 +273,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -307,7 +307,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -341,7 +341,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -376,7 +376,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -409,9 +409,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -446,7 +446,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -479,9 +479,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -516,7 +516,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -549,9 +549,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -586,7 +586,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -619,9 +619,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -656,7 +656,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -689,9 +689,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -725,7 +725,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -759,7 +759,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -793,7 +793,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -827,7 +827,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -861,7 +861,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -895,7 +895,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -929,7 +929,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -963,7 +963,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -997,7 +997,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     },
     {
@@ -1031,7 +1031,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       }
     }
   ],
@@ -1188,7 +1188,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t04",
       "injection": {
@@ -1228,7 +1228,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t05",
       "injection": {
@@ -1268,7 +1268,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t06",
       "injection": {
@@ -1308,7 +1308,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t07",
       "injection": {
@@ -1348,7 +1348,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t08",
       "injection": {
@@ -1388,7 +1388,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t09",
       "injection": {
@@ -1428,7 +1428,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t10",
       "injection": {
@@ -1469,7 +1469,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t11",
       "injection": {
@@ -1508,9 +1508,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t12",
       "injection": {
@@ -1551,7 +1551,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t13",
       "injection": {
@@ -1590,9 +1590,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t14",
       "injection": {
@@ -1633,7 +1633,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t15",
       "injection": {
@@ -1672,9 +1672,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t16",
       "injection": {
@@ -1715,7 +1715,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t17",
       "injection": {
@@ -1754,9 +1754,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t18",
       "injection": {
@@ -1797,7 +1797,7 @@
         "expected_outputs": [
           "oracle/expected/out/release.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t19",
       "injection": {
@@ -1836,9 +1836,9 @@
       "oracle": {
         "expected_effects": "oracle/expected_effects.json",
         "expected_outputs": [
-          "oracle/expected/out/release.json"
+          "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t20",
       "injection": {
@@ -1878,7 +1878,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t21",
       "injection": {
@@ -1918,7 +1918,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t22",
       "injection": {
@@ -1958,7 +1958,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t23",
       "injection": {
@@ -1998,7 +1998,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t24",
       "injection": {
@@ -2038,7 +2038,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t25",
       "injection": {
@@ -2078,7 +2078,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t26",
       "injection": {
@@ -2118,7 +2118,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t27",
       "injection": {
@@ -2158,7 +2158,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t28",
       "injection": {
@@ -2198,7 +2198,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t29",
       "injection": {
@@ -2238,7 +2238,7 @@
         "expected_outputs": [
           "oracle/expected/out/approval_request.json"
         ],
-        "status": "placeholder"
+        "status": "reference"
       },
       "variant_of": "t30",
       "injection": {

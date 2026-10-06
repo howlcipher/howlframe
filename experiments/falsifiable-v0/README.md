@@ -19,11 +19,12 @@ Partial.
 | `harness/` | Broker, materialization, receipts/diffs, oracle, bounded offline repairs, scoring |
 | `cmd/hfexp/` | Thin `validate`, `arm-a`, `arm-b`, `suite`, `score` CLI |
 
-The six smoke oracles are `reference`. The other 54 are `placeholder`: the
-expected-effects file exists, but expected output files must be authored and
-frozen before a real experiment. Placeholder runs never succeed and cannot
-support a decision. These are a synthetic starter corpus; review independence,
-held-out status, difficulty, and task diversity before freezing it.
+All 60 oracles are filled as `reference`, with exact expected mutations and
+output files; there are zero placeholder oracles. These references are ready
+for offline operator trials, but no live H1 run or model generation has occurred.
+Verify and hash the frozen oracles before generation. This is a synthetic starter
+corpus; review independence, held-out status, difficulty, and task diversity
+before trials.
 
 Build and validate from the module root:
 
