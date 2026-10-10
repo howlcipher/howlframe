@@ -21,6 +21,9 @@ package ast
 //   - (str_contains hay needle) → (> (list_len (str_split hay needle)) 1)
 //   - (str_replace s old new) → join of split parts with new
 //   - (starts_with s p) / (ends_with s p) → prefix/suffix tests
+//   - (http_body r) → (bytes_to_string (map_get r "body"))
+//   - (list_contains lst x) → membership scan via for/set
+//   - (dec x) → (set x (- x 1)) for symbol x
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -129,9 +132,13 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			desugarSwitch(node)
 			desugarInContext(node, parentHead, childIndex)
 		}
-	case "inc":
+	case "inc", "dec":
 		if isSugarExprContext(parentHead, childIndex) {
-			desugarInc(node)
+			if head == "inc" {
+				desugarInc(node)
+			} else {
+				desugarDec(node)
+			}
 		}
 	case "str":
 		if isSugarExprContext(parentHead, childIndex) {
@@ -169,6 +176,15 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			desugarStartsEndsWith(node)
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "http_body":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarHTTPBody(node)
+		}
+	case "list_contains":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarListContains(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
@@ -183,8 +199,9 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
-		"switch", "inc", "str", "nz", "map_has", "when", "unless",
-		"str_contains", "str_replace", "starts_with", "ends_with":
+		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
+		"str_contains", "str_replace", "starts_with", "ends_with",
+		"http_body", "list_contains":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -279,8 +296,9 @@ var reservedCallHeads = map[string]bool{
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
-	"switch": true, "inc": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
+	"switch": true, "inc": true, "dec": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
+	"http_body": true, "list_contains": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -712,6 +730,115 @@ func desugarInc(node *Node) {
 	}
 }
 
+func desugarDec(node *Node) {
+	if len(node.Children) != 2 || node.Children[1] == nil || node.Children[1].Type != "SYMBOL" {
+		ReportError("dec expects (dec symbol)", node.Line, node.Column)
+		return
+	}
+	sym := node.Children[1]
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		sym,
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "-", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				{Type: "SYMBOL", Value: sym.Value, Line: sym.Line, Column: sym.Column, Filename: sym.Filename},
+				{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		},
+	}
+}
+
+func desugarHTTPBody(node *Node) {
+	// (http_body r) → (bytes_to_string (map_get r "body"))
+	if len(node.Children) != 2 {
+		ReportError("http_body expects (http_body response)", node.Line, node.Column)
+		return
+	}
+	get := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "map_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			node.Children[1],
+			{Type: "STRING", Value: "body", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		get,
+	}
+}
+
+func desugarListContains(node *Node) {
+	// (list_contains lst x) → (let (__lst lst __x x __h 0)
+	//   (do (for __i __lst (if (= __i __x) (set __h 1))) (= __h 1)))
+	if len(node.Children) != 3 {
+		ReportError("list_contains expects (list_contains list value)", node.Line, node.Column)
+		return
+	}
+	lstSym := &Node{Type: "SYMBOL", Value: "__lst", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	xSym := &Node{Type: "SYMBOL", Value: "__x", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	hSym := &Node{Type: "SYMBOL", Value: "__h", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	iSym := &Node{Type: "SYMBOL", Value: "__i", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	setOne := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			hSym,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	eq := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			iSym, xSym,
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			eq, setOne,
+		},
+	}
+	forLoop := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "for", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			iSym, lstSym, iff,
+		},
+	}
+	eqH := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			hSym,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	body := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			forLoop, eqH,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				lstSym, node.Children[1],
+				xSym, node.Children[2],
+				hSym, {Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		},
+		body,
+	}
+}
+
 func desugarStr(node *Node) {
 	// (str a b…) → (str_join (list (to_string a) (to_string b)…) "")
 	if len(node.Children) < 2 {
@@ -1138,7 +1265,8 @@ var exprBodyHeads = map[string]bool{
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
-	"str_replace": true, "starts_with": true, "ends_with": true, "regex_match": true,
+	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
+	"list_contains": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

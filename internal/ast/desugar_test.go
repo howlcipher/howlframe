@@ -301,6 +301,23 @@ func TestDesugarStartsEndsWith(t *testing.T) {
 	}
 }
 
+func TestDesugarHTTPBodyListContainsDec(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (http_body r))
+		(print (list_contains (list "a" "b") "a"))
+		(dec n))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "http_body") || strings.Contains(src, "list_contains") || strings.Contains(src, "(dec ") {
+		t.Fatalf("http_body/list_contains/dec should desugar: %s", src)
+	}
+	if !strings.Contains(src, "bytes_to_string") || !strings.Contains(src, "map_get") {
+		t.Fatalf("http_body should use bytes_to_string/map_get: %s", src)
+	}
+	if !strings.Contains(src, "(set n (- n 1))") {
+		t.Fatalf("dec should expand to set-minus: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)

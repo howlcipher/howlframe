@@ -1,0 +1,9 @@
+(do
+  (let (needle (cli_args 0) path (cli_args 1))
+    (if (or (= needle "") (= path ""))
+      (do (print "Usage: has_line_cli <line> <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (if (list_contains (lines raw) needle)
+          (do (print "FOUND") (exit 0))
+          (do (print "MISSING") (exit 1)))))))
