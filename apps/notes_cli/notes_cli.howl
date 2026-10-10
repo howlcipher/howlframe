@@ -8,12 +8,11 @@
             (switch (list_get a i)
               ("add"
                 (do (inc i)
-                  (let (title (list_get a i) cur (sget kv "next_id"))
-                    (let (n (if (is_nil cur) 1 (to_int cur)))
-                      (do
-                        (sput kv (to_string n) title)
-                        (sput kv "next_id" (to_string (+ n 1)))
-                        (print "ADDED" n title))))))
+                  (let (title (list_get a i) n (to_int (nz (sget kv "next_id") "1")))
+                    (do
+                      (sput kv (to_string n) title)
+                      (sput kv "next_id" (to_string (+ n 1)))
+                      (print "ADDED" n title)))))
               ("list"
                 (for k (store_keys kv)
                   (if (!= k "next_id") (print k (sget kv k)))))

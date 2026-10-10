@@ -13,6 +13,8 @@ package ast
 //   - (sinc handle key) increments a string counter, stores it, and prints it
 //   - (switch expr (pat body...) ... (else|_/default body...)) → let+cond
 //   - (inc x) → (set x (+ x 1)) for symbol x
+//   - (str a b…) → (str_join (list (to_string a)…) "")
+//   - (nz x d) → (let (__nz x) (if (is_nil __nz) d __nz))
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -125,6 +127,14 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarInc(node)
 		}
+	case "str":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarStr(node)
+		}
+	case "nz":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarNz(node)
+		}
 	}
 }
 
@@ -139,7 +149,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
-		"switch", "inc":
+		"switch", "inc", "str", "nz":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -234,7 +244,7 @@ var reservedCallHeads = map[string]bool{
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
-	"switch": true, "inc": true,
+	"switch": true, "inc": true, "str": true, "nz": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -666,6 +676,64 @@ func desugarInc(node *Node) {
 	}
 }
 
+func desugarStr(node *Node) {
+	// (str a b…) → (str_join (list (to_string a) (to_string b)…) "")
+	if len(node.Children) < 2 {
+		ReportError("str expects (str part...)", node.Line, node.Column)
+		return
+	}
+	parts := make([]*Node, 0, len(node.Children))
+	parts = append(parts, &Node{Type: "SYMBOL", Value: "list", Line: node.Line, Column: node.Column, Filename: node.Filename})
+	for _, part := range node.Children[1:] {
+		parts = append(parts, &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				part,
+			},
+		})
+	}
+	list := &Node{Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename, Children: parts}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "str_join", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		list,
+		{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
+	}
+}
+
+func desugarNz(node *Node) {
+	// (nz x d) → (let (__nz x) (if (is_nil __nz) d __nz))
+	if len(node.Children) != 3 {
+		ReportError("nz expects (nz value default)", node.Line, node.Column)
+		return
+	}
+	tmp := &Node{Type: "SYMBOL", Value: "__nz", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	isNil := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			tmp,
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			isNil,
+			node.Children[2],
+			tmp,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{tmp, node.Children[1]},
+		},
+		iff,
+	}
+}
+
 func desugarAssert(node *Node) {
 	if len(node.Children) != 2 {
 		ReportError("assert expects (assert expr)", node.Line, node.Column)
@@ -772,8 +840,8 @@ var exprBodyHeads = map[string]bool{
 	"map_get": true, "list_get": true, "list_len": true, "map_keys": true,
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
-	"lines": true, "str_split": true, "str_join": true, "regex_match": true,
-	"parse_json": true, "encode_json": true, "is_nil": true,
+	"lines": true, "str_split": true, "str_join": true, "str": true, "regex_match": true,
+	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,

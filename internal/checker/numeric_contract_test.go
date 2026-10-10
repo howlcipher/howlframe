@@ -131,8 +131,8 @@ func TestBuiltinSignaturesRejectProvableMismatch(t *testing.T) {
 		`(print (str_join "a" ","))`,
 		`(print (str_join (list "a") 1))`,
 		`(print (regex_match 1 "a"))`,
-		`(print (list_len "abc"))`,
 		`(print (str_split "a"))`,
+		`(print (list_len))`,
 	}
 	for _, src := range invalid {
 		t.Run(src, func(t *testing.T) {
@@ -146,6 +146,7 @@ func TestBuiltinSignaturesRejectProvableMismatch(t *testing.T) {
 		`(print (str_join (str_split "a,b" ",") "-"))`,
 		`(print (regex_match "a+" "aaa"))`,
 		`(print (list_len (list 1 2)))`,
+		`(print (list_len "abc"))`,
 		`(let (raw (read_line)) (print (list_len (str_split raw ","))))`,
 		`(let (obj (dict ("k" "v"))) (print (str_split (map_get obj "x") ",")))`,
 	}

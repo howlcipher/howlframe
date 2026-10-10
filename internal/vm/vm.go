@@ -613,13 +613,13 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return fmt.Sprint(val)
 	case "list_len":
 		if len(node.Children) != 2 {
-			InterpErr("list_len expects (list_len list)", node)
+			InterpErr("list_len expects (list_len value)", node)
 		}
 		val := interp.eval(node.Children[1], env)
-		if lst, ok := val.([]any); ok {
-			return int64(len(lst))
+		if n, ok := collectionLen(val); ok {
+			return int64(n)
 		}
-		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, got %T", val), node.Children[1])
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, string, or bytes, got %T", val), node.Children[1])
 		return int64(0)
 	case "map_keys":
 		if len(node.Children) != 2 {
@@ -1944,6 +1944,20 @@ func (vm *BCVM) readRequestField(ip int, inst bytecode.BCInstruction, kind strin
 	return value
 }
 
+// collectionLen returns the length of list, string, or []byte values.
+func collectionLen(val any) (int, bool) {
+	switch v := val.(type) {
+	case []any:
+		return len(v), true
+	case string:
+		return len(v), true
+	case []byte:
+		return len(v), true
+	default:
+		return 0, false
+	}
+}
+
 // bytesToAnySlice converts a []byte into a []any of float64 elements, the
 // representation HowlFrame values use for byte data on the operand stack.
 // Shared by every instruction that returns raw bytes (fetch responses, file
@@ -3175,11 +3189,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpListLen:
 			val := vm.pop(inst.Op)
-			items, ok := val.([]any)
+			n, ok := collectionLen(val)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, got %T", val))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, string, or bytes, got %T", val))
 			}
-			vm.push(int64(len(items)))
+			vm.push(int64(n))
 		case bytecode.OpMapKeys:
 			val := vm.pop(inst.Op)
 			dict, ok := val.(map[string]any)

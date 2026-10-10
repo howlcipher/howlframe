@@ -65,6 +65,7 @@
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
 | `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
+| `nz` | No | None | Yes | No | - | AUTHORITATIVE |
 | `optimize_block` | Yes | None | No | No | - | AUTHORITATIVE |
 | `optimize_signature` | Yes | None | No | No | - | AUTHORITATIVE |
 | `or` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -100,6 +101,7 @@
 | `store_keys` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_open` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_put` | Yes | database | No | No | - | AUTHORITATIVE |
+| `str` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |

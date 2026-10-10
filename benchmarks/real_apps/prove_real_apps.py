@@ -98,6 +98,33 @@ APPS = {
         "howl_caps": "filesystem",
         "test_pkg": "./apps/grep_cli/",
     },
+    "wc_cli": {
+        "howlframe": ROOT / "apps/wc_cli/wc_cli.howl",
+        "python": HERE / "wc_cli/python/main.py",
+        "go": HERE / "wc_cli/go/main.go",
+        "node": HERE / "wc_cli/node/main.js",
+        "kind": "cli_wc",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/wc_cli/",
+    },
+    "json_get": {
+        "howlframe": ROOT / "apps/json_get/json_get.howl",
+        "python": HERE / "json_get/python/main.py",
+        "go": HERE / "json_get/go/main.go",
+        "node": HERE / "json_get/node/main.js",
+        "kind": "cli_json",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/json_get/",
+    },
+    "counter_api": {
+        "howlframe": ROOT / "apps/counter_api/counter_api.howl",
+        "python": HERE / "counter_api/python/main.py",
+        "go": HERE / "counter_api/go/main.go",
+        "node": HERE / "counter_api/node/main.js",
+        "kind": "http_counter",
+        "howl_caps": "network,database",
+        "test_pkg": "./apps/counter_api/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -418,6 +445,139 @@ def parity_auth(lang: str, source: Path, howl_bin: str, caps: str) -> None:
         run_http_auth(lang, source, howl_bin, caps, Path(td))
 
 
+def run_cli_wc(lang: str, source: Path, howl_bin: str, caps: str, path: Path, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "wc.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), str(path)], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), str(path)], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "wc_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), str(path)], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), str(path)], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_wc(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_bytes(b"one two\nthree\nfour five six\n")
+        r = run_cli_wc(lang, source, howl_bin, caps, sample, cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "lines=4" not in out or "words=6" not in out or "bytes=28" not in out:
+            raise RuntimeError(f"{lang} wc failed: {r.returncode} {out!r}")
+
+
+def run_cli_json(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "json.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "json_get"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_json(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.json"
+        sample.write_text('{"name":"ada","n":"7"}')
+        r = run_cli_json(lang, source, howl_bin, caps, [str(sample), "name"], cwd)
+        if r.returncode != 0 or "ada" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} json name failed: {r.returncode} {r.stdout!r}")
+        r = run_cli_json(lang, source, howl_bin, caps, [str(sample), "n"], cwd)
+        if r.returncode != 0 or "7" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} json n failed: {r.returncode} {r.stdout!r}")
+        r = run_cli_json(lang, source, howl_bin, caps, [str(sample), "missing"], cwd)
+        if r.returncode == 0 or "NOT FOUND" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} json missing failed: {r.returncode} {r.stdout!r}")
+
+
+def check_counter(base: str) -> None:
+    with urllib.request.urlopen(base + "/count") as resp:
+        body = resp.read().decode()
+        if '"n":"0"' not in body.replace(" ", ""):
+            raise RuntimeError(f"/count want 0: {body}")
+    req = urllib.request.Request(base + "/inc", method="POST")
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode()
+        if '"n":"1"' not in body.replace(" ", ""):
+            raise RuntimeError(f"/inc want 1: {body}")
+    req = urllib.request.Request(base + "/inc", method="POST")
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode()
+        if '"n":"2"' not in body.replace(" ", ""):
+            raise RuntimeError(f"/inc want 2: {body}")
+    req = urllib.request.Request(base + "/reset", method="POST")
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode()
+        if '"n":"0"' not in body.replace(" ", ""):
+            raise RuntimeError(f"/reset want 0: {body}")
+
+
+def run_http_counter(lang: str, source: Path, howl_bin: str, caps: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "counter.hfbc"
+        compile_howl(howl_bin, source, bc)
+        proc = subprocess.Popen(
+            [howl_bin, "-run-bc", "-allow-caps", caps, str(bc)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "python":
+        proc = subprocess.Popen(
+            [sys.executable, str(source)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "go":
+        exe = cwd / "counter_api"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        proc = subprocess.Popen([str(exe)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif lang == "node":
+        proc = subprocess.Popen(["node", str(source)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise ValueError(lang)
+
+    try:
+        deadline = time.time() + 3
+        last_err = None
+        while time.time() < deadline:
+            try:
+                check_counter("http://127.0.0.1:8103")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.1)
+        raise RuntimeError(f"counter checks failed: {last_err}")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+
+
+def parity_counter(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        run_http_counter(lang, source, howl_bin, caps, Path(td))
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -456,6 +616,9 @@ def main() -> int:
             "cli_notes": parity_notes,
             "http_auth": parity_auth,
             "cli_grep": parity_grep,
+            "cli_wc": parity_wc,
+            "cli_json": parity_json,
+            "http_counter": parity_counter,
         }[meta["kind"]]
         for lang in LANGS:
             try:

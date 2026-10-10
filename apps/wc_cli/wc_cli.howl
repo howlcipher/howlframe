@@ -1,0 +1,15 @@
+(do
+  (let (path (cli_args 0))
+    (if (= path "")
+      (do (print "Usage: wc_cli <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print (str "error=" e)) (exit 2)))
+        (let (rows (lines raw) lc 0 wc 0)
+          (do
+            (for row rows
+              (do (inc lc)
+                (for w (str_split row " ")
+                  (if (!= w "") (inc wc)))))
+            (print (str "lines=" lc))
+            (print (str "words=" wc))
+            (print (str "bytes=" (list_len raw)))))))))

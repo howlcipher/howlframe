@@ -244,3 +244,17 @@ func TestDesugarSwitchAndInc(t *testing.T) {
 		t.Fatalf("inc should expand to set+plus: %s", src)
 	}
 }
+
+func TestDesugarStrAndNz(t *testing.T) {
+	root := parseDesugar(t, `(cli_app (print (str "hits=" 2)) (print (nz x 0)))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "(str ") || strings.Contains(src, "(nz ") {
+		t.Fatalf("str/nz should be desugared: %s", src)
+	}
+	if !strings.Contains(src, "str_join") || !strings.Contains(src, "to_string") {
+		t.Fatalf("str should expand to str_join/to_string: %s", src)
+	}
+	if !strings.Contains(src, "is_nil") {
+		t.Fatalf("nz should expand to is_nil check: %s", src)
+	}
+}

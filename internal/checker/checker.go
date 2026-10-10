@@ -390,7 +390,7 @@ func checkGoApp(node *ast.Node) {
 
 func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 	if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-		ast.ReportError("Expected route, defun, struct, import, test, export, module, or middleware definition", handlerNode.Line, handlerNode.Column)
+		ast.ReportError("Expected route, defun, struct, import, test, export, module, middleware, or startup store/do/let form", handlerNode.Line, handlerNode.Column)
 	}
 	hHead := handlerNode.Children[0].Value
 	switch hHead {
@@ -494,11 +494,14 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 			}
 			checkGoAppHandler(routeNode, isCliApp)
 		}
+	case "store_open", "store_put", "store_delete", "do", "let":
+		// Startup forms compiled before HTTP_SERVER_SERVE (shared process store init).
+		checkGoStatement(handlerNode, 0)
 	default:
 		if isCliApp {
 			checkGoStatement(handlerNode, 0)
 		} else {
-			ast.ReportError("Expected route, defun, struct, import, test, module, export, or middleware block", handlerNode.Line, handlerNode.Column)
+			ast.ReportError("Expected route, defun, struct, import, test, module, export, middleware, or startup store/do/let form", handlerNode.Line, handlerNode.Column)
 		}
 	}
 }

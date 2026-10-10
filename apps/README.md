@@ -15,5 +15,8 @@
 * **[Notes CLI](./notes_cli)**: Persistent notes CRUD with runtime `store_open` URI + `sget`/`sput`/`switch` density. (Backend: Bytecode)
 * **[Auth API](./auth_api)**: Bearer-gated HTTP routes and path/query echo without middleware. (Backend: Bytecode)
 * **[Grep CLI](./grep_cli)**: Regex line matcher with `lines`/`regex_match` and capability denial. (Backend: Bytecode)
+* **[WC CLI](./wc_cli)**: Line/word/byte counts via widened `list_len` + `str` density. (Backend: Bytecode)
+* **[JSON Get](./json_get)**: Top-level JSON key lookup from a file. (Backend: Bytecode)
+* **[Counter API](./counter_api)**: Stateful HTTP counter with startup `store_open` on `http_server`. (Backend: Bytecode)
 * **[Release Authority](./release_authority)**: Demonstrates an untrusted AI proposing deployment actions while standalone HowlFrame independently enforces evidence, approval, capability, and state-transition policy. (Backend: Bytecode)
 * **[Action Executor](./action_executor)**: Bounded Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives. (Backend: Bytecode)
