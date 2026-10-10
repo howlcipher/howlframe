@@ -110,8 +110,12 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 	heads := compileNodeHeads(t)
 	consumedBeforeLowering := map[string]bool{
 		"assert":       true, // ast.Desugar
+		"cond":         true, // ast.Desugar
 		"lines":        true, // ast.Desugar
 		"read_text":    true, // ast.Desugar
+		"sget":         true, // ast.Desugar
+		"sinc":         true, // ast.Desugar
+		"sput":         true, // ast.Desugar
 		"patch":        true, // ast.ApplyPatches
 		"with_context": true, // ast.ApplyWithContext
 		"include":      true, // parser.ExpandIncludes

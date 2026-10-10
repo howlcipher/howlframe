@@ -1,0 +1,11 @@
+(do
+  (store_open kv "memory://session")
+  (sput kv "n" "0")
+  (let (v (sget kv "n") n (+ (if (is_nil v) 0 (to_int v)) 1))
+    (do
+      (sput kv "n" (to_string n))
+      (assert (= (sget kv "n") "1"))))
+  (let (a 1 b 2)
+    (cond
+      ((= a 1) (assert (= b 2)))
+      (else (assert (= b 0))))))

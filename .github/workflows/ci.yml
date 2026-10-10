@@ -46,6 +46,9 @@ jobs:
     - name: Prove densified HowlFrame v2 references
       run: python3 benchmarks/v2/harness/prove_howlframe_refs.py
 
+    - name: Prove real-app token wins with parity
+      run: python3 benchmarks/real_apps/prove_real_apps.py
+
     - name: Run Benchmark v2 Harness Tests
       working-directory: benchmarks/v2/harness
       run: python3 -m unittest test_harness.py
