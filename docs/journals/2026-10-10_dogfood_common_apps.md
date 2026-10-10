@@ -34,4 +34,4 @@ go test ./internal/ast/ ./internal/bytecode/ ./internal/vm/ ./internal/construct
 - `fetch` still returns bytes only (kept for ABI/conformance); prefer `http_request` when status matters
 - `middleware` still Unsupported (auth must be hand-rolled in handlers)
 - `schema` / SQL migrations still Unsupported
-- `match` still Unsupported ( `cond` covers the dispatch need for these apps)
+- `match` still Unsupported (`cond`/`switch` cover the dispatch need for these apps; see round 2 journal)

@@ -195,7 +195,10 @@ func (vm *BCVM) effectSummary(inst bytecode.BCInstruction, env *BcEnv) string {
 	case bytecode.OpSqlQuery, bytecode.OpStorePut, bytecode.OpStoreGet, bytecode.OpStoreDelete, bytecode.OpStoreKeys:
 		summary = inst.StringOperand
 	case bytecode.OpStoreOpen:
-		summary = inst.StringOperand2
+		summary = peek(0)
+		if summary == "" {
+			summary = inst.StringOperand2
+		}
 	case bytecode.OpHttpServerStart, bytecode.OpHttpRoute:
 		summary = inst.StringOperand
 	case bytecode.OpHttpServerServe:

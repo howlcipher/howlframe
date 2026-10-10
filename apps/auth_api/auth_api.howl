@@ -1,0 +1,13 @@
+(http_server 8102
+  (route "/health" (lambda (req) (res_json 200 (dict ("status" "ok")))))
+  (route "/secret" (lambda (req)
+    (switch (req_header req "Authorization")
+      ("Bearer secret" (res_json 200 (dict ("ok" "1") ("scope" "secret"))))
+      (else (res_json 401 (dict ("error" "unauthorized")))))))
+  (route "/echo/{name}" (lambda (req)
+    (switch (req_method req)
+      ("GET"
+        (if (!= (req_header req "Authorization") "Bearer secret")
+          (res_json 401 (dict ("error" "unauthorized")))
+          (res_json 200 (dict ("name" (req_path req "name")) ("q" (req_query req "q"))))))
+      (else (res_json 405 (dict ("error" "method_not_allowed"))))))))

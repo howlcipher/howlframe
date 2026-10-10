@@ -44,7 +44,7 @@ func runStoreOpen(t *testing.T, uri string, caps ...capability.Capability) *VMEr
 	vm := newStoreTestVM()
 	vm.AllowedCaps = caps
 	return captureVMError(func() {
-		vm.run([]bytecode.BCInstruction{storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "store", uri)}, vm.env)
+		vm.run(openStoreInsts("store", uri), vm.env)
 	})
 }
 
@@ -82,7 +82,7 @@ func TestDatabaseOnlyCannotReadOrModifyExistingFile(t *testing.T) {
 
 	vm := newStoreTestVM()
 	failure := captureVMError(func() {
-		vm.run([]bytecode.BCInstruction{storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "store", fileURI)}, vm.env)
+		vm.run(openStoreInsts("store", fileURI), vm.env)
 	})
 	if failure == nil || failure.Code != "CAPABILITY_DENIED" {
 		t.Fatalf("database-only existing-file failure = %#v, want CAPABILITY_DENIED", failure)
@@ -104,11 +104,12 @@ func TestFileStorePersistsAndDeleteCommits(t *testing.T) {
 
 	second := newStoreTestVM()
 	second.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
-	second.run([]bytecode.BCInstruction{
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "store", uri),
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
+	insts := openStoreInsts("store", uri)
+	insts = append(insts,
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
 		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "store", ""),
-	}, second.env)
+	)
+	second.run(insts, second.env)
 	if got := second.pop(bytecode.OpStoreGet); !reflect.DeepEqual(got, map[string]any{"status": "open"}) {
 		t.Fatalf("reopened file store record = %#v", got)
 	}
@@ -158,12 +159,13 @@ func TestFileStorePersistenceErrorsFailClosed(t *testing.T) {
 		vm := newStoreTestVM()
 		vm.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
 		failure := captureVMError(func() {
-			vm.run([]bytecode.BCInstruction{
-				storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "store", uri),
-				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "key"},
-				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: map[string]any{"value": "new"}},
+			insts := openStoreInsts("store", uri)
+			insts = append(insts,
+				bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "key"},
+				bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: map[string]any{"value": "new"}},
 				storeInstruction(bytecode.OpStorePut, "STORE_PUT", "store", ""),
-			}, vm.env)
+			)
+			vm.run(insts, vm.env)
 		})
 		if failure == nil || failure.Code != "STORE_PERSISTENCE_WRITE_FAILED" {
 			t.Fatalf("write failure = %#v", failure)

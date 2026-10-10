@@ -224,3 +224,23 @@ func TestDesugarSInc(t *testing.T) {
 		t.Fatalf("sinc expansion missing store/print forms: %s", src)
 	}
 }
+
+func TestDesugarSwitchAndInc(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(let (i 0)
+			(do
+				(switch "add"
+					("add" (inc i))
+					(else (print "no")))
+				(print i))))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "switch") || strings.Contains(src, "(inc ") {
+		t.Fatalf("switch/inc should be fully desugared: %s", src)
+	}
+	if !strings.Contains(src, "cond") && !strings.Contains(src, "if") {
+		t.Fatalf("switch should expand toward cond/if: %s", src)
+	}
+	if !strings.Contains(src, "(set i (+ i 1))") {
+		t.Fatalf("inc should expand to set+plus: %s", src)
+	}
+}

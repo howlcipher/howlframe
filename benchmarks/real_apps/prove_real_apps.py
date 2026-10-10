@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -69,6 +70,33 @@ APPS = {
         "kind": "http_status",
         "howl_caps": "network,environment",
         "test_pkg": "./apps/status_api/",
+    },
+    "notes_cli": {
+        "howlframe": ROOT / "apps/notes_cli/notes_cli.howl",
+        "python": HERE / "notes_cli/python/main.py",
+        "go": HERE / "notes_cli/go/main.go",
+        "node": HERE / "notes_cli/node/main.js",
+        "kind": "cli_notes",
+        "howl_caps": "database,filesystem,environment",
+        "test_pkg": "./apps/notes_cli/",
+    },
+    "auth_api": {
+        "howlframe": ROOT / "apps/auth_api/auth_api.howl",
+        "python": HERE / "auth_api/python/main.py",
+        "go": HERE / "auth_api/go/main.go",
+        "node": HERE / "auth_api/node/main.js",
+        "kind": "http_auth",
+        "howl_caps": "network",
+        "test_pkg": "./apps/auth_api/",
+    },
+    "grep_cli": {
+        "howlframe": ROOT / "apps/grep_cli/grep_cli.howl",
+        "python": HERE / "grep_cli/python/main.py",
+        "go": HERE / "grep_cli/go/main.go",
+        "node": HERE / "grep_cli/node/main.js",
+        "kind": "cli_grep",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/grep_cli/",
     },
 }
 
@@ -239,6 +267,157 @@ def parity_status(lang: str, source: Path, howl_bin: str, caps: str) -> None:
         run_http_status(lang, source, howl_bin, caps, Path(td))
 
 
+def run_cli_notes(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path, store: Path):
+    env = os.environ.copy()
+    env["NOTES_STORE"] = "file://" + str(store)
+    if lang == "howlframe":
+        bc = cwd / "notes.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd, env=env)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd, env=env)
+    if lang == "go":
+        exe = cwd / "notes_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd, env=env)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd, env=env)
+    raise ValueError(lang)
+
+
+def parity_notes(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        store = cwd / "notes.store"
+        r = run_cli_notes(lang, source, howl_bin, caps,
+                          ["add", "first", "add", "second", "list"], cwd, store)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "ADDED 1 first" not in out or "ADDED 2 second" not in out \
+                or "1 first" not in out or "2 second" not in out:
+            raise RuntimeError(f"{lang} notes add/list failed: {r.returncode} {out!r}")
+
+        r = run_cli_notes(lang, source, howl_bin, caps,
+                          ["get", "1", "delete", "2", "list"], cwd, store)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "1 first" not in out or "DELETED 2" not in out or "2 second" in out:
+            raise RuntimeError(f"{lang} notes persist failed: {r.returncode} {out!r}")
+
+        r = run_cli_notes(lang, source, howl_bin, caps, ["get", "missing"], cwd, store)
+        if "NOT FOUND" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} notes missing failed: {r.returncode} {r.stdout!r}")
+
+
+def run_cli_grep(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "grep.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "grep_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_grep(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("alpha\nbeta foo\ngamma\nfoo bar\n")
+        r = run_cli_grep(lang, source, howl_bin, caps, ["foo", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "beta foo" not in out or "foo bar" not in out or "hits=2" not in out:
+            raise RuntimeError(f"{lang} grep hits failed: {r.returncode} {out!r}")
+
+        r = run_cli_grep(lang, source, howl_bin, caps, ["zzz", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode == 0 or "hits=0" not in out:
+            raise RuntimeError(f"{lang} grep miss failed: {r.returncode} {out!r}")
+
+
+def check_auth(base: str) -> None:
+    # unauth secret
+    try:
+        urllib.request.urlopen(base + "/secret")
+        raise RuntimeError("secret without auth should 401")
+    except urllib.error.HTTPError as e:
+        if e.code != 401:
+            raise RuntimeError(f"secret unauth want 401 got {e.code}")
+    # auth secret
+    req = urllib.request.Request(base + "/secret", headers={"Authorization": "Bearer secret"})
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode()
+        if '"ok"' not in body or "1" not in body:
+            raise RuntimeError(f"/secret bad: {body}")
+    # echo
+    req = urllib.request.Request(
+        base + "/echo/alice?q=hi", headers={"Authorization": "Bearer secret"}
+    )
+    with urllib.request.urlopen(req) as resp:
+        body = resp.read().decode()
+        if "alice" not in body or "hi" not in body:
+            raise RuntimeError(f"/echo bad: {body}")
+    with urllib.request.urlopen(base + "/health") as resp:
+        if "ok" not in resp.read().decode():
+            raise RuntimeError("/health bad")
+
+
+def run_http_auth(lang: str, source: Path, howl_bin: str, caps: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "auth.hfbc"
+        compile_howl(howl_bin, source, bc)
+        proc = subprocess.Popen(
+            [howl_bin, "-run-bc", "-allow-caps", caps, str(bc)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "python":
+        proc = subprocess.Popen(
+            [sys.executable, str(source)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "go":
+        exe = cwd / "auth_api"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        proc = subprocess.Popen([str(exe)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif lang == "node":
+        proc = subprocess.Popen(["node", str(source)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise ValueError(lang)
+
+    try:
+        deadline = time.time() + 3
+        last_err = None
+        while time.time() < deadline:
+            try:
+                check_auth("http://127.0.0.1:8102")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.1)
+        raise RuntimeError(f"auth checks failed: {last_err}")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+
+
+def parity_auth(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        run_http_auth(lang, source, howl_bin, caps, Path(td))
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -270,14 +449,17 @@ def main() -> int:
             errors.append(f"{app} howlframe app test: {e}")
 
         # Parity for every language.
+        parity_fn = {
+            "cli_log": parity_log_analyzer,
+            "cli_kv": parity_kv,
+            "http_status": parity_status,
+            "cli_notes": parity_notes,
+            "http_auth": parity_auth,
+            "cli_grep": parity_grep,
+        }[meta["kind"]]
         for lang in LANGS:
             try:
-                if meta["kind"] == "cli_log":
-                    parity_log_analyzer(lang, meta[lang], howl_bin, meta["howl_caps"])
-                elif meta["kind"] == "cli_kv":
-                    parity_kv(lang, meta[lang], howl_bin, meta["howl_caps"])
-                else:
-                    parity_status(lang, meta[lang], howl_bin, meta["howl_caps"])
+                parity_fn(lang, meta[lang], howl_bin, meta["howl_caps"])
                 parity_ok[app][lang] = True
             except Exception as e:
                 parity_ok[app][lang] = False

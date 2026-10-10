@@ -11,6 +11,8 @@ package ast
 //   - (sget handle key) / (sput handle key val) wrap store_get/store_put
 //     for the common string "val" record shape
 //   - (sinc handle key) increments a string counter, stores it, and prints it
+//   - (switch expr (pat body...) ... (else|_/default body...)) → let+cond
+//   - (inc x) → (set x (+ x 1)) for symbol x
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -114,6 +116,15 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			// sinc expands into sget/sput forms; rewalk so those expand too.
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "switch":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarSwitch(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "inc":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarInc(node)
+		}
 	}
 }
 
@@ -127,7 +138,8 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"bytes_to_string", "set", "exit", "spawn", "spawn_agent", "task",
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
-		"store_get", "store_put", "store_delete", "http_request", "fetch":
+		"store_get", "store_put", "store_delete", "http_request", "fetch",
+		"switch", "inc":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -222,6 +234,7 @@ var reservedCallHeads = map[string]bool{
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
+	"switch": true, "inc": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -577,6 +590,79 @@ func desugarSInc(node *Node) {
 			Children: []*Node{kSym, key, vSym, sget, nSym, plus},
 		},
 		body,
+	}
+}
+
+func desugarSwitch(node *Node) {
+	// (switch expr (pat body...) ... (else|default|_ body...))
+	if len(node.Children) < 3 {
+		ReportError("switch expects (switch expr clause...)", node.Line, node.Column)
+		return
+	}
+	expr := node.Children[1]
+	tmp := &Node{Type: "SYMBOL", Value: "__sw", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	cond := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{{Type: "SYMBOL", Value: "cond", Line: node.Line, Column: node.Column, Filename: node.Filename}},
+	}
+	for _, clause := range node.Children[2:] {
+		if clause == nil || clause.Type != "List" || len(clause.Children) < 2 {
+			ReportError("switch clause expects (pat body...) or (else body...)", node.Line, node.Column)
+			return
+		}
+		pat := clause.Children[0]
+		bodyForms := clause.Children[1:]
+		if pat != nil && pat.Type == "SYMBOL" {
+			switch pat.Value {
+			case "else", "default", "_":
+				elseClause := &Node{
+					Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
+					Children: append([]*Node{{Type: "SYMBOL", Value: "else", Line: pat.Line, Column: pat.Column, Filename: pat.Filename}}, bodyForms...),
+				}
+				cond.Children = append(cond.Children, elseClause)
+				continue
+			}
+		}
+		eq := &Node{
+			Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "=", Line: clause.Line, Column: clause.Column, Filename: clause.Filename},
+				tmp,
+				pat,
+			},
+		}
+		cond.Children = append(cond.Children, &Node{
+			Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
+			Children: append([]*Node{eq}, bodyForms...),
+		})
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{tmp, expr},
+		},
+		cond,
+	}
+}
+
+func desugarInc(node *Node) {
+	if len(node.Children) != 2 || node.Children[1] == nil || node.Children[1].Type != "SYMBOL" {
+		ReportError("inc expects (inc symbol)", node.Line, node.Column)
+		return
+	}
+	sym := node.Children[1]
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		sym,
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "+", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				{Type: "SYMBOL", Value: sym.Value, Line: sym.Line, Column: sym.Column, Filename: sym.Filename},
+				{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		},
 	}
 }
 

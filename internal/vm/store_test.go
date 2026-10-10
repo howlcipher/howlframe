@@ -13,17 +13,20 @@ import (
 
 func TestBytecodeStoreLifecycleAndNamedAttachment(t *testing.T) {
 	vm := newStoreTestVM()
-	vm.run([]bytecode.BCInstruction{
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "primary", "memory://session"),
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "title"},
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "Add login"},
-		{Op: bytecode.OpMakeDict, OpString: "MAKE_DICT", IntOperand: 1},
+	insts := openStoreInsts("primary", "memory://session")
+	insts = append(insts,
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "title"},
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "Add login"},
+		bytecode.BCInstruction{Op: bytecode.OpMakeDict, OpString: "MAKE_DICT", IntOperand: 1},
 		storeInstruction(bytecode.OpStorePut, "STORE_PUT", "primary", ""),
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "attached", "memory://session"),
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
+	)
+	insts = append(insts, openStoreInsts("attached", "memory://session")...)
+	insts = append(insts,
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
 		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "attached", ""),
-	}, vm.env)
+	)
+	vm.run(insts, vm.env)
 
 	got := vm.pop(bytecode.OpStoreGet)
 	want := map[string]any{"title": "Add login"}
@@ -51,11 +54,12 @@ func TestBytecodeStoresAreIsolatedPerVM(t *testing.T) {
 	second := newStoreTestVM()
 
 	putStoreRecord(first, "first", "memory://session", "task:1", map[string]any{"status": "open"})
-	second.run([]bytecode.BCInstruction{
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "second", "memory://session"),
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
+	insts := openStoreInsts("second", "memory://session")
+	insts = append(insts,
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "task:1"},
 		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "second", ""),
-	}, second.env)
+	)
+	second.run(insts, second.env)
 
 	if got := second.pop(bytecode.OpStoreGet); got != nil {
 		t.Fatalf("second VM observed first VM record: %#v", got)
@@ -105,13 +109,21 @@ func storeInstruction(op bytecode.Opcode, name string, handle string, uri string
 	}
 }
 
-func putStoreRecord(vm *BCVM, handle string, uri string, key string, record map[string]any) {
-	vm.run([]bytecode.BCInstruction{
+func openStoreInsts(handle, uri string) []bytecode.BCInstruction {
+	return []bytecode.BCInstruction{
+		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: uri},
 		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", handle, uri),
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: key},
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: record},
+	}
+}
+
+func putStoreRecord(vm *BCVM, handle string, uri string, key string, record map[string]any) {
+	insts := openStoreInsts(handle, uri)
+	insts = append(insts,
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: key},
+		bytecode.BCInstruction{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: record},
 		storeInstruction(bytecode.OpStorePut, "STORE_PUT", handle, ""),
-	}, vm.env)
+	)
+	vm.run(insts, vm.env)
 }
 
 func getStoreRecord(vm *BCVM, handle string, key string) map[string]any {
@@ -145,10 +157,9 @@ func TestBytecodeStoreKeysSortedAndDeterministic(t *testing.T) {
 
 func TestBytecodeStoreKeysReflectsDeletesAndEmptyStore(t *testing.T) {
 	vm := newStoreTestVM()
-	vm.run([]bytecode.BCInstruction{
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "kv", "memory://session"),
-		storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
-	}, vm.env)
+	insts := openStoreInsts("kv", "memory://session")
+	insts = append(insts, storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""))
+	vm.run(insts, vm.env)
 	if got := vm.pop(bytecode.OpStoreKeys); !reflect.DeepEqual(got, []any{}) {
 		t.Fatalf("empty store STORE_KEYS = %#v, want empty list", got)
 	}
@@ -223,10 +234,9 @@ func TestFileStoreKeysDeniedWithDatabaseAlone(t *testing.T) {
 
 	reader := newStoreTestVM()
 	reader.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
-	reader.run([]bytecode.BCInstruction{
-		storeInstruction(bytecode.OpStoreOpen, "STORE_OPEN", "kv", uri),
-		storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
-	}, reader.env)
+	insts := openStoreInsts("kv", uri)
+	insts = append(insts, storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""))
+	reader.run(insts, reader.env)
 	if got := reader.pop(bytecode.OpStoreKeys); !reflect.DeepEqual(got, []any{"task:1"}) {
 		t.Fatalf("file:// STORE_KEYS with database and filesystem = %#v, want [task:1]", got)
 	}

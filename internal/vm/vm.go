@@ -2123,7 +2123,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			vm.push(results)
 		case bytecode.OpStoreOpen:
-			uri := inst.StringOperand2
+			uri := vm.popCheckedString(inst, ip, "store_open expected string URI")
 			vm.requireStoreCapabilities(uri, inst.Op)
 			if strings.HasPrefix(uri, "file://") {
 				uri = "file://" + vm.requireFilesystem(strings.TrimPrefix(uri, "file://"), false, inst.Op)

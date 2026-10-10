@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+* Dogfood round 2: `apps/notes_cli`, `apps/auth_api`, `apps/grep_cli` built on standalone bytecode; `store_open` accepts a runtime URI expression; AST density sugar `(switch …)` and `(inc x)`. Real-app token harness extended with Python/Go/Node ports and parity. Journal: `docs/journals/2026-10-10_dogfood_apps_round2.md`.
+
 ### Fixed
 * S8/P2.1 filesystem portion: native VM and interpreter enforce repeatable `filesystem:read=<root>` and `filesystem:write=<root>` grants, with symlink containment checks. File stores require read coverage and write coverage for mutations. Coarse `filesystem` remains unrestricted; process/network scoping and generated backends remain open. Journal: `docs/journals/2026-10-06_path_scoped_filesystem.md`.
 * Review C3/C7: executable VM effect-gate conformance coverage; demo decisions use escaped JSON; executor capability checks precede writes. Effects remain ordered, not atomic. Journal: `docs/journals/2026-10-05_effect_gate_conformance_demo_honesty.md`.
