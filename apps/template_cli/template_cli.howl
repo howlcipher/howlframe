@@ -1,6 +1,6 @@
 (do
   (let (path (cli_args 0) key (cli_args 1) val (cli_args 2))
-    (if (or (= path "") (= key "") (= val ""))
+    (if (or (blank path) (blank key) (blank val))
       (do (print "Usage: template_cli <file> <key> <value>") (exit 2))
       (try_let (s (read_text path))
         (catch e (do (print "error=" e) (exit 2)))

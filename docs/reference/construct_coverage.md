@@ -116,6 +116,7 @@
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
 | `str_replace` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
+| `str_trim` | Yes | None | No | No | - | AUTHORITATIVE |
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |
 | `switch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -123,7 +124,9 @@
 | `time_now` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_float` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_int` | Yes | None | No | No | - | AUTHORITATIVE |
+| `to_lower` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_string` | Yes | None | No | No | - | AUTHORITATIVE |
+| `to_upper` | Yes | None | No | No | - | AUTHORITATIVE |
 | `trace` | No | None | No | Yes | - | AUTHORITATIVE |
 | `try_let` | Yes | None | No | No | - | AUTHORITATIVE |
 | `type_hint` | No | None | Yes | No | - | AUTHORITATIVE |

@@ -1,0 +1,5 @@
+(do
+  (let (s (cli_args 0))
+    (if (blank s)
+      (do (print "Usage: lower_cli <text>") (exit 2))
+      (do (print (to_lower s)) (exit 0)))))

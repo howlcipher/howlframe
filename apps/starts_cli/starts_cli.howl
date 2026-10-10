@@ -1,6 +1,6 @@
 (do
   (let (prefix (cli_args 0) path (cli_args 1))
-    (if (or (= prefix "") (= path ""))
+    (if (or (blank prefix) (blank path))
       (do (print "Usage: starts_cli <prefix> <file>") (exit 2))
       (try_let (s (read_text path))
         (catch e (do (print "error=" e) (exit 2)))

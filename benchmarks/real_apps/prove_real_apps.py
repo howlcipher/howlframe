@@ -278,6 +278,42 @@ APPS = {
         "howl_caps": "",
         "test_pkg": "./apps/sleep_cli/",
     },
+    "lower_cli": {
+        "howlframe": ROOT / "apps/lower_cli/lower_cli.howl",
+        "python": HERE / "lower_cli/python/main.py",
+        "go": HERE / "lower_cli/go/main.go",
+        "node": HERE / "lower_cli/node/main.js",
+        "kind": "cli_lower",
+        "howl_caps": "",
+        "test_pkg": "./apps/lower_cli/",
+    },
+    "upper_cli": {
+        "howlframe": ROOT / "apps/upper_cli/upper_cli.howl",
+        "python": HERE / "upper_cli/python/main.py",
+        "go": HERE / "upper_cli/go/main.go",
+        "node": HERE / "upper_cli/node/main.js",
+        "kind": "cli_upper",
+        "howl_caps": "",
+        "test_pkg": "./apps/upper_cli/",
+    },
+    "trim_cli": {
+        "howlframe": ROOT / "apps/trim_cli/trim_cli.howl",
+        "python": HERE / "trim_cli/python/main.py",
+        "go": HERE / "trim_cli/go/main.go",
+        "node": HERE / "trim_cli/node/main.js",
+        "kind": "cli_trim",
+        "howl_caps": "",
+        "test_pkg": "./apps/trim_cli/",
+    },
+    "icontains_cli": {
+        "howlframe": ROOT / "apps/icontains_cli/icontains_cli.howl",
+        "python": HERE / "icontains_cli/python/main.py",
+        "go": HERE / "icontains_cli/go/main.go",
+        "node": HERE / "icontains_cli/node/main.js",
+        "kind": "cli_icontains",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/icontains_cli/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -1349,6 +1385,126 @@ def parity_sleep(lang: str, source: Path, howl_bin: str, caps: str) -> None:
             raise RuntimeError(f"{lang} sleep too brief")
 
 
+def run_cli_lower(lang: str, source: Path, howl_bin: str, caps: str, text: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "lower.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), text]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), text]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), text], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "lower_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), text], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), text], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_lower(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        r = run_cli_lower(lang, source, howl_bin, caps, "Hello World", Path(td))
+        out = (r.stdout + r.stderr).strip()
+        if r.returncode != 0 or out != "hello world":
+            raise RuntimeError(f"{lang} lower failed: {r.returncode} {out!r}")
+
+
+def run_cli_upper(lang: str, source: Path, howl_bin: str, caps: str, text: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "upper.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), text]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), text]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), text], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "upper_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), text], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), text], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_upper(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        r = run_cli_upper(lang, source, howl_bin, caps, "Hello World", Path(td))
+        out = (r.stdout + r.stderr).strip()
+        if r.returncode != 0 or out != "HELLO WORLD":
+            raise RuntimeError(f"{lang} upper failed: {r.returncode} {out!r}")
+
+
+def run_cli_trim(lang: str, source: Path, howl_bin: str, caps: str, text: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "trim.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), text]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), text]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), text], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "trim_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), text], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), text], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_trim(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        r = run_cli_trim(lang, source, howl_bin, caps, "  hello  ", Path(td))
+        out = (r.stdout + r.stderr).strip()
+        if r.returncode != 0 or out != "hello":
+            raise RuntimeError(f"{lang} trim failed: {r.returncode} {out!r}")
+
+
+def run_cli_icontains(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "icontains.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "icontains_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_icontains(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("Alpha Beta Gamma\n")
+        r = run_cli_icontains(lang, source, howl_bin, caps, ["beta", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "FOUND" not in out:
+            raise RuntimeError(f"{lang} icontains found failed: {r.returncode} {out!r}")
+        r = run_cli_icontains(lang, source, howl_bin, caps, ["delta", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode == 0 or "MISSING" not in out:
+            raise RuntimeError(f"{lang} icontains missing failed: {r.returncode} {out!r}")
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -1407,6 +1563,10 @@ def main() -> int:
             "http_echo": parity_echo,
             "cli_now": parity_now,
             "cli_sleep": parity_sleep,
+            "cli_lower": parity_lower,
+            "cli_upper": parity_upper,
+            "cli_trim": parity_trim,
+            "cli_icontains": parity_icontains,
         }[meta["kind"]]
         for lang in LANGS:
             try:

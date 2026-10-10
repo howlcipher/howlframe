@@ -309,7 +309,8 @@ func goValueType(node *ast.Node) string {
 				return "string"
 			}
 			return "[]string"
-		case "list_get", "str_join", "to_string", "html_escape", "attr_escape", "bytes_to_string", "encode_json", "env":
+		case "list_get", "str_join", "to_string", "html_escape", "attr_escape", "bytes_to_string", "encode_json", "env",
+			"to_lower", "to_upper", "str_trim":
 			return "string"
 		case "list_len", "to_int", "time_now":
 			return "int"
@@ -1637,6 +1638,15 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "bytes_to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("string(%s)", valStr)
+	case "to_lower":
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("strings.ToLower(fmt.Sprint(%s))", valStr)
+	case "to_upper":
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("strings.ToUpper(fmt.Sprint(%s))", valStr)
+	case "str_trim":
+		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("strings.TrimSpace(fmt.Sprint(%s))", valStr)
 	case "encode_json":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() string { b, _ := json.Marshal(%s); return string(b) }()", valStr)

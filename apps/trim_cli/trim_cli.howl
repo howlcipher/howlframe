@@ -1,0 +1,5 @@
+(do
+  (let (s (cli_args 0))
+    (if (blank s)
+      (do (print "Usage: trim_cli <text>") (exit 2))
+      (do (print (str_trim s)) (exit 0)))))

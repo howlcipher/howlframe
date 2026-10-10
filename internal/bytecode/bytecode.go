@@ -732,7 +732,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: "to_int"})
 		case "time_now":
 			insts = append(insts, BCInstruction{OpString: "TIME_NOW", Op: OpTimeNow})
-		case "to_float", "to_string", "bytes_to_string":
+		case "to_float", "to_string", "bytes_to_string", "to_lower", "to_upper", "str_trim":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: head})
 		case "encode_json":
