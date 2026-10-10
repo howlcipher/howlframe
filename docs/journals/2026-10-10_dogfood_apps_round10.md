@@ -19,7 +19,11 @@ Native case/trim CONVERT ops for general string use; ship lower/upper/trim/icont
 4. **`apps/icontains_cli`** — case-insensitive file substring
 5. Densified `starts_cli`/`ends_cli`/`contains_cli`/`template_cli`/`file_transform` with `blank`
 
-## Token proof
+## Token proof (`cl100k_base`, 30 apps)
+
+| | HowlFrame | Python | Go | Node |
+|---|---|---|---|---|
+| **TOTAL** | **4114** | 5572 | 5894 | 5370 |
 
 ```bash
 python3 benchmarks/real_apps/prove_real_apps.py
