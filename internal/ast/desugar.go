@@ -15,6 +15,9 @@ package ast
 //   - (inc x) → (set x (+ x 1)) for symbol x
 //   - (str a b…) → (str_join (list (to_string a)…) "")
 //   - (nz x d) → (let (__nz x) (if (is_nil __nz) d __nz))
+//   - (map_has d k) → membership check via map_keys (bool)
+//   - (when test body…) / (unless test body…) → single-branch if
+//   - (and a b c…) / (or a b c…) → nested binary and/or
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -135,6 +138,21 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarNz(node)
 		}
+	case "map_has":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarMapHas(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "when", "unless":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarWhenUnless(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "and", "or":
+		if isSugarExprContext(parentHead, childIndex) && len(node.Children) > 3 {
+			desugarNaryLogic(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
@@ -149,7 +167,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
-		"switch", "inc", "str", "nz":
+		"switch", "inc", "str", "nz", "map_has", "when", "unless":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -244,7 +262,7 @@ var reservedCallHeads = map[string]bool{
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
-	"switch": true, "inc": true, "str": true, "nz": true,
+	"switch": true, "inc": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -734,6 +752,133 @@ func desugarNz(node *Node) {
 	}
 }
 
+func desugarMapHas(node *Node) {
+	// (map_has d k) → (let (__d d __k k __h 0)
+	//   (do (for __x (map_keys __d) (if (= __x __k) (set __h 1))) (= __h 1)))
+	if len(node.Children) != 3 {
+		ReportError("map_has expects (map_has dict key)", node.Line, node.Column)
+		return
+	}
+	dSym := &Node{Type: "SYMBOL", Value: "__d", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	hSym := &Node{Type: "SYMBOL", Value: "__h", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	xSym := &Node{Type: "SYMBOL", Value: "__x", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	keys := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "map_keys", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			dSym,
+		},
+	}
+	setOne := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			hSym,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	eq := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			xSym,
+			kSym,
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			eq,
+			setOne,
+		},
+	}
+	forLoop := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "for", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			xSym,
+			keys,
+			iff,
+		},
+	}
+	eqH := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			hSym,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	body := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			forLoop,
+			eqH,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				dSym, node.Children[1],
+				kSym, node.Children[2],
+				hSym, {Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		},
+		body,
+	}
+}
+
+func desugarNaryLogic(node *Node) {
+	// (or a b c…) → (or a (or b (or c…))); same for and.
+	if len(node.Children) < 4 {
+		return
+	}
+	head := node.Children[0]
+	acc := node.Children[len(node.Children)-1]
+	for i := len(node.Children) - 2; i >= 1; i-- {
+		acc = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: head.Value, Line: head.Line, Column: head.Column, Filename: head.Filename},
+				node.Children[i],
+				acc,
+			},
+		}
+	}
+	node.Children = acc.Children
+}
+
+func desugarWhenUnless(node *Node) {
+	// (when test body…) → (if test (do body…) (do))
+	// (unless test body…) → (if test (do) (do body…))
+	if len(node.Children) < 3 {
+		ReportError(node.Children[0].Value+" expects ( "+node.Children[0].Value+" test body...)", node.Line, node.Column)
+		return
+	}
+	head := node.Children[0].Value
+	test := node.Children[1]
+	body := wrapBodyForms(node.Children[2:], node.Line, node.Column, node.Filename)
+	empty := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename}},
+	}
+	thenForm, elseForm := body, empty
+	if head == "unless" {
+		thenForm, elseForm = empty, body
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		test,
+		thenForm,
+		elseForm,
+	}
+}
+
 func desugarAssert(node *Node) {
 	if len(node.Children) != 2 {
 		ReportError("assert expects (assert expr)", node.Line, node.Column)
@@ -841,7 +986,7 @@ var exprBodyHeads = map[string]bool{
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "regex_match": true,
-	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true,
+	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,

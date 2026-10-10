@@ -258,3 +258,34 @@ func TestDesugarStrAndNz(t *testing.T) {
 		t.Fatalf("nz should expand to is_nil check: %s", src)
 	}
 }
+
+func TestDesugarMapHasWhenUnless(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(when (map_has (dict ("a" "1")) "a") (print "yes"))
+		(unless (= 1 2) (print "ok")))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "map_has") || strings.Contains(src, "(when ") || strings.Contains(src, "(unless ") {
+		t.Fatalf("map_has/when/unless should desugar: %s", src)
+	}
+	if !strings.Contains(src, "map_keys") {
+		t.Fatalf("map_has should use map_keys: %s", src)
+	}
+}
+
+func TestDesugarNaryOr(t *testing.T) {
+	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
+	src := ast.Stringify(root)
+	// Should be nested binary ors only (3 children per or list)
+	if strings.Count(src, "(or ") == 0 {
+		t.Fatalf("expected nested or: %s", src)
+	}
+}
+
+func TestDesugarNaryOrInIf(t *testing.T) {
+	root := parseDesugar(t, `(cli_app (if (or (= path "") (= key "") (= val "")) (print "x") (print "y")))`)
+	src := ast.Stringify(root)
+	t.Log(src)
+	if strings.Contains(src, "(or (= path \"\") (= key \"\") (= val \"\"))") {
+		t.Fatalf("n-ary or not nested: %s", src)
+	}
+}

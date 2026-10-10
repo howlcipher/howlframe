@@ -18,5 +18,8 @@
 * **[WC CLI](./wc_cli)**: Line/word/byte counts via widened `list_len` + `str` density. (Backend: Bytecode)
 * **[JSON Get](./json_get)**: Top-level JSON key lookup from a file. (Backend: Bytecode)
 * **[Counter API](./counter_api)**: Stateful HTTP counter with startup `store_open` on `http_server`. (Backend: Bytecode)
+* **[Fetch CLI](./fetch_cli)**: Outbound `http_request` CLI printing status+body. (Backend: Bytecode)
+* **[Template CLI](./template_cli)**: `{{key}}` placeholder fill with n-ary `or`/`str`. (Backend: Bytecode)
+* **[Stamp API](./stamp_api)**: `time_now` HTTP clock and path echo. (Backend: Bytecode)
 * **[Release Authority](./release_authority)**: Demonstrates an untrusted AI proposing deployment actions while standalone HowlFrame independently enforces evidence, approval, capability, and state-transition policy. (Backend: Bytecode)
 * **[Action Executor](./action_executor)**: Bounded Action Executor — demonstrates a finite trusted action catalog where untrusted AI/user proposals can request operations but cannot select arbitrary code, paths, capabilities, or execution primitives. (Backend: Bytecode)

@@ -58,6 +58,7 @@
 | `llm_generate` | Yes | network | No | No | - | AUTHORITATIVE |
 | `map_delete` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_get` | Yes | None | No | No | - | AUTHORITATIVE |
+| `map_has` | No | None | Yes | No | - | AUTHORITATIVE |
 | `map_keys` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
@@ -117,9 +118,11 @@
 | `type_hint` | No | None | Yes | No | - | AUTHORITATIVE |
 | `type_hints` | No | None | Yes | No | - | AUTHORITATIVE |
 | `type_param` | No | None | Yes | No | - | AUTHORITATIVE |
+| `unless` | No | None | Yes | No | - | AUTHORITATIVE |
 | `use` | No | None | Yes | No | - | AUTHORITATIVE |
 | `wasm_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `web_app` | Yes | None | No | No | - | AUTHORITATIVE |
+| `when` | No | None | Yes | No | - | AUTHORITATIVE |
 | `while` | Yes | None | No | No | - | AUTHORITATIVE |
 | `with_context` | No | None | Yes | No | - | AUTHORITATIVE |
 | `write_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |

@@ -1,0 +1,10 @@
+(do
+  (let (url (cli_args 0) method (cli_args 1))
+    (if (= url "")
+      (do (print "Usage: fetch_cli <url> [method]") (exit 2))
+      (do
+        (when (= method "") (set method "GET"))
+        (let (r (http_request url method))
+          (do
+            (print (str "status=" (map_get r "status")))
+            (print (bytes_to_string (map_get r "body")))))))))
