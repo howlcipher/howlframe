@@ -342,6 +342,24 @@ func TestDesugarBlankUnixNow(t *testing.T) {
 	}
 }
 
+func TestDesugarGetdMinMaxEqCiSnxt(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (getd m "k" "d"))
+		(print (min 1 2))
+		(print (max 1 2))
+		(print (eq_ci "A" "a"))
+		(print (snxt kv "next_id")))`)
+	src := ast.Stringify(root)
+	for _, head := range []string{"getd", "min", "max", "eq_ci", "snxt"} {
+		if strings.Contains(src, "("+head+" ") || strings.Contains(src, "("+head+")") {
+			t.Fatalf("%s should desugar: %s", head, src)
+		}
+	}
+	if !strings.Contains(src, "to_lower") || !strings.Contains(src, "map_get") {
+		t.Fatalf("expected to_lower/map_get in expansion: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)

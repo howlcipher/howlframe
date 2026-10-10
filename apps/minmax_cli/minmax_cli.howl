@@ -1,0 +1,8 @@
+(do
+  (let (a (cli_args 0) b (cli_args 1))
+    (if (or (blank a) (blank b))
+      (do (print "Usage: minmax_cli <a> <b>") (exit 2))
+      (do
+        (print (str "min=" (min (to_int a) (to_int b))))
+        (print (str "max=" (max (to_int a) (to_int b))))
+        (exit 0)))))

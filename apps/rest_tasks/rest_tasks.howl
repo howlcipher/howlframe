@@ -2,13 +2,7 @@
   (defun next_id ()
     (do
       (store_open kv "memory://session")
-      (let (rec (store_get kv "next_id") n 1)
-        (do
-          (if (is_nil rec)
-            (set n 1)
-            (set n (to_int (map_get rec "val"))))
-          (store_put kv "next_id" (dict ("val" (to_string (+ n 1)))))
-          (return (to_string n))))))
+      (return (snxt kv "next_id"))))
 
   (route "/tasks" (lambda (req)
     (cond
@@ -25,8 +19,8 @@
       ((= (req_method req) "POST")
         (try_let (body (parse_json Any req.body))
           (catch e (res_json 400 (dict ("error" "invalid_json"))))
-          (let (title (map_get body "title"))
-            (if (= title "")
+          (let (title (getd body "title" ""))
+            (if (blank title)
               (res_json 400 (dict ("error" "title_required")))
               (let (id (next_id) task (dict ("id" id) ("title" title) ("status" "open")))
                 (do

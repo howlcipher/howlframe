@@ -1,0 +1,7 @@
+(do
+  (let (a (cli_args 0) b (cli_args 1))
+    (if (or (blank a) (blank b))
+      (do (print "Usage: eqci_cli <a> <b>") (exit 2))
+      (if (eq_ci a b)
+        (do (print "YES") (exit 0))
+        (do (print "NO") (exit 1))))))

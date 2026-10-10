@@ -1,0 +1,9 @@
+(do
+  (let (path (cli_args 0) key (cli_args 1) def (cli_args 2))
+    (if (or (blank path) (blank key))
+      (do (print "Usage: getd_cli <file> <key> [default]") (exit 2))
+      (try_let (content (read_text path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (try_let (obj (parse_json Any content))
+          (catch e (do (print "error=" e) (exit 2)))
+          (print (getd obj key (if (blank def) "MISSING" def))))))))

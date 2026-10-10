@@ -314,6 +314,33 @@ APPS = {
         "howl_caps": "filesystem",
         "test_pkg": "./apps/icontains_cli/",
     },
+    "eqci_cli": {
+        "howlframe": ROOT / "apps/eqci_cli/eqci_cli.howl",
+        "python": HERE / "eqci_cli/python/main.py",
+        "go": HERE / "eqci_cli/go/main.go",
+        "node": HERE / "eqci_cli/node/main.js",
+        "kind": "cli_eqci",
+        "howl_caps": "",
+        "test_pkg": "./apps/eqci_cli/",
+    },
+    "minmax_cli": {
+        "howlframe": ROOT / "apps/minmax_cli/minmax_cli.howl",
+        "python": HERE / "minmax_cli/python/main.py",
+        "go": HERE / "minmax_cli/go/main.go",
+        "node": HERE / "minmax_cli/node/main.js",
+        "kind": "cli_minmax",
+        "howl_caps": "",
+        "test_pkg": "./apps/minmax_cli/",
+    },
+    "getd_cli": {
+        "howlframe": ROOT / "apps/getd_cli/getd_cli.howl",
+        "python": HERE / "getd_cli/python/main.py",
+        "go": HERE / "getd_cli/go/main.go",
+        "node": HERE / "getd_cli/node/main.js",
+        "kind": "cli_getd",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/getd_cli/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -1505,6 +1532,102 @@ def parity_icontains(lang: str, source: Path, howl_bin: str, caps: str) -> None:
             raise RuntimeError(f"{lang} icontains missing failed: {r.returncode} {out!r}")
 
 
+def run_cli_eqci(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "eqci.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), *args]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "eqci_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_eqci(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        r = run_cli_eqci(lang, source, howl_bin, caps, ["Hello", "hello"], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "YES" not in out:
+            raise RuntimeError(f"{lang} eqci yes failed: {r.returncode} {out!r}")
+        r = run_cli_eqci(lang, source, howl_bin, caps, ["Hello", "world"], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode == 0 or "NO" not in out:
+            raise RuntimeError(f"{lang} eqci no failed: {r.returncode} {out!r}")
+
+
+def run_cli_minmax(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "minmax.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), *args]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "minmax_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_minmax(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        r = run_cli_minmax(lang, source, howl_bin, caps, ["3", "9"], Path(td))
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "min=3" not in out or "max=9" not in out:
+            raise RuntimeError(f"{lang} minmax failed: {r.returncode} {out!r}")
+
+
+def run_cli_getd(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "getd.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "getd_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_getd(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.json"
+        sample.write_text('{"name":"ada"}')
+        r = run_cli_getd(lang, source, howl_bin, caps, [str(sample), "name"], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "ada" not in out:
+            raise RuntimeError(f"{lang} getd hit failed: {r.returncode} {out!r}")
+        r = run_cli_getd(lang, source, howl_bin, caps, [str(sample), "missing", "fallback"], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "fallback" not in out:
+            raise RuntimeError(f"{lang} getd default failed: {r.returncode} {out!r}")
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -1567,6 +1690,9 @@ def main() -> int:
             "cli_upper": parity_upper,
             "cli_trim": parity_trim,
             "cli_icontains": parity_icontains,
+            "cli_eqci": parity_eqci,
+            "cli_minmax": parity_minmax,
+            "cli_getd": parity_getd,
         }[meta["kind"]]
         for lang in LANGS:
             try:

@@ -29,6 +29,10 @@ package ast
 //   - (not x) → boolean negation via if
 //   - (blank x) → (= x "")
 //   - (unix_now) → (to_string (time_now))
+//   - (getd m k d) → map_has gated map_get default
+//   - (min a b) / (max a b) → comparison via let+if
+//   - (eq_ci a b) → case-insensitive = via to_lower
+//   - (snxt handle key) → next string id from store counter
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -211,6 +215,26 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarUnixNow(node)
 		}
+	case "getd":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarGetd(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "min", "max":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarMinMax(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "eq_ci":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarEqCi(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "snxt":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarSNxt(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
@@ -228,7 +252,8 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
 		"str_contains", "str_replace", "starts_with", "ends_with",
 		"http_body", "http_status", "http_res", "list_contains", "not",
-		"blank", "unix_now":
+		"blank", "unix_now", "getd", "min", "max", "eq_ci", "snxt",
+		"to_lower", "to_upper", "str_trim":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -326,7 +351,7 @@ var reservedCallHeads = map[string]bool{
 	"switch": true, "inc": true, "dec": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
 	"http_body": true, "http_status": true, "http_res": true, "list_contains": true, "not": true,
-	"blank": true, "unix_now": true,
+	"blank": true, "unix_now": true, "getd": true, "min": true, "max": true, "eq_ci": true, "snxt": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,
@@ -911,6 +936,211 @@ func desugarUnixNow(node *Node) {
 	}
 }
 
+func desugarGetd(node *Node) {
+	// (getd m k d) → (let (__m m __k k) (if (map_has __m __k) (map_get __m __k) d))
+	// Missing keys are "" in HowlFrame, so membership (not is_nil) is the default gate.
+	if len(node.Children) != 4 {
+		ReportError("getd expects (getd dict key default)", node.Line, node.Column)
+		return
+	}
+	mSym := &Node{Type: "SYMBOL", Value: "__m", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	has := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "map_has", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			mSym,
+			kSym,
+		},
+	}
+	mapGet := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "map_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			mSym,
+			kSym,
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			has,
+			mapGet,
+			node.Children[3],
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{mSym, node.Children[1], kSym, node.Children[2]},
+		},
+		iff,
+	}
+}
+
+func desugarMinMax(node *Node) {
+	// (min a b) → (let (__a a __b b) (if (< __a __b) __a __b))
+	// (max a b) → (let (__a a __b b) (if (> __a __b) __a __b))
+	if len(node.Children) != 3 {
+		ReportError("min/max expects (min a b) or (max a b)", node.Line, node.Column)
+		return
+	}
+	head := node.Children[0].Value
+	cmp := "<"
+	if head == "max" {
+		cmp = ">"
+	}
+	aSym := &Node{Type: "SYMBOL", Value: "__a", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	bSym := &Node{Type: "SYMBOL", Value: "__b", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	cmpNode := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: cmp, Line: node.Line, Column: node.Column, Filename: node.Filename},
+			aSym,
+			bSym,
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			cmpNode,
+			aSym,
+			bSym,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{aSym, node.Children[1], bSym, node.Children[2]},
+		},
+		iff,
+	}
+}
+
+func desugarEqCi(node *Node) {
+	// (eq_ci a b) → (= (to_lower a) (to_lower b))
+	if len(node.Children) != 3 {
+		ReportError("eq_ci expects (eq_ci a b)", node.Line, node.Column)
+		return
+	}
+	lowerA := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_lower", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			node.Children[1],
+		},
+	}
+	lowerB := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_lower", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			node.Children[2],
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		lowerA,
+		lowerB,
+	}
+}
+
+func desugarSNxt(node *Node) {
+	// (snxt handle key) → allocate next string id from a string counter
+	// (let (__k key __v (sget handle __k) __n (if (is_nil __v) 1 (to_int __v)))
+	//   (do (sput handle __k (to_string (+ __n 1))) (to_string __n)))
+	if len(node.Children) != 3 {
+		ReportError("snxt expects (snxt handle key)", node.Line, node.Column)
+		return
+	}
+	handle := node.Children[1]
+	key := node.Children[2]
+	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	vSym := &Node{Type: "SYMBOL", Value: "__v", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	nSym := &Node{Type: "SYMBOL", Value: "__n", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	sget := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "sget", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			handle,
+			kSym,
+		},
+	}
+	isNilV := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			vSym,
+		},
+	}
+	toInt := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_int", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			vSym,
+		},
+	}
+	nInit := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			isNilV,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			toInt,
+		},
+	}
+	plus := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "+", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			nSym,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	toStringNext := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			plus,
+		},
+	}
+	sput := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "sput", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			handle,
+			kSym,
+			toStringNext,
+		},
+	}
+	toStringN := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			nSym,
+		},
+	}
+	body := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			sput,
+			toStringN,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{kSym, key, vSym, sget, nSym, nInit},
+		},
+		body,
+	}
+}
+
 func desugarListContains(node *Node) {
 	// (list_contains lst x) → (let (__lst lst __x x __h 0)
 	//   (do (for __i __lst (if (= __i __x) (set __h 1))) (= __h 1)))
@@ -1409,8 +1639,9 @@ var exprBodyHeads = map[string]bool{
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
 	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
 	"http_status": true, "list_contains": true, "not": true, "blank": true,
-	"unix_now": true, "regex_match": true,
-	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
+	"unix_now": true, "getd": true, "min": true, "max": true, "eq_ci": true, "snxt": true,
+	"regex_match": true,
+	"parse_json":  true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,

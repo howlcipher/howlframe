@@ -37,12 +37,14 @@
 | `ends_with` | No | None | Yes | No | - | AUTHORITATIVE |
 | `env` | Yes | environment | No | No | - | AUTHORITATIVE |
 | `ephemeral_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
+| `eq_ci` | No | None | Yes | No | - | AUTHORITATIVE |
 | `exec` | Yes | process | No | No | - | AUTHORITATIVE |
 | `exit` | Yes | None | No | No | - | AUTHORITATIVE |
 | `export` | No | None | Yes | No | - | AUTHORITATIVE |
 | `fetch` | Yes | network | No | No | - | AUTHORITATIVE |
 | `for` | Yes | None | No | No | - | AUTHORITATIVE |
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
+| `getd` | No | None | Yes | No | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `http_body` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -69,7 +71,9 @@
 | `map_keys` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
+| `max` | No | None | Yes | No | - | AUTHORITATIVE |
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |
+| `min` | No | None | Yes | No | - | AUTHORITATIVE |
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
 | `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
@@ -100,6 +104,7 @@
 | `sget` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sinc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sleep` | Yes | None | No | No | - | AUTHORITATIVE |
+| `snxt` | No | None | Yes | No | - | AUTHORITATIVE |
 | `spawn` | Yes | process | No | No | - | AUTHORITATIVE |
 | `spawn_agent` | Yes | process | No | No | - | AUTHORITATIVE |
 | `sput` | No | None | Yes | No | - | AUTHORITATIVE |
