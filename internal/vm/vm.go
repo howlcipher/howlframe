@@ -159,6 +159,7 @@ func sortedMapKeys(dict map[string]any) []any {
 // cli_app only, per docs/direct_execution_design.md.
 // Enforces allowedCaps matching RunBytecodeWithPolicy (HOWL-CANON-002).
 func Interpret(root *ast.Node, args []string, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer) (exitCode int) {
+	ast.Desugar(root)
 	interp := &Interpreter{
 		funcs:       make(map[string]*InterpFunc),
 		args:        args,

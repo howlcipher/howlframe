@@ -18,6 +18,7 @@
 | `achieve` | Yes | network | No | No | - | AUTHORITATIVE |
 | `and` | Yes | None | No | No | - | AUTHORITATIVE |
 | `append` | Yes | None | No | No | - | AUTHORITATIVE |
+| `assert` | No | None | Yes | No | - | AUTHORITATIVE |
 | `assert_semantic` | No | None | No | Yes | - | AUTHORITATIVE |
 | `attr_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `bytes_to_string` | Yes | None | No | No | - | AUTHORITATIVE |

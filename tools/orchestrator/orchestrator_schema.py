@@ -281,6 +281,7 @@ class SpawnInstruction(BaseModel):
 class SpawnAgentInstruction(BaseModel):
     op: Literal["SPAWN_AGENT"]
     string_operand: str
+    int_operand: int
 
 
 class SqlQueryInstruction(BaseModel):

@@ -177,6 +177,7 @@ func main() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	ast.Desugar(root)
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
 
@@ -693,6 +694,7 @@ func checkSource() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	ast.Desugar(root)
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
@@ -787,6 +789,7 @@ func buildSource() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	ast.Desugar(root)
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
@@ -967,6 +970,7 @@ func runArtifact() {
 		ast.ApplyPatches(root)
 		root = ast.ApplyWithContext(root, nil)
 		root = ast.ApplyWithContext(root, nil)
+		ast.Desugar(root)
 		_ = checker.Check(root)
 		hfirModule := filepath.Base(inputFile)
 		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
@@ -994,6 +998,7 @@ func runArtifact() {
 			ast.ApplyPatches(root)
 			root = ast.ApplyWithContext(root, nil)
 			root = ast.ApplyWithContext(root, nil)
+			ast.Desugar(root)
 			_ = checker.Check(root)
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
