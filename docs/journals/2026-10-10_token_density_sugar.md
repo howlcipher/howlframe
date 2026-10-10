@@ -12,12 +12,14 @@ Make HowlFrame win on `cl100k_base` source tokens against Python on the write-co
 2. **Expression-bodied `defun`** — last value form becomes `(return …)` (skips `void` and statement-only bodies).
 3. **`(assert expr)`** — expands to `if` / `stderr` / `exit 1` (CompileTimeOnly registry entry).
 4. **Auto-`call`** — `(fname args…)` rewrites to `(call fname …)` when `fname` is a `defun` name.
+5. **`(lines expr)`** — expands to `(str_split (bytes_to_string expr) "\n")`.
+6. **`(read_text path)`** — expands to `(bytes_to_string (read_file path))`.
 
 Wired through `howlframe.go` preprocess, `CompileToBytecode`, Go/JS emitters, and `vm.Interpret`. Corpus partition test desugars before `construct.Scan` so it matches the real gate.
 
 ## Evidence
 
-Task C fixture (`benchmarks/language_write_cost/task_c_function_test/howlframe/add.howl`):
+Task C fixture:
 
 ```lisp
 (do
@@ -25,15 +27,25 @@ Task C fixture (`benchmarks/language_write_cost/task_c_function_test/howlframe/a
   (assert (= (add 2 3) 5)))
 ```
 
-| Language | Tokens (`cl100k_base`) |
-|---|---|
-| HowlFrame | **34** |
-| Python (main+test) | 37 |
+Task B fixture:
 
-Totals across A+B+C (recounted HowlFrame fixtures): HowlFrame **202** vs Python **262**.
+```lisp
+(do
+  (try_let (content (read_file "names.txt"))
+    (catch err (print "Error: could not read names.txt"))
+    (for line (lines content)
+      (if (!= line "") (print "Hello," line) (print)))))
+```
 
-Verified: `tests/test_token_density.howl` via `-run` and `-run-bc` prints `42`; `go test ./...` green; coverage matrix regenerated.
+| Task | HowlFrame | Python |
+|---|---|---|
+| A HTTP/JSON | 88 | 164 |
+| B CLI file | **56** | 61 |
+| C fn+check | **34** | 37 |
+| **Total** | **178** | **262** |
+
+Verified: `tests/test_token_density.howl` (`-run`/`-run-bc`), `tests/test_lines_density.howl` (`-run-bc -allow-caps filesystem`); `go test ./...` green; coverage matrix regenerated.
 
 ## Next
 
-Task B still trails Python (80 vs 61). Candidate: denser line-iteration / file-read idioms without `bytes_to_string` + `str_split` nesting.
+Optional further cuts: truthy empty-string `if`, shorter missing-file idioms, HFIR/JSON as the model emission surface.

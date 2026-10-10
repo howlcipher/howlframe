@@ -1,9 +1,5 @@
-(cli_app
+(do
   (try_let (content (read_file "names.txt"))
     (catch err (print "Error: could not read names.txt"))
-    (do
-      (let (lines (str_split (bytes_to_string content) "\n"))
-        (for line lines
-          (if (!= line "")
-            (print "Hello," line)
-            (print "")))))))
+    (for line (lines content)
+      (if (!= line "") (print "Hello," line) (print)))))

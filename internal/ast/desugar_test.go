@@ -108,3 +108,40 @@ func TestDesugarAutoCall(t *testing.T) {
 		t.Fatalf("expected (call add ...), got %#v", call)
 	}
 }
+
+func TestDesugarLinesAndReadText(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(let (text (read_text "names.txt"))
+			(for line (lines text)
+				(print line))))`)
+	letNode := root.Children[1]
+	binding := letNode.Children[1]
+	readText := binding.Children[1]
+	if readText.Children[0].Value != "bytes_to_string" ||
+		readText.Children[1].Children[0].Value != "read_file" {
+		t.Fatalf("read_text should expand to bytes_to_string/read_file, got %#v", readText)
+	}
+	forNode := letNode.Children[2]
+	lines := forNode.Children[2]
+	if lines.Children[0].Value != "str_split" ||
+		lines.Children[1].Children[0].Value != "bytes_to_string" ||
+		lines.Children[2].Value != "\n" {
+		t.Fatalf("lines should expand to str_split/bytes_to_string, got %#v", lines)
+	}
+}
+
+func TestDesugarPreservesLinesBindingName(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(let (content "a\nb")
+			(let (lines (str_split content "\n"))
+				(print lines))))`)
+	outer := root.Children[1]
+	inner := outer.Children[2]
+	binding := inner.Children[1]
+	if binding.Children[0].Value != "lines" {
+		t.Fatalf("let binding name lines was rewritten: %#v", binding)
+	}
+	if binding.Children[1].Children[0].Value != "str_split" {
+		t.Fatalf("expected str_split value, got %#v", binding.Children[1])
+	}
+}
