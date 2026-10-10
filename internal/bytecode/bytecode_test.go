@@ -38,6 +38,17 @@ func TestCompileStoreOperations(t *testing.T) {
 		storeOps[0].StringOperand2 != "memory://session" {
 		t.Fatalf("unexpected STORE_OPEN instruction: %#v", storeOps[0])
 	}
+	// URI is compiled onto the stack before STORE_OPEN (Pops: 1).
+	foundURI := false
+	for _, inst := range prog.Main {
+		if inst.Op == OpLoadConst && inst.ValueOperand == "memory://session" {
+			foundURI = true
+			break
+		}
+	}
+	if !foundURI {
+		t.Fatal("STORE_OPEN missing compiled URI load")
+	}
 	if storeOps[1].Op != OpStorePut || storeOps[1].StringOperand != "store" {
 		t.Fatalf("unexpected STORE_PUT instruction: %#v", storeOps[1])
 	}
@@ -48,7 +59,7 @@ func TestCompileStoreOperations(t *testing.T) {
 		t.Fatalf("unexpected STORE_DELETE instruction: %#v", storeOps[3])
 	}
 
-	assertStoreSpec(t, OpStoreOpen, "STORE_OPEN", 0, 0)
+	assertStoreSpec(t, OpStoreOpen, "STORE_OPEN", 1, 0)
 	assertStoreSpec(t, OpStorePut, "STORE_PUT", 2, 0)
 	assertStoreSpec(t, OpStoreGet, "STORE_GET", 1, 1)
 	assertStoreSpec(t, OpStoreDelete, "STORE_DELETE", 1, 0)

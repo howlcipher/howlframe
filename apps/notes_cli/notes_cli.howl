@@ -1,0 +1,31 @@
+(do
+  (let (uri (env "NOTES_STORE"))
+    (do
+      (store_open kv (if (= uri "") "file://notes.store" uri))
+      (let (a (cli_args) i 0)
+        (while (< i (list_len a))
+          (do
+            (switch (list_get a i)
+              ("add"
+                (do (inc i)
+                  (let (title (list_get a i) cur (sget kv "next_id"))
+                    (let (n (if (is_nil cur) 1 (to_int cur)))
+                      (do
+                        (sput kv (to_string n) title)
+                        (sput kv "next_id" (to_string (+ n 1)))
+                        (print "ADDED" n title))))))
+              ("list"
+                (for k (store_keys kv)
+                  (if (!= k "next_id") (print k (sget kv k)))))
+              ("get"
+                (do (inc i)
+                  (let (id (list_get a i) t (sget kv id))
+                    (if (is_nil t) (do (print "NOT FOUND") (exit 1))
+                      (print id t)))))
+              ("delete"
+                (do (inc i)
+                  (let (id (list_get a i) t (sget kv id))
+                    (if (is_nil t) (do (print "NOT FOUND") (exit 1))
+                      (do (store_delete kv id) (print "DELETED" id))))))
+              (else (do (print "UNKNOWN") (exit 1))))
+            (inc i)))))))

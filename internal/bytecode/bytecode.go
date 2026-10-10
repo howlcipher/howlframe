@@ -422,22 +422,26 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "SQL_QUERY", Op: OpSqlQuery, StringOperand: dbVar, StringOperand2: queryStr})
 		case "store_open":
 			if len(node.Children) != 3 {
-				ast.ReportError(`store_open expects (store_open handle "memory://name" or "file://name")`, node.Line, node.Column)
+				ast.ReportError(`store_open expects (store_open handle uri)`, node.Line, node.Column)
 			}
 			handleNode := node.Children[1]
 			uriNode := node.Children[2]
 			if handleNode.Type != "SYMBOL" {
 				ast.ReportError("store_open handle must be a symbol", handleNode.Line, handleNode.Column)
 			}
-			if uriNode.Type != "STRING" {
-				ast.ReportError("store_open URI must be a string", uriNode.Line, uriNode.Column)
+			// URI is a runtime expression. When it is a string literal, also
+			// record StringOperand2 so RequiredCapabilities can classify
+			// memory:// vs file:// without executing.
+			insts = append(insts, c.compileNode(uriNode)...)
+			open := BCInstruction{
+				OpString:      "STORE_OPEN",
+				Op:            OpStoreOpen,
+				StringOperand: handleNode.Value,
 			}
-			insts = append(insts, BCInstruction{
-				OpString:       "STORE_OPEN",
-				Op:             OpStoreOpen,
-				StringOperand:  handleNode.Value,
-				StringOperand2: uriNode.Value,
-			})
+			if uriNode.Type == "STRING" {
+				open.StringOperand2 = uriNode.Value
+			}
+			insts = append(insts, open)
 		case "store_put":
 			if len(node.Children) != 4 {
 				ast.ReportError("store_put expects (store_put handle key record)", node.Line, node.Column)
