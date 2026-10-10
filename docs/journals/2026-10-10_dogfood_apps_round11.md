@@ -20,7 +20,13 @@ equality, and store next-id allocation; ship dogfood CLIs and densify store/HTTP
 2. Densified `notes_cli` (`snxt`/`blank`), `rest_tasks`/`task_api` (`snxt`/`getd`/`blank`),
    `webhook_relay` (`blank`/`switch`), `json_get` (`blank`)
 
-## Token proof
+## Token proof (`cl100k_base`, 33 apps)
+
+| | HowlFrame | Python | Go | Node |
+|---|---|---|---|---|
+| **TOTAL** | **4431** | 5995 | 6418 | 5802 |
+
+`notes_cli` densified from 331 → 303 tokens via `snxt`/`blank`.
 
 ```bash
 python3 benchmarks/real_apps/prove_real_apps.py
