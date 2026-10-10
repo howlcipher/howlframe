@@ -46,6 +46,7 @@
 | `http_server` | Yes | None | No | No | - | AUTHORITATIVE |
 | `if` | Yes | None | No | No | - | AUTHORITATIVE |
 | `import` | No | None | No | Yes | - | AUTHORITATIVE |
+| `inc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `include` | No | None | Yes | No | - | AUTHORITATIVE |
 | `is_nil` | Yes | None | No | No | - | AUTHORITATIVE |
 | `lazy_synthesize` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -102,6 +103,7 @@
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |
+| `switch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
 | `test` | No | None | No | Yes | improvements.md #96 | AUTHORITATIVE |
 | `time_now` | Yes | None | No | No | - | AUTHORITATIVE |

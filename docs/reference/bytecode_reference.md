@@ -63,7 +63,7 @@
 | `STORE_DELETE` | string | 1 | 0 | database | Deletes a structured record by key |
 | `STORE_GET` | string | 1 | 1 | database | Fetches a structured record by key |
 | `STORE_KEYS` | string | 0 | 1 | database | Returns every record key in a store, sorted |
-| `STORE_OPEN` | string, string | 0 | 0 | database | Creates or attaches a named in-memory store handle |
+| `STORE_OPEN` | string, string | 1 | 0 | database | Opens a store handle; pops URI. StringOperand2 is an optional static URI hint for capability reports |
 | `STORE_PUT` | string | 2 | 0 | database | Upserts a structured record by key |
 | `STORE_VAR` | string | 1 | 0 |  | Pops a value and stores it in a new variable |
 | `STR_JOIN` |  | 2 | 1 |  | Joins a list of strings |
