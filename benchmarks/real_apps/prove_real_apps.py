@@ -260,6 +260,24 @@ APPS = {
         "howl_caps": "network",
         "test_pkg": "./apps/echo_api/",
     },
+    "now_cli": {
+        "howlframe": ROOT / "apps/now_cli/now_cli.howl",
+        "python": HERE / "now_cli/python/main.py",
+        "go": HERE / "now_cli/go/main.go",
+        "node": HERE / "now_cli/node/main.js",
+        "kind": "cli_now",
+        "howl_caps": "",
+        "test_pkg": "./apps/now_cli/",
+    },
+    "sleep_cli": {
+        "howlframe": ROOT / "apps/sleep_cli/sleep_cli.howl",
+        "python": HERE / "sleep_cli/python/main.py",
+        "go": HERE / "sleep_cli/go/main.go",
+        "node": HERE / "sleep_cli/node/main.js",
+        "kind": "cli_sleep",
+        "howl_caps": "",
+        "test_pkg": "./apps/sleep_cli/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -1266,6 +1284,71 @@ def parity_echo(lang: str, source: Path, howl_bin: str, caps: str) -> None:
         run_http_echo(lang, source, howl_bin, caps, Path(td))
 
 
+def run_cli_now(lang: str, source: Path, howl_bin: str, caps: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "now.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc)]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc)]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source)], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "now_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe)], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source)], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_now(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        r = run_cli_now(lang, source, howl_bin, caps, Path(td))
+        out = (r.stdout + r.stderr).strip()
+        if r.returncode != 0:
+            raise RuntimeError(f"{lang} now failed: {r.returncode} {out!r}")
+        n = int(out)
+        now = int(time.time())
+        if abs(n - now) > 5:
+            raise RuntimeError(f"{lang} now out of range: {n} vs {now}")
+
+
+def run_cli_sleep(lang: str, source: Path, howl_bin: str, caps: str, ms: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "sleep.hfbc"
+        compile_howl(howl_bin, source, bc)
+        cmd = [howl_bin, "-run-bc", str(bc), ms]
+        if caps:
+            cmd = [howl_bin, "-run-bc", "-allow-caps", caps, str(bc), ms]
+        return run(cmd, cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), ms], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "sleep_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), ms], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), ms], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_sleep(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        start = time.time()
+        r = run_cli_sleep(lang, source, howl_bin, caps, "50", Path(td))
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "OK" not in out:
+            raise RuntimeError(f"{lang} sleep failed: {r.returncode} {out!r}")
+        if time.time() - start < 0.04:
+            raise RuntimeError(f"{lang} sleep too brief")
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -1322,6 +1405,8 @@ def main() -> int:
             "cli_join": parity_join,
             "cli_uniq": parity_uniq,
             "http_echo": parity_echo,
+            "cli_now": parity_now,
+            "cli_sleep": parity_sleep,
         }[meta["kind"]]
         for lang in LANGS:
             try:

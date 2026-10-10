@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-10T21:37:31Z",
+  "timestamp": "2026-10-10T21:44:09Z",
   "token_method": "tiktoken(cl100k_base)",
   "tokens": {
     "log_analyzer": {
@@ -69,13 +69,13 @@
       "node": 203
     },
     "stamp_api": {
-      "howlframe": 135,
+      "howlframe": 128,
       "python": 239,
       "go": 264,
       "node": 213
     },
     "mkdir_cli": {
-      "howlframe": 50,
+      "howlframe": 51,
       "python": 90,
       "go": 114,
       "node": 92
@@ -93,7 +93,7 @@
       "node": 238
     },
     "env_cli": {
-      "howlframe": 79,
+      "howlframe": 81,
       "python": 105,
       "go": 103,
       "node": 104
@@ -129,13 +129,13 @@
       "node": 161
     },
     "join_cli": {
-      "howlframe": 97,
+      "howlframe": 98,
       "python": 139,
       "go": 127,
       "node": 132
     },
     "uniq_cli": {
-      "howlframe": 126,
+      "howlframe": 127,
       "python": 153,
       "go": 182,
       "node": 162
@@ -145,13 +145,25 @@
       "python": 284,
       "go": 219,
       "node": 223
+    },
+    "now_cli": {
+      "howlframe": 15,
+      "python": 41,
+      "go": 24,
+      "node": 18
+    },
+    "sleep_cli": {
+      "howlframe": 58,
+      "python": 94,
+      "go": 126,
+      "node": 103
     }
   },
   "totals": {
-    "howlframe": 3743,
-    "python": 5037,
-    "go": 5341,
-    "node": 4862
+    "howlframe": 3814,
+    "python": 5172,
+    "go": 5491,
+    "node": 4983
   },
   "parity": {
     "log_analyzer": {
@@ -293,6 +305,18 @@
       "node": true
     },
     "echo_api": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "now_cli": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "sleep_cli": {
       "howlframe": true,
       "python": true,
       "go": true,

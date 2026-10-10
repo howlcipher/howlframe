@@ -21,6 +21,7 @@
 | `assert` | No | None | Yes | No | - | AUTHORITATIVE |
 | `assert_semantic` | No | None | No | Yes | - | AUTHORITATIVE |
 | `attr_escape` | Yes | None | No | No | - | AUTHORITATIVE |
+| `blank` | No | None | Yes | No | - | AUTHORITATIVE |
 | `bytes_to_string` | Yes | None | No | No | - | AUTHORITATIVE |
 | `call` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_app` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -128,6 +129,7 @@
 | `type_hint` | No | None | Yes | No | - | AUTHORITATIVE |
 | `type_hints` | No | None | Yes | No | - | AUTHORITATIVE |
 | `type_param` | No | None | Yes | No | - | AUTHORITATIVE |
+| `unix_now` | No | None | Yes | No | - | AUTHORITATIVE |
 | `unless` | No | None | Yes | No | - | AUTHORITATIVE |
 | `use` | No | None | Yes | No | - | AUTHORITATIVE |
 | `wasm_app` | Yes | None | No | No | - | AUTHORITATIVE |

@@ -1,0 +1,5 @@
+(do
+  (let (ms (cli_args 0))
+    (if (blank ms)
+      (do (print "Usage: sleep_cli <ms>") (exit 2))
+      (do (sleep (to_int ms)) (print "OK") (exit 0)))))

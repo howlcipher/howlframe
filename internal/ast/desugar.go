@@ -27,6 +27,8 @@ package ast
 //   - (list_contains lst x) → membership scan via for/set
 //   - (dec x) → (set x (- x 1)) for symbol x
 //   - (not x) → boolean negation via if
+//   - (blank x) → (= x "")
+//   - (unix_now) → (to_string (time_now))
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -201,6 +203,14 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarNot(node)
 		}
+	case "blank":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarBlank(node)
+		}
+	case "unix_now":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarUnixNow(node)
+		}
 	}
 }
 
@@ -217,7 +227,8 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
 		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
 		"str_contains", "str_replace", "starts_with", "ends_with",
-		"http_body", "http_status", "http_res", "list_contains", "not":
+		"http_body", "http_status", "http_res", "list_contains", "not",
+		"blank", "unix_now":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -315,6 +326,7 @@ var reservedCallHeads = map[string]bool{
 	"switch": true, "inc": true, "dec": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
 	"http_body": true, "http_status": true, "http_res": true, "list_contains": true, "not": true,
+	"blank": true, "unix_now": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -868,6 +880,36 @@ func desugarNot(node *Node) {
 	}
 }
 
+func desugarBlank(node *Node) {
+	// (blank x) → (= x "")
+	if len(node.Children) != 2 {
+		ReportError("blank expects (blank expr)", node.Line, node.Column)
+		return
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		node.Children[1],
+		{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
+	}
+}
+
+func desugarUnixNow(node *Node) {
+	// (unix_now) → (to_string (time_now))
+	if len(node.Children) != 1 {
+		ReportError("unix_now expects (unix_now)", node.Line, node.Column)
+		return
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "time_now", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		},
+	}
+}
+
 func desugarListContains(node *Node) {
 	// (list_contains lst x) → (let (__lst lst __x x __h 0)
 	//   (do (for __i __lst (if (= __i __x) (set __h 1))) (= __h 1)))
@@ -1364,7 +1406,8 @@ var exprBodyHeads = map[string]bool{
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
 	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
-	"http_status": true, "list_contains": true, "not": true, "regex_match": true,
+	"http_status": true, "list_contains": true, "not": true, "blank": true,
+	"unix_now": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

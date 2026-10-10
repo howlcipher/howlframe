@@ -1,5 +1,5 @@
 (do
   (let (path (cli_args 0))
-    (if (= path "")
+    (if (blank path)
       (do (print "Usage: mkdir_cli <path>") (exit 2))
       (do (mkdir path) (print "OK")))))

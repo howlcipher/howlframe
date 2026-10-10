@@ -1,6 +1,6 @@
 (do
   (let (path (cli_args 0))
-    (if (= path "")
+    (if (blank path)
       (do (print "Usage: uniq_cli <file>") (exit 2))
       (try_let (raw (read_file path))
         (catch e (do (print "error=" e) (exit 2)))
