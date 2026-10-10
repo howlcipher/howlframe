@@ -18,6 +18,8 @@ package ast
 //   - (map_has d k) → membership check via map_keys (bool)
 //   - (when test body…) / (unless test body…) → single-branch if
 //   - (and a b c…) / (or a b c…) → nested binary and/or
+//   - (str_contains hay needle) → (> (list_len (str_split hay needle)) 1)
+//   - (str_replace s old new) → join of split parts with new
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -153,6 +155,14 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			desugarNaryLogic(node)
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "str_contains":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarStrContains(node)
+		}
+	case "str_replace":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarStrReplace(node)
+		}
 	}
 }
 
@@ -167,7 +177,8 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
-		"switch", "inc", "str", "nz", "map_has", "when", "unless":
+		"switch", "inc", "str", "nz", "map_has", "when", "unless",
+		"str_contains", "str_replace":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -263,6 +274,7 @@ var reservedCallHeads = map[string]bool{
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
 	"switch": true, "inc": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
+	"str_contains": true, "str_replace": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -833,6 +845,55 @@ func desugarMapHas(node *Node) {
 	}
 }
 
+func desugarStrContains(node *Node) {
+	// (str_contains hay needle) → (> (list_len (str_split hay needle)) 1)
+	if len(node.Children) != 3 {
+		ReportError("str_contains expects (str_contains hay needle)", node.Line, node.Column)
+		return
+	}
+	split := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			node.Children[1],
+			node.Children[2],
+		},
+	}
+	llen := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "list_len", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			split,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: ">", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		llen,
+		{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+	}
+}
+
+func desugarStrReplace(node *Node) {
+	// (str_replace s old new) → (str_join (str_split s old) new)
+	if len(node.Children) != 4 {
+		ReportError("str_replace expects (str_replace s old new)", node.Line, node.Column)
+		return
+	}
+	split := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			node.Children[1],
+			node.Children[2],
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "str_join", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		split,
+		node.Children[3],
+	}
+}
+
 func desugarNaryLogic(node *Node) {
 	// (or a b c…) → (or a (or b (or c…))); same for and.
 	if len(node.Children) < 4 {
@@ -985,7 +1046,8 @@ var exprBodyHeads = map[string]bool{
 	"map_get": true, "list_get": true, "list_len": true, "map_keys": true,
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
-	"lines": true, "str_split": true, "str_join": true, "str": true, "regex_match": true,
+	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
+	"str_replace": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

@@ -4,9 +4,9 @@
       (do (print "Usage: template_cli <file> <key> <value>") (exit 2))
       (try_let (raw (read_file path))
         (catch e (do (print "error=" e) (exit 2)))
-        (let (s (bytes_to_string raw) needle (str "{{" key "}}") parts (str_split s needle))
-          (if (< (list_len parts) 2)
-            (do (print "NO PLACEHOLDER") (exit 1))
-            (do
-              (print (str_join (list (list_get parts 0) val (list_get parts 1)) ""))
-              (exit 0))))))))
+        (let (s (bytes_to_string raw) needle (str "{{" key "}}"))
+          (do
+            (unless (str_contains s needle)
+              (do (print "NO PLACEHOLDER") (exit 1)))
+            (print (str_replace s needle val))
+            (exit 0)))))))

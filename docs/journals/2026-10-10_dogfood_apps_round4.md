@@ -29,3 +29,7 @@ Also densified `json_get` with `map_has`. Prove harness always rebuilds `howlfra
 ```bash
 python3 benchmarks/real_apps/prove_real_apps.py
 ```
+
+## Follow-on
+
+- Round 5 continues in `docs/journals/2026-10-10_dogfood_apps_round5.md`

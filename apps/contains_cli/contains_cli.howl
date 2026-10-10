@@ -1,0 +1,10 @@
+(do
+  (let (needle (cli_args 0) path (cli_args 1))
+    (if (or (= needle "") (= path ""))
+      (do (print "Usage: contains_cli <needle> <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (s (bytes_to_string raw))
+          (if (str_contains s needle)
+            (do (print "FOUND") (exit 0))
+            (do (print "MISSING") (exit 1))))))))

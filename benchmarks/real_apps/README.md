@@ -25,8 +25,11 @@ python3 benchmarks/real_apps/prove_real_apps.py
 | json_get | **157** | 185 | 189 | 161 |
 | counter_api | **229** | 233 | 320 | 235 |
 | fetch_cli | **109** | 185 | 199 | 214 |
-| template_cli | **184** | 206 | 190 | 203 |
+| template_cli | **160** | 206 | 190 | 203 |
 | stamp_api | **135** | 239 | 264 | 213 |
-| **TOTAL** | **2331** | 3025 | 3295 | 2927 |
+| mkdir_cli | **50** | 90 | 114 | 92 |
+| contains_cli | **130** | 158 | 148 | 156 |
+| file_transform | **229** | 266 | 293 | 238 |
+| **TOTAL** | **2716** | 3539 | 3850 | 3413 |
 
 Latest proof artifact: [`proof_latest.json`](proof_latest.json).

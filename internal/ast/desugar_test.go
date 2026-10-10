@@ -272,6 +272,22 @@ func TestDesugarMapHasWhenUnless(t *testing.T) {
 	}
 }
 
+func TestDesugarStrContainsReplace(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (str_contains "ab" "b"))
+		(print (str_replace "aXXb" "XX" "-")))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "str_contains") || strings.Contains(src, "str_replace") {
+		t.Fatalf("str_contains/str_replace should desugar: %s", src)
+	}
+	if !strings.Contains(src, "str_split") || !strings.Contains(src, "list_len") {
+		t.Fatalf("str_contains should use str_split/list_len: %s", src)
+	}
+	if !strings.Contains(src, "str_join") {
+		t.Fatalf("str_replace should use str_join: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)
