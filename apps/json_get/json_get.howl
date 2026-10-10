@@ -1,0 +1,13 @@
+(do
+  (let (path (cli_args 0) key (cli_args 1))
+    (if (or (= path "") (= key ""))
+      (do (print "Usage: json_get <file> <key>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (content (bytes_to_string raw))
+          (try_let (obj (parse_json Any content))
+            (catch e (do (print "error=" e) (exit 2)))
+            (let (v (map_get obj key))
+              (if (= v "")
+                (do (print "NOT FOUND") (exit 1))
+                (print v)))))))))

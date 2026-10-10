@@ -3,11 +3,11 @@
     (if (or (= pat "") (= path ""))
       (do (print "Usage: grep_cli <pattern> <file>") (exit 2))
       (try_let (raw (read_file path))
-        (catch e (do (print (str_join (list "error=" (to_string e)) "")) (exit 2)))
+        (catch e (do (print (str "error=" e)) (exit 2)))
         (let (rows (lines raw) n 0)
           (do
             (for row rows
               (if (regex_match pat row)
                 (do (inc n) (print row))))
-            (print (str_join (list "hits=" (to_string n)) ""))
+            (print (str "hits=" n))
             (if (> n 0) (exit 0) (exit 1))))))))

@@ -46,3 +46,4 @@ and under every language on the total (`cl100k_base`).
 - `match` still Unsupported (`switch`/`cond` cover dispatch)
 - `schema` / SQL migrations still Unsupported
 - `fetch` still body-bytes only (`http_request` for status+body)
+- Round 3 continues in `docs/journals/2026-10-10_dogfood_apps_round3.md`

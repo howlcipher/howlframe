@@ -165,7 +165,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
-	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list"},
+	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},
 	OpIsNil:            {Code: OpIsNil, Name: "IS_NIL", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Checks if a value is nil"},
 	OpTimeNow:          {Code: OpTimeNow, Name: "TIME_NOW", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Gets current unix timestamp"},
 	OpEncodeJson:       {Code: OpEncodeJson, Name: "ENCODE_JSON", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes a value as a JSON string"},

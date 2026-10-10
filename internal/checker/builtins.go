@@ -19,7 +19,8 @@ var builtinSignatures = map[string]builtinSignature{
 	"str_split":   {Params: []ast.ValueKind{ast.String, ast.String}, Result: stringList()},
 	"str_join":    {Params: []ast.ValueKind{ast.List, ast.String}, Result: ast.Layout(ast.String)},
 	"regex_match": {Params: []ast.ValueKind{ast.String, ast.String}, Result: ast.Layout(ast.Bool)},
-	"list_len":    {Params: []ast.ValueKind{ast.List}, Result: ast.Layout(ast.Int)},
+	// Empty kind: list_len accepts list, string, or bytes (runtime-enforced).
+	"list_len": {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.Int)},
 }
 
 func stringList() ast.TypeInfo {

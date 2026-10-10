@@ -2,6 +2,8 @@ package vm
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -83,10 +85,8 @@ func TestCollectionOpsFailClosed(t *testing.T) {
 		{name: "list_get string", source: dynamicCollection(`(print (list_get s 0))`), want: "list_get expected list"},
 		{name: "list_get dict", source: dynamicCollection(`(print (list_get d 0))`), want: "list_get expected list"},
 		{name: "list_get bad index", source: dynamicCollection(`(print (list_get xs s))`), want: "list_get index must be a number"},
-		{name: "list_len string", source: dynamicCollection(`(print (list_len s))`), want: "list_len expected list"},
-		{name: "list_len dict", source: dynamicCollection(`(print (list_len d))`), want: "list_len expected list"},
-		{name: "list_len string literal", source: `(cli_app (let (s "hello") (print (list_len s))))`, want: "list_len expected list"},
-		{name: "list_len dict literal", source: `(cli_app (let (d (dict ("a" "b"))) (print (list_len d))))`, want: "list_len expected list"},
+		{name: "list_len dict", source: dynamicCollection(`(print (list_len d))`), want: "list_len expected list, string, or bytes"},
+		{name: "list_len dict literal", source: `(cli_app (let (d (dict ("a" "b"))) (print (list_len d))))`, want: "list_len expected list, string, or bytes"},
 		{name: "map_keys string", source: dynamicCollection(`(print (map_keys s))`), want: "map_keys expected dict"},
 	}
 	for _, tc := range cases {
@@ -118,6 +118,45 @@ func TestCollectionOpsFailClosed(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestListLenAcceptsStringAndBytes(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		_, prog := parseAndCompile(t, `(cli_app (print (list_len "hello")))`)
+		var out, errOut bytes.Buffer
+		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
+			t.Fatalf("exit = %d stderr=%s", exitCode, errOut.String())
+		}
+		if out.String() != "5\n" {
+			t.Fatalf("stdout=%q", out.String())
+		}
+	})
+	t.Run("dynamic string", func(t *testing.T) {
+		_, prog := parseAndCompile(t, dynamicCollection(`(print (list_len s))`))
+		var out, errOut bytes.Buffer
+		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
+			t.Fatalf("exit = %d stderr=%s", exitCode, errOut.String())
+		}
+		if out.String() != "3\n" {
+			t.Fatalf("stdout=%q", out.String())
+		}
+	})
+	t.Run("read_file bytes", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "sample.bin")
+		if err := os.WriteFile(path, []byte("abcd"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		src := `(cli_app (try_let (raw (read_file "` + path + `")) (catch e (print e)) (print (list_len raw))))`
+		_, prog := parseAndCompile(t, src)
+		var out, errOut bytes.Buffer
+		if exitCode := RunBytecode(prog, nil, []capability.Capability{capability.Filesystem}, strings.NewReader(""), &out, &errOut); exitCode != 0 {
+			t.Fatalf("exit = %d stderr=%s", exitCode, errOut.String())
+		}
+		if out.String() != "4\n" {
+			t.Fatalf("stdout=%q", out.String())
+		}
+	})
 }
 
 func TestCollectionOpsGrantNothing(t *testing.T) {
