@@ -1,8 +1,3 @@
 (module
   (export
-    (defun Multiply (a b)
-      (type_hints (a "int") (b "int") (return "int"))
-      (return (* a b))
-    )
-  )
-)
+    (defun Multiply ((a int) (b int)) int (* a b))))

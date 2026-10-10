@@ -39,12 +39,17 @@ Task B fixture:
 
 | Task | HowlFrame | Python |
 |---|---|---|
-| A HTTP/JSON | 88 | 164 |
+| A HTTP/JSON | **75** | 168 |
 | B CLI file | **56** | 61 |
 | C fn+check | **34** | 37 |
-| **Total** | **178** | **262** |
+| **Total** | **165** | **266** |
 
-Verified: `tests/test_token_density.howl` (`-run`/`-run-bc`), `tests/test_lines_density.howl` (`-run-bc -allow-caps filesystem`); `go test ./...` green; coverage matrix regenerated.
+Verified:
+
+- `python3 benchmarks/language_write_cost/recount_and_verify.py` (compile/run + token gates)
+- `python3 benchmarks/v2/harness/prove_howlframe_refs.py` (densified v2 refs under Track A)
+- `tests/test_token_density.howl`, `tests/test_lines_density.howl`
+- CI steps added in `.github/workflows/ci.yml`
 
 ## Next
 

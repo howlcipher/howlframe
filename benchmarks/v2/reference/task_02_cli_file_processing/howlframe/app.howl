@@ -1,25 +1,7 @@
-(cli_app
+(do
   (try_let (filepath (cli_args 0))
-    (catch err
-      (do
-        (stderr "Error: File not found")
-        (exit 1)
-      )
-    )
+    (catch err (do (stderr "Error: File not found") (exit 1)))
     (try_let (content (read_file filepath))
-      (catch err
-        (do
-          (stderr "Error: File not found")
-          (exit 1)
-        )
-      )
-      (let (lines (str_split (bytes_to_string content) "\n"))
-        (for line lines
-          (if (!= line "")
-            (print "Hello," line "!")
-          )
-        )
-      )
-    )
-  )
-)
+      (catch err (do (stderr "Error: File not found") (exit 1)))
+      (for line (lines content)
+        (if (!= line "") (print "Hello," line "!"))))))

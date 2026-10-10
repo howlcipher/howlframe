@@ -34,6 +34,18 @@ jobs:
       with:
         python-version: '3.12'
 
+    - name: Install tiktoken
+      run: pip install tiktoken
+
+    - name: Build howlframe CLI
+      run: go build -o howlframe howlframe.go
+
+    - name: Prove write-cost token wins
+      run: python3 benchmarks/language_write_cost/recount_and_verify.py
+
+    - name: Prove densified HowlFrame v2 references
+      run: python3 benchmarks/v2/harness/prove_howlframe_refs.py
+
     - name: Run Benchmark v2 Harness Tests
       working-directory: benchmarks/v2/harness
       run: python3 -m unittest test_harness.py
