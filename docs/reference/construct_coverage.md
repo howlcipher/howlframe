@@ -25,6 +25,7 @@
 | `call` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_args` | Yes | None | No | No | - | AUTHORITATIVE |
+| `cond` | No | None | Yes | No | - | AUTHORITATIVE |
 | `confidence` | Yes | network | No | No | - | AUTHORITATIVE |
 | `db_connect` | Yes | database | No | No | - | AUTHORITATIVE |
 | `defun` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -84,9 +85,12 @@
 | `schema_bridge` | Yes | None | No | No | - | AUTHORITATIVE |
 | `semantic_match` | No | None | No | Yes | - | AUTHORITATIVE |
 | `set` | Yes | None | No | No | - | AUTHORITATIVE |
+| `sget` | No | None | Yes | No | - | AUTHORITATIVE |
+| `sinc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sleep` | Yes | None | No | No | - | AUTHORITATIVE |
 | `spawn` | Yes | process | No | No | - | AUTHORITATIVE |
 | `spawn_agent` | Yes | process | No | No | - | AUTHORITATIVE |
+| `sput` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sql_query` | Yes | database | No | No | - | AUTHORITATIVE |
 | `stderr` | Yes | None | No | No | - | AUTHORITATIVE |
 | `store_delete` | Yes | database | No | No | - | AUTHORITATIVE |

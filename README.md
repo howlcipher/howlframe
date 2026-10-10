@@ -484,15 +484,16 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 
 The write-cost benchmark compares the time and token cost of having an LLM produce working programs in HowlFrame, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
 
-As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Prove locally with:
+As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Dogfooded real apps (`log_analyzer`, `kv_cli`, `status_api`) total **674** versus Python **849**, Go **878**, and Node **794**, with app tests and cross-language parity required. Prove locally with:
 
 ```bash
 go build -o howlframe howlframe.go
 python3 benchmarks/language_write_cost/recount_and_verify.py
 python3 benchmarks/v2/harness/prove_howlframe_refs.py
+python3 benchmarks/real_apps/prove_real_apps.py
 ```
 
-See [docs/language_write_cost_benchmark.md](docs/language_write_cost_benchmark.md) for methodology, raw result links, limitations, and current results.
+See [docs/language_write_cost_benchmark.md](docs/language_write_cost_benchmark.md) and [benchmarks/real_apps/README.md](benchmarks/real_apps/README.md) for methodology and current results.
 
 ## License
 

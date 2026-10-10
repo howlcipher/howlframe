@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-10-10T17:57:41Z",
+  "token_method": "tiktoken(cl100k_base)",
+  "tokens": {
+    "log_analyzer": {
+      "howlframe": 279,
+      "python": 308,
+      "go": 331,
+      "node": 310
+    },
+    "kv_cli": {
+      "howlframe": 236,
+      "python": 270,
+      "go": 268,
+      "node": 263
+    },
+    "status_api": {
+      "howlframe": 159,
+      "python": 271,
+      "go": 279,
+      "node": 221
+    }
+  },
+  "totals": {
+    "howlframe": 674,
+    "python": 849,
+    "go": 878,
+    "node": 794
+  },
+  "parity": {
+    "log_analyzer": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "kv_cli": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "status_api": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    }
+  },
+  "errors": [],
+  "passed": true,
+  "notes": "HowlFrame sources are the densified dogfooded apps under apps/. Ports implement the same behavioral contracts used by apps/*_test.go."
+}

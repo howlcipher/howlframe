@@ -6,6 +6,11 @@ package ast
 //   - (assert expr) becomes a failing if/stderr/exit check
 //   - (lines expr) becomes (str_split (bytes_to_string expr) "\n")
 //   - (read_text path) becomes (bytes_to_string (read_file path))
+//   - (cond (test body...) ... (else body...)) becomes nested if
+//   - (let (a x b y) body) becomes nested single-binding let
+//   - (sget handle key) / (sput handle key val) wrap store_get/store_put
+//     for the common string "val" record shape
+//   - (sinc handle key) increments a string counter, stores it, and prints it
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -41,6 +46,11 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 	}
 	head := ""
 	if len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" {
+		head = node.Children[0].Value
+	}
+	// Expand multi-binding let before walking so children see single bindings.
+	if head == "let" {
+		desugarMultiLet(node)
 		head = node.Children[0].Value
 	}
 	for i, child := range node.Children {
@@ -80,19 +90,38 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarReadText(node)
 		}
+	case "cond":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarCond(node)
+		}
+	case "sget":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarSGet(node)
+		}
+	case "sput":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarSPut(node)
+		}
+	case "sinc":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarSInc(node)
+			// sinc expands into sget/sput forms; rewalk so those expand too.
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
 func isSugarExprContext(parentHead string, childIndex int) bool {
 	switch parentHead {
 	case "root", "cli_app", "do", "http_server", "web_app", "wasm_app",
-		"if", "while", "print", "stderr", "return", "call", "assert",
+		"if", "while", "print", "stderr", "return", "call", "assert", "cond",
 		"+", "-", "*", "/", "=", "==", "!=", "<", ">", "<=", ">=", "and", "or",
 		"list", "append", "map_set", "map_get", "map_delete", "list_get",
 		"str_split", "str_join", "encode_json", "to_int", "to_float", "to_string",
 		"bytes_to_string", "set", "exit", "spawn", "spawn_agent", "task",
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
-		"schema_bridge", "test", "let_value":
+		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
+		"store_get", "store_put", "store_delete":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -179,7 +208,7 @@ var reservedCallHeads = map[string]bool{
 	"<": true, ">": true, "<=": true, ">=": true,
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
-	"lines": true, "read_text": true,
+	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -188,6 +217,7 @@ var reservedCallHeads = map[string]bool{
 	"module": true, "export": true, "use": true, "include": true,
 	"map_get": true, "map_set": true, "map_delete": true, "map_keys": true,
 	"list_get": true, "list_len": true, "append": true,
+	"store_open": true, "store_get": true, "store_put": true, "store_delete": true,
 }
 
 func desugarDefunExprBody(node *Node) {
@@ -265,6 +295,273 @@ func desugarReadText(node *Node) {
 	node.Children = []*Node{
 		{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
 		readFile,
+	}
+}
+
+func desugarMultiLet(node *Node) {
+	if len(node.Children) < 3 {
+		return
+	}
+	binding := node.Children[1]
+	if binding == nil || binding.Type != "List" {
+		return
+	}
+	n := len(binding.Children)
+	if n <= 2 || n%2 != 0 {
+		return
+	}
+	body := node.Children[2]
+	// Build innermost let first: (let (lastName lastVal) body)
+	acc := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{
+				Type: "List", Line: binding.Line, Column: binding.Column, Filename: binding.Filename,
+				Children: []*Node{binding.Children[n-2], binding.Children[n-1]},
+			},
+			body,
+		},
+	}
+	for i := n - 4; i >= 0; i -= 2 {
+		acc = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				{
+					Type: "List", Line: binding.Line, Column: binding.Column, Filename: binding.Filename,
+					Children: []*Node{binding.Children[i], binding.Children[i+1]},
+				},
+				acc,
+			},
+		}
+	}
+	node.Children = acc.Children
+}
+
+func desugarCond(node *Node) {
+	if len(node.Children) < 2 {
+		ReportError("cond expects at least one clause", node.Line, node.Column)
+		return
+	}
+	clauses := node.Children[1:]
+	var acc *Node
+	for i := len(clauses) - 1; i >= 0; i-- {
+		clause := clauses[i]
+		if clause == nil || clause.Type != "List" || len(clause.Children) < 2 {
+			ReportError("cond clause expects (test body...) or (else body...)", node.Line, node.Column)
+			return
+		}
+		body := wrapBodyForms(clause.Children[1:], clause.Line, clause.Column, clause.Filename)
+		test := clause.Children[0]
+		if test != nil && test.Type == "SYMBOL" && test.Value == "else" {
+			if i != len(clauses)-1 {
+				ReportError("cond else clause must be last", test.Line, test.Column)
+				return
+			}
+			acc = body
+			continue
+		}
+		if acc == nil {
+			acc = &Node{
+				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+				Children: []*Node{{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename}},
+			}
+		}
+		acc = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				test,
+				body,
+				acc,
+			},
+		}
+	}
+	if acc == nil {
+		return
+	}
+	node.Children = acc.Children
+}
+
+func wrapBodyForms(forms []*Node, line, col int, filename string) *Node {
+	if len(forms) == 1 {
+		return forms[0]
+	}
+	children := make([]*Node, 0, len(forms)+1)
+	children = append(children, &Node{Type: "SYMBOL", Value: "do", Line: line, Column: col, Filename: filename})
+	children = append(children, forms...)
+	return &Node{Type: "List", Line: line, Column: col, Filename: filename, Children: children}
+}
+
+func desugarSGet(node *Node) {
+	if len(node.Children) != 3 {
+		ReportError("sget expects (sget handle key)", node.Line, node.Column)
+		return
+	}
+	handle := node.Children[1]
+	key := node.Children[2]
+	tmp := &Node{Type: "SYMBOL", Value: "__sget", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	storeGet := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "store_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			handle,
+			key,
+		},
+	}
+	isNil := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			tmp,
+		},
+	}
+	mapGet := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "map_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			tmp,
+			{Type: "STRING", Value: "val", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	iff := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			isNil,
+			tmp,
+			mapGet,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{tmp, storeGet},
+		},
+		iff,
+	}
+}
+
+func desugarSPut(node *Node) {
+	if len(node.Children) != 4 {
+		ReportError("sput expects (sput handle key val)", node.Line, node.Column)
+		return
+	}
+	handle := node.Children[1]
+	key := node.Children[2]
+	val := node.Children[3]
+	dict := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "dict", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{
+				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+				Children: []*Node{
+					{Type: "STRING", Value: "val", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					val,
+				},
+			},
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "store_put", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		handle,
+		key,
+		dict,
+	}
+}
+
+func desugarSInc(node *Node) {
+	if len(node.Children) != 3 {
+		ReportError("sinc expects (sinc handle key)", node.Line, node.Column)
+		return
+	}
+	handle := node.Children[1]
+	key := node.Children[2]
+	// (let (k key v (sget handle k) n (+ (if (is_nil v) 0 (to_int v)) 1))
+	//   (do (sput handle k (to_string n)) (print n)))
+	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	vSym := &Node{Type: "SYMBOL", Value: "__v", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	nSym := &Node{Type: "SYMBOL", Value: "__n", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	sget := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "sget", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			handle,
+			kSym,
+		},
+	}
+	isNilV := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			vSym,
+		},
+	}
+	toInt := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_int", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			vSym,
+		},
+	}
+	ifZero := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			isNilV,
+			{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			toInt,
+		},
+	}
+	plus := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "+", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			ifZero,
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	toString := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			nSym,
+		},
+	}
+	sput := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "sput", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			handle,
+			kSym,
+			toString,
+		},
+	}
+	printN := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "print", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			nSym,
+		},
+	}
+	body := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			sput,
+			printN,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{kSym, key, vSym, sget, nSym, plus},
+		},
+		body,
 	}
 }
 

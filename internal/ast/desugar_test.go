@@ -1,6 +1,7 @@
 package ast_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/ast"
@@ -143,5 +144,64 @@ func TestDesugarPreservesLinesBindingName(t *testing.T) {
 	}
 	if binding.Children[1].Children[0].Value != "str_split" {
 		t.Fatalf("expected str_split value, got %#v", binding.Children[1])
+	}
+}
+
+func TestDesugarCondAndMultiLet(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(let (a 1 b 2)
+			(cond
+				((= a 1) (print b))
+				(else (print "no")))))`)
+	outer := root.Children[1]
+	if outer.Children[0].Value != "let" {
+		t.Fatalf("expected let, got %#v", outer)
+	}
+	if outer.Children[1].Children[0].Value != "a" {
+		t.Fatalf("outer binding should be a, got %#v", outer.Children[1])
+	}
+	inner := outer.Children[2]
+	if inner.Children[0].Value != "let" || inner.Children[1].Children[0].Value != "b" {
+		t.Fatalf("multi-let should nest b binding, got %#v", inner)
+	}
+	cond := inner.Children[2]
+	if cond.Children[0].Value != "if" {
+		t.Fatalf("cond should expand to if, got %#v", cond)
+	}
+}
+
+func TestDesugarSGetSPut(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(sput kv "k" "v")
+		(print (sget kv "k")))`)
+	put := root.Children[1]
+	if put.Children[0].Value != "store_put" {
+		t.Fatalf("sput should expand to store_put, got %#v", put)
+	}
+	if put.Children[3].Children[0].Value != "dict" {
+		t.Fatalf("sput should wrap dict, got %#v", put.Children[3])
+	}
+	printNode := root.Children[2]
+	get := printNode.Children[1]
+	if get.Children[0].Value != "let" {
+		t.Fatalf("sget should expand to let, got %#v", get)
+	}
+	ast.Desugar(root)
+	if root.Children[1].Children[0].Value != "store_put" {
+		t.Fatalf("second Desugar changed sput expansion")
+	}
+}
+
+func TestDesugarSInc(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(store_open kv "memory://session")
+		(sinc kv "visits"))`)
+	sinc := root.Children[2]
+	if sinc.Children[0].Value != "let" {
+		t.Fatalf("sinc should expand to let, got %#v", sinc)
+	}
+	src := ast.Stringify(sinc)
+	if !strings.Contains(src, "store_get") || !strings.Contains(src, "store_put") || !strings.Contains(src, "print") {
+		t.Fatalf("sinc expansion missing store/print forms: %s", src)
 	}
 }
