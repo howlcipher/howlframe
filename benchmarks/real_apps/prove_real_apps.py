@@ -125,15 +125,40 @@ APPS = {
         "howl_caps": "network,database",
         "test_pkg": "./apps/counter_api/",
     },
+    "fetch_cli": {
+        "howlframe": ROOT / "apps/fetch_cli/fetch_cli.howl",
+        "python": HERE / "fetch_cli/python/main.py",
+        "go": HERE / "fetch_cli/go/main.go",
+        "node": HERE / "fetch_cli/node/main.js",
+        "kind": "cli_fetch",
+        "howl_caps": "network",
+        "test_pkg": "./apps/fetch_cli/",
+    },
+    "template_cli": {
+        "howlframe": ROOT / "apps/template_cli/template_cli.howl",
+        "python": HERE / "template_cli/python/main.py",
+        "go": HERE / "template_cli/go/main.go",
+        "node": HERE / "template_cli/node/main.js",
+        "kind": "cli_template",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/template_cli/",
+    },
+    "stamp_api": {
+        "howlframe": ROOT / "apps/stamp_api/stamp_api.howl",
+        "python": HERE / "stamp_api/python/main.py",
+        "go": HERE / "stamp_api/go/main.go",
+        "node": HERE / "stamp_api/node/main.js",
+        "kind": "http_stamp",
+        "howl_caps": "network",
+        "test_pkg": "./apps/stamp_api/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
 
 
 def ensure_howlframe() -> str:
-    candidate = ROOT / "howlframe"
-    if candidate.exists():
-        return str(candidate)
+    # Always rebuild so prove tracks language changes on the branch tip.
     built = Path(tempfile.gettempdir()) / "howlframe-real-apps"
     subprocess.run(["go", "build", "-o", str(built), "howlframe.go"], cwd=ROOT, check=True)
     return str(built)
@@ -578,6 +603,152 @@ def parity_counter(lang: str, source: Path, howl_bin: str, caps: str) -> None:
         run_http_counter(lang, source, howl_bin, caps, Path(td))
 
 
+def start_fetch_origin():
+    """Tiny local origin for fetch_cli parity (418 + JSON body)."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            return
+
+        def do_GET(self):
+            body = b'{"ok":"1"}'
+            self.send_response(418)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_port}"
+
+
+def run_cli_fetch(lang: str, source: Path, howl_bin: str, caps: str, url: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "fetch.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), url], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), url], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "fetch_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), url], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), url], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_fetch(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    srv, url = start_fetch_origin()
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            r = run_cli_fetch(lang, source, howl_bin, caps, url, Path(td))
+            out = r.stdout + r.stderr
+            if r.returncode != 0 or "status=418" not in out or '"ok":"1"' not in out.replace(" ", ""):
+                raise RuntimeError(f"{lang} fetch failed: {r.returncode} {out!r}")
+    finally:
+        srv.shutdown()
+
+
+def run_cli_template(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "tpl.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "template_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_template(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        tpl = cwd / "tpl.txt"
+        tpl.write_text("Hi {{name}}!\n")
+        r = run_cli_template(lang, source, howl_bin, caps, [str(tpl), "name", "Ada"], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "Hi Ada!" not in out:
+            raise RuntimeError(f"{lang} template failed: {r.returncode} {out!r}")
+        nop = cwd / "nop.txt"
+        nop.write_text("no tokens\n")
+        r = run_cli_template(lang, source, howl_bin, caps, [str(nop), "name", "Ada"], cwd)
+        if r.returncode == 0 or "NO PLACEHOLDER" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} template miss failed: {r.returncode} {r.stdout!r}")
+
+
+def check_stamp(base: str) -> None:
+    with urllib.request.urlopen(base + "/health") as resp:
+        if "ok" not in resp.read().decode():
+            raise RuntimeError("/health bad")
+    with urllib.request.urlopen(base + "/now") as resp:
+        body = resp.read().decode()
+        if "unix" not in body:
+            raise RuntimeError(f"/now bad: {body}")
+    with urllib.request.urlopen(base + "/echo/ada") as resp:
+        body = resp.read().decode()
+        if "ada" not in body or "unix" not in body:
+            raise RuntimeError(f"/echo bad: {body}")
+
+
+def run_http_stamp(lang: str, source: Path, howl_bin: str, caps: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "stamp.hfbc"
+        compile_howl(howl_bin, source, bc)
+        proc = subprocess.Popen(
+            [howl_bin, "-run-bc", "-allow-caps", caps, str(bc)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "python":
+        proc = subprocess.Popen(
+            [sys.executable, str(source)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "go":
+        exe = cwd / "stamp_api"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        proc = subprocess.Popen([str(exe)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif lang == "node":
+        proc = subprocess.Popen(["node", str(source)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise ValueError(lang)
+    try:
+        deadline = time.time() + 3
+        last_err = None
+        while time.time() < deadline:
+            try:
+                check_stamp("http://127.0.0.1:8104")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.1)
+        raise RuntimeError(f"stamp checks failed: {last_err}")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+
+
+def parity_stamp(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        run_http_stamp(lang, source, howl_bin, caps, Path(td))
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -619,6 +790,9 @@ def main() -> int:
             "cli_wc": parity_wc,
             "cli_json": parity_json,
             "http_counter": parity_counter,
+            "cli_fetch": parity_fetch,
+            "cli_template": parity_template,
+            "http_stamp": parity_stamp,
         }[meta["kind"]]
         for lang in LANGS:
             try:

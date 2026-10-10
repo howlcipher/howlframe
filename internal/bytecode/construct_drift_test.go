@@ -114,12 +114,15 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"lines":        true, // ast.Desugar
 		"read_text":    true, // ast.Desugar
 		"inc":          true, // ast.Desugar
+		"map_has":      true, // ast.Desugar
 		"nz":           true, // ast.Desugar
 		"sget":         true, // ast.Desugar
 		"sinc":         true, // ast.Desugar
 		"sput":         true, // ast.Desugar
 		"str":          true, // ast.Desugar
 		"switch":       true, // ast.Desugar
+		"unless":       true, // ast.Desugar
+		"when":         true, // ast.Desugar
 		"patch":        true, // ast.ApplyPatches
 		"with_context": true, // ast.ApplyWithContext
 		"include":      true, // parser.ExpandIncludes
