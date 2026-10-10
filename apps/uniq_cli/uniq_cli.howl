@@ -1,0 +1,12 @@
+(do
+  (let (path (cli_args 0))
+    (if (= path "")
+      (do (print "Usage: uniq_cli <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (seen (list) rows (lines raw))
+          (do
+            (for row rows
+              (when (and (!= row "") (not (list_contains seen row)))
+                (do (append seen row) (print row))))
+            (exit 0)))))))

@@ -46,7 +46,9 @@
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `http_body` | No | None | Yes | No | - | AUTHORITATIVE |
 | `http_request` | Yes | network | No | No | - | AUTHORITATIVE |
+| `http_res` | No | None | Yes | No | - | AUTHORITATIVE |
 | `http_server` | Yes | None | No | No | - | AUTHORITATIVE |
+| `http_status` | No | None | Yes | No | - | AUTHORITATIVE |
 | `if` | Yes | None | No | No | - | AUTHORITATIVE |
 | `import` | No | None | No | Yes | - | AUTHORITATIVE |
 | `inc` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -70,6 +72,7 @@
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
 | `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
+| `not` | No | None | Yes | No | - | AUTHORITATIVE |
 | `nz` | No | None | Yes | No | - | AUTHORITATIVE |
 | `optimize_block` | Yes | None | No | No | - | AUTHORITATIVE |
 | `optimize_signature` | Yes | None | No | No | - | AUTHORITATIVE |

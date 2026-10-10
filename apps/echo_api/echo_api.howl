@@ -1,0 +1,6 @@
+(http_server 8106
+  (route "/health" (lambda (req) (res_json 200 (dict ("status" "ok")))))
+  (route "/echo" (lambda (req)
+    (res_json 200 (dict ("method" (req_method req)) ("q" (req_query req "q"))))))
+  (route "/echo/{name}" (lambda (req)
+    (res_json 200 (dict ("name" (req_path req "name")) ("method" (req_method req)))))))

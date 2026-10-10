@@ -116,8 +116,11 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"inc":           true, // ast.Desugar
 		"dec":           true, // ast.Desugar
 		"http_body":     true, // ast.Desugar
+		"http_status":   true, // ast.Desugar
+		"http_res":      true, // ast.Desugar
 		"list_contains": true, // ast.Desugar
 		"map_has":       true, // ast.Desugar
+		"not":           true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar
 		"sinc":          true, // ast.Desugar

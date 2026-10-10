@@ -233,6 +233,33 @@ APPS = {
         "howl_caps": "filesystem",
         "test_pkg": "./apps/has_line_cli/",
     },
+    "join_cli": {
+        "howlframe": ROOT / "apps/join_cli/join_cli.howl",
+        "python": HERE / "join_cli/python/main.py",
+        "go": HERE / "join_cli/go/main.go",
+        "node": HERE / "join_cli/node/main.js",
+        "kind": "cli_join",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/join_cli/",
+    },
+    "uniq_cli": {
+        "howlframe": ROOT / "apps/uniq_cli/uniq_cli.howl",
+        "python": HERE / "uniq_cli/python/main.py",
+        "go": HERE / "uniq_cli/go/main.go",
+        "node": HERE / "uniq_cli/node/main.js",
+        "kind": "cli_uniq",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/uniq_cli/",
+    },
+    "echo_api": {
+        "howlframe": ROOT / "apps/echo_api/echo_api.howl",
+        "python": HERE / "echo_api/python/main.py",
+        "go": HERE / "echo_api/go/main.go",
+        "node": HERE / "echo_api/node/main.js",
+        "kind": "http_echo",
+        "howl_caps": "network",
+        "test_pkg": "./apps/echo_api/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -1120,6 +1147,125 @@ def parity_has_line(lang: str, source: Path, howl_bin: str, caps: str) -> None:
             raise RuntimeError(f"{lang} has_line miss failed: {r.returncode} {out!r}")
 
 
+def run_cli_join(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "join.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "join_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_join(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("a\nb\nc\n")
+        r = run_cli_join(lang, source, howl_bin, caps, [",", str(sample)], cwd)
+        out = (r.stdout + r.stderr).strip()
+        if r.returncode != 0 or out != "a,b,c,":
+            raise RuntimeError(f"{lang} join failed: {r.returncode} {out!r}")
+
+
+def run_cli_uniq(lang: str, source: Path, howl_bin: str, caps: str, path: Path, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "uniq.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), str(path)], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), str(path)], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "uniq_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), str(path)], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), str(path)], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_uniq(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("a\nb\na\nc\nb\n")
+        r = run_cli_uniq(lang, source, howl_bin, caps, sample, cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or out.count("a\n") != 1 or out.count("b\n") != 1 or "c\n" not in out:
+            raise RuntimeError(f"{lang} uniq failed: {r.returncode} {out!r}")
+
+
+def check_echo(base: str) -> None:
+    with urllib.request.urlopen(base + "/health") as resp:
+        if "ok" not in resp.read().decode():
+            raise RuntimeError("/health bad")
+    with urllib.request.urlopen(base + "/echo?q=hi") as resp:
+        body = resp.read().decode()
+        if "GET" not in body or "hi" not in body:
+            raise RuntimeError(f"/echo bad: {body}")
+    with urllib.request.urlopen(base + "/echo/ada") as resp:
+        body = resp.read().decode()
+        if "ada" not in body:
+            raise RuntimeError(f"/echo/name bad: {body}")
+
+
+def run_http_echo(lang: str, source: Path, howl_bin: str, caps: str, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "echo.hfbc"
+        compile_howl(howl_bin, source, bc)
+        proc = subprocess.Popen(
+            [howl_bin, "-run-bc", "-allow-caps", caps, str(bc)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "python":
+        proc = subprocess.Popen(
+            [sys.executable, str(source)],
+            cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif lang == "go":
+        exe = cwd / "echo_api"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        proc = subprocess.Popen([str(exe)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif lang == "node":
+        proc = subprocess.Popen(["node", str(source)], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise ValueError(lang)
+    try:
+        deadline = time.time() + 3
+        last_err = None
+        while time.time() < deadline:
+            try:
+                check_echo("http://127.0.0.1:8106")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.1)
+        raise RuntimeError(f"echo checks failed: {last_err}")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            proc.kill()
+
+
+def parity_echo(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        run_http_echo(lang, source, howl_bin, caps, Path(td))
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -1173,6 +1319,9 @@ def main() -> int:
             "cli_head": parity_head,
             "cli_cut": parity_cut,
             "cli_has_line": parity_has_line,
+            "cli_join": parity_join,
+            "cli_uniq": parity_uniq,
+            "http_echo": parity_echo,
         }[meta["kind"]]
         for lang in LANGS:
             try:

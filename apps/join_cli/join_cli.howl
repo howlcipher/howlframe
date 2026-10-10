@@ -1,0 +1,7 @@
+(do
+  (let (sep (cli_args 0) path (cli_args 1))
+    (if (= path "")
+      (do (print "Usage: join_cli <sep> <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (do (print (str_join (lines raw) sep)) (exit 0))))))
