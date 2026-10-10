@@ -4,6 +4,8 @@ package ast
 //   - root (do ...) becomes (cli_app ...) so programs skip the two-token root
 //   - expression-bodied defun: last value form becomes (return <form>)
 //   - (assert expr) becomes a failing if/stderr/exit check
+//   - (lines expr) becomes (str_split (bytes_to_string expr) "\n")
+//   - (read_text path) becomes (bytes_to_string (read_file path))
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -19,25 +21,91 @@ func Desugar(node *Node) {
 	}
 	funcs := map[string]bool{}
 	collectDefunNames(node, funcs)
-	desugarNode(node)
-	rewriteAutoCalls(node, funcs)
+	desugarInContext(node, "root", 0)
+	rewriteAutoCallsInContext(node, funcs, "root", 0)
 }
 
-func desugarNode(node *Node) {
+// desugarInContext walks the tree with parent context so binding pairs and
+// parameter lists are not mistaken for (lines …) / (read_text …) / (assert …).
+func desugarInContext(node *Node, parentHead string, childIndex int) {
 	if node == nil || node.Type != "List" {
 		return
 	}
-	for _, child := range node.Children {
-		desugarNode(child)
-	}
-	if len(node.Children) == 0 || node.Children[0].Type != "SYMBOL" {
+	// Binding / param pairs are (name value-or-type). Never treat the name as
+	// a construct; only walk the value/type side for further sugar.
+	if parentHead == "binding" || parentHead == "params" {
+		if len(node.Children) >= 2 {
+			desugarInContext(node.Children[1], "let_value", 1)
+		}
 		return
 	}
-	switch node.Children[0].Value {
+	head := ""
+	if len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" {
+		head = node.Children[0].Value
+	}
+	for i, child := range node.Children {
+		childParent := head
+		if childParent == "" {
+			childParent = parentHead
+		}
+		switch head {
+		case "defun", "lambda", "lazy_synthesize":
+			if i == 2 {
+				childParent = "params"
+			}
+		case "let", "try_let":
+			if i == 1 {
+				childParent = "binding"
+			}
+		case "dict", "type_hints", "type_hint", "type_param":
+			childParent = "binding"
+		}
+		desugarInContext(child, childParent, i)
+	}
+	if head == "" {
+		return
+	}
+	switch head {
 	case "defun":
 		desugarDefunExprBody(node)
 	case "assert":
-		desugarAssert(node)
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarAssert(node)
+		}
+	case "lines":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarLines(node)
+		}
+	case "read_text":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarReadText(node)
+		}
+	}
+}
+
+func isSugarExprContext(parentHead string, childIndex int) bool {
+	switch parentHead {
+	case "root", "cli_app", "do", "http_server", "web_app", "wasm_app",
+		"if", "while", "print", "stderr", "return", "call", "assert",
+		"+", "-", "*", "/", "=", "==", "!=", "<", ">", "<=", ">=", "and", "or",
+		"list", "append", "map_set", "map_get", "map_delete", "list_get",
+		"str_split", "str_join", "encode_json", "to_int", "to_float", "to_string",
+		"bytes_to_string", "set", "exit", "spawn", "spawn_agent", "task",
+		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
+		"schema_bridge", "test", "let_value":
+		return true
+	case "for":
+		return childIndex == 2 || childIndex == 3
+	case "let":
+		return childIndex == 2
+	case "try_let":
+		return childIndex == 2 || childIndex == 3
+	case "catch":
+		return childIndex == 2
+	case "params", "binding":
+		return false
+	default:
+		return false
 	}
 }
 
@@ -57,21 +125,50 @@ func collectDefunNames(node *Node, funcs map[string]bool) {
 	}
 }
 
-func rewriteAutoCalls(node *Node, funcs map[string]bool) {
+func rewriteAutoCallsInContext(node *Node, funcs map[string]bool, parentHead string, childIndex int) {
 	if node == nil || node.Type != "List" || len(node.Children) == 0 {
 		return
 	}
-	for _, child := range node.Children {
-		rewriteAutoCalls(child, funcs)
-	}
-	head := node.Children[0]
-	if head.Type != "SYMBOL" || head.Value == "call" || reservedCallHeads[head.Value] {
+	if parentHead == "binding" || parentHead == "params" {
+		if len(node.Children) >= 2 {
+			rewriteAutoCallsInContext(node.Children[1], funcs, "let_value", 1)
+		}
 		return
 	}
-	if !funcs[head.Value] {
+	head := ""
+	if node.Children[0].Type == "SYMBOL" {
+		head = node.Children[0].Value
+	}
+	for i, child := range node.Children {
+		childParent := head
+		if childParent == "" {
+			childParent = parentHead
+		}
+		switch head {
+		case "defun", "lambda", "lazy_synthesize":
+			if i == 2 {
+				childParent = "params"
+			}
+		case "let", "try_let":
+			if i == 1 {
+				childParent = "binding"
+			}
+		case "dict", "type_hints", "type_hint", "type_param":
+			childParent = "binding"
+		}
+		rewriteAutoCallsInContext(child, funcs, childParent, i)
+	}
+	if !isSugarExprContext(parentHead, childIndex) {
 		return
 	}
-	callSym := &Node{Type: "SYMBOL", Value: "call", Line: head.Line, Column: head.Column, Filename: head.Filename}
+	sym := node.Children[0]
+	if sym.Type != "SYMBOL" || sym.Value == "call" || reservedCallHeads[sym.Value] {
+		return
+	}
+	if !funcs[sym.Value] {
+		return
+	}
+	callSym := &Node{Type: "SYMBOL", Value: "call", Line: sym.Line, Column: sym.Column, Filename: sym.Filename}
 	node.Children = append([]*Node{callSym}, node.Children...)
 }
 
@@ -82,6 +179,7 @@ var reservedCallHeads = map[string]bool{
 	"<": true, ">": true, "<=": true, ">=": true,
 	"==": true, "!=": true, "=": true, "and": true, "or": true,
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
+	"lines": true, "read_text": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -128,6 +226,45 @@ func desugarDefunExprBody(node *Node) {
 			{Type: "SYMBOL", Value: "return", Line: last.Line, Column: last.Column, Filename: last.Filename},
 			last,
 		},
+	}
+}
+
+func desugarLines(node *Node) {
+	if len(node.Children) != 2 {
+		ReportError("lines expects (lines expr)", node.Line, node.Column)
+		return
+	}
+	expr := node.Children[1]
+	bytesToString := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			expr,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		bytesToString,
+		{Type: "STRING", Value: "\n", Line: node.Line, Column: node.Column, Filename: node.Filename},
+	}
+}
+
+func desugarReadText(node *Node) {
+	if len(node.Children) != 2 {
+		ReportError("read_text expects (read_text path)", node.Line, node.Column)
+		return
+	}
+	path := node.Children[1]
+	readFile := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "read_file", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			path,
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		readFile,
 	}
 }
 
@@ -236,8 +373,8 @@ var exprBodyHeads = map[string]bool{
 	"call": true, "list": true, "dict": true,
 	"map_get": true, "list_get": true, "list_len": true, "map_keys": true,
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
-	"env": true, "read_file": true, "read_line": true, "cli_args": true,
-	"str_split": true, "str_join": true, "regex_match": true,
+	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
+	"lines": true, "str_split": true, "str_join": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

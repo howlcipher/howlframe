@@ -1,0 +1,6 @@
+(do
+  (try_let (content (read_file "names.txt"))
+    (catch err (print "Error: could not read names.txt"))
+    (for line (lines content)
+      (if (!= line "") (print "Hello," line) (print))))
+)

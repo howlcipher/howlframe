@@ -36,7 +36,7 @@ run_date,task,language,start_ts,end_ts,elapsed_sec,tokens,verified
 2026-07-30,task_c_function_test,csharp,1785414883.475309610,1785414896.929309607,13.454,63,pass
 2026-07-30,task_c_function_test,java,1785414911.929309607,1785414919.872309685,7.943,74,pass
 2026-10-10,task_a_hello_json,HowlFrame,0,0,5.271,88,pass
-2026-10-10,task_b_cli_file_sum,HowlFrame,0,0,5.012,80,pass
+2026-10-10,task_b_cli_file_sum,HowlFrame,0,0,5.012,56,pass
 2026-10-10,task_c_function_test,HowlFrame,0,0,4.865,34,pass
 2026-10-10,task_a_hello_json,go,0,0,5.132,144,pass
 2026-10-10,task_b_cli_file_sum,go,0,0,8.608,97,pass
