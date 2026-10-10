@@ -109,6 +109,7 @@ func TestConstructRegistryMatchesCompileNode(t *testing.T) {
 func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 	heads := compileNodeHeads(t)
 	consumedBeforeLowering := map[string]bool{
+		"assert":       true, // ast.Desugar
 		"patch":        true, // ast.ApplyPatches
 		"with_context": true, // ast.ApplyWithContext
 		"include":      true, // parser.ExpandIncludes

@@ -56,7 +56,7 @@
 | `SET_VAR` | string | 1 | 0 |  | Pops a value and updates an existing variable |
 | `SLEEP` |  | 1 | 0 |  | Sleeps for a duration |
 | `SPAWN` | int64 | 0 | 0 | process | Spawns a background task |
-| `SPAWN_AGENT` | string | 1 | 0 | process | Spawns an autonomous subagent |
+| `SPAWN_AGENT` | string, int64 | 1 | 0 | process | Spawns an autonomous subagent |
 | `SQL_QUERY` | string, string | 0 | 1 | database | Executes a SQL query |
 | `STDERR` |  | 1 | 0 |  | Prints a value to standard error |
 | `STORE_DELETE` | string | 1 | 0 | database | Deletes a structured record by key |
@@ -73,7 +73,3 @@
 | `WRITE_FILE` |  | 2 | 0 | filesystem | Writes to a file |
 
 The capability column is the opcode field from `internal/bytecode/opcode.go`. `MAP_KEYS` is pure (empty). `STORE_KEYS` is `database`, and a `file://` store additionally requires `filesystem`. The hand-written note for that URI grant is [bytecode capability notes](bytecode_capability_notes.md).
-
-## Artifact Serialization & Compatibility
-
-Bytecode artifacts (`.hfbc`) are versioned and serialized deterministically. For format details, version migration rules, and compatibility notes between runtime versions, see [Artifact Compatibility](artifact_compatibility.md).

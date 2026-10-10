@@ -901,6 +901,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 }
 
 func GenerateJSCode(node *ast.Node) (string, string) {
+	ast.Desugar(node)
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
 	jsNeedsCollection = false

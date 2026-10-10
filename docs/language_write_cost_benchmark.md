@@ -47,32 +47,33 @@ HowlFrame's token count is still mid-pack-good here. In the original 2026-07-23 
 
 ### C — Function + unit test
 
-| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+| Language | Write time (2026-07-23) | Tokens (2026-07-23) | Tokens (2026-07-30) | Tokens (2026-10-10) | Verified |
 |---|---|---|---|---|---|
-| HowlFrame | 4.9s | 4.9s | 123 | 110 | pass |
-| Go | 5.7s | 5.7s | 73 | 73 | pass |
-| Python | 11.6s | 11.6s | 37 | 37 | pass |
-| Node.js | 8.4s | 8.4s | 72 | 72 | pass |
-| C# | 13.5s | 13.5s | 63 | 63 | pass |
-| Java | 7.9s | 7.9s | 74 | 74 | pass |
+| HowlFrame | 4.9s | 123 | 110 | **34** | pass |
+| Go | 5.7s | 73 | 73 | 73 | pass |
+| Python | 11.6s | 37 | 37 | 37 | pass |
+| Node.js | 8.4s | 72 | 72 | 72 | pass |
+| C# | 13.5s | 63 | 63 | 63 | pass |
+| Java | 7.9s | 74 | 74 | 74 | pass |
 
-HowlFrame's native `(test ...)` block is fast to write, but the `defun` historically required three separate `(type_hint ...)` statements. As of 2026-07-30, a combined `type_hints` form and compound return expressions (`return (+ a b)`) have reduced the token count to 110.
+HowlFrame's native `(test ...)` block was fast to write, but typed `defun` historically required three separate `(type_hint ...)` statements (123 tokens on 2026-07-23). Combined `type_hints` and compound `(return (+ a b))` cut that to 110 on 2026-07-30. As of 2026-10-10, density sugar — root `(do …)` as `cli_app`, inline typed params, expression-bodied `defun`, `(assert …)`, and auto-`call` — brings Task C to **34 tokens**, under Python's 37.
 
 ### Totals (all 3 tasks)
 
-| Language | Total write time (2026-07-23) | Total write time (2026-07-30) | Total tokens (2026-07-23) | Total tokens (2026-07-30) |
+| Language | Total write time (2026-07-30) | Total tokens (2026-07-23) | Total tokens (2026-07-30) | Total tokens (2026-10-10) |
 |---|---|---|---|---|
-| HowlFrame | 50.1s | 15.2s | 295 | 274 |
-| Go | 19.4s | 19.4s | 314 | 314 |
-| Node.js | 17.0s | 17.0s | 270 | 270 |
-| Python | 20.1s | 20.1s | 262 | 262 |
-| C# | 23.2s | 23.2s | 320 | 320 |
-| Java | 21.7s | 21.7s | 438 | 438 |
+| HowlFrame | 15.2s | 295 | 274 | **202** |
+| Go | 19.4s | 314 | 314 | 314 |
+| Node.js | 17.0s | 270 | 270 | 270 |
+| Python | 20.1s | 262 | 262 | 262 |
+| C# | 23.2s | 320 | 320 | 320 |
+| Java | 21.7s | 438 | 438 | 438 |
 
 ## Takeaways
 
-- **HowlFrame led this measured run on write time.** With the July 2026 primitives implemented, its total write time was 15.2s, ahead of Node.js at 17.0s in this benchmark harness.
-- **The language is competitive on tokens:** HowlFrame (274) is just behind Python (262) and Node.js (270), and beats Go (314), C# (320), and Java (438).
-- **The feedback loop works.** The 2026-07-23 benchmark successfully identified missing primitives and type-hint overhead as the main drivers of AI write cost. By 2026-07-30, fixing these brought HowlFrame into the lead, demonstrating that constrained S-expression grammars do reduce generation overhead when the primitive surface is complete.
+- **HowlFrame now leads on total tokens** (202 vs Python 262 / Node 270) after the 2026-10-10 density sugar on Task C, while keeping the July write-time lead (15.2s).
+- **Task C is the adoption-critical win:** HowlFrame 34 < Python 37 on the previously worst case (`defun` + check).
+- **Task B remains the next gap** (HowlFrame 80 vs Python 61): CLI I/O still needs denser idioms.
+- **The feedback loop works.** Measured write-cost gaps drove `type_hints`, then expression-body/`assert`/`do`-root/auto-call sugar.
 
-*Last run: 2026-07-30. Re-run this benchmark after any compiler, backend, or VM change that touches `defun`/`type_hint`, `read_file`, `str_split`, or the `test` block, since all four are exercised directly above.*
+*Last fixture recount: 2026-10-10 (`cl100k_base`). Re-run after changes touching `defun`/`type_hint`/`assert`/`do`-root, `read_file`, `str_split`, or `test`.*

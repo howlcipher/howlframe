@@ -1605,6 +1605,10 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 			root := parser.NewParser(lexer.NewLexer(string(source)), name).ParseExpression()
 			parser.ExpandIncludes(root, filepath.Dir(fixture), 0)
 			ast.ResolveModules(root)
+			ast.ApplyPatches(root)
+			root = ast.ApplyWithContext(root, nil)
+			root = ast.ApplyWithContext(root, nil)
+			ast.Desugar(root)
 			violations := construct.Scan(root)
 
 			outputFile := filepath.Join(outDir, name+".bc.bin")

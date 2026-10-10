@@ -93,6 +93,7 @@ var table = []Entry{
 	{Name: "achieve", Support: Supported, Opaque: true, Note: "ACHIEVE; operands are stringified via ast.Stringify, not compiled"},
 	{Name: "and", Support: Supported, Note: "compileNode binop case"},
 	{Name: "append", Support: Supported, Note: "APPEND"},
+	{Name: "assert", Support: CompileTimeOnly, Note: "density sugar; expanded to if/stderr/exit by ast.Desugar before lowering"},
 	{Name: "assert_semantic", Support: Unsupported, Note: "LLM intent assertion; no opcode, Go backend only"},
 	{Name: "attr_escape", Support: Supported, Note: "ATTR_ESCAPE; same encoding as html_escape, named for attribute context"},
 	{Name: "bytes_to_string", Support: Supported, Note: "CONVERT"},

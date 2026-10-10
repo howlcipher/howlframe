@@ -773,6 +773,7 @@ func goMkdirCall(node *ast.Node, reqVar string, depth int) string {
 }
 
 func GenerateCode(node *ast.Node) (string, string) {
+	ast.Desugar(node)
 	CurrentSchemaDDLs = nil
 	gogenHTTPReq = false
 	gogenMapGet = false

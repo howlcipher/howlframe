@@ -1,15 +1,3 @@
-(cli_app
-  (defun add (a b)
-    (type_hints (a "int") (b "int") (return "int"))
-    (return (+ a b))
-  )
-
-  (test "add function returns correct sum"
-    (let (result (call add 2 3))
-      (if (!= result 5)
-        (print "Error: expected 5 got" result)
-        (print "OK: add(2, 3) == 5")
-      )
-    )
-  )
-)
+(do
+  (defun add ((a int) (b int)) int (+ a b))
+  (assert (= (add 2 3) 5)))

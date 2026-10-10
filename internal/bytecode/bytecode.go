@@ -312,7 +312,8 @@ type BCCompiler struct {
 	funcs map[string]*BCFunction
 }
 
-func CompileToBytecode(ast *ast.Node) *BCProgram {
+func CompileToBytecode(root *ast.Node) *BCProgram {
+	ast.Desugar(root)
 	comp := &BCCompiler{
 		prog: &BCProgram{
 			Version:   1,
@@ -321,9 +322,9 @@ func CompileToBytecode(ast *ast.Node) *BCProgram {
 		funcs: make(map[string]*BCFunction),
 	}
 
-	// Phase 1 interpreter expects ast to be a single block (cli_app) usually,
-	// but ast is just a ast.Node.
-	mainInsts := comp.compileNode(ast)
+	// Phase 1 interpreter expects root to be a single block (cli_app) usually,
+	// but root is just a ast.Node.
+	mainInsts := comp.compileNode(root)
 	comp.prog.Main = mainInsts
 	comp.prog.Functions = comp.funcs
 	return comp.prog
