@@ -35,3 +35,7 @@ python3 benchmarks/real_apps/prove_real_apps.py
 - `match` still Unsupported (prod-flip lock)
 - `schema` / SQL migrations still Unsupported
 - `fetch` still body-bytes only (`http_request` for status+body)
+
+## Follow-on
+
+- Round 8 continues in `docs/journals/2026-10-10_dogfood_apps_round8.md`
