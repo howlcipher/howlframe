@@ -1,0 +1,16 @@
+(http_server 8098
+  (route "/relay" (lambda (req)
+    (let (upstream (env "UPSTREAM_URL"))
+      (if (= upstream "")
+        (res_json 500 (dict ("error" "missing_UPSTREAM_URL")))
+        (let (method (req_method req))
+          (cond
+            ((= method "GET")
+              (let (r (http_request upstream "GET"))
+                (res (map_get r "status") "application/json" (bytes_to_string (map_get r "body")))))
+            ((= method "POST")
+              (try_let (body (parse_json Any req.body))
+                (catch e (res_json 400 (dict ("error" "invalid_json"))))
+                (let (r (http_request upstream "POST" (encode_json body)))
+                  (res (map_get r "status") "application/json" (bytes_to_string (map_get r "body"))))))
+            (else (res_json 405 (dict ("error" "method_not_allowed")))))))))))

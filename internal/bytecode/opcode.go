@@ -77,6 +77,7 @@ const (
 	OpHttpReqPath
 	OpHTMLEscape
 	OpAttrEscape
+	OpHttpRequest
 )
 
 type OperandType string
@@ -160,6 +161,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpHttpReqPath:      {Code: OpHttpReqPath, Name: "HTTP_REQ_PATH", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Reads one path parameter from an already-accepted request"},
 	OpHTMLEscape:       {Code: OpHTMLEscape, Name: "HTML_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for HTML text"},
 	OpAttrEscape:       {Code: OpAttrEscape, Name: "ATTR_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for a quoted HTML attribute"},
+	OpHttpRequest:      {Code: OpHttpRequest, Name: "HTTP_REQUEST", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Capability: capability.Network, Description: "HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack"},
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},

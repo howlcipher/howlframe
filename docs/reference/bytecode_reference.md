@@ -21,6 +21,7 @@
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
 | `FOR_NEXT` | string, int64 | 0 | 0 |  | Next iteration of a for loop |
 | `HTML_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for HTML text |
+| `HTTP_REQUEST` | int64 | var | 1 | network | HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack |
 | `HTTP_REQ_HEADER` |  | 2 | 1 |  | Reads one request header from an already-accepted request |
 | `HTTP_REQ_METHOD` |  | 0 | 1 | network | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |

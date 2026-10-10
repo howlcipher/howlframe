@@ -828,6 +828,33 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("IO_ERROR: fetch body read failed: %v", err), node)
 		}
 		return b
+	case "http_request":
+		if len(node.Children) != 3 && len(node.Children) != 4 {
+			InterpErr("http_request expects (http_request url method [body])", node)
+		}
+		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
+		method := fmt.Sprint(interp.eval(node.Children[2], env))
+		var body io.Reader
+		if len(node.Children) == 4 {
+			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
+		}
+		req, err := http.NewRequest(method, urlStr, body)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: http_request creation failed: %v", err), node)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: http_request failed: %v", err), node)
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			InterpErr(fmt.Sprintf("IO_ERROR: http_request body read failed: %v", err), node)
+		}
+		return map[string]any{
+			"status": resp.StatusCode,
+			"body":   b,
+		}
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])
@@ -2213,6 +2240,46 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			vm.chargeBytes(len(b), ip, inst.Op)
 			vm.push(bytesToAnySlice(b))
+		case bytecode.OpHttpRequest:
+			var bodyReader io.Reader
+			if inst.IntOperand == 1 {
+				bodyReader = strings.NewReader(vm.popCheckedString(inst, ip, "http_request expected string body"))
+			}
+			method := vm.popCheckedString(inst, ip, "http_request expected string method")
+			urlStr := vm.popCheckedString(inst, ip, "http_request expected string url")
+			max := vm.Limits.MaxFetchBodyBytes
+			if max <= 0 {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
+			}
+			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
+			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request creation failed: %v", err))
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request failed: %v", err))
+			}
+			defer resp.Body.Close()
+			readLimit := int64(max)
+			if readLimit < math.MaxInt64 {
+				readLimit++
+			}
+			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
+			vm.checkDeadline(ip, inst.Op)
+			if len(b) > max {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
+			}
+			if err != nil {
+				vm.checkDeadline(ip, inst.Op)
+				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request body read failed: %v", err))
+			}
+			vm.chargeBytes(len(b), ip, inst.Op)
+			vm.push(map[string]any{
+				"status": resp.StatusCode,
+				"body":   bytesToAnySlice(b),
+			})
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
 			path = vm.requireFilesystem(path, false, inst.Op)

@@ -30,6 +30,7 @@ func TestForConstruct_Known(t *testing.T) {
 	}{
 		{"db_connect", Database},
 		{"fetch", Network},
+		{"http_request", Network},
 		{"read_file", Filesystem},
 		{"exec", Process},
 		{"env", Environment},

@@ -213,6 +213,7 @@ func TestEffectGateEmptyGrantConformance(t *testing.T) {
 	t.Setenv("HOWL_EFFECT_SECRET", "must-not-print")
 	sources := map[bytecode.Opcode]string{
 		bytecode.OpFetch:            `(fetch ` + quote(server.URL) + ` "GET")`,
+		bytecode.OpHttpRequest:      `(http_request ` + quote(server.URL) + ` "GET")`,
 		bytecode.OpReadFile:         `(read_file ` + quote(marker) + `)`,
 		bytecode.OpWriteFile:        `(write_file ` + quote(marker) + ` "changed")`,
 		bytecode.OpMkdir:            `(mkdir ` + quote(marker) + `)`,
@@ -288,7 +289,7 @@ func TestEffectGateEmptyGrantConformance(t *testing.T) {
 	}
 	// Interpreter constructs with an existing executable harness. Bytecode-only
 	// SQL, HTTP context and native stores are covered above, not interpreted.
-	for _, op := range []bytecode.Opcode{bytecode.OpFetch, bytecode.OpReadFile, bytecode.OpWriteFile, bytecode.OpMkdir, bytecode.OpExec, bytecode.OpSpawn, bytecode.OpSpawnAgent, bytecode.OpEnv, bytecode.OpConfidence, bytecode.OpNeuralCircuit, bytecode.OpEphemeralCircuit, bytecode.OpLlmGenerate, bytecode.OpAchieve, bytecode.OpCall} {
+	for _, op := range []bytecode.Opcode{bytecode.OpFetch, bytecode.OpHttpRequest, bytecode.OpReadFile, bytecode.OpWriteFile, bytecode.OpMkdir, bytecode.OpExec, bytecode.OpSpawn, bytecode.OpSpawnAgent, bytecode.OpEnv, bytecode.OpConfidence, bytecode.OpNeuralCircuit, bytecode.OpEphemeralCircuit, bytecode.OpLlmGenerate, bytecode.OpAchieve, bytecode.OpCall} {
 		t.Run("interpret/"+bytecode.Registry[op].Name, func(t *testing.T) {
 			source := sources[op]
 			cap := bytecode.Registry[op].Capability

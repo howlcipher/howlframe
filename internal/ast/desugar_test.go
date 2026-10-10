@@ -192,6 +192,25 @@ func TestDesugarSGetSPut(t *testing.T) {
 	}
 }
 
+func TestDesugarCondInsideLambda(t *testing.T) {
+	root := parseDesugar(t, "(http_server 8090 (route \"/x\" (lambda (req) (cond ((= (req_method req) \"GET\") (res_json 200 (dict (\"ok\" \"1\")))) (else (res_json 405 (dict (\"error\" \"no\"))))))))")
+	if root == nil || len(root.Children) < 3 {
+		t.Fatalf("unexpected root: %#v", root)
+	}
+	route := root.Children[2]
+	if route == nil || len(route.Children) < 3 {
+		t.Fatalf("unexpected route: %#v", route)
+	}
+	lambda := route.Children[2]
+	if lambda == nil || len(lambda.Children) < 3 {
+		t.Fatalf("unexpected lambda: %#v", lambda)
+	}
+	body := lambda.Children[2]
+	if body == nil || len(body.Children) == 0 || body.Children[0].Value != "if" {
+		t.Fatalf("cond inside lambda should desugar to if, got %#v", body)
+	}
+}
+
 func TestDesugarSInc(t *testing.T) {
 	root := parseDesugar(t, `(cli_app
 		(store_open kv "memory://session")

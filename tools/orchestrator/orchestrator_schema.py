@@ -101,6 +101,11 @@ class HtmlEscapeInstruction(BaseModel):
     pass
 
 
+class HttpRequestInstruction(BaseModel):
+    op: Literal["HTTP_REQUEST"]
+    int_operand: int
+
+
 class HttpReqHeaderInstruction(BaseModel):
     op: Literal["HTTP_REQ_HEADER"]
     pass
@@ -379,6 +384,7 @@ Instruction = Annotated[
         ForInitInstruction,
         ForNextInstruction,
         HtmlEscapeInstruction,
+        HttpRequestInstruction,
         HttpReqHeaderInstruction,
         HttpReqMethodInstruction,
         HttpReqPathInstruction,

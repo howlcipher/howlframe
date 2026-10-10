@@ -59,8 +59,14 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			childParent = parentHead
 		}
 		switch head {
-		case "defun", "lambda", "lazy_synthesize":
+		case "defun", "lazy_synthesize":
+			// (defun name (params) body...) — params at index 2
 			if i == 2 {
+				childParent = "params"
+			}
+		case "lambda":
+			// (lambda (params) body...) — params at index 1
+			if i == 1 {
 				childParent = "params"
 			}
 		case "let", "try_let":
@@ -121,12 +127,15 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"bytes_to_string", "set", "exit", "spawn", "spawn_agent", "task",
 		"res", "res_json", "route", "middleware", "optimize_block", "optimize_signature",
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
-		"store_get", "store_put", "store_delete":
+		"store_get", "store_put", "store_delete", "http_request", "fetch":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
 	case "let":
 		return childIndex == 2
+	case "lambda":
+		// Body forms start at index 2: (lambda (params) body...)
+		return childIndex >= 2
 	case "try_let":
 		return childIndex == 2 || childIndex == 3
 	case "catch":
@@ -174,8 +183,12 @@ func rewriteAutoCallsInContext(node *Node, funcs map[string]bool, parentHead str
 			childParent = parentHead
 		}
 		switch head {
-		case "defun", "lambda", "lazy_synthesize":
+		case "defun", "lazy_synthesize":
 			if i == 2 {
+				childParent = "params"
+			}
+		case "lambda":
+			if i == 1 {
 				childParent = "params"
 			}
 		case "let", "try_let":
@@ -218,6 +231,8 @@ var reservedCallHeads = map[string]bool{
 	"map_get": true, "map_set": true, "map_delete": true, "map_keys": true,
 	"list_get": true, "list_len": true, "append": true,
 	"store_open": true, "store_get": true, "store_put": true, "store_delete": true,
+	"http_request": true, "fetch": true, "req_method": true, "req_path": true,
+	"req_query": true, "req_header": true, "res": true, "res_json": true,
 }
 
 func desugarDefunExprBody(node *Node) {
@@ -675,4 +690,5 @@ var exprBodyHeads = map[string]bool{
 	"parse_json": true, "encode_json": true, "is_nil": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
+	"http_request": true, "fetch": true,
 }

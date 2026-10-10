@@ -482,6 +482,20 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			insts = append(insts, BCInstruction{OpString: "FETCH", Op: OpFetch})
+		case "http_request":
+			// (http_request url method [body]) → status+body dict.
+			// IntOperand 1 means a body value is on the stack above method.
+			if len(node.Children) != 3 && len(node.Children) != 4 {
+				ast.ReportError("http_request expects (http_request url method [body])", node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			hasBody := int64(0)
+			if len(node.Children) == 4 {
+				insts = append(insts, c.compileNode(node.Children[3])...)
+				hasBody = 1
+			}
+			insts = append(insts, BCInstruction{OpString: "HTTP_REQUEST", Op: OpHttpRequest, IntOperand: hasBody})
 		case "read_file":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "READ_FILE", Op: OpReadFile})
