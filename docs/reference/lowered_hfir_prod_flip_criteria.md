@@ -38,7 +38,7 @@ The experimental artifact and the production artifact match on every program pro
 * Operand order stays the AST order on the existing opcodes: `EXEC` is command then arguments, with `IntOperand` equal to the argument count; `FETCH` is URL then method; `REGEX_MATCH` is the pattern, then the string. `TIME_NOW` pops 0, pushes 1, and has no operand. `SLEEP` pops 1, pushes 0, and has an empty operand list; the duration is the compiled child before that instruction. `JUMP_IF_FALSE`, `JUMP`, `FOR_INIT`, `FOR_NEXT`, `CALL`, and `RETURN` keep the relative offsets the AST compiler already emits.
 * The promote-blocker fence below is empty. Each name leaves the fence only after `LowerToBytecode` emits that construct's existing opcode and a parity case matches production `-compile-bc` on grant and on denial when the construct has a capability.
 
-These names already lower under a different HFIR kind, so they are outside the fence: `cli_app` is `program`, `do` is `sequence`, `try_let` is `try`, the arithmetic and comparison heads are `binary`, and `to_int`, `to_float`, `to_string`, `bytes_to_string`, and `encode_json` are `convert`.
+These names already lower under a different HFIR kind, so they are outside the fence: `cli_app` is `program`, `do` is `sequence`, `try_let` is `try`, the arithmetic and comparison heads are `binary`, and `to_int`, `to_float`, `to_string`, `bytes_to_string`, `encode_json`, `to_lower`, `to_upper`, and `str_trim` are `convert`.
 
 ### Mediated host effects
 
