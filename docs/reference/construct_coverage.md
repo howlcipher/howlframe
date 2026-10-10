@@ -48,6 +48,7 @@
 | `is_nil` | Yes | None | No | No | - | AUTHORITATIVE |
 | `lazy_synthesize` | Yes | None | No | No | - | AUTHORITATIVE |
 | `let` | Yes | None | No | No | - | AUTHORITATIVE |
+| `lines` | No | None | Yes | No | - | AUTHORITATIVE |
 | `list` | Yes | None | No | No | - | AUTHORITATIVE |
 | `list_get` | Yes | None | No | No | - | AUTHORITATIVE |
 | `list_len` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -69,6 +70,7 @@
 | `print` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
+| `read_text` | No | None | Yes | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_header` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_method` | Yes | network | No | No | - | AUTHORITATIVE |

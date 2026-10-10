@@ -34,16 +34,16 @@ HowlFrame's smallest and clearest win: this is its actual designed niche (HTTP/J
 
 ### B — CLI file-parsing tool
 
-| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+| Language | Write time (2026-07-23) | Tokens (2026-07-23) | Tokens (2026-07-30) | Tokens (2026-10-10) | Verified |
 |---|---|---|---|---|---|
-| HowlFrame | 39.9s | 5.0s | 88 | 80 | pass |
-| Go | 8.6s | 8.6s | 97 | 97 | pass |
-| Python | 4.0s | 4.0s | 61 | 61 | pass |
-| Node.js | 4.6s | 4.6s | 87 | 87 | pass |
-| C# | 4.4s | 4.4s | 80 | 80 | pass |
-| Java | 6.8s | 6.8s | 127 | 127 | pass |
+| HowlFrame | 39.9s → 5.0s | 88 | 80 | **56** | pass |
+| Go | 8.6s | 97 | 97 | 97 | pass |
+| Python | 4.0s | 61 | 61 | 61 | pass |
+| Node.js | 4.6s | 87 | 87 | 87 | pass |
+| C# | 4.4s | 80 | 80 | 80 | pass |
+| Java | 6.8s | 127 | 127 | 127 | pass |
 
-HowlFrame's token count is still mid-pack-good here. In the original 2026-07-23 run, its write time was an outlier because of two bugs that required LLM workarounds. As of 2026-07-30, these missing primitives (e.g., `bytes_to_string` and `to_int`) have been implemented, dropping the write time from 39.9s to a blistering 5.0s.
+HowlFrame's write time was an outlier on 2026-07-23 until `bytes_to_string` / `to_int` landed (5.0s on 2026-07-30). As of 2026-10-10, `(lines …)` density sugar plus root `(do …)` and bare `(print)` bring Task B to **56 tokens**, under Python's 61.
 
 ### C — Function + unit test
 
@@ -62,7 +62,7 @@ HowlFrame's native `(test ...)` block was fast to write, but typed `defun` histo
 
 | Language | Total write time (2026-07-30) | Total tokens (2026-07-23) | Total tokens (2026-07-30) | Total tokens (2026-10-10) |
 |---|---|---|---|---|
-| HowlFrame | 15.2s | 295 | 274 | **202** |
+| HowlFrame | 15.2s | 295 | 274 | **178** |
 | Go | 19.4s | 314 | 314 | 314 |
 | Node.js | 17.0s | 270 | 270 | 270 |
 | Python | 20.1s | 262 | 262 | 262 |
@@ -71,9 +71,10 @@ HowlFrame's native `(test ...)` block was fast to write, but typed `defun` histo
 
 ## Takeaways
 
-- **HowlFrame now leads on total tokens** (202 vs Python 262 / Node 270) after the 2026-10-10 density sugar on Task C, while keeping the July write-time lead (15.2s).
-- **Task C is the adoption-critical win:** HowlFrame 34 < Python 37 on the previously worst case (`defun` + check).
-- **Task B remains the next gap** (HowlFrame 80 vs Python 61): CLI I/O still needs denser idioms.
-- **The feedback loop works.** Measured write-cost gaps drove `type_hints`, then expression-body/`assert`/`do`-root/auto-call sugar.
+- **HowlFrame now leads on total tokens** (178 vs Python 262 / Node 270) after 2026-10-10 density sugar on Tasks B and C, while keeping the July write-time lead (15.2s).
+- **Task C win:** HowlFrame 34 < Python 37 (`defun` + `assert`).
+- **Task B win:** HowlFrame 56 < Python 61 (`lines` + root `do`).
+- **Task A remains a large win** (88 vs Python 164) on the HTTP/JSON niche.
+- **The feedback loop works.** Measured gaps drove `type_hints`, then expression-body/`assert`/`do`-root/auto-call/`lines` sugar.
 
-*Last fixture recount: 2026-10-10 (`cl100k_base`). Re-run after changes touching `defun`/`type_hint`/`assert`/`do`-root, `read_file`, `str_split`, or `test`.*
+*Last fixture recount: 2026-10-10 (`cl100k_base`). Re-run after changes touching `defun`/`type_hint`/`assert`/`do`-root/`lines`/`read_text`, `read_file`, `str_split`, or `test`.*
