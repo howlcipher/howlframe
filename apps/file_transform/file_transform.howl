@@ -1,6 +1,6 @@
 (do
   (let (in (cli_args 0) out (cli_args 1))
-    (if (or (= in "") (= out ""))
+    (if (or (blank in) (blank out))
       (do (print "Usage: file_transform <in.csv> <out.jsonl>") (exit 2))
       (try_let (raw (read_file in))
         (catch e (do (print "error=" e) (exit 2)))

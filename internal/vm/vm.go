@@ -611,6 +611,19 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			return string(b)
 		}
 		return fmt.Sprint(val)
+	case "to_lower", "to_upper", "str_trim":
+		if len(node.Children) != 2 {
+			InterpErr(fmt.Sprintf("%s expects (%s text)", node.Children[0].Value, node.Children[0].Value), node)
+		}
+		s := fmt.Sprint(interp.eval(node.Children[1], env))
+		switch node.Children[0].Value {
+		case "to_lower":
+			return strings.ToLower(s)
+		case "to_upper":
+			return strings.ToUpper(s)
+		default:
+			return strings.TrimSpace(s)
+		}
 	case "list_len":
 		if len(node.Children) != 2 {
 			InterpErr("list_len expects (list_len value)", node)
@@ -3515,6 +3528,12 @@ func BcConvert(target string, a any) any {
 			panic(NewRuntimeError("TYPE_ERROR", "main", 0, bytecode.OpConvert, "bytes_to_string expected []any, got %T", a))
 		}
 		return string(bytesFromNumberList(items, 0, bytecode.BCInstruction{Op: bytecode.OpConvert}, "bytes_to_string"))
+	case "to_lower":
+		return strings.ToLower(fmt.Sprint(a))
+	case "to_upper":
+		return strings.ToUpper(fmt.Sprint(a))
+	case "str_trim":
+		return strings.TrimSpace(fmt.Sprint(a))
 	}
 	return a
 }

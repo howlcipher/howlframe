@@ -791,6 +791,15 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("String(%s)", valStr)
+	case "to_lower":
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("String(%s).toLowerCase()", valStr)
+	case "to_upper":
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("String(%s).toUpperCase()", valStr)
+	case "str_trim":
+		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		return fmt.Sprintf("String(%s).trim()", valStr)
 	case "encode_json":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("JSON.stringify(%s)", valStr)

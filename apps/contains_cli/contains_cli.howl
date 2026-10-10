@@ -1,6 +1,6 @@
 (do
   (let (needle (cli_args 0) path (cli_args 1))
-    (if (or (= needle "") (= path ""))
+    (if (or (blank needle) (blank path))
       (do (print "Usage: contains_cli <needle> <file>") (exit 2))
       (try_let (s (read_text path))
         (catch e (do (print "error=" e) (exit 2)))

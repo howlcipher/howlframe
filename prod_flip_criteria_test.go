@@ -328,6 +328,9 @@ var hfirKindAliases = map[string]string{
 	"to_string":       "convert",
 	"bytes_to_string": "convert",
 	"encode_json":     "convert",
+	"to_lower":        "convert",
+	"to_upper":        "convert",
+	"str_trim":        "convert",
 }
 
 func promoteBlockers(t *testing.T) []string {

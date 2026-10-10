@@ -788,7 +788,7 @@ func allowedBinary(value string) bool {
 
 func allowedConvert(value string) bool {
 	switch value {
-	case "to_int", "to_float", "to_string", "bytes_to_string", "encode_json":
+	case "to_int", "to_float", "to_string", "bytes_to_string", "encode_json", "to_lower", "to_upper", "str_trim":
 		return true
 	}
 	return false

@@ -712,7 +712,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 	case "to_float", "confidence":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.Float)
-	case "to_string", "bytes_to_string", "encode_json":
+	case "to_string", "bytes_to_string", "encode_json", "to_lower", "to_upper", "str_trim":
 		a.inferChild(node, 1, env)
 		return ast.Layout(ast.String)
 	case "html_escape", "attr_escape":
@@ -1050,7 +1050,8 @@ func isKeyword(name string) bool {
 		"print", "env", "read_file", "write_file", "mkdir", "exec", "call",
 		"return", "do", "while", "for", "match", "default", "set", "list",
 		"dict", "list_get", "map_get", "map_keys", "map_set", "map_delete", "append",
-		"to_int", "to_float", "to_string", "bytes_to_string", "encode_json", "html_escape", "attr_escape", "str_split",
+		"to_int", "to_float", "to_string", "bytes_to_string", "to_lower", "to_upper", "str_trim",
+		"encode_json", "html_escape", "attr_escape", "str_split",
 		"str_join", "regex_match", "confidence", "achieve", "fuzzy_cast",
 		"time_now", "lazy_synthesize", "semantic_match", "neural_circuit",
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
