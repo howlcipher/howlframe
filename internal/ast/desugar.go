@@ -22,8 +22,11 @@ package ast
 //   - (str_replace s old new) → join of split parts with new
 //   - (starts_with s p) / (ends_with s p) → prefix/suffix tests
 //   - (http_body r) → (bytes_to_string (map_get r "body"))
+//   - (http_status r) → (map_get r "status")
+//   - (http_res r) → (res status application/json body) from http_request result
 //   - (list_contains lst x) → membership scan via for/set
 //   - (dec x) → (set x (- x 1)) for symbol x
+//   - (not x) → boolean negation via if
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -180,10 +183,23 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarHTTPBody(node)
 		}
+	case "http_status":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarHTTPStatus(node)
+		}
+	case "http_res":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarHTTPRes(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
 	case "list_contains":
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarListContains(node)
 			desugarInContext(node, parentHead, childIndex)
+		}
+	case "not":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarNot(node)
 		}
 	}
 }
@@ -201,7 +217,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
 		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
 		"str_contains", "str_replace", "starts_with", "ends_with",
-		"http_body", "list_contains":
+		"http_body", "http_status", "http_res", "list_contains", "not":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -298,7 +314,7 @@ var reservedCallHeads = map[string]bool{
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
 	"switch": true, "inc": true, "dec": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
-	"http_body": true, "list_contains": true,
+	"http_body": true, "http_status": true, "http_res": true, "list_contains": true, "not": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -767,6 +783,88 @@ func desugarHTTPBody(node *Node) {
 	node.Children = []*Node{
 		{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
 		get,
+	}
+}
+
+func desugarHTTPStatus(node *Node) {
+	// (http_status r) → (map_get r "status")
+	if len(node.Children) != 2 {
+		ReportError("http_status expects (http_status response)", node.Line, node.Column)
+		return
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "map_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		node.Children[1],
+		{Type: "STRING", Value: "status", Line: node.Line, Column: node.Column, Filename: node.Filename},
+	}
+}
+
+func desugarHTTPRes(node *Node) {
+	// (http_res r) → (let (__r r)
+	//   (res (http_status __r) "application/json" (http_body __r)))
+	if len(node.Children) != 2 {
+		ReportError("http_res expects (http_res response)", node.Line, node.Column)
+		return
+	}
+	rSym := &Node{Type: "SYMBOL", Value: "__r", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	res := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "res", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{
+				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+				Children: []*Node{
+					{Type: "SYMBOL", Value: "http_status", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					rSym,
+				},
+			},
+			{Type: "STRING", Value: "application/json", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{
+				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+				Children: []*Node{
+					{Type: "SYMBOL", Value: "http_body", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					rSym,
+				},
+			},
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{rSym, node.Children[1]},
+		},
+		res,
+	}
+}
+
+func desugarNot(node *Node) {
+	// (not x) → (if x (= 0 1) (= 1 1))
+	if len(node.Children) != 2 {
+		ReportError("not expects (not expr)", node.Line, node.Column)
+		return
+	}
+	falseLit := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	trueLit := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		node.Children[1],
+		falseLit,
+		trueLit,
 	}
 }
 
@@ -1266,7 +1364,7 @@ var exprBodyHeads = map[string]bool{
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
 	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
-	"list_contains": true, "regex_match": true,
+	"http_status": true, "list_contains": true, "not": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

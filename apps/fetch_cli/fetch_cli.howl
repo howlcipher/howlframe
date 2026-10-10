@@ -6,5 +6,5 @@
         (when (= method "") (set method "GET"))
         (let (r (http_request url method))
           (do
-            (print (str "status=" (map_get r "status")))
+            (print (str "status=" (http_status r)))
             (print (http_body r))))))))

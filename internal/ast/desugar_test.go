@@ -318,6 +318,17 @@ func TestDesugarHTTPBodyListContainsDec(t *testing.T) {
 	}
 }
 
+func TestDesugarHTTPStatusResNot(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (http_status r))
+		(http_res r)
+		(print (not (= 1 2))))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "http_status") || strings.Contains(src, "http_res") || strings.Contains(src, "(not ") {
+		t.Fatalf("http_status/http_res/not should desugar: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)
