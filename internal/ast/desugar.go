@@ -20,6 +20,7 @@ package ast
 //   - (and a b c…) / (or a b c…) → nested binary and/or
 //   - (str_contains hay needle) → (> (list_len (str_split hay needle)) 1)
 //   - (str_replace s old new) → join of split parts with new
+//   - (starts_with s p) / (ends_with s p) → prefix/suffix tests
 //   - (fname args...) becomes (call fname args...) when fname is a defun
 //
 // Desugar is idempotent and mutates the tree in place. Call it after
@@ -163,6 +164,11 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarStrReplace(node)
 		}
+	case "starts_with", "ends_with":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarStartsEndsWith(node)
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
@@ -178,7 +184,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"schema_bridge", "test", "let_value", "sget", "sput", "sinc",
 		"store_get", "store_put", "store_delete", "http_request", "fetch",
 		"switch", "inc", "str", "nz", "map_has", "when", "unless",
-		"str_contains", "str_replace":
+		"str_contains", "str_replace", "starts_with", "ends_with":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -274,7 +280,7 @@ var reservedCallHeads = map[string]bool{
 	"assert": true, "call": true, "cli_app": true, "do": true, "defun": true,
 	"lines": true, "read_text": true, "cond": true, "sget": true, "sput": true, "sinc": true,
 	"switch": true, "inc": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
-	"str_contains": true, "str_replace": true,
+	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"test": true, "try_let": true, "type_hint": true, "type_hints": true,
@@ -894,6 +900,91 @@ func desugarStrReplace(node *Node) {
 	}
 }
 
+func desugarStartsEndsWith(node *Node) {
+	// (starts_with s p) → (let (__s s __p p __parts (str_split __s __p))
+	//   (or (= __p "") (= (list_get __parts 0) "")))
+	// (ends_with s p) → (let (__s s __p p)
+	//   (or (= __p "") (str_contains (str __s "\x1e") (str __p "\x1e"))))
+	// Sentinel is injected by desugar (not user source) so suffix match is exact.
+	if len(node.Children) != 3 {
+		ReportError(node.Children[0].Value+" expects ("+node.Children[0].Value+" s prefix)", node.Line, node.Column)
+		return
+	}
+	head := node.Children[0].Value
+	sSym := &Node{Type: "SYMBOL", Value: "__s", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	pSym := &Node{Type: "SYMBOL", Value: "__p", Line: node.Line, Column: node.Column, Filename: node.Filename}
+	emptyP := &Node{
+		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+		Children: []*Node{
+			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			pSym,
+			{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		},
+	}
+	var test *Node
+	bindings := []*Node{sSym, node.Children[1], pSym, node.Children[2]}
+	if head == "starts_with" {
+		partsSym := &Node{Type: "SYMBOL", Value: "__parts", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		split := &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				sSym, pSym,
+			},
+		}
+		bindings = append(bindings, partsSym, split)
+		test = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				{
+					Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+					Children: []*Node{
+						{Type: "SYMBOL", Value: "list_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
+						partsSym,
+						{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					},
+				},
+				{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
+			},
+		}
+	} else {
+		sentinel := &Node{Type: "STRING", Value: "\x1e", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		hay := &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "str", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				sSym, sentinel,
+			},
+		}
+		needle := &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "str", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				pSym, sentinel,
+			},
+		}
+		test = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "str_contains", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				hay, needle,
+			},
+		}
+	}
+	node.Children = []*Node{
+		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		{Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename, Children: bindings},
+		{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "or", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				emptyP, test,
+			},
+		},
+	}
+}
+
 func desugarNaryLogic(node *Node) {
 	// (or a b c…) → (or a (or b (or c…))); same for and.
 	if len(node.Children) < 4 {
@@ -1047,7 +1138,7 @@ var exprBodyHeads = map[string]bool{
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
-	"str_replace": true, "regex_match": true,
+	"str_replace": true, "starts_with": true, "ends_with": true, "regex_match": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

@@ -1,0 +1,8 @@
+(do
+  (let (key (cli_args 0))
+    (if (= key "")
+      (do (print "Usage: env_cli <name>") (exit 2))
+      (let (v (env key))
+        (if (= v "")
+          (do (print "MISSING") (exit 1))
+          (do (print v) (exit 0)))))))
