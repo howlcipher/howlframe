@@ -103,7 +103,9 @@
 | `store_open` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_put` | Yes | database | No | No | - | AUTHORITATIVE |
 | `str` | No | None | Yes | No | - | AUTHORITATIVE |
+| `str_contains` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
+| `str_replace` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |
 | `switch` | No | None | Yes | No | - | AUTHORITATIVE |

@@ -152,6 +152,33 @@ APPS = {
         "howl_caps": "network",
         "test_pkg": "./apps/stamp_api/",
     },
+    "mkdir_cli": {
+        "howlframe": ROOT / "apps/mkdir_cli/mkdir_cli.howl",
+        "python": HERE / "mkdir_cli/python/main.py",
+        "go": HERE / "mkdir_cli/go/main.go",
+        "node": HERE / "mkdir_cli/node/main.js",
+        "kind": "cli_mkdir",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/mkdir_cli/",
+    },
+    "contains_cli": {
+        "howlframe": ROOT / "apps/contains_cli/contains_cli.howl",
+        "python": HERE / "contains_cli/python/main.py",
+        "go": HERE / "contains_cli/go/main.go",
+        "node": HERE / "contains_cli/node/main.js",
+        "kind": "cli_contains",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/contains_cli/",
+    },
+    "file_transform": {
+        "howlframe": ROOT / "apps/file_transform/file_transform.howl",
+        "python": HERE / "file_transform/python/main.py",
+        "go": HERE / "file_transform/go/main.go",
+        "node": HERE / "file_transform/node/main.js",
+        "kind": "cli_transform",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/file_transform/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -749,6 +776,105 @@ def parity_stamp(lang: str, source: Path, howl_bin: str, caps: str) -> None:
         run_http_stamp(lang, source, howl_bin, caps, Path(td))
 
 
+def run_cli_mkdir(lang: str, source: Path, howl_bin: str, caps: str, path: Path, cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "mkdir.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), str(path)], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), str(path)], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "mkdir_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), str(path)], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), str(path)], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_mkdir(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        dest = cwd / "nested" / "dir"
+        r = run_cli_mkdir(lang, source, howl_bin, caps, dest, cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "OK" not in out:
+            raise RuntimeError(f"{lang} mkdir failed: {r.returncode} {out!r}")
+        if not dest.is_dir():
+            raise RuntimeError(f"{lang} mkdir did not create {dest}")
+
+
+def run_cli_contains(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "contains.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "contains_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_contains(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("alpha beta gamma\n")
+        r = run_cli_contains(lang, source, howl_bin, caps, ["beta", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "FOUND" not in out:
+            raise RuntimeError(f"{lang} contains hit failed: {r.returncode} {out!r}")
+        r = run_cli_contains(lang, source, howl_bin, caps, ["zzz", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode == 0 or "MISSING" not in out:
+            raise RuntimeError(f"{lang} contains miss failed: {r.returncode} {out!r}")
+
+
+def run_cli_transform(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "transform.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "file_transform"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_transform(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        inp = cwd / "sample.csv"
+        outp = cwd / "sample.jsonl"
+        inp.write_text("name,age\nalice,30\nbob,25\n")
+        r = run_cli_transform(lang, source, howl_bin, caps, [str(inp), str(outp)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "rows=3" not in out:
+            raise RuntimeError(f"{lang} transform failed: {r.returncode} {out!r}")
+        text = outp.read_text()
+        if '"c0":"alice"' not in text or '"c1":"30"' not in text:
+            raise RuntimeError(f"{lang} transform jsonl bad: {text!r}")
+        r = run_cli_transform(lang, source, howl_bin, caps, [str(cwd / "missing.csv"), str(outp)], cwd)
+        if r.returncode == 0 or "error=" not in (r.stdout + r.stderr):
+            raise RuntimeError(f"{lang} transform missing failed: {r.returncode} {r.stdout!r}")
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -793,6 +919,9 @@ def main() -> int:
             "cli_fetch": parity_fetch,
             "cli_template": parity_template,
             "http_stamp": parity_stamp,
+            "cli_mkdir": parity_mkdir,
+            "cli_contains": parity_contains,
+            "cli_transform": parity_transform,
         }[meta["kind"]]
         for lang in LANGS:
             try:

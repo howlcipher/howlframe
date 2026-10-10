@@ -1,6 +1,6 @@
 # Template CLI
 
-Replace `{{key}}` in a file with a value (split/join; n-ary `or` + `str` density).
+Replace `{{key}}` in a file with a value (`str_contains` / `str_replace` density).
 
 ```bash
 go run ../../howlframe.go -compile-bc template_cli.howl

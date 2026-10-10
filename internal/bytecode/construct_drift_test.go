@@ -120,6 +120,8 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"sinc":         true, // ast.Desugar
 		"sput":         true, // ast.Desugar
 		"str":          true, // ast.Desugar
+		"str_contains": true, // ast.Desugar
+		"str_replace":  true, // ast.Desugar
 		"switch":       true, // ast.Desugar
 		"unless":       true, // ast.Desugar
 		"when":         true, // ast.Desugar

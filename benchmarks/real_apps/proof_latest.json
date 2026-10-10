@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-10T21:23:16Z",
+  "timestamp": "2026-10-10T21:26:45Z",
   "token_method": "tiktoken(cl100k_base)",
   "tokens": {
     "log_analyzer": {
@@ -63,7 +63,7 @@
       "node": 214
     },
     "template_cli": {
-      "howlframe": 184,
+      "howlframe": 160,
       "python": 206,
       "go": 190,
       "node": 203
@@ -73,13 +73,31 @@
       "python": 239,
       "go": 264,
       "node": 213
+    },
+    "mkdir_cli": {
+      "howlframe": 50,
+      "python": 90,
+      "go": 114,
+      "node": 92
+    },
+    "contains_cli": {
+      "howlframe": 130,
+      "python": 158,
+      "go": 148,
+      "node": 156
+    },
+    "file_transform": {
+      "howlframe": 229,
+      "python": 266,
+      "go": 293,
+      "node": 238
     }
   },
   "totals": {
-    "howlframe": 2331,
-    "python": 3025,
-    "go": 3295,
-    "node": 2927
+    "howlframe": 2716,
+    "python": 3539,
+    "go": 3850,
+    "node": 3413
   },
   "parity": {
     "log_analyzer": {
@@ -149,6 +167,24 @@
       "node": true
     },
     "stamp_api": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "mkdir_cli": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "contains_cli": {
+      "howlframe": true,
+      "python": true,
+      "go": true,
+      "node": true
+    },
+    "file_transform": {
       "howlframe": true,
       "python": true,
       "go": true,
