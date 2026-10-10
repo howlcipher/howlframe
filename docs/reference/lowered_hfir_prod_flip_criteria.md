@@ -98,6 +98,7 @@ achieve
 confidence
 db_connect
 ephemeral_circuit
+http_request
 http_server
 lazy_synthesize
 llm_generate
