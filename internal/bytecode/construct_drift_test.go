@@ -121,6 +121,8 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"list_contains": true, // ast.Desugar
 		"map_has":       true, // ast.Desugar
 		"not":           true, // ast.Desugar
+		"blank":         true, // ast.Desugar
+		"unix_now":      true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar
 		"sinc":          true, // ast.Desugar

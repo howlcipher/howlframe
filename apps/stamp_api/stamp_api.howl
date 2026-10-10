@@ -1,9 +1,9 @@
 (http_server 8104
   (route "/health" (lambda (req) (res_json 200 (dict ("status" "ok")))))
   (route "/now" (lambda (req)
-    (res_json 200 (dict ("unix" (to_string (time_now)))))))
+    (res_json 200 (dict ("unix" (unix_now))))))
   (route "/echo/{name}" (lambda (req)
     (switch (req_method req)
       ("GET"
-        (res_json 200 (dict ("name" (req_path req "name")) ("unix" (to_string (time_now))))))
+        (res_json 200 (dict ("name" (req_path req "name")) ("unix" (unix_now)))))
       (else (res_json 405 (dict ("error" "method_not_allowed"))))))))

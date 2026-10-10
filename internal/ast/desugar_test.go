@@ -329,6 +329,19 @@ func TestDesugarHTTPStatusResNot(t *testing.T) {
 	}
 }
 
+func TestDesugarBlankUnixNow(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (blank x))
+		(print (unix_now)))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "blank") || strings.Contains(src, "unix_now") {
+		t.Fatalf("blank/unix_now should desugar: %s", src)
+	}
+	if !strings.Contains(src, "time_now") || !strings.Contains(src, "to_string") {
+		t.Fatalf("unix_now should use to_string/time_now: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)
