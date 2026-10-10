@@ -1,0 +1,12 @@
+(do
+  (let (nStr (cli_args 0) path (cli_args 1))
+    (if (or (= nStr "") (= path ""))
+      (do (print "Usage: head_cli <n> <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (n (to_int nStr) rows (lines raw) i 0)
+          (do
+            (for row rows
+              (when (< i n)
+                (do (print row) (inc i))))
+            (exit 0)))))))

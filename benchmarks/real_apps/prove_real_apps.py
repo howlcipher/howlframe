@@ -206,6 +206,33 @@ APPS = {
         "howl_caps": "filesystem",
         "test_pkg": "./apps/ends_cli/",
     },
+    "head_cli": {
+        "howlframe": ROOT / "apps/head_cli/head_cli.howl",
+        "python": HERE / "head_cli/python/main.py",
+        "go": HERE / "head_cli/go/main.go",
+        "node": HERE / "head_cli/node/main.js",
+        "kind": "cli_head",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/head_cli/",
+    },
+    "cut_cli": {
+        "howlframe": ROOT / "apps/cut_cli/cut_cli.howl",
+        "python": HERE / "cut_cli/python/main.py",
+        "go": HERE / "cut_cli/go/main.go",
+        "node": HERE / "cut_cli/node/main.js",
+        "kind": "cli_cut",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/cut_cli/",
+    },
+    "has_line_cli": {
+        "howlframe": ROOT / "apps/has_line_cli/has_line_cli.howl",
+        "python": HERE / "has_line_cli/python/main.py",
+        "go": HERE / "has_line_cli/go/main.go",
+        "node": HERE / "has_line_cli/node/main.js",
+        "kind": "cli_has_line",
+        "howl_caps": "filesystem",
+        "test_pkg": "./apps/has_line_cli/",
+    },
 }
 
 LANGS = ["howlframe", "python", "go", "node"]
@@ -1002,6 +1029,97 @@ def parity_ends(lang: str, source: Path, howl_bin: str, caps: str) -> None:
             raise RuntimeError(f"{lang} ends no failed: {r.returncode} {out!r}")
 
 
+def run_cli_head(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "head.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "head_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_head(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("a\nb\nc\nd\n")
+        r = run_cli_head(lang, source, howl_bin, caps, ["2", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "a\n" not in out or "b\n" not in out or out.count("c") > 0:
+            raise RuntimeError(f"{lang} head failed: {r.returncode} {out!r}")
+
+
+def run_cli_cut(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "cut.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "cut_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_cut(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.csv"
+        sample.write_text("a,b,c\n1,2,3\n")
+        r = run_cli_cut(lang, source, howl_bin, caps, ["1", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "b\n" not in out or "2\n" not in out:
+            raise RuntimeError(f"{lang} cut failed: {r.returncode} {out!r}")
+
+
+def run_cli_has_line(lang: str, source: Path, howl_bin: str, caps: str, args: list[str], cwd: Path):
+    if lang == "howlframe":
+        bc = cwd / "has_line.hfbc"
+        compile_howl(howl_bin, source, bc)
+        return run([howl_bin, "-run-bc", "-allow-caps", caps, str(bc), *args], cwd=cwd)
+    if lang == "python":
+        return run([sys.executable, str(source), *args], cwd=cwd)
+    if lang == "go":
+        exe = cwd / "has_line_cli"
+        r = run(["go", "build", "-o", str(exe), str(source)])
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr)
+        return run([str(exe), *args], cwd=cwd)
+    if lang == "node":
+        return run(["node", str(source), *args], cwd=cwd)
+    raise ValueError(lang)
+
+
+def parity_has_line(lang: str, source: Path, howl_bin: str, caps: str) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+        sample = cwd / "sample.txt"
+        sample.write_text("alpha\nbeta\ngamma\n")
+        r = run_cli_has_line(lang, source, howl_bin, caps, ["beta", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode != 0 or "FOUND" not in out:
+            raise RuntimeError(f"{lang} has_line hit failed: {r.returncode} {out!r}")
+        r = run_cli_has_line(lang, source, howl_bin, caps, ["zzz", str(sample)], cwd)
+        out = r.stdout + r.stderr
+        if r.returncode == 0 or "MISSING" not in out:
+            raise RuntimeError(f"{lang} has_line miss failed: {r.returncode} {out!r}")
+
+
 def run_app_tests(pkg: str) -> None:
     r = run(["go", "test", pkg, "-count=1"], cwd=ROOT)
     if r.returncode != 0:
@@ -1052,6 +1170,9 @@ def main() -> int:
             "cli_env": parity_env,
             "cli_starts": parity_starts,
             "cli_ends": parity_ends,
+            "cli_head": parity_head,
+            "cli_cut": parity_cut,
+            "cli_has_line": parity_has_line,
         }[meta["kind"]]
         for lang in LANGS:
             try:

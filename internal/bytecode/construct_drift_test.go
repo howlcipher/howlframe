@@ -109,30 +109,33 @@ func TestConstructRegistryMatchesCompileNode(t *testing.T) {
 func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 	heads := compileNodeHeads(t)
 	consumedBeforeLowering := map[string]bool{
-		"assert":       true, // ast.Desugar
-		"cond":         true, // ast.Desugar
-		"lines":        true, // ast.Desugar
-		"read_text":    true, // ast.Desugar
-		"inc":          true, // ast.Desugar
-		"map_has":      true, // ast.Desugar
-		"nz":           true, // ast.Desugar
-		"sget":         true, // ast.Desugar
-		"sinc":         true, // ast.Desugar
-		"sput":         true, // ast.Desugar
-		"str":          true, // ast.Desugar
-		"str_contains": true, // ast.Desugar
-		"str_replace":  true, // ast.Desugar
-		"starts_with":  true, // ast.Desugar
-		"ends_with":    true, // ast.Desugar
-		"switch":       true, // ast.Desugar
-		"unless":       true, // ast.Desugar
-		"when":         true, // ast.Desugar
-		"patch":        true, // ast.ApplyPatches
-		"with_context": true, // ast.ApplyWithContext
-		"include":      true, // parser.ExpandIncludes
-		"use":          true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
-		"export":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
-		"module":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"assert":        true, // ast.Desugar
+		"cond":          true, // ast.Desugar
+		"lines":         true, // ast.Desugar
+		"read_text":     true, // ast.Desugar
+		"inc":           true, // ast.Desugar
+		"dec":           true, // ast.Desugar
+		"http_body":     true, // ast.Desugar
+		"list_contains": true, // ast.Desugar
+		"map_has":       true, // ast.Desugar
+		"nz":            true, // ast.Desugar
+		"sget":          true, // ast.Desugar
+		"sinc":          true, // ast.Desugar
+		"sput":          true, // ast.Desugar
+		"str":           true, // ast.Desugar
+		"str_contains":  true, // ast.Desugar
+		"str_replace":   true, // ast.Desugar
+		"starts_with":   true, // ast.Desugar
+		"ends_with":     true, // ast.Desugar
+		"switch":        true, // ast.Desugar
+		"unless":        true, // ast.Desugar
+		"when":          true, // ast.Desugar
+		"patch":         true, // ast.ApplyPatches
+		"with_context":  true, // ast.ApplyWithContext
+		"include":       true, // parser.ExpandIncludes
+		"use":           true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"export":        true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"module":        true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
 	}
 
 	for _, entry := range construct.Table() {

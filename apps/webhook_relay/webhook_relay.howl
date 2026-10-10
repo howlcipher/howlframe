@@ -7,10 +7,10 @@
           (cond
             ((= method "GET")
               (let (r (http_request upstream "GET"))
-                (res (map_get r "status") "application/json" (bytes_to_string (map_get r "body")))))
+                (res (map_get r "status") "application/json" (http_body r))))
             ((= method "POST")
               (try_let (body (parse_json Any req.body))
                 (catch e (res_json 400 (dict ("error" "invalid_json"))))
                 (let (r (http_request upstream "POST" (encode_json body)))
-                  (res (map_get r "status") "application/json" (bytes_to_string (map_get r "body"))))))
+                  (res (map_get r "status") "application/json" (http_body r)))))
             (else (res_json 405 (dict ("error" "method_not_allowed")))))))))))

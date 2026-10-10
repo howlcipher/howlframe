@@ -1,0 +1,14 @@
+(do
+  (let (idxStr (cli_args 0) path (cli_args 1))
+    (if (or (= idxStr "") (= path ""))
+      (do (print "Usage: cut_cli <index> <file>") (exit 2))
+      (try_let (raw (read_file path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (idx (to_int idxStr) rows (lines raw))
+          (do
+            (for row rows
+              (when (!= row "")
+                (let (cols (str_split row ","))
+                  (when (> (list_len cols) idx)
+                    (print (list_get cols idx))))))
+            (exit 0)))))))

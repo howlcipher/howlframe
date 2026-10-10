@@ -28,6 +28,7 @@
 | `cond` | No | None | Yes | No | - | AUTHORITATIVE |
 | `confidence` | Yes | network | No | No | - | AUTHORITATIVE |
 | `db_connect` | Yes | database | No | No | - | AUTHORITATIVE |
+| `dec` | No | None | Yes | No | - | AUTHORITATIVE |
 | `defun` | Yes | None | No | No | - | AUTHORITATIVE |
 | `dict` | Yes | None | No | No | - | AUTHORITATIVE |
 | `do` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -43,6 +44,7 @@
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
+| `http_body` | No | None | Yes | No | - | AUTHORITATIVE |
 | `http_request` | Yes | network | No | No | - | AUTHORITATIVE |
 | `http_server` | Yes | None | No | No | - | AUTHORITATIVE |
 | `if` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -54,6 +56,7 @@
 | `let` | Yes | None | No | No | - | AUTHORITATIVE |
 | `lines` | No | None | Yes | No | - | AUTHORITATIVE |
 | `list` | Yes | None | No | No | - | AUTHORITATIVE |
+| `list_contains` | No | None | Yes | No | - | AUTHORITATIVE |
 | `list_get` | Yes | None | No | No | - | AUTHORITATIVE |
 | `list_len` | Yes | None | No | No | - | AUTHORITATIVE |
 | `llm_generate` | Yes | network | No | No | - | AUTHORITATIVE |
