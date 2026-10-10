@@ -1,0 +1,41 @@
+{
+  "rows": [
+    {
+      "task": "task_01_typed_function",
+      "passed": true,
+      "tokens": 54
+    },
+    {
+      "task": "task_02_cli_file_processing",
+      "passed": true,
+      "tokens": 91
+    },
+    {
+      "task": "task_03_http_json_endpoint",
+      "passed": true,
+      "tokens": 53
+    },
+    {
+      "task": "task_04_multi_module_cli",
+      "passed": true,
+      "tokens": 53
+    },
+    {
+      "task": "task_06_error_handling",
+      "passed": true,
+      "tokens": 116
+    },
+    {
+      "task": "task_07_native_store",
+      "passed": true,
+      "tokens": 169
+    },
+    {
+      "task": "task_08_capability_restricted",
+      "passed": true,
+      "tokens": 46
+    }
+  ],
+  "passed": true,
+  "failures": []
+}

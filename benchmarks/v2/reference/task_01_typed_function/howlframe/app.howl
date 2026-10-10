@@ -1,12 +1,5 @@
 (do
   (defun add ((a int) (b int)) int (+ a b))
-  (let (result (add 2 3))
-    (if (!= result 5)
-      (do
-        (stderr "Failed")
-        (exit 1)
-      )
-      (print "Pass")
-    )
-  )
-)
+  (if (!= (add 2 3) 5)
+    (do (stderr "Failed") (exit 1))
+    (print "Pass")))

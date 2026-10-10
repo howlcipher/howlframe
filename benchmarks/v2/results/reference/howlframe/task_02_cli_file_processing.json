@@ -1,0 +1,22 @@
+{
+  "task": "task_02_cli_file_processing",
+  "language": "howlframe",
+  "track": "A",
+  "model": "reference",
+  "timestamp": "2026-10-10T17:30:10.393222+00:00",
+  "notes": "Tokens counted using tiktoken(cl100k_base)",
+  "metrics": {
+    "first_pass_success": true,
+    "eventual_success": true,
+    "repair_attempts": 0,
+    "total_generated_tokens": null,
+    "final_source_tokens": 91,
+    "elapsed_time_seconds": 0.01,
+    "verification_commands_run": 3,
+    "code_churn_lines": null,
+    "verification_result": "pass",
+    "runtime_backend": "HowlFrame VM",
+    "capability_denial_behavior": null,
+    "deterministic_repeatability": null
+  }
+}

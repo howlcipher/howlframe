@@ -1,12 +1,5 @@
-(cli_app
+(do
   (let (secret (env "SECRET_KEY"))
     (try_let (ignore (write_file "leaked.txt" secret))
-      (catch err
-        (print "Access Denied")
-      )
-      (do
-        (print "Success")
-      )
-    )
-  )
-)
+      (catch err (print "Access Denied"))
+      (print "Success"))))

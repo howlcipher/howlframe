@@ -1,17 +1,8 @@
-(cli_app
-  (defun divide (a b)
-    (type_hints (a "int") (b "int") (return "any"))
+(do
+  (defun divide ((a int) (b int)) any
     (if (== b 0)
       (return (dict ("result" "0") ("error" "Division by zero")))
-      (return (dict ("result" (to_string (/ a b))) ("error" "")))
-    )
-  )
-  (let (res (call divide 10 0))
+      (return (dict ("result" (to_string (/ a b))) ("error" "")))))
+  (let (res (divide 10 0))
     (let (err (map_get res "error"))
-      (if (!= err "")
-        (print "Error:" err)
-        (print "Result:" (map_get res "result"))
-      )
-    )
-  )
-)
+      (if (!= err "") (print "Error:" err) (print "Result:" (map_get res "result"))))))

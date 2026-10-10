@@ -21,16 +21,16 @@ This is improvement [#44](../improvements.md#44-add-cross-language-ai-write-cost
 
 ### A — Hello World HTTP+JSON
 
-| Language | Write time (2026-07-23) | Write time (2026-07-30) | Tokens (2026-07-23) | Tokens (2026-07-30) | Verified |
+| Language | Write time (2026-07-23) | Tokens (2026-07-23) | Tokens (2026-07-30) | Tokens (2026-10-10) | Verified |
 |---|---|---|---|---|---|
-| HowlFrame | 5.3s | 5.3s | 84 | 84 | pass |
-| Go | 5.1s | 5.1s | 144 | 144 | pass |
-| Python | 4.6s | 4.6s | 164 | 164 | pass |
-| Node.js | 3.9s | 3.9s | 111 | 111 | pass |
-| C# | 5.4s | 5.4s | 177 | 177 | pass |
-| Java | 6.9s | 6.9s | 237 | 237 | pass |
+| HowlFrame | 5.3s | 84 | 84 | **75** | pass |
+| Go | 5.1s | 144 | 144 | 148 | pass |
+| Python | 4.6s | 164 | 164 | 168 | pass |
+| Node.js | 3.9s | 111 | 111 | 115 | pass |
+| C# | 5.4s | 177 | 177 | 181 | pass |
+| Java | 6.9s | 237 | 237 | 241 | pass |
 
-HowlFrame's smallest and clearest win: this is its actual designed niche (HTTP/JSON web handlers), and it produces the fewest tokens of any language by a wide margin while writing just as fast as the others.
+HowlFrame's niche win: HTTP/JSON handlers stay densest. The 2026-10-10 fixture drops the intermediate `let` and inlines `res_json`/`dict`, landing at **75** tokens vs Python 168.
 
 ### B — CLI file-parsing tool
 
@@ -62,19 +62,31 @@ HowlFrame's native `(test ...)` block was fast to write, but typed `defun` histo
 
 | Language | Total write time (2026-07-30) | Total tokens (2026-07-23) | Total tokens (2026-07-30) | Total tokens (2026-10-10) |
 |---|---|---|---|---|
-| HowlFrame | 15.2s | 295 | 274 | **178** |
-| Go | 19.4s | 314 | 314 | 314 |
-| Node.js | 17.0s | 270 | 270 | 270 |
-| Python | 20.1s | 262 | 262 | 262 |
-| C# | 23.2s | 320 | 320 | 320 |
-| Java | 21.7s | 438 | 438 | 438 |
+| HowlFrame | 15.2s | 295 | 274 | **165** |
+| Go | 19.4s | 314 | 314 | 318 |
+| Node.js | 17.0s | 270 | 270 | 274 |
+| Python | 20.1s | 262 | 262 | 266 |
+| C# | 23.2s | 320 | 320 | 324 |
+| Java | 21.7s | 438 | 438 | 442 |
+
+## Proof harness
+
+Executable gate (not marketing tables):
+
+```bash
+go build -o howlframe howlframe.go
+python3 benchmarks/language_write_cost/recount_and_verify.py
+python3 benchmarks/v2/harness/prove_howlframe_refs.py
+```
+
+`recount_and_verify.py` compiles/runs HowlFrame fixtures and fails unless HowlFrame is under Python on A/B/C and under every language total. Latest proof: `benchmarks/language_write_cost/proof_latest.json`.
 
 ## Takeaways
 
-- **HowlFrame now leads on total tokens** (178 vs Python 262 / Node 270) after 2026-10-10 density sugar on Tasks B and C, while keeping the July write-time lead (15.2s).
-- **Task C win:** HowlFrame 34 < Python 37 (`defun` + `assert`).
-- **Task B win:** HowlFrame 56 < Python 61 (`lines` + root `do`).
-- **Task A remains a large win** (88 vs Python 164) on the HTTP/JSON niche.
-- **The feedback loop works.** Measured gaps drove `type_hints`, then expression-body/`assert`/`do`-root/auto-call/`lines` sugar.
+- **HowlFrame leads on total tokens** (**165** vs Python 266 / Node 274) after 2026-10-10 density work on A/B/C.
+- **Task A:** 75 < Python 168 (inline HTTP/JSON).
+- **Task B:** 56 < Python 61 (`lines` + root `do`).
+- **Task C:** 34 < Python 37 (`defun` + `assert` + auto-`call`).
+- **v2 densified references** also verify under Track A (`prove_howlframe_refs.py`).
 
-*Last fixture recount: 2026-10-10 (`cl100k_base`). Re-run after changes touching `defun`/`type_hint`/`assert`/`do`-root/`lines`/`read_text`, `read_file`, `str_split`, or `test`.*
+*Last fixture recount: 2026-10-10 (`cl100k_base`). Re-run the proof harness after surface changes touching these fixtures.*

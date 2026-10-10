@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-10-10T17:30:10Z",
+  "token_method": "tiktoken(cl100k_base)",
+  "per_task": {
+    "task_a_hello_json": {
+      "HowlFrame": 75,
+      "go": 148,
+      "python": 168,
+      "node": 115,
+      "csharp": 181,
+      "java": 241
+    },
+    "task_b_cli_file_sum": {
+      "HowlFrame": 56,
+      "go": 97,
+      "python": 61,
+      "node": 87,
+      "csharp": 80,
+      "java": 127
+    },
+    "task_c_function_test": {
+      "HowlFrame": 34,
+      "go": 73,
+      "python": 37,
+      "node": 72,
+      "csharp": 63,
+      "java": 74
+    }
+  },
+  "totals": {
+    "HowlFrame": 165,
+    "go": 318,
+    "python": 266,
+    "node": 274,
+    "csharp": 324,
+    "java": 442
+  },
+  "verify_errors": [],
+  "passed": true
+}

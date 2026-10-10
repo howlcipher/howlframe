@@ -1,0 +1,22 @@
+{
+  "task": "task_03_http_json_endpoint",
+  "language": "howlframe",
+  "track": "A",
+  "model": "reference",
+  "timestamp": "2026-10-10T17:30:11.563860+00:00",
+  "notes": "Tokens counted using tiktoken(cl100k_base)",
+  "metrics": {
+    "first_pass_success": true,
+    "eventual_success": true,
+    "repair_attempts": 0,
+    "total_generated_tokens": null,
+    "final_source_tokens": 53,
+    "elapsed_time_seconds": 1.04,
+    "verification_commands_run": 1,
+    "code_churn_lines": null,
+    "verification_result": "pass",
+    "runtime_backend": "HowlFrame VM",
+    "capability_denial_behavior": null,
+    "deterministic_repeatability": null
+  }
+}
