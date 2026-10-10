@@ -288,6 +288,19 @@ func TestDesugarStrContainsReplace(t *testing.T) {
 	}
 }
 
+func TestDesugarStartsEndsWith(t *testing.T) {
+	root := parseDesugar(t, `(cli_app
+		(print (starts_with "hello" "he"))
+		(print (ends_with "hello" "lo")))`)
+	src := ast.Stringify(root)
+	if strings.Contains(src, "starts_with") || strings.Contains(src, "ends_with") {
+		t.Fatalf("starts_with/ends_with should desugar: %s", src)
+	}
+	if !strings.Contains(src, "str_split") || !strings.Contains(src, "list_get") {
+		t.Fatalf("starts_with should use str_split/list_get: %s", src)
+	}
+}
+
 func TestDesugarNaryOr(t *testing.T) {
 	root := parseDesugar(t, `(cli_app (print (or (= 1 2) (= 2 3) (= 3 3))))`)
 	src := ast.Stringify(root)

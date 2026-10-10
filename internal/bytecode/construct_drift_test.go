@@ -122,6 +122,8 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"str":          true, // ast.Desugar
 		"str_contains": true, // ast.Desugar
 		"str_replace":  true, // ast.Desugar
+		"starts_with":  true, // ast.Desugar
+		"ends_with":    true, // ast.Desugar
 		"switch":       true, // ast.Desugar
 		"unless":       true, // ast.Desugar
 		"when":         true, // ast.Desugar

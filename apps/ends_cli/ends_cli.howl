@@ -1,0 +1,9 @@
+(do
+  (let (suffix (cli_args 0) path (cli_args 1))
+    (if (or (= suffix "") (= path ""))
+      (do (print "Usage: ends_cli <suffix> <file>") (exit 2))
+      (try_let (s (read_text path))
+        (catch e (do (print "error=" e) (exit 2)))
+        (if (ends_with s suffix)
+          (do (print "YES") (exit 0))
+          (do (print "NO") (exit 1)))))))

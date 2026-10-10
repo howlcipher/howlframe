@@ -32,6 +32,7 @@
 | `dict` | Yes | None | No | No | - | AUTHORITATIVE |
 | `do` | Yes | None | No | No | - | AUTHORITATIVE |
 | `encode_json` | Yes | None | No | No | - | AUTHORITATIVE |
+| `ends_with` | No | None | Yes | No | - | AUTHORITATIVE |
 | `env` | Yes | environment | No | No | - | AUTHORITATIVE |
 | `ephemeral_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
 | `exec` | Yes | process | No | No | - | AUTHORITATIVE |
@@ -96,6 +97,7 @@
 | `spawn_agent` | Yes | process | No | No | - | AUTHORITATIVE |
 | `sput` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sql_query` | Yes | database | No | No | - | AUTHORITATIVE |
+| `starts_with` | No | None | Yes | No | - | AUTHORITATIVE |
 | `stderr` | Yes | None | No | No | - | AUTHORITATIVE |
 | `store_delete` | Yes | database | No | No | - | AUTHORITATIVE |
 | `store_get` | Yes | database | No | No | - | AUTHORITATIVE |

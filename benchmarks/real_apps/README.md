@@ -22,14 +22,17 @@ python3 benchmarks/real_apps/prove_real_apps.py
 | auth_api | **199** | 330 | 337 | 296 |
 | grep_cli | **156** | 188 | 259 | 225 |
 | wc_cli | **157** | 198 | 197 | 191 |
-| json_get | **157** | 185 | 189 | 161 |
+| json_get | **146** | 185 | 189 | 161 |
 | counter_api | **229** | 233 | 320 | 235 |
 | fetch_cli | **109** | 185 | 199 | 214 |
-| template_cli | **160** | 206 | 190 | 203 |
+| template_cli | **153** | 206 | 190 | 203 |
 | stamp_api | **135** | 239 | 264 | 213 |
 | mkdir_cli | **50** | 90 | 114 | 92 |
-| contains_cli | **130** | 158 | 148 | 156 |
+| contains_cli | **119** | 158 | 148 | 156 |
 | file_transform | **229** | 266 | 293 | 238 |
-| **TOTAL** | **2716** | 3539 | 3850 | 3413 |
+| env_cli | **79** | 105 | 103 | 104 |
+| starts_cli | **118** | 157 | 147 | 155 |
+| ends_cli | **118** | 157 | 148 | 155 |
+| **TOTAL** | **3002** | 3958 | 4248 | 3827 |
 
 Latest proof artifact: [`proof_latest.json`](proof_latest.json).

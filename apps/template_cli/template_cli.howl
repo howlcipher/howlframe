@@ -2,9 +2,9 @@
   (let (path (cli_args 0) key (cli_args 1) val (cli_args 2))
     (if (or (= path "") (= key "") (= val ""))
       (do (print "Usage: template_cli <file> <key> <value>") (exit 2))
-      (try_let (raw (read_file path))
+      (try_let (s (read_text path))
         (catch e (do (print "error=" e) (exit 2)))
-        (let (s (bytes_to_string raw) needle (str "{{" key "}}"))
+        (let (needle (str "{{" key "}}"))
           (do
             (unless (str_contains s needle)
               (do (print "NO PLACEHOLDER") (exit 1)))
