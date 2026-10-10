@@ -109,10 +109,10 @@ func TestConstructRegistryMatchesCompileNode(t *testing.T) {
 func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 	heads := compileNodeHeads(t)
 	consumedBeforeLowering := map[string]bool{
-		"assert":       true, // ast.Desugar
-		"cond":         true, // ast.Desugar
-		"lines":        true, // ast.Desugar
-		"read_text":    true, // ast.Desugar
+		"assert":        true, // ast.Desugar
+		"cond":          true, // ast.Desugar
+		"lines":         true, // ast.Desugar
+		"read_text":     true, // ast.Desugar
 		"inc":           true, // ast.Desugar
 		"dec":           true, // ast.Desugar
 		"http_body":     true, // ast.Desugar
@@ -130,12 +130,12 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"switch":        true, // ast.Desugar
 		"unless":        true, // ast.Desugar
 		"when":          true, // ast.Desugar
-		"patch":        true, // ast.ApplyPatches
-		"with_context": true, // ast.ApplyWithContext
-		"include":      true, // parser.ExpandIncludes
-		"use":          true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
-		"export":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
-		"module":       true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"patch":         true, // ast.ApplyPatches
+		"with_context":  true, // ast.ApplyWithContext
+		"include":       true, // parser.ExpandIncludes
+		"use":           true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"export":        true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
+		"module":        true, // parser.ExpandIncludes / ast.ResolveModules (improvements.md #95)
 	}
 
 	for _, entry := range construct.Table() {
