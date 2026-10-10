@@ -1,0 +1,67 @@
+(http_server 8097
+  (defun next_id ()
+    (do
+      (store_open kv "memory://session")
+      (let (rec (store_get kv "next_id") n 1)
+        (do
+          (if (is_nil rec)
+            (set n 1)
+            (set n (to_int (map_get rec "val"))))
+          (store_put kv "next_id" (dict ("val" (to_string (+ n 1)))))
+          (return (to_string n))))))
+
+  (route "/tasks" (lambda (req)
+    (cond
+      ((= (req_method req) "GET")
+        (do
+          (store_open kv "memory://session")
+          (let (ks (store_keys kv) tasks (list))
+            (do
+              (for k ks
+                (if (!= k "next_id")
+                  (let (t (store_get kv k))
+                    (if (is_nil t) (do) (append tasks t)))))
+              (res_json 200 (dict ("tasks" tasks)))))))
+      ((= (req_method req) "POST")
+        (try_let (body (parse_json Any req.body))
+          (catch e (res_json 400 (dict ("error" "invalid_json"))))
+          (let (title (map_get body "title"))
+            (if (= title "")
+              (res_json 400 (dict ("error" "title_required")))
+              (let (id (next_id) task (dict ("id" id) ("title" title) ("status" "open")))
+                (do
+                  (store_open kv "memory://session")
+                  (store_put kv id task)
+                  (res_json 201 task)))))))
+      (else (res_json 405 (dict ("error" "method_not_allowed")))))))
+
+  (route "/tasks/{id}" (lambda (req)
+    (let (id (req_path req "id") m (req_method req))
+      (cond
+        ((= m "GET")
+          (do
+            (store_open kv "memory://session")
+            (let (task (store_get kv id))
+              (if (is_nil task)
+                (res_json 404 (dict ("error" "not_found")))
+                (res_json 200 task)))))
+        ((= m "PATCH")
+          (do
+            (store_open kv "memory://session")
+            (let (task (store_get kv id))
+              (if (is_nil task)
+                (res_json 404 (dict ("error" "not_found")))
+                (let (updated (dict ("id" id) ("title" (map_get task "title")) ("status" "done")))
+                  (do
+                    (store_put kv id updated)
+                    (res_json 200 updated)))))))
+        ((= m "DELETE")
+          (do
+            (store_open kv "memory://session")
+            (let (task (store_get kv id))
+              (if (is_nil task)
+                (res_json 404 (dict ("error" "not_found")))
+                (do
+                  (store_delete kv id)
+                  (res_json 200 (dict ("deleted" id))))))))
+        (else (res_json 405 (dict ("error" "method_not_allowed")))))))))

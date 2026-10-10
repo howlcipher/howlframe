@@ -165,8 +165,13 @@ func (vm *BCVM) effectSummary(inst bytecode.BCInstruction, env *BcEnv) string {
 	}
 	summary := ""
 	switch inst.Op {
-	case bytecode.OpFetch:
-		u, err := url.Parse(peek(1))
+	case bytecode.OpFetch, bytecode.OpHttpRequest:
+		// With a body (IntOperand==1), URL sits under method and body.
+		urlIdx := 1
+		if inst.Op == bytecode.OpHttpRequest && inst.IntOperand == 1 {
+			urlIdx = 2
+		}
+		u, err := url.Parse(peek(urlIdx))
 		if err != nil || u.Scheme == "" || u.Host == "" {
 			summary = "<invalid-url>"
 		} else {

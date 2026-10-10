@@ -117,6 +117,7 @@ var table = []Entry{
 	{Name: "fuzzy_cast", Support: Unsupported, Note: "LLM struct coercion; no opcode, Go backend only"},
 	{Name: "go_import", Support: Unsupported, Note: "Go-backend-only directive; the standalone VM cannot honour a Go package dependency"},
 	{Name: "html_escape", Support: Supported, Note: "HTML_ESCAPE; encodes &, <, >, \", and ' with no capability"},
+	{Name: "http_request", Support: Supported, Note: "HTTP_REQUEST; returns dict (status int, body bytes); optional body sent"},
 	{Name: "http_server", Support: Supported, Note: "HTTP_SERVER_START / HTTP_ROUTE / HTTP_SERVER_SERVE"},
 	{Name: "if", Support: Supported, Note: "JUMP_IF_FALSE / JUMP"},
 	{Name: "import", Support: Unsupported, Note: "Go-backend-only directive; same reasoning as go_import"},

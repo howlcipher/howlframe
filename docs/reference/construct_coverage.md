@@ -42,6 +42,7 @@
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
+| `http_request` | Yes | network | No | No | - | AUTHORITATIVE |
 | `http_server` | Yes | None | No | No | - | AUTHORITATIVE |
 | `if` | Yes | None | No | No | - | AUTHORITATIVE |
 | `import` | No | None | No | Yes | - | AUTHORITATIVE |

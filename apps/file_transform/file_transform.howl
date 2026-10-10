@@ -1,0 +1,20 @@
+(do
+  (let (in (cli_args 0) out (cli_args 1))
+    (if (or (= in "") (= out ""))
+      (do (print "Usage: file_transform <in.csv> <out.jsonl>") (exit 2))
+      (try_let (raw (read_file in))
+        (catch e (do (print "error=" e) (exit 2)))
+        (let (rows (lines raw) n 0 buf "")
+          (do
+            (for row rows
+              (if (!= row "")
+                (let (cols (str_split row ","))
+                  (if (>= (list_len cols) 2)
+                    (do
+                      (set n (+ n 1))
+                      (let (obj (dict ("c0" (list_get cols 0)) ("c1" (list_get cols 1))))
+                        (set buf (str_join (list buf (encode_json obj) "\n") ""))))))))
+            (write_file out buf)
+            (print (str_join (list "rows=" (to_string n)) ""))
+            (print (str_join (list "out=" out) ""))
+            (exit 0)))))))
