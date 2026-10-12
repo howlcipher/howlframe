@@ -1,13 +1,9 @@
-(cli_app
- (let (raw (bytes_to_string (read_file "evidence/checks.json")))
- (let (checks (parse_json Checks raw))
-  (let (version (bytes_to_string (read_file "evidence/version.kv")))
-   (let (note (bytes_to_string (read_file "evidence/note.txt")))
-    (let (selected (list))
-     (do
-      (for c checks (if (= (map_get c "name") "unit") (append selected c)))
-      (let (record (dict ("batch" "26") ("selected" selected)))
-       (do
-        (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" record))))
-        ))
-      )))))))
+(do
+ (let (raw (read_text "evidence/checks.json"))
+ (let (checks (parse_json Checks raw)
+       version (read_text "evidence/version.kv")
+       note (read_text "evidence/note.txt")
+       selected (list))
+  (do
+   (for c checks (when (= (map_get c "name") "unit") (append selected c)))
+   (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" (dict ("batch" "26") ("selected" selected))))))))))

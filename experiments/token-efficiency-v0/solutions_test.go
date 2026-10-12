@@ -22,17 +22,16 @@ func TestSolutionCoverage(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"t01", "t02", "t03", "a01", "a02", "a03"} {
-		got, err := os.ReadFile(filepath.Join("solutions/howl", id+".howl"))
+	// HowlFrame references were re-authored in current shorthand on 2026-10-12
+	// (rerun after #128-#130); they intentionally no longer copy reference/arm_a
+	// verbatim. Guard against regressing to the expanded pre-shorthand forms.
+	for _, task := range m.All() {
+		data, err := os.ReadFile(filepath.Join("solutions/howl", task.ID+".howl"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		want, err := os.ReadFile(filepath.Join("../falsifiable-v0/reference/arm_a", id+".howl"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("existing reference changed: %s", id)
+		if bytes.Contains(data, []byte("bytes_to_string")) {
+			t.Errorf("%s uses expanded bytes_to_string; use read_text/lines shorthand", task.ID)
 		}
 	}
 }
