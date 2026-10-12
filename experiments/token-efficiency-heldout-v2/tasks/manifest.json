@@ -1,0 +1,491 @@
+{
+  "version": "heldout-v2",
+  "tasks": [
+    {
+      "id": "w01",
+      "category": "text",
+      "description": "Read in/para.txt (one line of words separated by single spaces). Greedy word-wrap it to width 20: put as many words on a line as fit (joined by single spaces, line length <= 20), then start a new line. Write the wrapped lines to out/result.txt.",
+      "inputs": {
+        "in/para.txt": "the quick agent reads every spec twice before it writes a single line of code"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "the quick agent\nreads every spec\ntwice before it\nwrites a single line\nof code"
+    },
+    {
+      "id": "w02",
+      "category": "text",
+      "description": "Read in/events.txt. Collapse runs of consecutive identical lines into one line (like uniq) and write the result to out/result.txt.",
+      "inputs": {
+        "in/events.txt": "start\nstart\nping\nping\nping\nstop\nping\nstop\nstop"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "start\nping\nstop\nping\nstop"
+    },
+    {
+      "id": "w03",
+      "category": "text",
+      "description": "Read in/settings.txt. On every line remove everything from the first '#' to the end of the line, then remove trailing spaces. Drop lines that are empty or only spaces after that. Write the remaining lines to out/result.txt in order.",
+      "inputs": {
+        "in/settings.txt": "# settings\nhost = example.org  # primary\n\nport = 8080\n   # indented comment\nmode = fast#inline"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "host = example.org\nport = 8080\nmode = fast"
+    },
+    {
+      "id": "w04",
+      "category": "text",
+      "description": "Read in/headings.txt (lower-case words separated by single spaces). Write out/result.txt with every line in title case: the first letter of each word upper-cased, the rest unchanged.",
+      "inputs": {
+        "in/headings.txt": "release notes for march\nknown issues\nupgrade guide and faq"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "Release Notes For March\nKnown Issues\nUpgrade Guide And Faq"
+    },
+    {
+      "id": "w05",
+      "category": "table",
+      "description": "Read in/ledger.csv (header date,account,amount; comma-separated, no quoting; amount is a signed integer). Write out/result.json: an object mapping each account to its integer balance (sum of its amounts).",
+      "inputs": {
+        "in/ledger.csv": "date,account,amount\n2026-01-03,cash,500\n2026-01-09,card,-120\n2026-02-01,cash,-75\n2026-02-14,card,300\n2026-02-20,savings,1000\n2026-03-02,cash,-40"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "cash": 385,
+        "card": 180,
+        "savings": 1000
+      }
+    },
+    {
+      "id": "w06",
+      "category": "table",
+      "description": "Read in/ledger.csv. Write out/result.json: an object mapping each month (the first 7 characters of date, YYYY-MM) to the integer sum of amounts in that month.",
+      "inputs": {
+        "in/ledger.csv": "date,account,amount\n2026-01-03,cash,500\n2026-01-09,card,-120\n2026-02-01,cash,-75\n2026-02-14,card,300\n2026-02-20,savings,1000\n2026-03-02,cash,-40"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "2026-01": 380,
+        "2026-02": 1225,
+        "2026-03": -40
+      }
+    },
+    {
+      "id": "w07",
+      "category": "table",
+      "description": "Read in/lines.csv (header item,qty,unit; integers for qty and unit). Write out/result.csv: the same table with a fourth column named total equal to qty * unit, header included, rows in input order, comma-separated.",
+      "inputs": {
+        "in/lines.csv": "item,qty,unit\nbolt,40,3\nnut,100,1\nwasher,25,2\ngear,2,150"
+      },
+      "output": "out/result.csv",
+      "kind": "text",
+      "expected": "item,qty,unit,total\nbolt,40,3,120\nnut,100,1,100\nwasher,25,2,50\ngear,2,150,300"
+    },
+    {
+      "id": "w08",
+      "category": "table",
+      "description": "Read in/team.csv (header name,role). Write out/result.txt with one line per data row: the name padded on the right with spaces to the length of the longest name, then \" | \", then the role.",
+      "inputs": {
+        "in/team.csv": "name,role\nAnnika,lead\nBo,dev\nChristopher,dev\nDee,qa"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "Annika      | lead\nBo          | dev\nChristopher | dev\nDee         | qa"
+    },
+    {
+      "id": "w09",
+      "category": "numbers",
+      "description": "Read in/latency.txt (one integer per line; the count is odd). Write out/result.txt with the median value.",
+      "inputs": {
+        "in/latency.txt": "120\n87\n340\n95\n101\n77\n410"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "101"
+    },
+    {
+      "id": "w10",
+      "category": "numbers",
+      "description": "Read in/seconds.txt (one non-negative integer per line). Write out/result.txt with each value as H:MM:SS (hours not padded, minutes and seconds two digits), one per line.",
+      "inputs": {
+        "in/seconds.txt": "59\n3600\n3725\n86399\n0"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "0:00:59\n1:00:00\n1:02:05\n23:59:59\n0:00:00"
+    },
+    {
+      "id": "w11",
+      "category": "numbers",
+      "description": "Read in/ages.txt (one line of comma-separated non-negative integers). Bucket them by tens. Write out/result.txt with one line per non-empty bucket in ascending order, formatted \"<lo>-<hi>: <count>\" (e.g. \"10-19: 2\").",
+      "inputs": {
+        "in/ages.txt": "3,17,25,29,31,44,8,19,40,22"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "0-9: 2\n10-19: 2\n20-29: 3\n30-39: 1\n40-49: 2"
+    },
+    {
+      "id": "w12",
+      "category": "numbers",
+      "description": "Read in/load.txt (one line of comma-separated integers). Write out/result.json: the JSON array of 3-wide moving averages, each rounded down (floor), one per full window, in order.",
+      "inputs": {
+        "in/load.txt": "4,8,6,10,2,9"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        6,
+        8,
+        6,
+        7
+      ]
+    },
+    {
+      "id": "w13",
+      "category": "lists",
+      "description": "Read in/jobs.json (array of strings). Write out/result.json: the elements split into consecutive batches of 3 (the last batch may be shorter), as an array of arrays.",
+      "inputs": {
+        "in/jobs.json": "[\"j1\", \"j2\", \"j3\", \"j4\", \"j5\", \"j6\", \"j7\", \"j8\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        [
+          "j1",
+          "j2",
+          "j3"
+        ],
+        [
+          "j4",
+          "j5",
+          "j6"
+        ],
+        [
+          "j7",
+          "j8"
+        ]
+      ]
+    },
+    {
+      "id": "w14",
+      "category": "lists",
+      "description": "Read in/left.json and in/right.json (arrays of strings). Write out/result.json: their elements interleaved (left[0], right[0], left[1], right[1], ...); when one runs out, append the rest of the other.",
+      "inputs": {
+        "in/left.json": "[\"a\", \"b\", \"c\", \"d\"]",
+        "in/right.json": "[\"1\", \"2\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "a",
+        "1",
+        "b",
+        "2",
+        "c",
+        "d"
+      ]
+    },
+    {
+      "id": "w15",
+      "category": "lists",
+      "description": "Read in/ring.json (array of strings) and in/k.txt (one non-negative integer k). Write out/result.json: the array rotated left by k positions (k may exceed the length; rotation wraps).",
+      "inputs": {
+        "in/ring.json": "[\"n1\", \"n2\", \"n3\", \"n4\", \"n5\"]",
+        "in/k.txt": "7"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "n3",
+        "n4",
+        "n5",
+        "n1",
+        "n2"
+      ]
+    },
+    {
+      "id": "w16",
+      "category": "lists",
+      "description": "Read in/meter.json (array of integers, cumulative meter readings). Write out/result.json: the array of differences between each reading and the one before it (one element shorter than the input).",
+      "inputs": {
+        "in/meter.json": "[100, 104, 104, 101, 110]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        4,
+        0,
+        -3,
+        9
+      ]
+    },
+    {
+      "id": "w17",
+      "category": "strings",
+      "description": "Read in/raw.txt (one line). Run-length encode it: each maximal run of the same character becomes the character followed by the run length (e.g. \"aab\" -> \"a2b1\"). Write it to out/result.txt.",
+      "inputs": {
+        "in/raw.txt": "aaabccddddde"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "a3b1c2d5e1"
+    },
+    {
+      "id": "w18",
+      "category": "strings",
+      "description": "Read in/idents.txt (one camelCase identifier per line, starting lower-case). Write out/result.txt with each converted to snake_case (insert '_' before every upper-case letter and lower-case it), one per line.",
+      "inputs": {
+        "in/idents.txt": "userId\nhttpStatusCode\nname\nretryAfterMs"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "user_id\nhttp_status_code\nname\nretry_after_ms"
+    },
+    {
+      "id": "w19",
+      "category": "strings",
+      "description": "Read in/msg.txt (one line). Shift every lower-case letter a-z forward by 3 places in the alphabet, wrapping z to c; leave every other character unchanged. Write it to out/result.txt.",
+      "inputs": {
+        "in/msg.txt": "attack at dawn, zebra!"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "dwwdfn dw gdzq, cheud!"
+    },
+    {
+      "id": "w20",
+      "category": "strings",
+      "description": "Read in/cards.txt (one digit string per line). Write out/result.txt with each line masked: every character except the last 4 replaced by '*'.",
+      "inputs": {
+        "in/cards.txt": "4111222233334444\n5500000000000004\n340000000000009"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "************4444\n************0004\n***********0009"
+    },
+    {
+      "id": "w21",
+      "category": "records",
+      "description": "Read in/staff.json (array of {name, manager}; manager is \"\" for the top). Write out/result.json: an object mapping each manager who has at least one report to the array of their direct reports' names in input order.",
+      "inputs": {
+        "in/staff.json": "[{\"name\": \"ana\", \"manager\": \"\"}, {\"name\": \"ben\", \"manager\": \"ana\"}, {\"name\": \"cai\", \"manager\": \"ana\"}, {\"name\": \"dov\", \"manager\": \"ben\"}, {\"name\": \"eli\", \"manager\": \"ana\"}, {\"name\": \"fay\", \"manager\": \"dov\"}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "ana": [
+          "ben",
+          "cai",
+          "eli"
+        ],
+        "ben": [
+          "dov"
+        ],
+        "dov": [
+          "fay"
+        ]
+      }
+    },
+    {
+      "id": "w22",
+      "category": "records",
+      "description": "Read in/users.json (array of {id, name}) and in/scores.json (array of {user, points}; user is a user id). Write out/result.txt with one line per user in users.json order: \"<name> <total points>\" (0 if the user has no scores).",
+      "inputs": {
+        "in/users.json": "[{\"id\": 1, \"name\": \"ada\"}, {\"id\": 2, \"name\": \"bob\"}, {\"id\": 3, \"name\": \"cy\"}]",
+        "in/scores.json": "[{\"user\": 3, \"points\": 12}, {\"user\": 1, \"points\": 30}, {\"user\": 3, \"points\": 5}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "ada 30\nbob 0\ncy 17"
+    },
+    {
+      "id": "w23",
+      "category": "records",
+      "description": "Read in/stock.json (object of sku to integer count) and in/moves.json (array of {sku, delta}). Apply every move in order (a sku not yet in stock starts at 0). Write out/result.json: the final stock object.",
+      "inputs": {
+        "in/stock.json": "{\"bolt\": 10, \"nut\": 4, \"gear\": 0}",
+        "in/moves.json": "[{\"sku\": \"nut\", \"delta\": 6}, {\"sku\": \"bolt\", \"delta\": -3}, {\"sku\": \"cog\", \"delta\": 2}, {\"sku\": \"nut\", \"delta\": -1}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "bolt": 7,
+        "nut": 9,
+        "gear": 0,
+        "cog": 2
+      }
+    },
+    {
+      "id": "w24",
+      "category": "records",
+      "description": "Read in/carts.json (array of {cart, items}; items is an array of {sku, qty}). Write out/result.json: an object mapping each sku to its total integer qty across all carts.",
+      "inputs": {
+        "in/carts.json": "[{\"cart\": \"c1\", \"items\": [{\"sku\": \"pen\", \"qty\": 2}, {\"sku\": \"ink\", \"qty\": 1}]}, {\"cart\": \"c2\", \"items\": []}, {\"cart\": \"c3\", \"items\": [{\"sku\": \"pen\", \"qty\": 5}, {\"sku\": \"pad\", \"qty\": 3}]}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "pen": 7,
+        "ink": 1,
+        "pad": 3
+      }
+    },
+    {
+      "id": "w25",
+      "category": "logic",
+      "description": "Read in/n.txt (one integer n >= 2). Write out/result.txt with all primes p <= n separated by single spaces, ascending.",
+      "inputs": {
+        "in/n.txt": "40"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "2 3 5 7 11 13 17 19 23 29 31 37"
+    },
+    {
+      "id": "w26",
+      "category": "logic",
+      "description": "Read in/n.txt (one integer n >= 1). Repeatedly replace n by n/2 if it is even or 3n+1 if it is odd, until n is 1. Write out/result.txt with the integer number of steps taken.",
+      "inputs": {
+        "in/n.txt": "27"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "111"
+    },
+    {
+      "id": "w27",
+      "category": "logic",
+      "description": "Read in/years.txt (one integer year per line). Write out/result.txt with one line per year: \"<year> leap\" or \"<year> common\" (Gregorian rules: divisible by 4, except centuries unless divisible by 400).",
+      "inputs": {
+        "in/years.txt": "1900\n2000\n2024\n2023\n2100\n2400"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1900 common\n2000 leap\n2024 leap\n2023 common\n2100 common\n2400 leap"
+    },
+    {
+      "id": "w28",
+      "category": "logic",
+      "description": "Read in/cmds.txt (one command per line). A door starts \"closed\". Allowed transitions: closed+open->opened, opened+close->closed, closed+lock->locked, locked+unlock->closed. Process commands in order; at the first command not allowed in the current state stop and write \"error line <n>: cannot <cmd> when <state>\" (n is 1-based). If all succeed, write the final state. Output goes to out/result.txt.",
+      "inputs": {
+        "in/cmds.txt": "open\nclose\nlock\nopen\nunlock"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "error line 4: cannot open when locked"
+    },
+    {
+      "id": "w29",
+      "category": "logic",
+      "description": "Read in/spend.txt (one integer per line) and in/budget.txt (one integer). Add the values in order; write out/result.txt with \"over at <n>\" for the 1-based line where the running total first exceeds the budget, or \"within budget\" if it never does.",
+      "inputs": {
+        "in/spend.txt": "30\n45\n10\n60\n5",
+        "in/budget.txt": "100"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "over at 4"
+    },
+    {
+      "id": "w30",
+      "category": "logic",
+      "description": "Read in/romans.txt (one valid Roman numeral per line, I V X L C D M with subtractive forms). Write out/result.json: the JSON array of their integer values in order.",
+      "inputs": {
+        "in/romans.txt": "XIV\nMCMXCIV\nXL\nMMXXVI\nIX"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        14,
+        1994,
+        40,
+        2026,
+        9
+      ]
+    },
+    {
+      "id": "w31",
+      "category": "logic",
+      "description": "Read in/nums.txt (one non-negative integer per line). Write out/result.txt with each number in base 2 (no prefix, \"0\" for zero), one per line.",
+      "inputs": {
+        "in/nums.txt": "5\n0\n255\n1024"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "101\n0\n11111111\n10000000000"
+    },
+    {
+      "id": "w32",
+      "category": "logic",
+      "description": "Read in/ids.txt (one digit string per line). Write out/result.txt with \"<digits> valid\" or \"<digits> invalid\" per line according to the Luhn checksum (from the rightmost digit, double every second digit, subtract 9 from results over 9, sum all; valid if the sum is divisible by 10).",
+      "inputs": {
+        "in/ids.txt": "79927398713\n79927398710\n4539578763621486\n1234567812345678"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "79927398713 valid\n79927398710 invalid\n4539578763621486 valid\n1234567812345678 invalid"
+    },
+    {
+      "id": "w33",
+      "category": "logic",
+      "description": "Read in/board.json (array of {name, score}). Sort by score descending, then name ascending. Write out/result.txt with one line per entry \"<rank> <name> <score>\" using dense ranking (equal scores share a rank; the next distinct score gets the next rank).",
+      "inputs": {
+        "in/board.json": "[{\"name\": \"kim\", \"score\": 88}, {\"name\": \"ari\", \"score\": 95}, {\"name\": \"zed\", \"score\": 88}, {\"name\": \"bea\", \"score\": 70}, {\"name\": \"lou\", \"score\": 95}, {\"name\": \"max\", \"score\": 81}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1 ari 95\n1 lou 95\n2 kim 88\n2 zed 88\n3 max 81\n4 bea 70"
+    },
+    {
+      "id": "w34",
+      "category": "logic",
+      "description": "Read in/maze.txt (rows of '#', '.' and exactly one 'S'). Write out/result.txt with \"<row>,<col> <walls>\": the 0-based row and column of 'S' and the number of '#' cells directly up, down, left or right of it (cells off the grid do not count).",
+      "inputs": {
+        "in/maze.txt": "#.#..\n..S#.\n.###.\n....."
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1,2 3"
+    },
+    {
+      "id": "w35",
+      "category": "logic",
+      "description": "Read in/prices.json (array of integers) and in/target.txt (one integer). Find the pair of 0-based indices i < j with prices[i] + prices[j] == target that has the smallest j (then the smallest i). Write \"<i> <j>\" to out/result.txt, or \"none\" if no pair exists.",
+      "inputs": {
+        "in/prices.json": "[14, 3, 9, 22, 6, 11]",
+        "in/target.txt": "20"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "0 4"
+    },
+    {
+      "id": "w36",
+      "category": "logic",
+      "description": "Read in/passwords.txt (one per line). For each, write the first failing rule, checked in this order: \"too short\" if fewer than 8 characters, \"no digit\" if it has no 0-9, \"no upper\" if it has no A-Z; otherwise \"ok\". One result per line in out/result.txt.",
+      "inputs": {
+        "in/passwords.txt": "hunter2\nCorrectHorse\ncorrecthorse9\nBattery9Staple\nShort1"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "too short\nno digit\nno upper\nok\ntoo short"
+    },
+    {
+      "id": "w37",
+      "category": "logic",
+      "description": "Read in/board.txt (3 lines of 3 characters, each 'X', 'O' or '.'). Write out/result.txt with \"X\" or \"O\" if that player has three in a row (row, column or diagonal), else \"draw\" if no '.' remains, else \"open\". At most one player has a line.",
+      "inputs": {
+        "in/board.txt": "XOX\nOXO\nOXX"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "X"
+    }
+  ]
+}
