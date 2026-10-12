@@ -1,0 +1,3 @@
+(do
+ (let (m (parse_json Any (read_text "in/meter.json")))
+  (write_file "out/result.json" (encode_json (map_list i (range 1 (list_len m)) (- (list_get m i) (list_get m (- i 1))))))))

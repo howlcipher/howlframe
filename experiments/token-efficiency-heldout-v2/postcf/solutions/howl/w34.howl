@@ -1,0 +1,10 @@
+(do
+ (let (g (map_list l (lines (read_file "in/maze.txt")) (str_split l "")) r 0 c 0 w 0 i 0)
+  (do
+   (for row g
+    (do (when (list_contains row "S") (do (set r i) (set c (index_of row "S")))) (inc i)))
+   (for d (list (list -1 0) (list 1 0) (list 0 -1) (list 0 1))
+    (let ((dy dx) d y (+ r dy) x (+ c dx))
+     (when (and (>= y 0) (< y (list_len g)) (>= x 0) (< x (list_len (list_get g y))) (= (list_get (list_get g y) x) "#"))
+      (inc w))))
+   (write_file "out/result.txt" (str r "," c " " w)))))

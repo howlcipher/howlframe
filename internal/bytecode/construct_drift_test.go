@@ -139,6 +139,19 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"reverse":       true, // ast.Desugar core library
 		"count_by":      true, // ast.Desugar core library
 		"sort":          true, // ast.Desugar core library
+		"%":             true, // ast.Desugar control-flow
+		"//":            true, // ast.Desugar control-flow
+		"break":         true, // ast.Desugar control-flow (loop flag)
+		"range":         true, // ast.Desugar control-flow
+		"max_by":        true, // ast.Desugar core library
+		"min_by":        true, // ast.Desugar core library
+		"sort_by":       true, // ast.Desugar core library
+		"pad_left":      true, // ast.Desugar core library
+		"pad_right":     true, // ast.Desugar core library
+		"str_repeat":    true, // ast.Desugar core library
+		"rtrim":         true, // ast.Desugar core library
+		"ltrim":         true, // ast.Desugar core library
+		"to_base":       true, // ast.Desugar core library
 		"ver_ge":        true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar

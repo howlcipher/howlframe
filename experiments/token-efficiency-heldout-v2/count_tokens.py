@@ -13,6 +13,14 @@ LANGUAGES = v0.LANGUAGES
 
 
 def main():
+    # Defaults reproduce the frozen baseline; the post-control-flow set passes
+    # --howl-dir postcf/solutions/howl --results postcf/results.
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--howl-dir", default="solutions/howl")
+    ap.add_argument("--results", default="results")
+    opts = ap.parse_args()
+    res = ROOT / opts.results
     if tiktoken.__version__ != "0.8.0":
         raise RuntimeError("Install requirements.txt: tiktoken==0.8.0 required")
     tiktoken.load.read_file = v0.offline_read
@@ -20,7 +28,7 @@ def main():
     tasks = json.loads((ROOT / "tasks/manifest.json").read_text())["tasks"]
     cats = {t["id"]: t["category"] for t in tasks}
     gaps = {(g["task"], g["lang"]) for g in json.loads((ROOT / "gaps.json").read_text())}
-    checks = {(r["task"], r["lang"]): r for r in json.loads((ROOT / "results/verification.json").read_text())}
+    checks = {(r["task"], r["lang"]): r for r in json.loads((res / "verification.json").read_text())}
     expected = {(t["id"], l) for t in tasks for l in LANGUAGES} - gaps
     if set(checks) != expected:
         raise RuntimeError("verification coverage must be every task x language minus gaps.json")
@@ -29,7 +37,8 @@ def main():
         for lang, ext in LANGUAGES.items():
             if (t["id"], lang) in gaps:
                 continue
-            raw = (ROOT / f"solutions/{lang}/{t['id']}.{ext}").read_bytes()
+            src_dir = ROOT / opts.howl_dir if lang == "howl" else ROOT / f"solutions/{lang}"
+            raw = (src_dir / f"{t['id']}.{ext}").read_bytes()
             c = checks[t["id"], lang]
             if hashlib.sha256(raw).hexdigest() != c["sha256"] or not c["pass"]:
                 raise RuntimeError(f"unverified or changed source {t['id']}/{lang}")
@@ -40,8 +49,8 @@ def main():
                              "tokens": len(enc.encode(src, disallowed_special=())),
                              "tokens_nocomments": len(enc.encode(stripped, disallowed_special=())),
                              "bytes": len(raw), "pass": c["pass"]})
-    (ROOT / "results/tokens.json").write_text(json.dumps(rows, indent=2) + "\n")
-    with (ROOT / "results/tokens.csv").open("w", newline="") as f:
+    (res / "tokens.json").write_text(json.dumps(rows, indent=2) + "\n")
+    with (res / "tokens.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
@@ -74,7 +83,7 @@ def main():
                     "median_ratio_vs_python": statistics.median(by["howl"][t] / by["python"][t] for t in hs) if hs else None,
                 }
             summary[enc][metric] = s
-    (ROOT / "results/summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (res / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps({e: summary[e]["tokens"]["howl_vs"] for e in summary}, indent=1))
 
 

@@ -36,7 +36,7 @@ var arities = map[string]Arity{
 	"env": {1, 1}, "ephemeral_circuit": {2, Variadic}, "exec": {1, Variadic}, "exit": {1, 1},
 	"fetch": {2, 3}, "filter": {3, 3}, "for": {3, 3}, "html_escape": {1, 1},
 	"http_body": {1, 1}, "http_request": {2, 3}, "http_res": {1, 1}, "http_server": {1, Variadic},
-	"http_status": {1, 1}, "if": {2, 3}, "inc": {1, 1}, "index_of": {2, 2}, "is_nil": {1, 1},
+	"http_status": {1, 1}, "if": {2, Variadic}, "inc": {1, 1}, "index_of": {2, 2}, "is_nil": {1, 1},
 	"lazy_synthesize": {3, 3}, "let": {2, 2}, "lines": {1, 1}, "list": {0, Variadic},
 	"list_contains": {2, 2}, "list_get": {2, 2}, "list_len": {1, 1}, "list_slice": {2, 3},
 	"llm_generate": {1, 2}, "map_delete": {2, 2}, "map_get": {2, 2}, "map_has": {2, 2},
@@ -58,6 +58,10 @@ var arities = map[string]Arity{
 	"try_let": {2, Variadic}, "unix_now": {0, 0}, "unless": {1, Variadic}, "ver_ge": {2, 2},
 	"ver_gt": {2, 2}, "wasm_app": {0, Variadic}, "web_app": {0, Variadic}, "when": {1, Variadic},
 	"while": {2, 2}, "write_file": {2, 2},
+	// Control-flow and core built-ins (heldout-v2 follow-up).
+	"%": {2, 2}, "//": {2, 2}, "break": {0, 0}, "range": {1, 2}, "max_by": {3, 3}, "min_by": {3, 3},
+	"sort_by": {3, 3}, "pad_left": {2, 3}, "pad_right": {2, 3}, "str_repeat": {2, 2}, "rtrim": {1, 1},
+	"ltrim": {1, 1}, "to_base": {2, 2},
 }
 
 // arityExempt lists registry constructs with no arity entry, each with the

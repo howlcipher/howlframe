@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (filter s (map_list l (lines (read_file "in/settings.txt")) (rtrim (list_get (str_split l "#") 0))) (!= s "")) "\n")))

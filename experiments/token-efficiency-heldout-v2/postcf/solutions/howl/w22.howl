@@ -1,0 +1,7 @@
+(do
+ (let (sc (parse_json Any (read_text "in/scores.json")))
+  (write_file "out/result.txt"
+   (str_join
+    (map_list u (parse_json Any (read_text "in/users.json"))
+     (str (map_get u "name") " " (sum (map_list s (filter s sc (= (map_get s "user") (map_get u "id"))) (map_get s "points")))))
+    "\n"))))

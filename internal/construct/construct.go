@@ -80,10 +80,12 @@ type Entry struct {
 // a copy on every call. construct_test.go enforces the ordering.
 var table = []Entry{
 	{Name: "!=", Support: Supported, Note: "compileNode binop case"},
+	{Name: "%", Support: CompileTimeOnly, Note: "control-flow sugar; (% a b) floored remainder via to_int(/)/*/- by ast.Desugar (pure)"},
 	{Name: "*", Support: Supported, Note: "compileNode binop case"},
 	{Name: "+", Support: Supported, Note: "compileNode binop case"},
 	{Name: "-", Support: Supported, Note: "compileNode binop case"},
 	{Name: "/", Support: Supported, Note: "compileNode binop case"},
+	{Name: "//", Support: CompileTimeOnly, Note: "control-flow sugar; (// a b) floored integer division via % and / by ast.Desugar (pure)"},
 	{Name: "<", Support: Supported, Note: "compileNode binop case"},
 	{Name: "<=", Support: Supported, Note: "compileNode binop case"},
 	{Name: "=", Support: Supported, Note: "compileNode binop case, normalized to =="},
@@ -99,6 +101,7 @@ var table = []Entry{
 	{Name: "assert_semantic", Support: Unsupported, Note: "LLM intent assertion; no opcode, Go backend only"},
 	{Name: "attr_escape", Support: Supported, Note: "ATTR_ESCAPE; same encoding as html_escape, named for attribute context"},
 	{Name: "blank", Support: CompileTimeOnly, Note: "density sugar; (blank x) → (= x \"\") by ast.Desugar"},
+	{Name: "break", Support: CompileTimeOnly, Note: "control-flow sugar; (break) in a for/while body becomes a flag set + guarded rest by ast.Desugar (pure)"},
 	{Name: "bytes_to_string", Support: Supported, Note: "CONVERT"},
 	{Name: "call", Support: Supported, Note: "CALL"},
 	{Name: "cli_app", Support: Supported, Note: "compiles every child in sequence"},
@@ -144,6 +147,7 @@ var table = []Entry{
 	{Name: "list_len", Support: Supported, Note: "LIST_LEN; list, string, or bytes"},
 	{Name: "list_slice", Support: CompileTimeOnly, Note: "core-library sugar; (list_slice lst a b) elements a..b-1, negative from end by ast.Desugar (pure)"},
 	{Name: "llm_generate", Support: Supported, Note: "LLM_GENERATE"},
+	{Name: "ltrim", Support: CompileTimeOnly, Note: "core-library sugar; (ltrim s) via str_split/while/list_slice/str_join by ast.Desugar (pure)"},
 	{Name: "map_delete", Support: Supported, Note: "MAP_DELETE"},
 	{Name: "map_get", Support: Supported, Note: "MAP_GET"},
 	{Name: "map_has", Support: CompileTimeOnly, Note: "density sugar; dict key membership via map_keys by ast.Desugar"},
@@ -152,8 +156,10 @@ var table = []Entry{
 	{Name: "map_set", Support: Supported, Note: "MAP_SET"},
 	{Name: "match", Support: Unsupported, Note: "no opcode; the interpreter also fails closed on it (internal/vm/vm.go); use switch"},
 	{Name: "max", Support: CompileTimeOnly, Note: "core-library sugar; (max lst) for/when/> by ast.Desugar (pure)"},
+	{Name: "max_by", Support: CompileTimeOnly, Note: "core-library sugar; (max_by x lst key) via map_list/for by ast.Desugar (pure)"},
 	{Name: "middleware", Support: Unsupported, Note: "HTTP middleware chain; no opcode, Go backend only"},
 	{Name: "min", Support: CompileTimeOnly, Note: "core-library sugar; (min lst) for/when/< by ast.Desugar (pure)"},
+	{Name: "min_by", Support: CompileTimeOnly, Note: "core-library sugar; (min_by x lst key) via map_list/for by ast.Desugar (pure)"},
 	{Name: "mkdir", Support: Supported, Note: "MKDIR"},
 	{Name: "module", Support: CompileTimeOnly, Note: "parser.ExpandIncludes/ast.ResolveModules consume (module ...) children of the root before checker.Check or lowering ever run (improvements.md #95); a root that is itself a module (no importer) is a malformed standalone program and fails earlier, in checker.Check"},
 	{Name: "neural_circuit", Support: Supported, Note: "NEURAL_CIRCUIT"},
@@ -162,9 +168,12 @@ var table = []Entry{
 	{Name: "optimize_block", Support: Supported, Note: "compiles children[3:]"},
 	{Name: "optimize_signature", Support: Supported, Note: "compiles the final child; the preceding metric/test/candidate forms are metadata"},
 	{Name: "or", Support: Supported, Note: "compileNode binop case"},
+	{Name: "pad_left", Support: CompileTimeOnly, Note: "core-library sugar; (pad_left s n [ch]) via while/str by ast.Desugar (pure)"},
+	{Name: "pad_right", Support: CompileTimeOnly, Note: "core-library sugar; (pad_right s n [ch]) via while/str by ast.Desugar (pure)"},
 	{Name: "parse_json", Support: Supported, Opaque: true, Note: "PARSE_JSON; reads child .Value directly"},
 	{Name: "patch", Support: CompileTimeOnly, Note: "applied and removed by ast.ApplyPatches before lowering"},
 	{Name: "print", Support: Supported, Note: "PRINT"},
+	{Name: "range", Support: CompileTimeOnly, Note: "control-flow sugar; (range [a] b) int list via while/append by ast.Desugar (pure)"},
 	{Name: "read_file", Support: Supported, Note: "READ_FILE"},
 	{Name: "read_line", Support: Supported, Note: "READ_LINE"},
 	{Name: "read_text", Support: CompileTimeOnly, Note: "density sugar; expanded to bytes_to_string/read_file by ast.Desugar before lowering"},
@@ -179,6 +188,7 @@ var table = []Entry{
 	{Name: "res_json", Support: Supported, Note: "RES_JSON"},
 	{Name: "return", Support: Supported, Note: "RETURN"},
 	{Name: "reverse", Support: CompileTimeOnly, Note: "core-library sugar; (reverse lst) while/list_get/append by ast.Desugar (pure)"},
+	{Name: "rtrim", Support: CompileTimeOnly, Note: "core-library sugar; (rtrim s) via str_split/while/list_slice/str_join by ast.Desugar (pure)"},
 	{Name: "schema", Support: Unsupported, Note: "declarative SQL migration; no opcode, Go backend only"},
 	{Name: "schema_bridge", Support: Supported, Note: "compiles the wrapped source expression"},
 	{Name: "semantic_match", Support: Unsupported, Note: "LLM intent dispatch; no opcode, Go backend only"},
@@ -187,6 +197,7 @@ var table = []Entry{
 	{Name: "sinc", Support: CompileTimeOnly, Note: "density sugar; store string-counter increment+print by ast.Desugar"},
 	{Name: "sleep", Support: Supported, Note: "SLEEP"},
 	{Name: "sort", Support: CompileTimeOnly, Note: "core-library sugar; (sort lst) stable insertion sort via for/when/</append by ast.Desugar (pure)"},
+	{Name: "sort_by", Support: CompileTimeOnly, Note: "core-library sugar; (sort_by x lst key) stable insertion sort on precomputed keys by ast.Desugar (pure)"},
 	{Name: "spawn", Support: Supported, Note: "SPAWN"},
 	{Name: "spawn_agent", Support: Supported, Note: "SPAWN_AGENT"},
 	{Name: "sput", Support: CompileTimeOnly, Note: "density sugar; store string-val put via store_put/dict by ast.Desugar"},
@@ -202,6 +213,7 @@ var table = []Entry{
 	{Name: "str_contains", Support: CompileTimeOnly, Note: "density sugar; substring test via str_split/list_len by ast.Desugar"},
 	{Name: "str_join", Support: Supported, Note: "STR_JOIN"},
 	{Name: "str_len", Support: CompileTimeOnly, Note: "core-library sugar; (str_len s) byte length via str_split/list_len by ast.Desugar (pure)"},
+	{Name: "str_repeat", Support: CompileTimeOnly, Note: "core-library sugar; (str_repeat s n) via while/str by ast.Desugar (pure)"},
 	{Name: "str_replace", Support: CompileTimeOnly, Note: "density sugar; replace via str_split/str_join by ast.Desugar"},
 	{Name: "str_slice", Support: CompileTimeOnly, Note: "core-library sugar; (str_slice s a b) bytes a..b-1 via str_split/list_slice/str_join by ast.Desugar (pure)"},
 	{Name: "str_split", Support: Supported, Note: "STR_SPLIT"},
@@ -212,6 +224,7 @@ var table = []Entry{
 	{Name: "task", Support: Supported, Opaque: true, Note: "TASK; reads description child .Value directly; optional body forms execute through SPAWN_AGENT"},
 	{Name: "test", Support: Unsupported, Tracker: "improvements.md #96", Note: "test blocks are extracted into Go _test.go output; the VM cannot run them"},
 	{Name: "time_now", Support: Supported, Note: "TIME_NOW"},
+	{Name: "to_base", Support: CompileTimeOnly, Note: "core-library sugar; (to_base n b) digits via %/// and list_get by ast.Desugar (pure)"},
 	{Name: "to_float", Support: Supported, Note: "CONVERT"},
 	{Name: "to_int", Support: Supported, Note: "CONVERT"},
 	{Name: "to_lower", Support: Supported, Note: "CONVERT; strings.ToLower"},
@@ -390,6 +403,21 @@ func scanNode(node *ast.Node, parentHead string, out *[]Violation, profile Profi
 			return
 		}
 		if entry.Opaque {
+			return
+		}
+		if entry.Name == "cond" {
+			// (cond (test body...) ... (else body...)): each clause is
+			// structural, never a construct; its test and body are code.
+			for _, clause := range node.Children[1:] {
+				if clause == nil || clause.Type != "List" || len(clause.Children) == 0 {
+					continue
+				}
+				from := 0
+				if h := clause.Children[0]; h.Type == "SYMBOL" && h.Value == "else" {
+					from = 1
+				}
+				scanChildren(clause, entry.Name, out, from, profile)
+			}
 			return
 		}
 		scanChildren(node, entry.Name, out, 1, profile)

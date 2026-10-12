@@ -1,0 +1,9 @@
+(do
+ (let (out (list) cur "")
+  (do
+   (for w (str_split (str_trim (read_text "in/para.txt")) " ")
+    (if (= cur "") (set cur w)
+     (<= (str_len (str cur " " w)) 20) (set cur (str cur " " w))
+     (do (append out cur) (set cur w))))
+   (append out cur)
+   (write_file "out/result.txt" (str_join out "\n")))))

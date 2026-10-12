@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (map_list l (lines (read_file "in/headings.txt")) (str_join (map_list w (str_split l " ") (str (to_upper (str_slice w 0 1)) (str_slice w 1))) " ")) "\n")))

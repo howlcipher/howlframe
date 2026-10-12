@@ -1,0 +1,6 @@
+(do
+ (let (ls (lines (read_file "in/lines.csv")) out (list (str (list_get ls 0) ",total")))
+  (do
+   (for l (list_slice ls 1)
+    (let (r (str_split l ",")) (append out (str l "," (* (to_int (list_get r 1)) (to_int (list_get r 2)))))))
+   (write_file "out/result.csv" (str_join out "\n")))))

@@ -1,0 +1,9 @@
+(do
+ (let (b (to_int (str_trim (read_text "in/budget.txt"))) tot 0 i 0 res "within budget")
+  (do
+   (for x (lines (read_file "in/spend.txt"))
+    (do
+     (inc i)
+     (set tot (+ tot (to_int x)))
+     (when (> tot b) (do (set res (str "over at " i)) (break)))))
+   (write_file "out/result.txt" res))))

@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (map_list l (lines (read_file "in/nums.txt")) (to_base (to_int l) 2)) "\n")))

@@ -1,0 +1,1 @@
+(do (let (v (sort (map_list x (lines (read_file "in/latency.txt")) (to_int x)))) (write_file "out/result.txt" (to_string (list_get v (// (list_len v) 2))))))

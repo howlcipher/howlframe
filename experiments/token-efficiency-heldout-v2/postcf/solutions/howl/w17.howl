@@ -1,0 +1,7 @@
+(do
+ (let (out "" prev "" n 0)
+  (do
+   (for c (str_split (str_trim (read_text "in/raw.txt")) "")
+    (if (= c prev) (inc n)
+     (do (when (> n 0) (set out (str out prev n))) (set prev c) (set n 1))))
+   (write_file "out/result.txt" (str out prev n)))))

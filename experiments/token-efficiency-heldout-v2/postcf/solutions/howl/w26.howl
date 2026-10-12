@@ -1,0 +1,6 @@
+(do
+ (let (n (to_int (str_trim (read_text "in/n.txt"))) k 0)
+  (do
+   (while (!= n 1)
+    (do (set n (if (= (% n 2) 0) (// n 2) (+ (* 3 n) 1))) (inc k)))
+   (write_file "out/result.txt" (to_string k)))))

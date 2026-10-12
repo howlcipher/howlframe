@@ -1,0 +1,4 @@
+(do
+ (let (d (count_by x (str_split (str_trim (read_text "in/ages.txt")) ",") (str (// (to_int x) 10))))
+  (write_file "out/result.txt"
+   (str_join (map_list b (sort_by k (map_keys d) (to_int k)) (str (* (to_int b) 10) "-" (+ (* (to_int b) 10) 9) ": " (map_get d b))) "\n"))))
