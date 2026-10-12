@@ -177,6 +177,7 @@ func main() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	construct.EnforceArity(root)
 	ast.Desugar(root)
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
@@ -694,6 +695,7 @@ func checkSource() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	construct.EnforceArity(root)
 	ast.Desugar(root)
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
@@ -789,11 +791,13 @@ func buildSource() {
 	ast.ApplyPatches(root)
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
+	construct.EnforceArity(root)
 	ast.Desugar(root)
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
 	rejectUnsupportedTargetSugar(root, strings.ToLower(strings.TrimSpace(*target)))
+	rejectUnsupportedTargetValueForms(root, strings.ToLower(strings.TrimSpace(*target)))
 
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
@@ -971,6 +975,7 @@ func runArtifact() {
 		ast.ApplyPatches(root)
 		root = ast.ApplyWithContext(root, nil)
 		root = ast.ApplyWithContext(root, nil)
+		construct.EnforceArity(root)
 		ast.Desugar(root)
 		_ = checker.Check(root)
 		hfirModule := filepath.Base(inputFile)
@@ -999,6 +1004,7 @@ func runArtifact() {
 			ast.ApplyPatches(root)
 			root = ast.ApplyWithContext(root, nil)
 			root = ast.ApplyWithContext(root, nil)
+			construct.EnforceArity(root)
 			ast.Desugar(root)
 			_ = checker.Check(root)
 			hfirModule := filepath.Base(inputFile)
@@ -1146,4 +1152,93 @@ func rejectUnsupportedTargetSugar(root *ast.Node, target string) {
 		}
 	}
 	walk(root)
+}
+
+// targetStatementForms are heads whose sub-forms the Go/JS backends emit as
+// statements. Their bodies are statement positions; see targetValueArgs for
+// which operands are values.
+var targetStatementForms = map[string]bool{
+	"cli_app": true, "web_app": true, "wasm_app": true, "do": true, "let": true, "if": true,
+	"for": true, "while": true, "defun": true, "lambda": true, "switch": true,
+	"cond": true, "try": true, "try_let": true, "catch": true, "route": true,
+	"http_server": true, "test": true, "spawn": true, "task": true,
+}
+
+// rejectUnsupportedTargetValueForms fails closed when a let, do, if, for or
+// while is used as a value (an operand, a let binding or a call argument) on
+// --target=go|js. Those backends emit these forms as statements, so the
+// output would not compile; desugared sugar (all/any, ver_gt/ver_ge,
+// starts_with, list_contains, map_has, not, list_get/parse_json operand
+// binding, ...) reaches the backend in exactly this shape (#141).
+func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
+	if target != "go" && target != "js" && target != "javascript" {
+		return
+	}
+	isForm := func(n *ast.Node) string {
+		if n == nil || n.Type != "List" || len(n.Children) == 0 || n.Children[0].Type != "SYMBOL" {
+			return ""
+		}
+		switch h := n.Children[0].Value; h {
+		case "let", "do", "if", "for", "while":
+			return h
+		}
+		return ""
+	}
+	var walk func(n *ast.Node, value bool)
+	walk = func(n *ast.Node, value bool) {
+		if n == nil {
+			return
+		}
+		if value {
+			if h := isForm(n); h != "" {
+				ast.ReportError(fmt.Sprintf("UNSUPPORTED_ON_TARGET: %s used as a value is not supported on --target=%s (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead", h, target), n.Line, n.Column)
+				return
+			}
+		}
+		if n.Type != "List" || len(n.Children) == 0 {
+			for _, c := range n.Children {
+				walk(c, false)
+			}
+			return
+		}
+		head := ""
+		if n.Children[0].Type == "SYMBOL" {
+			head = n.Children[0].Value
+		}
+		args := n.Children[1:]
+		switch {
+		case head == "let" && len(args) >= 1:
+			b := args[0]
+			for k := 1; k < len(b.Children); k += 2 {
+				walk(b.Children[k], true)
+			}
+			for _, c := range args[1:] {
+				walk(c, false)
+			}
+		case head == "if" && len(args) >= 1:
+			walk(args[0], true)
+			for _, c := range args[1:] {
+				walk(c, value)
+			}
+		case (head == "for") && len(args) >= 2:
+			walk(args[1], true)
+			for _, c := range args[2:] {
+				walk(c, false)
+			}
+		case head == "while" && len(args) >= 1:
+			walk(args[0], true)
+			for _, c := range args[1:] {
+				walk(c, false)
+			}
+		case targetStatementForms[head] || head == "":
+			for _, c := range n.Children {
+				walk(c, false)
+			}
+		default:
+			for _, c := range args {
+				walk(c, true)
+			}
+		}
+	}
+	walk(root, false)
 }

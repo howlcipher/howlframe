@@ -818,8 +818,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 	if isCliApp {
 		startIndex = 1
 	} else {
-		if len(node.Children) < 3 {
-			// ast.ReportError("http_server expects at least a port and 1 route", head.Line, head.Column)
+		if len(node.Children) < 2 {
+			ast.ReportError(fmt.Sprintf("ARITY_ERROR: %s expects at least a port", head.Value), head.Line, head.Column)
 		}
 		portNode = node.Children[1]
 		if portNode.Type != "INT" {
@@ -857,7 +857,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	for i := 0; i < len(handlers); i++ {
 		handlerNode := handlers[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-			// ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
+			ast.ReportError("Expected route, defun, struct, import, test, or middleware definition", handlerNode.Line, handlerNode.Column)
 		}
 
 		head := handlerNode.Children[0].Value
@@ -1398,6 +1398,12 @@ func generateStatement(node *ast.Node, reqVar string, depth int) string {
 }
 
 func generateExpression(node *ast.Node, reqVar string, depth int) string {
+	if node != nil && node.Type == "List" && len(node.Children) == 1 &&
+		node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "time_now" {
+		// Unix seconds, matching the bytecode VM and the JS backend. Before
+		// #141 time_now emitted an empty expression on --target=go.
+		return "int(time.Now().Unix())"
+	}
 	return generateStatementRaw(node, reqVar, depth)
 }
 
@@ -1900,7 +1906,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return generateExpression(node.Children[1], reqVar, depth+1)
 	} else if head == "trace" {
 		if len(node.Children) != 2 {
-			// ast.ReportError("trace expects (trace var)", node.Line, node.Column)
+			ast.ReportError("trace expects (trace var)", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		fileLine := fmt.Sprintf("[%s:%d]", node.Filename, node.Line)
@@ -2178,7 +2184,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, instructionStr, promptVar)
 	} else if head == "fuzzy_cast" {
 		if len(node.Children) < 3 {
-			// ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
+			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
 		}
 		typeStr := node.Children[1].Value
 		varStr := generateStatement(node.Children[2], reqVar, depth+1)
@@ -2207,7 +2213,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, typeStr, typeStr, modelStr, varStr)
 	} else if head == "semantic_match" {
 		if len(node.Children) < 3 {
-			// ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
+			ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		var casesStr string
@@ -2215,8 +2221,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 
 		for i := 2; i < len(node.Children); i++ {
 			caseNode := node.Children[i]
-			if caseNode.Type != "LIST" || len(caseNode.Children) < 2 {
-				// ast.ReportError("semantic_match case expects (intent consequence...)", caseNode.Line, caseNode.Column)
+			if caseNode.Type != "List" || len(caseNode.Children) < 2 {
+				ast.ReportError("semantic_match case expects (intent consequence...)", caseNode.Line, caseNode.Column)
 			}
 			label := caseNode.Children[0]
 			isDefault := label.Value == "default" || label.Value == "_"
@@ -2265,7 +2271,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}()`, intentsArrayStr, varStr, casesStr)
 	} else if head == "assert_semantic" {
 		if len(node.Children) != 3 {
-			// ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
+			ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
 		}
 		varStr := generateStatement(node.Children[1], reqVar, depth+1)
 		condStr := generateStatement(node.Children[2], reqVar, depth+1)
