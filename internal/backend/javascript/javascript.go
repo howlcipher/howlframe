@@ -89,7 +89,7 @@ var jsNumeric bool
 
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
-	// still "". list_get of an in-range element returns that element. An
+	// null (rendered as "" by print/to_string). list_get of an in-range element returns that element. An
 	// out-of-range index is "". A wrong receiver is TYPE_ERROR. A list_get
 	// index that is not a whole number is TYPE_ERROR, matching Atoi.
 	return `function howlFrameValueKind(v) {
@@ -104,7 +104,7 @@ function howlFrameMapGet(dict, key) {
   if (!howlFrameIsDict(dict)) {
     throw new Error("TYPE_ERROR: map_get expected dict, got " + howlFrameValueKind(dict));
   }
-  return dict[key] ?? "";
+  return Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : null;
 }
 function howlFrameMapSet(dict, key, val) {
   if (!howlFrameIsDict(dict)) {
@@ -122,8 +122,10 @@ function howlFrameAppend(list, item) {
   if (!Array.isArray(list)) {
     throw new Error("TYPE_ERROR: append expected list, got " + howlFrameValueKind(list));
   }
-  list.push(item);
-  return list;
+  // Lists are values: append returns a copy, matching the VM.
+  var out = list.slice();
+  out.push(item);
+  return out;
 }
 function howlFrameListIndex(idx) {
   if (typeof idx === "number" && Number.isInteger(idx)) return idx;
@@ -797,7 +799,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s)", valStr)
+		return fmt.Sprintf("((_v) => _v == null ? \"\" : String(_v))(%s)", valStr)
 	case "to_lower":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("String(%s).toLowerCase()", valStr)
@@ -830,7 +832,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		jsNeedsCollection = true
 		listNode := ir.Kids[0]
 		itemStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		return fmt.Sprintf("howlFrameAppend(%s, %s)", listNode.Value, itemStr)
+		return fmt.Sprintf("%s = howlFrameAppend(%s, %s)", listNode.Value, listNode.Value, itemStr)
 	case "map_set":
 		jsNeedsCollection = true
 		dictNode := ir.Kids[0]
@@ -908,7 +910,12 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "print":
 		var args []string
 		for _, kid := range ir.Kids {
-			args = append(args, generateJSStatementRaw(kid, reqVar, depth+1))
+			// null (a map_get miss) renders as "", matching vm.TextOf.
+			argStr := generateJSStatementRaw(kid, reqVar, depth+1)
+			if kid.Type != "STRING" && kid.Type != "INT" && kid.Type != "FLOAT" {
+				argStr = fmt.Sprintf("((_v) => _v == null ? \"\" : _v)(%s)", argStr)
+			}
+			args = append(args, argStr)
 		}
 		return fmt.Sprintf("console.log(%s)", strings.Join(args, ", "))
 	}

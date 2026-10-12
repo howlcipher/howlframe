@@ -12,7 +12,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 )
 
-func TestJSMapGetMissIsEmptyString(t *testing.T) {
+func TestJSMapGetMissIsNil(t *testing.T) {
 	const source = `(web_app
   (let (strings (dict ("hit" "yes") ("empty" "")))
     (let (raw "{\"hit\":\"yes\",\"empty\":\"\",\"n\":7,\"nested\":{\"k\":\"v\"}}")
@@ -38,22 +38,22 @@ func TestJSMapGetMissIsEmptyString(t *testing.T) {
 		"s-empty \n" +
 		"s-miss \n" +
 		"s-empty-nil false\n" +
-		"s-miss-nil false\n" +
+		"s-miss-nil true\n" +
 		"a-hit yes\n" +
 		"a-n 7\n" +
 		"a-empty \n" +
 		"a-miss \n" +
 		"a-empty-nil false\n" +
-		"a-miss-nil false\n" +
+		"a-miss-nil true\n" +
 		"nested v\n" +
 		"nested-miss \n" +
-		"nested-miss-nil false\n"
+		"nested-miss-nil true\n"
 
 	root := parser.NewParser(lexer.NewLexer(source), "absence.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
-	if !strings.Contains(code, `howlFrameMapGet(strings, "missing")`) || !strings.Contains(code, `?? ""`) {
-		t.Fatalf("generated JavaScript does not coerce a missing map_get to \"\":\n%s", code)
+	if !strings.Contains(code, `howlFrameMapGet(strings, "missing")`) {
+		t.Fatalf("generated JavaScript does not route map_get through the helper:\n%s", code)
 	}
 
 	dir := t.TempDir()

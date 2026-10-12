@@ -53,7 +53,7 @@ These grant nothing. The suite runs them with an empty capability grant.
 * `let` and `print`. `print` writes one line. Several arguments are separated by a single space.
 * `dict`, `map_get`, `map_keys`, `list`, `list_len`, `str_join`, `is_nil`, `html_escape`, `attr_escape`, `regex_match`.
 
-`(map_get dict key)` on a missing key is `""`. `is_nil` of that result is false. A present value is returned as stored. This is the #103 absence rule. `map_get` grants nothing.
+`(map_get dict key)` on a missing key is nil. `is_nil` of that result is true. Nil renders as `""` in `print` and `to_string`, so a miss still prints as an empty field. A present value is returned as stored. Go caveat: on a typed `map[string]string` a miss still reads as `""` (that map cannot hold nil); `is_nil` of a named `map_get` is compiled as a key-presence check so it still agrees with the VM. This supersedes the #103 empty-string miss rule. `map_get` grants nothing.
 
 `(map_keys dict)` returns a list of strings in UTF-8 byte order (Go `sort.Strings`, Go string `<`). An empty dict is an empty list, so its length is `0`. A value that is not a dict fails at runtime with `TYPE_ERROR` and the text `map_keys expected dict`. `map_keys` grants nothing. The order, including keys outside the Basic Multilingual Plane, is the #109 rule. The suite replays `tests/fixtures/map_keys_sort_bmp.howl` and `tests/fixtures/map_keys_sort_nonbmp.howl`. Wasm does not emit `map_keys`; #73 must use this byte order if it ever does.
 

@@ -73,27 +73,35 @@ type goVarFrame struct {
 var gogenVarStack []goVarFrame
 
 // mapGetHelperSource is the Go form of the map_get absence contract.
-// map[string]string already yields "" for a missing key. map[string]any
-// yields nil, so the helper returns "" for that miss. A present value,
-// including "" and a present nil, is returned unchanged.
+// map[string]string yields "" for a missing key (it cannot hold nil).
+// map[string]any yields nil. A present value is returned unchanged.
 func mapGetHelperSource() string {
 	return `func howlFrameMapGet[V any](m map[string]V, key string) V {
 	if v, ok := m[key]; ok {
 		return v
 	}
+	// A missing key is the zero value: nil for dynamic maps. Typed string
+	// maps (map[string]string) cannot hold nil and return "".
 	var zero V
-	if any(zero) == nil {
-		if blank, ok := any("").(V); ok {
-			return blank
-		}
-	}
 	return zero
+}
+
+// howlFrameMapGetIsNil is is_nil(map_get m key): true for a missing key or a
+// present nil, false otherwise, for typed and dynamic maps alike.
+func howlFrameMapGetIsNil[V any](m map[string]V, key string) bool {
+	v, ok := m[key]
+	if !ok {
+		return true
+	}
+	var a any = v
+	return a == nil
 }
 
 // howlFrameMapGetValue reads a key from a dict expression. A named map_get
 // stays on howlFrameMapGet so a string map still returns a string. A nested
-// map_get receives that result as any. A missing key is still "". A map_get
-// of that sentinel, or of any other non-dict, fails closed.
+// map_get receives that result as any. A missing key in a dynamic map is nil
+// (a typed string map still returns ""). A map_get of nil, or of any other
+// non-dict, fails closed.
 func howlFrameMapGetValue(m any, key string) any {
 	switch d := m.(type) {
 	case map[string]string:
@@ -105,7 +113,7 @@ func howlFrameMapGetValue(m any, key string) any {
 		if v, ok := d[key]; ok {
 			return v
 		}
-		return ""
+		return nil
 	default:
 		panic(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %T", m))
 	}
@@ -115,7 +123,7 @@ func howlFrameMapGetValue(m any, key string) any {
 }
 
 // collectionHelperSource is the fail-closed form of the remaining dict and
-// list operations. A missing map_get key is still "". A list_get index that
+// list operations. A missing map_get key is nil for dynamic maps ("" for typed string maps). A list_get index that
 // is in range returns the element. An out-of-range index is "". A receiver
 // of the wrong type is TYPE_ERROR, as is a list_get index that is not a
 // whole number.
@@ -127,9 +135,10 @@ func collectionHelperSource() string {
 		if !ok {
 			panic(fmt.Sprintf("TYPE_ERROR: append expected string item, got %T", item))
 		}
-		return append(l, s)
+		// Full slice expression forces a copy: lists are values.
+		return append(l[:len(l):len(l)], s)
 	case []any:
-		return append(l, item)
+		return append(l[:len(l):len(l)], item)
 	default:
 		panic(fmt.Sprintf("TYPE_ERROR: append expected list, got %T", list))
 	}
@@ -318,6 +327,12 @@ func goValueType(node *ast.Node) string {
 			return "float64"
 		case "is_nil":
 			return "bool"
+		case "schema_bridge":
+			// The bridge emits its wrapped source expression.
+			if len(node.Children) == 3 {
+				return goValueType(node.Children[2])
+			}
+			return ""
 		default:
 			return ""
 		}
@@ -1634,7 +1649,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("fmt.Sprint(%s)", valStr)
+		return fmt.Sprintf("func() string { var _v any = %s; if _v == nil { return \"\" }; return fmt.Sprint(_v) }()", valStr)
 	case "bytes_to_string":
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("string(%s)", valStr)
@@ -1677,7 +1692,10 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// when the runtime value is not a list.
 		switch goVarKind(listNode.Value) {
 		case "[]string", "":
-			return fmt.Sprintf("		%s = append(%s, %s)", listNode.Value, listNode.Value, itemStr)
+			// Lists are values: the full slice expression forces a fresh
+			// backing array, so a list stored in a map (or another variable)
+			// never sees this append. Matches the VM copy-on-append.
+			return fmt.Sprintf("		%s = append(%s[:len(%s):len(%s)], %s)", listNode.Value, listNode.Value, listNode.Value, listNode.Value, itemStr)
 		case "any":
 			gogenCollection = true
 			return fmt.Sprintf("		%s = howlFrameAppend(%s, %s)", listNode.Value, listNode.Value, itemStr)
@@ -1753,6 +1771,17 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// plane keys. Improvement #109.
 		return fmt.Sprintf("func() []string { switch _m := any(%s).(type) { case map[string]string: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; case map[string]any: _keys := make([]string, 0, len(_m)); for _k := range _m { _keys = append(_keys, _k) }; sort.Strings(_keys); return _keys; default: panic(fmt.Sprintf(\"TYPE_ERROR: map_keys expected dict, got %%T\", _m)) } }()", dictStr)
 	case "is_nil":
+		// is_nil of a named map_get checks key presence, so a miss on a typed
+		// map[string]string (which cannot hold nil) still reports true.
+		if mg := ir.Kids[0]; mg != nil && mg.Type == "List" && len(mg.Children) == 3 &&
+			mg.Children[0].Type == "SYMBOL" && mg.Children[0].Value == "map_get" && mg.Children[1].Type == "SYMBOL" {
+			switch goVarKind(mg.Children[1].Value) {
+			case "map[string]string", "map[string]any":
+				gogenMapGet = true
+				keyStr := generateExpression(mg.Children[2], reqVar, depth+1)
+				return fmt.Sprintf("howlFrameMapGetIsNil(%s, fmt.Sprint(%s))", mg.Children[1].Value, keyStr)
+			}
+		}
 		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() bool { var _v any = %s; return _v == nil || fmt.Sprint(_v) == \"<nil>\" }()", valStr)
 	case "list":
@@ -1770,7 +1799,13 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "print":
 		var args []string
 		for _, kid := range ir.Kids {
-			args = append(args, generateExpression(kid, reqVar, depth+1))
+			// nil (a map_get miss) renders as "", matching vm.TextOf. Only a
+			// dynamic value can be nil; concrete values print directly.
+			argStr := generateExpression(kid, reqVar, depth+1)
+			if typ := goValueType(kid); typ == "" || typ == "any" {
+				argStr = fmt.Sprintf("func() any { var _v any = %s; if _v == nil { return \"\" }; return _v }()", argStr)
+			}
+			args = append(args, argStr)
 		}
 		return fmt.Sprintf("		fmt.Println(%s)", strings.Join(args, ", "))
 	}

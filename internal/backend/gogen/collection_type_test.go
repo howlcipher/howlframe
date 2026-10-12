@@ -36,7 +36,7 @@ func TestGoConcreteListAndDictStayDirect(t *testing.T) {
         (print (map_get d "k"))
       ))))`
 	code := generateCheckedGo(t, source)
-	if !strings.Contains(code, `items = append(items, "b")`) {
+	if !strings.Contains(code, `items = append(items[:len(items):len(items)], "b")`) {
 		t.Fatalf("concrete append changed shape:\n%s", code)
 	}
 	if !strings.Contains(code, `d["k2"] = "v2"`) || !strings.Contains(code, `delete(d, "k")`) {

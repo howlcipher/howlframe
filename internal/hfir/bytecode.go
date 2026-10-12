@@ -203,6 +203,17 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			diagnostic := c.diagnostic(node, "binary operation requires operator, left, and right")
 			return nil, &diagnostic
 		}
+		if node.Value == "and" || node.Value == "or" {
+			left, d := c.compile(children[0])
+			if d != nil {
+				return nil, d
+			}
+			right, d := c.compile(children[1])
+			if d != nil {
+				return nil, d
+			}
+			return bytecode.ShortCircuit(node.Value, left, right), nil
+		}
 		insts, childDiagnostic := compileAll()
 		if childDiagnostic != nil {
 			return nil, childDiagnostic

@@ -248,7 +248,15 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
 		"str_contains", "str_replace", "starts_with", "ends_with",
 		"http_body", "http_status", "http_res", "list_contains", "not",
-		"blank", "unix_now", "ver_gt", "ver_ge", "all", "any", "parse_json", "list_len":
+		"blank", "unix_now", "ver_gt", "ver_ge", "all", "any", "parse_json", "list_len",
+		// Value-taking built-ins: nested sugar in their arguments must expand
+		// (heldout-v0 h05/h12). Kept complete by the registry drift test.
+		"write_file", "read_file", "mkdir", "to_lower", "to_upper", "str_trim",
+		"html_escape", "attr_escape", "regex_match", "is_nil", "map_keys",
+		"env", "sleep", "exec", "cli_args", "read_line", "time_now",
+		"store_open", "store_keys", "res_header",
+		"req_header", "req_method", "req_path", "req_query",
+		"llm_generate", "confidence":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -1434,4 +1442,18 @@ var exprBodyHeads = map[string]bool{
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,
+}
+
+// IsSugarExprParent reports whether sugar nested directly under a form with
+// this head is expanded (for heads with structural slots such as for/let, it
+// reports whether any child slot is an expression slot). Exported for the
+// registry drift test so every construct taking expression arguments expands
+// nested sugar.
+func IsSugarExprParent(head string) bool {
+	for i := 1; i <= 3; i++ {
+		if isSugarExprContext(head, i) {
+			return true
+		}
+	}
+	return false
 }

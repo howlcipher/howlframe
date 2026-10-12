@@ -37,16 +37,16 @@ const absenceMapGetWant = "s-hit yes\n" +
 	"s-empty \n" +
 	"s-miss \n" +
 	"s-empty-nil false\n" +
-	"s-miss-nil false\n" +
+	"s-miss-nil true\n" +
 	"a-hit yes\n" +
 	"a-n 7\n" +
 	"a-empty \n" +
 	"a-miss \n" +
 	"a-empty-nil false\n" +
-	"a-miss-nil false\n" +
+	"a-miss-nil true\n" +
 	"nested v\n" +
 	"nested-miss \n" +
-	"nested-miss-nil false\n"
+	"nested-miss-nil true\n"
 
 const absenceStoreSource = `(cli_app
   (let (strings (dict ("empty" "")))
@@ -62,9 +62,9 @@ const absenceStoreSource = `(cli_app
 const absenceStoreWant = "field-nil false\n" +
 	"record-nil false\n" +
 	"gone-nil true\n" +
-	"gone <nil>\n"
+	"gone \n"
 
-func TestMapGetMissIsEmptyString(t *testing.T) {
+func TestMapGetMissIsNil(t *testing.T) {
 	t.Run("interpreter", func(t *testing.T) {
 		node, _ := parseAndCompile(t, absenceMapGetSource)
 		var out, errOut bytes.Buffer
@@ -98,9 +98,7 @@ func TestStoreGetMissIsNil(t *testing.T) {
 	if out.String() != absenceStoreWant {
 		t.Fatalf("stdout = %q, want %q", out.String(), absenceStoreWant)
 	}
-	if strings.Contains(out.String(), "gone \n") || strings.Contains(out.String(), "gone \"\"") {
-		t.Fatalf("missing store record printed as an empty string:\n%s", out.String())
-	}
+	// nil renders as "" in print (2026-10-12); absence is observed with is_nil.
 }
 
 func TestAbsenceOpcodeValuesAndCapabilities(t *testing.T) {
@@ -153,11 +151,11 @@ func TestAbsenceOpcodeValuesAndCapabilities(t *testing.T) {
 	if got := runMapGet(t, vm, "strings", "empty"); got != "" {
 		t.Fatalf("present empty string = %#v", got)
 	}
-	if got := runMapGet(t, vm, "strings", "missing"); got != "" {
-		t.Fatalf("string-map miss = %#v, want \"\"", got)
+	if got := runMapGet(t, vm, "strings", "missing"); got != nil {
+		t.Fatalf("string-map miss = %#v, want nil", got)
 	}
-	if got := runMapGet(t, vm, "records", "missing"); got != "" {
-		t.Fatalf("map[string]any miss = %#v, want \"\"", got)
+	if got := runMapGet(t, vm, "records", "missing"); got != nil {
+		t.Fatalf("map[string]any miss = %#v, want nil", got)
 	}
 	if got := runMapGet(t, vm, "records", "n"); got != int64(7) {
 		t.Fatalf("non-string hit = %#v, want 7", got)
@@ -172,8 +170,8 @@ func TestAbsenceOpcodeValuesAndCapabilities(t *testing.T) {
 	if got := runIsNil(t, vm, "strings", "empty"); got {
 		t.Fatal("is_nil(present \"\") = true")
 	}
-	if got := runIsNil(t, vm, "strings", "missing"); got {
-		t.Fatal("is_nil(map_get miss) = true, want false")
+	if got := runIsNil(t, vm, "strings", "missing"); !got {
+		t.Fatal("is_nil(map_get miss) = false, want true")
 	}
 	if got := runIsNil(t, vm, "records", "null"); !got {
 		t.Fatal("is_nil(present nil) = false")

@@ -52,12 +52,12 @@ func TestJSChainedMapGetMissingIntermediate(t *testing.T) {
 		t.Fatalf("missing intermediate succeeded, stdout=%q stderr=%q", stdout, stderr)
 	}
 	if stdout != "sentinel \n" {
-		t.Fatalf("stdout = %q, want the #103 empty-string sentinel and no chained print", stdout)
+		t.Fatalf("stdout = %q, want the nil miss and no chained print", stdout)
 	}
 	if strings.Contains(stdout, "chained") {
 		t.Fatalf("chained read of the sentinel printed %q", stdout)
 	}
-	if !strings.Contains(stderr, "TYPE_ERROR: map_get expected dict, got string") {
+	if !strings.Contains(stderr, "TYPE_ERROR: map_get expected dict, got ") {
 		t.Fatalf("stderr = %q", stderr)
 	}
 }
