@@ -85,11 +85,11 @@ func TestChainedMapGetMissingIntermediate(t *testing.T) {
 		if evidence.RuntimeFailure == nil || evidence.RuntimeFailure.Code != "TYPE_ERROR" {
 			t.Fatalf("failure = %#v, want TYPE_ERROR", evidence.RuntimeFailure)
 		}
-		if !strings.Contains(evidence.RuntimeFailure.Message, "map_get expected dict, got string") {
+		if !strings.Contains(evidence.RuntimeFailure.Message, "map_get expected dict, got <nil>") {
 			t.Fatalf("message = %q", evidence.RuntimeFailure.Message)
 		}
 		if out.String() != "sentinel \n" {
-			t.Fatalf("stdout = %q, want the #103 empty-string sentinel and no chained print", out.String())
+			t.Fatalf("stdout = %q, want the nil miss and no chained print", out.String())
 		}
 		if strings.Contains(out.String(), "chained") {
 			t.Fatalf("chained read of the sentinel printed %q", out.String())
@@ -145,11 +145,11 @@ func TestChainedMapGetDeclaresNoCapability(t *testing.T) {
 
 func assertMapGetPathTypeError(t *testing.T, exitCode int, stdout, stderr string) {
 	t.Helper()
-	if exitCode == 0 || !strings.Contains(stderr, "TYPE_ERROR: map_get expected dict, got string") {
+	if exitCode == 0 || !strings.Contains(stderr, "TYPE_ERROR: map_get expected dict, got") || !strings.Contains(stderr, "nil") {
 		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exitCode, stdout, stderr)
 	}
 	if stdout != "sentinel \n" {
-		t.Fatalf("stdout = %q, want the #103 empty-string sentinel and no chained print", stdout)
+		t.Fatalf("stdout = %q, want the nil miss and no chained print", stdout)
 	}
 	if strings.Contains(stdout, "chained") {
 		t.Fatalf("chained read of the sentinel printed %q", stdout)

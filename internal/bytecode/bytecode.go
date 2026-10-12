@@ -719,7 +719,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				insts = append(insts, c.compileNode(arg)...)
 			}
 			insts = append(insts, BCInstruction{OpString: "CALL", Op: OpCall, StringOperand: funcName, IntOperand: int64(float64(len(node.Children) - 2))})
-		case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=", "and", "or":
+		case "and", "or":
+			insts = append(insts, ShortCircuit(head, c.compileNode(node.Children[1]), c.compileNode(node.Children[2]))...)
+		case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			op := head
@@ -863,4 +865,35 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 
 func extractParamNames(paramsNode *ast.Node) []string {
 	return ast.ParamNames(paramsNode)
+}
+
+// ShortCircuit lowers (and l r) / (or l r) so r is skipped when l decides.
+// The left value is tested by JUMP_IF_FALSE (which requires a boolean); a
+// skipped branch pushes the decided constant. An evaluated right operand still
+// goes through BINOP with the identity constant, so a non-boolean right value
+// is the same TYPE_ERROR as before.
+//
+//	and: l; JIF +len(r)+4; r; CONST true; BINOP and; JUMP +2; CONST false
+//	or:  l; JIF +3; CONST true; JUMP +len(r)+3; r; CONST false; BINOP or
+func ShortCircuit(op string, left, right []BCInstruction) []BCInstruction {
+	out := append([]BCInstruction{}, left...)
+	if op == "and" {
+		out = append(out, BCInstruction{OpString: "JUMP_IF_FALSE", Op: OpJumpIfFalse, IntOperand: int64(len(right) + 4)})
+		out = append(out, right...)
+		out = append(out,
+			BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: true},
+			BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: "and"},
+			BCInstruction{OpString: "JUMP", Op: OpJump, IntOperand: 2},
+			BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: false})
+		return out
+	}
+	out = append(out,
+		BCInstruction{OpString: "JUMP_IF_FALSE", Op: OpJumpIfFalse, IntOperand: 3},
+		BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: true},
+		BCInstruction{OpString: "JUMP", Op: OpJump, IntOperand: int64(len(right) + 3)})
+	out = append(out, right...)
+	out = append(out,
+		BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: false},
+		BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: "or"})
+	return out
 }

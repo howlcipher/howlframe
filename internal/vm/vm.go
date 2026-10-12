@@ -357,13 +357,13 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		var out []string
 		for _, arg := range args {
-			out = append(out, fmt.Sprint(arg))
+			out = append(out, TextOf(arg))
 		}
 		fmt.Fprintln(interp.Out, strings.Join(out, " "))
 		return nil
 	case "stderr":
 		val := interp.eval(node.Children[1], env)
-		fmt.Fprint(interp.ErrOut, val)
+		fmt.Fprint(interp.ErrOut, TextOf(val))
 		return nil
 	case "exit":
 		val := interp.eval(node.Children[1], env)
@@ -601,7 +601,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if len(node.Children) != 2 {
 			InterpErr("to_string expects (to_string val)", node)
 		}
-		return fmt.Sprint(interp.eval(node.Children[1], env))
+		return TextOf(interp.eval(node.Children[1], env))
 	case "bytes_to_string":
 		if len(node.Children) != 2 {
 			InterpErr("bytes_to_string expects (bytes_to_string val)", node)
@@ -709,7 +709,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		strs := make([]string, len(items))
 		for i, it := range items {
-			strs[i] = fmt.Sprint(it)
+			strs[i] = TextOf(it)
 		}
 		return strings.Join(strs, sep)
 	case "regex_match":
@@ -1099,7 +1099,7 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		// A missing key is "". Reading through that sentinel, or any other
+		// A missing key is nil. Reading through nil, or any other
 		// non-dict, is a type error rather than another absence value.
 		InterpErr(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %T", current), dictNode)
 	}
@@ -1107,8 +1107,8 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 	if val, ok := d[key]; ok {
 		return val
 	}
-	// Missing keys are the empty string. A missing store record is nil.
-	return ""
+	// A missing key is nil (is_nil true; nz supplies a default).
+	return nil
 }
 
 func (interp *Interpreter) evalListGet(node *ast.Node, env *InterpEnv) any {
@@ -1142,13 +1142,23 @@ func (interp *Interpreter) evalBinop(op string, node *ast.Node, env *InterpEnv) 
 	if len(node.Children) != 3 {
 		InterpErr(fmt.Sprintf("%s expects 2 arguments", op), node)
 	}
+	// and/or short-circuit: the right operand (and any effect in it) is not
+	// evaluated when the left operand decides the result.
+	switch op {
+	case "and":
+		if !ToBool(interp.eval(node.Children[1], env), node.Children[1]) {
+			return false
+		}
+		return ToBool(interp.eval(node.Children[2], env), node.Children[2])
+	case "or":
+		if ToBool(interp.eval(node.Children[1], env), node.Children[1]) {
+			return true
+		}
+		return ToBool(interp.eval(node.Children[2], env), node.Children[2])
+	}
 	a := interp.eval(node.Children[1], env)
 	b := interp.eval(node.Children[2], env)
 	switch op {
-	case "and":
-		return ToBool(a, node.Children[1]) && ToBool(b, node.Children[2])
-	case "or":
-		return ToBool(a, node.Children[1]) || ToBool(b, node.Children[2])
 	case "==", "=":
 		return ValuesEqual(a, b)
 	case "!=":
@@ -2963,12 +2973,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vals = append([]any{vm.pop(inst.Op)}, vals...)
 			}
 			for _, v := range vals {
-				out = append(out, fmt.Sprint(v))
+				out = append(out, TextOf(v))
 			}
 			fmt.Fprintln(vm.Out, strings.Join(out, " "))
 		case bytecode.OpStderr:
 			val := vm.pop(inst.Op)
-			fmt.Fprint(vm.ErrOut, val)
+			fmt.Fprint(vm.ErrOut, TextOf(val))
 		case bytecode.OpExit:
 			val := vm.pop(inst.Op)
 			var code int
@@ -3034,7 +3044,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			var strs []string
 			for _, item := range list {
-				strs = append(strs, fmt.Sprint(item))
+				strs = append(strs, TextOf(item))
 			}
 			joined := strings.Join(strs, sep)
 			vm.chargeAlloc(len(joined), ip, inst.Op)
@@ -3160,8 +3170,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			dict, ok := current.(map[string]any)
 			if !ok {
-				// A missing key is "". map_get of that sentinel is a type
-				// error, not a second miss.
+				// A missing key is nil. map_get of nil is a type error,
+				// not a second miss.
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
 			}
 			if val, ok := dict[key]; ok {
@@ -3173,8 +3183,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.trace.state("map:"+varName, key)
 				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 				vm.mapLedger.read(dict, ip, nodeID, key, false, nil)
-				// Missing keys are the empty string. A missing store record is nil.
-				vm.push("")
+				// A missing key is nil (is_nil true; nz supplies a default).
+				vm.push(nil)
 			}
 		case bytecode.OpListGet:
 			varName := inst.StringOperand
@@ -3521,7 +3531,7 @@ func BcConvert(target string, a any) any {
 			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %T to float", a))
 		}
 	case "to_string":
-		return fmt.Sprint(a)
+		return TextOf(a)
 	case "bytes_to_string":
 		items, ok := a.([]any)
 		if !ok {
@@ -3738,4 +3748,14 @@ func filesystemIOPath(path string, grants capability.Grants) string {
 	}
 	normalized, _ := filepath.Abs(path) // authorization already checked this error
 	return normalized
+}
+
+// TextOf renders a value as text for print, stderr, to_string and str_join.
+// nil (a missing map key or store record) renders as the empty string, so
+// absence stays distinguishable via is_nil/nz without changing text output.
+func TextOf(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
 }

@@ -48,12 +48,12 @@ func TestGoChainedMapGetMissingIntermediate(t *testing.T) {
 	code := generateCheckedGo(t, source)
 	stdout, crash := goRunCrash(t, code)
 	if stdout != "sentinel \n" {
-		t.Fatalf("stdout = %q, want the #103 empty-string sentinel and no chained print", stdout)
+		t.Fatalf("stdout = %q, want the nil miss and no chained print", stdout)
 	}
 	if strings.Contains(stdout, "chained") {
 		t.Fatalf("chained read of the sentinel printed %q", stdout)
 	}
-	if !strings.Contains(crash, "TYPE_ERROR: map_get expected dict, got string") {
+	if !strings.Contains(crash, "TYPE_ERROR: map_get expected dict, got ") {
 		t.Fatalf("crash = %q", crash)
 	}
 }

@@ -85,12 +85,18 @@ func TestReleaseAuthority(t *testing.T) {
 				t.Fatalf("extra output after decision: %v", err)
 			}
 			var proposal struct {
-				Target string `json:"target"`
+				Target *string `json:"target"`
 			}
 			if err := json.Unmarshal([]byte(proposalJSON), &proposal); err != nil {
 				t.Fatal(err)
 			}
-			if decision["target"] != proposal.Target {
+			// A missing target is nil from map_get, so the app's is_nil
+			// fallback reports "unknown" (2026-10-12 nil semantics).
+			wantTarget := "unknown"
+			if proposal.Target != nil {
+				wantTarget = *proposal.Target
+			}
+			if decision["target"] != wantTarget {
 				t.Fatalf("target did not round-trip: %q", decision["target"])
 			}
 			tokens := json.NewDecoder(strings.NewReader(outStr))

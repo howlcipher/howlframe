@@ -12,7 +12,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 )
 
-func TestGoMapGetMissIsEmptyString(t *testing.T) {
+func TestGoMapGetMissIsNil(t *testing.T) {
 	const source = `(cli_app
   (let (strings (dict ("hit" "yes") ("empty" "")))
     (do
@@ -26,7 +26,7 @@ func TestGoMapGetMissIsEmptyString(t *testing.T) {
 		"s-empty \n" +
 		"s-miss \n" +
 		"s-empty-nil false\n" +
-		"s-miss-nil false\n"
+		"s-miss-nil true\n"
 
 	root := parser.NewParser(lexer.NewLexer(source), "absence.howl").ParseExpression()
 	checker.Check(root)
@@ -67,7 +67,7 @@ func main() {
 		"s-miss string \"\"\n" +
 		"a-hit string \"yes\"\n" +
 		"a-empty string \"\"\n" +
-		"a-miss string \"\"\n" +
+		"a-miss nil\n" +
 		"a-n int \"7\"\n" +
 		"a-nested map[string]interface {} \"map[k:v]\"\n" +
 		"a-null nil\n"

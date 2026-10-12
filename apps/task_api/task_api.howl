@@ -26,7 +26,7 @@
         (res_json 400 (dict ("error" "invalid_json")))
       )
       (let (title (map_get body "title"))
-        (if (= title "")
+        (if (or (is_nil title) (= title ""))
           (res_json 400 (dict ("error" "title_required")))
           (let (id (call next_task_id))
             (let (task (dict ("id" id) ("title" title) ("status" "open")))
@@ -84,7 +84,7 @@
         (res_json 400 (dict ("error" "invalid_json")))
       )
       (let (id (map_get body "id"))
-        (if (= id "")
+        (if (or (is_nil id) (= id ""))
           (res_json 400 (dict ("error" "id_required")))
           (do
             (store_open kv "memory://session")
@@ -106,7 +106,7 @@
         (res_json 400 (dict ("error" "invalid_json")))
       )
       (let (id (map_get body "id"))
-        (if (= id "")
+        (if (or (is_nil id) (= id ""))
           (res_json 400 (dict ("error" "id_required")))
           (do
             (store_open kv "memory://session")
@@ -135,7 +135,7 @@
         (res_json 400 (dict ("error" "invalid_json")))
       )
       (let (id (map_get body "id"))
-        (if (= id "")
+        (if (or (is_nil id) (= id ""))
           (res_json 400 (dict ("error" "id_required")))
           (do
             (store_open kv "memory://session")
