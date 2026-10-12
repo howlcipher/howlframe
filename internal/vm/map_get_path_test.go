@@ -10,7 +10,8 @@ import (
 )
 
 // A path read is nested map_get. No intermediate let, no new capability.
-// A missing key is still "". map_get of that sentinel is TYPE_ERROR.
+// A missing key is nil (is_nil true); print/to_string still render it as "".
+// map_get of that nil sentinel is TYPE_ERROR.
 const mapGetPathHitSource = `(cli_app
   (let (row (dict ("user" (dict ("name" "ada") ("city" (dict ("id" "pdx")))))))
     (do
