@@ -1,0 +1,549 @@
+{
+  "version": "heldout-v3",
+  "tasks": [
+    {
+      "id": "x01",
+      "category": "records",
+      "description": "Read in/config.json (nested JSON objects) and in/paths.txt (one dotted key path per line, e.g. a.b.c). For each path, follow the keys from the top-level object. If every key exists, write the value found encoded as compact JSON (strings quoted, null as null, booleans as true/false); if any key is absent or an intermediate value is not an object, write missing. One result per line in out/result.txt.",
+      "inputs": {
+        "in/config.json": "{\"db\": {\"primary\": {\"host\": \"db1.internal\", \"port\": 5432}, \"replicas\": 2}, \"cache\": {\"ttl\": 30, \"enabled\": false}, \"owner\": null}",
+        "in/paths.txt": "db.primary.host\ndb.primary.port\ncache.enabled\ndb.secondary.host\nowner\ncache.ttl.unit"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "\"db1.internal\"\n5432\nfalse\nmissing\nnull\nmissing"
+    },
+    {
+      "id": "x02",
+      "category": "records",
+      "description": "Read in/base.json and in/override.json (JSON objects). Deep-merge override into base: for each key in override, if both values are objects merge them recursively, otherwise the override value replaces the base value (arrays are replaced, not concatenated). Keys only in base are kept. Write the merged object to out/result.json.",
+      "inputs": {
+        "in/base.json": "{\"name\": \"svc\", \"limits\": {\"cpu\": 2, \"mem\": 512, \"io\": {\"read\": 10, \"write\": 5}}, \"tags\": [\"a\", \"b\"], \"debug\": false}",
+        "in/override.json": "{\"limits\": {\"mem\": 1024, \"io\": {\"write\": 8}}, \"tags\": [\"c\"], \"region\": \"eu\"}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "name": "svc",
+        "limits": {
+          "cpu": 2,
+          "mem": 1024,
+          "io": {
+            "read": 10,
+            "write": 8
+          }
+        },
+        "tags": [
+          "c"
+        ],
+        "debug": false,
+        "region": "eu"
+      }
+    },
+    {
+      "id": "x03",
+      "category": "records",
+      "description": "Read in/nested.json (a JSON object whose values may be nested objects). Write out/result.json: a flat object whose keys are the dot-joined key paths to every non-object value (an empty object counts as a value and is kept as {}), with the values unchanged.",
+      "inputs": {
+        "in/nested.json": "{\"server\": {\"http\": {\"port\": 80, \"tls\": true}, \"name\": \"edge\"}, \"retries\": 3, \"paths\": {\"logs\": \"/var/log\", \"empty\": {}}}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "server.http.port": 80,
+        "server.http.tls": true,
+        "server.name": "edge",
+        "retries": 3,
+        "paths.logs": "/var/log",
+        "paths.empty": {}
+      }
+    },
+    {
+      "id": "x04",
+      "category": "records",
+      "description": "Read in/flat.json (an object whose keys are dot-separated paths; no path is a prefix of another key). Write out/result.json: the equivalent nested object, creating an object for each path segment.",
+      "inputs": {
+        "in/flat.json": "{\"app.name\": \"howl\", \"app.version.major\": 3, \"app.version.minor\": 1, \"log.level\": \"warn\", \"workers\": 4}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "app": {
+          "name": "howl",
+          "version": {
+            "major": 3,
+            "minor": 1
+          }
+        },
+        "log": {
+          "level": "warn"
+        },
+        "workers": 4
+      }
+    },
+    {
+      "id": "x05",
+      "category": "records",
+      "description": "Read in/contacts.json (array of objects with an integer id and an optional email key that may be a string or null). Write out/result.json: {\"present\": [...], \"null\": [...], \"absent\": [...]}, the ids whose email is a string, is null, or is not present at all, each in input order.",
+      "inputs": {
+        "in/contacts.json": "[{\"id\": 1, \"email\": \"a@x.io\"}, {\"id\": 2, \"email\": null}, {\"id\": 3}, {\"id\": 4, \"email\": \"d@x.io\"}, {\"id\": 5, \"email\": null}, {\"id\": 6}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "present": [
+          1,
+          4
+        ],
+        "null": [
+          2,
+          5
+        ],
+        "absent": [
+          3,
+          6
+        ]
+      }
+    },
+    {
+      "id": "x06",
+      "category": "records",
+      "description": "Read in/sales.json (array of {region, product, units}). Write out/result.json: an object mapping each region to a record {\"units\": total integer units, \"products\": array of the distinct product names in that region sorted ascending}.",
+      "inputs": {
+        "in/sales.json": "[{\"region\": \"north\", \"product\": \"kite\", \"units\": 4}, {\"region\": \"south\", \"product\": \"yoyo\", \"units\": 7}, {\"region\": \"north\", \"product\": \"yoyo\", \"units\": 2}, {\"region\": \"north\", \"product\": \"kite\", \"units\": 1}, {\"region\": \"south\", \"product\": \"ball\", \"units\": 3}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "north": {
+          "units": 7,
+          "products": [
+            "kite",
+            "yoyo"
+          ]
+        },
+        "south": {
+          "units": 10,
+          "products": [
+            "ball",
+            "yoyo"
+          ]
+        }
+      }
+    },
+    {
+      "id": "x07",
+      "category": "records",
+      "description": "Read in/rows.json (array of objects) and in/rename.json (object of old key to new key). Write out/result.json: the array with every key that appears in rename.json renamed to its new name; other keys and all values unchanged.",
+      "inputs": {
+        "in/rows.json": "[{\"fname\": \"Ida\", \"lname\": \"Moss\", \"dob\": \"1990-02-01\"}, {\"fname\": \"Raj\", \"lname\": \"Kaur\", \"zip\": \"48201\"}]",
+        "in/rename.json": "{\"fname\": \"first_name\", \"lname\": \"last_name\", \"dob\": \"birth_date\"}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        {
+          "first_name": "Ida",
+          "last_name": "Moss",
+          "birth_date": "1990-02-01"
+        },
+        {
+          "first_name": "Raj",
+          "last_name": "Kaur",
+          "zip": "48201"
+        }
+      ]
+    },
+    {
+      "id": "x08",
+      "category": "records",
+      "description": "Read in/doc.json (any JSON object). Write out/result.txt with one line: the same value as canonical compact JSON, with the keys of every object (at any depth) sorted in ascending byte order, no whitespace between tokens (separators \",\" and \":\"), array order unchanged. The output is compared as text.",
+      "inputs": {
+        "in/doc.json": "{\"zeta\": 1, \"alpha\": {\"m\": [3, {\"y\": true, \"b\": null}], \"c\": \"q\"}, \"Beta\": \"x y\"}"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "{\"Beta\":\"x y\",\"alpha\":{\"c\":\"q\",\"m\":[3,{\"b\":null,\"y\":true}]},\"zeta\":1}"
+    },
+    {
+      "id": "x09",
+      "category": "records",
+      "description": "Read in/old.json and in/new.json (flat JSON objects). Write out/result.json: {\"added\": keys only in new, \"removed\": keys only in old, \"changed\": keys in both whose values differ}, each an array sorted ascending.",
+      "inputs": {
+        "in/old.json": "{\"host\": \"a\", \"port\": 80, \"debug\": true, \"mode\": \"x\"}",
+        "in/new.json": "{\"host\": \"a\", \"port\": 8080, \"mode\": \"x\", \"timeout\": 5}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "added": [
+          "timeout"
+        ],
+        "removed": [
+          "debug"
+        ],
+        "changed": [
+          "port"
+        ]
+      }
+    },
+    {
+      "id": "x10",
+      "category": "records",
+      "description": "Read in/tickets.json (array of {id, meta}; meta is an object that may have a tags array). Write out/result.txt with the id of every ticket whose meta.tags contains \"urgent\", one per line in input order.",
+      "inputs": {
+        "in/tickets.json": "[{\"id\": \"T1\", \"meta\": {\"tags\": [\"ui\", \"urgent\"]}}, {\"id\": \"T2\", \"meta\": {\"tags\": []}}, {\"id\": \"T3\", \"meta\": {\"tags\": [\"urgent\"]}}, {\"id\": \"T4\", \"meta\": {}}, {\"id\": \"T5\", \"meta\": {\"tags\": [\"backend\"]}}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "T1\nT3"
+    },
+    {
+      "id": "x11",
+      "category": "records",
+      "description": "Read in/accounts.json (array of {login, user}). Write out/result.txt with one line per account: \"<login>: <city>\" where city is user.profile.city, or unknown if user.profile or city is missing or city is null.",
+      "inputs": {
+        "in/accounts.json": "[{\"login\": \"kim\", \"user\": {\"profile\": {\"city\": \"Oslo\"}}}, {\"login\": \"lu\", \"user\": {\"profile\": {}}}, {\"login\": \"mo\", \"user\": {}}, {\"login\": \"ny\", \"user\": {\"profile\": {\"city\": null}}}, {\"login\": \"ot\", \"user\": {\"profile\": {\"city\": \"Lima\"}}}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "kim: Oslo\nlu: unknown\nmo: unknown\nny: unknown\not: Lima"
+    },
+    {
+      "id": "x12",
+      "category": "records",
+      "description": "Read in/people.json (array of {first, last, age}). Write out/result.json: an object keyed by \"<last>, <first>\" mapping to the integer age.",
+      "inputs": {
+        "in/people.json": "[{\"first\": \"Ada\", \"last\": \"King\", \"age\": 36}, {\"first\": \"Alan\", \"last\": \"Turing\", \"age\": 41}, {\"first\": \"Grace\", \"last\": \"Hopper\", \"age\": 85}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "King, Ada": 36,
+        "Turing, Alan": 41,
+        "Hopper, Grace": 85
+      }
+    },
+    {
+      "id": "x13",
+      "category": "records",
+      "description": "Read in/requests.jsonl (one JSON object {level, ms} per line). Write out/result.json: an object mapping each level to the largest integer ms seen for it.",
+      "inputs": {
+        "in/requests.jsonl": "{\"level\": \"info\", \"ms\": 12}\n{\"level\": \"warn\", \"ms\": 40}\n{\"level\": \"info\", \"ms\": 31}\n{\"level\": \"error\", \"ms\": 7}\n{\"level\": \"warn\", \"ms\": 22}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "info": 31,
+        "warn": 40,
+        "error": 7
+      }
+    },
+    {
+      "id": "x14",
+      "category": "records",
+      "description": "Read in/prices.json (object of item to integer price in cents). Write out/result.json: an object with the same keys, each value the price as a string \"$D.CC\" (dollars without leading zeros, at least \"0\"; exactly two cent digits).",
+      "inputs": {
+        "in/prices.json": "{\"tea\": 450, \"cake\": 1205, \"water\": 99, \"gift\": 10000}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "tea": "$4.50",
+        "cake": "$12.05",
+        "water": "$0.99",
+        "gift": "$100.00"
+      }
+    },
+    {
+      "id": "x15",
+      "category": "records",
+      "description": "Read in/tree.json (any JSON value). Write out/result.txt with its nesting depth as an integer: a scalar (number, string, boolean, null) has depth 0; an object or array has depth 1 plus the largest depth among its values or elements (1 if empty).",
+      "inputs": {
+        "in/tree.json": "{\"a\": [1, {\"b\": {\"c\": []}}], \"d\": {\"e\": 2}}"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "5"
+    },
+    {
+      "id": "x16",
+      "category": "records",
+      "description": "Read in/env.json (object of string to string). Write out/result.json: an array of {\"key\": k, \"value\": v} records, one per entry, sorted by key ascending.",
+      "inputs": {
+        "in/env.json": "{\"PATH\": \"/bin\", \"HOME\": \"/root\", \"LANG\": \"C\", \"EDITOR\": \"vi\"}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        {
+          "key": "EDITOR",
+          "value": "vi"
+        },
+        {
+          "key": "HOME",
+          "value": "/root"
+        },
+        {
+          "key": "LANG",
+          "value": "C"
+        },
+        {
+          "key": "PATH",
+          "value": "/bin"
+        }
+      ]
+    },
+    {
+      "id": "x17",
+      "category": "records",
+      "description": "Read in/doc.json (object) and in/ops.json (array of {op, path, value?}; op is \"set\" or \"del\", path is dot-separated). Apply the ops in order: set assigns value at path, creating missing intermediate objects; del removes the key at path and does nothing if it is absent. Write the resulting object to out/result.json.",
+      "inputs": {
+        "in/doc.json": "{\"svc\": {\"replicas\": 1, \"image\": \"v1\"}, \"owner\": \"ops\"}",
+        "in/ops.json": "[{\"op\": \"set\", \"path\": \"svc.replicas\", \"value\": 3}, {\"op\": \"set\", \"path\": \"svc.env.MODE\", \"value\": \"prod\"}, {\"op\": \"del\", \"path\": \"owner\"}, {\"op\": \"del\", \"path\": \"svc.missing\"}, {\"op\": \"set\", \"path\": \"svc.image\", \"value\": \"v2\"}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "svc": {
+          "replicas": 3,
+          "image": "v2",
+          "env": {
+            "MODE": "prod"
+          }
+        }
+      }
+    },
+    {
+      "id": "x18",
+      "category": "text",
+      "description": "Read in/script.txt. A line ending in a backslash continues on the next line: remove the trailing backslash and append the next line to it unchanged (keep its leading spaces). Repeat for chains. Write the joined logical lines to out/result.txt.",
+      "inputs": {
+        "in/script.txt": "run build \\\n  --fast \\\n  --quiet\necho done\nlint \\\n  src"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "run build   --fast   --quiet\necho done\nlint   src"
+    },
+    {
+      "id": "x19",
+      "category": "text",
+      "description": "Read in/app.ini (lines that are either a section header \"[name]\", a key=value line, or empty). Write out/result.txt with the non-empty lines that belong to the section named net (after \"[net]\" and before the next header), in order.",
+      "inputs": {
+        "in/app.ini": "[core]\nname=alpha\n[net]\nhost=10.0.0.1\nport=9000\n\n[extra]\nnet=no"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "host=10.0.0.1\nport=9000"
+    },
+    {
+      "id": "x20",
+      "category": "text",
+      "description": "Read in/doc.txt. Paragraphs are runs of non-blank lines separated by one or more blank lines. Write out/result.txt with one line per paragraph, \"<n>: <words>\", where n is the 1-based paragraph number and words is the number of space-separated words in it.",
+      "inputs": {
+        "in/doc.txt": "one two three\nfour\n\nfive six\n\n\nseven eight nine ten"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1: 4\n2: 2\n3: 4"
+    },
+    {
+      "id": "x21",
+      "category": "table",
+      "description": "Read in/grid.csv (comma-separated, no quoting, every row the same width). Write out/result.csv: the table transposed (row i column j becomes row j column i), comma-separated.",
+      "inputs": {
+        "in/grid.csv": "metric,mon,tue,wed\ncpu,40,55,61\nmem,70,72,68"
+      },
+      "output": "out/result.csv",
+      "kind": "text",
+      "expected": "metric,cpu,mem\nmon,40,70\ntue,55,72\nwed,61,68"
+    },
+    {
+      "id": "x22",
+      "category": "table",
+      "description": "Read in/sites.csv (header row, comma-separated, no quoting; some cells are empty). Fill every empty cell with the value in the same column of the row above it after that row was filled (the first data row has no empty cells). Write the filled table, header included, to out/result.csv.",
+      "inputs": {
+        "in/sites.csv": "site,owner,status\nalpha,ann,up\nbeta,,down\ngamma,,\ndelta,dan,\nepsilon,,up"
+      },
+      "output": "out/result.csv",
+      "kind": "text",
+      "expected": "site,owner,status\nalpha,ann,up\nbeta,ann,down\ngamma,ann,down\ndelta,dan,down\nepsilon,dan,up"
+    },
+    {
+      "id": "x23",
+      "category": "table",
+      "description": "Read in/emp.csv (header id,name) and in/dept.csv (header id,dept). Left-join on id: write out/result.csv with header id,name,dept and one row per emp.csv row in its order; dept is empty when the id has no match.",
+      "inputs": {
+        "in/emp.csv": "id,name\n7,ivy\n3,jon\n9,kai",
+        "in/dept.csv": "id,dept\n3,ops\n7,eng\n5,hr"
+      },
+      "output": "out/result.csv",
+      "kind": "text",
+      "expected": "id,name,dept\n7,ivy,eng\n3,jon,ops\n9,kai,"
+    },
+    {
+      "id": "x24",
+      "category": "numbers",
+      "description": "Read in/vals.txt (one line of comma-separated positive integers). Write out/result.json: {\"gcd\": greatest common divisor, \"lcm\": least common multiple} of all of them, as integers.",
+      "inputs": {
+        "in/vals.txt": "12,18,30"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "gcd": 6,
+        "lcm": 180
+      }
+    },
+    {
+      "id": "x25",
+      "category": "numbers",
+      "description": "Read in/nums.txt (one non-negative integer per line). For each, repeatedly replace it with the sum of its decimal digits until it is a single digit. Write \"<n> -> <digit>\" per line to out/result.txt.",
+      "inputs": {
+        "in/nums.txt": "38\n0\n9\n123456789\n1000"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "38 -> 2\n0 -> 0\n9 -> 9\n123456789 -> 9\n1000 -> 1"
+    },
+    {
+      "id": "x26",
+      "category": "numbers",
+      "description": "Read in/votes.txt (lines \"<name> <count>\" with non-negative integer counts, positive total). Write out/result.txt with one line per input line: \"<name> <p>%\" where p = count * 100 / total rounded down to an integer.",
+      "inputs": {
+        "in/votes.txt": "red 13\nblue 29\ngreen 8"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "red 26%\nblue 58%\ngreen 16%"
+    },
+    {
+      "id": "x27",
+      "category": "lists",
+      "description": "Read in/deep.json (an array whose elements are integers or arrays nested to any depth). Write out/result.json: one flat array of all the integers in left-to-right order.",
+      "inputs": {
+        "in/deep.json": "[1, [2, [3, [4]], 5], [], [[6]]]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "id": "x28",
+      "category": "lists",
+      "description": "Read in/a.json and in/b.json (arrays of strings). Write out/result.json: {\"only_a\": elements of a not in b, \"only_b\": elements of b not in a}, each in its own input order with duplicates removed (keep first occurrence).",
+      "inputs": {
+        "in/a.json": "[\"git\", \"make\", \"curl\", \"jq\", \"make\"]",
+        "in/b.json": "[\"jq\", \"tar\", \"git\", \"zip\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "only_a": [
+          "make",
+          "curl"
+        ],
+        "only_b": [
+          "tar",
+          "zip"
+        ]
+      }
+    },
+    {
+      "id": "x29",
+      "category": "lists",
+      "description": "Read in/visits.json (array of strings). Write out/result.json: the array with duplicates removed keeping only the LAST occurrence of each string, in the order those last occurrences appear.",
+      "inputs": {
+        "in/visits.json": "[\"home\", \"docs\", \"home\", \"blog\", \"docs\", \"about\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "home",
+        "blog",
+        "docs",
+        "about"
+      ]
+    },
+    {
+      "id": "x30",
+      "category": "strings",
+      "description": "Read in/pairs.txt (lines of two lower-case words separated by one space). Write out/result.txt with yes if the two words are anagrams (same letters with the same counts), else no, one per line.",
+      "inputs": {
+        "in/pairs.txt": "listen silent\nevil vile\napple paple\nrat car\nab abb"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "yes\nyes\nyes\nno\nno"
+    },
+    {
+      "id": "x31",
+      "category": "strings",
+      "description": "Read in/ranges.txt (one line of comma-separated items, each a non-negative integer or an inclusive range \"a-b\" with a <= b). Write out/result.txt with every number listed, comma-separated, in order.",
+      "inputs": {
+        "in/ranges.txt": "1-3,7,10-12,15"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1,2,3,7,10,11,12,15"
+    },
+    {
+      "id": "x32",
+      "category": "strings",
+      "description": "Read in/words.txt (one word per line). Write out/result.txt with the longest common prefix of all the lines (empty if none).",
+      "inputs": {
+        "in/words.txt": "interstellar\ninternet\ninterval\ninternal"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "inter"
+    },
+    {
+      "id": "x33",
+      "category": "logic",
+      "description": "Read in/spans.txt (one inclusive integer interval \"a-b\" per line, a <= b, unsorted). Merge intervals that overlap or touch at an endpoint (e.g. 5-8 and 8-9). Write the merged intervals sorted by start, one \"a-b\" per line, to out/result.txt.",
+      "inputs": {
+        "in/spans.txt": "5-8\n1-3\n2-4\n10-11\n8-9"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1-4\n5-9\n10-11"
+    },
+    {
+      "id": "x34",
+      "category": "logic",
+      "description": "Read in/days.txt (one day-of-year integer 1..365 per line, non-leap year). Write out/result.txt with each as MM-DD (two digits each), one per line.",
+      "inputs": {
+        "in/days.txt": "1\n59\n60\n200\n365"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "01-01\n02-28\n03-01\n07-19\n12-31"
+    },
+    {
+      "id": "x35",
+      "category": "logic",
+      "description": "Read in/deps.json (object of task name to array of task names it depends on; no cycles). Write out/result.json: an array of all task names in an order where every task comes after its dependencies; at each step pick the alphabetically smallest task whose dependencies are all already placed.",
+      "inputs": {
+        "in/deps.json": "{\"deploy\": [\"test\", \"build\"], \"test\": [\"build\"], \"build\": [\"fetch\"], \"fetch\": [], \"lint\": [\"fetch\"], \"docs\": []}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "docs",
+        "fetch",
+        "build",
+        "lint",
+        "test",
+        "deploy"
+      ]
+    }
+  ]
+}
