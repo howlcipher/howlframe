@@ -1,0 +1,5762 @@
+[
+  {
+    "task": "t01",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e65fdbd04434672bc1059b0768d4f8131d51c326afd45f17d46576bbeb712964",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t02",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "4ba450295a11afd93d1191c351a140fa453fc65200aaf93d305c9d59bac88206",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t03",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "3bbc458d10976fed48e8f02cf2ce92e2f1d4687652be298346a676399ccce277",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t04",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "789c662055ee4798c0e9231ac61df5dc011b01b9db0b6632096bac12f2c0fdf5",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t05",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6dcf23a7055ac2f534e8baf7749fcaf63809212292e527f56875c7d9947b328c",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t06",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "f8a32c9a688eb577699f4ccd80303478ab1a12f93a9c6b1e567659c7e1eb864d",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t07",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "a1dd3e16ffb02180a3de8afc5e2a3f2461fa301851812b8b977f02e45ff1176e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t08",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "0f89f156582887ca8b0e52f28f00cb922fa36602622a906b2e63828157c3fc90",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t09",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "cd2c6b1d2cac09606adc87edb78d7bbb8673f03908c6aa04ad5c79330e9d9a50",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t10",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "dfdb78a704643adc409eec8e8c88c6330dd24bd46474ced657edb81a01fe0c01",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t11",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "18ce3f9b28084adee253412ada656aad14a06a59e141293961ff77830abf07e4",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t12",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "521d51e4bdc5f287381f07ed1909785a30d309d4f08443c843b7ba70ed18fedb",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t13",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "1bc6bd4dbb6add1734b1a37c67561cb3569d74558668cfbb16090be2c2b2fa1e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t14",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c93c0157184df4c09161634a9113c6244194375d90c0749d2aa781083c409774",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t15",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "126412b7908632870758f23f37481c603b085e7d9e94decaa9fcec2417d871c6",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t16",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "2929fd1ad81a6913ecb41762ccfd64d2665ff380e101a947ac3b019b20ff2d42",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t17",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c2a6978f3ca1734c07c52188f7a681e299a2fb429daebce04034fed44106e5f6",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t18",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "8dc2687588398cef653adc70f7493a8ca42e3bf78894a3395a9d02537f577997",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t19",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "2420fbe4b3aaeea726cac1da591b4fe248340135348894e7d3493d6bc44df23e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t20",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "fdb4b08dcaca7986a054fd8812e2b603f5e8f57504d5666d7558b64660d8170f",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t21",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "804be4024c5300db9d5860e3e97bba1325e6d371180c11430e576eda0fe37d25",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t22",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c5c09a604c54639477ba9803c7b30623c2533dacdde9c1a264258d48cc1f5fb9",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t23",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "aa2d04b108f529f4e6fb2a68ff489eab1a75af8c4d42cbd34a586a9fefdbf934",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t24",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "5d5c708144002227c0c339727dd83709ff9b5f264a69172181a38be9cf4887ea",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t25",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "a55df8a7446c871748065621ab6af1b407f19d174c1f6af4a36b7ae665a4c435",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t26",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "022ddca9d5bf174b24503d44628b7201bc9ac70768d77d55905f4551992544ca",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t27",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "9d61d52df86be94e173265971f91463d2530cbeb78a0ed0f9b18d5ec2d01d665",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t28",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "5f19f1f0a7e2c5e5ebdc1dfcdc58a71307404a32ab7fcf5142a844ee9f7050c0",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t29",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "10dfd8677d42f0ff4f884e4cc7bc44258eb335ab1709824370068f6e97059f86",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t30",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "9e6415bd5c86459c4b14d0e1907d77abad749e0d569687f6a7bf24df75210941",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a01",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e65fdbd04434672bc1059b0768d4f8131d51c326afd45f17d46576bbeb712964",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a02",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "4ba450295a11afd93d1191c351a140fa453fc65200aaf93d305c9d59bac88206",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a03",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "3bbc458d10976fed48e8f02cf2ce92e2f1d4687652be298346a676399ccce277",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a04",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "789c662055ee4798c0e9231ac61df5dc011b01b9db0b6632096bac12f2c0fdf5",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a05",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6dcf23a7055ac2f534e8baf7749fcaf63809212292e527f56875c7d9947b328c",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a06",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "f8a32c9a688eb577699f4ccd80303478ab1a12f93a9c6b1e567659c7e1eb864d",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a07",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "a1dd3e16ffb02180a3de8afc5e2a3f2461fa301851812b8b977f02e45ff1176e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a08",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "0f89f156582887ca8b0e52f28f00cb922fa36602622a906b2e63828157c3fc90",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a09",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "cd2c6b1d2cac09606adc87edb78d7bbb8673f03908c6aa04ad5c79330e9d9a50",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a10",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "dfdb78a704643adc409eec8e8c88c6330dd24bd46474ced657edb81a01fe0c01",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a11",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "18ce3f9b28084adee253412ada656aad14a06a59e141293961ff77830abf07e4",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a12",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "521d51e4bdc5f287381f07ed1909785a30d309d4f08443c843b7ba70ed18fedb",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a13",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "1bc6bd4dbb6add1734b1a37c67561cb3569d74558668cfbb16090be2c2b2fa1e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a14",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c93c0157184df4c09161634a9113c6244194375d90c0749d2aa781083c409774",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a15",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "126412b7908632870758f23f37481c603b085e7d9e94decaa9fcec2417d871c6",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a16",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "2929fd1ad81a6913ecb41762ccfd64d2665ff380e101a947ac3b019b20ff2d42",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a17",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c2a6978f3ca1734c07c52188f7a681e299a2fb429daebce04034fed44106e5f6",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a18",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "8dc2687588398cef653adc70f7493a8ca42e3bf78894a3395a9d02537f577997",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a19",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "2420fbe4b3aaeea726cac1da591b4fe248340135348894e7d3493d6bc44df23e",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a20",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "fdb4b08dcaca7986a054fd8812e2b603f5e8f57504d5666d7558b64660d8170f",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a21",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "804be4024c5300db9d5860e3e97bba1325e6d371180c11430e576eda0fe37d25",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a22",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c5c09a604c54639477ba9803c7b30623c2533dacdde9c1a264258d48cc1f5fb9",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a23",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "aa2d04b108f529f4e6fb2a68ff489eab1a75af8c4d42cbd34a586a9fefdbf934",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a24",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "5d5c708144002227c0c339727dd83709ff9b5f264a69172181a38be9cf4887ea",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a25",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "a55df8a7446c871748065621ab6af1b407f19d174c1f6af4a36b7ae665a4c435",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a26",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "022ddca9d5bf174b24503d44628b7201bc9ac70768d77d55905f4551992544ca",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a27",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "9d61d52df86be94e173265971f91463d2530cbeb78a0ed0f9b18d5ec2d01d665",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a28",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "5f19f1f0a7e2c5e5ebdc1dfcdc58a71307404a32ab7fcf5142a844ee9f7050c0",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a29",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "10dfd8677d42f0ff4f884e4cc7bc44258eb335ab1709824370068f6e97059f86",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a30",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "9e6415bd5c86459c4b14d0e1907d77abad749e0d569687f6a7bf24df75210941",
+    "diagnostics": "[]",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": [],
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t01",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0ab3ff5438b173dac9b055877ea3658752fa5d9d847ff8229e67073611984982",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t02",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b09b2562b407f08860dd99925d4c891ca18c67a1b6aa9c0a74d5ed62f3b350a2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t03",
+    "lang": "python",
+    "pass": true,
+    "sha256": "2291a028ffe2313203a2e6cc3005dbc5c83e65f24a328c0b7512452f53e8f8ee",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t04",
+    "lang": "python",
+    "pass": true,
+    "sha256": "349a8fea02b59a62c945d6c1fd7d5633568e600f9c27f4103e29ac7ac8b24974",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t05",
+    "lang": "python",
+    "pass": true,
+    "sha256": "41c11ca907984c1f224108fa9b12cf6a193fc336f1252a807fe30dbbfde9d61d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t06",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b3ac654d56de03e1897235542993e7727d9a2704d63254d29849cb77e22234a5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t07",
+    "lang": "python",
+    "pass": true,
+    "sha256": "511601c0f0b2c137b1885636a8ed5fada232c1642b593dc605b3d26e55d6f25f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t08",
+    "lang": "python",
+    "pass": true,
+    "sha256": "07deaf52afb61331103c64c4e544e9d0b590dda2a17a9e61e23a37a37bec78ab",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t09",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ac421fd9558ea11f6093c07e299a1c87bff4481daee873d78784d1b591c072c5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t10",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d331f1ce7b898eb6b6f405895c7d6e22ceefae13684315653e885a6fca34b989",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t11",
+    "lang": "python",
+    "pass": true,
+    "sha256": "043771c8a1c53a757d2fcf4c7b24b59ee0bd0d96b3ccd09b67f119c728300594",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t12",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0e4531e6eaeabe381cf0ec525f41396c9da7d728b86fc1c4d52fdc6ebec3a752",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t13",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7097fa2378258c5f8b93ab8bf98177f949ba3f667b6621e9c5053632557e6726",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t14",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d4f1816875e7b1ca7f7e529214e7019a89729e9c58f5800fc8153bb9d0b0b9c9",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t15",
+    "lang": "python",
+    "pass": true,
+    "sha256": "a2b6b6b774e6920a9a9c18cc11b2b9f14329c8166e013b1fa0dddbd7879b3972",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t16",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7190fe237c5fe5747433d664e915977df1405620b5c87a7529dbd38978ec73b5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t17",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6f16f87503b76ea3f75066a473f686fb7e1d30fbcb0cf5ad60b4fb41d87c5c7b",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t18",
+    "lang": "python",
+    "pass": true,
+    "sha256": "bb9ce2cefba968a7e52d0118aebdb9df0387b45f8921a031fa97324ecab0006a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t19",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7615aa0615c0417806f9feaa0d538f32157da0228b11508442c757b7e4e0f50c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t20",
+    "lang": "python",
+    "pass": true,
+    "sha256": "12d152ffd5ad63bdb00641e7afc563a1a65cab33a5fd77b7433ec3a66bbed107",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t21",
+    "lang": "python",
+    "pass": true,
+    "sha256": "70d3047e7075740c6486521be4e49f0d1808922a47c5588364daaddceb62ae9b",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t22",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7acca2f02043f5f14326733fcad4c0735606b8b09b6e127b85e5e211e2b59399",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t23",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7a724f1f53112089e0223f67a4f26de7238bf2e40408305d68c45486e7ecef34",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t24",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d744ad7aeaab38187792b199c240aae0ba3b2983bd43525c03f62f5cbdd3c60c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t25",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0cf074c69f9cff886681ab3c5694dbb62657ef8118d32e39700e7b75ea5ff57f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t26",
+    "lang": "python",
+    "pass": true,
+    "sha256": "089a0878f33b0cf85900c99428a6bd1f3ecfd81eed0cf873a8a384453258b470",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t27",
+    "lang": "python",
+    "pass": true,
+    "sha256": "be4f168eb92cee1ac3f4480b450f5bf23a21c7fb843bc290fcc513d26e431513",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t28",
+    "lang": "python",
+    "pass": true,
+    "sha256": "c8ee0896669d7124f3116e83661b59b9cc2687eca180894bd3230ba36c14a1fd",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t29",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ff2ea753bfb5463ed7b7633b34ab34402ab091228c9bcc4f9c741cff816589dc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t30",
+    "lang": "python",
+    "pass": true,
+    "sha256": "cd9bb8579b0845890a5c787be20f2a79dfacfe74c49a5dd1f40aa7ed90ebdaa2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a01",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0ab3ff5438b173dac9b055877ea3658752fa5d9d847ff8229e67073611984982",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a02",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b09b2562b407f08860dd99925d4c891ca18c67a1b6aa9c0a74d5ed62f3b350a2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a03",
+    "lang": "python",
+    "pass": true,
+    "sha256": "2291a028ffe2313203a2e6cc3005dbc5c83e65f24a328c0b7512452f53e8f8ee",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a04",
+    "lang": "python",
+    "pass": true,
+    "sha256": "349a8fea02b59a62c945d6c1fd7d5633568e600f9c27f4103e29ac7ac8b24974",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a05",
+    "lang": "python",
+    "pass": true,
+    "sha256": "41c11ca907984c1f224108fa9b12cf6a193fc336f1252a807fe30dbbfde9d61d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a06",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b3ac654d56de03e1897235542993e7727d9a2704d63254d29849cb77e22234a5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a07",
+    "lang": "python",
+    "pass": true,
+    "sha256": "511601c0f0b2c137b1885636a8ed5fada232c1642b593dc605b3d26e55d6f25f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a08",
+    "lang": "python",
+    "pass": true,
+    "sha256": "07deaf52afb61331103c64c4e544e9d0b590dda2a17a9e61e23a37a37bec78ab",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a09",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ac421fd9558ea11f6093c07e299a1c87bff4481daee873d78784d1b591c072c5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a10",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d331f1ce7b898eb6b6f405895c7d6e22ceefae13684315653e885a6fca34b989",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a11",
+    "lang": "python",
+    "pass": true,
+    "sha256": "043771c8a1c53a757d2fcf4c7b24b59ee0bd0d96b3ccd09b67f119c728300594",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a12",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0e4531e6eaeabe381cf0ec525f41396c9da7d728b86fc1c4d52fdc6ebec3a752",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a13",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7097fa2378258c5f8b93ab8bf98177f949ba3f667b6621e9c5053632557e6726",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a14",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d4f1816875e7b1ca7f7e529214e7019a89729e9c58f5800fc8153bb9d0b0b9c9",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a15",
+    "lang": "python",
+    "pass": true,
+    "sha256": "a2b6b6b774e6920a9a9c18cc11b2b9f14329c8166e013b1fa0dddbd7879b3972",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a16",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7190fe237c5fe5747433d664e915977df1405620b5c87a7529dbd38978ec73b5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a17",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6f16f87503b76ea3f75066a473f686fb7e1d30fbcb0cf5ad60b4fb41d87c5c7b",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a18",
+    "lang": "python",
+    "pass": true,
+    "sha256": "bb9ce2cefba968a7e52d0118aebdb9df0387b45f8921a031fa97324ecab0006a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a19",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7615aa0615c0417806f9feaa0d538f32157da0228b11508442c757b7e4e0f50c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a20",
+    "lang": "python",
+    "pass": true,
+    "sha256": "12d152ffd5ad63bdb00641e7afc563a1a65cab33a5fd77b7433ec3a66bbed107",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a21",
+    "lang": "python",
+    "pass": true,
+    "sha256": "70d3047e7075740c6486521be4e49f0d1808922a47c5588364daaddceb62ae9b",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a22",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7acca2f02043f5f14326733fcad4c0735606b8b09b6e127b85e5e211e2b59399",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a23",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7a724f1f53112089e0223f67a4f26de7238bf2e40408305d68c45486e7ecef34",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a24",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d744ad7aeaab38187792b199c240aae0ba3b2983bd43525c03f62f5cbdd3c60c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a25",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0cf074c69f9cff886681ab3c5694dbb62657ef8118d32e39700e7b75ea5ff57f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a26",
+    "lang": "python",
+    "pass": true,
+    "sha256": "089a0878f33b0cf85900c99428a6bd1f3ecfd81eed0cf873a8a384453258b470",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a27",
+    "lang": "python",
+    "pass": true,
+    "sha256": "be4f168eb92cee1ac3f4480b450f5bf23a21c7fb843bc290fcc513d26e431513",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a28",
+    "lang": "python",
+    "pass": true,
+    "sha256": "c8ee0896669d7124f3116e83661b59b9cc2687eca180894bd3230ba36c14a1fd",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a29",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ff2ea753bfb5463ed7b7633b34ab34402ab091228c9bcc4f9c741cff816589dc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a30",
+    "lang": "python",
+    "pass": true,
+    "sha256": "cd9bb8579b0845890a5c787be20f2a79dfacfe74c49a5dd1f40aa7ed90ebdaa2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t01",
+    "lang": "js",
+    "pass": true,
+    "sha256": "28f0f725c7e670e0fb41d7eff370a1440a0469b17031fbf81b80f0a0fdb315ec",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t02",
+    "lang": "js",
+    "pass": true,
+    "sha256": "9ef7f223b5571e11d890f1df20c9d2c539a2adf58125fb7e0598e8a34764fc08",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t03",
+    "lang": "js",
+    "pass": true,
+    "sha256": "98eb895a3bf2be6ba4e0c9374e9d4c638a31f961a5699298d3798cd767740e8e",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t04",
+    "lang": "js",
+    "pass": true,
+    "sha256": "db04b0a71b6a653acfb2791970ef38e7e205596a880306a3e8f5198f6bdacf21",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t05",
+    "lang": "js",
+    "pass": true,
+    "sha256": "32b78b70d1764b2b16de8801cc4229a2902d9c6713f54f70d9fbf131e6efb72f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t06",
+    "lang": "js",
+    "pass": true,
+    "sha256": "aeceadbb10ada8d1f0df810d6b86a19d2cdf901b76d8a0eed4113784387437cc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t07",
+    "lang": "js",
+    "pass": true,
+    "sha256": "047eee8d368ca7fd1dfb9bf9bbe7a2f4c92fec9caeb6d0928790bd897a027aa8",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t08",
+    "lang": "js",
+    "pass": true,
+    "sha256": "18e1219d1dfb34fff6d87a4bc7e15412b48ca99aef5fb6b62ff0c7b44314f59f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t09",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c132d79c2035edf9b1b6bf051675a449d82034a1cf83e5d5d6ae0d09033fe23c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t10",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d23ad9f57f5d612ce7935bf7e952eb0dc1fca604fd3f00cae9c0997ef6222050",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t11",
+    "lang": "js",
+    "pass": true,
+    "sha256": "2e2b9935c956e92efdce50aa6fc96e6cf16cd5bfa09edde097c98bd17406f9c4",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t12",
+    "lang": "js",
+    "pass": true,
+    "sha256": "755253d96769a62cb257dd292140ffb71a72826ea460ab4f709cdcfbee86feea",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t13",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c78aab3d272a03b3de2560bf84bb5acc622ed6298577e6305b8e7c1c4b05dc6a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t14",
+    "lang": "js",
+    "pass": true,
+    "sha256": "0242fa215e83b0b9f94cc3c72e5313c2359028a74a4c4e0c83284eca0b85993c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t15",
+    "lang": "js",
+    "pass": true,
+    "sha256": "70b9b106ba37cce515f34920f07aafa67ec4e560dde239f3cfdd536120b456a8",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t16",
+    "lang": "js",
+    "pass": true,
+    "sha256": "0e85375ef403047e941f79705969e6b4edbdeae3c57fcf1deddafde2a44cd415",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t17",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d6d029bc67a130cffa0f31267db6a62023246e08e859963dc800c8e8e33ccf70",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t18",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c8076c789f1343f921dbf1fa224ecc36ac44060ba78a420e9fd5413f8b49076c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t19",
+    "lang": "js",
+    "pass": true,
+    "sha256": "e92f4fd02532b471a2f191ccfbd00afe9b68d8d71ccfc590eb71545973312e58",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t20",
+    "lang": "js",
+    "pass": true,
+    "sha256": "debcf64c5dd5e7e932cc79b956973253c63a7b78467f19cf2cd714abb05cf4a1",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t21",
+    "lang": "js",
+    "pass": true,
+    "sha256": "33f43388c2e5db3a64c1311885179ca0ee1e1added425008344655cec12b7789",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t22",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ffe92b431ad503fdc6bdd534b08c8cc2f5280bd431c125d650260bc01c4e8909",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t23",
+    "lang": "js",
+    "pass": true,
+    "sha256": "66854bf0fee2edda46f53972b5505d11cbbd94436d141dc4195a1ef8cbbfcc06",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t24",
+    "lang": "js",
+    "pass": true,
+    "sha256": "420676ae9d9c2e50852199ab8b9a40323117dd0475057703d34aa74023824f17",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t25",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d5746535e977e4b75e627fdcf35d4c3426e0621d4b877db3e314e4e23853a5fc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t26",
+    "lang": "js",
+    "pass": true,
+    "sha256": "50ca4b3482bbe55df43436281db3440ec0b469f587c26bdfb2d879af8b859242",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t27",
+    "lang": "js",
+    "pass": true,
+    "sha256": "3c38a1df8c2a55b2194e58b7ecf13a462ca3cde6d3dbc5467b0cee21164ec509",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t28",
+    "lang": "js",
+    "pass": true,
+    "sha256": "72e04e8e4a30cc32b16b260e06c39ceba005539572a95b5f461e7909bb591ccf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t29",
+    "lang": "js",
+    "pass": true,
+    "sha256": "7a0b80cafc149117868abd78c0c7fe8e4978307f8740a415ff2897bb89558c27",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t30",
+    "lang": "js",
+    "pass": true,
+    "sha256": "8c5fe75ae95a5212440304eb8a4f384372df252ece74581d2099bb3cf35dd269",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a01",
+    "lang": "js",
+    "pass": true,
+    "sha256": "28f0f725c7e670e0fb41d7eff370a1440a0469b17031fbf81b80f0a0fdb315ec",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a02",
+    "lang": "js",
+    "pass": true,
+    "sha256": "9ef7f223b5571e11d890f1df20c9d2c539a2adf58125fb7e0598e8a34764fc08",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a03",
+    "lang": "js",
+    "pass": true,
+    "sha256": "98eb895a3bf2be6ba4e0c9374e9d4c638a31f961a5699298d3798cd767740e8e",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a04",
+    "lang": "js",
+    "pass": true,
+    "sha256": "db04b0a71b6a653acfb2791970ef38e7e205596a880306a3e8f5198f6bdacf21",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a05",
+    "lang": "js",
+    "pass": true,
+    "sha256": "32b78b70d1764b2b16de8801cc4229a2902d9c6713f54f70d9fbf131e6efb72f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a06",
+    "lang": "js",
+    "pass": true,
+    "sha256": "aeceadbb10ada8d1f0df810d6b86a19d2cdf901b76d8a0eed4113784387437cc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a07",
+    "lang": "js",
+    "pass": true,
+    "sha256": "047eee8d368ca7fd1dfb9bf9bbe7a2f4c92fec9caeb6d0928790bd897a027aa8",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a08",
+    "lang": "js",
+    "pass": true,
+    "sha256": "18e1219d1dfb34fff6d87a4bc7e15412b48ca99aef5fb6b62ff0c7b44314f59f",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a09",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c132d79c2035edf9b1b6bf051675a449d82034a1cf83e5d5d6ae0d09033fe23c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a10",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d23ad9f57f5d612ce7935bf7e952eb0dc1fca604fd3f00cae9c0997ef6222050",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a11",
+    "lang": "js",
+    "pass": true,
+    "sha256": "2e2b9935c956e92efdce50aa6fc96e6cf16cd5bfa09edde097c98bd17406f9c4",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a12",
+    "lang": "js",
+    "pass": true,
+    "sha256": "755253d96769a62cb257dd292140ffb71a72826ea460ab4f709cdcfbee86feea",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a13",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c78aab3d272a03b3de2560bf84bb5acc622ed6298577e6305b8e7c1c4b05dc6a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a14",
+    "lang": "js",
+    "pass": true,
+    "sha256": "0242fa215e83b0b9f94cc3c72e5313c2359028a74a4c4e0c83284eca0b85993c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a15",
+    "lang": "js",
+    "pass": true,
+    "sha256": "70b9b106ba37cce515f34920f07aafa67ec4e560dde239f3cfdd536120b456a8",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a16",
+    "lang": "js",
+    "pass": true,
+    "sha256": "0e85375ef403047e941f79705969e6b4edbdeae3c57fcf1deddafde2a44cd415",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a17",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d6d029bc67a130cffa0f31267db6a62023246e08e859963dc800c8e8e33ccf70",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a18",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c8076c789f1343f921dbf1fa224ecc36ac44060ba78a420e9fd5413f8b49076c",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a19",
+    "lang": "js",
+    "pass": true,
+    "sha256": "e92f4fd02532b471a2f191ccfbd00afe9b68d8d71ccfc590eb71545973312e58",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a20",
+    "lang": "js",
+    "pass": true,
+    "sha256": "debcf64c5dd5e7e932cc79b956973253c63a7b78467f19cf2cd714abb05cf4a1",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a21",
+    "lang": "js",
+    "pass": true,
+    "sha256": "33f43388c2e5db3a64c1311885179ca0ee1e1added425008344655cec12b7789",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a22",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ffe92b431ad503fdc6bdd534b08c8cc2f5280bd431c125d650260bc01c4e8909",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a23",
+    "lang": "js",
+    "pass": true,
+    "sha256": "66854bf0fee2edda46f53972b5505d11cbbd94436d141dc4195a1ef8cbbfcc06",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a24",
+    "lang": "js",
+    "pass": true,
+    "sha256": "420676ae9d9c2e50852199ab8b9a40323117dd0475057703d34aa74023824f17",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a25",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d5746535e977e4b75e627fdcf35d4c3426e0621d4b877db3e314e4e23853a5fc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a26",
+    "lang": "js",
+    "pass": true,
+    "sha256": "50ca4b3482bbe55df43436281db3440ec0b469f587c26bdfb2d879af8b859242",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a27",
+    "lang": "js",
+    "pass": true,
+    "sha256": "3c38a1df8c2a55b2194e58b7ecf13a462ca3cde6d3dbc5467b0cee21164ec509",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a28",
+    "lang": "js",
+    "pass": true,
+    "sha256": "72e04e8e4a30cc32b16b260e06c39ceba005539572a95b5f461e7909bb591ccf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a29",
+    "lang": "js",
+    "pass": true,
+    "sha256": "7a0b80cafc149117868abd78c0c7fe8e4978307f8740a415ff2897bb89558c27",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a30",
+    "lang": "js",
+    "pass": true,
+    "sha256": "8c5fe75ae95a5212440304eb8a4f384372df252ece74581d2099bb3cf35dd269",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t01",
+    "lang": "go",
+    "pass": true,
+    "sha256": "832a1abba169d4de37e170fea3f4701eed67e1eb94ebccc237a6415a3e0b0983",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t02",
+    "lang": "go",
+    "pass": true,
+    "sha256": "0ed5a4c745366b46036710a2a6fab95845d85baf5fe2fc4b905257d09cdc70e3",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t03",
+    "lang": "go",
+    "pass": true,
+    "sha256": "27d9155611e0f5fbe03482682f749a32c9475fda9d543fc8943e98b09ece0fdc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t04",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c0d1adf8336465eb553643ea77fe1ae13e967fb9511266ae6630cee492b6ccfe",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t05",
+    "lang": "go",
+    "pass": true,
+    "sha256": "331dfe665af6de5c7493e9c987e3002e047c8c38b13df560979aa99c8fc129ae",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t06",
+    "lang": "go",
+    "pass": true,
+    "sha256": "3f43723313a679c8b3ac16ed077bb0a740ebd2e5898c726cdc0d20b61155abe5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t07",
+    "lang": "go",
+    "pass": true,
+    "sha256": "8f056be0f83db39c99c3e551ee0901af5154cca620e4342969e8a83eba2f6106",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t08",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f3f49dd7d0e444c3a926d8126d422094427b8abde575dc580db70d1e20158ff4",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t09",
+    "lang": "go",
+    "pass": true,
+    "sha256": "995d29ffe6d474675bfa656ff338754078faf1b5c376c0c3481835433630cf9a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t10",
+    "lang": "go",
+    "pass": true,
+    "sha256": "61df74e0ea4dc82f306307a6ecff894b0bdda13e1c80574cfe3f71f69233f3a0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t11",
+    "lang": "go",
+    "pass": true,
+    "sha256": "643b10be1778c0ffcf5f6b5bc91d6619161509dc04438976c6a3c031b020de2d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t12",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c81e4404ed0e0ce9d6152729ac0d308ba480b300187f5e55f1fefbb0671bd050",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t13",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6f19871647be6b2d6241f88d50f1205c4e0740c4b16c3dc382e83629f32543c0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t14",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b87659a4d0bba81e0ef9197cd37e385816226636c9a110c850a38e6b27f8169d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t15",
+    "lang": "go",
+    "pass": true,
+    "sha256": "8b7f6c69314842fe160f4b377215a7bec4bc7601239a49d63d88d9d23a41faaf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t16",
+    "lang": "go",
+    "pass": true,
+    "sha256": "324beb8b9c3a1e4c57b173984e1fc76a37d49de2afd18dbf2f847c90cc9d6cae",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t17",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b3f789af6955035a1871c5121120b9a83209f5b1b3b4e09e522fa6bd954887c7",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t18",
+    "lang": "go",
+    "pass": true,
+    "sha256": "4d17667ba86c30ccf5ee60ccac0ed52e99a20257a5465be2a79cac6565d64198",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t19",
+    "lang": "go",
+    "pass": true,
+    "sha256": "25eb679150ddf2b8c5a7fb56f2145d2e0f12cefc6400356d8cf780bbcb09f063",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t20",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a0fb9d4939751f624656dd52318573b47a778b992cfd4a4cd2c0c306c1b11f21",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t21",
+    "lang": "go",
+    "pass": true,
+    "sha256": "d45c8edc791023744a84f2177cba5fcd0f47bd11d2d9d93d2e5d6ff58359e3f9",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t22",
+    "lang": "go",
+    "pass": true,
+    "sha256": "85b0a757ff2b96cfc60cecf3ef389f9988ca31b2d74614d83769c2eaf9648ff6",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t23",
+    "lang": "go",
+    "pass": true,
+    "sha256": "befe333369da2f2f7cdb03d1197c514b48cc83af708fd8d14420ea5edea6c478",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t24",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f2dc4bc99a0dd838347b4499e5495d325f5e40a87108d85b5ac5e8214c4baabf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t25",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f060dff67507f15493874a5bf1f81499781f746932a2305ae306e96d76a1a1d2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t26",
+    "lang": "go",
+    "pass": true,
+    "sha256": "baba485b2b7763d498079165b0ceb5508c45c397a4ffce46deeb28377600fded",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t27",
+    "lang": "go",
+    "pass": true,
+    "sha256": "64273acdb47acccdc019cd595641efd1f98f6daa2eb94359d49597372f0d95f3",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t28",
+    "lang": "go",
+    "pass": true,
+    "sha256": "15ae8f821bd8b95fd56acc5346bf0dd3d9f21d32ad41e59436f7561d7bfd5f8e",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t29",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6cb381ba1af48720cf131efce21cadc99d0868af2c10d5900ba757c216b98218",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "t30",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c2182775286d74749de1aeb4e1fdf5d3c66d28d9ffe351889bb53c0350aef3b0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a01",
+    "lang": "go",
+    "pass": true,
+    "sha256": "832a1abba169d4de37e170fea3f4701eed67e1eb94ebccc237a6415a3e0b0983",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a02",
+    "lang": "go",
+    "pass": true,
+    "sha256": "0ed5a4c745366b46036710a2a6fab95845d85baf5fe2fc4b905257d09cdc70e3",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a03",
+    "lang": "go",
+    "pass": true,
+    "sha256": "27d9155611e0f5fbe03482682f749a32c9475fda9d543fc8943e98b09ece0fdc",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a04",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c0d1adf8336465eb553643ea77fe1ae13e967fb9511266ae6630cee492b6ccfe",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a05",
+    "lang": "go",
+    "pass": true,
+    "sha256": "331dfe665af6de5c7493e9c987e3002e047c8c38b13df560979aa99c8fc129ae",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a06",
+    "lang": "go",
+    "pass": true,
+    "sha256": "3f43723313a679c8b3ac16ed077bb0a740ebd2e5898c726cdc0d20b61155abe5",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a07",
+    "lang": "go",
+    "pass": true,
+    "sha256": "8f056be0f83db39c99c3e551ee0901af5154cca620e4342969e8a83eba2f6106",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a08",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f3f49dd7d0e444c3a926d8126d422094427b8abde575dc580db70d1e20158ff4",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a09",
+    "lang": "go",
+    "pass": true,
+    "sha256": "995d29ffe6d474675bfa656ff338754078faf1b5c376c0c3481835433630cf9a",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a10",
+    "lang": "go",
+    "pass": true,
+    "sha256": "61df74e0ea4dc82f306307a6ecff894b0bdda13e1c80574cfe3f71f69233f3a0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a11",
+    "lang": "go",
+    "pass": true,
+    "sha256": "643b10be1778c0ffcf5f6b5bc91d6619161509dc04438976c6a3c031b020de2d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a12",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c81e4404ed0e0ce9d6152729ac0d308ba480b300187f5e55f1fefbb0671bd050",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a13",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6f19871647be6b2d6241f88d50f1205c4e0740c4b16c3dc382e83629f32543c0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a14",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b87659a4d0bba81e0ef9197cd37e385816226636c9a110c850a38e6b27f8169d",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a15",
+    "lang": "go",
+    "pass": true,
+    "sha256": "8b7f6c69314842fe160f4b377215a7bec4bc7601239a49d63d88d9d23a41faaf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a16",
+    "lang": "go",
+    "pass": true,
+    "sha256": "324beb8b9c3a1e4c57b173984e1fc76a37d49de2afd18dbf2f847c90cc9d6cae",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a17",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b3f789af6955035a1871c5121120b9a83209f5b1b3b4e09e522fa6bd954887c7",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a18",
+    "lang": "go",
+    "pass": true,
+    "sha256": "4d17667ba86c30ccf5ee60ccac0ed52e99a20257a5465be2a79cac6565d64198",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a19",
+    "lang": "go",
+    "pass": true,
+    "sha256": "25eb679150ddf2b8c5a7fb56f2145d2e0f12cefc6400356d8cf780bbcb09f063",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/release.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a20",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a0fb9d4939751f624656dd52318573b47a778b992cfd4a4cd2c0c306c1b11f21",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a21",
+    "lang": "go",
+    "pass": true,
+    "sha256": "d45c8edc791023744a84f2177cba5fcd0f47bd11d2d9d93d2e5d6ff58359e3f9",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a22",
+    "lang": "go",
+    "pass": true,
+    "sha256": "85b0a757ff2b96cfc60cecf3ef389f9988ca31b2d74614d83769c2eaf9648ff6",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a23",
+    "lang": "go",
+    "pass": true,
+    "sha256": "befe333369da2f2f7cdb03d1197c514b48cc83af708fd8d14420ea5edea6c478",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a24",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f2dc4bc99a0dd838347b4499e5495d325f5e40a87108d85b5ac5e8214c4baabf",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a25",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f060dff67507f15493874a5bf1f81499781f746932a2305ae306e96d76a1a1d2",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a26",
+    "lang": "go",
+    "pass": true,
+    "sha256": "baba485b2b7763d498079165b0ceb5508c45c397a4ffce46deeb28377600fded",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a27",
+    "lang": "go",
+    "pass": true,
+    "sha256": "64273acdb47acccdc019cd595641efd1f98f6daa2eb94359d49597372f0d95f3",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a28",
+    "lang": "go",
+    "pass": true,
+    "sha256": "15ae8f821bd8b95fd56acc5346bf0dd3d9f21d32ad41e59436f7561d7bfd5f8e",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a29",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6cb381ba1af48720cf131efce21cadc99d0868af2c10d5900ba757c216b98218",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  },
+  {
+    "task": "a30",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c2182775286d74749de1aeb4e1fdf5d3c66d28d9ffe351889bb53c0350aef3b0",
+    "diagnostics": "",
+    "comparison": {
+      "status": "evaluated",
+      "success": true,
+      "output_match": true,
+      "effects_match": true,
+      "unauthorized": [],
+      "denied_attempts": null,
+      "diff": [
+        {
+          "kind": "created",
+          "path": "out/approval_request.json",
+          "source": "filesystem",
+          "in_p1_backlog": false
+        }
+      ],
+      "output_details": []
+    }
+  }
+]
