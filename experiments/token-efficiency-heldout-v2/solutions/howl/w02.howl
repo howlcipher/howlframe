@@ -1,0 +1,6 @@
+(do
+ (let (out (list))
+  (do
+   (for l (lines (read_file "in/events.txt"))
+    (when (or (= (list_len out) 0) (!= l (list_get out (- (list_len out) 1)))) (append out l)))
+   (write_file "out/result.txt" (str_join out "\n")))))

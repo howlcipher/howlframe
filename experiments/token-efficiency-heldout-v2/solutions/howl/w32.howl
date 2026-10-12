@@ -1,0 +1,11 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/ids.txt"))
+    (let (t 0 i 0)
+     (do
+      (for c (reverse (str_split l ""))
+       (let (d (* (to_int c) (+ 1 (- i (* 2 (to_int (/ i 2)))))))
+        (do (set t (+ t (if (> d 9) (- d 9) d))) (inc i))))
+      (str l (if (= (* 10 (to_int (/ t 10))) t) " valid" " invalid")))))
+   "\n")))

@@ -1,0 +1,6 @@
+(do
+ (let (q (parse_json Any (read_text "in/jobs.json")) out (list) i 0)
+  (do
+   (while (< i (list_len q))
+    (do (append out (list_slice q i (+ i 3))) (set i (+ i 3))))
+   (write_file "out/result.json" (encode_json out)))))

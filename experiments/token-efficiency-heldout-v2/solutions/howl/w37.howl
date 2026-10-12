@@ -1,0 +1,7 @@
+(do
+ (let (b (str_split (str_join (lines (read_file "in/board.txt")) "") "") res "")
+  (do
+   (for t (list (list 0 1 2) (list 3 4 5) (list 6 7 8) (list 0 3 6) (list 1 4 7) (list 2 5 8) (list 0 4 8) (list 2 4 6))
+    (let (a (list_get b (list_get t 0)))
+     (when (and (!= a ".") (and (= a (list_get b (list_get t 1))) (= a (list_get b (list_get t 2))))) (set res a))))
+   (write_file "out/result.txt" (if (!= res "") res (if (list_contains b ".") "open" "draw"))))))

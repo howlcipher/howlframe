@@ -1,0 +1,6 @@
+(do
+ (let (st (parse_json Any (read_text "in/stock.json")))
+  (do
+   (for m (parse_json Any (read_text "in/moves.json"))
+    (map_set st (map_get m "sku") (+ (nz (map_get st (map_get m "sku")) 0) (map_get m "delta"))))
+   (write_file "out/result.json" (encode_json st)))))

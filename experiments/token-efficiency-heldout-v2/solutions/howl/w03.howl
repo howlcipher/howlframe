@@ -1,0 +1,9 @@
+(do
+ (let (out (list))
+  (do
+   (for l (lines (read_file "in/settings.txt"))
+    (let (s (list_get (str_split l "#") 0))
+     (do
+      (while (ends_with s " ") (set s (str_slice s 0 (- (str_len s) 1))))
+      (when (!= s "") (append out s)))))
+   (write_file "out/result.txt" (str_join out "\n")))))

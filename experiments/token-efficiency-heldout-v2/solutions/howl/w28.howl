@@ -1,0 +1,10 @@
+(do
+ (let (t (dict ("closed open" "opened") ("opened close" "closed") ("closed lock" "locked") ("locked unlock" "closed")) st "closed" res "" i 0)
+  (do
+   (for c (lines (read_file "in/cmds.txt"))
+    (do
+     (inc i)
+     (when (= res "")
+      (let (nx (map_get t (str st " " c)))
+       (if (is_nil nx) (set res (str "error line " i ": cannot " c " when " st)) (set st nx))))))
+   (write_file "out/result.txt" (if (= res "") st res)))))

@@ -1,0 +1,9 @@
+(do
+ (let (b (parse_json Any (read_text "in/board.json")) ss (list) out (list))
+  (do
+   (for s (reverse (sort (map_list e b (map_get e "score"))))
+    (when (not (list_contains ss s)) (append ss s)))
+   (for s ss
+    (for n (sort (map_list e (filter e b (= (map_get e "score") s)) (map_get e "name")))
+     (append out (str (+ (index_of ss s) 1) " " n " " s))))
+   (write_file "out/result.txt" (str_join out "\n")))))

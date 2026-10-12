@@ -1,0 +1,9 @@
+(do
+ (let (a (map_list x (str_split (str_trim (read_text "in/ages.txt")) ",") (to_int x)) out (list) b 0)
+  (do
+   (while (<= (* b 10) (max a))
+    (do
+     (let (c (list_len (filter x a (= (to_int (/ x 10)) b))))
+      (when (> c 0) (append out (str (* b 10) "-" (+ (* b 10) 9) ": " c))))
+     (inc b)))
+   (write_file "out/result.txt" (str_join out "\n")))))

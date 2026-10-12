@@ -1,0 +1,10 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/nums.txt"))
+    (let (n (to_int l) s "")
+     (do
+      (while (> n 0)
+       (do (set s (str (- n (* 2 (to_int (/ n 2)))) s)) (set n (to_int (/ n 2)))))
+      (if (= s "") "0" s))))
+   "\n")))

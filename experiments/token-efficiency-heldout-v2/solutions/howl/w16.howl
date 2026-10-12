@@ -1,0 +1,6 @@
+(do
+ (let (m (parse_json Any (read_text "in/meter.json")) out (list) i 1)
+  (do
+   (while (< i (list_len m))
+    (do (append out (- (list_get m i) (list_get m (- i 1)))) (inc i)))
+   (write_file "out/result.json" (encode_json out)))))

@@ -1,0 +1,7 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/years.txt"))
+    (let (y (to_int l) dv (if (= (* 100 (to_int (/ y 100))) y) 400 4))
+     (str y (if (= (* dv (to_int (/ y dv))) y) " leap" " common"))))
+   "\n")))
