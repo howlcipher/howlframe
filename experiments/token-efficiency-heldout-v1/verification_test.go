@@ -82,4 +82,3 @@ func TestHeldoutV1VerificationCoverage(t *testing.T) {
 		t.Errorf("%d results, want %d", len(results), want)
 	}
 }
-
