@@ -1,0 +1,468 @@
+{
+  "version": "heldout-v0",
+  "tasks": [
+    {
+      "id": "h01",
+      "category": "text",
+      "description": "Read in/text.txt. Write out/result.txt with every line upper-cased, same line order.",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "ALPHA BETA\nGAMMA DELTA\n\nFOO BAR FOO\n  PADDED LINE  \nLAST"
+    },
+    {
+      "id": "h02",
+      "category": "text",
+      "description": "Read in/text.txt. Write out/result.txt with the lines in reverse order.",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "last\n  padded line  \nfoo bar foo\n\nGamma delta\nalpha beta"
+    },
+    {
+      "id": "h03",
+      "category": "text",
+      "description": "Read in/text.txt. Write out/result.txt where each line is prefixed with its 1-based line number and \": \" (e.g. \"1: alpha beta\").",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1: alpha beta\n2: Gamma delta\n3: \n4: foo bar foo\n5:   padded line  \n6: last"
+    },
+    {
+      "id": "h04",
+      "category": "text",
+      "description": "Read in/text.txt. Trim leading/trailing spaces of every line, drop lines that are then empty, and write the rest to out/result.txt.",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "alpha beta\nGamma delta\nfoo bar foo\npadded line\nlast"
+    },
+    {
+      "id": "h05",
+      "category": "text",
+      "description": "Read in/text.txt. Replace every occurrence of the substring \"foo\" with \"bar\" and write the result to out/result.txt.",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "alpha beta\nGamma delta\n\nbar bar bar\n  padded line  \nlast"
+    },
+    {
+      "id": "h06",
+      "category": "csv",
+      "description": "Read in/data.csv (header row, comma-separated, no quoting). Write the email column values, one per line in row order, to out/result.txt.",
+      "inputs": {
+        "in/data.csv": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nBob,bob@test.org,25,ops,75\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300\nEd,ed@test.org,29,ops,15"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "ada@example.com\nbob@test.org\ncy@example.com\ndee@corp.net\ned@test.org"
+    },
+    {
+      "id": "h07",
+      "category": "csv",
+      "description": "Read in/data.csv. Write out/result.csv containing the header row followed by only the rows whose integer age is >= 30, in input order.",
+      "inputs": {
+        "in/data.csv": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nBob,bob@test.org,25,ops,75\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300\nEd,ed@test.org,29,ops,15"
+      },
+      "output": "out/result.csv",
+      "kind": "text",
+      "expected": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300"
+    },
+    {
+      "id": "h08",
+      "category": "csv",
+      "description": "Read in/data.csv. Write the integer sum of the amount column to out/result.txt.",
+      "inputs": {
+        "in/data.csv": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nBob,bob@test.org,25,ops,75\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300\nEd,ed@test.org,29,ops,15"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "550"
+    },
+    {
+      "id": "h09",
+      "category": "csv",
+      "description": "Read in/data.csv. Write out/result.json: a JSON array with one object per row mapping each header name to the row's string value.",
+      "inputs": {
+        "in/data.csv": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nBob,bob@test.org,25,ops,75\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300\nEd,ed@test.org,29,ops,15"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        {
+          "name": "Ada",
+          "email": "ada@example.com",
+          "age": "36",
+          "dept": "eng",
+          "amount": "120"
+        },
+        {
+          "name": "Bob",
+          "email": "bob@test.org",
+          "age": "25",
+          "dept": "ops",
+          "amount": "75"
+        },
+        {
+          "name": "Cy",
+          "email": "cy@example.com",
+          "age": "30",
+          "dept": "eng",
+          "amount": "40"
+        },
+        {
+          "name": "Dee",
+          "email": "dee@corp.net",
+          "age": "41",
+          "dept": "sales",
+          "amount": "300"
+        },
+        {
+          "name": "Ed",
+          "email": "ed@test.org",
+          "age": "29",
+          "dept": "ops",
+          "amount": "15"
+        }
+      ]
+    },
+    {
+      "id": "h10",
+      "category": "csv",
+      "description": "Read in/data.csv. Write out/result.json: a JSON object mapping each dept value to the integer number of rows with that dept.",
+      "inputs": {
+        "in/data.csv": "name,email,age,dept,amount\nAda,ada@example.com,36,eng,120\nBob,bob@test.org,25,ops,75\nCy,cy@example.com,30,eng,40\nDee,dee@corp.net,41,sales,300\nEd,ed@test.org,29,ops,15"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "eng": 2,
+        "ops": 2,
+        "sales": 1
+      }
+    },
+    {
+      "id": "h11",
+      "category": "aggregate",
+      "description": "Read in/numbers.txt (one integer per line). Write out/result.json: {\"min\": m, \"max\": M, \"sum\": s} as integers.",
+      "inputs": {
+        "in/numbers.txt": "12\n-4\n7\n30\n0\n9"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "min": -4,
+        "max": 30,
+        "sum": 54
+      }
+    },
+    {
+      "id": "h12",
+      "category": "aggregate",
+      "description": "Read in/words.txt. Lower-case it, split every line on single spaces, and write out/result.json mapping each word to its integer count.",
+      "inputs": {
+        "in/words.txt": "the cat and the hat\nThe bat and THE cat"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "the": 4,
+        "cat": 2,
+        "and": 2,
+        "hat": 1,
+        "bat": 1
+      }
+    },
+    {
+      "id": "h13",
+      "category": "aggregate",
+      "description": "Read in/scores.json (a JSON array of integers). Write out/result.txt containing the integer mean rounded down (floor).",
+      "inputs": {
+        "in/scores.json": "[88, 92, 79, 65, 100, 71]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "82"
+    },
+    {
+      "id": "h14",
+      "category": "aggregate",
+      "description": "Read in/app.log. Write out/result.txt containing the integer number of lines that contain the substring \"ERROR\" (case-sensitive).",
+      "inputs": {
+        "in/app.log": "INFO start\nERROR disk full\nWARN slow\nERROR timeout\ninfo ERROR-free\nDEBUG x"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "3"
+    },
+    {
+      "id": "h15",
+      "category": "aggregate",
+      "description": "Read in/text.txt. Write the longest line (by character count; the first one on ties) to out/result.txt.",
+      "inputs": {
+        "in/text.txt": "alpha beta\nGamma delta\n\nfoo bar foo\n  padded line  \nlast"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "  padded line  "
+    },
+    {
+      "id": "h16",
+      "category": "parse",
+      "description": "Read in/config.kv (key=value per line; split on the first '=' only). Write out/result.json mapping keys to string values.",
+      "inputs": {
+        "in/config.kv": "host=db.local\nport=5432\nuser=admin\nmode=read=only"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "host": "db.local",
+        "port": "5432",
+        "user": "admin",
+        "mode": "read=only"
+      }
+    },
+    {
+      "id": "h17",
+      "category": "parse",
+      "description": "Read in/events.log (LEVEL|message per line). Write out/result.json mapping each LEVEL to its integer count.",
+      "inputs": {
+        "in/events.log": "INFO|started\nWARN|disk 80%\nERROR|crash\nINFO|retry\nINFO|ok\nERROR|again"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "INFO": 3,
+        "WARN": 1,
+        "ERROR": 2
+      }
+    },
+    {
+      "id": "h18",
+      "category": "parse",
+      "description": "Read in/emails.txt (one address per line). Write the domain part (after '@') of each, one per line, to out/result.txt.",
+      "inputs": {
+        "in/emails.txt": "ada@example.com\nbob@mail.test.org\ncy@x.io"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "example.com\nmail.test.org\nx.io"
+    },
+    {
+      "id": "h19",
+      "category": "parse",
+      "description": "Read in/times.txt (HH:MM durations, one per line). Write the integer total number of minutes to out/result.txt.",
+      "inputs": {
+        "in/times.txt": "01:30\n00:45\n02:05\n10:00"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "860"
+    },
+    {
+      "id": "h20",
+      "category": "parse",
+      "description": "Read in/tags.txt (one line of ';'-separated tags). Write out/result.json: the JSON array of distinct tags in first-seen order.",
+      "inputs": {
+        "in/tags.txt": "red;green;red;blue;green;yellow"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "red",
+        "green",
+        "blue",
+        "yellow"
+      ]
+    },
+    {
+      "id": "h21",
+      "category": "validate",
+      "description": "Read in/users.json (array of objects with integer id). Write out/result.json: the JSON array of ids of objects that have no \"email\" key, in input order.",
+      "inputs": {
+        "in/users.json": "[{\"id\": 1, \"email\": \"a@x\"}, {\"id\": 2}, {\"id\": 3, \"email\": \"c@x\"}, {\"id\": 4, \"name\": \"d\"}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        2,
+        4
+      ]
+    },
+    {
+      "id": "h22",
+      "category": "validate",
+      "description": "Read in/people.json (array of {id, age} with integer ages). Write out/result.txt with one line per record \"<id> valid\" if 0 <= age <= 150 else \"<id> invalid\".",
+      "inputs": {
+        "in/people.json": "[{\"id\": \"p1\", \"age\": 34}, {\"id\": \"p2\", \"age\": -3}, {\"id\": \"p3\", \"age\": 151}, {\"id\": \"p4\", \"age\": 0}, {\"id\": \"p5\", \"age\": 150}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "p1 valid\np2 invalid\np3 invalid\np4 valid\np5 valid"
+    },
+    {
+      "id": "h23",
+      "category": "validate",
+      "description": "Read in/ids.json (array of strings). Write out/result.txt: \"ok\" if all are distinct, else \"duplicate:<id>\" for the first id that repeats an earlier one.",
+      "inputs": {
+        "in/ids.json": "[\"a7\", \"b2\", \"c9\", \"b2\", \"a7\"]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "duplicate:b2"
+    },
+    {
+      "id": "h24",
+      "category": "validate",
+      "description": "Read in/schema.json (array of required key names) and in/config.json (object). Write out/result.json: the array of required keys missing from config, in schema order.",
+      "inputs": {
+        "in/schema.json": "[\"host\", \"port\", \"user\", \"timeout\"]",
+        "in/config.json": "{\"host\": \"h\", \"user\": \"u\", \"debug\": true}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "port",
+        "timeout"
+      ]
+    },
+    {
+      "id": "h25",
+      "category": "validate",
+      "description": "Read in/seq.txt (one integer per line). Write out/result.txt: \"sorted\" if the sequence is non-decreasing, otherwise \"unsorted at <n>\" where n is the 1-based line of the first value smaller than its predecessor.",
+      "inputs": {
+        "in/seq.txt": "1\n3\n3\n8\n5\n9"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "unsorted at 5"
+    },
+    {
+      "id": "h26",
+      "category": "reshape",
+      "description": "Read in/items.json (array of {id, name}). Write out/result.json: an object mapping each id to its name.",
+      "inputs": {
+        "in/items.json": "[{\"id\": \"u1\", \"name\": \"Ada\"}, {\"id\": \"u2\", \"name\": \"Bob\"}, {\"id\": \"u3\", \"name\": \"Cy\"}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "u1": "Ada",
+        "u2": "Bob",
+        "u3": "Cy"
+      }
+    },
+    {
+      "id": "h27",
+      "category": "reshape",
+      "description": "Read in/profile.json ({user: {name, tags, ...}}). Write out/result.json: {\"name\": user.name, \"tag_count\": number of user.tags}.",
+      "inputs": {
+        "in/profile.json": "{\"user\": {\"name\": \"Ada\", \"tags\": [\"x\", \"y\", \"z\"], \"meta\": {\"active\": true}}}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "name": "Ada",
+        "tag_count": 3
+      }
+    },
+    {
+      "id": "h28",
+      "category": "reshape",
+      "description": "Read in/members.json (array of {team, member}). Write out/result.json: an object mapping each team to the array of its members in input order.",
+      "inputs": {
+        "in/members.json": "[{\"team\": \"red\", \"member\": \"a\"}, {\"team\": \"blue\", \"member\": \"b\"}, {\"team\": \"red\", \"member\": \"c\"}, {\"team\": \"green\", \"member\": \"d\"}, {\"team\": \"blue\", \"member\": \"e\"}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "red": [
+          "a",
+          "c"
+        ],
+        "blue": [
+          "b",
+          "e"
+        ],
+        "green": [
+          "d"
+        ]
+      }
+    },
+    {
+      "id": "h29",
+      "category": "reshape",
+      "description": "Read in/records.json (array of objects). Write out/result.json: the same array keeping only the \"id\" and \"status\" fields of each object.",
+      "inputs": {
+        "in/records.json": "[{\"id\": 1, \"status\": \"open\", \"owner\": \"a\", \"prio\": 2}, {\"id\": 2, \"status\": \"done\", \"owner\": \"b\", \"prio\": 1}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        {
+          "id": 1,
+          "status": "open"
+        },
+        {
+          "id": 2,
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "h30",
+      "category": "reshape",
+      "description": "Read in/codes.json (object of string to string). Write out/result.json: the inverted object mapping each value to its key.",
+      "inputs": {
+        "in/codes.json": "{\"US\": \"United States\", \"FR\": \"France\", \"JP\": \"Japan\"}"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "United States": "US",
+        "France": "FR",
+        "Japan": "JP"
+      }
+    },
+    {
+      "id": "h31",
+      "category": "walk",
+      "description": "Recursively walk in/docs. Write out/result.txt containing the integer number of regular files under it.",
+      "inputs": {
+        "in/docs/a.txt": "one",
+        "in/docs/sub/b.txt": "two",
+        "in/docs/sub/c.md": "three",
+        "in/docs/sub/deep/d.txt": "four",
+        "in/docs/e.log": "five"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "5"
+    },
+    {
+      "id": "h32",
+      "category": "walk",
+      "description": "Recursively walk in/docs. Write out/result.txt with the paths (relative to in/docs, '/'-separated) of all files ending in .txt, sorted lexicographically, one per line.",
+      "inputs": {
+        "in/docs/a.txt": "one",
+        "in/docs/sub/b.txt": "two",
+        "in/docs/sub/c.md": "three",
+        "in/docs/sub/deep/d.txt": "four",
+        "in/docs/e.log": "five"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "a.txt\nsub/b.txt\nsub/deep/d.txt"
+    }
+  ]
+}
