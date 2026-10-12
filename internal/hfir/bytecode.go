@@ -381,11 +381,19 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 			diagnostic := c.diagnostic(node, "parse_json requires content")
 			return nil, &diagnostic
 		}
-		insts, childDiagnostic := compileChild(0)
-		if childDiagnostic != nil {
-			return nil, childDiagnostic
+		// PARSE_JSON reads its body from the variable named by its operand
+		// and pushes nothing else, exactly as bytecode.CompileToBytecode
+		// emits it. Desugar always binds the body to a symbol first, so the
+		// content edge is that symbol and must not also be evaluated: doing
+		// so left the raw string on the operand stack, where a later
+		// WRITE_FILE popped it as its path (a false CAPABILITY_DENIED inside
+		// the grant) and PRINT/MAP_GET consumed it instead of the parsed
+		// value (#159, #155). Anything else fails closed.
+		if children[0].Kind != "symbol" || children[0].Value == "" || children[0].Value != node.Value {
+			diagnostic := c.diagnostic(node, "parse_json content must be a bound symbol")
+			return nil, &diagnostic
 		}
-		return append(insts, instruction(bytecode.OpParseJson, "PARSE_JSON", func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })), nil
+		return []bytecode.BCInstruction{instruction(bytecode.OpParseJson, "PARSE_JSON", func(inst *bytecode.BCInstruction) { inst.StringOperand = node.Value })}, nil
 	case "is_nil":
 		if len(children) != 1 || node.DataInputs[0].Name != "value" {
 			diagnostic := c.diagnostic(node, "is_nil requires value")
@@ -499,6 +507,16 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		}
 		return append(insts, instruction(op, name, nil)), nil
 	case "map_get", "list_get", "map_delete", "append":
+		if node.Kind == "map_get" && len(node.DataInputs) == 2 && node.DataInputs[0].Name == "target" && node.DataInputs[1].Name == "key" {
+			// Expression target: evaluate the dict, then the key, then
+			// MAP_GET with an empty variable operand pops both - the same
+			// sequence bytecode.CompileToBytecode emits (#159).
+			insts, childDiagnostic := compileAll()
+			if childDiagnostic != nil {
+				return nil, childDiagnostic
+			}
+			return append(insts, instruction(bytecode.OpMapGet, "MAP_GET", nil)), nil
+		}
 		edgeName := "key"
 		if node.Kind == "list_get" {
 			edgeName = "index"

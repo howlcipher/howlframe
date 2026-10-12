@@ -1,0 +1,6 @@
+(cli_app
+ (let (s "{\"z\": 1, \"a\": [2, {\"b\": null}]}")
+  (do
+   (print (encode_json (parse_json Any s)) (let (v (parse_json Any s)) (get v "z")))
+   (print (str_join (map_list k (map_keys (parse_json Any s)) (str k "!")) ","))
+   (print (list_len (map_keys (parse_json Any s))) (encode_json (parse_json Any s))))))

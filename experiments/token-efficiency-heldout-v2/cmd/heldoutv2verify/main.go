@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/howlcipher/howlframe/experiments/internal/pathparity"
 )
 
 type Task struct {
@@ -80,6 +82,11 @@ func main() {
 				r.Detail = readErr.Error()
 			} else {
 				r.Detail = verify(filepath.Join(work, lang+"-"+t.ID), src, lang, *howl, t)
+				if r.Detail == "" && lang == "howl" {
+					// #159: the interpreter, governed bytecode and HFIR bytecode
+					// must agree byte for byte (output, exit status, file tree).
+					r.Detail = pathparity.Check(*howl, src, filepath.Join(work, "parity-"+t.ID), heldoutSandbox(t))
+				}
 				r.Pass = r.Detail == ""
 			}
 			if r.Pass {
@@ -218,5 +225,30 @@ func must(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
+	}
+}
+
+// heldoutSandbox materializes a task's inputs plus an empty out/ and grants
+// exactly the same read and write roots verify uses.
+func heldoutSandbox(t Task) pathparity.Sandbox {
+	return func(run string) (string, string, error) {
+		dir := filepath.Join(run, "sandbox")
+		if err := os.MkdirAll(filepath.Join(dir, "out"), 0o755); err != nil {
+			return "", "", err
+		}
+		for p, content := range t.Inputs {
+			full := filepath.Join(dir, p)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				return "", "", err
+			}
+			if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+				return "", "", err
+			}
+		}
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return "", "", err
+		}
+		return abs, "filesystem:read=" + filepath.Join(abs, "in") + ",filesystem:write=" + filepath.Join(abs, "out"), nil
 	}
 }

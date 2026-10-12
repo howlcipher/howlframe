@@ -10,9 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/howlcipher/howlframe/experiments/falsifiable-v0/harness"
+	"github.com/howlcipher/howlframe/experiments/internal/pathparity"
 )
 
 type Result struct {
@@ -137,6 +139,13 @@ func main() {
 				err = readErr
 			} else {
 				result.Comparison, result.Diagnostics, err = verify(root, filepath.Join(work, lang+"-"+task.ID), source, lang, *hfexpFlag, *howlFlag, task)
+				if err == nil && lang == "howl" && result.Comparison.Success {
+					// #159: interpreter, governed bytecode and HFIR bytecode
+					// must agree byte for byte in identical sandboxes.
+					if detail := pathparity.Check(*howlFlag, source, filepath.Join(work, "parity-"+task.ID), v0Sandbox(root, task)); detail != "" {
+						err = fmt.Errorf("%s", detail)
+					}
+				}
 			}
 			if err != nil {
 				result.Diagnostics += " " + err.Error()
@@ -161,5 +170,18 @@ func main() {
 	}
 	if failed {
 		os.Exit(1)
+	}
+}
+
+// v0Sandbox materializes the same reference sandbox the other languages use
+// and grants the task's declared capabilities.
+func v0Sandbox(root string, task harness.Task) pathparity.Sandbox {
+	return func(run string) (string, string, error) {
+		dir := filepath.Join(run, "ref")
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			return "", "", err
+		}
+		sandbox, _, err := harness.MaterializeReferenceSandbox(filepath.Join(root, "experiments/falsifiable-v0"), dir, task)
+		return sandbox, strings.Join(task.AllowedCaps, ","), err
 	}
 }
