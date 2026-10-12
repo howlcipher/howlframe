@@ -4,8 +4,8 @@
 
 ### 1. One arity table, enforced before codegen
 - `internal/construct/arity.go` declares an `Arity{Min,Max}` for every
-  construct-registry entry. `Variadic` means there is no maximum. 134 entries
-  have an arity and 20 are exempt, out of 154 registry entries.
+  construct-registry entry. `Variadic` means there is no maximum. 136 entries
+  have an arity and 18 are exempt, out of 154 registry entries.
 - Each exemption carries a reason. Most are Unsupported constructs or
   directives (`include`, `use`, `patch`, `with_context`) that earlier passes
   consume. The rest are pure type annotations (`type_hint`, `type_hints`,

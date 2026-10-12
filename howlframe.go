@@ -1158,7 +1158,7 @@ func rejectUnsupportedTargetSugar(root *ast.Node, target string) {
 // statements. Their bodies are statement positions; see targetValueArgs for
 // which operands are values.
 var targetStatementForms = map[string]bool{
-	"cli_app": true, "web_app": true, "do": true, "let": true, "if": true,
+	"cli_app": true, "web_app": true, "wasm_app": true, "do": true, "let": true, "if": true,
 	"for": true, "while": true, "defun": true, "lambda": true, "switch": true,
 	"cond": true, "try": true, "try_let": true, "catch": true, "route": true,
 	"http_server": true, "test": true, "spawn": true, "task": true,
