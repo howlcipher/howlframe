@@ -12,8 +12,10 @@ import "strings"
 //   (% a b)              integer remainder, floored like Python: the result
 //                        has the sign of b. (% 7 3)=1, (% -7 3)=2, (% 7 -3)=-2.
 //   (// a b)             floored integer division: (// -7 2) = -4.
-//                        Both use exact int arithmetic around one float
-//                        division, so |a| must stay below 2^53. b = 0 is the
+//                        Int operands use exact int64 arithmetic over the
+//                        whole range (see cfIntCore); MinInt64 // -1 is the
+//                        existing RUNTIME_ERROR "integer overflow". Float
+//                        operands keep the float formula. b = 0 is the
 //                        existing RUNTIME_ERROR "division by zero".
 //   (if c1 a c2 b ... [else])  n-ary if: elif chains without cond clauses.
 //   (break)              leaves the innermost for/while. Statement position
@@ -33,6 +35,38 @@ import "strings"
 //                        for negatives. Other bases: "VALUE_ERROR: to_base
 //                        base must be 2..36", exit 1.
 //   (let ((a b) lst) body)  destructuring: a = (list_get lst 0), b = ... .
+//                        A list of another length fails with
+//                        "VALUE_ERROR: destructuring expects N elements", exit 1.
+
+// cfIsFloat is true when either operand of % or // is not an integer: its
+// printed form contains ".", "e" (exponent), "n" (Inf) or "N" (NaN), none of
+// which an int64 ever prints. Such operands keep the float formula.
+// Integral floats such as 6.0 print like ints and take the exact path; the
+// result value is the same (and prints the same) as the float formula's.
+const cfIsFloat = "(or (str_contains (str $A) $DOT) (str_contains (str $B) $DOT) (str_contains (str $A) $EXP) (str_contains (str $B) $EXP) (str_contains (str $A) $INF) (str_contains (str $B) $INF) (str_contains (str $A) $NAN) (str_contains (str $B) $NAN))"
+
+// cfSmall is true when both operands are strictly inside (-2^52, 2^52). There
+// the float formula is exact: a correctly rounded a/b cannot cross an integer
+// boundary, and // divides a - r with |a - r| < 2^53 (with the old 2^53 bound
+// (// (2^53-1) -3) was off by one). % and // keep the cheaper pre-#149
+// expansion there, so the instruction cost of ordinary loops is unchanged.
+const cfSmall = "(and (< $A $LIM) (> $A $NLIM) (< $B $LIM) (> $B $NLIM))"
+
+// cfIntCore computes, in exact int64 arithmetic, Q = |trunc(A/B)| and
+// R = -(|A| mod |B|) (so DN < R <= 0) for |B| >= 2, B = 0 failing with the
+// existing "division by zero". It works on non-positive magnitudes
+// N = -|A|, DN = -|B| so MinInt64 is representable. One float division gives
+// an estimate within ~1536 of the true quotient (|Q| <= 2^62); it is biased
+// 2048 toward zero so DN*Q never passes N (no overflow), a second float
+// division of the small remainder is biased by 1, and a final loop of at
+// most a few steps makes DN < R <= 0 exact. The caller closes four parens.
+const cfIntCore = "(let ($N (if (< $A 0) $A (- 0 $A)) $DN (if (< $B 0) $B (- 0 $B)) $Q (- (to_int (/ $N $DN)) 2048)) (do (when (< $Q 0) (set $Q 0)) (let ($R (- $N (* $DN $Q)) $T (- (to_int (/ $R $DN)) 1)) (do (when (< $T 0) (set $T 0)) (set $R (- $R (* $DN $T))) (set $Q (+ $Q $T)) (while (<= $R $DN) (do (set $R (- $R $DN)) (set $Q (+ $Q 1))))"
+
+// cfW wraps an exact-path % result as (+ (+ x (* 0 A)) (* 0 B)). At run time
+// the exact path only sees ints, so this adds 0; statically it gives the
+// result the same type as the float formula (float when either operand is
+// typed float), which the checker requires of both if branches.
+func cfW(x string) string { return "(+ (+ " + x + " (* 0 $A)) (* 0 $B))" }
 
 var controlflowTemplates = map[string]struct {
 	arity  int
@@ -41,10 +75,10 @@ var controlflowTemplates = map[string]struct {
 	tpl    string
 	binder int
 }{
-	"%": {2, []string{"a", "b"}, []string{"A", "B", "R"},
-		"(let ($A $a $B $b $R (- $A (* $B (to_int (/ $A $B))))) (if (and (!= $R 0) (!= (< $R 0) (< $B 0))) (+ $R $B) $R))", -1},
-	"//": {2, []string{"a", "b"}, []string{"A", "B"},
-		"(let ($A $a $B $b) (to_int (/ (- $A (% $A $B)) $B)))", -1},
+	"%": {2, []string{"a", "b"}, []string{"A", "B", "R", "N", "DN", "Q", "T"},
+		"(let ($A $a $B $b) (if " + cfSmall + " (let ($R (- $A (* $B (to_int (/ $A $B))))) (if (and (!= $R 0) (!= (< $R 0) (< $B 0))) (+ $R $B) $R)) (if " + cfIsFloat + " (let ($R (- $A (* $B (to_int (/ $A $B))))) (if (and (!= $R 0) (!= (< $R 0) (< $B 0))) (+ $R $B) $R)) (if (or (= $B 1) (= $B (- 0 1))) " + cfW("0") + " " + cfIntCore + " (let ($T (if (< $A 0) $R (- 0 $R))) (if (and (!= $T 0) (!= (< $T 0) (< $B 0))) " + cfW("(+ $T $B)") + " " + cfW("$T") + "))))))))))", -1},
+	"//": {2, []string{"a", "b"}, []string{"A", "B", "R", "N", "DN", "Q", "T"},
+		"(let ($A $a $B $b) (if (or " + cfSmall + " " + cfIsFloat + ") (to_int (/ (- $A (% $A $B)) $B)) (if (= $B 1) (to_int $A) (if (= $B (- 0 1)) (to_int (- 0 $A)) " + cfIntCore + " (if (= (< $A 0) (< $B 0)) $Q (if (= $R 0) (- 0 $Q) (- 0 (+ $Q 1))))))))))))", -1},
 	"range": {2, []string{"a", "b"}, []string{"A", "B", "R"},
 		"(let ($A $a $B $b $R (list)) (do (while (< $A $B) (do (append $R $A) (set $A (+ $A 1)))) $R))", -1},
 	"max_by": {3, []string{"x", "lst", "key"}, []string{"L", "KS", "I", "M", "MK", "K"},
@@ -63,8 +97,8 @@ var controlflowTemplates = map[string]struct {
 		"(let ($C (str_split $s $E) $N (list_len $C)) (do (while (and (> $N 0) (list_contains $WS (list_get $C (- $N 1)))) (set $N (- $N 1))) (str_join (list_slice $C 0 $N) $E)))", -1},
 	"ltrim": {1, []string{"s"}, []string{"C", "N", "I"},
 		"(let ($C (str_split $s $E) $N (list_len $C) $I 0) (do (while (and (< $I $N) (list_contains $WS (list_get $C $I))) (set $I (+ $I 1))) (str_join (list_slice $C $I $N) $E)))", -1},
-	"to_base": {2, []string{"n", "b"}, []string{"N", "B", "G", "R", "NEG"},
-		"(let ($N $n $B $b $G (str_split $D $E) $R $E $NEG (< $N 0)) (do (when (or (< $B 2) (> $B 36)) (do (stderr $msg) (exit 1))) (when $NEG (set $N (- 0 $N))) (while (> $N 0) (do (set $R (str (list_get $G (% $N $B)) $R)) (set $N (// $N $B)))) (when (= $R $E) (set $R $Z)) (when $NEG (set $R (str $MINUS $R))) $R))", -1},
+	"to_base": {2, []string{"n", "b"}, []string{"N", "B", "G", "R", "NEG", "M"},
+		"(let ($N $n $B $b $G (str_split $D $E) $R $E $NEG (< $N 0) $M (* 0 $N)) (do (when (or (< $B 2) (> $B 36)) (do (stderr $msg) (exit 1))) (when (not $NEG) (set $N (- 0 $N))) (while (< $N 0) (do (set $M (% $N $B)) (set $N (// $N $B)) (when (!= $M 0) (do (set $M (- $B $M)) (set $N (+ $N 1)))) (set $R (str (list_get $G $M) $R)))) (when (= $R $E) (set $R $Z)) (when $NEG (set $R (str $MINUS $R))) $R))", -1},
 }
 
 // ControlflowHeads lists every head added by this file plus break, for the
@@ -109,7 +143,17 @@ func desugarControlflow(node *Node) bool {
 		"E":     func() *Node { return strNode("", node) },
 		"Z":     func() *Node { return strNode("0", node) },
 		"MINUS": func() *Node { return strNode("-", node) },
-		"D":     func() *Node { return strNode("0123456789abcdefghijklmnopqrstuvwxyz", node) },
+		"DOT":   func() *Node { return strNode(".", node) },
+		"LIM": func() *Node {
+			return &Node{Type: "INT", Value: "4503599627370496", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		},
+		"NLIM": func() *Node {
+			return &Node{Type: "INT", Value: "-4503599627370496", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		},
+		"EXP": func() *Node { return strNode("e", node) },
+		"INF": func() *Node { return strNode("n", node) },
+		"NAN": func() *Node { return strNode("N", node) },
+		"D":   func() *Node { return strNode("0123456789abcdefghijklmnopqrstuvwxyz", node) },
 		"WS": func() *Node {
 			return &Node{Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename, Children: []*Node{
 				symNode("list", node), strNode(" ", node), strNode("\t", node), strNode("\n", node), strNode("\r", node)}}
@@ -183,6 +227,22 @@ func desugarDestructure(node *Node) {
 		changed = true
 		tmp := compactTemp("clDS")
 		out = append(out, symNode(tmp, node), val)
+		// Length check: (do (when (!= (list_len T) n) (do (stderr msg) (exit 1))) 0).
+		at := name
+		n := len(name.Children)
+		mk := func(ch ...*Node) *Node {
+			return &Node{Type: "List", Line: at.Line, Column: at.Column, Filename: at.Filename, Children: ch}
+		}
+		intN := func(v int) *Node {
+			return &Node{Type: "INT", Value: itoa(v), Line: at.Line, Column: at.Column, Filename: at.Filename}
+		}
+		check := mk(symNode("do", at),
+			mk(symNode("when", at), mk(symNode("!=", at), mk(symNode("list_len", at), symNode(tmp, at)), intN(n)),
+				mk(symNode("do", at),
+					mk(symNode("stderr", at), strNode("VALUE_ERROR: destructuring expects "+itoa(n)+" elements\n", at)),
+					mk(symNode("exit", at), intN(1)))),
+			intN(0))
+		out = append(out, symNode(compactTemp("clDSN"), node), check)
 		for j, sym := range name.Children {
 			idx := &Node{Type: "INT", Value: itoa(j), Line: sym.Line, Column: sym.Column, Filename: sym.Filename}
 			get := &Node{Type: "List", Line: sym.Line, Column: sym.Column, Filename: sym.Filename,
