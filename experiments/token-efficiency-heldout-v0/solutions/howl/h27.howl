@@ -1,0 +1,3 @@
+(do
+ (let (profile (parse_json Any (read_text "in/profile.json")) user (map_get profile "user") tags (map_get user "tags"))
+  (write_file "out/result.json" (encode_json (dict ("name" (map_get user "name")) ("tag_count" (list_len tags)))))))

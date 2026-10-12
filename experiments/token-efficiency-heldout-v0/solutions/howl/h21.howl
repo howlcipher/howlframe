@@ -1,0 +1,5 @@
+(do
+ (let (users (parse_json Any (read_text "in/users.json")) out (list))
+  (do
+   (for u users (unless (map_has u "email") (append out (map_get u "id"))))
+   (write_file "out/result.json" (encode_json out)))))

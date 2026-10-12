@@ -1,0 +1,5 @@
+(do
+ (let (items (parse_json Any (read_text "in/items.json")) out (dict))
+  (do
+   (for it items (map_set out (map_get it "id") (map_get it "name")))
+   (write_file "out/result.json" (encode_json out)))))

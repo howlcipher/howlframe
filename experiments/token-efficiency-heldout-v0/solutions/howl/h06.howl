@@ -1,0 +1,7 @@
+(do
+ (let (lines (lines (read_file "in/data.csv")) header (str_split (list_get lines 0) ",") col 0 i 0 out (list))
+  (do
+   (for h header (do (when (= h "email") (set col i)) (inc i)))
+   (set i 0)
+   (for row lines (do (when (> i 0) (append out (list_get (str_split row ",") col))) (inc i)))
+   (write_file "out/result.txt" (str_join out "\n")))))

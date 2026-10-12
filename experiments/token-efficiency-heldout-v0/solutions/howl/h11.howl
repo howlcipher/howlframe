@@ -1,0 +1,11 @@
+(do
+ (let (lines (lines (read_file "in/numbers.txt")) lo 0 hi 0 sum 0 first 1)
+  (do
+   (for l lines
+    (let (n (to_int l))
+     (do
+      (when (or (= first 1) (< n lo)) (set lo n))
+      (when (or (= first 1) (> n hi)) (set hi n))
+      (set sum (+ sum n))
+      (set first 0))))
+   (write_file "out/result.json" (encode_json (dict ("min" lo) ("max" hi) ("sum" sum)))))))

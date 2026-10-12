@@ -1,0 +1,758 @@
+[
+  {
+    "task": "h01",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "b4de690a94feafe6fee53dace2c98c1b54e3df174f28831cb079979be816b59e"
+  },
+  {
+    "task": "h02",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6cdaac65ab7e5cf8fe48bd36f7566f824ec9cf809d05d5d840e308d70bf9ae2e"
+  },
+  {
+    "task": "h03",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "28fe212b9313bf0a87ac292098626b862d3746ce8f37e1e6183848703b6cd9c7"
+  },
+  {
+    "task": "h04",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "a86c6fb7c64a9127f2f002db65af8dcf737c9b269192e73c4d7b0cd9e5fdad05"
+  },
+  {
+    "task": "h05",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "286b716b9155ba003e7dd618ad42436e16f387ba8ff0a5e2b6ec4048756402a7"
+  },
+  {
+    "task": "h06",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "1850ea29d9337bf1912d6b9105ec09ba8afd39ffc37b62db0d0bc7852cf276ea"
+  },
+  {
+    "task": "h07",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c371b635596e230839e25e9aac14bd6b0db14844564e5b772985c022117c29bb"
+  },
+  {
+    "task": "h08",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "91330ac95a1cf8745bd2040042d449a0bdf77b3b76b96cd3e1e377dc5863d054"
+  },
+  {
+    "task": "h09",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "b1749f7053e6511d0ebaa8d2dc050acaa3d4f48e31cbbe2f953d88822b79ff54"
+  },
+  {
+    "task": "h10",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "62be5b650b51ddebefeaefef2181e2898dd97d90b3ec8186c6f1756102f95ad7"
+  },
+  {
+    "task": "h11",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "266248df5f57d46c001045d0c1b90ed51f649b0a2c442a7ebc9cb35eef28fd48"
+  },
+  {
+    "task": "h12",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e06880a540f1b2f853b00cc0d366b22ccd30ab22b79a3c5b90aaca4acb369792"
+  },
+  {
+    "task": "h13",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "939b6aeaeef5e96f0dc07a7524507f95e88b54ce497aeb004251c6c88f7ef1fa"
+  },
+  {
+    "task": "h14",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "851d0ed640e674c73a1c244ea9fe109db706532c928764013013e3c3ea30d7f7"
+  },
+  {
+    "task": "h15",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "73c5cbbe59036fb1217d545bc76665bf5f58daaa1c0a472c9c96a38447acc777"
+  },
+  {
+    "task": "h16",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "1f22506e18b96edf2a2b8eb99094dccff1940d1f6fc8f9786de9e17f2729c580"
+  },
+  {
+    "task": "h17",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "1b2c6bbde05473dd1dc539468be7ae3d15a43d6d0b8971813634c29be717c146"
+  },
+  {
+    "task": "h18",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e92bf7ed57ed7b1dbf864122c4d5f9fba4892313e24ff65a1fbfbfe728ec1c40"
+  },
+  {
+    "task": "h19",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "b7bd999315e5a09f94b89bd3e24218b21978295ffae16935a9e1072c41b65340"
+  },
+  {
+    "task": "h20",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "0fc488b6133d71fafc955ff1f6e1f34b4dc18a8fd2859a5882a436d65e3833f6"
+  },
+  {
+    "task": "h21",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "131d369bd2ec71182aed19a80ef6bcba25018dcd498ca6428fbc7b23049d5061"
+  },
+  {
+    "task": "h22",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "348bf96094d72de914a2347556a87423d1cb69f54fb16a40273e2305976db81f"
+  },
+  {
+    "task": "h23",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "f998d8189a63721548335c6ab412c7c84caf3cf3e32d01a75cb7d1fa778209b3"
+  },
+  {
+    "task": "h24",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "9b9195ed368ae5d0045d015fbf5d8a7ac70a7fff3a994c008c791e53a3758152"
+  },
+  {
+    "task": "h25",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "0d81dc7acde6316c6b8886c54c38aab91568ac5c185d7a275a1c9b6fb1156836"
+  },
+  {
+    "task": "h26",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "bd0deb275b6afeffd3f16ee96fcc69b2ab25d2554ac4b44857cb2d5c93de088d"
+  },
+  {
+    "task": "h27",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "593af43a1306b0aaf5aa8fe356497dcc1f76a5247a33d28f158d6a08de829f45"
+  },
+  {
+    "task": "h28",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6603f4e0e88857a619f902df4f7a731329dbf4b64074abcf56d997fe429c9b43"
+  },
+  {
+    "task": "h29",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "0953d2707c42c3e00ff597c1e2c23bea4abcd882e14a733e68b29f26f3bdcd02"
+  },
+  {
+    "task": "h30",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "ae952468b04822b901d73767f9e240e4e374c588b1925782a66772b602b099ea"
+  },
+  {
+    "task": "h01",
+    "lang": "python",
+    "pass": true,
+    "sha256": "4f2f858c937c95c8ebd433083a9cfcf091b9ef0775569389009a4b96741e91d2"
+  },
+  {
+    "task": "h02",
+    "lang": "python",
+    "pass": true,
+    "sha256": "f42b028456fa49a3f14a4d19e93df065e7e8fad964ec88a2f63b673b60a2f37f"
+  },
+  {
+    "task": "h03",
+    "lang": "python",
+    "pass": true,
+    "sha256": "9a5ca0de7370dff2af6e0e1083874f90e025c438a1968fd4325c8326e2797eb2"
+  },
+  {
+    "task": "h04",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d0b7ab420461c352c77bdfde9fccf49898407dcdd096751486087ae7ddc97dd6"
+  },
+  {
+    "task": "h05",
+    "lang": "python",
+    "pass": true,
+    "sha256": "baeefb32824ce6be6f02a8b239bb1b6c76f772ca41eb595f54bc8bfe02d237e7"
+  },
+  {
+    "task": "h06",
+    "lang": "python",
+    "pass": true,
+    "sha256": "40f4dd86ba39f55af7f327de0717ca96768df36d30a22f4c4692c48a102afe87"
+  },
+  {
+    "task": "h07",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6420a906c13d0b49409dff5edef52f73d854d5a3ece2a2565cd38d180ed49ca1"
+  },
+  {
+    "task": "h08",
+    "lang": "python",
+    "pass": true,
+    "sha256": "e988e38d6531a0282542dc2346c2bb02ddca1609f563b8678c105bc5b768acb6"
+  },
+  {
+    "task": "h09",
+    "lang": "python",
+    "pass": true,
+    "sha256": "487c78a6fb57e477cf0ddb9e9f4b183dce9d2fa5886c87dbb77a86f9b07418de"
+  },
+  {
+    "task": "h10",
+    "lang": "python",
+    "pass": true,
+    "sha256": "027928342905eac12c6f8a4b4a0779a4b69c33c7bf41fa2dba464866390b6452"
+  },
+  {
+    "task": "h11",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6378cb337a1a4a4b30a0379c13c6f41b798831d001b49eae9fe05a218b765f28"
+  },
+  {
+    "task": "h12",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ef873c7fbfae70e8f0de98ef08d4d4835c592c4258b498be60e55ed50b3e8c65"
+  },
+  {
+    "task": "h13",
+    "lang": "python",
+    "pass": true,
+    "sha256": "94197926ffa52cfa5ce3ef6f43301910a58d59b43a83b9c70d74897c85c47496"
+  },
+  {
+    "task": "h14",
+    "lang": "python",
+    "pass": true,
+    "sha256": "5a0d4c6cd40d504f4e6bac87d03998b3db8e8ed387682bdbfdce1ec76d398eba"
+  },
+  {
+    "task": "h15",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d71970c859e45d298284f87c4b207bbbf9c243924987ea9af3fe30690ee3bd0e"
+  },
+  {
+    "task": "h16",
+    "lang": "python",
+    "pass": true,
+    "sha256": "5370a3a8b05fc6a6d949274fced699d9b20267be3dbaae03ed586c86608e2ac0"
+  },
+  {
+    "task": "h17",
+    "lang": "python",
+    "pass": true,
+    "sha256": "3a5ce38bd09da174b880bf692dd6b61af5cf2bc76461bff4e93ac06bf06a6b5e"
+  },
+  {
+    "task": "h18",
+    "lang": "python",
+    "pass": true,
+    "sha256": "1044de98234037baf6d54c9717c7e3a1c94f3f26b6c7a01bb53f07ff039495da"
+  },
+  {
+    "task": "h19",
+    "lang": "python",
+    "pass": true,
+    "sha256": "1679efba38f6c6ed238305b37e6f9061826a135f27970e615524aa576e511fac"
+  },
+  {
+    "task": "h20",
+    "lang": "python",
+    "pass": true,
+    "sha256": "1efeb040fe4242ad846f56367417124f561b97e10b3d65d4683d27dafb0e7afb"
+  },
+  {
+    "task": "h21",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6f940610e5558d7855dd32e2c1db2e486db98476ad9c88fc43530e1f5164a74f"
+  },
+  {
+    "task": "h22",
+    "lang": "python",
+    "pass": true,
+    "sha256": "73be9f869de3b4adc3f9152eedec3d1ab13b6f2a092384910c453a18ff4e4ed6"
+  },
+  {
+    "task": "h23",
+    "lang": "python",
+    "pass": true,
+    "sha256": "026134d6ff7fe1af88e9293fcd9a7b242733e3cf0c8929ab7f64f017349c828c"
+  },
+  {
+    "task": "h24",
+    "lang": "python",
+    "pass": true,
+    "sha256": "106dee982a5cc21599aaf9456c9ad4caf8192d3d1e7c751a1d8342a5d6d78e75"
+  },
+  {
+    "task": "h25",
+    "lang": "python",
+    "pass": true,
+    "sha256": "bc0316ef6d7737d41a8e90fc51b00fb51dfdb941020f07a60c0853c6578637b6"
+  },
+  {
+    "task": "h26",
+    "lang": "python",
+    "pass": true,
+    "sha256": "d6474388680a2f12e9320272c3e22512389254c58f3935be61639f1c63e6367c"
+  },
+  {
+    "task": "h27",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ab574fe3795318a1221f3062ca65509dedb4dc5a6cb29b1e8acbef0dfd05ca3e"
+  },
+  {
+    "task": "h28",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0fc05f767a70162adb89046931a37fcf4d99f8aa14ac36c7373d7619b91515ae"
+  },
+  {
+    "task": "h29",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7fcfa8b0919f92ad56543f3c8df695415393a471e8ec6bc87ba81db3ac8e3d46"
+  },
+  {
+    "task": "h30",
+    "lang": "python",
+    "pass": true,
+    "sha256": "26f4b7bdfbbb243358f379802551f8617035565d6d73ffd3572ab5b8229c6287"
+  },
+  {
+    "task": "h31",
+    "lang": "python",
+    "pass": true,
+    "sha256": "28295d265e2b3ebb2e1772ce8a71557fecb2093e203ed81e57f25a8e6a2bce80"
+  },
+  {
+    "task": "h32",
+    "lang": "python",
+    "pass": true,
+    "sha256": "35bcc7cd514a8e9e76fff30c286c640dc0bd7ca8c48b6a4c912f0c1a10cb8893"
+  },
+  {
+    "task": "h01",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ed85768b3c7331f4ab8fce7afb6f23cea40ad4861e08bf606d857d49fdca671a"
+  },
+  {
+    "task": "h02",
+    "lang": "js",
+    "pass": true,
+    "sha256": "22d776b0fc78c3b1338e03cc45f36d1e0297507bac0161da7c55c6df6abce1eb"
+  },
+  {
+    "task": "h03",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d487a4c5368009eaac2aba60f03cd5345230ce230aa57372ad4d5bff877557b9"
+  },
+  {
+    "task": "h04",
+    "lang": "js",
+    "pass": true,
+    "sha256": "2ccae5bb12be92bea499ea1385342e72c3acebdfefc4f369336e63ffa973107e"
+  },
+  {
+    "task": "h05",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ec7f32f93db53aa2022a2e3ef417a7ffbcb5656f23f01d3956369b6a8e89ae48"
+  },
+  {
+    "task": "h06",
+    "lang": "js",
+    "pass": true,
+    "sha256": "9566570463f16372eeb6d72f913ee0471245f5da4fe7bb939dabb88604ff0657"
+  },
+  {
+    "task": "h07",
+    "lang": "js",
+    "pass": true,
+    "sha256": "55cf2b6074540a05c9888f438537e7adaff140e4c75c7b023d147b8a586030d4"
+  },
+  {
+    "task": "h08",
+    "lang": "js",
+    "pass": true,
+    "sha256": "982457bac94c08f58c06e3e2572137b8cd53245845782d1dbf3ba0720a64ef9d"
+  },
+  {
+    "task": "h09",
+    "lang": "js",
+    "pass": true,
+    "sha256": "68ba81a2020a4daa2a2f1c96edd732f7a68c2071a988aaa37880debe8f5c4010"
+  },
+  {
+    "task": "h10",
+    "lang": "js",
+    "pass": true,
+    "sha256": "82fd8d9c135b3154eea0815a4cf80a860ed2106745cd9e8e07a13fad79ab102c"
+  },
+  {
+    "task": "h11",
+    "lang": "js",
+    "pass": true,
+    "sha256": "b24eaca279d260c1f7d22de3f111c99b900df0a9050ae46eec3b03abf173f4eb"
+  },
+  {
+    "task": "h12",
+    "lang": "js",
+    "pass": true,
+    "sha256": "a799801ada1a36244eb78e6519a938e877c026bc4f84db2f25cf719a1b79a65e"
+  },
+  {
+    "task": "h13",
+    "lang": "js",
+    "pass": true,
+    "sha256": "a4dad63f39559e88aadf0c3163c359964fb0f430f8e88bd7d380771a04feafa7"
+  },
+  {
+    "task": "h14",
+    "lang": "js",
+    "pass": true,
+    "sha256": "3d45243fad89a36d37d3cd70404af039f57fe03c34c491493345b7a8475b7fb3"
+  },
+  {
+    "task": "h15",
+    "lang": "js",
+    "pass": true,
+    "sha256": "aa24e2f02ea5ee570a0b6701656778693f67cdb7cba37bd6faaebc0c0f4f34bb"
+  },
+  {
+    "task": "h16",
+    "lang": "js",
+    "pass": true,
+    "sha256": "2f068c42a0e9feb554127ed33e3b14330f5120d67f06a03833f8af8fc5991acc"
+  },
+  {
+    "task": "h17",
+    "lang": "js",
+    "pass": true,
+    "sha256": "2063e580378002d9ab92000fb3ee9e1ebc5d406161658274562c54be4d726db4"
+  },
+  {
+    "task": "h18",
+    "lang": "js",
+    "pass": true,
+    "sha256": "3741104ec8552fd070f99756f350e4cc39010c41076f51be1b6ba3190c65f8c7"
+  },
+  {
+    "task": "h19",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c4215c3f9e48c09891d791d1bb6245adf902e0194d49083b42698d96ab4ce5e6"
+  },
+  {
+    "task": "h20",
+    "lang": "js",
+    "pass": true,
+    "sha256": "f04179414e8ae40577158eaa6dbba58ebc852a92ff235b216a0ad7b9c5e437a7"
+  },
+  {
+    "task": "h21",
+    "lang": "js",
+    "pass": true,
+    "sha256": "7c78238feb28d25a7d27b11968c7f68634ff9886478a57f532b773f37f39cc4c"
+  },
+  {
+    "task": "h22",
+    "lang": "js",
+    "pass": true,
+    "sha256": "cb8ef0964bc2cd8c376f9f748a360733c45e7b8cd36f162e9826d19201ba59ba"
+  },
+  {
+    "task": "h23",
+    "lang": "js",
+    "pass": true,
+    "sha256": "7d7dcc055dc0a50b0ecd0e49d79e22a326f6f192850d851be845ae8103d129b6"
+  },
+  {
+    "task": "h24",
+    "lang": "js",
+    "pass": true,
+    "sha256": "494650fed76da0200392c91eb4db61632251692a4b8c69d944f316d1ea8a8d0e"
+  },
+  {
+    "task": "h25",
+    "lang": "js",
+    "pass": true,
+    "sha256": "09a8a50c268f48724bdcd9e1a84d7fae58e295d39fdd913c4703fdca0f6359b7"
+  },
+  {
+    "task": "h26",
+    "lang": "js",
+    "pass": true,
+    "sha256": "fd053154d4eb4a67f7adf22665dd3c88593319d732209bde0290e3a5c108c2b6"
+  },
+  {
+    "task": "h27",
+    "lang": "js",
+    "pass": true,
+    "sha256": "496b5247495ddbe082033e450313d1f32a44058177113ac833296242c0220af5"
+  },
+  {
+    "task": "h28",
+    "lang": "js",
+    "pass": true,
+    "sha256": "cd9ca67668100a0ed0d507a52ebb1cb6ec96af29a2e53e06d03e9c58237cf8c6"
+  },
+  {
+    "task": "h29",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d3a8d32a5f139157b17f725ea3d77b6542d354604ac4edc70337dd4852bb2573"
+  },
+  {
+    "task": "h30",
+    "lang": "js",
+    "pass": true,
+    "sha256": "7d14dc6c7fd758ed87699c167bdf8815a74fb54a453ce37c6198ce4325a948bf"
+  },
+  {
+    "task": "h31",
+    "lang": "js",
+    "pass": true,
+    "sha256": "907d594579552cb74fd8eebc92bfac84b2461ba06830788decc7b637c48c702e"
+  },
+  {
+    "task": "h32",
+    "lang": "js",
+    "pass": true,
+    "sha256": "4ee11e20975ef48d58fba9be3156d2725e18cd467c1411d9a664d1f0c35f1735"
+  },
+  {
+    "task": "h01",
+    "lang": "go",
+    "pass": true,
+    "sha256": "3ef78ec6cef665d45009bf955ec355cb3202cf107745ca0b4089ac5d3ae85a35"
+  },
+  {
+    "task": "h02",
+    "lang": "go",
+    "pass": true,
+    "sha256": "de4b2dcf329b6873970280d091822761df02f9757ca5e656a1c5af07b7613d4a"
+  },
+  {
+    "task": "h03",
+    "lang": "go",
+    "pass": true,
+    "sha256": "56dac09eea18669edeac5ed673a9c97189d02e1d44ddbf6bf4aa45d1386cb25f"
+  },
+  {
+    "task": "h04",
+    "lang": "go",
+    "pass": true,
+    "sha256": "5d787a897183bbff89b9e62415d748c8834bde41e940b80abb2c71143b34d8c5"
+  },
+  {
+    "task": "h05",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c40b4bae5c7846e23e4526c264487c3a0847d8de3b272eedd1141ec193183e8f"
+  },
+  {
+    "task": "h06",
+    "lang": "go",
+    "pass": true,
+    "sha256": "573319e1ed7c078e22392117f8ee4cf13f5f959882d159c6c351da67c2ed6529"
+  },
+  {
+    "task": "h07",
+    "lang": "go",
+    "pass": true,
+    "sha256": "7548872e4ff08c74998fcbc0de1d0194456c12dcb8334bb993471c9fbe94dc28"
+  },
+  {
+    "task": "h08",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6db3310e9cd829dd0c824b29fb1e67024f9fa834ca1b158d2c60f2135fb90f8e"
+  },
+  {
+    "task": "h09",
+    "lang": "go",
+    "pass": true,
+    "sha256": "256421d5a08b40a9609f59aac6215998bdfa32fd9cbf2dea062c3558930fd6ff"
+  },
+  {
+    "task": "h10",
+    "lang": "go",
+    "pass": true,
+    "sha256": "948358441c4bd3033688c8caf8f468d01a69753acbd968203623168681e38873"
+  },
+  {
+    "task": "h11",
+    "lang": "go",
+    "pass": true,
+    "sha256": "fa80a151719f8d5b7dea700e3ae065fe38c072c8ce5ce3ba6fe3222a1ea18b38"
+  },
+  {
+    "task": "h12",
+    "lang": "go",
+    "pass": true,
+    "sha256": "1a536cfc670938fc9dc870b4cb855df3b3c196b5c7c48b406b4758c96688e9d4"
+  },
+  {
+    "task": "h13",
+    "lang": "go",
+    "pass": true,
+    "sha256": "90d71aeeb40ef71422b1b2f6d8b4ea3d5b21ff33d119c613dfc231e194cfcdb8"
+  },
+  {
+    "task": "h14",
+    "lang": "go",
+    "pass": true,
+    "sha256": "bd2dd389e05bb5a7278b0088727fbd5e90c215d793966d2f9319dc4d8db8653e"
+  },
+  {
+    "task": "h15",
+    "lang": "go",
+    "pass": true,
+    "sha256": "933aee58ff41565613c1c1d4a74c753e043357262f7e3436acc75c9d7ef1133c"
+  },
+  {
+    "task": "h16",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f37cc554c73690f0f9a6c6f79de58d10436f144df5ac0165c7aede9633fb01fd"
+  },
+  {
+    "task": "h17",
+    "lang": "go",
+    "pass": true,
+    "sha256": "e66efabe47bc98d5ec5ce46d6abf346466bafe228d4055062dbd447767946bf1"
+  },
+  {
+    "task": "h18",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a4c5a7a84de4bf7e9923182adf24ae925d8f505b3d5baf70f94ba24f1c3721bd"
+  },
+  {
+    "task": "h19",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6166969bdcf4c96adacbeb2d5e4bcc77ef10a04fc14eb6fe297a87eef554b7a0"
+  },
+  {
+    "task": "h20",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f3a1dc8644d457e4c7b45802ac5b338470dbb6348af82e93de32972704fb2cf1"
+  },
+  {
+    "task": "h21",
+    "lang": "go",
+    "pass": true,
+    "sha256": "7dff3d4638679eba64bc0aa826f6df060d6194f89fb27d429d5b5a1a1a5d2e96"
+  },
+  {
+    "task": "h22",
+    "lang": "go",
+    "pass": true,
+    "sha256": "d51d2d23710e5e8fec4a7b449b7738c5bfec1f417170818dff1f6c79c9372c19"
+  },
+  {
+    "task": "h23",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6a88e87572e528b7fb46e1a218fe4ec2d1e6ee7b2eeb38eb97c71cd1bc3bf8b5"
+  },
+  {
+    "task": "h24",
+    "lang": "go",
+    "pass": true,
+    "sha256": "e702f6f81daa29c4c772a9fa76834b157592125dbffc3cc62638d601b5e632da"
+  },
+  {
+    "task": "h25",
+    "lang": "go",
+    "pass": true,
+    "sha256": "2f0aa4987aa2df5d396dc931426d391da36fe1c701bffd7029da3084d405495f"
+  },
+  {
+    "task": "h26",
+    "lang": "go",
+    "pass": true,
+    "sha256": "fd3a41116a6bbb5cd31e137f0b612f5d811a6dee2596d2c0375f9684fb2bc684"
+  },
+  {
+    "task": "h27",
+    "lang": "go",
+    "pass": true,
+    "sha256": "32a052df2580f0d90e86083f0a535d5420abcb4e90595ed666b3af83367b09fe"
+  },
+  {
+    "task": "h28",
+    "lang": "go",
+    "pass": true,
+    "sha256": "0f9ac96ff9361763d8b0d6c971678f702aa790277e70f27d3bb9966dabf1ddd7"
+  },
+  {
+    "task": "h29",
+    "lang": "go",
+    "pass": true,
+    "sha256": "96f195da264dacc8aa963ad40a0a45ba65b4ca47d5897fb20e93bc6350f8be5c"
+  },
+  {
+    "task": "h30",
+    "lang": "go",
+    "pass": true,
+    "sha256": "8265c91a860879e20070185a9699043c265087d383eecc3da8e430dfde81cb2c"
+  },
+  {
+    "task": "h31",
+    "lang": "go",
+    "pass": true,
+    "sha256": "7453c3a0680e5b367e5ab7dc101119f35ae482c14bd517bc62083c4c6b23dc4a"
+  },
+  {
+    "task": "h32",
+    "lang": "go",
+    "pass": true,
+    "sha256": "025371b372077b1408245fac4c5caeb60c3767c5d15bd2659abfe49e56ef0ada"
+  }
+]

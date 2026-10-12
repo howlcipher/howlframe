@@ -1,0 +1,5 @@
+(do
+ (let (records (parse_json Any (read_text "in/records.json")) out (list))
+  (do
+   (for r records (append out (dict ("id" (map_get r "id")) ("status" (map_get r "status")))))
+   (write_file "out/result.json" (encode_json out)))))

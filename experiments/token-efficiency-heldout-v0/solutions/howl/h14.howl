@@ -1,0 +1,5 @@
+(do
+ (let (lines (lines (read_file "in/app.log")) n 0)
+  (do
+   (for l lines (when (str_contains l "ERROR") (inc n)))
+   (write_file "out/result.txt" (to_string n)))))

@@ -1,0 +1,5 @@
+(do
+ (let (scores (parse_json Any (read_text "in/scores.json")) total 0)
+  (do
+   (for s scores (set total (+ total s)))
+   (write_file "out/result.txt" (to_string (to_int (/ total (list_len scores))))))))

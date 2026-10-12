@@ -1,0 +1,4 @@
+[
+  {"task": "h31", "lang": "howl", "reason": "no directory listing or walking construct on main (only read_file/write_file/mkdir on fixed paths)"},
+  {"task": "h32", "lang": "howl", "reason": "no directory listing or walking construct on main; also no string ordering comparison for sorting"}
+]

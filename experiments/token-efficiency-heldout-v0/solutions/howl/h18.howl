@@ -1,0 +1,5 @@
+(do
+ (let (lines (lines (read_file "in/emails.txt")) out (list))
+  (do
+   (for e lines (append out (list_get (str_split e "@") 1)))
+   (write_file "out/result.txt" (str_join out "\n")))))

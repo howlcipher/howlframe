@@ -1,0 +1,7 @@
+(do
+ (let (people (parse_json Any (read_text "in/people.json")) out (list))
+  (do
+   (for p people
+    (let (age (map_get p "age"))
+     (append out (str (map_get p "id") " " (if (and (>= age 0) (<= age 150)) "valid" "invalid")))))
+   (write_file "out/result.txt" (str_join out "\n")))))
