@@ -1,0 +1,7 @@
+(do
+ (let (out (dict ("present" (list)) ("null" (list)) ("absent" (list))))
+  (do
+   (for c (parse_json Any (read_text "in/contacts.json"))
+    (let (k (if (not (map_has c "email")) "absent" (is_nil (map_get c "email")) "null" "present") l (map_get out k))
+     (do (append l (map_get c "id")) (map_set out k l))))
+   (write_file "out/result.json" (encode_json out)))))

@@ -1,0 +1,11 @@
+(do
+ (let (out (dict))
+  (do
+   (for s (parse_json Any (read_text "in/sales.json"))
+    (let (r (nz (map_get out (map_get s "region")) (dict ("units" 0) ("products" (list)))) ps (map_get r "products"))
+     (do
+      (map_set r "units" (+ (map_get r "units") (map_get s "units")))
+      (when (not (list_contains ps (map_get s "product"))) (append ps (map_get s "product")))
+      (map_set r "products" (sort ps))
+      (map_set out (map_get s "region") r))))
+   (write_file "out/result.json" (encode_json out)))))

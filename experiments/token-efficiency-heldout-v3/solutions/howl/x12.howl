@@ -1,0 +1,5 @@
+(do
+ (let (out (dict))
+  (do
+   (for p (parse_json Any (read_text "in/people.json")) (map_set out (str (map_get p "last") ", " (map_get p "first")) (map_get p "age")))
+   (write_file "out/result.json" (encode_json out)))))

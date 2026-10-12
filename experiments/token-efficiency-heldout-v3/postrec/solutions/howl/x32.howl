@@ -1,0 +1,5 @@
+(do
+ (let (ws (lines (read_file "in/words.txt")) p (list_get ws 0))
+  (do
+   (for w ws (while (not (starts_with w p)) (set p (str_slice p 0 (- (str_len p) 1)))))
+   (write_file "out/result.txt" p))))

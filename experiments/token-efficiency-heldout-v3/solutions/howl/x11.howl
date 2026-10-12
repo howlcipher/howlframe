@@ -1,0 +1,7 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list a (parse_json Any (read_text "in/accounts.json"))
+    (let (p (map_get (map_get a "user") "profile"))
+     (str (map_get a "login") ": " (if (is_nil p) "unknown" (nz (map_get p "city") "unknown")))))
+   "\n")))

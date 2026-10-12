@@ -1,0 +1,3 @@
+(do
+ (let (v (parse_json Any (read_text "in/visits.json")) i 0)
+  (write_file "out/result.json" (encode_json (filter x v (do (inc i) (not (list_contains (list_slice v i) x))))))))

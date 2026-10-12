@@ -1,0 +1,11 @@
+(do
+ (let (cfg (parse_json Any (read_text "in/config.json")))
+  (write_file "out/result.txt"
+   (str_join
+    (map_list p (lines (read_file "in/paths.txt"))
+     (let (v cfg ok true)
+      (do
+       (for k (str_split p ".")
+        (if (and (starts_with (encode_json v) "{") (map_has v k)) (set v (map_get v k)) (do (set ok false) (break))))
+       (if ok (encode_json v) "missing"))))
+    "\n"))))

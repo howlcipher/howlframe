@@ -1,0 +1,3 @@
+(do
+ (let (e (read_json "in/env.json"))
+  (write_json "out/result.json" (map_list k (sort (map_keys e)) (rec key k value (get e k))))))

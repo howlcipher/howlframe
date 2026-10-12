@@ -1,0 +1,4 @@
+(do
+ (let (rows (map_list l (lines (read_file "in/grid.csv")) (str_split l ",")))
+  (write_file "out/result.csv"
+   (str_join (map_list j (range (list_len (list_get rows 0))) (str_join (map_list r rows (list_get r j)) ",")) "\n"))))

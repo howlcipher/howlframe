@@ -1,0 +1,7 @@
+(do
+ (let (deps (read_json "in/deps.json") ks (sort (map_keys deps)) out (list))
+  (do
+   (while (< (list_len out) (list_len ks))
+    (for t ks
+     (when (and (not (list_contains out t)) (all d (get deps t) (list_contains out d))) (do (append out t) (break)))))
+   (write_json "out/result.json" out))))

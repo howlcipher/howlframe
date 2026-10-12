@@ -1,0 +1,10 @@
+(do
+ (let (doc (read_json "in/doc.json"))
+  (do
+   (for op (read_json "in/ops.json")
+    (let (ps (str_split (get op "path") ".") n (list_len ps) node doc k (list_get ps (- n 1)))
+     (do
+      (for p (list_slice ps 0 (- n 1))
+       (do (when (is_nil (get node p)) (map_set node p (dict))) (set node (get node p))))
+      (if (= (get op "op") "set") (map_set node k (get op "value")) (map_delete node k)))))
+   (write_json "out/result.json" doc))))

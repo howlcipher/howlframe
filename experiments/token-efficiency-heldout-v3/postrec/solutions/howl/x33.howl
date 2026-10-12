@@ -1,0 +1,9 @@
+(do
+ (let (as (list) bs (list))
+  (do
+   (for s (sort_by s (map_list l (lines (read_file "in/spans.txt")) (map_list x (str_split l "-") (to_int x))) (list_get s 0))
+    (let (n (list_len bs) (a b) s)
+     (if (and (> n 0) (<= a (list_get bs (- n 1))))
+      (let (e (max (list b (list_get bs (- n 1))))) (do (set bs (list_slice bs 0 (- n 1))) (append bs e)))
+      (do (append as a) (append bs b)))))
+   (write_file "out/result.txt" (str_join (map_list i (range (list_len as)) (str (list_get as i) "-" (list_get bs i))) "\n")))))

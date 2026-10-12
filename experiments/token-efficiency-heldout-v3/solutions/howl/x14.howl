@@ -1,0 +1,6 @@
+(do
+ (let (p (parse_json Any (read_text "in/prices.json")) out (dict))
+  (do
+   (for k (map_keys p)
+    (let (v (map_get p k)) (map_set out k (str "$" (// v 100) "." (pad_left (% v 100) 2 "0")))))
+   (write_file "out/result.json" (encode_json out)))))

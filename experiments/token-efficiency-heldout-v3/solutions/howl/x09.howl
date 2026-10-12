@@ -1,0 +1,6 @@
+(do
+ (let (o (parse_json Any (read_text "in/old.json")) n (parse_json Any (read_text "in/new.json")))
+  (write_file "out/result.json" (encode_json (dict
+     ("added" (filter k (map_keys n) (not (map_has o k))))
+     ("removed" (filter k (map_keys o) (not (map_has n k))))
+     ("changed" (filter k (map_keys o) (and (map_has n k) (!= (encode_json (map_get o k)) (encode_json (map_get n k)))))))))))

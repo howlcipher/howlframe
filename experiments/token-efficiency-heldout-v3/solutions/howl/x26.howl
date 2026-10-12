@@ -1,0 +1,4 @@
+(do
+ (let (rows (map_list l (lines (read_file "in/votes.txt")) (str_split l " ")) t (sum (map_list r rows (to_int (list_get r 1)))))
+  (write_file "out/result.txt"
+   (str_join (map_list r rows (str (list_get r 0) " " (// (* (to_int (list_get r 1)) 100) t) "%")) "\n"))))

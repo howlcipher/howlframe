@@ -1,0 +1,6 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list n (lines (read_file "in/nums.txt"))
+    (let (d n) (do (while (> (str_len d) 1) (set d (str (sum (map_list c (str_split d "") (to_int c)))))) (str n " -> " d))))
+   "\n")))

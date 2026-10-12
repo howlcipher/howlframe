@@ -1,0 +1,6 @@
+(do
+ (let (a (parse_json Any (read_text "in/a.json")) b (parse_json Any (read_text "in/b.json")) oa (list) ob (list))
+  (do
+   (for x a (when (not (or (list_contains b x) (list_contains oa x))) (append oa x)))
+   (for x b (when (not (or (list_contains a x) (list_contains ob x))) (append ob x)))
+   (write_file "out/result.json" (encode_json (dict ("only_a" oa) ("only_b" ob)))))))

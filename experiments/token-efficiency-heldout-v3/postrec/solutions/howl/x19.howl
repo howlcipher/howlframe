@@ -1,0 +1,6 @@
+(do
+ (let (out (list) in false)
+  (do
+   (for l (lines (read_file "in/app.ini"))
+    (if (starts_with l "[") (set in (= l "[net]")) (when (and in (!= l "")) (append out l))))
+   (write_file "out/result.txt" (str_join out "\n")))))

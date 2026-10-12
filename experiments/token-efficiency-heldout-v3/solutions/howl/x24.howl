@@ -1,0 +1,10 @@
+(do
+ (let (g 0 m 1)
+  (do
+   (for s (str_split (read_text "in/vals.txt") ",")
+    (let (n (to_int s) a g b n)
+     (do
+      (while (!= b 0) (let (t (% a b)) (do (set a b) (set b t))))
+      (set g a)
+      (let (x m y n) (do (while (!= y 0) (let (t (% x y)) (do (set x y) (set y t)))) (set m (* (// m x) n)))))))
+   (write_file "out/result.json" (encode_json (dict ("gcd" g) ("lcm" m)))))))

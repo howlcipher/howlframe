@@ -1,0 +1,10 @@
+(do
+ (let (ml (list 31 28 31 30 31 30 31 31 30 31 30 31))
+  (write_file "out/result.txt"
+   (str_join
+    (map_list l (lines (read_file "in/days.txt"))
+     (let (d (to_int l) m 0)
+      (do
+       (while (> d (list_get ml m)) (do (set d (- d (list_get ml m))) (inc m)))
+       (str (pad_left (+ m 1) 2 "0") "-" (pad_left d 2 "0")))))
+    "\n"))))

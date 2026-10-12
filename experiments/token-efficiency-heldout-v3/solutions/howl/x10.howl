@@ -1,0 +1,5 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list t (filter t (parse_json Any (read_text "in/tickets.json")) (list_contains (nz (map_get (map_get t "meta") "tags") (list)) "urgent")) (map_get t "id"))
+   "\n")))
