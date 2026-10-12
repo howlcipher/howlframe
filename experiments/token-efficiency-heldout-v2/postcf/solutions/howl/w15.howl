@@ -1,0 +1,5 @@
+(do
+ (let (r (parse_json Any (read_text "in/ring.json")) k (% (to_int (str_trim (read_text "in/k.txt"))) (list_len r)) out (list_slice r k))
+  (do
+   (for x (list_slice r 0 k) (append out x))
+   (write_file "out/result.json" (encode_json out)))))

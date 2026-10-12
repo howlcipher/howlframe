@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (map_list l (lines (read_file "in/idents.txt")) (str_join (map_list c (str_split l "") (if (!= c (to_lower c)) (str "_" (to_lower c)) c)) "")) "\n")))

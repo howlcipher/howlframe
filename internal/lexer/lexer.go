@@ -122,8 +122,17 @@ func (l *Lexer) NextToken() Token {
 		}
 		return Token{Type: TokenString, Value: val, Line: startLine, Column: startCol}
 	}
+	// A '-' directly followed by a digit starts a negative number literal
+	// (-1, -2.5). "-" alone and symbols such as a-1 are unaffected.
+	neg := ch == '-' && unicode.IsDigit(l.peekChar())
+	if neg {
+		ch = l.nextChar()
+	}
 	if unicode.IsDigit(ch) {
 		val := string(ch)
+		if neg {
+			val = "-" + val
+		}
 		for unicode.IsDigit(l.peekChar()) {
 			val += string(l.nextChar())
 		}
@@ -142,7 +151,7 @@ func (l *Lexer) NextToken() Token {
 		}
 		return Token{Type: TokenInt, Value: val, Line: startLine, Column: startCol}
 	}
-	if unicode.IsLetter(ch) || ch == '_' || ch == '/' || ch == '-' || ch == '=' || ch == '.' || ch == '+' || ch == '*' || ch == '<' || ch == '>' || ch == '!' {
+	if unicode.IsLetter(ch) || ch == '_' || ch == '%' || ch == '/' || ch == '-' || ch == '=' || ch == '.' || ch == '+' || ch == '*' || ch == '<' || ch == '>' || ch == '!' {
 		val := string(ch)
 		for unicode.IsLetter(l.peekChar()) || unicode.IsDigit(l.peekChar()) || l.peekChar() == '_' || l.peekChar() == '/' || l.peekChar() == '-' || l.peekChar() == '=' || l.peekChar() == '.' || l.peekChar() == '+' || l.peekChar() == '*' || l.peekChar() == '<' || l.peekChar() == '>' || l.peekChar() == '!' {
 			val += string(l.nextChar())

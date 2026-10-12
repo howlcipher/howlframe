@@ -1,0 +1,8 @@
+(do
+ (let (out (dict))
+  (do
+   (for s (parse_json Any (read_text "in/staff.json"))
+    (let (m (map_get s "manager"))
+     (when (!= m "")
+      (let (r (nz (map_get out m) (list))) (do (append r (map_get s "name")) (map_set out m r))))))
+   (write_file "out/result.json" (encode_json out)))))

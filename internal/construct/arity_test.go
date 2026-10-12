@@ -57,6 +57,12 @@ func TestArityMessages(t *testing.T) {
 		`(cli_app (fetch "u"))`:                     "ARITY_ERROR: fetch expects 2 to 3 args, got 1",
 		`(cli_app (defun f (x)))`:                   "ARITY_ERROR: defun expects at least 3 args, got 2",
 		`(cli_app (write_file "a" "b" "c"))`:        "ARITY_ERROR: write_file expects 2 args, got 3",
+		`(cli_app (print (% 1)))`:                   "ARITY_ERROR: % expects 2 args, got 1",
+		`(cli_app (print (range)))`:                 "ARITY_ERROR: range expects 1 to 2 args, got 0",
+		`(cli_app (for x (list 1) (break 1)))`:      "ARITY_ERROR: break expects 0 args, got 1",
+		`(cli_app (print (sort_by x (list 1))))`:    "ARITY_ERROR: sort_by expects 3 args, got 2",
+		`(cli_app (print (pad_left "a")))`:          "ARITY_ERROR: pad_left expects 2 to 3 args, got 1",
+		`(cli_app (print (to_base 1 2 3)))`:         "ARITY_ERROR: to_base expects 2 args, got 3",
 		`(cli_app (let (x (read_file)) (print x)))`: "ARITY_ERROR: read_file expects 1 arg, got 0",
 	}
 	for src, want := range cases {

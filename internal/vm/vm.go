@@ -19,7 +19,6 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
 	"math"
-	"math/bits"
 	"net/http"
 	"os"
 	"os/exec"
@@ -1281,13 +1280,24 @@ func checkedSubInt64(a, b int64, node *ast.Node) int64 {
 }
 
 func checkedMulInt64(a, b int64, node *ast.Node) int64 {
-	hi, lo := bits.Mul64(uint64(a), uint64(b))
-	// sign-extend the low 63 bits; the high word must equal either all 0s or all 1s of that extension
-	expectedHi := uint64(lo>>63) * ^uint64(0)
-	if hi != expectedHi {
+	if mulOverflowsInt64(a, b) {
 		InterpErr("integer overflow", node)
 	}
-	return int64(lo)
+	return a * b
+}
+
+// mulOverflowsInt64 reports whether a*b overflows int64. The previous check
+// multiplied the operands as uint64, which flagged every product with exactly
+// one negative operand ((* 3 -2)) as an overflow.
+func mulOverflowsInt64(a, b int64) bool {
+	if a == 0 || b == 0 {
+		return false
+	}
+	if (a == -1 && b == math.MinInt64) || (b == -1 && a == math.MinInt64) {
+		return true
+	}
+	c := a * b
+	return c/b != a
 }
 
 // compareNumeric compares two numeric values. It returns the signed comparison
@@ -3477,12 +3487,10 @@ func bcCheckedSubInt64(a, b int64) int64 {
 }
 
 func bcCheckedMulInt64(a, b int64) int64 {
-	hi, lo := bits.Mul64(uint64(a), uint64(b))
-	expectedHi := uint64(lo>>63) * ^uint64(0)
-	if hi != expectedHi {
+	if mulOverflowsInt64(a, b) {
 		panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "integer overflow"))
 	}
-	return int64(lo)
+	return a * b
 }
 
 func ToBCFloat(v any) float64 {

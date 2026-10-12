@@ -792,6 +792,7 @@ func buildSource() {
 	root = ast.ApplyWithContext(root, nil)
 	root = ast.ApplyWithContext(root, nil)
 	construct.EnforceArity(root)
+	rejectUnsupportedTargetControlflow(root, strings.ToLower(strings.TrimSpace(*target)))
 	ast.Desugar(root)
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
@@ -1241,4 +1242,48 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
 		}
 	}
 	walk(root, false)
+}
+
+// rejectUnsupportedTargetControlflow fails closed on --target=go|js for the
+// heldout-v2 control-flow and core built-ins (%, //, break, range, max_by,
+// min_by, sort_by, pad_left, pad_right, str_repeat, rtrim, ltrim, to_base),
+// n-ary if (elif chains) and let destructuring. They are bytecode-target sugar:
+// the expansions use let-expressions in value position or loop flags the Go
+// and JS backends do not emit. It runs on the source tree before desugaring,
+// before any file is written: nonzero exit, no "Built", no output.
+func rejectUnsupportedTargetControlflow(root *ast.Node, target string) {
+	if target != "go" && target != "js" && target != "javascript" {
+		return
+	}
+	heads := map[string]bool{}
+	for _, h := range ast.ControlflowHeads {
+		heads[h] = true
+	}
+	fail := func(what string, n *ast.Node) {
+		ast.ReportError(fmt.Sprintf("UNSUPPORTED_ON_TARGET: %s is not supported on --target=%s (control-flow/core built-ins are bytecode-target sugar); build for the bytecode target instead", what, target), n.Line, n.Column)
+	}
+	var walk func(n *ast.Node)
+	walk = func(n *ast.Node) {
+		if n == nil || n.Type != "List" {
+			return
+		}
+		if len(n.Children) > 0 && n.Children[0].Type == "SYMBOL" {
+			switch h := n.Children[0].Value; {
+			case heads[h]:
+				fail(h, n)
+			case h == "if" && len(n.Children) > 4:
+				fail("n-ary if (elif chain)", n)
+			case h == "let" && len(n.Children) > 1 && n.Children[1] != nil:
+				for i, b := range n.Children[1].Children {
+					if i%2 == 0 && b != nil && b.Type == "List" && len(n.Children[1].Children)%2 == 0 {
+						fail("let destructuring", b)
+					}
+				}
+			}
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(root)
 }

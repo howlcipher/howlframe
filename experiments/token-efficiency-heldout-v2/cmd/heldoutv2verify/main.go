@@ -47,6 +47,8 @@ var exts = map[string]string{"howl": "howl", "python": "py", "js": "js", "go": "
 func main() {
 	root := flag.String("root", "experiments/token-efficiency-heldout-v2", "benchmark root")
 	howl := flag.String("howlframe", "/tmp/howlframe", "HowlFrame binary")
+	howlDir := flag.String("howl-dir", "", "HowlFrame solutions directory (default <root>/solutions/howl)")
+	resultsDir := flag.String("results", "", "results directory (default <root>/results)")
 	flag.Parse()
 	var manifest struct{ Tasks []Task }
 	must(readJSON(filepath.Join(*root, "tasks/manifest.json"), &manifest))
@@ -69,6 +71,9 @@ func main() {
 			}
 			total++
 			src, _ := filepath.Abs(filepath.Join(*root, "solutions", lang, t.ID+"."+exts[lang]))
+			if lang == "howl" && *howlDir != "" {
+				src, _ = filepath.Abs(filepath.Join(*howlDir, t.ID+"."+exts[lang]))
+			}
 			data, readErr := os.ReadFile(src)
 			r := Result{Task: t.ID, Lang: lang, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
 			if readErr != nil {
@@ -88,8 +93,12 @@ func main() {
 		fmt.Printf("%s: %d/%d passed\n", lang, passed, total)
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
-	must(os.MkdirAll(filepath.Join(*root, "results"), 0o755))
-	must(os.WriteFile(filepath.Join(*root, "results/verification.json"), append(out, '\n'), 0o644))
+	res := filepath.Join(*root, "results")
+	if *resultsDir != "" {
+		res = *resultsDir
+	}
+	must(os.MkdirAll(res, 0o755))
+	must(os.WriteFile(filepath.Join(res, "verification.json"), append(out, '\n'), 0o644))
 	if failed {
 		os.Exit(1)
 	}

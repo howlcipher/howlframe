@@ -46,6 +46,7 @@ func Desugar(node *Node) {
 	collectDefunNames(node, funcs)
 	desugarInContext(node, "root", 0)
 	rewriteAutoCallsInContext(node, funcs, "root", 0)
+	reportStrayBreaks(node)
 }
 
 // desugarInContext walks the tree with parent context so binding pairs and
@@ -68,6 +69,7 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 	}
 	// Expand multi-binding let before walking so children see single bindings.
 	if head == "let" {
+		desugarDestructure(node)
 		desugarMultiLet(node)
 		head = node.Children[0].Value
 	}
@@ -225,6 +227,14 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) && desugarCorelib(node) {
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "%", "//", "range", "max_by", "min_by", "sort_by", "pad_left", "pad_right", "str_repeat", "rtrim", "ltrim", "to_base":
+		if isSugarExprContext(parentHead, childIndex) && desugarControlflow(node) {
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "if":
+		desugarNaryIf(node)
+	case "for", "while":
+		desugarLoopBreak(node)
 	case "list_get":
 		// A literal (list …) operand is left alone: backends such as wasm
 		// lower it directly and do not support let.
@@ -262,7 +272,9 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"req_header", "req_method", "req_path", "req_query",
 		"llm_generate", "confidence",
 		// Core-library sugar (heldout-v1).
-		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort":
+		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort",
+		// Control-flow and core built-ins (heldout-v2 follow-up).
+		"%", "//", "range", "max_by", "min_by", "sort_by", "pad_left", "pad_right", "str_repeat", "rtrim", "ltrim", "to_base":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -363,6 +375,8 @@ var reservedCallHeads = map[string]bool{
 	"blank": true, "unix_now": true, "ver_gt": true, "ver_ge": true, "all": true, "any": true, "parse_json": true,
 	"list_slice": true, "str_slice": true, "str_len": true, "index_of": true, "map_list": true, "filter": true,
 	"reduce": true, "sum": true, "min": true, "max": true, "reverse": true, "count_by": true, "sort": true,
+	"%": true, "//": true, "range": true, "max_by": true, "min_by": true, "sort_by": true, "pad_left": true,
+	"pad_right": true, "str_repeat": true, "rtrim": true, "ltrim": true, "to_base": true, "break": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,

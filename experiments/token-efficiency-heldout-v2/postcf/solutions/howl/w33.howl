@@ -1,0 +1,9 @@
+(do
+ (let (b (sort_by e (sort_by e (parse_json Any (read_text "in/board.json")) (map_get e "name")) (- 0 (map_get e "score"))) r 0 p 0 out (list))
+  (do
+   (for e b
+    (let (s (map_get e "score"))
+     (do
+      (when (or (= r 0) (!= s p)) (do (inc r) (set p s)))
+      (append out (str r " " (map_get e "name") " " s)))))
+   (write_file "out/result.txt" (str_join out "\n")))))

@@ -5,10 +5,12 @@
 | Construct | Standalone Bytecode | Required Capability | Compile-Time Only? | Known Unsupported? | Tracker | Evidence Source |
 |---|---|---|---|---|---|---|
 | `!=` | Yes | None | No | No | - | AUTHORITATIVE |
+| `%` | No | None | Yes | No | - | AUTHORITATIVE |
 | `*` | Yes | None | No | No | - | AUTHORITATIVE |
 | `+` | Yes | None | No | No | - | AUTHORITATIVE |
 | `-` | Yes | None | No | No | - | AUTHORITATIVE |
 | `/` | Yes | None | No | No | - | AUTHORITATIVE |
+| `//` | No | None | Yes | No | - | AUTHORITATIVE |
 | `<` | Yes | None | No | No | - | AUTHORITATIVE |
 | `<=` | Yes | None | No | No | - | AUTHORITATIVE |
 | `=` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -24,6 +26,7 @@
 | `assert_semantic` | No | None | No | Yes | - | AUTHORITATIVE |
 | `attr_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `blank` | No | None | Yes | No | - | AUTHORITATIVE |
+| `break` | No | None | Yes | No | - | AUTHORITATIVE |
 | `bytes_to_string` | Yes | None | No | No | - | AUTHORITATIVE |
 | `call` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cli_app` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -69,6 +72,7 @@
 | `list_len` | Yes | None | No | No | - | AUTHORITATIVE |
 | `list_slice` | No | None | Yes | No | - | AUTHORITATIVE |
 | `llm_generate` | Yes | network | No | No | - | AUTHORITATIVE |
+| `ltrim` | No | None | Yes | No | - | AUTHORITATIVE |
 | `map_delete` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_get` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_has` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -77,8 +81,10 @@
 | `map_set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
 | `max` | No | None | Yes | No | - | AUTHORITATIVE |
+| `max_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |
 | `min` | No | None | Yes | No | - | AUTHORITATIVE |
+| `min_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
 | `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
@@ -87,9 +93,12 @@
 | `optimize_block` | Yes | None | No | No | - | AUTHORITATIVE |
 | `optimize_signature` | Yes | None | No | No | - | AUTHORITATIVE |
 | `or` | Yes | None | No | No | - | AUTHORITATIVE |
+| `pad_left` | No | None | Yes | No | - | AUTHORITATIVE |
+| `pad_right` | No | None | Yes | No | - | AUTHORITATIVE |
 | `parse_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `patch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `print` | Yes | None | No | No | - | AUTHORITATIVE |
+| `range` | No | None | Yes | No | - | AUTHORITATIVE |
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_text` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -104,6 +113,7 @@
 | `res_json` | Yes | network | No | No | - | AUTHORITATIVE |
 | `return` | Yes | None | No | No | - | AUTHORITATIVE |
 | `reverse` | No | None | Yes | No | - | AUTHORITATIVE |
+| `rtrim` | No | None | Yes | No | - | AUTHORITATIVE |
 | `schema` | No | None | No | Yes | - | AUTHORITATIVE |
 | `schema_bridge` | Yes | None | No | No | - | AUTHORITATIVE |
 | `semantic_match` | No | None | No | Yes | - | AUTHORITATIVE |
@@ -112,6 +122,7 @@
 | `sinc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sleep` | Yes | None | No | No | - | AUTHORITATIVE |
 | `sort` | No | None | Yes | No | - | AUTHORITATIVE |
+| `sort_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `spawn` | Yes | process | No | No | - | AUTHORITATIVE |
 | `spawn_agent` | Yes | process | No | No | - | AUTHORITATIVE |
 | `sput` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -127,6 +138,7 @@
 | `str_contains` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
 | `str_len` | No | None | Yes | No | - | AUTHORITATIVE |
+| `str_repeat` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_replace` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_slice` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -137,6 +149,7 @@
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
 | `test` | No | None | No | Yes | improvements.md #96 | AUTHORITATIVE |
 | `time_now` | Yes | None | No | No | - | AUTHORITATIVE |
+| `to_base` | No | None | Yes | No | - | AUTHORITATIVE |
 | `to_float` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_int` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_lower` | Yes | None | No | No | - | AUTHORITATIVE |

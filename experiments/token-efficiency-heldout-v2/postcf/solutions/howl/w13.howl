@@ -1,0 +1,3 @@
+(do
+ (let (q (parse_json Any (read_text "in/jobs.json")))
+  (write_file "out/result.json" (encode_json (map_list i (range (// (+ (list_len q) 2) 3)) (list_slice q (* i 3) (+ (* i 3) 3)))))))
