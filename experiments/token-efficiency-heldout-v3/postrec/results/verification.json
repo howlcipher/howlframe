@@ -1,0 +1,842 @@
+[
+  {
+    "task": "x01",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "4d6170b9ae55dcb35f745e2d478b119787cea6eb99119bd94922ee5f26829dc1"
+  },
+  {
+    "task": "x02",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "715ac825a2e5b2d556e1cbc6b40131bb6df0f783fddfe1f6d6c47e8cf260afbf"
+  },
+  {
+    "task": "x03",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "aebe4fd99add62f0b4815a8e6456f59157b9645f499ce11bf599557af2e19f45"
+  },
+  {
+    "task": "x04",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6705c1c57ed8c08ae57d544fcbc298e214a0a6360f0e169f2d2417d88cecfaf0"
+  },
+  {
+    "task": "x05",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "181b7b942fe39bb086ea3e21060a21addbbfae80a0a44f46e7efcc334235164f"
+  },
+  {
+    "task": "x06",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e4bf00966815071b893fb01de88e064179645a1cf219fdcb3311794684f0f88e"
+  },
+  {
+    "task": "x07",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "2556e88c3a874e8ed674a40856f2a2b6c5aa711bfa16e4a3bcd99faa13ab5c8f"
+  },
+  {
+    "task": "x08",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "f9b4ff0bb9efe317da4e9027da34ccb48d5286e2ddc5ed9a838f5b44e8e62ac2"
+  },
+  {
+    "task": "x09",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "056383a7c938ea2870ba3cf3749199357d03c0e7bb682f726fe6990c46d283b9"
+  },
+  {
+    "task": "x10",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "3b40d7208213643dfca04d7295b3c86d2e0aa4c5e32aa706abcfaf2fae6dd423"
+  },
+  {
+    "task": "x11",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "23ec9126b76c7ed5fb6ef1698ebcd5575446a1cd116bed95881b5e91c76a66ac"
+  },
+  {
+    "task": "x12",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "488feb5e0d4e217df9f0509a8f00eaf9d1bb1a40f01cc6007d985a2dfc2117b1"
+  },
+  {
+    "task": "x13",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "eee3b431f2b65518429755468fd5329c1968ad0df76f3387fce6255108ccfc70"
+  },
+  {
+    "task": "x14",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "bbfb38683cc46c728a819feb544b8ecf6d521dec454d69395d4a186d5d4716bc"
+  },
+  {
+    "task": "x15",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "51117feae2697858f17bb86e81163885c6ab06607946629fde4b770a2607a612"
+  },
+  {
+    "task": "x16",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "af04bda275a73daef3f889f8a6b38c9ae01b6329b0fc6e511622aa9d49538add"
+  },
+  {
+    "task": "x17",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "02fd2bcb5f13e90d127d51eadd02babcfe100bf51a106cb97a511c28044c3320"
+  },
+  {
+    "task": "x18",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "8e492686094411300a951ac64e0f780b54d83989c25dedd040ce22387386b1f8"
+  },
+  {
+    "task": "x19",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "797a7bdfcc0b6e545f437b7d445ecd26fbd0184418482e836234ff4d3a56cb8f"
+  },
+  {
+    "task": "x20",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "5e9a366d4d4148917923244b40790b4e509d9f7f96f4c94f4683cf87143da193"
+  },
+  {
+    "task": "x21",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "83106acc2a0e8e786c416b003eb21c1eca0e75f76193c6a650e59cf0c96ecbfd"
+  },
+  {
+    "task": "x22",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "8459cb9edff5afcbfcfe75d23d95dbf9e975724138d24eb4c99e1c871f1eb89b"
+  },
+  {
+    "task": "x23",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "8c4ae0e3173b29e76fdc6000a3b146835d9f81701796b5144c72a7a54a437eb3"
+  },
+  {
+    "task": "x24",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "afc113e63cb924df37f48c224794e24cd888b538541b27a3e6c71480a201a8b3"
+  },
+  {
+    "task": "x25",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6c8d3d87177312c832eabac4ef08b9b05588ebd81c73e6de34e67f72642786b6"
+  },
+  {
+    "task": "x26",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "f507ece1f166896d142b9e49a3ca85b8f620142cb5f08e3ab9f6fbd3a4d41d3f"
+  },
+  {
+    "task": "x27",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "bae1b2394c6e8cb097877a024db7cd9797f59a3b261f3aebf4e5dfcd06a090c6"
+  },
+  {
+    "task": "x28",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "7dcd5e30adf6096c0e3a863b1c5d27eeccacaddfb35514175681579885690527"
+  },
+  {
+    "task": "x29",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "e6f82d55d610b0e837e4cb72c5dde021b3f391666555f1fd1f49e129ec53249f"
+  },
+  {
+    "task": "x30",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "492d650079bdf7ae39c1a7a907df1f41018816df53806a0aea57a385c1ae003c"
+  },
+  {
+    "task": "x31",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6831ab1b264b63584aa082331b7b237ebf2b2a0adb0f83cf46c92f170379d9b1"
+  },
+  {
+    "task": "x32",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "c4e32c54f02a5aa1ab3637be5921de3ff0a429ad0f280e86e7b8872f00901abe"
+  },
+  {
+    "task": "x33",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "7ce93978b39a55db22c0bda75f402d80a472c12120cb5f8b04a696cd06e8e6e4"
+  },
+  {
+    "task": "x34",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "7f4e4b1ed3b1744d45e5c236ecd15eb3085996b85dfa93b1c1180c7d9a5d37c4"
+  },
+  {
+    "task": "x35",
+    "lang": "howl",
+    "pass": true,
+    "sha256": "6b996e50453812d82326c39bbb708c29c965b67fe0ee99de0b3efa334cf3653f"
+  },
+  {
+    "task": "x01",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ccd1d0519c928ea99a16be362296b9b350e0ec981a79991d2429a2565c97e404"
+  },
+  {
+    "task": "x02",
+    "lang": "python",
+    "pass": true,
+    "sha256": "f61de199ada79c3d78b693b340d70f5d0850661013e824ae02b635416dfe8be2"
+  },
+  {
+    "task": "x03",
+    "lang": "python",
+    "pass": true,
+    "sha256": "98432ebf8e928e7646dc02f23652a88f90c1314e2cfd991f78b1dfcd37b19555"
+  },
+  {
+    "task": "x04",
+    "lang": "python",
+    "pass": true,
+    "sha256": "bcbbec67656bc8eec0ac9e95c8057368bd7a7df86914c92c52a20747f810c69a"
+  },
+  {
+    "task": "x05",
+    "lang": "python",
+    "pass": true,
+    "sha256": "ee21c291704348289d666219e97be9c2b6749e74576d5c4693e66a9c55cb9f24"
+  },
+  {
+    "task": "x06",
+    "lang": "python",
+    "pass": true,
+    "sha256": "569a5af7ef631e53ec3115c1d9fde860f4785ccb07966ede14f06e71006f1934"
+  },
+  {
+    "task": "x07",
+    "lang": "python",
+    "pass": true,
+    "sha256": "5111d24b38ad58091b9909e56ee136e8c582d4c7ded227d3f46f0c50ffab407f"
+  },
+  {
+    "task": "x08",
+    "lang": "python",
+    "pass": true,
+    "sha256": "78447469f75f555fbb3a75e3cf31ace274e10461bc783fa6d5b10ae093ff7280"
+  },
+  {
+    "task": "x09",
+    "lang": "python",
+    "pass": true,
+    "sha256": "fc4ec9537bccb6356bb1c704df0b2cd7fdcd3ed43da8d7fcdea71c73c7928229"
+  },
+  {
+    "task": "x10",
+    "lang": "python",
+    "pass": true,
+    "sha256": "8f20446c4ecec53e7a833636c6350f4061df7332c89750eba62ff5cfa608e3fb"
+  },
+  {
+    "task": "x11",
+    "lang": "python",
+    "pass": true,
+    "sha256": "8935253e2185abfb488efe8cb166ae2f431835d52ccf85ec0e93884717617d3c"
+  },
+  {
+    "task": "x12",
+    "lang": "python",
+    "pass": true,
+    "sha256": "2de65e25278c91ad606912145e35b2e423f6a23748493ef61ed41d86800cec6c"
+  },
+  {
+    "task": "x13",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b44a832324e7258b5f0c4764bbef299c211a0ef6f5f8af883399977138ecf8e2"
+  },
+  {
+    "task": "x14",
+    "lang": "python",
+    "pass": true,
+    "sha256": "5c06b13449327018eb615b198e7b6266552cbdc2d5ded5d25e905ed8d1659914"
+  },
+  {
+    "task": "x15",
+    "lang": "python",
+    "pass": true,
+    "sha256": "75fcee6da1bea919373ef64cbc42eabe9d00535b41b6849200da68a135fd16e8"
+  },
+  {
+    "task": "x16",
+    "lang": "python",
+    "pass": true,
+    "sha256": "8eb2ec5b4eba480798e7e12da2f46186c5f3d6207224978c524996bb8821461a"
+  },
+  {
+    "task": "x17",
+    "lang": "python",
+    "pass": true,
+    "sha256": "10db829777cda742b758f136d01a946313349d9256a26a9f3fb3e55ff77bbc6a"
+  },
+  {
+    "task": "x18",
+    "lang": "python",
+    "pass": true,
+    "sha256": "3c158f59c2705cebaba14b72bd03844ebfbec59597046b23bbe23b05b5ca73cb"
+  },
+  {
+    "task": "x19",
+    "lang": "python",
+    "pass": true,
+    "sha256": "222ae1940084838aed29875829a05680b2c9eb7c83852f6bb5458f62423c6ce2"
+  },
+  {
+    "task": "x20",
+    "lang": "python",
+    "pass": true,
+    "sha256": "8ae5d273e50c34d208670886abc4cb9c079655e189665984c739d4bc52708232"
+  },
+  {
+    "task": "x21",
+    "lang": "python",
+    "pass": true,
+    "sha256": "9418d868d415c97b092c813e33a08e5381ad32af217a366248090105ee264031"
+  },
+  {
+    "task": "x22",
+    "lang": "python",
+    "pass": true,
+    "sha256": "6303c392e679e8f47a5ece5bd19d6b9df5bae23ae1a3429b59abde41b7781892"
+  },
+  {
+    "task": "x23",
+    "lang": "python",
+    "pass": true,
+    "sha256": "b4368c9a96229c8d8a17b45525d8ee63f6b1528fdc9049b707169904735cb0ef"
+  },
+  {
+    "task": "x24",
+    "lang": "python",
+    "pass": true,
+    "sha256": "a165b1f61b99d5991d340c5562d16e230792a5ff54a07b07ed258a2360c0f582"
+  },
+  {
+    "task": "x25",
+    "lang": "python",
+    "pass": true,
+    "sha256": "4bf072b325eb139fe805f5dfe82e975e7779b1bc3cb132a28f2149967e47037a"
+  },
+  {
+    "task": "x26",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7cf7b19621179b98bce78cc196388d81fea9250f0c476ca055dabf65a1cc30ed"
+  },
+  {
+    "task": "x27",
+    "lang": "python",
+    "pass": true,
+    "sha256": "7bad486d6f4e3188124ae2f7ef89dd3e415b14a7535fc943c4107c71d69206d8"
+  },
+  {
+    "task": "x28",
+    "lang": "python",
+    "pass": true,
+    "sha256": "387f58955a58072056378c5bdc473d171792120a3b210dfc707a5ddebde0952a"
+  },
+  {
+    "task": "x29",
+    "lang": "python",
+    "pass": true,
+    "sha256": "edb53b63f2d410706aac4993d676cc748befa6f0f1cf31c4f7da807842889aa5"
+  },
+  {
+    "task": "x30",
+    "lang": "python",
+    "pass": true,
+    "sha256": "1c4a69290bfb11b954ad852077c0b9fe11f5f8bedb56ecc791e1b132f4d2dddd"
+  },
+  {
+    "task": "x31",
+    "lang": "python",
+    "pass": true,
+    "sha256": "e017b810a85fb7c1026ed971a015ca2ead300cb5eced6a1f7dfdfd963d60f2aa"
+  },
+  {
+    "task": "x32",
+    "lang": "python",
+    "pass": true,
+    "sha256": "949c8f57602fe3eb8b01f1a09db1fba8d451173ecb3669d3e2c5c65d181b26d2"
+  },
+  {
+    "task": "x33",
+    "lang": "python",
+    "pass": true,
+    "sha256": "396a3ca6b2968657ce0b9d0be1d5d170f6b5d072985ab374ea50698df0a0512f"
+  },
+  {
+    "task": "x34",
+    "lang": "python",
+    "pass": true,
+    "sha256": "e244ca0da1a888c05641fc328c9cc4f480780f36753751f790b40f81203fe7f7"
+  },
+  {
+    "task": "x35",
+    "lang": "python",
+    "pass": true,
+    "sha256": "0d4ee7acf3c78e67b3901b760e69d32857370677b4723647e9f622c5bce741aa"
+  },
+  {
+    "task": "x01",
+    "lang": "js",
+    "pass": true,
+    "sha256": "810cb930aba9ddf6dcdcfe6408876ecb61f6d07f7c86f13816515462ed54f84f"
+  },
+  {
+    "task": "x02",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d1afb52a7b6f54387c2e8bf070fae72901d0af0becfff018ff1bc241baf77669"
+  },
+  {
+    "task": "x03",
+    "lang": "js",
+    "pass": true,
+    "sha256": "80861908391364abb51b7a9a1410cf5a6016b88cf60e759181fb22c197500579"
+  },
+  {
+    "task": "x04",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c54f79e0b77cda5fe65dba74e927b5a941d86499504e1dc9490b0678bd01023e"
+  },
+  {
+    "task": "x05",
+    "lang": "js",
+    "pass": true,
+    "sha256": "64ce091ca0c891e742f67e073b8139eaf555ce81c0d4ccb58297cf9879997aad"
+  },
+  {
+    "task": "x06",
+    "lang": "js",
+    "pass": true,
+    "sha256": "676fb98689b78e59fd89851e0e38febcb14455d73453d7ce7ee4fac92e67c24e"
+  },
+  {
+    "task": "x07",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ab2d00a382428b5ef67229c9c128ba502d8f189957335cb6644776c25cfb95a0"
+  },
+  {
+    "task": "x08",
+    "lang": "js",
+    "pass": true,
+    "sha256": "9d7553aef97bb0e46e13a30e25e75465cdc0ff22f341a4e36bffc59ab3b5bdcf"
+  },
+  {
+    "task": "x09",
+    "lang": "js",
+    "pass": true,
+    "sha256": "33a326473af951b90e699ed0f8ee43727fd50dd9ea71dde1e66c5eb009519fad"
+  },
+  {
+    "task": "x10",
+    "lang": "js",
+    "pass": true,
+    "sha256": "1c30fef1559f824e90e59482d2a9addd7e77296dc6ce38b7a5998a39583a955a"
+  },
+  {
+    "task": "x11",
+    "lang": "js",
+    "pass": true,
+    "sha256": "13d028aa8f691d684504e3d38680dc110ed2d30a58f92d130f71c389af6ae4ec"
+  },
+  {
+    "task": "x12",
+    "lang": "js",
+    "pass": true,
+    "sha256": "5e1ada75df8a362f25fce523e783e3295c74756867964c333095960cc40983a5"
+  },
+  {
+    "task": "x13",
+    "lang": "js",
+    "pass": true,
+    "sha256": "51946855c065070ee5b8e70704a469c75ffbb4f373a1ac3b419e7cfdc2df4422"
+  },
+  {
+    "task": "x14",
+    "lang": "js",
+    "pass": true,
+    "sha256": "874214840db9f5e0501b387a3ccdf6433f0240958f4578aff201ef622d13183b"
+  },
+  {
+    "task": "x15",
+    "lang": "js",
+    "pass": true,
+    "sha256": "f671cca8a42ff7a509d7da3d2a3bbc6a42de1e3af1a20962ab6b30b34d1368ce"
+  },
+  {
+    "task": "x16",
+    "lang": "js",
+    "pass": true,
+    "sha256": "090b8df4bdc56bb266d74347c466ef22ed37608c4e3c37abdd7898ac2744889a"
+  },
+  {
+    "task": "x17",
+    "lang": "js",
+    "pass": true,
+    "sha256": "d0d6357a4168a3badfa00035465ad36b8e3a22b0ed90fe8c38d8087004c2e848"
+  },
+  {
+    "task": "x18",
+    "lang": "js",
+    "pass": true,
+    "sha256": "ba9d3b417b43705633d865e74772b188ffe8b61899cf0ecefdfe7eb928280dac"
+  },
+  {
+    "task": "x19",
+    "lang": "js",
+    "pass": true,
+    "sha256": "022c89d96f330e9fdbab304810f6b9a4c8a00dfcf7fe4879e5a5b06a2d496cb9"
+  },
+  {
+    "task": "x20",
+    "lang": "js",
+    "pass": true,
+    "sha256": "3502bde168ffc00ed111490587f1c3aa42b5e3b8aad247e65d81f8adbbe1aa49"
+  },
+  {
+    "task": "x21",
+    "lang": "js",
+    "pass": true,
+    "sha256": "5e3b476fe4201867ad3bee01b9a43982088b8df5a9ce99082a3beb3d61495551"
+  },
+  {
+    "task": "x22",
+    "lang": "js",
+    "pass": true,
+    "sha256": "532ebe15db0043824802797f2f5dcbc1de016e568a5d54286a9cfd775ab9a523"
+  },
+  {
+    "task": "x23",
+    "lang": "js",
+    "pass": true,
+    "sha256": "67f085ba9a69bca5b1d6fe889950d145cb09ac8a163d000822b9e1427030878f"
+  },
+  {
+    "task": "x24",
+    "lang": "js",
+    "pass": true,
+    "sha256": "1ca48bb55cd15bfd59058dac995ef30aaf3d0a573e48bb142e9f705178bf0e32"
+  },
+  {
+    "task": "x25",
+    "lang": "js",
+    "pass": true,
+    "sha256": "34cf79d2da8f6310d0d499c119cce304b3e670827a2e8ad3f75d667aa6e2b566"
+  },
+  {
+    "task": "x26",
+    "lang": "js",
+    "pass": true,
+    "sha256": "58e23dd101736fdc91e8edc3e4f192693bfc899e22697bb626eb2e1c466ff125"
+  },
+  {
+    "task": "x27",
+    "lang": "js",
+    "pass": true,
+    "sha256": "1ce778fde075e46aa4867db9d7f045857566328f20be938a3973c043f2679d36"
+  },
+  {
+    "task": "x28",
+    "lang": "js",
+    "pass": true,
+    "sha256": "13447bab585d93e84963d87cd80471c6938a70f359387f3baf847d224388c318"
+  },
+  {
+    "task": "x29",
+    "lang": "js",
+    "pass": true,
+    "sha256": "70b485f9d6dc1df0ad81dd62a14ee49fd7748013cc0830e63278cd885cc52f15"
+  },
+  {
+    "task": "x30",
+    "lang": "js",
+    "pass": true,
+    "sha256": "68edca153194d1d382af767e54faff0c34e228a339055c147e9f5463ce48a097"
+  },
+  {
+    "task": "x31",
+    "lang": "js",
+    "pass": true,
+    "sha256": "f92896a9840257401f093eaa6e57de86fd798be228bbefe29635a6bea536b353"
+  },
+  {
+    "task": "x32",
+    "lang": "js",
+    "pass": true,
+    "sha256": "c607224f1e2989710418985b889016e9a5adb5365b50db936b43d7b551bf998e"
+  },
+  {
+    "task": "x33",
+    "lang": "js",
+    "pass": true,
+    "sha256": "e40f4384cec11f6b75412433b58dc663ff784e24ecec7803e21507b3ccc7b3b5"
+  },
+  {
+    "task": "x34",
+    "lang": "js",
+    "pass": true,
+    "sha256": "6edf2a05d994f1bdc475853136656bd3e32c0710ae3cdfd38cc0d60ad85e1b3c"
+  },
+  {
+    "task": "x35",
+    "lang": "js",
+    "pass": true,
+    "sha256": "72b60a642440ff4d67555c1597729d179cf305ab9ae7ec76a720d8ff47eaa23c"
+  },
+  {
+    "task": "x01",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6284cb689a56dabf5d022c4469a3b4c75a51dad767f054e1c064d925af7d0a1e"
+  },
+  {
+    "task": "x02",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b108237da81c2515bccf82226cc59041b22837e2cbd1d761c1d9abda1c749b28"
+  },
+  {
+    "task": "x03",
+    "lang": "go",
+    "pass": true,
+    "sha256": "e77ff75e3310dd64061ab5f74e6eff51f6356cd056e7768110f72c6f5484a792"
+  },
+  {
+    "task": "x04",
+    "lang": "go",
+    "pass": true,
+    "sha256": "361183ad1cb1834ef34b03e34e443bb69bb9b4ec1ba76b5d02c3cccda6e01354"
+  },
+  {
+    "task": "x05",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6e79ed287a2bddef12fdb78ae9cfd9813333d6acc8a37f02d9ebac4dbefd613b"
+  },
+  {
+    "task": "x06",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a16bb40277592823f6627507fc0d77a53f01aabeb41db1b4cb844d1aad60b248"
+  },
+  {
+    "task": "x07",
+    "lang": "go",
+    "pass": true,
+    "sha256": "d9b156970e08efc73106fcf0fa66e1eaa8ab25d08686179b415301f7608f4aca"
+  },
+  {
+    "task": "x08",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f7fd216aee38dbcb83a15e3a236bdacd8df9eadd329eeb1852e8d7132165d51b"
+  },
+  {
+    "task": "x09",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a5c2519795dba802095583cad8ab2bbb03b10ce9b77ff4210d3352cc2300efed"
+  },
+  {
+    "task": "x10",
+    "lang": "go",
+    "pass": true,
+    "sha256": "c64acf031639bd32a8a238100333da377877ad4187e21f049d61bd59faa808d5"
+  },
+  {
+    "task": "x11",
+    "lang": "go",
+    "pass": true,
+    "sha256": "ce95a88cdb13a5def4e3ffebb7f4ee87e9e33e88307e04df6f0a515fcf7c3846"
+  },
+  {
+    "task": "x12",
+    "lang": "go",
+    "pass": true,
+    "sha256": "253077c40025ff0f0e2da9256c26af0930839efea09ea69aed23ef268aede21b"
+  },
+  {
+    "task": "x13",
+    "lang": "go",
+    "pass": true,
+    "sha256": "aab0e10848a8717c2ea39aa8da33b9a32067af352ca75a96d62ba3e994e5791d"
+  },
+  {
+    "task": "x14",
+    "lang": "go",
+    "pass": true,
+    "sha256": "71aca530230938ac99975a655e63573f0cd6c55f50742a51a83632b7a86889a6"
+  },
+  {
+    "task": "x15",
+    "lang": "go",
+    "pass": true,
+    "sha256": "4affe1a3021ed08836dce868c2dcb04cdd72b939c1a6a36b9414cb724c043aae"
+  },
+  {
+    "task": "x16",
+    "lang": "go",
+    "pass": true,
+    "sha256": "f3e4a6882d6aa38a6d9ac7989e5231d8272eee0399894220ea544caf72144ab6"
+  },
+  {
+    "task": "x17",
+    "lang": "go",
+    "pass": true,
+    "sha256": "9c07b793bbd7ff1fde0474dada31812f9ef068723cf585718755f4a56f6f06da"
+  },
+  {
+    "task": "x18",
+    "lang": "go",
+    "pass": true,
+    "sha256": "ba64f2392d55677b78594f72e058d94d8cf94f26d1a2dd8ace4eeaf70e8ac618"
+  },
+  {
+    "task": "x19",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a6560101135b7c0245f647b1a176fb1b2e749aba789281f41ca971f9f385da97"
+  },
+  {
+    "task": "x20",
+    "lang": "go",
+    "pass": true,
+    "sha256": "83d12841df9bbf2d26c208ec87882e78163f7f55ea114d11a2937cb2e567e5e3"
+  },
+  {
+    "task": "x21",
+    "lang": "go",
+    "pass": true,
+    "sha256": "219ae7cc9429e3130125bc30144b1f3a4d549c08a3d6183341a371b7408cd4f1"
+  },
+  {
+    "task": "x22",
+    "lang": "go",
+    "pass": true,
+    "sha256": "a90d9210696c1dd00de9e4545e65189dd6339cecb41e1f2d63f789e6dc948f9a"
+  },
+  {
+    "task": "x23",
+    "lang": "go",
+    "pass": true,
+    "sha256": "52df17fcf7f25273cd9b5c142a3c96e213da611c3f120c79f8f98bb82e61471b"
+  },
+  {
+    "task": "x24",
+    "lang": "go",
+    "pass": true,
+    "sha256": "81a6ac5a293e8d1f9d1482dead7de17c66c3d634628e0ae3e42384c3f59badab"
+  },
+  {
+    "task": "x25",
+    "lang": "go",
+    "pass": true,
+    "sha256": "5c9c38fcdd02ee32eab70d2de6ff3837092208fbc931483ea4d0a5f25e4b5242"
+  },
+  {
+    "task": "x26",
+    "lang": "go",
+    "pass": true,
+    "sha256": "5e4b9ad2d5dd164a319e3fe14e9df3eb0c29f5bf126bfb973c5db7c9e9157a66"
+  },
+  {
+    "task": "x27",
+    "lang": "go",
+    "pass": true,
+    "sha256": "206cdc486dd3e1df770c9f83042bb68d2c3b4c39e12caf0551a28797d39c9667"
+  },
+  {
+    "task": "x28",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b28081cdbe6ceea24e53e5b64ce1f5274b200287dc032efd782b9a1df7a294fe"
+  },
+  {
+    "task": "x29",
+    "lang": "go",
+    "pass": true,
+    "sha256": "b211ef65805a242a0cf3e1351fd82f58aa7e4dba3240f8ee6ca44a5edd6a88b1"
+  },
+  {
+    "task": "x30",
+    "lang": "go",
+    "pass": true,
+    "sha256": "6cb62e3244df173f97285c09ac71adde19cc0a47732f4aa37788ccbe7903b24d"
+  },
+  {
+    "task": "x31",
+    "lang": "go",
+    "pass": true,
+    "sha256": "1879945760488d3bbcecfa88f7638e148468a5545aea153ea11905a985fd6353"
+  },
+  {
+    "task": "x32",
+    "lang": "go",
+    "pass": true,
+    "sha256": "9bbb572e9f5127e622dabc940d96056904e5a687796ba18cb3069f422fa4148f"
+  },
+  {
+    "task": "x33",
+    "lang": "go",
+    "pass": true,
+    "sha256": "5e35144b9519728a74d9a118efbd0b3f52a8bfc43c268ff3e883bbfa94872fcb"
+  },
+  {
+    "task": "x34",
+    "lang": "go",
+    "pass": true,
+    "sha256": "4c1b037d4491ef23ac9210a4637d34cf8a764c0e69d61604b9a785c9ec19d189"
+  },
+  {
+    "task": "x35",
+    "lang": "go",
+    "pass": true,
+    "sha256": "db2125c2a9d22e97671c2c5c039f52258fe1aa424a8148b316f3f95c60ddd1a9"
+  }
+]

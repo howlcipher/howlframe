@@ -33,7 +33,9 @@ Wired into `main()` via a new `-run` boolean flag:
 
 ### Explicitly out of scope for Phase 1
 
-`http_server`/`route`/`middleware`, `struct`/`parse_json`/`res`/`res_json`, `db_connect`/`sql_query`, `spawn`, `fetch`, `llm_generate`/`fuzzy_cast`/`assert_semantic`, `try_let`, `patch`, `with_context`, `test`, `match`, `exec`, `read_file`/`write_file`/`mkdir`, `web_app`/JS target. Attempting any of these under `-run` produces a clear "not supported under -run (Phase 1)" JSON error naming the specific node, not a silent no-op or crash. `read_file`/`write_file`/`mkdir` were deliberately deferred rather than included: the Go backend's usage pattern for these depends on `try_let` to catch the `(value, error)` tuple they return, and `try_let` itself is Phase 2 scope — including the I/O primitives without an error-handling primitive to pair them with would mean inventing an ad hoc error convention with no precedent, better decided alongside `try_let` itself.
+`http_server`/`route`/`middleware`, `struct`/`res`/`res_json`, `db_connect`/`sql_query`, `spawn`, `fetch`, `llm_generate`/`fuzzy_cast`/`assert_semantic`, `try_let`, `patch`, `with_context`, `test`, `match`, `exec`, `read_file`/`write_file`/`mkdir`, `web_app`/JS target. Attempting any of these under `-run` produces a clear "not supported under -run (Phase 1)" JSON error naming the specific node, not a silent no-op or crash. `read_file`/`write_file`/`mkdir` were deliberately deferred rather than included: the Go backend's usage pattern for these depends on `try_let` to catch the `(value, error)` tuple they return, and `try_let` itself is Phase 2 scope — including the I/O primitives without an error-handling primitive to pair them with would mean inventing an ad hoc error convention with no precedent, better decided alongside `try_let` itself.
+
+`parse_json` has since been added to `-run` (heldout-v3 records slice): `(parse_json T text)` decodes an in-memory string, bytes or byte-number list with the same `decodeJSONValue` the bytecode `PARSE_JSON` uses, and needs no capability.
 
 ### Value representation
 

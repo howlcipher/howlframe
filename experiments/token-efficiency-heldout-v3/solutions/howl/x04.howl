@@ -1,0 +1,10 @@
+(do
+ (let (f (parse_json Any (read_text "in/flat.json")) out (dict))
+  (do
+   (for k (map_keys f)
+    (let (ps (str_split k ".") n (list_len ps) node out)
+     (do
+      (for p (list_slice ps 0 (- n 1))
+       (do (when (is_nil (map_get node p)) (map_set node p (dict))) (set node (map_get node p))))
+      (map_set node (list_get ps (- n 1)) (map_get f k)))))
+   (write_file "out/result.json" (encode_json out)))))

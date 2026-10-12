@@ -1,0 +1,6 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/pairs.txt"))
+    (let ((a b) (str_split l " ")) (if (= (str_join (sort (str_split a "")) "") (str_join (sort (str_split b "")) "")) "yes" "no")))
+   "\n")))

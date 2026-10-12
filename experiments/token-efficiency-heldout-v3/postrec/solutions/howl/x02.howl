@@ -1,0 +1,9 @@
+(do
+ (defun merge ((a any) (b any)) any
+  (do
+   (for k (map_keys b)
+    (let (x (get a k) y (get b k))
+     (map_set a k (if (and (starts_with (encode_json x) "{") (starts_with (encode_json y) "{")) (call merge x y) y))))
+   (return a)))
+ (write_file "out/result.json"
+  (encode_json (call merge (read_json "in/base.json") (read_json "in/override.json")))))

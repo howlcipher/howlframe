@@ -679,6 +679,37 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("encode_json: %v", err), node)
 		}
 		return string(b)
+	case "parse_json":
+		// (parse_json T text): ast.Desugar has bound a non-symbol text
+		// operand to a temporary, so this is the same variable read the
+		// bytecode PARSE_JSON does (string, bytes or a byte-number list),
+		// decoded with the same decodeJSONValue. No capability: the text
+		// is already in memory.
+		if len(node.Children) != 3 {
+			InterpErr("parse_json expects (parse_json T text)", node)
+		}
+		var data []byte
+		switch v := interp.eval(node.Children[2], env).(type) {
+		case string:
+			data = []byte(v)
+		case []byte:
+			data = v
+		case []any:
+			for _, e := range v {
+				n, ok := e.(int64)
+				if !ok || n < 0 || n > 255 {
+					InterpErr("parse_json failed: byte list must hold ints 0..255", node)
+				}
+				data = append(data, byte(n))
+			}
+		default:
+			InterpErr(fmt.Sprintf("parse_json failed: expected text, got %T", v), node)
+		}
+		result, err := decodeJSONValue(data)
+		if err != nil {
+			InterpErr(fmt.Sprintf("parse_json failed: %v", err), node)
+		}
+		return result
 	case "html_escape", "attr_escape":
 		if len(node.Children) != 2 {
 			InterpErr(fmt.Sprintf("%s expects (%s text)", head, head), node)

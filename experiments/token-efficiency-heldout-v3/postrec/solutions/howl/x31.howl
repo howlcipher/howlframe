@@ -1,0 +1,6 @@
+(do
+ (let (out (list))
+  (do
+   (for it (str_split (read_text "in/ranges.txt") ",")
+    (let (p (str_split it "-")) (for i (range (to_int (list_get p 0)) (+ (to_int (list_get p (- (list_len p) 1))) 1)) (append out i))))
+   (write_file "out/result.txt" (str_join (map_list i out (str i)) ",")))))

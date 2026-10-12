@@ -1,0 +1,5 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list t (filter t (read_json "in/tickets.json") (list_contains (nz (get t "meta" "tags") (list)) "urgent")) (get t "id"))
+   "\n")))

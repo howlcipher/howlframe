@@ -1,0 +1,6 @@
+(do
+ (let (a (read_json "in/a.json") b (read_json "in/b.json") oa (list) ob (list))
+  (do
+   (for x a (when (not (or (list_contains b x) (list_contains oa x))) (append oa x)))
+   (for x b (when (not (or (list_contains a x) (list_contains ob x))) (append ob x)))
+   (write_json "out/result.json" (rec only_a oa only_b ob)))))

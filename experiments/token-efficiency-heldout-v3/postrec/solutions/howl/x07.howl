@@ -1,0 +1,4 @@
+(do
+ (let (ren (read_json "in/rename.json"))
+  (write_json "out/result.json" (map_list r (read_json "in/rows.json")
+     (let (o (dict)) (do (for k (map_keys r) (map_set o (nz (get ren k) k) (get r k))) o))))))

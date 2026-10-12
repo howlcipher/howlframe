@@ -1,0 +1,10 @@
+(do
+ (let (doc (parse_json Any (read_text "in/doc.json")))
+  (do
+   (for op (parse_json Any (read_text "in/ops.json"))
+    (let (ps (str_split (map_get op "path") ".") n (list_len ps) node doc k (list_get ps (- n 1)))
+     (do
+      (for p (list_slice ps 0 (- n 1))
+       (do (when (is_nil (map_get node p)) (map_set node p (dict))) (set node (map_get node p))))
+      (if (= (map_get op "op") "set") (map_set node k (map_get op "value")) (map_delete node k)))))
+   (write_file "out/result.json" (encode_json doc)))))

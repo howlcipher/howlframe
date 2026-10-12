@@ -1,0 +1,9 @@
+(do
+ (let (ls (lines (read_file "in/sites.csv")) prev (str_split (list_get ls 1) ",") out (list (list_get ls 0)))
+  (do
+   (for l (list_slice ls 1)
+    (let (c (str_split l ",") i 0)
+     (do
+      (set prev (map_list x c (do (inc i) (if (= x "") (list_get prev (- i 1)) x))))
+      (append out (str_join prev ",")))))
+   (write_file "out/result.csv" (str_join out "\n")))))

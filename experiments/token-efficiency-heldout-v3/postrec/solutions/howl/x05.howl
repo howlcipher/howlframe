@@ -1,0 +1,7 @@
+(do
+ (let (out (rec present (list) null (list) absent (list)))
+  (do
+   (for c (read_json "in/contacts.json")
+    (let (k (if (not (map_has c "email")) "absent" (is_nil (get c "email")) "null" "present") l (get out k))
+     (do (append l (get c "id")) (map_set out k l))))
+   (write_json "out/result.json" out))))

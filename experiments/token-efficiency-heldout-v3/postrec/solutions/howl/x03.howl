@@ -1,0 +1,8 @@
+(do
+ (defun flat ((d any) (pre string) (out any)) any
+  (do
+   (for k (map_keys d)
+    (let (v (get d k))
+     (if (and (starts_with (encode_json v) "{") (!= (encode_json v) "{}")) (call flat v (str pre k ".") out) (map_set out (str pre k) v))))
+   (return out)))
+ (write_json "out/result.json" (call flat (read_json "in/nested.json") "" (dict))))

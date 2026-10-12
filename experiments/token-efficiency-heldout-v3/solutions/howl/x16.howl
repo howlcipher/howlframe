@@ -1,0 +1,3 @@
+(do
+ (let (e (parse_json Any (read_text "in/env.json")))
+  (write_file "out/result.json" (encode_json (map_list k (sort (map_keys e)) (dict ("key" k) ("value" (map_get e k))))))))

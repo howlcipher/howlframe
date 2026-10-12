@@ -1,0 +1,7 @@
+(do
+ (let (out (dict))
+  (do
+   (for l (lines (read_file "in/requests.jsonl"))
+    (let (r (parse_json Any l) lv (map_get r "level") ms (map_get r "ms"))
+     (map_set out lv (max (list ms (nz (map_get out lv) ms))))))
+   (write_file "out/result.json" (encode_json out)))))

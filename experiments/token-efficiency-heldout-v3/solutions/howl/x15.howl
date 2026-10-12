@@ -1,0 +1,9 @@
+(do
+ (defun dep ((v any)) int
+  (let (e (encode_json v) m 0)
+   (if (or (starts_with e "{") (starts_with e "["))
+    (do
+     (for x (if (starts_with e "{") (map_list k (map_keys v) (map_get v k)) v) (set m (max (list m (call dep x)))))
+     (return (+ m 1)))
+    (return 0))))
+ (write_file "out/result.txt" (str (call dep (parse_json Any (read_text "in/tree.json"))))))

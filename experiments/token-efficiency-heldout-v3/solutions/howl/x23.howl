@@ -1,0 +1,6 @@
+(do
+ (let (d (dict) out (list "id,name,dept"))
+  (do
+   (for l (list_slice (lines (read_file "in/dept.csv")) 1) (let ((i n) (str_split l ",")) (map_set d i n)))
+   (for l (list_slice (lines (read_file "in/emp.csv")) 1) (append out (str l "," (nz (map_get d (list_get (str_split l ",") 0)) ""))))
+   (write_file "out/result.csv" (str_join out "\n")))))

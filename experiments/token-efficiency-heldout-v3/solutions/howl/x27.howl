@@ -1,0 +1,6 @@
+(do
+ (defun flat ((v any)) any
+  (if (starts_with (encode_json v) "[")
+   (let (o (list)) (do (for e v (for x (call flat e) (append o x))) (return o)))
+   (return (list v))))
+ (write_file "out/result.json" (encode_json (call flat (parse_json Any (read_text "in/deep.json"))))))

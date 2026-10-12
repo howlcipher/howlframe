@@ -1,0 +1,6 @@
+(do
+ (let (p (read_json "in/prices.json") out (dict))
+  (do
+   (for k (map_keys p)
+    (let (v (get p k)) (map_set out k (str "$" (// v 100) "." (pad_left (% v 100) 2 "0")))))
+   (write_json "out/result.json" out))))

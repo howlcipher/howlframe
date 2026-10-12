@@ -112,12 +112,11 @@
       "exit": 0,
       "targets": {
         "hfir_bytecode": "PASS",
-        "interpreter": "UNSUPPORTED",
+        "interpreter": "PASS",
         "go": "COMPILE_FAILURE",
         "javascript": "PASS"
       },
       "notes": {
-        "interpreter": "parse_json is not supported under -run",
         "go": "generated Go decodes into a declared Go type; the undeclared Payload used by the VM is not a Go type"
       }
     },

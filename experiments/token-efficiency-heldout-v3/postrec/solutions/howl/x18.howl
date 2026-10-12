@@ -1,0 +1,6 @@
+(do
+ (let (out (list) cur "")
+  (do
+   (for l (lines (read_file "in/script.txt"))
+    (if (ends_with l "\\") (set cur (str cur (str_slice l 0 (- (str_len l) 1)))) (do (append out (str cur l)) (set cur ""))))
+   (write_file "out/result.txt" (str_join out "\n")))))

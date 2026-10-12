@@ -1,0 +1,6 @@
+(do
+ (let (o (read_json "in/old.json") n (read_json "in/new.json"))
+  (write_json "out/result.json" (rec
+     added (filter k (map_keys n) (not (map_has o k)))
+     removed (filter k (map_keys o) (not (map_has n k)))
+     changed (filter k (map_keys o) (and (map_has n k) (!= (encode_json (get o k)) (encode_json (get n k)))))))))

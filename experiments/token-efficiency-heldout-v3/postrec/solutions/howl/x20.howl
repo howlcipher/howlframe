@@ -1,0 +1,8 @@
+(do
+ (let (out (list) w 0)
+  (do
+   (for l (str_split (str (read_text "in/doc.txt") "\n") "\n")
+    (if (= (str_trim l) "")
+     (when (> w 0) (do (append out (str (+ (list_len out) 1) ": " w)) (set w 0)))
+     (set w (+ w (list_len (filter x (str_split l " ") (!= x "")))))))
+   (write_file "out/result.txt" (str_join out "\n")))))

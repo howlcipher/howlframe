@@ -152,6 +152,15 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"rtrim":         true, // ast.Desugar core library
 		"ltrim":         true, // ast.Desugar core library
 		"to_base":       true, // ast.Desugar core library
+		"rec":           true, // ast.Desugar records
+		"get":           true, // ast.Desugar records
+		"put":           true, // ast.Desugar records
+		"read_json":     true, // ast.Desugar records
+		"write_json":    true, // ast.Desugar records
+		"pluck":         true, // ast.Desugar records
+		"select":        true, // ast.Desugar records
+		"group_by":      true, // ast.Desugar records
+		"merge":         true, // ast.Desugar records
 		"ver_ge":        true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar
