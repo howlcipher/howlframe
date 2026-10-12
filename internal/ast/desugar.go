@@ -211,6 +211,26 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) {
 			desugarUnixNow(node)
 		}
+	case "ver_gt", "ver_ge":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarVersionCompare(node, head == "ver_ge")
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "all", "any":
+		if isSugarExprContext(parentHead, childIndex) {
+			desugarAllAny(node, head == "all")
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "list_get":
+		// A literal (list …) operand is left alone: backends such as wasm
+		// lower it directly and do not support let.
+		if isSugarExprContext(parentHead, childIndex) && !isListLiteral(node, 1) && desugarBindOperand(node, 1, "lg") {
+			desugarInContext(node, parentHead, childIndex)
+		}
+	case "parse_json":
+		if isSugarExprContext(parentHead, childIndex) && desugarBindOperand(node, 2, "pj") {
+			desugarInContext(node, parentHead, childIndex)
+		}
 	}
 }
 
@@ -228,7 +248,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"switch", "inc", "dec", "str", "nz", "map_has", "when", "unless",
 		"str_contains", "str_replace", "starts_with", "ends_with",
 		"http_body", "http_status", "http_res", "list_contains", "not",
-		"blank", "unix_now":
+		"blank", "unix_now", "ver_gt", "ver_ge", "all", "any", "parse_json", "list_len":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -326,7 +346,7 @@ var reservedCallHeads = map[string]bool{
 	"switch": true, "inc": true, "dec": true, "str": true, "nz": true, "map_has": true, "when": true, "unless": true,
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
 	"http_body": true, "http_status": true, "http_res": true, "list_contains": true, "not": true,
-	"blank": true, "unix_now": true,
+	"blank": true, "unix_now": true, "ver_gt": true, "ver_ge": true, "all": true, "any": true, "parse_json": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,

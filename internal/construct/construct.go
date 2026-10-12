@@ -91,7 +91,9 @@ var table = []Entry{
 	{Name: ">", Support: Supported, Note: "compileNode binop case"},
 	{Name: ">=", Support: Supported, Note: "compileNode binop case"},
 	{Name: "achieve", Support: Supported, Opaque: true, Note: "ACHIEVE; operands are stringified via ast.Stringify, not compiled"},
+	{Name: "all", Support: CompileTimeOnly, Note: "density sugar; (all x list pred) → for/when/not flag scan by ast.Desugar (pure)"},
 	{Name: "and", Support: Supported, Note: "compileNode binop case"},
+	{Name: "any", Support: CompileTimeOnly, Note: "density sugar; (any x list pred) → for/when flag scan by ast.Desugar (pure)"},
 	{Name: "append", Support: Supported, Note: "APPEND"},
 	{Name: "assert", Support: CompileTimeOnly, Note: "density sugar; expanded to if/stderr/exit by ast.Desugar before lowering"},
 	{Name: "assert_semantic", Support: Unsupported, Note: "LLM intent assertion; no opcode, Go backend only"},
@@ -210,6 +212,8 @@ var table = []Entry{
 	{Name: "unix_now", Support: CompileTimeOnly, Note: "density sugar; (unix_now) → (to_string (time_now)) by ast.Desugar"},
 	{Name: "unless", Support: CompileTimeOnly, Note: "density sugar; (unless test body…) → if with empty then by ast.Desugar"},
 	{Name: "use", Support: CompileTimeOnly, Note: "resolved by parser.ExpandIncludes/ast.ResolveModules before checker.Check or lowering ever run (improvements.md #95); nested use inside an already-used module is rejected at parse time instead"},
+	{Name: "ver_ge", Support: CompileTimeOnly, Note: "density sugar; strict numeric x.y.z a >= b via str_split/to_int/list_get by ast.Desugar (pure)"},
+	{Name: "ver_gt", Support: CompileTimeOnly, Note: "density sugar; strict numeric x.y.z a > b via str_split/to_int/list_get by ast.Desugar (pure)"},
 	{Name: "wasm_app", Support: Supported, Note: "compiles every child in sequence"},
 	{Name: "web_app", Support: Supported, Note: "compiles every child in sequence"},
 	{Name: "when", Support: CompileTimeOnly, Note: "density sugar; (when test body…) → if with empty else by ast.Desugar"},
@@ -438,6 +442,15 @@ func scanSupported(node *ast.Node, head string, out *[]Violation, profile Profil
 		}
 		scanChildren(node, head, out, 2, profile)
 	case "parse_json":
+		// Governed pre-desugar profile scan: an expression operand is
+		// allowed because ast.Desugar binds it to a temporary before any
+		// lowering, but the operand itself is still scanned so forbidden
+		// constructs inside it are rejected before anything compiles or
+		// runs. The default Scan (post-desugar construct gate) stays strict.
+		if profile == ProfileGoverned && len(node.Children) > 2 && node.Children[2] != nil && node.Children[2].Type == "List" {
+			scanNode(node.Children[2], head, out, profile)
+			return
+		}
 		if len(node.Children) > 2 && node.Children[2] != nil && node.Children[2].Type != "SYMBOL" {
 			*out = append(*out, Violation{
 				Name:   "parse_json",

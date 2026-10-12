@@ -23,7 +23,7 @@ func TestSolutionCoverage(t *testing.T) {
 		}
 	}
 	// HowlFrame references were re-authored in current shorthand on 2026-10-12
-	// (rerun after #128-#130); they intentionally no longer copy reference/arm_a
+	// (#134; sugar from #117, #118, #120, #124; compact built-ins later); they intentionally no longer copy reference/arm_a
 	// verbatim. Guard against regressing to the expanded pre-shorthand forms.
 	for _, task := range m.All() {
 		data, err := os.ReadFile(filepath.Join("solutions/howl", task.ID+".howl"))

@@ -123,6 +123,10 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"not":           true, // ast.Desugar
 		"blank":         true, // ast.Desugar
 		"unix_now":      true, // ast.Desugar
+		"all":           true, // ast.Desugar
+		"any":           true, // ast.Desugar
+		"ver_gt":        true, // ast.Desugar
+		"ver_ge":        true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar
 		"sinc":          true, // ast.Desugar
