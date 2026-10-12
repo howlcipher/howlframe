@@ -15,6 +15,10 @@ per task. It does not win.**
 | HowlFrame vs JS | 0.922 | 26/2/6 |
 | HowlFrame vs Go | 0.339 | 34/0/0 |
 
+- Total tokens across all 34 tasks: HowlFrame uses **1.076×** Python's total
+  (2132 vs 1982 on cl100k_base; 1.078× on o200k_base), 0.948× JS's and
+  0.394× Go's. The per-task median hides that the losses are larger than the
+  wins.
 - Median tokens are 52.5 for HowlFrame and 53.0 for Python, so the ratio of
   medians is 0.991.
 - HowlFrame is clearly shorter than Go and somewhat shorter than JS.
@@ -142,6 +146,11 @@ The method is unchanged from heldout-v0:
   field and is unique. With duplicate skus, ties would be broken differently.
 - **v18 distinct.** It uses `map_keys` of `count_by`, which is documented to
   return keys in byte order.
+- **Library semantics.** `str_len` and `str_slice` count bytes, not
+  characters (`str_split s ""` splits bytes). `sort` is a stable insertion
+  sort, O(n²). Empty `min`/`max` is a runtime `VALUE_ERROR` (since the #139
+  hardening slice).
 - **Go/JS targets.** The core-library sugar does not compile on the Go/JS
-  backends. Their let-in-expression lowering is a known pre-existing gap. All
+  backends, because their let-in-expression lowering is a known pre-existing
+  gap. `build --target go|js` now rejects it with `UNSUPPORTED_ON_TARGET`. All
   HowlFrame references run on governed `-run-bc`.
