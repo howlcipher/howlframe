@@ -1,6 +1,6 @@
 (cli_app
   (print "swarm start")
-  (spawn_agent "Outer" (task "outer work"
+  (spawn_agent "Outer" (grants "process") (task "outer work"
     (print "outer before")
     (spawn_agent "Inner" (task "inner work"
       (print "inner body")))

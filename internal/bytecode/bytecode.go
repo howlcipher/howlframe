@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/construct"
 
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/httpreq"
 	"strconv"
+	"strings"
 )
 
 type BCInstruction struct {
@@ -549,7 +551,11 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, bodyInsts...)
 		case "spawn_agent":
 			agentName := node.Children[1].Value
-			taskNode := node.Children[2]
+			taskNode := node.Children[len(node.Children)-1]
+			childGrants := ""
+			if len(node.Children) == 4 {
+				childGrants = compileSpawnGrants(node.Children[2])
+			}
 			var bodyInsts []BCInstruction
 			if taskNode.Type == "List" && len(taskNode.Children) >= 2 && taskNode.Children[0].Value == "task" {
 				insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: taskNode.Children[1].Value})
@@ -561,8 +567,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				// onto the stack; SPAWN_AGENT still type-checks a string task.
 				insts = append(insts, c.compileNode(taskNode)...)
 			}
-			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName, IntOperand: int64(len(bodyInsts))})
+			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName, StringOperand2: childGrants, IntOperand: int64(len(bodyInsts))})
 			insts = append(insts, bodyInsts...)
+		case "grants":
+			// Only spawn_agent's (grants ...) argument is legal; it is read by
+			// compileSpawnGrants and never evaluated as an expression.
+			ast.ReportError("grants is only valid as (spawn_agent name (grants \"cap\" ...) task)", node.Line, node.Column)
 		case "task":
 			insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: node.Children[1].Value})
 		case "res":
@@ -938,4 +948,26 @@ func ShortCircuit(op string, left, right []BCInstruction) []BCInstruction {
 		BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: false},
 		BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: "or"})
 	return out
+}
+
+// compileSpawnGrants validates (grants "cap" ...) for spawn_agent. Every entry
+// must be a string literal naming a valid grant; the runtime attenuates the
+// list against the parent's grants. Entries are newline-joined, which no
+// valid grant contains.
+func compileSpawnGrants(node *ast.Node) string {
+	if node.Type != "List" || len(node.Children) == 0 || node.Children[0].Value != "grants" {
+		ast.ReportError("spawn_agent expects (spawn_agent name (grants \"cap\" ...) task)", node.Line, node.Column)
+	}
+	var out []string
+	for _, g := range node.Children[1:] {
+		if g.Type != "STRING" {
+			ast.ReportError("grants entries must be string literals", g.Line, g.Column)
+		}
+		parsed, err := capability.ParseGrant(g.Value)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("grants: %v", err), g.Line, g.Column)
+		}
+		out = append(out, string(parsed))
+	}
+	return strings.Join(out, "\n")
 }

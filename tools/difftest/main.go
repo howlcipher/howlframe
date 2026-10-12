@@ -112,7 +112,7 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 		return false, "", fmt.Sprintf("(compile-bc): %v\n%s", err, out5)
 	}
 
-	out6, err := runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", bcPath)
+	out6, err := runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,process:exec=/usr/bin/rm **,environment,database", bcPath)
 	if err != nil {
 		return false, "", fmt.Sprintf("(run-bc): %v\n%s", err, out6)
 	}
@@ -133,7 +133,7 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 		}
 	}
 	if hfirFenced == "" {
-		out8, err = runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", hfirPath)
+		out8, err = runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,process:exec=/usr/bin/rm **,environment,database", hfirPath)
 		if err != nil {
 			return false, "", fmt.Sprintf("(run-bc hfir): %v\n%s", err, out8)
 		}

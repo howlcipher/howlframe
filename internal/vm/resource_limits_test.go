@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,9 +19,16 @@ import (
 
 func runResourceTest(t *testing.T, source string, policy ExecutionPolicy) *bytecode.RuntimeFailure {
 	t.Helper()
+	// exec needs an exact allow-list entry for a canonical (symlink-free)
+	// program path; /bin/sh is commonly a symlink, so run its target.
+	caps := []capability.Capability{capability.Network, capability.Filesystem, capability.Process}
+	if sh, err := filepath.EvalSymlinks("/bin/sh"); err == nil && strings.Contains(source, `"/bin/sh"`) {
+		source = strings.ReplaceAll(source, `"/bin/sh"`, fmt.Sprintf("%q", sh))
+		caps = append(caps, capability.Capability("process:exec="+sh+" -c *"))
+	}
 	_, prog := parseAndCompile(t, source)
 	var out, stderr bytes.Buffer
-	ev := RunBytecodeWithEvidence(prog, nil, policy, []capability.Capability{capability.Network, capability.Filesystem, capability.Process}, nil, &out, &stderr, 0)
+	ev := RunBytecodeWithEvidence(prog, nil, policy, caps, nil, &out, &stderr, 0)
 	if ev.ExitCode != 0 {
 		t.Fatalf("unexpected exit %d: %s", ev.ExitCode, &stderr)
 	}

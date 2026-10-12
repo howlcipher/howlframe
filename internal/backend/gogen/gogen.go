@@ -505,8 +505,55 @@ func envHelperSource() string {
 // is spawned only after that grant is present, so a denial cannot run it
 // or include the command in the error.
 func execHelperSource() string {
-	return `func howlFrameExec(cmd string, args ...string) []byte {
-	if !howlFrameGrantHas("process") {
+	return `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
+// must be an absolute, clean, symlink-free path named by a process:exec=
+// grant whose argument pattern matches argv exactly. A bare process grant
+// never authorizes exec.
+func howlFrameExecAllowed(cmd string, args []string) bool {
+	if !strings.HasPrefix(cmd, "/") {
+		return false
+	}
+	prefix := ""
+	for _, part := range strings.Split(cmd[1:], "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+		prefix += "/" + part
+		info, err := os.Lstat(prefix)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return false
+		}
+	}
+	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		spec, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:exec=")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(spec)
+		if len(fields) == 0 || fields[0] != cmd {
+			continue
+		}
+		pats := fields[1:]
+		matched := func() bool {
+			for i, p := range pats {
+				if p == "**" && i == len(pats)-1 {
+					return true
+				}
+				if i >= len(args) || p != "*" && p != args[i] {
+					return false
+				}
+			}
+			return len(args) == len(pats)
+		}()
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+func howlFrameExec(cmd string, args ...string) []byte {
+	if !howlFrameExecAllowed(cmd, args) {
 		panic("CAPABILITY_DENIED: capability denied: process")
 	}
 	out, err := exec.Command(cmd, args...).CombinedOutput()
@@ -1894,7 +1941,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// Child grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
 		agentNameStr := generateExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateExpression(node.Children[2], reqVar, depth+1)

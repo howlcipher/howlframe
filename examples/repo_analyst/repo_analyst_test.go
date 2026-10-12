@@ -28,7 +28,7 @@ func runRepoAnalystWithBudget(t *testing.T, compiler, artifact string, maxInstru
 	t.Helper()
 	commandArgs := []string{
 		"-run-bc",
-		"-allow-caps", "process,filesystem",
+		"-allow-caps", "process:exec=/usr/bin/find **,filesystem",
 	}
 	if maxInstructions > 0 {
 		commandArgs = append(commandArgs, "--max-instructions", fmt.Sprint(maxInstructions))

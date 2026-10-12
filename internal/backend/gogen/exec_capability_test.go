@@ -13,14 +13,14 @@ import (
 
 func TestGoExecRequiresGrantBeforeSpawn(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "phase2b-secret-out")
-	source := `(cli_app (exec "touch" "` + marker + `"))`
+	source := `(cli_app (exec "/usr/bin/touch" "` + marker + `"))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateCode(root)
-	if strings.Contains(code, `exec.Command("touch"`) {
+	if strings.Contains(code, `exec.Command("/usr/bin/touch"`) {
 		t.Fatalf("exec spawns at the call site:\n%s", code)
 	}
-	if !strings.Contains(code, `howlFrameExec("touch", "`+marker+`")`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/touch", "`+marker+`")`) {
 		t.Fatalf("exec is not mediated:\n%s", code)
 	}
 	helper := code[strings.Index(code, "func howlFrameExec"):]
@@ -67,7 +67,10 @@ func TestGoExecRequiresGrantBeforeSpawn(t *testing.T) {
 	otherOut, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=environment")
 	assertDenied("environment grant", otherOut, otherErr)
 
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
+	bareOut, bareErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
+	assertDenied("bare process grant (no allow-list)", bareOut, bareErr)
+
+	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true")
 	if grantErr != "" {
 		t.Fatalf("process grant failed: %s\n%s", grantErr, granted)
 	}
@@ -79,16 +82,16 @@ func TestGoExecRequiresGrantBeforeSpawn(t *testing.T) {
 
 func TestGoExecGrantedPrintsCapturedOutput(t *testing.T) {
 	const source = `(cli_app
-  (let (value (exec "printf" "phase2b-exec-marker"))
+  (let (value (exec "/usr/bin/printf" "phase2b-exec-marker"))
     (print (bytes_to_string value))))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateCode(root)
-	if !strings.Contains(code, `howlFrameExec("printf", "phase2b-exec-marker")`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`) {
 		t.Fatalf("let-bound exec is not mediated:\n%s", code)
 	}
 	rootDir := moduleRoot(t)
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
+	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true")
 	if grantErr != "" {
 		t.Fatalf("process grant failed: %s\n%s", grantErr, granted)
 	}
@@ -98,31 +101,31 @@ func TestGoExecGrantedPrintsCapturedOutput(t *testing.T) {
 }
 
 func TestGoExecExpressionPositionIsMediated(t *testing.T) {
-	const source = `(cli_app (print (bytes_to_string (exec "printf" "phase2b-exec-marker"))))`
+	const source = `(cli_app (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-marker"))))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateCode(root)
-	if !strings.Contains(code, `howlFrameExec("printf", "phase2b-exec-marker")`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`) {
 		t.Fatalf("expression-position exec is not mediated:\n%s", code)
 	}
-	if strings.Contains(code, `exec.Command("printf"`) {
+	if strings.Contains(code, `exec.Command("/usr/bin/printf"`) {
 		t.Fatalf("expression-position exec bypasses the grant:\n%s", code)
 	}
 }
 
 func TestGoExecZeroArgsIsMediated(t *testing.T) {
-	const source = `(cli_app (exec "true") (print "zero-arg-ok"))`
+	const source = `(cli_app (exec "/usr/bin/true") (print "zero-arg-ok"))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateCode(root)
-	if !strings.Contains(code, `howlFrameExec("true")`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/true")`) {
 		t.Fatalf("zero-arg exec is not mediated:\n%s", code)
 	}
-	if strings.Contains(code, `exec.Command("true"`) {
+	if strings.Contains(code, `exec.Command("/usr/bin/true"`) {
 		t.Fatalf("zero-arg exec spawns at the call site:\n%s", code)
 	}
 	rootDir := moduleRoot(t)
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
+	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true")
 	if grantErr != "" {
 		t.Fatalf("process grant failed: %s\n%s", grantErr, granted)
 	}

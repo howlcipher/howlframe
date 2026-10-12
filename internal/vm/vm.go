@@ -793,6 +793,10 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, argNode := range node.Children[2:] {
 			args = append(args, fmt.Sprint(interp.eval(argNode, env)))
 		}
+		cmd, denied := capability.Grants(interp.AllowedCaps).AuthorizeExec(cmd, args)
+		if denied != nil {
+			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
+		}
 		out, err := exec.Command(cmd, args...).CombinedOutput()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
@@ -1943,9 +1947,18 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 }
 
 func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
+	if cap == capability.Process && (op == bytecode.OpSpawn || op == bytecode.OpSpawnAgent) && !capability.Grants(vm.AllowedCaps).HasCoarse(capability.Process) {
+		// Spawning needs the coarse process grant; an exec allow-list alone does not spawn.
+		vm.recordEffect(cap, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", cap))
+	}
 	for _, allowed := range vm.AllowedCaps {
 		if capability.Grants([]capability.Capability{allowed}).Has(cap) {
-			// A scoped filesystem class check is provisional until its path check.
+			// A scoped filesystem class check is provisional until its path
+			// check; exec and spawn_agent are provisional until argv/attenuation checks.
+			if op == bytecode.OpExec || op == bytecode.OpSpawnAgent {
+				return
+			}
 			if cap != capability.Filesystem || capability.Grants(vm.AllowedCaps).HasUnrestrictedFilesystem() {
 				vm.recordEffect(cap, op, "allowed")
 			}
@@ -2455,6 +2468,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				args = append([]string{fmt.Sprint(vm.pop(inst.Op))}, args...)
 			}
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
+			cmdStr = vm.requireExec(cmdStr, args, inst.Op)
 			max := vm.Limits.MaxExecOutputBytes
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
@@ -3390,6 +3404,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "spawn_agent expected string task, got %T", v))
 			}
 			name := inst.StringOperand
+			childCaps := vm.attenuateChild(inst, ip)
 			if vm.spawnDepth >= vm.Limits.MaxCallDepth {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "spawn nesting depth limit exceeded"))
 			}
@@ -3412,7 +3427,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
@@ -3808,6 +3823,34 @@ func (b *limitedOutput) Write(p []byte) (int, error) {
 		return 0, io.ErrShortWrite
 	}
 	return b.buffer.Write(p)
+}
+
+// requireExec enforces the exact-argv process allow-list. A denial is a typed
+// CAPABILITY_DENIED error and is recorded in the receipt before anything runs.
+func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) string {
+	path, err := capability.Grants(vm.AllowedCaps).AuthorizeExec(program, args)
+	if err != nil {
+		vm.recordEffect(capability.Process, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", err.Error()))
+	}
+	vm.recordEffect(capability.Process, op, "allowed")
+	return path
+}
+
+// attenuateChild computes a spawned agent's grants (S9 attenuation): only the
+// explicit (grants ...) subset, never more than the parent holds; none by default.
+func (vm *BCVM) attenuateChild(inst bytecode.BCInstruction, ip int) []capability.Capability {
+	var requested []string
+	if inst.StringOperand2 != "" {
+		requested = strings.Split(inst.StringOperand2, "\n")
+	}
+	child, err := capability.Attenuate(capability.Grants(vm.AllowedCaps), requested)
+	if err != nil {
+		vm.recordEffect(capability.Process, inst.Op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", ip, inst.Op, "capability denied: %s", err.Error()))
+	}
+	vm.recordEffect(capability.Process, inst.Op, "allowed")
+	return child
 }
 
 func (vm *BCVM) requireFilesystem(path string, write bool, op bytecode.Opcode) string {

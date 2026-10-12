@@ -1316,8 +1316,8 @@ func TestHFIRBytecodeExecFixture(t *testing.T) {
 		if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
 			t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
 		}
-		if got := fsPathValue(t, graph, node); got != "printf" {
-			t.Fatalf("exec command = %q, want printf", got)
+		if got := fsPathValue(t, graph, node); got != "/usr/bin/printf" {
+			t.Fatalf("exec command = %q, want /usr/bin/printf", got)
 		}
 		arg := graph.NodeByID(node.DataInputs[1].SourceNode)
 		if arg == nil || arg.Kind != "const" || arg.Value != "phase2b-exec-marker" {
@@ -1346,16 +1346,16 @@ func TestHFIRBytecodeExecFixture(t *testing.T) {
 	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
 	}
-	if !reflect.DeepEqual(execOperandShapes(direct), []string{"main\x00printf\x00phase2b-exec-marker"}) {
+	if !reflect.DeepEqual(execOperandShapes(direct), []string{"main\x00/usr/bin/printf\x00phase2b-exec-marker"}) {
 		t.Fatalf("EXEC operands = %#v", execOperandShapes(direct))
 	}
 
 	legacyDenied := runBytecodeOutcome(legacy, "", nil)
 	directDenied := runBytecodeOutcome(direct, "", nil)
 	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
-	requireProcessDenial(t, legacyDenied, "printf", "phase2b-exec-marker")
+	requireProcessDenial(t, legacyDenied, "/usr/bin/printf", "phase2b-exec-marker")
 
-	caps := []capability.Capability{capability.Process}
+	caps := []capability.Capability{printfExecGrant}
 	legacyGranted := runBytecodeOutcome(legacy, "", caps)
 	directGranted := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
@@ -1370,9 +1370,9 @@ func TestHFIRBytecodeExecFixture(t *testing.T) {
 // printf format plus two values, so a swapped operand changes the text.
 func TestHFIRBytecodeExecOperandOrder(t *testing.T) {
 	source := `(cli_app
-  (print (bytes_to_string (exec "true")))
-  (print (bytes_to_string (exec "printf" "only")))
-  (print (bytes_to_string (exec "printf" "%s:%s" "left" "right"))))`
+  (print (bytes_to_string (exec "/usr/bin/true")))
+  (print (bytes_to_string (exec "/usr/bin/printf" "only")))
+  (print (bytes_to_string (exec "/usr/bin/printf" "%s:%s" "left" "right"))))`
 	root, graph := checkedHFIRGraph(t, source)
 	var counts []int
 	for _, node := range graph.Nodes {
@@ -1400,14 +1400,14 @@ func TestHFIRBytecodeExecOperandOrder(t *testing.T) {
 	}
 	direct = roundTripArtifact(t, direct)
 	wantShapes := []string{
-		"main\x00true",
-		"main\x00printf\x00only",
-		"main\x00printf\x00%s:%s\x00left\x00right",
+		"main\x00/usr/bin/true",
+		"main\x00/usr/bin/printf\x00only",
+		"main\x00/usr/bin/printf\x00%s:%s\x00left\x00right",
 	}
 	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(got, wantShapes) {
 		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v\nwant %#v", got, want, wantShapes)
 	}
-	caps := []capability.Capability{capability.Process}
+	caps := []capability.Capability{printfExecGrant, "process:exec=/usr/bin/true"}
 	legacyOutcome := runBytecodeOutcome(legacy, "", caps)
 	directOutcome := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyOutcome, directOutcome)
@@ -1449,9 +1449,9 @@ func TestHFIRBytecodeNestedExecFixture(t *testing.T) {
 	legacyDenied := runBytecodeOutcome(legacy, "", nil)
 	directDenied := runBytecodeOutcome(direct, "", nil)
 	requireSameBytecodeOutcome(t, legacyDenied, directDenied)
-	requireProcessDenial(t, legacyDenied, "printf", "phase2b-exec-marker")
+	requireProcessDenial(t, legacyDenied, "/usr/bin/printf", "phase2b-exec-marker")
 
-	caps := []capability.Capability{capability.Process}
+	caps := []capability.Capability{printfExecGrant}
 	legacyGranted := runBytecodeOutcome(legacy, "", caps)
 	directGranted := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
@@ -1783,7 +1783,7 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	}
 
 	const partialStdout = "phase1-token\nmulti-read-marker\nphase2b-exec-marker\n"
-	partialCaps := []capability.Capability{capability.Environment, capability.Filesystem, capability.Process}
+	partialCaps := []capability.Capability{capability.Environment, capability.Filesystem, printfExecGrant}
 	legacyPartial, legacyPartialFS := runOne(legacy, partialCaps)
 	directPartial, directPartialFS := runOne(direct, partialCaps)
 	requireSameBytecodeOutcome(t, legacyPartial, directPartial)
@@ -1804,8 +1804,9 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	}
 
 	const wantStdout = "phase1-token\nmulti-read-marker\nphase2b-exec-marker\n" + abiFetchMarker + "\nL a 0\nL b 0\nkept 2\nphase1-token\nmulti-kept-read\nphase2b-exec-kept\n" + abiFetchMarker + "\nresult 2\nmiss\nphase1-token\nmulti-miss-read\nphase2b-exec-miss\n" + abiFetchMarker + "\nempty 0\n"
-	legacyGranted, legacyFS := runOne(legacy, wantCaps)
-	directGranted, directFS := runOne(direct, wantCaps)
+	grantedCaps := []capability.Capability{capability.Environment, capability.Filesystem, capability.Network, printfExecGrant}
+	legacyGranted, legacyFS := runOne(legacy, grantedCaps)
+	directGranted, directFS := runOne(direct, grantedCaps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
 	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
 		t.Fatalf("granted outcome %#v", legacyGranted)
@@ -2136,8 +2137,8 @@ func assertNestedExecShape(t *testing.T, graph *hfir.Graph) {
 			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
 				t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
 			}
-			if got := fsPathValue(t, graph, node); got != "printf" {
-				t.Fatalf("exec command = %q, want printf", got)
+			if got := fsPathValue(t, graph, node); got != "/usr/bin/printf" {
+				t.Fatalf("exec command = %q, want /usr/bin/printf", got)
 			}
 			arg := graph.NodeByID(node.DataInputs[1].SourceNode)
 			if arg == nil || arg.Kind != "const" || arg.LiteralKind != "STRING" || arg.Value == "" {
@@ -2384,8 +2385,8 @@ func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string
 			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
 				t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
 			}
-			if got := fsPathValue(t, graph, node); got != "printf" {
-				t.Fatalf("exec command = %q, want printf", got)
+			if got := fsPathValue(t, graph, node); got != "/usr/bin/printf" {
+				t.Fatalf("exec command = %q, want /usr/bin/printf", got)
 			}
 			arg := graph.NodeByID(node.DataInputs[1].SourceNode)
 			if arg == nil || arg.Kind != "const" || arg.Value == "" {
@@ -2676,6 +2677,10 @@ func serveABIFetchFixture(t *testing.T) (hits, bodies *atomic.Int64) {
 	t.Cleanup(func() { _ = srv.Close() })
 	return hits, bodies
 }
+
+// printfExecGrant is the exact-argv allow-list entry the exec fixtures need;
+// a bare process grant never authorizes exec.
+const printfExecGrant = capability.Capability("process:exec=/usr/bin/printf **")
 
 func requireProcessDenial(t *testing.T, outcome bytecodeOutcome, command, marker string) {
 	t.Helper()

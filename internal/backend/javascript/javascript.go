@@ -319,8 +319,42 @@ func envJSHelper() string {
 // put the command in the error. There is no shell. Stdout is returned
 // ahead of stderr, which matches CombinedOutput when only one stream writes.
 func execJSHelper() string {
-	return `function howlFrameExec(cmd, args) {
-  if (!howlFrameGrantHas("process")) {
+	return `function howlFrameExecAllowed(cmd, args) {
+  var fs = require("fs");
+  if (typeof cmd !== "string" || cmd.charAt(0) !== "/") return false;
+  var prefix = "";
+  var parts = cmd.slice(1).split("/");
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (part === "" || part === "." || part === "..") return false;
+    prefix += "/" + part;
+    try {
+      if (fs.lstatSync(prefix).isSymbolicLink()) return false;
+    } catch (e) {
+      return false;
+    }
+  }
+  var grants = String(process.env.HOWLFRAME_ALLOW_CAPS || "").split(",");
+  for (var g = 0; g < grants.length; g++) {
+    var grant = grants[g].trim();
+    if (grant.indexOf("process:exec=") !== 0) continue;
+    var fields = grant.slice("process:exec=".length).split(/\s+/).filter(function (f) { return f !== ""; });
+    if (fields.length === 0 || fields[0] !== cmd) continue;
+    var pats = fields.slice(1);
+    var ok = true;
+    var rest = false;
+    for (var k = 0; k < pats.length; k++) {
+      if (pats[k] === "**" && k === pats.length - 1) { rest = true; break; }
+      if (k >= args.length || (pats[k] !== "*" && pats[k] !== String(args[k]))) { ok = false; break; }
+    }
+    if (ok && !rest && args.length !== pats.length) ok = false;
+    if (ok) return true;
+  }
+  return false;
+}
+
+function howlFrameExec(cmd, args) {
+  if (!howlFrameExecAllowed(cmd, args)) {
     throw new Error("CAPABILITY_DENIED: capability denied: process");
   }
   var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8" });
@@ -1172,7 +1206,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return jsFetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// Child grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
 		agentNameStr := generateJSExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateJSExpression(node.Children[2], reqVar, depth+1)

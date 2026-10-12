@@ -314,7 +314,7 @@ func checkJSStatement(node *ast.Node, depth int) {
 		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime; expects (spawn_agent name task)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)

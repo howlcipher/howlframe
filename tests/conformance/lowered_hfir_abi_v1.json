@@ -84,11 +84,29 @@
     {
       "name": "exec_granted",
       "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
-      "allow_caps": "process",
+      "allow_caps": "process:exec=/usr/bin/printf *",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
       "stdout": "phase2b-exec-marker"
+    },
+    {
+      "name": "exec_bare_process_denied",
+      "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
+      "allow_caps": "process",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2b-exec-marker"
+    },
+    {
+      "name": "exec_argv_mismatch_denied",
+      "fixture": "tests/conformance/abi_v1/06_exec_capability.howl",
+      "allow_caps": "process:exec=/usr/bin/printf other-marker",
+      "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
+      "javascript_root": "web_app",
+      "expect": "CAPABILITY_DENIED",
+      "forbid": "phase2b-exec-marker"
     },
     {
       "name": "read_file_denied",
@@ -271,7 +289,7 @@
     {
       "name": "nested_exec_granted",
       "fixture": "tests/conformance/abi_v1/19_nested_exec.howl",
-      "allow_caps": "process",
+      "allow_caps": "process:exec=/usr/bin/printf *",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
@@ -309,7 +327,7 @@
     {
       "name": "nested_multi_effect_partial",
       "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
-      "allow_caps": "environment,filesystem,process",
+      "allow_caps": "environment,filesystem,process:exec=/usr/bin/printf *",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "CAPABILITY_DENIED",
@@ -319,7 +337,7 @@
     {
       "name": "nested_multi_effect_granted",
       "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
-      "allow_caps": "environment,filesystem,process,network",
+      "allow_caps": "environment,filesystem,process:exec=/usr/bin/printf *,network",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
