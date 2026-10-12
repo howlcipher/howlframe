@@ -3,7 +3,7 @@
     "task": "t01",
     "lang": "howl",
     "pass": true,
-    "sha256": "6246759308a83e1b4f647364ce5f80f7e9319a0d953c1f7a71754433c06753e5",
+    "sha256": "fbfbacd083ef616005a12f2726083463ea4c531344a8e42a13ebd648c2caa422",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -27,7 +27,7 @@
     "task": "t02",
     "lang": "howl",
     "pass": true,
-    "sha256": "552045472a7f49debec8816b2dde07dc2cb71aa3b706e4ba298f8d3be00b58d8",
+    "sha256": "b314283a4ea217a177d5d92a5daa6be0209812f1ec5959f355917cedc5aecdeb",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -51,7 +51,7 @@
     "task": "t03",
     "lang": "howl",
     "pass": true,
-    "sha256": "11725e2f076f38f4b06d84e05e019369722f7404d53152d1aa09bcf30f68abcc",
+    "sha256": "2d63009ee912590b5eb196219fb70ecb9c47045180750e95105240e4db50b51f",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -75,7 +75,7 @@
     "task": "t04",
     "lang": "howl",
     "pass": true,
-    "sha256": "5a3fed703db55f13c2482ef237a5d0145baaf0c66debb6f20b012580b681fbd2",
+    "sha256": "71312b138c76e1ef5cfa74fa026a6614857ab6615c21459745629825536881fd",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -99,7 +99,7 @@
     "task": "t05",
     "lang": "howl",
     "pass": true,
-    "sha256": "56f2b8e3465a6b13afbf7144a87045cbaef0c28cfb6450ebe7d51d37964e4331",
+    "sha256": "8f6ca6e2104d8755aa19573d40f27bdbf15bec801109b6589ddc9bf018d9e1eb",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -123,7 +123,7 @@
     "task": "t06",
     "lang": "howl",
     "pass": true,
-    "sha256": "870daa78511205e5cea158490dc9f630ee715392144cf61b85f438e3992c05fb",
+    "sha256": "5f566cf5df731e9443c09deb4dd7a4004c86d137222514625ca77cdcdb1de0b5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -147,7 +147,7 @@
     "task": "t07",
     "lang": "howl",
     "pass": true,
-    "sha256": "85341ab3fdb2303738e0560f3256fb6ac562e0dfad4522beaedf16ddf8203395",
+    "sha256": "7ce21e3331a06a2552f3b7bf1a4ef5fbf667116f3e20b735c4c68365ae7e8d02",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -171,7 +171,7 @@
     "task": "t08",
     "lang": "howl",
     "pass": true,
-    "sha256": "c14c9c745f38457e1a95728555b14153eb9926dbd9a9b95df0eb10e40c473e02",
+    "sha256": "55e44afc5b31485b0eb08aacd3b14b063efbc9ee8aaec2d77c3e118e5ce2bf28",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -195,7 +195,7 @@
     "task": "t09",
     "lang": "howl",
     "pass": true,
-    "sha256": "5178812f18234d49f3a0649dcb57817ce34a80311bcb40c651a685bb71656005",
+    "sha256": "e4df09e3c66bf0b0e191ae58d9ea22b2f45726aa0bc9deb2fa1a04a611046a88",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -219,7 +219,7 @@
     "task": "t10",
     "lang": "howl",
     "pass": true,
-    "sha256": "ba11e6171ea1458bffa9a315daa0488ac2869bcd4263401861c8acd2c172a128",
+    "sha256": "13e85deeb253ea3b6a5b0da23884433588da6686ae124d4facc6b6863ca292ed",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -243,7 +243,7 @@
     "task": "t11",
     "lang": "howl",
     "pass": true,
-    "sha256": "f81a864df66dfc87a406592ad51cdc31f2d08c682bffe470a70fd8c11eaddaa6",
+    "sha256": "59ece6d170e93a46a5788cab10e328913835989e4933fe326e47e8cd1949fff5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -267,7 +267,7 @@
     "task": "t12",
     "lang": "howl",
     "pass": true,
-    "sha256": "e68886e92aa4d56e91354820aa658c3b59c675a7acaab8327a2f3413fd5d70bd",
+    "sha256": "60674b33d71dfbd1dc3a51592f2b2ae883049d4317808647f68b206faf71c5cf",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -291,7 +291,7 @@
     "task": "t13",
     "lang": "howl",
     "pass": true,
-    "sha256": "086b9afd15a36bf5642bc0585094f780c7302aebb29c8d91d647c1f74f0696a8",
+    "sha256": "4e2f1c0a0837474a22a4f990500a806bfb36831b5eda757ba14a46177a0ed237",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -315,7 +315,7 @@
     "task": "t14",
     "lang": "howl",
     "pass": true,
-    "sha256": "d2be02cf0e992ae565dca21c8cb73005ab62c4d36468f1fbcbc1aa23da6893cd",
+    "sha256": "87fb341a85965e4898e968b590170f6a3800b52ebd649c3193b741b14dbefb44",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -339,7 +339,7 @@
     "task": "t15",
     "lang": "howl",
     "pass": true,
-    "sha256": "7456f004379d0633235c154911e5701f8930af09c0f347cd292c3c1931c47e4f",
+    "sha256": "227c44f19c6c6e5cf943a58e8c1c59c3c522d386fdbfb12d83fbb74442f46751",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -363,7 +363,7 @@
     "task": "t16",
     "lang": "howl",
     "pass": true,
-    "sha256": "a5e0eb5d4cf19fedd21c5795735c5cdd584364f9079f52411f1218a7725417d1",
+    "sha256": "e0d7b728e8b4c2b2597789604874584e5ecbdb11f77932bdf47dd0a907598fab",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -387,7 +387,7 @@
     "task": "t17",
     "lang": "howl",
     "pass": true,
-    "sha256": "d4ae270a0de47e112f9be6d691e6b178a08166939dc438fcf2b2fbc396cd7975",
+    "sha256": "97f7722bbfe54dd66c07b706352d6531efda851946ea79f626f7ea7bc5d5ba04",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -411,7 +411,7 @@
     "task": "t18",
     "lang": "howl",
     "pass": true,
-    "sha256": "ff1819bc68f3c01fd0a921a4db7c528a5daf561b7f093dadb387b4f514598b1e",
+    "sha256": "7b7934e41c6a5d14b6091b846c2c5b5f5ffc80030e4886002cad67ea626771c5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -435,7 +435,7 @@
     "task": "t19",
     "lang": "howl",
     "pass": true,
-    "sha256": "8aa82ab5c767f927cceadb190fab2bfa885600b9c94ad76a783f44fbb2097d63",
+    "sha256": "4b54b075a74072fbff6c13d4a69491d96f5562d906fa96ce706e4486ebe02faf",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -459,7 +459,7 @@
     "task": "t20",
     "lang": "howl",
     "pass": true,
-    "sha256": "d1d36e914b4a7d429504a6a16cd7e87317963fb2e18608933acaca860304b2f0",
+    "sha256": "092bb5379026822f8db9f04e47158644497c00b1bc4a6bc18b7531490eaa499c",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -483,7 +483,7 @@
     "task": "t21",
     "lang": "howl",
     "pass": true,
-    "sha256": "91947795f5f2198905c3af47e12be933a981738bb06b904e79ec8124ced392af",
+    "sha256": "c5b80c87213b51e98d2fa1314d5f9d88207c9953b0fa7ec50007b876b8b9c039",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -507,7 +507,7 @@
     "task": "t22",
     "lang": "howl",
     "pass": true,
-    "sha256": "ad8f97d01a0d824f39b2ea3eceddf6849bef04e630d1183c12150502f2e43a1c",
+    "sha256": "3756d448ce9999c0221a5e64ce61e1189cac6588cd79ccfa50e8e58555b8327e",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -531,7 +531,7 @@
     "task": "t23",
     "lang": "howl",
     "pass": true,
-    "sha256": "eaac5da8c0d1e03812a19627fefbbc469d6ff5dbad022f5f7d1c8f0baed5e4c2",
+    "sha256": "068fd23e3a609011b09fd267c640ae581c45c26e1ff05fa3d03d8c68cb8bc018",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -555,7 +555,7 @@
     "task": "t24",
     "lang": "howl",
     "pass": true,
-    "sha256": "15f5c4f907afbefc39fd83fa9acbdea7b713ceded6a2faef3d2b90274c531af2",
+    "sha256": "b61cb5a6486439774fbb55bdd0c39784e0f0f75d8e03a4c9fe2f4ddb593d0b28",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -579,7 +579,7 @@
     "task": "t25",
     "lang": "howl",
     "pass": true,
-    "sha256": "9d1bc994c5d34c28450470a47de0785510dd2134381d4e0050560aa63c28514c",
+    "sha256": "f534a6539280410fce866c79304d926d515c4f97ef2b611166eab31484034822",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -603,7 +603,7 @@
     "task": "t26",
     "lang": "howl",
     "pass": true,
-    "sha256": "80ea5b9a5e78aaa3e97afb30a509d62ca4830cc972f9fe72c09706693b7cce61",
+    "sha256": "12b40aa0e5fa98a3c119328c330ec891a770383236d9010f8b072ac872a49696",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -627,7 +627,7 @@
     "task": "t27",
     "lang": "howl",
     "pass": true,
-    "sha256": "1450a387d929e7256ebbb2de4dea83e1a78cb12439b74c6d3a78640bd20943b4",
+    "sha256": "ec84785dc8a12c55e91c42886f29cb960b5493c6e45a654a30e3ddcdad1ed835",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -651,7 +651,7 @@
     "task": "t28",
     "lang": "howl",
     "pass": true,
-    "sha256": "5868aa9c14236e05ba222e2bf4ecd060df0e2765fceb6323c12762af62057314",
+    "sha256": "6c3aff0a89902fbb3a11706752cb1ad1ef2371927c08a23ae03d9fcb7a97c395",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -675,7 +675,7 @@
     "task": "t29",
     "lang": "howl",
     "pass": true,
-    "sha256": "dda0be2d5ee7feb9aadd1aa41b94a336179f73e87885e6cd42b07c8db1c144f8",
+    "sha256": "2600d74f0235da495d6bde320a47a5690b2043a8eedae566d3813904084a3e95",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -699,7 +699,7 @@
     "task": "t30",
     "lang": "howl",
     "pass": true,
-    "sha256": "f454d603990b866ddf7ab92cf5686cc4d3f2af7665fbe541babf8c8c8fc2820f",
+    "sha256": "fbc392a9113f59c2800532eeb35b6a354d03d3be1138df49f6b9fb7e1d19bbbd",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -723,7 +723,7 @@
     "task": "a01",
     "lang": "howl",
     "pass": true,
-    "sha256": "6246759308a83e1b4f647364ce5f80f7e9319a0d953c1f7a71754433c06753e5",
+    "sha256": "fbfbacd083ef616005a12f2726083463ea4c531344a8e42a13ebd648c2caa422",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -747,7 +747,7 @@
     "task": "a02",
     "lang": "howl",
     "pass": true,
-    "sha256": "552045472a7f49debec8816b2dde07dc2cb71aa3b706e4ba298f8d3be00b58d8",
+    "sha256": "b314283a4ea217a177d5d92a5daa6be0209812f1ec5959f355917cedc5aecdeb",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -771,7 +771,7 @@
     "task": "a03",
     "lang": "howl",
     "pass": true,
-    "sha256": "11725e2f076f38f4b06d84e05e019369722f7404d53152d1aa09bcf30f68abcc",
+    "sha256": "2d63009ee912590b5eb196219fb70ecb9c47045180750e95105240e4db50b51f",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -795,7 +795,7 @@
     "task": "a04",
     "lang": "howl",
     "pass": true,
-    "sha256": "5a3fed703db55f13c2482ef237a5d0145baaf0c66debb6f20b012580b681fbd2",
+    "sha256": "71312b138c76e1ef5cfa74fa026a6614857ab6615c21459745629825536881fd",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -819,7 +819,7 @@
     "task": "a05",
     "lang": "howl",
     "pass": true,
-    "sha256": "56f2b8e3465a6b13afbf7144a87045cbaef0c28cfb6450ebe7d51d37964e4331",
+    "sha256": "8f6ca6e2104d8755aa19573d40f27bdbf15bec801109b6589ddc9bf018d9e1eb",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -843,7 +843,7 @@
     "task": "a06",
     "lang": "howl",
     "pass": true,
-    "sha256": "870daa78511205e5cea158490dc9f630ee715392144cf61b85f438e3992c05fb",
+    "sha256": "5f566cf5df731e9443c09deb4dd7a4004c86d137222514625ca77cdcdb1de0b5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -867,7 +867,7 @@
     "task": "a07",
     "lang": "howl",
     "pass": true,
-    "sha256": "85341ab3fdb2303738e0560f3256fb6ac562e0dfad4522beaedf16ddf8203395",
+    "sha256": "7ce21e3331a06a2552f3b7bf1a4ef5fbf667116f3e20b735c4c68365ae7e8d02",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -891,7 +891,7 @@
     "task": "a08",
     "lang": "howl",
     "pass": true,
-    "sha256": "c14c9c745f38457e1a95728555b14153eb9926dbd9a9b95df0eb10e40c473e02",
+    "sha256": "55e44afc5b31485b0eb08aacd3b14b063efbc9ee8aaec2d77c3e118e5ce2bf28",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -915,7 +915,7 @@
     "task": "a09",
     "lang": "howl",
     "pass": true,
-    "sha256": "5178812f18234d49f3a0649dcb57817ce34a80311bcb40c651a685bb71656005",
+    "sha256": "e4df09e3c66bf0b0e191ae58d9ea22b2f45726aa0bc9deb2fa1a04a611046a88",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -939,7 +939,7 @@
     "task": "a10",
     "lang": "howl",
     "pass": true,
-    "sha256": "ba11e6171ea1458bffa9a315daa0488ac2869bcd4263401861c8acd2c172a128",
+    "sha256": "13e85deeb253ea3b6a5b0da23884433588da6686ae124d4facc6b6863ca292ed",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -963,7 +963,7 @@
     "task": "a11",
     "lang": "howl",
     "pass": true,
-    "sha256": "f81a864df66dfc87a406592ad51cdc31f2d08c682bffe470a70fd8c11eaddaa6",
+    "sha256": "59ece6d170e93a46a5788cab10e328913835989e4933fe326e47e8cd1949fff5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -987,7 +987,7 @@
     "task": "a12",
     "lang": "howl",
     "pass": true,
-    "sha256": "e68886e92aa4d56e91354820aa658c3b59c675a7acaab8327a2f3413fd5d70bd",
+    "sha256": "60674b33d71dfbd1dc3a51592f2b2ae883049d4317808647f68b206faf71c5cf",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1011,7 +1011,7 @@
     "task": "a13",
     "lang": "howl",
     "pass": true,
-    "sha256": "086b9afd15a36bf5642bc0585094f780c7302aebb29c8d91d647c1f74f0696a8",
+    "sha256": "4e2f1c0a0837474a22a4f990500a806bfb36831b5eda757ba14a46177a0ed237",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1035,7 +1035,7 @@
     "task": "a14",
     "lang": "howl",
     "pass": true,
-    "sha256": "d2be02cf0e992ae565dca21c8cb73005ab62c4d36468f1fbcbc1aa23da6893cd",
+    "sha256": "87fb341a85965e4898e968b590170f6a3800b52ebd649c3193b741b14dbefb44",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1059,7 +1059,7 @@
     "task": "a15",
     "lang": "howl",
     "pass": true,
-    "sha256": "7456f004379d0633235c154911e5701f8930af09c0f347cd292c3c1931c47e4f",
+    "sha256": "227c44f19c6c6e5cf943a58e8c1c59c3c522d386fdbfb12d83fbb74442f46751",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1083,7 +1083,7 @@
     "task": "a16",
     "lang": "howl",
     "pass": true,
-    "sha256": "a5e0eb5d4cf19fedd21c5795735c5cdd584364f9079f52411f1218a7725417d1",
+    "sha256": "e0d7b728e8b4c2b2597789604874584e5ecbdb11f77932bdf47dd0a907598fab",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1107,7 +1107,7 @@
     "task": "a17",
     "lang": "howl",
     "pass": true,
-    "sha256": "d4ae270a0de47e112f9be6d691e6b178a08166939dc438fcf2b2fbc396cd7975",
+    "sha256": "97f7722bbfe54dd66c07b706352d6531efda851946ea79f626f7ea7bc5d5ba04",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1131,7 +1131,7 @@
     "task": "a18",
     "lang": "howl",
     "pass": true,
-    "sha256": "ff1819bc68f3c01fd0a921a4db7c528a5daf561b7f093dadb387b4f514598b1e",
+    "sha256": "7b7934e41c6a5d14b6091b846c2c5b5f5ffc80030e4886002cad67ea626771c5",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1155,7 +1155,7 @@
     "task": "a19",
     "lang": "howl",
     "pass": true,
-    "sha256": "8aa82ab5c767f927cceadb190fab2bfa885600b9c94ad76a783f44fbb2097d63",
+    "sha256": "4b54b075a74072fbff6c13d4a69491d96f5562d906fa96ce706e4486ebe02faf",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1179,7 +1179,7 @@
     "task": "a20",
     "lang": "howl",
     "pass": true,
-    "sha256": "d1d36e914b4a7d429504a6a16cd7e87317963fb2e18608933acaca860304b2f0",
+    "sha256": "092bb5379026822f8db9f04e47158644497c00b1bc4a6bc18b7531490eaa499c",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1203,7 +1203,7 @@
     "task": "a21",
     "lang": "howl",
     "pass": true,
-    "sha256": "91947795f5f2198905c3af47e12be933a981738bb06b904e79ec8124ced392af",
+    "sha256": "c5b80c87213b51e98d2fa1314d5f9d88207c9953b0fa7ec50007b876b8b9c039",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1227,7 +1227,7 @@
     "task": "a22",
     "lang": "howl",
     "pass": true,
-    "sha256": "ad8f97d01a0d824f39b2ea3eceddf6849bef04e630d1183c12150502f2e43a1c",
+    "sha256": "3756d448ce9999c0221a5e64ce61e1189cac6588cd79ccfa50e8e58555b8327e",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1251,7 +1251,7 @@
     "task": "a23",
     "lang": "howl",
     "pass": true,
-    "sha256": "eaac5da8c0d1e03812a19627fefbbc469d6ff5dbad022f5f7d1c8f0baed5e4c2",
+    "sha256": "068fd23e3a609011b09fd267c640ae581c45c26e1ff05fa3d03d8c68cb8bc018",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1275,7 +1275,7 @@
     "task": "a24",
     "lang": "howl",
     "pass": true,
-    "sha256": "15f5c4f907afbefc39fd83fa9acbdea7b713ceded6a2faef3d2b90274c531af2",
+    "sha256": "b61cb5a6486439774fbb55bdd0c39784e0f0f75d8e03a4c9fe2f4ddb593d0b28",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1299,7 +1299,7 @@
     "task": "a25",
     "lang": "howl",
     "pass": true,
-    "sha256": "9d1bc994c5d34c28450470a47de0785510dd2134381d4e0050560aa63c28514c",
+    "sha256": "f534a6539280410fce866c79304d926d515c4f97ef2b611166eab31484034822",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1323,7 +1323,7 @@
     "task": "a26",
     "lang": "howl",
     "pass": true,
-    "sha256": "80ea5b9a5e78aaa3e97afb30a509d62ca4830cc972f9fe72c09706693b7cce61",
+    "sha256": "12b40aa0e5fa98a3c119328c330ec891a770383236d9010f8b072ac872a49696",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1347,7 +1347,7 @@
     "task": "a27",
     "lang": "howl",
     "pass": true,
-    "sha256": "1450a387d929e7256ebbb2de4dea83e1a78cb12439b74c6d3a78640bd20943b4",
+    "sha256": "ec84785dc8a12c55e91c42886f29cb960b5493c6e45a654a30e3ddcdad1ed835",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1371,7 +1371,7 @@
     "task": "a28",
     "lang": "howl",
     "pass": true,
-    "sha256": "5868aa9c14236e05ba222e2bf4ecd060df0e2765fceb6323c12762af62057314",
+    "sha256": "6c3aff0a89902fbb3a11706752cb1ad1ef2371927c08a23ae03d9fcb7a97c395",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1395,7 +1395,7 @@
     "task": "a29",
     "lang": "howl",
     "pass": true,
-    "sha256": "dda0be2d5ee7feb9aadd1aa41b94a336179f73e87885e6cd42b07c8db1c144f8",
+    "sha256": "2600d74f0235da495d6bde320a47a5690b2043a8eedae566d3813904084a3e95",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",
@@ -1419,7 +1419,7 @@
     "task": "a30",
     "lang": "howl",
     "pass": true,
-    "sha256": "f454d603990b866ddf7ab92cf5686cc4d3f2af7665fbe541babf8c8c8fc2820f",
+    "sha256": "fbc392a9113f59c2800532eeb35b6a354d03d3be1138df49f6b9fb7e1d19bbbd",
     "diagnostics": "[]",
     "comparison": {
       "status": "evaluated",

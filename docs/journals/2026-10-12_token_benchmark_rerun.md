@@ -3,7 +3,7 @@
 ## Goal
 
 Rerun `experiments/token-efficiency-v0` on main `fd1c6225` (includes the
-#124–#130 density sugar). Re-author HowlFrame references in idiomatic current
+#117–#130 density sugar; the references use root `do` #117, `read_text`/`lines` #118, multi-binding `let` #120 and `when` #124 — corrected 2026-10-12, previously misstated as #124–#130). Re-author HowlFrame references in idiomatic current
 syntax, leave Python/JS/Go untouched, and fix the #133 REPORT.md issues.
 
 ## What changed

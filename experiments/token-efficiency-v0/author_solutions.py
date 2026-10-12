@@ -5,35 +5,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CORPUS = ROOT.parent / 'falsifiable-v0'
 
-# HowlFrame references use current shorthand (multi-binding let, read_text,
-# lines, when, n-ary and/or). Never reads reference/arm_a or oracle contents.
+# HowlFrame references use current shorthand (root do, multi-binding let,
+# inline parse_json/list_get operands, read_text, lines, when, all, ver_gt).
+# Never reads reference/arm_a or oracle contents.
 def howl_src(batch, field, value, conditional, approval):
     sel = f'(for c checks (when (= (map_get c "{field}") "{value}") (append selected c)))'
-    extra = '\n       failed (list)' if conditional and field != 'status' else ''
-    head = ('(do\n (let (raw (read_text "evidence/checks.json"))\n (let (checks (parse_json Checks raw)\n'
-            + ('       lines (lines (read_file "evidence/version.kv"))\n' if conditional and not approval else '       version (read_text "evidence/version.kv")\n')
+    head = ('(do\n (let (checks (parse_json Checks (read_text "evidence/checks.json"))\n'
+            + ('       lines (lines (read_file "evidence/version.kv"))\n' if conditional else '       version (read_text "evidence/version.kv")\n')
             + '       note (read_text "evidence/note.txt")\n'
-            f'       selected (list){extra})\n  (do\n   {sel}')
+            f'       selected (list))\n  (do\n   {sel}')
     rec = f'(dict ("batch" "{batch}") ("selected" selected))'
     if approval:
-        return head + f'\n   (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" {rec}))))))))\n'
+        return head + f'\n   (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" {rec})))))))\n'
     if not conditional:
-        return head + f'\n   (write_file "out/release.json" (encode_json {rec}))))))\n'
-    if field == 'status':
-        ok = '(= (list_len selected) (list_len checks))'
-    else:
-        ok = '(= (list_len failed) 0)'
-        head += '\n   (for c checks (when (!= (map_get c "status") "PASS") (append failed c)))'
+        return head + f'\n   (write_file "out/release.json" (encode_json {rec})))))\n'
     return head + (
-        '\n   (let (cp (str_split (list_get lines 0) "=")\n'
-        '         pp (str_split (list_get lines 1) "=")\n'
-        '         cur (str_split (list_get cp 1) ".")\n'
-        '         pro (str_split (list_get pp 1) ".")\n'
-        '         c0 (to_int (list_get cur 0)) c1 (to_int (list_get cur 1)) c2 (to_int (list_get cur 2))\n'
-        '         p0 (to_int (list_get pro 0)) p1 (to_int (list_get pro 1)) p2 (to_int (list_get pro 2)))\n'
-        f'    (if (and {ok} (or (> p0 c0) (and (= p0 c0) (or (> p1 c1) (and (= p1 c1) (> p2 c2))))))\n'
-        f'     (write_file "out/release.json" (encode_json {rec}))\n'
-        '     (write_file "out/approval_request.json" "{\\"reason\\":\\"blocked\\",\\"summary\\":{}}")))))))\n')
+        '\n   (if (and (all c checks (= (map_get c "status") "PASS"))\n'
+        '            (ver_gt (list_get (str_split (list_get lines 1) "=") 1) (list_get (str_split (list_get lines 0) "=") 1)))\n'
+        f'    (write_file "out/release.json" (encode_json {rec}))\n'
+        '    (write_file "out/approval_request.json" "{\\"reason\\":\\"blocked\\",\\"summary\\":{}}")))))\n')
 
 
 manifest = json.loads((CORPUS / 'tasks/manifest.json').read_text())

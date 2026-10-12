@@ -16,7 +16,9 @@
 | `>` | Yes | None | No | No | - | AUTHORITATIVE |
 | `>=` | Yes | None | No | No | - | AUTHORITATIVE |
 | `achieve` | Yes | network | No | No | - | AUTHORITATIVE |
+| `all` | No | None | Yes | No | - | AUTHORITATIVE |
 | `and` | Yes | None | No | No | - | AUTHORITATIVE |
+| `any` | No | None | Yes | No | - | AUTHORITATIVE |
 | `append` | Yes | None | No | No | - | AUTHORITATIVE |
 | `assert` | No | None | Yes | No | - | AUTHORITATIVE |
 | `assert_semantic` | No | None | No | Yes | - | AUTHORITATIVE |
@@ -135,6 +137,8 @@
 | `unix_now` | No | None | Yes | No | - | AUTHORITATIVE |
 | `unless` | No | None | Yes | No | - | AUTHORITATIVE |
 | `use` | No | None | Yes | No | - | AUTHORITATIVE |
+| `ver_ge` | No | None | Yes | No | - | AUTHORITATIVE |
+| `ver_gt` | No | None | Yes | No | - | AUTHORITATIVE |
 | `wasm_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `web_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `when` | No | None | Yes | No | - | AUTHORITATIVE |

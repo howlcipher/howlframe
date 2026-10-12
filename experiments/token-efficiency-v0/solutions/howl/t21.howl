@@ -1,9 +1,8 @@
 (do
- (let (raw (read_text "evidence/checks.json"))
- (let (checks (parse_json Checks raw)
+ (let (checks (parse_json Checks (read_text "evidence/checks.json"))
        version (read_text "evidence/version.kv")
        note (read_text "evidence/note.txt")
        selected (list))
   (do
    (for c checks (when (= (map_get c "name") "unit") (append selected c)))
-   (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" (dict ("batch" "21") ("selected" selected))))))))))
+   (write_file "out/approval_request.json" (encode_json (dict ("reason" "release review") ("summary" (dict ("batch" "21") ("selected" selected)))))))))
