@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (sort (list_slice (lines (read_file "in/stock.tsv")) 1)) "\n")))

@@ -1,0 +1,466 @@
+{
+  "cl100k_base": {
+    "tokens": {
+      "languages": {
+        "howl": {
+          "median_all": 52.5,
+          "median_howl_solved": 52.5,
+          "mean_howl_solved": 62.705882352941174
+        },
+        "python": {
+          "median_all": 53.0,
+          "median_howl_solved": 53.0,
+          "mean_howl_solved": 58.294117647058826
+        },
+        "js": {
+          "median_all": 58.0,
+          "median_howl_solved": 58.0,
+          "mean_howl_solved": 66.17647058823529
+        },
+        "go": {
+          "median_all": 153.5,
+          "median_howl_solved": 153.5,
+          "mean_howl_solved": 159.05882352941177
+        }
+      },
+      "howl_vs": {
+        "python": {
+          "median_per_task_ratio": 1.0261973641915783,
+          "ratio_of_medians": 0.9905660377358491,
+          "wins": 16,
+          "ties": 0,
+          "losses": 18,
+          "gaps": 0
+        },
+        "js": {
+          "median_per_task_ratio": 0.9219793564055859,
+          "ratio_of_medians": 0.9051724137931034,
+          "wins": 26,
+          "ties": 2,
+          "losses": 6,
+          "gaps": 0
+        },
+        "go": {
+          "median_per_task_ratio": 0.33922597910555297,
+          "ratio_of_medians": 0.34201954397394135,
+          "wins": 34,
+          "ties": 0,
+          "losses": 0,
+          "gaps": 0
+        }
+      },
+      "categories": {
+        "lists": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 37.8,
+          "mean_python": 47.2,
+          "mean_js": 52.4,
+          "mean_go": 135.8,
+          "median_ratio_vs_python": 0.7727272727272727
+        },
+        "logic": {
+          "n": 4,
+          "howl_solved": 4,
+          "mean_howl": 139.5,
+          "mean_python": 91.5,
+          "mean_js": 104.75,
+          "mean_go": 196.25,
+          "median_ratio_vs_python": 1.5570214338507022
+        },
+        "numbers": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 54.4,
+          "mean_python": 58.2,
+          "mean_js": 58.8,
+          "mean_go": 179,
+          "median_ratio_vs_python": 1.0196078431372548
+        },
+        "records": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 64.4,
+          "mean_python": 60.6,
+          "mean_js": 63.8,
+          "mean_go": 189.2,
+          "median_ratio_vs_python": 1.0684931506849316
+        },
+        "strings": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 49.4,
+          "mean_python": 43.6,
+          "mean_js": 51.2,
+          "mean_go": 112.6,
+          "median_ratio_vs_python": 1.1111111111111112
+        },
+        "table": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 69,
+          "mean_python": 65,
+          "mean_js": 86,
+          "mean_go": 182.4,
+          "median_ratio_vs_python": 1.1194029850746268
+        },
+        "text": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 39.8,
+          "mean_python": 48.6,
+          "mean_js": 54,
+          "mean_go": 125.6,
+          "median_ratio_vs_python": 0.8301886792452831
+        }
+      }
+    },
+    "tokens_nocomments": {
+      "languages": {
+        "howl": {
+          "median_all": 52.5,
+          "median_howl_solved": 52.5,
+          "mean_howl_solved": 62.705882352941174
+        },
+        "python": {
+          "median_all": 53.0,
+          "median_howl_solved": 53.0,
+          "mean_howl_solved": 58.294117647058826
+        },
+        "js": {
+          "median_all": 58.0,
+          "median_howl_solved": 58.0,
+          "mean_howl_solved": 66.17647058823529
+        },
+        "go": {
+          "median_all": 147.5,
+          "median_howl_solved": 147.5,
+          "mean_howl_solved": 153.05882352941177
+        }
+      },
+      "howl_vs": {
+        "python": {
+          "median_per_task_ratio": 1.0261973641915783,
+          "ratio_of_medians": 0.9905660377358491,
+          "wins": 16,
+          "ties": 0,
+          "losses": 18,
+          "gaps": 0
+        },
+        "js": {
+          "median_per_task_ratio": 0.9219793564055859,
+          "ratio_of_medians": 0.9051724137931034,
+          "wins": 26,
+          "ties": 2,
+          "losses": 6,
+          "gaps": 0
+        },
+        "go": {
+          "median_per_task_ratio": 0.35455669871254286,
+          "ratio_of_medians": 0.3559322033898305,
+          "wins": 34,
+          "ties": 0,
+          "losses": 0,
+          "gaps": 0
+        }
+      },
+      "categories": {
+        "lists": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 37.8,
+          "mean_python": 47.2,
+          "mean_js": 52.4,
+          "mean_go": 129.8,
+          "median_ratio_vs_python": 0.7727272727272727
+        },
+        "logic": {
+          "n": 4,
+          "howl_solved": 4,
+          "mean_howl": 139.5,
+          "mean_python": 91.5,
+          "mean_js": 104.75,
+          "mean_go": 190.25,
+          "median_ratio_vs_python": 1.5570214338507022
+        },
+        "numbers": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 54.4,
+          "mean_python": 58.2,
+          "mean_js": 58.8,
+          "mean_go": 173,
+          "median_ratio_vs_python": 1.0196078431372548
+        },
+        "records": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 64.4,
+          "mean_python": 60.6,
+          "mean_js": 63.8,
+          "mean_go": 183.2,
+          "median_ratio_vs_python": 1.0684931506849316
+        },
+        "strings": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 49.4,
+          "mean_python": 43.6,
+          "mean_js": 51.2,
+          "mean_go": 106.6,
+          "median_ratio_vs_python": 1.1111111111111112
+        },
+        "table": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 69,
+          "mean_python": 65,
+          "mean_js": 86,
+          "mean_go": 176.4,
+          "median_ratio_vs_python": 1.1194029850746268
+        },
+        "text": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 39.8,
+          "mean_python": 48.6,
+          "mean_js": 54,
+          "mean_go": 119.6,
+          "median_ratio_vs_python": 0.8301886792452831
+        }
+      }
+    }
+  },
+  "o200k_base": {
+    "tokens": {
+      "languages": {
+        "howl": {
+          "median_all": 52.5,
+          "median_howl_solved": 52.5,
+          "mean_howl_solved": 62.85294117647059
+        },
+        "python": {
+          "median_all": 53.0,
+          "median_howl_solved": 53.0,
+          "mean_howl_solved": 58.3235294117647
+        },
+        "js": {
+          "median_all": 62.0,
+          "median_howl_solved": 62.0,
+          "mean_howl_solved": 70.41176470588235
+        },
+        "go": {
+          "median_all": 155.5,
+          "median_howl_solved": 155.5,
+          "mean_howl_solved": 160.61764705882354
+        }
+      },
+      "howl_vs": {
+        "python": {
+          "median_per_task_ratio": 1.0261973641915783,
+          "ratio_of_medians": 0.9905660377358491,
+          "wins": 16,
+          "ties": 0,
+          "losses": 18,
+          "gaps": 0
+        },
+        "js": {
+          "median_per_task_ratio": 0.8615384615384616,
+          "ratio_of_medians": 0.8467741935483871,
+          "wins": 29,
+          "ties": 0,
+          "losses": 5,
+          "gaps": 0
+        },
+        "go": {
+          "median_per_task_ratio": 0.33571068548387095,
+          "ratio_of_medians": 0.33762057877813506,
+          "wins": 34,
+          "ties": 0,
+          "losses": 0,
+          "gaps": 0
+        }
+      },
+      "categories": {
+        "lists": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 38,
+          "mean_python": 47.2,
+          "mean_js": 56.6,
+          "mean_go": 137,
+          "median_ratio_vs_python": 0.7727272727272727
+        },
+        "logic": {
+          "n": 4,
+          "howl_solved": 4,
+          "mean_howl": 139.25,
+          "mean_python": 91.5,
+          "mean_js": 108.75,
+          "mean_go": 197.5,
+          "median_ratio_vs_python": 1.5529563932002957
+        },
+        "numbers": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 54.4,
+          "mean_python": 58.2,
+          "mean_js": 63,
+          "mean_go": 181,
+          "median_ratio_vs_python": 1.0196078431372548
+        },
+        "records": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 64.8,
+          "mean_python": 60.8,
+          "mean_js": 68,
+          "mean_go": 190.2,
+          "median_ratio_vs_python": 1.0675675675675675
+        },
+        "strings": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 49.8,
+          "mean_python": 43.6,
+          "mean_js": 56.2,
+          "mean_go": 115,
+          "median_ratio_vs_python": 1.1333333333333333
+        },
+        "table": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 69.2,
+          "mean_python": 65,
+          "mean_js": 90,
+          "mean_go": 183.4,
+          "median_ratio_vs_python": 1.1194029850746268
+        },
+        "text": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 39.8,
+          "mean_python": 48.6,
+          "mean_js": 58,
+          "mean_go": 127.6,
+          "median_ratio_vs_python": 0.8301886792452831
+        }
+      }
+    },
+    "tokens_nocomments": {
+      "languages": {
+        "howl": {
+          "median_all": 52.5,
+          "median_howl_solved": 52.5,
+          "mean_howl_solved": 62.85294117647059
+        },
+        "python": {
+          "median_all": 53.0,
+          "median_howl_solved": 53.0,
+          "mean_howl_solved": 58.3235294117647
+        },
+        "js": {
+          "median_all": 62.0,
+          "median_howl_solved": 62.0,
+          "mean_howl_solved": 70.41176470588235
+        },
+        "go": {
+          "median_all": 149.5,
+          "median_howl_solved": 149.5,
+          "mean_howl_solved": 154.61764705882354
+        }
+      },
+      "howl_vs": {
+        "python": {
+          "median_per_task_ratio": 1.0261973641915783,
+          "ratio_of_medians": 0.9905660377358491,
+          "wins": 16,
+          "ties": 0,
+          "losses": 18,
+          "gaps": 0
+        },
+        "js": {
+          "median_per_task_ratio": 0.8615384615384616,
+          "ratio_of_medians": 0.8467741935483871,
+          "wins": 29,
+          "ties": 0,
+          "losses": 5,
+          "gaps": 0
+        },
+        "go": {
+          "median_per_task_ratio": 0.3507261524920233,
+          "ratio_of_medians": 0.3511705685618729,
+          "wins": 34,
+          "ties": 0,
+          "losses": 0,
+          "gaps": 0
+        }
+      },
+      "categories": {
+        "lists": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 38,
+          "mean_python": 47.2,
+          "mean_js": 56.6,
+          "mean_go": 131,
+          "median_ratio_vs_python": 0.7727272727272727
+        },
+        "logic": {
+          "n": 4,
+          "howl_solved": 4,
+          "mean_howl": 139.25,
+          "mean_python": 91.5,
+          "mean_js": 108.75,
+          "mean_go": 191.5,
+          "median_ratio_vs_python": 1.5529563932002957
+        },
+        "numbers": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 54.4,
+          "mean_python": 58.2,
+          "mean_js": 63,
+          "mean_go": 175,
+          "median_ratio_vs_python": 1.0196078431372548
+        },
+        "records": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 64.8,
+          "mean_python": 60.8,
+          "mean_js": 68,
+          "mean_go": 184.2,
+          "median_ratio_vs_python": 1.0675675675675675
+        },
+        "strings": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 49.8,
+          "mean_python": 43.6,
+          "mean_js": 56.2,
+          "mean_go": 109,
+          "median_ratio_vs_python": 1.1333333333333333
+        },
+        "table": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 69.2,
+          "mean_python": 65,
+          "mean_js": 90,
+          "mean_go": 177.4,
+          "median_ratio_vs_python": 1.1194029850746268
+        },
+        "text": {
+          "n": 5,
+          "howl_solved": 5,
+          "mean_howl": 39.8,
+          "mean_python": 48.6,
+          "mean_js": 58,
+          "mean_go": 121.6,
+          "median_ratio_vs_python": 0.8301886792452831
+        }
+      }
+    }
+  }
+}

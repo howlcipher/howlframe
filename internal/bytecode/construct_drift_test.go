@@ -126,6 +126,19 @@ func TestCompileTimeOnlyConstructsReachingCompileNodeHaveCases(t *testing.T) {
 		"all":           true, // ast.Desugar
 		"any":           true, // ast.Desugar
 		"ver_gt":        true, // ast.Desugar
+		"list_slice":    true, // ast.Desugar core library
+		"str_slice":     true, // ast.Desugar core library
+		"str_len":       true, // ast.Desugar core library
+		"index_of":      true, // ast.Desugar core library
+		"map_list":      true, // ast.Desugar core library
+		"filter":        true, // ast.Desugar core library
+		"reduce":        true, // ast.Desugar core library
+		"sum":           true, // ast.Desugar core library
+		"min":           true, // ast.Desugar core library
+		"max":           true, // ast.Desugar core library
+		"reverse":       true, // ast.Desugar core library
+		"count_by":      true, // ast.Desugar core library
+		"sort":          true, // ast.Desugar core library
 		"ver_ge":        true, // ast.Desugar
 		"nz":            true, // ast.Desugar
 		"sget":          true, // ast.Desugar

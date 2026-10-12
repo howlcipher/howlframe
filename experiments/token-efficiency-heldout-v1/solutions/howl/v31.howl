@@ -1,0 +1,12 @@
+(do
+ (let (n (to_int (str_trim (read_text "in/n.txt"))) out (list) i 1 c3 0 c5 0)
+  (do
+   (while (<= i n)
+    (do
+     (inc c3)
+     (inc c5)
+     (when (= c3 3) (set c3 0))
+     (when (= c5 5) (set c5 0))
+     (append out (if (= c3 0) (if (= c5 0) "FizzBuzz" "Fizz") (if (= c5 0) "Buzz" (to_string i))))
+     (inc i)))
+   (write_file "out/result.txt" (str_join out "\n")))))

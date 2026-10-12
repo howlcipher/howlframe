@@ -1,0 +1,5 @@
+(do
+ (let (out (dict))
+  (do
+   (for o (parse_json Any (read_text "in/orders.json")) (map_set out (map_get o "cust") (+ (nz (map_get out (map_get o "cust")) 0) (map_get o "total"))))
+   (write_file "out/result.json" (encode_json out)))))

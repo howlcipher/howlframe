@@ -1,0 +1,444 @@
+{
+  "version": "heldout-v1",
+  "tasks": [
+    {
+      "id": "v01",
+      "category": "text",
+      "description": "Read in/poem.txt. Write out/result.txt with the first word of each line, one per line, in order.",
+      "inputs": {
+        "in/poem.txt": "Roses are red\nviolets are blue\nsugar is sweet\nAND so are you\nthe end"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "Roses\nviolets\nsugar\nAND\nthe"
+    },
+    {
+      "id": "v02",
+      "category": "text",
+      "description": "Read in/poem.txt. Write out/result.txt where every line has its words in reverse order (words are separated by single spaces).",
+      "inputs": {
+        "in/poem.txt": "Roses are red\nviolets are blue\nsugar is sweet\nAND so are you\nthe end"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "red are Roses\nblue are violets\nsweet is sugar\nyou are so AND\nend the"
+    },
+    {
+      "id": "v03",
+      "category": "text",
+      "description": "Read in/poem.txt. Write out/result.txt containing only the first 3 characters of every line, one per line.",
+      "inputs": {
+        "in/poem.txt": "Roses are red\nviolets are blue\nsugar is sweet\nAND so are you\nthe end"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "Ros\nvio\nsug\nAND\nthe"
+    },
+    {
+      "id": "v04",
+      "category": "text",
+      "description": "Read in/poem.txt. Write out/result.txt with the lines sorted in ascending byte order (plain string comparison; uppercase sorts before lowercase).",
+      "inputs": {
+        "in/poem.txt": "Roses are red\nviolets are blue\nsugar is sweet\nAND so are you\nthe end"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "AND so are you\nRoses are red\nsugar is sweet\nthe end\nviolets are blue"
+    },
+    {
+      "id": "v05",
+      "category": "text",
+      "description": "Read in/poem.txt. Write out/result.txt with only the lines whose word count is exactly 3, in input order.",
+      "inputs": {
+        "in/poem.txt": "Roses are red\nviolets are blue\nsugar is sweet\nAND so are you\nthe end"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "Roses are red\nviolets are blue\nsugar is sweet"
+    },
+    {
+      "id": "v06",
+      "category": "table",
+      "description": "Read in/stock.tsv (tab-separated, header row sku,qty,price). Write out/result.txt with the sku of every row whose integer qty is 0.",
+      "inputs": {
+        "in/stock.tsv": "sku\tqty\tprice\nA1\t3\t250\nB7\t10\t99\nC2\t1\t1200\nA9\t0\t45\nD4\t7\t300"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "A9"
+    },
+    {
+      "id": "v07",
+      "category": "table",
+      "description": "Read in/stock.tsv. Write out/result.txt containing the integer total value: the sum over rows of qty * price.",
+      "inputs": {
+        "in/stock.tsv": "sku\tqty\tprice\nA1\t3\t250\nB7\t10\t99\nC2\t1\t1200\nA9\t0\t45\nD4\t7\t300"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "5040"
+    },
+    {
+      "id": "v08",
+      "category": "table",
+      "description": "Read in/stock.tsv. Write out/result.txt with the sku of the row with the highest integer price.",
+      "inputs": {
+        "in/stock.tsv": "sku\tqty\tprice\nA1\t3\t250\nB7\t10\t99\nC2\t1\t1200\nA9\t0\t45\nD4\t7\t300"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "C2"
+    },
+    {
+      "id": "v09",
+      "category": "table",
+      "description": "Read in/stock.tsv. Write out/result.txt with the data rows (no header) sorted by sku in ascending string order, each row written back tab-separated.",
+      "inputs": {
+        "in/stock.tsv": "sku\tqty\tprice\nA1\t3\t250\nB7\t10\t99\nC2\t1\t1200\nA9\t0\t45\nD4\t7\t300"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "A1\t3\t250\nA9\t0\t45\nB7\t10\t99\nC2\t1\t1200\nD4\t7\t300"
+    },
+    {
+      "id": "v10",
+      "category": "table",
+      "description": "Read in/stock.tsv. Write out/result.json: an object mapping each sku to its integer qty.",
+      "inputs": {
+        "in/stock.tsv": "sku\tqty\tprice\nA1\t3\t250\nB7\t10\t99\nC2\t1\t1200\nA9\t0\t45\nD4\t7\t300"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "A1": 3,
+        "B7": 10,
+        "C2": 1,
+        "A9": 0,
+        "D4": 7
+      }
+    },
+    {
+      "id": "v11",
+      "category": "numbers",
+      "description": "Read in/temps.txt (one line of comma-separated integers). Write out/result.txt with the integer difference between the largest and smallest value.",
+      "inputs": {
+        "in/temps.txt": "18,21,19,25,30,22,17"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "13"
+    },
+    {
+      "id": "v12",
+      "category": "numbers",
+      "description": "Read in/temps.txt. Write out/result.json: the JSON array of values that are strictly greater than the first value, in input order.",
+      "inputs": {
+        "in/temps.txt": "18,21,19,25,30,22,17"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        21,
+        19,
+        25,
+        30,
+        22
+      ]
+    },
+    {
+      "id": "v13",
+      "category": "numbers",
+      "description": "Read in/temps.txt. Write out/result.json: the JSON array of running totals (the i-th element is the sum of the first i+1 values).",
+      "inputs": {
+        "in/temps.txt": "18,21,19,25,30,22,17"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        18,
+        39,
+        58,
+        83,
+        113,
+        135,
+        152
+      ]
+    },
+    {
+      "id": "v14",
+      "category": "numbers",
+      "description": "Read in/temps.txt. Write out/result.txt with the 1-based position of the largest value (the first one on ties).",
+      "inputs": {
+        "in/temps.txt": "18,21,19,25,30,22,17"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "5"
+    },
+    {
+      "id": "v15",
+      "category": "numbers",
+      "description": "Read in/temps.txt. Write out/result.json: the values doubled, as a JSON array of integers in input order.",
+      "inputs": {
+        "in/temps.txt": "18,21,19,25,30,22,17"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        36,
+        42,
+        38,
+        50,
+        60,
+        44,
+        34
+      ]
+    },
+    {
+      "id": "v16",
+      "category": "lists",
+      "description": "Read in/queue.json (array of strings). Write out/result.json: the last 3 elements, in their original order.",
+      "inputs": {
+        "in/queue.json": "[\"deploy\", \"test\", \"lint\", \"build\", \"test\", \"deploy\", \"audit\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "test",
+        "deploy",
+        "audit"
+      ]
+    },
+    {
+      "id": "v17",
+      "category": "lists",
+      "description": "Read in/queue.json. Write out/result.txt with the 0-based index of the first \"build\", or -1 if absent.",
+      "inputs": {
+        "in/queue.json": "[\"deploy\", \"test\", \"lint\", \"build\", \"test\", \"deploy\", \"audit\"]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "3"
+    },
+    {
+      "id": "v18",
+      "category": "lists",
+      "description": "Read in/queue.json. Write out/result.json: the distinct strings sorted in ascending string order.",
+      "inputs": {
+        "in/queue.json": "[\"deploy\", \"test\", \"lint\", \"build\", \"test\", \"deploy\", \"audit\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "audit",
+        "build",
+        "deploy",
+        "lint",
+        "test"
+      ]
+    },
+    {
+      "id": "v19",
+      "category": "lists",
+      "description": "Read in/queue.json. Write out/result.json: an object mapping each string to how many times it occurs.",
+      "inputs": {
+        "in/queue.json": "[\"deploy\", \"test\", \"lint\", \"build\", \"test\", \"deploy\", \"audit\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "deploy": 2,
+        "test": 2,
+        "lint": 1,
+        "build": 1,
+        "audit": 1
+      }
+    },
+    {
+      "id": "v20",
+      "category": "lists",
+      "description": "Read in/queue.json. Write out/result.json: the array without its first and last elements.",
+      "inputs": {
+        "in/queue.json": "[\"deploy\", \"test\", \"lint\", \"build\", \"test\", \"deploy\", \"audit\"]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "test",
+        "lint",
+        "build",
+        "test",
+        "deploy"
+      ]
+    },
+    {
+      "id": "v21",
+      "category": "strings",
+      "description": "Read in/path.txt (one Unix path). Write out/result.txt with the file extension without the dot (text after the last '.').",
+      "inputs": {
+        "in/path.txt": "/srv/app/releases/v2.3/build.tar.gz"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "gz"
+    },
+    {
+      "id": "v22",
+      "category": "strings",
+      "description": "Read in/word.txt (one word). Write out/result.txt with \"yes\" if it reads the same reversed, else \"no\".",
+      "inputs": {
+        "in/word.txt": "racecar"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "yes"
+    },
+    {
+      "id": "v23",
+      "category": "strings",
+      "description": "Read in/title.txt. Make a slug: trim, lower-case, split on single spaces, drop empty pieces, join with '-'. Write it to out/result.txt.",
+      "inputs": {
+        "in/title.txt": "  Hello World From  HowlFrame "
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "hello-world-from-howlframe"
+    },
+    {
+      "id": "v24",
+      "category": "strings",
+      "description": "Read in/version.txt (MAJOR.MINOR.PATCH). Write out/result.txt with the next minor version (minor + 1, patch reset to 0).",
+      "inputs": {
+        "in/version.txt": "4.17.9"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "4.18.0"
+    },
+    {
+      "id": "v25",
+      "category": "strings",
+      "description": "Read in/sentence.txt. Write out/result.txt with the longest word (the first one on ties).",
+      "inputs": {
+        "in/sentence.txt": "the quick brown fox jumps over the lazy dog"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "quick"
+    },
+    {
+      "id": "v26",
+      "category": "records",
+      "description": "Read in/orders.json (array of {id, cust, total}). Write out/result.json: an object mapping each cust to the integer sum of their totals.",
+      "inputs": {
+        "in/orders.json": "[{\"id\": \"o1\", \"cust\": \"ada\", \"total\": 120}, {\"id\": \"o2\", \"cust\": \"bob\", \"total\": 80}, {\"id\": \"o3\", \"cust\": \"ada\", \"total\": 45}, {\"id\": \"o4\", \"cust\": \"cy\", \"total\": 200}, {\"id\": \"o5\", \"cust\": \"bob\", \"total\": 15}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "bob": 95,
+        "cy": 200,
+        "ada": 165
+      }
+    },
+    {
+      "id": "v27",
+      "category": "records",
+      "description": "Read in/orders.json. Write out/result.txt with the ids of orders whose total is at least 100, one per line in input order.",
+      "inputs": {
+        "in/orders.json": "[{\"id\": \"o1\", \"cust\": \"ada\", \"total\": 120}, {\"id\": \"o2\", \"cust\": \"bob\", \"total\": 80}, {\"id\": \"o3\", \"cust\": \"ada\", \"total\": 45}, {\"id\": \"o4\", \"cust\": \"cy\", \"total\": 200}, {\"id\": \"o5\", \"cust\": \"bob\", \"total\": 15}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "o1\no4"
+    },
+    {
+      "id": "v28",
+      "category": "records",
+      "description": "Read in/orders.json. Write out/result.json: the array of distinct cust names in first-seen order.",
+      "inputs": {
+        "in/orders.json": "[{\"id\": \"o1\", \"cust\": \"ada\", \"total\": 120}, {\"id\": \"o2\", \"cust\": \"bob\", \"total\": 80}, {\"id\": \"o3\", \"cust\": \"ada\", \"total\": 45}, {\"id\": \"o4\", \"cust\": \"cy\", \"total\": 200}, {\"id\": \"o5\", \"cust\": \"bob\", \"total\": 15}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        "ada",
+        "bob",
+        "cy"
+      ]
+    },
+    {
+      "id": "v29",
+      "category": "records",
+      "description": "Read in/orders.json. Write out/result.txt with the id of the order with the smallest total.",
+      "inputs": {
+        "in/orders.json": "[{\"id\": \"o1\", \"cust\": \"ada\", \"total\": 120}, {\"id\": \"o2\", \"cust\": \"bob\", \"total\": 80}, {\"id\": \"o3\", \"cust\": \"ada\", \"total\": 45}, {\"id\": \"o4\", \"cust\": \"cy\", \"total\": 200}, {\"id\": \"o5\", \"cust\": \"bob\", \"total\": 15}]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "o5"
+    },
+    {
+      "id": "v30",
+      "category": "records",
+      "description": "Read in/orders.json. Write out/result.json: {\"count\": number of orders, \"total\": integer sum of totals}.",
+      "inputs": {
+        "in/orders.json": "[{\"id\": \"o1\", \"cust\": \"ada\", \"total\": 120}, {\"id\": \"o2\", \"cust\": \"bob\", \"total\": 80}, {\"id\": \"o3\", \"cust\": \"ada\", \"total\": 45}, {\"id\": \"o4\", \"cust\": \"cy\", \"total\": 200}, {\"id\": \"o5\", \"cust\": \"bob\", \"total\": 15}]"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": {
+        "count": 5,
+        "total": 460
+      }
+    },
+    {
+      "id": "v31",
+      "category": "logic",
+      "description": "Read in/n.txt (one integer n >= 1). Write out/result.txt with the FizzBuzz lines for 1..n: \"FizzBuzz\" for multiples of 15, \"Fizz\" for 3, \"Buzz\" for 5, else the number.",
+      "inputs": {
+        "in/n.txt": "15"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz"
+    },
+    {
+      "id": "v32",
+      "category": "logic",
+      "description": "Read in/brackets.txt (one line). Check (), [] and {} nesting. Write \"ok\" if balanced, \"unclosed\" if brackets remain open at the end, or \"error at <i>\" (0-based character index) at the first closing bracket that does not match.",
+      "inputs": {
+        "in/brackets.txt": "(a[b]{c})(]"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "error at 10"
+    },
+    {
+      "id": "v33",
+      "category": "logic",
+      "description": "Read in/grid.txt (rows of '#' and '.'). Write out/result.json: an array with the integer count of '#' in each row.",
+      "inputs": {
+        "in/grid.txt": "#..#\n....\n##.#"
+      },
+      "output": "out/result.json",
+      "kind": "json",
+      "expected": [
+        2,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "v34",
+      "category": "logic",
+      "description": "Read in/edges.txt (lines \"x>y\" forming one chain). Write out/result.txt with the chain from its start to its end joined by '>' (here the start is the only node that is never on the right).",
+      "inputs": {
+        "in/edges.txt": "b>c\na>b\nc>d"
+      },
+      "output": "out/result.txt",
+      "kind": "text",
+      "expected": "a>b>c>d"
+    }
+  ]
+}

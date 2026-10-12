@@ -1,0 +1,1 @@
+(do (write_file "out/result.json" (encode_json (map_list t (map_list x (str_split (str_trim (read_text "in/temps.txt")) ",") (to_int x)) (* t 2)))))

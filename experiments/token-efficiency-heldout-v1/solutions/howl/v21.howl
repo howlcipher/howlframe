@@ -1,0 +1,1 @@
+(do (let (parts (str_split (str_trim (read_text "in/path.txt")) ".")) (write_file "out/result.txt" (list_get parts (- (list_len parts) 1)))))

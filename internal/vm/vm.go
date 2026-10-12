@@ -1236,6 +1236,9 @@ func interpNumericDiv(a, b any, node *ast.Node) any {
 func interpNumericRelational(op string, a, b any, node *ast.Node) bool {
 	cmp, numeric := compareNumeric(a, b)
 	if !numeric {
+		cmp, numeric = compareStrings(a, b)
+	}
+	if !numeric {
 		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
 	}
 	switch op {
@@ -1249,6 +1252,18 @@ func interpNumericRelational(op string, a, b any, node *ast.Node) bool {
 		return cmp >= 0
 	}
 	return false
+}
+
+// compareStrings orders two strings by byte value (Go string <), so <, >, <=
+// and >= work on string pairs (core library, heldout-v1). Mixed string and
+// number operands remain a TYPE_ERROR.
+func compareStrings(a, b any) (int, bool) {
+	as, ok1 := a.(string)
+	bs, ok2 := b.(string)
+	if !ok1 || !ok2 {
+		return 0, false
+	}
+	return strings.Compare(as, bs), true
 }
 
 func checkedAddInt64(a, b int64, node *ast.Node) int64 {
@@ -3427,6 +3442,9 @@ func bcNumericBinop(op string, a, b any) any {
 		return res
 	case "<", ">", "<=", ">=":
 		cmp, numeric := compareNumeric(a, b)
+		if !numeric {
+			cmp, numeric = compareStrings(a, b)
+		}
 		if !numeric {
 			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
 		}

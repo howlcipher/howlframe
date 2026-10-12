@@ -1,0 +1,9 @@
+(do
+ (let (next (dict) rights (list) cur "" out (list))
+  (do
+   (for l (lines (read_file "in/edges.txt"))
+    (let (p (str_split l ">")) (do (map_set next (list_get p 0) (list_get p 1)) (append rights (list_get p 1)))))
+   (for k (map_keys next) (when (= (index_of rights k) (- 0 1)) (set cur k)))
+   (while (!= cur "")
+    (do (append out cur) (set cur (nz (map_get next cur) ""))))
+   (write_file "out/result.txt" (str_join out ">")))))

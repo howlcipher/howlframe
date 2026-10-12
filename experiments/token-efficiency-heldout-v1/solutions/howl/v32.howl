@@ -1,0 +1,14 @@
+(do
+ (let (s (str_trim (read_text "in/brackets.txt")) st (list) res "" i 0)
+  (do
+   (for c (str_split s "")
+    (do
+     (when (= res "")
+      (if (str_contains "([{" c)
+       (append st c)
+       (when (str_contains ")]}" c)
+        (if (or (= (list_len st) 0) (!= (list_get st (- (list_len st) 1)) (list_get (str_split "([{" "") (index_of (str_split ")]}" "") c))))
+         (set res (str "error at " i))
+         (set st (list_slice st 0 (- (list_len st) 1)))))))
+     (inc i)))
+   (write_file "out/result.txt" (if (!= res "") res (if (= (list_len st) 0) "ok" "unclosed"))))))

@@ -1,0 +1,3 @@
+(do
+ (let (ws (str_split (str_trim (read_text "in/sentence.txt")) " ") lens (map_list w ws (str_len w)))
+  (write_file "out/result.txt" (list_get ws (index_of lens (max lens))))))

@@ -1,3 +1,1 @@
-(do
- (let (text (read_text "in/text.txt") out (str_replace text "foo" "bar"))
-  (write_file "out/result.txt" out)))
+(do (write_file "out/result.txt" (str_replace (read_text "in/text.txt") "foo" "bar")))

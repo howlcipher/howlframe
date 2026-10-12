@@ -1,0 +1,3 @@
+(do
+ (let (rows (map_list l (list_slice (lines (read_file "in/stock.tsv")) 1) (str_split l "\t")))
+  (write_file "out/result.txt" (str_join (map_list r (filter r rows (= (to_int (list_get r 1)) 0)) (list_get r 0)) "\n"))))
