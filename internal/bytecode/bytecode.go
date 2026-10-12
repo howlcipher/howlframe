@@ -500,6 +500,14 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			// construct.arities table above and before desugaring (#141).
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
+			if len(node.Children) == 4 {
+				// FETCH has no body operand. A body is sent the way the
+				// interpreter sends it (stringified) by lowering to the
+				// existing HTTP_REQUEST and taking its "body" bytes (#143).
+				// No new opcode and no new capability.
+				insts = append(insts, FetchWithBody(c.compileNode(node.Children[3]))...)
+				break
+			}
 			insts = append(insts, BCInstruction{OpString: "FETCH", Op: OpFetch})
 		case "http_request":
 			// (http_request url method [body]) → status+body dict.
@@ -886,6 +894,19 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 
 func extractParamNames(paramsNode *ast.Node) []string {
 	return ast.ParamNames(paramsNode)
+}
+
+// FetchWithBody finishes (fetch url method body) once url and method are on
+// the stack: it stringifies body (as the interpreter's fmt.Sprint does for
+// strings and numbers), sends it with HTTP_REQUEST and keeps the response
+// body bytes, which is what FETCH pushes. Shared with the HFIR lowerer.
+func FetchWithBody(body []BCInstruction) []BCInstruction {
+	out := append([]BCInstruction{}, body...)
+	return append(out,
+		BCInstruction{OpString: "CONVERT", Op: OpConvert, StringOperand: "to_string"},
+		BCInstruction{OpString: "HTTP_REQUEST", Op: OpHttpRequest, IntOperand: 1},
+		BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: "body"},
+		BCInstruction{OpString: "MAP_GET", Op: OpMapGet})
 }
 
 // ShortCircuit lowers (and l r) / (or l r) so r is skipped when l decides.

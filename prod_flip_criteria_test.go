@@ -237,7 +237,10 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 	})
 
 	t.Run("fetch body", func(t *testing.T) {
-		const body = "body-not-sent"
+		// Criteria change approved by the Owner in #143: a fetch body is
+		// carried (as the interpreter sends it), not dropped. Both compilers
+		// lower it to the existing HTTP_REQUEST with a body; no new opcode.
+		const body = "body-is-sent"
 		source := `(cli_app (print (fetch "http://127.0.0.1/howlframe-flip" "PUT" "` + body + `")))`
 		graph := mustGraph(t, source)
 		lowered, diags := hfir.LowerToBytecode(graph)
@@ -246,11 +249,14 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		}
 		astProgram := bytecode.CompileToBytecode(mustAST(t, source))
 		for _, program := range []*bytecode.BCProgram{lowered, astProgram} {
-			if !programHasOpcode(program, bytecode.OpFetch) {
-				t.Fatal("fetch program missing FETCH")
+			if !programHasOpcode(program, bytecode.OpHttpRequest) {
+				t.Fatal("fetch-with-body program missing HTTP_REQUEST")
 			}
-			if strings.Contains(programText(program), body) {
-				t.Fatal("fetch artifact contains the body string")
+			if programHasOpcode(program, bytecode.OpFetch) {
+				t.Fatal("fetch-with-body program still uses body-less FETCH")
+			}
+			if !strings.Contains(programText(program), body) {
+				t.Fatal("fetch artifact dropped the body string")
 			}
 		}
 	})

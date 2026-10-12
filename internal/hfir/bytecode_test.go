@@ -209,11 +209,14 @@ func TestLowerToBytecodeFetchEmitsExistingOpcode(t *testing.T) {
 	}
 }
 
-func TestLowerToBytecodeFetchSkipsBodyOperand(t *testing.T) {
+// TestLowerToBytecodeFetchSendsBodyOperand: since #143 (Owner-approved change
+// to the flip criteria) a fetch body is sent, as the interpreter sends it, via
+// the existing HTTP_REQUEST opcode, keeping the response body bytes.
+func TestLowerToBytecodeFetchSendsBodyOperand(t *testing.T) {
 	graph := NewGraph()
 	url := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "http://127.0.0.1:47653/howlframe-abi-v1-phase2d"})
 	method := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "PUT"})
-	body := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2d-body-not-sent"})
+	body := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "phase2d-body-sent"})
 	entry := graph.AddNode(&Node{
 		Kind: "fetch",
 		DataInputs: []DataEdge{
@@ -228,16 +231,23 @@ func TestLowerToBytecodeFetchSkipsBodyOperand(t *testing.T) {
 	if len(diagnostics) != 0 {
 		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
 	}
-	if len(program.Main) != 3 || program.Main[2].Op != bytecode.OpFetch {
-		t.Fatalf("instructions = %#v, want URL, method, FETCH", program.Main)
+	want := []bytecode.Opcode{bytecode.OpLoadConst, bytecode.OpLoadConst, bytecode.OpLoadConst, bytecode.OpConvert, bytecode.OpHttpRequest, bytecode.OpLoadConst, bytecode.OpMapGet}
+	if len(program.Main) != len(want) {
+		t.Fatalf("instructions = %#v, want url, method, body, CONVERT, HTTP_REQUEST 1, \"body\", MAP_GET", program.Main)
 	}
-	if program.Main[0].ValueOperand != "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" || program.Main[1].ValueOperand != "PUT" {
-		t.Fatalf("operands = %#v, %#v, want URL then method", program.Main[0].ValueOperand, program.Main[1].ValueOperand)
-	}
-	for _, inst := range program.Main {
-		if inst.ValueOperand == "phase2d-body-not-sent" || inst.StringOperand == "phase2d-body-not-sent" {
-			t.Fatalf("FETCH compiled the body: %#v", program.Main)
+	for i, op := range want {
+		if program.Main[i].Op != op {
+			t.Fatalf("instruction %d = %#v, want op %v", i, program.Main[i], op)
 		}
+	}
+	if program.Main[0].ValueOperand != "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" || program.Main[1].ValueOperand != "PUT" || program.Main[2].ValueOperand != "phase2d-body-sent" {
+		t.Fatalf("operands = %#v", program.Main[:3])
+	}
+	if program.Main[3].StringOperand != "to_string" || program.Main[4].IntOperand != 1 || program.Main[5].ValueOperand != "body" {
+		t.Fatalf("body lowering = %#v", program.Main[3:])
+	}
+	if bytecode.Registry[program.Main[4].Op].Capability != "network" {
+		t.Fatalf("HTTP_REQUEST capability = %q, want network", bytecode.Registry[program.Main[4].Op].Capability)
 	}
 }
 
