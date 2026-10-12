@@ -1,0 +1,8 @@
+(cli_app
+ (let (s "{\"meta\": {\"tags\": [\"ui\", \"urgent\"], \"owner\": {\"name\": \"kim\"}}}")
+  (let (doc (parse_json Any s))
+   (do
+    (print (map_get (map_get doc "meta") "owner"))
+    (print (map_get (map_get (map_get doc "meta") "owner") "name"))
+    (print (list_len (map_get (map_get doc "meta") "tags")))
+    (print (map_get (dict ("k" 7)) "k"))))))

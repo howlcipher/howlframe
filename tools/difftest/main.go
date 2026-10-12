@@ -117,8 +117,29 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 		return false, "", fmt.Sprintf("(run-bc): %v\n%s", err, out6)
 	}
 
-	if out1 != out4 || out1 != out6 {
-		msg := fmt.Sprintf("stdout mismatch\n--- interpreter ---\n%s\n--- go backend  ---\n%s\n--- bytecode    ---\n%s", out1, out4, out6)
+	// #159: the experimental HFIR bytecode path is a third leg; any
+	// divergence from the interpreter fails the run.
+	hfirPath := filepath.Join(outDir, "test.hfir.bc")
+	// A construct on the locked HFIR promote-blocker fence (see
+	// TestProdFlipCriteriaLock) is refused at lowering, fail closed; that is
+	// not a semantic mismatch, so only that refusal skips the leg.
+	out8, hfirFenced := out1, false
+	out7, err := runCommand("go", "run", "howlframe.go", "-compile-hfir-bc", file, "-o", hfirPath)
+	if err != nil {
+		if !strings.Contains(out7, "is not in the Phase-1 executable subset") {
+			return false, "", fmt.Sprintf("(compile-hfir-bc): %v\n%s", err, out7)
+		}
+		hfirFenced = true
+	}
+	if !hfirFenced {
+		out8, err = runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", hfirPath)
+		if err != nil {
+			return false, "", fmt.Sprintf("(run-bc hfir): %v\n%s", err, out8)
+		}
+	}
+
+	if out1 != out4 || out1 != out6 || out1 != out8 {
+		msg := fmt.Sprintf("stdout mismatch\n--- interpreter ---\n%s\n--- go backend  ---\n%s\n--- bytecode    ---\n%s\n--- hfir bytecode ---\n%s", out1, out4, out6, out8)
 		return false, "", msg
 	}
 

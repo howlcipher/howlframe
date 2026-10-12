@@ -331,6 +331,18 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		if len(astNode.Children) < 2 {
 			return "", false, nil
 		}
+		if head == "map_get" && len(astNode.Children) == 3 && astNode.Children[1].Type != "SYMBOL" {
+			// (map_get <expr> key): the same shape bytecode.CompileToBytecode
+			// accepts. The dict expression is evaluated and popped by
+			// MAP_GET with an empty variable operand, which is what lets
+			// one map_get be the dict of another (#159). No new opcode.
+			node.Kind = head
+			id, err := addNamed([]struct {
+				name  string
+				child *ast.Node
+			}{{"target", astNode.Children[1]}, {"key", astNode.Children[2]}})
+			return id, true, err
+		}
 		if (head == "map_get" || head == "map_delete" || head == "list_get" || head == "append" || head == "parse_json") && astNode.Children[1].Type != "SYMBOL" {
 			return "", false, nil
 		}
