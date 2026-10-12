@@ -1322,6 +1322,16 @@ func compareNumeric(a, b any) (int, bool) {
 		return 0, false
 	}
 	// Mixed int/float: keep precision by comparing as integers when possible.
+	// A float outside the int64 range or with a fraction never equals an
+	// int64; order it without rounding the int through float64 (2^63 used to
+	// compare as MinInt64 and MaxInt64 as equal to 2^63). NaN keeps the
+	// float comparison below.
+	if aInt && bFloat && !math.IsNaN(bf) && !floatIsWholeInt64(bf) {
+		return cmpIntNonWholeFloat(ai, bf), true
+	}
+	if aFloat && bInt && !math.IsNaN(af) && !floatIsWholeInt64(af) {
+		return -cmpIntNonWholeFloat(bi, af), true
+	}
 	if aInt && bFloat && floatIsWholeInt64(bf) {
 		bi2 := int64(bf)
 		switch {
@@ -1351,8 +1361,23 @@ func compareNumeric(a, b any) (int, bool) {
 	return 0, true
 }
 
+// cmpIntNonWholeFloat orders int64 i against a non-NaN float f that is not
+// a whole number inside the int64 range.
+func cmpIntNonWholeFloat(i int64, f float64) int {
+	if f >= 9223372036854775808.0 {
+		return -1
+	}
+	if f < math.MinInt64 {
+		return 1
+	}
+	if i <= int64(math.Floor(f)) {
+		return -1
+	}
+	return 1
+}
+
 func floatIsWholeInt64(f float64) bool {
-	if math.IsNaN(f) || math.IsInf(f, 0) || f < math.MinInt64 || f > math.MaxInt64 {
+	if math.IsNaN(f) || math.IsInf(f, 0) || f < math.MinInt64 || f >= 9223372036854775808.0 {
 		return false
 	}
 	return math.Trunc(f) == f
