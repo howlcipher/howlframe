@@ -134,7 +134,10 @@ func desugarRecords(node *Node) bool {
 			rest := rnLet(at, build(nt, keys[1:]), rnSym(nt, at), rnList(at, rnSym("map_get", at), rnSym(cur, at), rnSym(kt, at)))
 			return rnLet(at, rnList(at, rnSym("do", at), fill, rest), rnSym(kt, at), keys[0])
 		}
-		node.Children = rnLet(at, build(t, args[1:len(args)-1]), rnSym(t, at), args[0]).Children
+		// #161: put evaluates to the updated (root) dict on every path, so
+		// (encode_json (put d k v)) sees a value instead of an empty stack.
+		body := rnList(at, rnSym("do", at), build(t, args[1:len(args)-1]), rnSym(t, at))
+		node.Children = rnLet(at, body, rnSym(t, at), args[0]).Children
 	case "read_json":
 		node.Children = []*Node{rnSym("parse_json", at), rnSym("Any", at), rnList(at, rnSym("read_text", at), args[0])}
 	case "write_json":
