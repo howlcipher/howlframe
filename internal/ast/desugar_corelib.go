@@ -10,16 +10,20 @@ package ast
 //                          out-of-range indices are clamped by the scan.
 //                          (list_slice lst a) runs to the end.
 //   (str_slice s a b)      same over the bytes of s; (str_slice s a) too.
-//   (str_len s)            byte length of s.
+//   (str_len s)            byte length of s (bytes, not characters).
 //   (index_of lst v)       first 0-based index of v, or -1.
 //   (map_list x lst expr)  list of expr for each x.
 //   (filter x lst pred)    elements x where pred holds.
 //   (reduce acc init x lst expr)  fold: acc starts at init, set to expr per x.
 //   (sum lst)              numeric sum (0 for empty).
-//   (min lst) / (max lst)  smallest / largest element (first on ties).
+//   (min lst) / (max lst)  smallest / largest element (first on ties). An
+//                          empty list is a runtime error: stderr
+//                          "VALUE_ERROR: min of empty list" and exit 1, the
+//                          same stderr+exit shape as assert, on every path.
 //   (reverse lst)          list in reverse order.
 //   (count_by x lst key)   dict mapping each key value to its integer count.
 //   (sort lst)             ascending, stable; numbers or strings (byte order).
+//                          Insertion sort: O(n^2) comparisons and copies.
 
 var corelibTemplates = map[string]struct {
 	arity int
@@ -46,9 +50,9 @@ var corelibTemplates = map[string]struct {
 	"sum": {1, []string{"lst"}, []string{"L", "S", "X"},
 		"(let ($L $lst $S 0) (do (for $X $L (set $S (+ $S $X))) $S))", -1},
 	"min": {1, []string{"lst"}, []string{"L", "M", "X"},
-		"(let ($L $lst $M (list_get $L 0)) (do (for $X $L (when (< $X $M) (set $M $X))) $M))", -1},
+		"(let ($L $lst $M (list_get $L 0)) (do (when (= (list_len $L) 0) (do (stderr $msg) (exit 1))) (for $X $L (when (< $X $M) (set $M $X))) $M))", -1},
 	"max": {1, []string{"lst"}, []string{"L", "M", "X"},
-		"(let ($L $lst $M (list_get $L 0)) (do (for $X $L (when (> $X $M) (set $M $X))) $M))", -1},
+		"(let ($L $lst $M (list_get $L 0)) (do (when (= (list_len $L) 0) (do (stderr $msg) (exit 1))) (for $X $L (when (> $X $M) (set $M $X))) $M))", -1},
 	"reverse": {1, []string{"lst"}, []string{"L", "R", "N"},
 		"(let ($L $lst $R (list) $N (list_len $L)) (do (while (> $N 0) (do (set $N (- $N 1)) (append $R (list_get $L $N)))) $R))", -1},
 	"count_by": {3, []string{"x", "lst", "key"}, []string{"L", "D", "K"},
@@ -87,6 +91,9 @@ func desugarCorelib(node *Node) bool {
 	args := map[string]*Node{}
 	for i, v := range spec.vars {
 		args[v] = node.Children[i+1]
+	}
+	if head == "min" || head == "max" {
+		args["msg"] = &Node{Type: "STRING", Value: "VALUE_ERROR: " + head + " of empty list\n", Line: node.Line, Column: node.Column, Filename: node.Filename}
 	}
 	for _, tmp := range spec.temps {
 		args[tmp] = symNode(compactTemp("cl"+tmp), node)

@@ -793,6 +793,7 @@ func buildSource() {
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
+	rejectUnsupportedTargetSugar(root, strings.ToLower(strings.TrimSpace(*target)))
 
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
@@ -1114,4 +1115,35 @@ func writeExecutionReceipt(path string, receipt vm.ExecutionReceipt) error {
 		return err
 	}
 	return os.Rename(f.Name(), path)
+}
+
+// rejectUnsupportedTargetSugar fails closed when a Go or JS build would emit
+// broken code. The core-library built-ins (#138: list_slice, str_slice,
+// str_len, index_of, map_list, filter, reduce, sum, min, max, reverse,
+// count_by, sort) and nz desugar into let-expressions in value position, which
+// the Go and JS backends emit as statements, so the output does not compile.
+// Their expansions are recognized by the desugar temporaries (__cl*, __nz),
+// so a user variable or defun with the same name is not rejected. It runs
+// before any file is written: nonzero exit, no "Built", no output.
+func rejectUnsupportedTargetSugar(root *ast.Node, target string) {
+	if target != "go" && target != "js" && target != "javascript" {
+		return
+	}
+	var walk func(n *ast.Node)
+	walk = func(n *ast.Node) {
+		if n == nil {
+			return
+		}
+		if n.Type == "SYMBOL" && (strings.HasPrefix(n.Value, "__cl") || n.Value == "__nz") {
+			what := "a core-library built-in (list_slice, str_slice, str_len, index_of, map_list, filter, reduce, sum, min, max, reverse, count_by, sort)"
+			if n.Value == "__nz" {
+				what = "nz"
+			}
+			ast.ReportError(fmt.Sprintf("UNSUPPORTED_ON_TARGET: %s is not supported on --target=%s (it lowers to a let-expression this backend cannot emit); build for the bytecode target instead", what, target), n.Line, n.Column)
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(root)
 }

@@ -483,6 +483,13 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "STORE_KEYS", Op: OpStoreKeys, StringOperand: handleNode.Value})
 		case "fetch":
+			// (fetch url method [body]). Arity is checked before any child is
+			// indexed: a one-argument (fetch url) used to index past the end
+			// and panic the compiler (#139). Fail closed with a diagnostic.
+			if len(node.Children) != 3 && len(node.Children) != 4 {
+				ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
+				return insts
+			}
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			insts = append(insts, BCInstruction{OpString: "FETCH", Op: OpFetch})
