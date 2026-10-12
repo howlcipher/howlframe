@@ -1264,6 +1264,9 @@ func interpNumericDiv(a, b any, node *ast.Node) any {
 }
 
 func interpNumericRelational(op string, a, b any, node *ast.Node) bool {
+	if relationalHasNaN(a, b) {
+		return false
+	}
 	cmp, numeric := compareNumeric(a, b)
 	if !numeric {
 		cmp, numeric = compareStrings(a, b)
@@ -1329,6 +1332,18 @@ func mulOverflowsInt64(a, b int64) bool {
 	}
 	c := a * b
 	return c/b != a
+}
+
+// relationalHasNaN reports whether a numeric relational operand pair includes
+// NaN. IEEE 754 and Python order NaN against nothing, so <, <=, > and >= are
+// all false (#158). Non-numeric operands still fall through to the type check.
+func relationalHasNaN(a, b any) bool {
+	af, aOk := toFloat64(a)
+	bf, bOk := toFloat64(b)
+	if !aOk || !bOk {
+		return false
+	}
+	return math.IsNaN(af) || math.IsNaN(bf)
 }
 
 // compareNumeric compares two numeric values. It returns the signed comparison
@@ -3507,6 +3522,9 @@ func bcNumericBinop(op string, a, b any) any {
 		}
 		return res
 	case "<", ">", "<=", ">=":
+		if relationalHasNaN(a, b) {
+			return false
+		}
 		cmp, numeric := compareNumeric(a, b)
 		if !numeric {
 			cmp, numeric = compareStrings(a, b)
@@ -3699,9 +3717,9 @@ func normalizeForJSON(v any) any {
 			out[i] = normalizeForJSON(val)
 		}
 		return out
-	case int64:
-		return float64(t)
 	default:
+		// int64 stays int64 so encoding/json writes it exactly; the old
+		// float64 conversion rounded integers above 2^53 (#156).
 		return v
 	}
 }

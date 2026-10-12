@@ -120,27 +120,31 @@ func testFixture(file string) (passed bool, skipReason string, failMsg string) {
 	// #159: the experimental HFIR bytecode path is a third leg; any
 	// divergence from the interpreter fails the run.
 	hfirPath := filepath.Join(outDir, "test.hfir.bc")
-	// A construct on the locked HFIR promote-blocker fence (see
-	// TestProdFlipCriteriaLock) is refused at lowering, fail closed; that is
-	// not a semantic mismatch, so only that refusal skips the leg.
-	out8, hfirFenced := out1, false
+	// #161: only a construct on the explicit HFIR fence list (the locked
+	// promote-blocker fence, see TestProdFlipCriteriaLock) may skip the HFIR
+	// leg. Any other Phase-1 subset refusal is a failure, and a fenced fixture
+	// is reported as SKIP, never counted as Passed.
+	out8, hfirFenced := "", ""
 	out7, err := runCommand("go", "run", "howlframe.go", "-compile-hfir-bc", file, "-o", hfirPath)
 	if err != nil {
-		if !strings.Contains(out7, "is not in the Phase-1 executable subset") {
+		hfirFenced = hfirFencedConstruct(out7)
+		if hfirFenced == "" {
 			return false, "", fmt.Sprintf("(compile-hfir-bc): %v\n%s", err, out7)
 		}
-		hfirFenced = true
 	}
-	if !hfirFenced {
+	if hfirFenced == "" {
 		out8, err = runCommand("go", "run", "howlframe.go", "-run-bc", "-allow-caps", "network,filesystem,process,environment,database", hfirPath)
 		if err != nil {
 			return false, "", fmt.Sprintf("(run-bc hfir): %v\n%s", err, out8)
 		}
 	}
 
-	if out1 != out4 || out1 != out6 || out1 != out8 {
+	if out1 != out4 || out1 != out6 || (hfirFenced == "" && out1 != out8) {
 		msg := fmt.Sprintf("stdout mismatch\n--- interpreter ---\n%s\n--- go backend  ---\n%s\n--- bytecode    ---\n%s\n--- hfir bytecode ---\n%s", out1, out4, out6, out8)
 		return false, "", msg
+	}
+	if hfirFenced != "" {
+		return false, fmt.Sprintf("HFIR leg fenced (%s); interpreter, go and bytecode legs agree", hfirFenced), ""
 	}
 
 	return true, "", ""
@@ -157,4 +161,20 @@ func runCommand(name string, arg ...string) (string, error) {
 	)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// hfirFencedConstructs is the explicit list of constructs whose HFIR lowering
+// refusal skips the HFIR leg. It must not grow to hide unsupported constructs.
+var hfirFencedConstructs = []string{"optimize_signature"}
+
+// hfirFencedConstruct returns the fenced construct named by an HFIR lowering
+// refusal, or "" when the refusal is not for a construct on the list.
+func hfirFencedConstruct(out string) string {
+	for _, kind := range hfirFencedConstructs {
+		if strings.Contains(out, `node kind \"`+kind+`\" is not in the Phase-1 executable subset`) ||
+			strings.Contains(out, `node kind "`+kind+`" is not in the Phase-1 executable subset`) {
+			return kind
+		}
+	}
+	return ""
 }

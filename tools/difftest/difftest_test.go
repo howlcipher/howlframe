@@ -255,3 +255,18 @@ func TestErrorNormalization(t *testing.T) {
 		}
 	}
 }
+
+// #161: only an explicitly fenced construct may skip the HFIR leg.
+func TestHFIRFencedConstructIsExplicit(t *testing.T) {
+	fenced := `{"reason":"HFIR direct lowering failed: node kind \"optimize_signature\" is not in the Phase-1 executable subset"}`
+	if got := hfirFencedConstruct(fenced); got != "optimize_signature" {
+		t.Fatalf("hfirFencedConstruct(optimize_signature) = %q", got)
+	}
+	other := `{"reason":"HFIR direct lowering failed: node kind \"some_new_form\" is not in the Phase-1 executable subset"}`
+	if got := hfirFencedConstruct(other); got != "" {
+		t.Fatalf("hfirFencedConstruct(some_new_form) = %q, want no skip", got)
+	}
+	if got := hfirFencedConstruct("type error"); got != "" {
+		t.Fatalf("hfirFencedConstruct(other error) = %q, want no skip", got)
+	}
+}
