@@ -1,0 +1,13 @@
+(cli_app
+ (let (raw (bytes_to_string (read_file "evidence/checks.json")))
+ (let (checks (parse_json Checks raw))
+  (let (version (bytes_to_string (read_file "evidence/version.kv")))
+   (let (note (bytes_to_string (read_file "evidence/note.txt")))
+    (let (selected (list))
+     (do
+      (for c checks (if (= (map_get c "status") "PASS") (append selected c)))
+      (let (record (dict ("batch" "01") ("selected" selected)))
+       (do
+        (write_file "out/release.json" (encode_json record))
+        ))
+      )))))))
