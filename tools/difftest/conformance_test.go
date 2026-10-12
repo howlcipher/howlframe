@@ -266,6 +266,8 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				t.Fatalf("%s performed no HTTP request", tc.Name)
 			}
 			if tc.Name == "nested_multi_effect_granted" && (hits%3 != 0 || bodies != 0) {
+				// The one body fetch sits in a dead while-false branch: since #143
+				// it is compiled (not dropped) but never runs, so no body is sent.
 				t.Fatalf("%s hits = %d bodies = %d, want a multiple of 3 requests and no body", tc.Name, hits, bodies)
 			}
 			if (tc.Name == "fetch_granted" || tc.Name == "nested_fetch_granted" || tc.Name == "nested_multi_effect_denied" || tc.Name == "nested_multi_effect_partial") && bodies != 0 {
@@ -409,7 +411,7 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 						continue
 					}
 					blob := res.Stdout + res.Stderr + res.ErrorMessage
-					if strings.Contains(blob, fetchURL) || strings.Contains(blob, "phase2d-body-not-sent") || strings.Contains(blob, multiPrefix) {
+					if strings.Contains(blob, fetchURL) || strings.Contains(blob, "phase2d-dead-branch-body") || strings.Contains(blob, multiPrefix) {
 						t.Errorf("%s leaked the fetch URL, the dropped body, or a path", tgt)
 					}
 					if tc.Name == "nested_multi_effect_denied" && !strings.Contains(blob, "capability denied: environment") {

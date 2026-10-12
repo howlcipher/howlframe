@@ -416,9 +416,8 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		// (fetch url method [body]). Existing FETCH opcode. The first edge
 		// is the URL and the second is the method. An optional third edge
 		// records a body. Experimental -compile-hfir-bc only. No new opcode
-		// and no new capability. OpFetch has no body operand, and the AST
-		// bytecode compiler does not compile that child, so the bytecode
-		// lowerer does not either.
+		// and no new capability. The bytecode lowerer sends the body via
+		// HTTP_REQUEST, as the AST bytecode compiler does (#143).
 		if len(astNode.Children) != 3 && len(astNode.Children) != 4 {
 			return "", false, nil
 		}

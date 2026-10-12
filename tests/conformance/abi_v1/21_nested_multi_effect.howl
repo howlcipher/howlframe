@@ -53,7 +53,7 @@
                           (write_file "/tmp/howlframe-abi-v1-multi-dead-write.txt" "no")
                           (mkdir "/tmp/howlframe-abi-v1-multi-dead-dir")
                           (print (bytes_to_string (exec "printf" "no-dead")))
-                          (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "PUT" "phase2d-body-not-sent")))
+                          (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "PUT" "phase2d-dead-branch-body")))
                           (print "no"))))))
                 (set n (+ n 1))))
             (if (> total 0)

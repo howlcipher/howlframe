@@ -1537,14 +1537,15 @@ func TestHFIRBytecodeFetchFixture(t *testing.T) {
 
 // TestHFIRBytecodeFetchOperandOrder locks GET, POST, and a three-argument
 // fetch onto the same FETCH instruction the AST compiler emits: URL, then
-// method. The third argument is a body. OpFetch has no body operand, so
-// neither compiler loads it, and the fixture server sees an empty body.
+// method. The third argument is a body. Since #143 (Owner-approved change
+// to the flip criteria) both compilers send it, as the interpreter does, by
+// lowering to HTTP_REQUEST and keeping the response body.
 func TestHFIRBytecodeFetchOperandOrder(t *testing.T) {
 	hits, bodies := serveABIFetchFixture(t)
 	source := `(cli_app
   (print (bytes_to_string (fetch "` + abiFetchURL + `" "GET")))
   (print (bytes_to_string (fetch "` + abiFetchURL + `" "POST")))
-  (print (bytes_to_string (fetch "` + abiFetchURL + `" "PUT" "phase2d-body-not-sent"))))`
+  (print (bytes_to_string (fetch "` + abiFetchURL + `" "PUT" "phase2d-body-sent"))))`
 	root, graph := checkedHFIRGraph(t, source)
 	var methods []string
 	var bodiesOnGraph int
@@ -1582,7 +1583,7 @@ func TestHFIRBytecodeFetchOperandOrder(t *testing.T) {
 	wantShapes := []string{
 		"main\x00" + abiFetchURL + "\x00GET",
 		"main\x00" + abiFetchURL + "\x00POST",
-		"main\x00" + abiFetchURL + "\x00PUT",
+		"main\x00" + abiFetchURL + "\x00PUT\x00body=phase2d-body-sent",
 	}
 	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(got, wantShapes) {
 		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v\nwant %#v", got, want, wantShapes)
@@ -1595,8 +1596,8 @@ func TestHFIRBytecodeFetchOperandOrder(t *testing.T) {
 	if legacyOutcome.stdout != wantStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
 		t.Fatalf("granted outcome %#v, want stdout %q", legacyOutcome, wantStdout)
 	}
-	if hits.Load() != 6 || bodies.Load() != 0 {
-		t.Fatalf("hits = %d bodies = %d, want 6 requests and no body", hits.Load(), bodies.Load())
+	if hits.Load() != 6 || bodies.Load() != 2 {
+		t.Fatalf("hits = %d bodies = %d, want 6 requests and 2 bodies (one PUT per compiler)", hits.Load(), bodies.Load())
 	}
 }
 
@@ -1656,8 +1657,9 @@ func TestHFIRBytecodeNestedFetchFixture(t *testing.T) {
 // TestHFIRBytecodeNestedMultiEffectFixture compares production AST bytecode
 // with the experimental HFIR lowerer on one program that nests env,
 // read_file, write_file, mkdir, exec, and fetch inside if, while, for, and
-// defun. One fetch records a body edge. OpFetch still has no body operand,
-// so neither compiler loads that string. The conformance harness runs the
+// defun. One fetch, in a dead while-false branch, records a body edge. Since
+// #143 both compilers load that body the same way, and it is never sent
+// because the branch never runs. The conformance harness runs the
 // same file through -compile-bc and -compile-hfir-bc.
 func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	t.Setenv("HOWLFRAME_ABI_SECRET", "phase1-token")
@@ -1691,12 +1693,12 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
 	}
-	const droppedBody = "phase2d-body-not-sent"
-	if strings.Contains(strings.Join(fetchOperandShapes(direct), "\n"), droppedBody) || programHasLiteral(direct, droppedBody) || programHasLiteral(legacy, droppedBody) {
-		t.Fatal("a bytecode compiler loaded the fetch body")
+	const deadBody = "phase2d-dead-branch-body"
+	if !programHasLiteral(direct, deadBody) || !programHasLiteral(legacy, deadBody) {
+		t.Fatal("a bytecode compiler dropped the fetch body")
 	}
 	getShape := "probe\x00" + abiFetchURL + "\x00GET"
-	putShape := "probe\x00" + abiFetchURL + "\x00PUT"
+	putShape := "probe\x00" + abiFetchURL + "\x00PUT\x00body=" + deadBody
 	var gets, puts int
 	for _, shape := range fetchOperandShapes(direct) {
 		switch shape {
@@ -1788,7 +1790,7 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	if legacyPartial.vmError == nil || legacyPartial.vmError.Code != "CAPABILITY_DENIED" || legacyPartial.vmError.Opcode != "FETCH" || legacyPartial.vmError.Message != "capability denied: network" {
 		t.Fatalf("partial denial = %#v, want CAPABILITY_DENIED FETCH", legacyPartial)
 	}
-	if strings.Contains(legacyPartial.vmError.Message, abiFetchURL) || strings.Contains(legacyPartial.stdout, abiFetchMarker) || strings.Contains(legacyPartial.stdout, droppedBody) {
+	if strings.Contains(legacyPartial.vmError.Message, abiFetchURL) || strings.Contains(legacyPartial.stdout, abiFetchMarker) || strings.Contains(legacyPartial.stdout, deadBody) {
 		t.Fatalf("partial denial leaked the URL, marker, or body: %#v", legacyPartial)
 	}
 	if legacyPartial.stdout != partialStdout {
@@ -1808,7 +1810,7 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	if legacyGranted.stdout != wantStdout || legacyGranted.stderr != "" || legacyGranted.exitCode != 0 || legacyGranted.vmError != nil || legacyGranted.panicVal != nil {
 		t.Fatalf("granted outcome %#v", legacyGranted)
 	}
-	if strings.Contains(legacyGranted.stdout, "no") || strings.Contains(legacyGranted.stdout, droppedBody) || strings.Contains(legacyGranted.stdout, prefix) {
+	if strings.Contains(legacyGranted.stdout, "no") || strings.Contains(legacyGranted.stdout, deadBody) || strings.Contains(legacyGranted.stdout, prefix) {
 		t.Fatalf("granted stdout leaked an untaken branch, body, or path: %q", legacyGranted.stdout)
 	}
 	if !reflect.DeepEqual(legacyFS, grantedFS) || !reflect.DeepEqual(directFS, grantedFS) {
@@ -2412,7 +2414,7 @@ func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string
 					t.Fatalf("body fetch edges %#v method %#v", node.DataInputs, method)
 				}
 				body := graph.NodeByID(node.DataInputs[2].SourceNode)
-				if body == nil || body.Kind != "const" || body.Value != "phase2d-body-not-sent" {
+				if body == nil || body.Kind != "const" || body.Value != "phase2d-dead-branch-body" {
 					t.Fatalf("fetch body = %#v", body)
 				}
 				bodyEdges++
@@ -3010,6 +3012,26 @@ func fetchOperandShapes(program *bytecode.BCProgram) []string {
 	var shapes []string
 	collect := func(where string, insts []bytecode.BCInstruction) {
 		for index, inst := range insts {
+			// A fetch with a body lowers to url, method, body, CONVERT,
+			// HTTP_REQUEST 1, LOAD_CONST "body", MAP_GET (#143).
+			if inst.Op == bytecode.OpHttpRequest && inst.IntOperand == 1 && index >= 4 &&
+				insts[index-1].Op == bytecode.OpConvert && insts[index-1].StringOperand == "to_string" &&
+				index+2 < len(insts) && insts[index+1].Op == bytecode.OpLoadConst && insts[index+1].ValueOperand == "body" && insts[index+2].Op == bytecode.OpMapGet {
+				parts := []string{where}
+				for _, prev := range insts[index-4 : index-1] {
+					text, ok := prev.ValueOperand.(string)
+					if prev.Op != bytecode.OpLoadConst || !ok {
+						parts = []string{where, "nonliteral"}
+						break
+					}
+					parts = append(parts, text)
+				}
+				if len(parts) == 4 {
+					parts[3] = "body=" + parts[3]
+				}
+				shapes = append(shapes, strings.Join(parts, "\x00"))
+				continue
+			}
 			if inst.Op != bytecode.OpFetch {
 				continue
 			}

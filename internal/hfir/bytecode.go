@@ -365,9 +365,16 @@ func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruc
 		}
 		insts = append(insts, methodInsts...)
 		// Same operand order as bytecode.CompileToBytecode: URL, then method.
-		// FETCH pops the method and then the URL. The optional body is not
-		// an operand; the AST compiler does not compile that child either.
-		// No new opcode.
+		// FETCH pops the method and then the URL. A body lowers exactly as
+		// the AST compiler lowers it (#143): HTTP_REQUEST with the
+		// stringified body, then its "body" bytes. No new opcode.
+		if len(children) == 3 {
+			bodyInsts, childDiagnostic := compileChild(2)
+			if childDiagnostic != nil {
+				return nil, childDiagnostic
+			}
+			return append(insts, bytecode.FetchWithBody(bodyInsts)...), nil
+		}
 		return append(insts, instruction(bytecode.OpFetch, "FETCH", nil)), nil
 	case "parse_json":
 		if len(children) != 1 || node.DataInputs[0].Name != "content" {
