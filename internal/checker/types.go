@@ -63,6 +63,8 @@ type Analysis struct {
 	// jsTarget is true for web_app programs, whose generated JavaScript
 	// evaluates a parse_json body expression directly.
 	jsTarget bool
+	// sugarReported dedupes operand-type diagnostics per % or // form.
+	sugarReported map[*ast.Node]bool
 }
 
 type typeEnv map[string]ast.TypeInfo
@@ -1031,6 +1033,18 @@ func (a *Analysis) inferChild(node *ast.Node, index int, env typeEnv) ast.TypeIn
 }
 
 func (a *Analysis) add(node *ast.Node, reason string) {
+	// A diagnostic inside a % or // expansion can only come from an operand
+	// of the wrong type: report it once, at the form, in the user's terms.
+	if site, ok := ast.NumericSugarOrigin(node); ok {
+		if a.sugarReported == nil {
+			a.sugarReported = map[*ast.Node]bool{}
+		}
+		if a.sugarReported[site.Root] {
+			return
+		}
+		a.sugarReported[site.Root] = true
+		node, reason = site.Root, site.Head+" requires numeric operands (int or float)"
+	}
 	a.Diagnostics = append(a.Diagnostics, Diagnostic{Reason: reason, Line: node.Line, Column: node.Column})
 }
 

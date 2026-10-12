@@ -80,12 +80,12 @@ type Entry struct {
 // a copy on every call. construct_test.go enforces the ordering.
 var table = []Entry{
 	{Name: "!=", Support: Supported, Note: "compileNode binop case"},
-	{Name: "%", Support: CompileTimeOnly, Note: "control-flow sugar; (% a b) floored remainder via to_int(/)/*/- by ast.Desugar (pure)"},
+	{Name: "%", Support: CompileTimeOnly, Note: "control-flow sugar; (% a b) Python-floored remainder by ast.Desugar (pure): to_int(/)/*/- for whole operands below 2^52, exact int64 core otherwise, exact float fmod loop for floats; Inf/NaN operands are VALUE_ERROR"},
 	{Name: "*", Support: Supported, Note: "compileNode binop case"},
 	{Name: "+", Support: Supported, Note: "compileNode binop case"},
 	{Name: "-", Support: Supported, Note: "compileNode binop case"},
 	{Name: "/", Support: Supported, Note: "compileNode binop case"},
-	{Name: "//", Support: CompileTimeOnly, Note: "control-flow sugar; (// a b) floored integer division via % and / by ast.Desugar (pure)"},
+	{Name: "//", Support: CompileTimeOnly, Note: "control-flow sugar; (// a b) floored division returning int by ast.Desugar (pure): via % and / for whole operands below 2^52, exact int64 core otherwise, CPython float floor division for floats; Inf/NaN operands and results outside int64 are VALUE_ERROR"},
 	{Name: "<", Support: Supported, Note: "compileNode binop case"},
 	{Name: "<=", Support: Supported, Note: "compileNode binop case"},
 	{Name: "=", Support: Supported, Note: "compileNode binop case, normalized to =="},
