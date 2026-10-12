@@ -1245,7 +1245,9 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
 }
 
 // rejectUnsupportedTargetControlflow fails closed on --target=go|js for the
-// heldout-v2 control-flow and core built-ins (%, //, break, range, max_by,
+// records and JSON sugar (ast.RecordHeads: rec, get, put, read_json,
+// write_json, pluck, select, group_by, merge) and the heldout-v2 control-flow
+// and core built-ins (%, //, break, range, max_by,
 // min_by, sort_by, pad_left, pad_right, str_repeat, rtrim, ltrim, to_base),
 // n-ary if (elif chains) and let destructuring. They are bytecode-target sugar:
 // the expansions use let-expressions in value position or loop flags the Go
@@ -1257,6 +1259,9 @@ func rejectUnsupportedTargetControlflow(root *ast.Node, target string) {
 	}
 	heads := map[string]bool{}
 	for _, h := range ast.ControlflowHeads {
+		heads[h] = true
+	}
+	for _, h := range ast.RecordHeads {
 		heads[h] = true
 	}
 	fail := func(what string, n *ast.Node) {

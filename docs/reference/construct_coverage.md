@@ -50,7 +50,9 @@
 | `filter` | No | None | Yes | No | - | AUTHORITATIVE |
 | `for` | Yes | None | No | No | - | AUTHORITATIVE |
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
+| `get` | No | None | Yes | No | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
+| `group_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `http_body` | No | None | Yes | No | - | AUTHORITATIVE |
 | `http_request` | Yes | network | No | No | - | AUTHORITATIVE |
@@ -82,6 +84,7 @@
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
 | `max` | No | None | Yes | No | - | AUTHORITATIVE |
 | `max_by` | No | None | Yes | No | - | AUTHORITATIVE |
+| `merge` | No | None | Yes | No | - | AUTHORITATIVE |
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |
 | `min` | No | None | Yes | No | - | AUTHORITATIVE |
 | `min_by` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -97,11 +100,15 @@
 | `pad_right` | No | None | Yes | No | - | AUTHORITATIVE |
 | `parse_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `patch` | No | None | Yes | No | - | AUTHORITATIVE |
+| `pluck` | No | None | Yes | No | - | AUTHORITATIVE |
 | `print` | Yes | None | No | No | - | AUTHORITATIVE |
+| `put` | No | None | Yes | No | - | AUTHORITATIVE |
 | `range` | No | None | Yes | No | - | AUTHORITATIVE |
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
+| `read_json` | No | None | Yes | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_text` | No | None | Yes | No | - | AUTHORITATIVE |
+| `rec` | No | None | Yes | No | - | AUTHORITATIVE |
 | `reduce` | No | None | Yes | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_header` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -116,6 +123,7 @@
 | `rtrim` | No | None | Yes | No | - | AUTHORITATIVE |
 | `schema` | No | None | No | Yes | - | AUTHORITATIVE |
 | `schema_bridge` | Yes | None | No | No | - | AUTHORITATIVE |
+| `select` | No | None | Yes | No | - | AUTHORITATIVE |
 | `semantic_match` | No | None | No | Yes | - | AUTHORITATIVE |
 | `set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `sget` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -171,3 +179,4 @@
 | `while` | Yes | None | No | No | - | AUTHORITATIVE |
 | `with_context` | No | None | Yes | No | - | AUTHORITATIVE |
 | `write_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
+| `write_json` | No | None | Yes | No | - | AUTHORITATIVE |

@@ -231,6 +231,10 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		if isSugarExprContext(parentHead, childIndex) && desugarControlflow(node) {
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "rec", "get", "put", "read_json", "write_json", "pluck", "select", "group_by", "merge":
+		if isSugarExprContext(parentHead, childIndex) && desugarRecords(node) {
+			desugarInContext(node, parentHead, childIndex)
+		}
 	case "if":
 		desugarNaryIf(node)
 	case "for", "while":
@@ -274,7 +278,9 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		// Core-library sugar (heldout-v1).
 		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort",
 		// Control-flow and core built-ins (heldout-v2 follow-up).
-		"%", "//", "range", "max_by", "min_by", "sort_by", "pad_left", "pad_right", "str_repeat", "rtrim", "ltrim", "to_base":
+		"%", "//", "range", "max_by", "min_by", "sort_by", "pad_left", "pad_right", "str_repeat", "rtrim", "ltrim", "to_base",
+		// Records and JSON sugar (heldout-v3 records slice).
+		"rec", "get", "put", "read_json", "write_json", "pluck", "select", "group_by", "merge":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -377,6 +383,8 @@ var reservedCallHeads = map[string]bool{
 	"reduce": true, "sum": true, "min": true, "max": true, "reverse": true, "count_by": true, "sort": true,
 	"%": true, "//": true, "range": true, "max_by": true, "min_by": true, "sort_by": true, "pad_left": true,
 	"pad_right": true, "str_repeat": true, "rtrim": true, "ltrim": true, "to_base": true, "break": true,
+	"rec": true, "get": true, "put": true, "read_json": true, "write_json": true, "pluck": true, "select": true,
+	"group_by": true, "merge": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,

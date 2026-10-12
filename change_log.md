@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+* Records and JSON sugar (heldout-v3 records slice): `(rec k v …)` record literals with name keys, `(get m k …)` / `(put m k … v)` nested path read/write, `(read_json p)` / `(write_json p v)` one-call file JSON under the existing filesystem grant, `(pluck lst k)`, `(select lst k …)`, `(group_by x lst key)`, `(merge a b …)`. Desugar-only: no opcode or capability; arity entries; Go/JS reject with `UNSUPPORTED_ON_TARGET`; governed scan fails closed through every form. `parse_json` now runs under `-run`. `encode_json` already writes sorted keys, so output is stable.
 * Dogfood round 4: `apps/fetch_cli`, `apps/template_cli`, `apps/stamp_api`; `(map_has)`, `(when)`/`(unless)`, n-ary `and`/`or` desugar. Suite total HowlFrame 2331 vs Python 3025 / Go 3295 / Node 2927. Journal: `docs/journals/2026-10-10_dogfood_apps_round4.md`.
 * Dogfood round 3: `apps/wc_cli`, `apps/json_get`, `apps/counter_api`; density sugar `(str …)` / `(nz x d)`; `list_len` accepts string/bytes; `http_server` startup `store_open`/`store_put`/`do`/`let`. Real-app harness extended; totals HowlFrame 1907 vs Python 2395 / Go 2642 / Node 2297. Journal: `docs/journals/2026-10-10_dogfood_apps_round3.md`.
 * Dogfood round 2: `apps/notes_cli`, `apps/auth_api`, `apps/grep_cli` built on standalone bytecode; `store_open` accepts a runtime URI expression; AST density sugar `(switch …)` and `(inc x)`. Real-app token harness extended with Python/Go/Node ports and parity. Journal: `docs/journals/2026-10-10_dogfood_apps_round2.md`.

@@ -62,6 +62,9 @@ var arities = map[string]Arity{
 	"%": {2, 2}, "//": {2, 2}, "break": {0, 0}, "range": {1, 2}, "max_by": {3, 3}, "min_by": {3, 3},
 	"sort_by": {3, 3}, "pad_left": {2, 3}, "pad_right": {2, 3}, "str_repeat": {2, 2}, "rtrim": {1, 1},
 	"ltrim": {1, 1}, "to_base": {2, 2},
+	// Records and JSON sugar (heldout-v3 records slice).
+	"rec": {0, Variadic}, "get": {2, Variadic}, "put": {3, Variadic}, "read_json": {1, 1}, "write_json": {2, 2},
+	"pluck": {2, 2}, "select": {2, Variadic}, "group_by": {3, 3}, "merge": {1, Variadic},
 }
 
 // arityExempt lists registry constructs with no arity entry, each with the
