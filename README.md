@@ -498,3 +498,25 @@ See [docs/language_write_cost_benchmark.md](docs/language_write_cost_benchmark.m
 ## License
 
 HowlFrame is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Browser host capability grants
+
+Compiled JavaScript network access requires an explicit host grant. In Node,
+set `HOWLFRAME_ALLOW_CAPS=network` in the environment. In a browser, the hosting
+page sets `globalThis.HOWLFRAME_ALLOW_CAPS = "network"` before loading the
+compiled script. Unset, empty, non-string, and unrelated grants deny a request
+before calling fetch. The Node environment remains authoritative in Node.
+
+```html
+<script>globalThis.HOWLFRAME_ALLOW_CAPS = "network";</script>
+<script src="app.js"></script>
+```
+
+The string uses the same capability names as `-allow-caps`; only the network
+helper has a browser host API. Node-specific filesystem, process, and environment
+APIs do not become browser APIs. This live value is read at call time, so any
+script on the page can change it. It is host configuration, not an OS sandbox
+or deployment authorization. A process.env bundler shim takes precedence and
+fails closed unless that shim supplies the environment grant.
+Browser bootstrap failures keep their original error rather than trying to
+call Node process.exit.
