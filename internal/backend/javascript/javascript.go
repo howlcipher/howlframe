@@ -274,11 +274,18 @@ function howlRequestString(kind, value) {
 `
 }
 
-// grantJSHelper reads HOWLFRAME_ALLOW_CAPS, comma-separated, the same names
-// as -allow-caps. An empty or unset grant denies every name.
+// grantJSHelper reads the host's explicit grant. Node uses its environment;
+// browsers use a host-supplied global before loading the compiled script.
+// An empty, unset, or non-string grant denies every name.
 func grantJSHelper() string {
 	return `function howlFrameGrantHas(name) {
-  var raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
+  var raw = "";
+  if (typeof process !== "undefined" && process.env) {
+    raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
+  } else if (typeof globalThis !== "undefined") {
+    raw = globalThis.HOWLFRAME_ALLOW_CAPS;
+  }
+  if (typeof raw !== "string") return false;
   var parts = raw.split(",");
   for (var i = 0; i < parts.length; i++) {
     if (parts[i].trim() === name) return true;
@@ -994,7 +1001,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			// The async IIFE would otherwise turn that into an unhandled rejection
 			// and a zero exit. try_let still catches the throw before it reaches
 			// this handler.
-			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  process.exit(1);\n});\n", appCode)
+			code += fmt.Sprintf(";(async () => {\n%s\n})().catch((err) => {\n  console.error(err && err.message ? err.message : err);\n  if (typeof process !== \"undefined\" && typeof process.exit === \"function\") {\n    process.exit(1);\n  } else {\n    throw err;\n  }\n});\n", appCode)
 		} else {
 			code += fmt.Sprintf(";(async () => {\n%s\n})();\n", appCode)
 		}
