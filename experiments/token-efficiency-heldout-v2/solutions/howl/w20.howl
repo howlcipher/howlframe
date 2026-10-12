@@ -1,0 +1,6 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/cards.txt"))
+    (let (k (- (str_len l) 4)) (str (str_join (map_list c (str_split (str_slice l 0 k) "") "*") "") (str_slice l k))))
+   "\n")))

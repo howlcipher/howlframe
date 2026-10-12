@@ -1,0 +1,7 @@
+(do
+ (let (abc (str_split "abcdefghijklmnopqrstuvwxyz" ""))
+  (write_file "out/result.txt"
+   (str_join
+    (map_list c (str_split (str_trim (read_text "in/msg.txt")) "")
+     (let (i (index_of abc c)) (if (< i 0) c (list_get abc (if (> i 22) (- i 23) (+ i 3))))))
+    ""))))

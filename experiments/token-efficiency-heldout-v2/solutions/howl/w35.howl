@@ -1,0 +1,10 @@
+(do
+ (let (p (parse_json Any (read_text "in/prices.json")) t (to_int (str_trim (read_text "in/target.txt"))) res "none" j 1)
+  (do
+   (while (and (= res "none") (< j (list_len p)))
+    (let (i 0)
+     (do
+      (while (and (= res "none") (< i j))
+       (do (when (= (+ (list_get p i) (list_get p j)) t) (set res (str i " " j))) (inc i)))
+      (inc j))))
+   (write_file "out/result.txt" res))))

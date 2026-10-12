@@ -1,0 +1,12 @@
+(do
+ (let (v (dict ("I" 1) ("V" 5) ("X" 10) ("L" 50) ("C" 100) ("D" 500) ("M" 1000)))
+  (write_file "out/result.json"
+   (encode_json
+    (map_list l (lines (read_file "in/romans.txt"))
+     (let (ds (map_list c (str_split l "") (map_get v c)) t 0 i 0)
+      (do
+       (for d ds
+        (do
+         (inc i)
+         (set t (if (and (< i (list_len ds)) (< d (list_get ds i))) (- t d) (+ t d)))))
+       t)))))))

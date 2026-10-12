@@ -1,0 +1,12 @@
+(do
+ (let (n (to_int (str_trim (read_text "in/n.txt"))) out (list) p 2)
+  (do
+   (while (<= p n)
+    (do
+     (let (d 2 ok true)
+      (do
+       (while (and ok (<= (* d d) p))
+        (do (when (= (* d (to_int (/ p d))) p) (set ok false)) (inc d)))
+       (when ok (append out p))))
+     (inc p)))
+   (write_file "out/result.txt" (str_join out " ")))))

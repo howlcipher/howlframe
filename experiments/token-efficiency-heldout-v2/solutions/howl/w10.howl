@@ -1,0 +1,7 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list x (lines (read_file "in/seconds.txt"))
+    (let (s (to_int x) h (to_int (/ s 3600)) m (to_int (/ (- s (* h 3600)) 60)) c (- (- s (* h 3600)) (* m 60)))
+     (str h ":" (if (< m 10) "0" "") m ":" (if (< c 10) "0" "") c)))
+   "\n")))

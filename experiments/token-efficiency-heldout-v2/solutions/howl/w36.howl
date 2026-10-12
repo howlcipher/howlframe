@@ -1,0 +1,9 @@
+(do
+ (write_file "out/result.txt"
+  (str_join
+   (map_list l (lines (read_file "in/passwords.txt"))
+    (let (cs (str_split l ""))
+     (if (< (str_len l) 8) "too short"
+      (if (not (any c cs (str_contains "0123456789" c))) "no digit"
+       (if (not (any c cs (str_contains "ABCDEFGHIJKLMNOPQRSTUVWXYZ" c))) "no upper" "ok")))))
+   "\n")))

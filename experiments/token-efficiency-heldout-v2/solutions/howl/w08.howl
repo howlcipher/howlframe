@@ -1,0 +1,9 @@
+(do
+ (let (rows (map_list l (list_slice (lines (read_file "in/team.csv")) 1) (str_split l ",")) w (max (map_list r rows (str_len (list_get r 0)))) out (list))
+  (do
+   (for r rows
+    (let (n (list_get r 0))
+     (do
+      (while (< (str_len n) w) (set n (str n " ")))
+      (append out (str n " | " (list_get r 1))))))
+   (write_file "out/result.txt" (str_join out "\n")))))

@@ -1,0 +1,7 @@
+(do
+ (let (out (dict))
+  (do
+   (for c (parse_json Any (read_text "in/carts.json"))
+    (for i (map_get c "items")
+     (map_set out (map_get i "sku") (+ (nz (map_get out (map_get i "sku")) 0) (map_get i "qty")))))
+   (write_file "out/result.json" (encode_json out)))))

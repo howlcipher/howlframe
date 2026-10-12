@@ -1,0 +1,9 @@
+(do
+ (let (a (parse_json Any (read_text "in/left.json")) b (parse_json Any (read_text "in/right.json")) out (list) i 0)
+  (do
+   (while (< i (max (list (list_len a) (list_len b))))
+    (do
+     (when (< i (list_len a)) (append out (list_get a i)))
+     (when (< i (list_len b)) (append out (list_get b i)))
+     (inc i)))
+   (write_file "out/result.json" (encode_json out)))))
