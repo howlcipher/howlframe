@@ -30,6 +30,7 @@
 | `cli_args` | Yes | None | No | No | - | AUTHORITATIVE |
 | `cond` | No | None | Yes | No | - | AUTHORITATIVE |
 | `confidence` | Yes | network | No | No | - | AUTHORITATIVE |
+| `count_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `db_connect` | Yes | database | No | No | - | AUTHORITATIVE |
 | `dec` | No | None | Yes | No | - | AUTHORITATIVE |
 | `defun` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -43,6 +44,7 @@
 | `exit` | Yes | None | No | No | - | AUTHORITATIVE |
 | `export` | No | None | Yes | No | - | AUTHORITATIVE |
 | `fetch` | Yes | network | No | No | - | AUTHORITATIVE |
+| `filter` | No | None | Yes | No | - | AUTHORITATIVE |
 | `for` | Yes | None | No | No | - | AUTHORITATIVE |
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
@@ -56,6 +58,7 @@
 | `import` | No | None | No | Yes | - | AUTHORITATIVE |
 | `inc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `include` | No | None | Yes | No | - | AUTHORITATIVE |
+| `index_of` | No | None | Yes | No | - | AUTHORITATIVE |
 | `is_nil` | Yes | None | No | No | - | AUTHORITATIVE |
 | `lazy_synthesize` | Yes | None | No | No | - | AUTHORITATIVE |
 | `let` | Yes | None | No | No | - | AUTHORITATIVE |
@@ -64,14 +67,18 @@
 | `list_contains` | No | None | Yes | No | - | AUTHORITATIVE |
 | `list_get` | Yes | None | No | No | - | AUTHORITATIVE |
 | `list_len` | Yes | None | No | No | - | AUTHORITATIVE |
+| `list_slice` | No | None | Yes | No | - | AUTHORITATIVE |
 | `llm_generate` | Yes | network | No | No | - | AUTHORITATIVE |
 | `map_delete` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_get` | Yes | None | No | No | - | AUTHORITATIVE |
 | `map_has` | No | None | Yes | No | - | AUTHORITATIVE |
 | `map_keys` | Yes | None | No | No | - | AUTHORITATIVE |
+| `map_list` | No | None | Yes | No | - | AUTHORITATIVE |
 | `map_set` | Yes | None | No | No | - | AUTHORITATIVE |
 | `match` | No | None | No | Yes | - | AUTHORITATIVE |
+| `max` | No | None | Yes | No | - | AUTHORITATIVE |
 | `middleware` | No | None | No | Yes | - | AUTHORITATIVE |
+| `min` | No | None | Yes | No | - | AUTHORITATIVE |
 | `mkdir` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `module` | No | None | Yes | No | - | AUTHORITATIVE |
 | `neural_circuit` | Yes | network | No | No | - | AUTHORITATIVE |
@@ -86,6 +93,7 @@
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_text` | No | None | Yes | No | - | AUTHORITATIVE |
+| `reduce` | No | None | Yes | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_header` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_method` | Yes | network | No | No | - | AUTHORITATIVE |
@@ -95,6 +103,7 @@
 | `res_header` | Yes | network | No | No | - | AUTHORITATIVE |
 | `res_json` | Yes | network | No | No | - | AUTHORITATIVE |
 | `return` | Yes | None | No | No | - | AUTHORITATIVE |
+| `reverse` | No | None | Yes | No | - | AUTHORITATIVE |
 | `schema` | No | None | No | Yes | - | AUTHORITATIVE |
 | `schema_bridge` | Yes | None | No | No | - | AUTHORITATIVE |
 | `semantic_match` | No | None | No | Yes | - | AUTHORITATIVE |
@@ -102,6 +111,7 @@
 | `sget` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sinc` | No | None | Yes | No | - | AUTHORITATIVE |
 | `sleep` | Yes | None | No | No | - | AUTHORITATIVE |
+| `sort` | No | None | Yes | No | - | AUTHORITATIVE |
 | `spawn` | Yes | process | No | No | - | AUTHORITATIVE |
 | `spawn_agent` | Yes | process | No | No | - | AUTHORITATIVE |
 | `sput` | No | None | Yes | No | - | AUTHORITATIVE |
@@ -116,10 +126,13 @@
 | `str` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_contains` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_join` | Yes | None | No | No | - | AUTHORITATIVE |
+| `str_len` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_replace` | No | None | Yes | No | - | AUTHORITATIVE |
+| `str_slice` | No | None | Yes | No | - | AUTHORITATIVE |
 | `str_split` | Yes | None | No | No | - | AUTHORITATIVE |
 | `str_trim` | Yes | None | No | No | - | AUTHORITATIVE |
 | `struct` | No | None | No | Yes | - | AUTHORITATIVE |
+| `sum` | No | None | Yes | No | - | AUTHORITATIVE |
 | `switch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
 | `test` | No | None | No | Yes | improvements.md #96 | AUTHORITATIVE |

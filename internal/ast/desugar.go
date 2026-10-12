@@ -221,6 +221,10 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 			desugarAllAny(node, head == "all")
 			desugarInContext(node, parentHead, childIndex)
 		}
+	case "list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort":
+		if isSugarExprContext(parentHead, childIndex) && desugarCorelib(node) {
+			desugarInContext(node, parentHead, childIndex)
+		}
 	case "list_get":
 		// A literal (list …) operand is left alone: backends such as wasm
 		// lower it directly and do not support let.
@@ -256,7 +260,9 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"env", "sleep", "exec", "cli_args", "read_line", "time_now",
 		"store_open", "store_keys", "res_header",
 		"req_header", "req_method", "req_path", "req_query",
-		"llm_generate", "confidence":
+		"llm_generate", "confidence",
+		// Core-library sugar (heldout-v1).
+		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort":
 		return true
 	case "for":
 		return childIndex == 2 || childIndex == 3
@@ -355,6 +361,8 @@ var reservedCallHeads = map[string]bool{
 	"str_contains": true, "str_replace": true, "starts_with": true, "ends_with": true,
 	"http_body": true, "http_status": true, "http_res": true, "list_contains": true, "not": true,
 	"blank": true, "unix_now": true, "ver_gt": true, "ver_ge": true, "all": true, "any": true, "parse_json": true,
+	"list_slice": true, "str_slice": true, "str_len": true, "index_of": true, "map_list": true, "filter": true,
+	"reduce": true, "sum": true, "min": true, "max": true, "reverse": true, "count_by": true, "sort": true,
 	"dict": true, "exit": true, "for": true, "if": true, "let": true,
 	"list": true, "print": true, "return": true, "set": true, "stderr": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,
