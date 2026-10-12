@@ -3,8 +3,8 @@
     "tokens": {
       "languages": {
         "howl": {
-          "median": 160.0,
-          "mean": 248.83333333333334
+          "median": 124.0,
+          "mean": 200.6
         },
         "python": {
           "median": 119.0,
@@ -21,8 +21,8 @@
       },
       "howl_ratios": {
         "python": {
-          "median_per_task_ratio": 1.4215686274509804,
-          "ratio_of_medians": 1.3445378151260505,
+          "median_per_task_ratio": 1.0588235294117647,
+          "ratio_of_medians": 1.0420168067226891,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -87,8 +87,8 @@
           ]
         },
         "js": {
-          "median_per_task_ratio": 1.3679245283018868,
-          "ratio_of_medians": 1.3114754098360655,
+          "median_per_task_ratio": 1.0188679245283019,
+          "ratio_of_medians": 1.0163934426229508,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -153,8 +153,8 @@
           ]
         },
         "go": {
-          "median_per_task_ratio": 0.64,
-          "ratio_of_medians": 0.64,
+          "median_per_task_ratio": 0.496,
+          "ratio_of_medians": 0.496,
           "howl_more_tokens": []
         }
       }
@@ -162,8 +162,8 @@
     "tokens_nocomments": {
       "languages": {
         "howl": {
-          "median": 160.0,
-          "mean": 248.83333333333334
+          "median": 124.0,
+          "mean": 200.6
         },
         "python": {
           "median": 119.0,
@@ -180,8 +180,8 @@
       },
       "howl_ratios": {
         "python": {
-          "median_per_task_ratio": 1.4215686274509804,
-          "ratio_of_medians": 1.3445378151260505,
+          "median_per_task_ratio": 1.0588235294117647,
+          "ratio_of_medians": 1.0420168067226891,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -246,8 +246,8 @@
           ]
         },
         "js": {
-          "median_per_task_ratio": 1.3679245283018868,
-          "ratio_of_medians": 1.3114754098360655,
+          "median_per_task_ratio": 1.0188679245283019,
+          "ratio_of_medians": 1.0163934426229508,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -312,8 +312,8 @@
           ]
         },
         "go": {
-          "median_per_task_ratio": 0.6557377049180327,
-          "ratio_of_medians": 0.6557377049180327,
+          "median_per_task_ratio": 0.5081967213114754,
+          "ratio_of_medians": 0.5081967213114754,
           "howl_more_tokens": []
         }
       }
@@ -323,8 +323,8 @@
     "tokens": {
       "languages": {
         "howl": {
-          "median": 159.0,
-          "mean": 248.73333333333332
+          "median": 123.0,
+          "mean": 200.5
         },
         "python": {
           "median": 118.0,
@@ -341,8 +341,8 @@
       },
       "howl_ratios": {
         "python": {
-          "median_per_task_ratio": 1.4174757281553398,
-          "ratio_of_medians": 1.347457627118644,
+          "median_per_task_ratio": 1.058252427184466,
+          "ratio_of_medians": 1.0423728813559323,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -407,19 +407,10 @@
           ]
         },
         "js": {
-          "median_per_task_ratio": 1.2695652173913043,
-          "ratio_of_medians": 1.2325581395348837,
+          "median_per_task_ratio": 0.9534883720930233,
+          "ratio_of_medians": 0.9534883720930233,
           "howl_more_tokens": [
-            "t01",
             "t02",
-            "t03",
-            "t04",
-            "t05",
-            "t06",
-            "t07",
-            "t08",
-            "t09",
-            "t10",
             "t11",
             "t12",
             "t13",
@@ -430,26 +421,7 @@
             "t18",
             "t19",
             "t20",
-            "t21",
-            "t22",
-            "t23",
-            "t24",
-            "t25",
-            "t26",
-            "t27",
-            "t28",
-            "t29",
-            "t30",
-            "a01",
             "a02",
-            "a03",
-            "a04",
-            "a05",
-            "a06",
-            "a07",
-            "a08",
-            "a09",
-            "a10",
             "a11",
             "a12",
             "a13",
@@ -459,22 +431,12 @@
             "a17",
             "a18",
             "a19",
-            "a20",
-            "a21",
-            "a22",
-            "a23",
-            "a24",
-            "a25",
-            "a26",
-            "a27",
-            "a28",
-            "a29",
-            "a30"
+            "a20"
           ]
         },
         "go": {
-          "median_per_task_ratio": 0.636,
-          "ratio_of_medians": 0.636,
+          "median_per_task_ratio": 0.492,
+          "ratio_of_medians": 0.492,
           "howl_more_tokens": []
         }
       }
@@ -482,8 +444,8 @@
     "tokens_nocomments": {
       "languages": {
         "howl": {
-          "median": 159.0,
-          "mean": 248.73333333333332
+          "median": 123.0,
+          "mean": 200.5
         },
         "python": {
           "median": 118.0,
@@ -500,8 +462,8 @@
       },
       "howl_ratios": {
         "python": {
-          "median_per_task_ratio": 1.4174757281553398,
-          "ratio_of_medians": 1.347457627118644,
+          "median_per_task_ratio": 1.058252427184466,
+          "ratio_of_medians": 1.0423728813559323,
           "howl_more_tokens": [
             "t01",
             "t02",
@@ -566,19 +528,10 @@
           ]
         },
         "js": {
-          "median_per_task_ratio": 1.2695652173913043,
-          "ratio_of_medians": 1.2325581395348837,
+          "median_per_task_ratio": 0.9534883720930233,
+          "ratio_of_medians": 0.9534883720930233,
           "howl_more_tokens": [
-            "t01",
             "t02",
-            "t03",
-            "t04",
-            "t05",
-            "t06",
-            "t07",
-            "t08",
-            "t09",
-            "t10",
             "t11",
             "t12",
             "t13",
@@ -589,26 +542,7 @@
             "t18",
             "t19",
             "t20",
-            "t21",
-            "t22",
-            "t23",
-            "t24",
-            "t25",
-            "t26",
-            "t27",
-            "t28",
-            "t29",
-            "t30",
-            "a01",
             "a02",
-            "a03",
-            "a04",
-            "a05",
-            "a06",
-            "a07",
-            "a08",
-            "a09",
-            "a10",
             "a11",
             "a12",
             "a13",
@@ -618,22 +552,12 @@
             "a17",
             "a18",
             "a19",
-            "a20",
-            "a21",
-            "a22",
-            "a23",
-            "a24",
-            "a25",
-            "a26",
-            "a27",
-            "a28",
-            "a29",
-            "a30"
+            "a20"
           ]
         },
         "go": {
-          "median_per_task_ratio": 0.6516393442622951,
-          "ratio_of_medians": 0.6516393442622951,
+          "median_per_task_ratio": 0.5040983606557377,
+          "ratio_of_medians": 0.5040983606557377,
           "howl_more_tokens": []
         }
       }
