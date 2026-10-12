@@ -1,0 +1,7 @@
+(do
+ (let (text (read_text "in/words.txt") lines (str_split (to_lower text) "\n") counts (dict))
+  (do
+   (for l lines
+    (for w (str_split l " ")
+     (map_set counts w (+ (if (map_has counts w) (map_get counts w) 0) 1))))
+   (write_file "out/result.json" (encode_json counts)))))

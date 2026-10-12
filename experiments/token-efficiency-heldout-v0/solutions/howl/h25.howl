@@ -1,0 +1,10 @@
+(do
+ (let (lines (lines (read_file "in/seq.txt")) prev 0 i 0 result "sorted")
+  (do
+   (for l lines
+    (let (n (to_int l))
+     (do
+      (inc i)
+      (when (and (> i 1) (< n prev) (= result "sorted")) (set result (str "unsorted at " i)))
+      (set prev n))))
+   (write_file "out/result.txt" result))))

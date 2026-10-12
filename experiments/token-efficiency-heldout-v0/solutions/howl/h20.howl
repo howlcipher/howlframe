@@ -1,0 +1,5 @@
+(do
+ (let (tags (str_split (read_text "in/tags.txt") ";") out (list))
+  (do
+   (for t tags (unless (list_contains out t) (append out t)))
+   (write_file "out/result.json" (encode_json out)))))

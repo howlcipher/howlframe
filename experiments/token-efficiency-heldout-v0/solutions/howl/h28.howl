@@ -1,0 +1,7 @@
+(do
+ (let (members (parse_json Any (read_text "in/members.json")) teams (dict))
+  (do
+   (for m members
+    (let (team (map_get m "team") group (if (map_has teams team) (map_get teams team) (list)))
+     (do (append group (map_get m "member")) (map_set teams team group))))
+   (write_file "out/result.json" (encode_json teams)))))

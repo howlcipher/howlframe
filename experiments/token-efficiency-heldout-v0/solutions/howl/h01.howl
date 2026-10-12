@@ -1,0 +1,5 @@
+(do
+ (let (lines (lines (read_file "in/text.txt")) out (list))
+  (do
+   (for l lines (append out (to_upper l)))
+   (write_file "out/result.txt" (str_join out "\n")))))

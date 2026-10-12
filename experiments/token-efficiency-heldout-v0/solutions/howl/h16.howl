@@ -1,0 +1,9 @@
+(do
+ (let (lines (lines (read_file "in/config.kv")) config (dict))
+  (do
+   (for l lines
+    (let (parts (str_split l "=") rest (list) i 0)
+     (do
+      (for p parts (do (when (> i 0) (append rest p)) (inc i)))
+      (map_set config (list_get parts 0) (str_join rest "=")))))
+   (write_file "out/result.json" (encode_json config)))))

@@ -1,0 +1,7 @@
+(do
+ (let (schema (parse_json Any (read_text "in/schema.json"))
+       config (parse_json Any (read_text "in/config.json"))
+       out (list))
+  (do
+   (for k schema (unless (map_has config k) (append out k)))
+   (write_file "out/result.json" (encode_json out)))))

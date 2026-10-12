@@ -1,0 +1,7 @@
+(do
+ (let (lines (lines (read_file "in/times.txt")) total 0)
+  (do
+   (for t lines
+    (let (hm (str_split t ":"))
+     (set total (+ total (+ (* (to_int (list_get hm 0)) 60) (to_int (list_get hm 1)))))))
+   (write_file "out/result.txt" (to_string total)))))

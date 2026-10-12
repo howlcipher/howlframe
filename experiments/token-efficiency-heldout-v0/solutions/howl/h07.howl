@@ -1,0 +1,10 @@
+(do
+ (let (lines (lines (read_file "in/data.csv")) header (str_split (list_get lines 0) ",") col 0 i 0 out (list))
+  (do
+   (for h header (do (when (= h "age") (set col i)) (inc i)))
+   (set i 0)
+   (for row lines
+    (do
+     (if (= i 0) (append out row) (when (>= (to_int (list_get (str_split row ",") col)) 30) (append out row)))
+     (inc i)))
+   (write_file "out/result.csv" (str_join out "\n")))))

@@ -1,0 +1,5 @@
+(do
+ (let (lines (lines (read_file "in/text.txt")) best (list_get lines 0))
+  (do
+   (for l lines (when (> (list_len l) (list_len best)) (set best l)))
+   (write_file "out/result.txt" best))))

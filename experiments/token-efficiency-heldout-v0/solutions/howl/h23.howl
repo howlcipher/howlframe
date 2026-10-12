@@ -1,0 +1,7 @@
+(do
+ (let (ids (parse_json Any (read_text "in/ids.json")) seen (list) result "ok")
+  (do
+   (for id ids
+    (when (= result "ok")
+     (if (list_contains seen id) (set result (str "duplicate:" id)) (append seen id))))
+   (write_file "out/result.txt" result))))

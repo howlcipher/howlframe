@@ -1,0 +1,12 @@
+(do
+ (let (lines (lines (read_file "in/data.csv")) header (str_split (list_get lines 0) ",") rows (list) i 0)
+  (do
+   (for row lines
+    (do
+     (when (> i 0)
+      (let (vals (str_split row ",") rec (dict) j 0)
+       (do
+        (for h header (do (map_set rec h (list_get vals j)) (inc j)))
+        (append rows rec))))
+     (inc i)))
+   (write_file "out/result.json" (encode_json rows)))))
