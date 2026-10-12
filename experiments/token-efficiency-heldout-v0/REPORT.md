@@ -204,3 +204,28 @@ All of these were run locally on the box, outside a sandbox, with `GOCACHE=/tmp/
 - `experiments/token-efficiency-v0/run.sh`: exit 0. v0 is unchanged.
 
 See the [journal](../../docs/journals/2026-10-12_heldout_token_benchmark.md).
+
+## Addendum (2026-10-12): rerun with the core library (NOT blind)
+
+`results/` now holds a rerun made after the core library landed (heldout-v1
+slice). The tables above are the original blind measurement. This rerun is no
+longer blind, because the library was written after these tasks were seen.
+
+- **Rewritten:** h02, h05, h07, h08, h10, h11, h12, h13 and h17 now use
+  `reverse`, `index_of`, `filter`, `map_list`, `sum`, `min`/`max`,
+  `count_by` and `list_slice`. h05, h07 and h12 are also back in their natural
+  form now that the #137 fixes are in.
+- **Gaps unchanged:** h31 and h32 remain gaps, because there is still no
+  directory walk.
+
+| cl100k_base | Before (blind) | After (not blind) |
+|---|---|---|
+| Median HowlFrame tokens | 72.5 | 67.0 |
+| vs Python, median per-task ratio | 1.309 | 1.109 |
+| vs Python, W/T/L | 0/1/29 | 5/0/25 |
+| vs JS, median per-task ratio | 1.087 | 1.025 |
+| vs JS, W/T/L | 6/1/23 | 14/1/15 |
+| vs Go, median per-task ratio | 0.499 | 0.428 |
+| vs Go, W/T/L | 30/0/0 | 30/0/0 |
+
+HowlFrame still loses to Python on heldout-v0.

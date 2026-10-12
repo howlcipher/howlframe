@@ -1,0 +1,3 @@
+(do
+ (let (w (str_trim (read_text "in/word.txt")))
+  (write_file "out/result.txt" (if (= w (str_join (reverse (str_split w "")) "")) "yes" "no"))))

@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (map_list l (lines (read_file "in/poem.txt")) (list_get (str_split l " ") 0)) "\n")))

@@ -1,0 +1,6 @@
+(do
+ (let (out (dict))
+  (do
+   (for l (list_slice (lines (read_file "in/stock.tsv")) 1)
+    (let (r (str_split l "\t")) (map_set out (list_get r 0) (to_int (list_get r 1)))))
+   (write_file "out/result.json" (encode_json out)))))

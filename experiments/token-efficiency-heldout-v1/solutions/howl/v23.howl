@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (filter p (str_split (to_lower (str_trim (read_text "in/title.txt"))) " ") (!= p "")) "-")))

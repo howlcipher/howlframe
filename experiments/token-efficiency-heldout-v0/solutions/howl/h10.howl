@@ -1,12 +1,3 @@
 (do
- (let (lines (lines (read_file "in/data.csv")) header (str_split (list_get lines 0) ",") col 0 i 0 counts (dict))
-  (do
-   (for h header (do (when (= h "dept") (set col i)) (inc i)))
-   (set i 0)
-   (for row lines
-    (do
-     (when (> i 0)
-      (let (d (list_get (str_split row ",") col))
-       (map_set counts d (+ (if (map_has counts d) (map_get counts d) 0) 1))))
-     (inc i)))
-   (write_file "out/result.json" (encode_json counts)))))
+ (let (rows (lines (read_file "in/data.csv")) col (index_of (str_split (list_get rows 0) ",") "dept"))
+  (write_file "out/result.json" (encode_json (count_by r (list_slice rows 1) (list_get (str_split r ",") col))))))

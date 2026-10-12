@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (sort (lines (read_file "in/poem.txt"))) "\n")))

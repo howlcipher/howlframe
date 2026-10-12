@@ -9,7 +9,7 @@
     "task": "h02",
     "lang": "howl",
     "pass": true,
-    "sha256": "6cdaac65ab7e5cf8fe48bd36f7566f824ec9cf809d05d5d840e308d70bf9ae2e"
+    "sha256": "184914308581720180694ac0706b0dc732d41fd34d2127b34f03b85ad35fa81b"
   },
   {
     "task": "h03",
@@ -27,7 +27,7 @@
     "task": "h05",
     "lang": "howl",
     "pass": true,
-    "sha256": "286b716b9155ba003e7dd618ad42436e16f387ba8ff0a5e2b6ec4048756402a7"
+    "sha256": "c875ba131b9a2e9b2ac0937f96da3433e32df31396c4d1fd47a7641ef5316eda"
   },
   {
     "task": "h06",
@@ -39,13 +39,13 @@
     "task": "h07",
     "lang": "howl",
     "pass": true,
-    "sha256": "c371b635596e230839e25e9aac14bd6b0db14844564e5b772985c022117c29bb"
+    "sha256": "eeeef27a07dc9750b9c692d00b67c50af988a4bb1acf18d1ae2da48279957a74"
   },
   {
     "task": "h08",
     "lang": "howl",
     "pass": true,
-    "sha256": "91330ac95a1cf8745bd2040042d449a0bdf77b3b76b96cd3e1e377dc5863d054"
+    "sha256": "a812a9bfbc3f9d64579903855d9753aa0064d5cb4fb55ae4ee84e959160230de"
   },
   {
     "task": "h09",
@@ -57,25 +57,25 @@
     "task": "h10",
     "lang": "howl",
     "pass": true,
-    "sha256": "62be5b650b51ddebefeaefef2181e2898dd97d90b3ec8186c6f1756102f95ad7"
+    "sha256": "8fbb6b02d64c9e04e06f8ffd1c0bc86870073c2045707f1cf5e5eecaf410ccb1"
   },
   {
     "task": "h11",
     "lang": "howl",
     "pass": true,
-    "sha256": "266248df5f57d46c001045d0c1b90ed51f649b0a2c442a7ebc9cb35eef28fd48"
+    "sha256": "41bcd0f2adeafe0cc21469cf69b3ecb43aa44af897c2470428da3c59546ea8a0"
   },
   {
     "task": "h12",
     "lang": "howl",
     "pass": true,
-    "sha256": "e06880a540f1b2f853b00cc0d366b22ccd30ab22b79a3c5b90aaca4acb369792"
+    "sha256": "e1672b7de376aec3f6e45312415118bf555d350754f73502eb5b1d739202b06a"
   },
   {
     "task": "h13",
     "lang": "howl",
     "pass": true,
-    "sha256": "939b6aeaeef5e96f0dc07a7524507f95e88b54ce497aeb004251c6c88f7ef1fa"
+    "sha256": "c0f7f42d16b9d54919e5fda5796e5f2087009f744798054869cd1519e97437c4"
   },
   {
     "task": "h14",
@@ -99,7 +99,7 @@
     "task": "h17",
     "lang": "howl",
     "pass": true,
-    "sha256": "1b2c6bbde05473dd1dc539468be7ae3d15a43d6d0b8971813634c29be717c146"
+    "sha256": "9004d8d74ab7e609cf940885b0d69b6b2517ec5ab08e8bbae4904524a362446b"
   },
   {
     "task": "h18",

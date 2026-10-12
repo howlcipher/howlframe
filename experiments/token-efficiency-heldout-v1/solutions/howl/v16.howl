@@ -1,0 +1,1 @@
+(do (let (q (parse_json Any (read_text "in/queue.json"))) (write_file "out/result.json" (encode_json (list_slice q (- (list_len q) 3) (list_len q))))))

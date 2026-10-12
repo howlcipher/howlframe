@@ -1,7 +1,1 @@
-(do
- (let (lines (lines (read_file "in/events.log")) counts (dict))
-  (do
-   (for l lines
-    (let (level (list_get (str_split l "|") 0))
-     (map_set counts level (+ (if (map_has counts level) (map_get counts level) 0) 1))))
-   (write_file "out/result.json" (encode_json counts)))))
+(do (write_file "out/result.json" (encode_json (count_by l (lines (read_file "in/events.log")) (list_get (str_split l "|") 0)))))

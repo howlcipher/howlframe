@@ -1,0 +1,3 @@
+(do
+ (let (os (parse_json Any (read_text "in/orders.json")) ts (map_list o os (map_get o "total")))
+  (write_file "out/result.txt" (map_get (list_get os (index_of ts (min ts))) "id"))))

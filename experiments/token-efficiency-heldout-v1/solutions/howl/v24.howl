@@ -1,0 +1,3 @@
+(do
+ (let (v (str_split (str_trim (read_text "in/version.txt")) "."))
+  (write_file "out/result.txt" (str (list_get v 0) "." (+ (to_int (list_get v 1)) 1) ".0"))))

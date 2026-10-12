@@ -8,7 +8,8 @@ package ast
 //
 //   (list_slice lst a b)   elements a..b-1; negative a/b count from the end;
 //                          out-of-range indices are clamped by the scan.
-//   (str_slice s a b)      same over the bytes of s.
+//                          (list_slice lst a) runs to the end.
+//   (str_slice s a b)      same over the bytes of s; (str_slice s a) too.
 //   (str_len s)            byte length of s.
 //   (index_of lst v)       first 0-based index of v, or -1.
 //   (map_list x lst expr)  list of expr for each x.
@@ -65,6 +66,12 @@ func IsCorelibSugar(head string) bool {
 func desugarCorelib(node *Node) bool {
 	head := node.Children[0].Value
 	spec := corelibTemplates[head]
+	// The two-argument slice forms run to the end: b defaults to the length
+	// (any b >= length selects the rest; the operand is evaluated once).
+	if (head == "list_slice" || head == "str_slice") && len(node.Children) == 3 {
+		big := &Node{Type: "INT", Value: "9223372036854775807", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		node.Children = append(node.Children, big)
+	}
 	if len(node.Children) != spec.arity+1 {
 		ReportError(head+" expects "+itoa(spec.arity)+" arguments", node.Line, node.Column)
 		return false

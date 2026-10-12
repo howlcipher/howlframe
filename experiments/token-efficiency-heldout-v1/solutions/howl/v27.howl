@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (str_join (map_list o (filter o (parse_json Any (read_text "in/orders.json")) (>= (map_get o "total") 100)) (map_get o "id")) "\n")))

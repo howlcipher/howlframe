@@ -1,0 +1,1 @@
+(do (write_file "out/result.txt" (to_string (index_of (parse_json Any (read_text "in/queue.json")) "build"))))

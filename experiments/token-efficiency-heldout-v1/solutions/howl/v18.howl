@@ -1,0 +1,1 @@
+(do (write_file "out/result.json" (encode_json (map_keys (count_by q (parse_json Any (read_text "in/queue.json")) q)))))

@@ -1,0 +1,5 @@
+(do
+ (let (out (list))
+  (do
+   (for o (parse_json Any (read_text "in/orders.json")) (let (c (map_get o "cust")) (when (= (index_of out c) (- 0 1)) (append out c))))
+   (write_file "out/result.json" (encode_json out)))))
