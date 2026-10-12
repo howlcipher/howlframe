@@ -70,7 +70,7 @@ func TestCLIRequiredCapsAndGoverned(t *testing.T) {
 	}
 	// Valid default programs for every excluded registry construct.
 	forms := map[string]string{
-		"achieve": `(achieve "goal")`, "confidence": `(print (confidence "test"))`, "db_connect": `(db_connect db "sqlite3" ":memory:")`, "ephemeral_circuit": `(print (ephemeral_circuit (1) "test"))`, "exec": `(print (exec "echo" "x"))`, "lazy_synthesize": `(lazy_synthesize f () "test")`, "llm_generate": `(print (llm_generate "test"))`, "neural_circuit": `(print (neural_circuit (1) "test"))`, "spawn": `(spawn (lambda () (print "x")))`, "spawn_agent": `(spawn_agent "x" (task "test"))`, "sql_query": `(db_connect db "sqlite3" ":memory:") (print (sql_query db "SELECT 1"))`,
+		"achieve": `(achieve "goal" "constraint")`, "confidence": `(print (confidence "test"))`, "db_connect": `(db_connect db "sqlite3" ":memory:")`, "ephemeral_circuit": `(print (ephemeral_circuit (1) "test"))`, "exec": `(print (exec "echo" "x"))`, "lazy_synthesize": `(lazy_synthesize f () "test")`, "llm_generate": `(print (llm_generate "test"))`, "neural_circuit": `(print (neural_circuit (1) "test"))`, "spawn": `(spawn (lambda () (print "x")))`, "spawn_agent": `(spawn_agent "x" (task "test"))`, "sql_query": `(db_connect db "sqlite3" ":memory:") (print (sql_query db "SELECT 1"))`,
 	}
 	for name, form := range forms {
 		t.Run(name, func(t *testing.T) {

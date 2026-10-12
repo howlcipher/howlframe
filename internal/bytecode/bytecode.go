@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/construct"
 
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/httpreq"
@@ -360,6 +361,18 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 
 	if node.Type == "List" && len(node.Children) > 0 {
 		head := node.Children[0].Value
+		// Table-driven arity backstop (#141). The CLI enforces the same
+		// construct.arities table before desugaring; this keeps a direct
+		// CompileToBytecode caller from indexing past a short child list.
+		if node.Children[0].Type == "SYMBOL" {
+			if want, ok := construct.LookupArity(head); ok {
+				if got := len(node.Children) - 1; got < want.Min || (want.Max >= 0 && got > want.Max) {
+					v := construct.ArityViolation{Name: head, Got: got, Want: want}
+					ast.ReportError(v.Message(), node.Line, node.Column)
+					return insts
+				}
+			}
+		}
 		switch head {
 		case "cli_app", "wasm_app", "web_app":
 			for _, child := range node.Children[1:] {
@@ -483,13 +496,8 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "STORE_KEYS", Op: OpStoreKeys, StringOperand: handleNode.Value})
 		case "fetch":
-			// (fetch url method [body]). Arity is checked before any child is
-			// indexed: a one-argument (fetch url) used to index past the end
-			// and panic the compiler (#139). Fail closed with a diagnostic.
-			if len(node.Children) != 3 && len(node.Children) != 4 {
-				ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
-				return insts
-			}
+			// (fetch url method [body]). Arity (#139) is enforced by the
+			// construct.arities table above and before desugaring (#141).
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, c.compileNode(node.Children[2])...)
 			insts = append(insts, BCInstruction{OpString: "FETCH", Op: OpFetch})
@@ -727,6 +735,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "CALL", Op: OpCall, StringOperand: funcName, IntOperand: int64(float64(len(node.Children) - 2))})
 		case "and", "or":
+			if len(node.Children) != 3 {
+				// N-ary and/or folds to binary in desugar; one that reaches
+				// here unfolded would silently drop operands (#141).
+				ast.ReportError(fmt.Sprintf("ARITY_ERROR: %s with %d operands was not folded to binary form in this position", head, len(node.Children)-1), node.Line, node.Column)
+				return insts
+			}
 			insts = append(insts, ShortCircuit(head, c.compileNode(node.Children[1]), c.compileNode(node.Children[2]))...)
 		case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=":
 			insts = append(insts, c.compileNode(node.Children[1])...)
