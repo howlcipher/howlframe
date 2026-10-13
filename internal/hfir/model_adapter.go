@@ -32,7 +32,7 @@ const SemanticRepairSchemaVersion = "hfir-semantic-repair/v2"
 const (
 	modelAdapterTarget   = "model-adapter"
 	maxCandidateNodes    = 4096
-	maxNodeInputs        = 256
+	maxNodeInputs        = 64
 	maxTransportBytes    = 1024 * 1024
 	maxValueBytes        = 4 * 1024
 	maxRepairOperations  = 5
@@ -613,15 +613,20 @@ func validateTransport(transport candidateTransport) *Diagnostic {
 	if diagnostic := validateDictEntries(transport); diagnostic != nil {
 		return diagnostic
 	}
+	// Cycles are rejected before any recursive pass (type inference walks
+	// inputs and would not terminate on a cyclic proposal).
+	if cycle := transportCycle(transport); cycle != "" {
+		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_CYCLE", "cyclic data dependency is not executable", cycle)
+		return &diagnostic
+	}
+	if diagnostic := validateReturnPlacement(transport); diagnostic != nil {
+		return diagnostic
+	}
 	if diagnostic := validateTransportTypes(transport); diagnostic != nil {
 		return diagnostic
 	}
 	if diagnostic := validateNoSharedEffects(transport); diagnostic != nil {
 		return diagnostic
-	}
-	if cycle := transportCycle(transport); cycle != "" {
-		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_CYCLE", "cyclic data dependency is not executable", cycle)
-		return &diagnostic
 	}
 	if unreachable := unreachableTransportNode(transport); unreachable != "" {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_UNREACHABLE", "every candidate node must be reachable from entry_node", unreachable)
@@ -929,6 +934,10 @@ func validateTransportTypes(transport candidateTransport) *Diagnostic {
 		return typ
 	}
 	for _, node := range transport.Nodes {
+		if node.Kind == "sleep" && len(node.Inputs) == 1 && !compatibleNumber(infer(node.Inputs[0].NodeID)) {
+			diagnostic := adapterDiagnostic("HFIR_TRANSPORT_TYPE", "sleep duration must be a number", node.ID)
+			return &diagnostic
+		}
 		if infer(node.ID) == "invalid" {
 			diagnostic := adapterDiagnostic("HFIR_TRANSPORT_TYPE", "node operands have incompatible known types", node.ID)
 			return &diagnostic
@@ -1203,4 +1212,63 @@ func (n *Node) DataInputsNodeIDs() []NodeID {
 
 func adapterDiagnostic(code, message string, node NodeID) Diagnostic {
 	return Diagnostic{Code: code, Severity: SeverityError, Message: message, RelatedNode: node, ContractVersion: DiagnosticContractVersion, Target: modelAdapterTarget}
+}
+
+// validateReturnPlacement rejects a return that is not inside a defun body.
+// The graph is acyclic when this runs.
+func validateReturnPlacement(transport candidateTransport) *Diagnostic {
+	byID := make(map[NodeID]transportNode, len(transport.Nodes))
+	for _, node := range transport.Nodes {
+		byID[node.ID] = node
+	}
+	inDefun := map[NodeID]bool{}
+	var mark func(NodeID)
+	mark = func(id NodeID) {
+		if inDefun[id] {
+			return
+		}
+		inDefun[id] = true
+		for _, input := range byID[id].Inputs {
+			mark(input.NodeID)
+		}
+	}
+	for _, node := range transport.Nodes {
+		if node.Kind == "defun" {
+			for _, input := range node.Inputs {
+				if input.Role == "body" {
+					mark(input.NodeID)
+				}
+			}
+		}
+	}
+	// A straight-line main-level return (reached from entry_node only
+	// through program/sequence bodies, let bodies and if branches) is valid
+	// source that -compile-hfir-bc lowers (tests/test_wasm_call.howl), so it
+	// stays accepted. A return under a loop, try, call or expression outside
+	// a defun is rejected.
+	mainTail := map[NodeID]bool{}
+	var tail func(NodeID)
+	tail = func(id NodeID) {
+		if mainTail[id] {
+			return
+		}
+		mainTail[id] = true
+		node := byID[id]
+		for _, input := range node.Inputs {
+			switch {
+			case (node.Kind == "program" || node.Kind == "sequence") && input.Role == "body",
+				node.Kind == "let" && input.Role == "body",
+				node.Kind == "if" && (input.Role == "then" || input.Role == "else"):
+				tail(input.NodeID)
+			}
+		}
+	}
+	tail(transport.EntryNode)
+	for _, node := range transport.Nodes {
+		if node.Kind == "return" && !inDefun[node.ID] && !mainTail[node.ID] {
+			diagnostic := adapterDiagnostic("HFIR_TRANSPORT_RETURN", "return is only valid inside a defun body or as a main-level statement", node.ID)
+			return &diagnostic
+		}
+	}
+	return nil
 }

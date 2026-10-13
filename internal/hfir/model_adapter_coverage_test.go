@@ -169,3 +169,84 @@ func TestAdapterSleepRoleRoundTrip(t *testing.T) {
 		t.Fatalf("sleep 0 exit %d", exit)
 	}
 }
+
+func decodeCode(t *testing.T, nodes ...transportNode) string {
+	t.Helper()
+	data, _ := json.Marshal(candidateTransport{SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program", Nodes: nodes})
+	candidate, diagnostics := DecodeCandidate(data)
+	if candidate.Graph != nil || len(diagnostics) != 1 {
+		t.Fatalf("want one rejection, got graph=%v %#v", candidate.Graph != nil, diagnostics)
+	}
+	return diagnostics[0].Code
+}
+
+// Review blocker: a binary a<->b cycle used to overflow the stack in type
+// inference before the cycle check ran.
+func TestAdapterBinaryCycleRejectedBeforeTypes(t *testing.T) {
+	code := decodeCode(t,
+		testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "pr"}}),
+		testNode("pr", "print", "", "", []transportEdge{{Role: "value", NodeID: "a"}}),
+		testNode("a", "binary", "+", "", []transportEdge{{Role: "left", NodeID: "b"}, {Role: "right", NodeID: "b"}}),
+		testNode("b", "binary", "+", "", []transportEdge{{Role: "left", NodeID: "a"}, {Role: "right", NodeID: "a"}}),
+	)
+	if code != "HFIR_TRANSPORT_CYCLE" {
+		t.Fatalf("code = %s", code)
+	}
+}
+
+func TestAdapterReturnOutsideDefunRejected(t *testing.T) {
+	cases := map[string][]transportNode{
+		"in loop body": {
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "w"}}),
+			testNode("w", "while", "", "", []transportEdge{{Role: "condition", NodeID: "c"}, {Role: "body", NodeID: "r"}}),
+			testNode("c", "const", "true", "BOOL", nil),
+			testNode("r", "return", "", "", []transportEdge{{Role: "value", NodeID: "v"}}),
+			testNode("v", "const", "1", "INT", nil),
+		},
+		"as an operand": {
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "pr"}}),
+			testNode("pr", "print", "", "", []transportEdge{{Role: "value", NodeID: "r"}}),
+			testNode("r", "return", "", "", []transportEdge{{Role: "value", NodeID: "v"}}),
+			testNode("v", "const", "1", "INT", nil),
+		},
+	}
+	for name, nodes := range cases {
+		if code := decodeCode(t, nodes...); code != "HFIR_TRANSPORT_RETURN" {
+			t.Fatalf("%s: code = %s", name, code)
+		}
+	}
+	// A straight-line main-level return is valid source and stays accepted.
+	coverageCandidate(t,
+		testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "r"}}),
+		testNode("r", "return", "", "", []transportEdge{{Role: "value", NodeID: "v"}}),
+		testNode("v", "const", "1", "INT", nil),
+	)
+}
+
+func TestAdapterSleepDurationTypeChecked(t *testing.T) {
+	for _, bad := range []transportNode{testNode("d", "const", "x", "STRING", nil), testNode("d", "list", "", "", nil), testNode("d", "const", "true", "BOOL", nil)} {
+		code := decodeCode(t,
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "s"}}),
+			testNode("s", "sleep", "", "", []transportEdge{{Role: "duration", NodeID: "d"}}),
+			bad,
+		)
+		if code != "HFIR_TRANSPORT_TYPE" {
+			t.Fatalf("%s: code = %s", bad.Kind, code)
+		}
+	}
+}
+
+func TestAdapterInputsPerNodeBound(t *testing.T) {
+	nodes := []transportNode{{}}
+	var edges []transportEdge
+	for i := 0; i < maxNodeInputs+1; i++ {
+		id := NodeID(fmt.Sprintf("c%d", i))
+		edges = append(edges, transportEdge{Role: "value", NodeID: id})
+		nodes = append(nodes, testNode(id, "const", "1", "INT", nil))
+	}
+	nodes[0] = testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "pr"}})
+	nodes = append(nodes, testNode("pr", "print", "", "", edges))
+	if code := decodeCode(t, nodes...); code != "HFIR_TRANSPORT_BOUNDS" || maxNodeInputs != 64 {
+		t.Fatalf("code = %s, maxNodeInputs = %d", code, maxNodeInputs)
+	}
+}

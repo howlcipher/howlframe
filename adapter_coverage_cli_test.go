@@ -26,17 +26,21 @@ import (
 
 // adapterFormSamples covers arity-table forms that no corpus program uses.
 var adapterFormSamples = map[string]string{
-	"dec":         `(do (let (x 3) (do (dec x) (print x))))`,
-	"ltrim":       `(do (print (ltrim "  a")))`,
-	"max_by":      `(do (print (max_by x (list 1 3 2) x)))`,
-	"min_by":      `(do (print (min_by x (list 1 3 2) x)))`,
-	"merge":       `(do (print (encode_json (merge (rec a 1) (rec b 2)))))`,
-	"pluck":       `(do (print (encode_json (pluck (list (rec a 1)) "a"))))`,
-	"put":         `(do (let (m (rec)) (do (put m "a" 1) (print (encode_json m)))))`,
-	"reduce":      `(do (print (reduce acc 0 x (list 1 2 3) (+ acc x))))`,
-	"select":      `(do (print (encode_json (select (list (rec a 1 b 2)) a))))`,
-	"group_by":    `(do (print (encode_json (group_by x (list 1 2 3) (% x 2)))))`,
-	"switch":      `(do (let (v 2) (switch v (1 (print "one")) (2 (print "two")) (else (print "other")))))`,
+	"dec":      `(do (let (x 3) (do (dec x) (print x))))`,
+	"ltrim":    `(do (print (ltrim "  a")))`,
+	"max_by":   `(do (print (max_by x (list 1 3 2) x)))`,
+	"min_by":   `(do (print (min_by x (list 1 3 2) x)))`,
+	"merge":    `(do (print (encode_json (merge (rec a 1) (rec b 2)))))`,
+	"pluck":    `(do (print (encode_json (pluck (list (rec a 1)) "a"))))`,
+	"put":      `(do (let (m (rec)) (do (put m "a" 1) (print (encode_json m)))))`,
+	"reduce":   `(do (print (reduce acc 0 x (list 1 2 3) (+ acc x))))`,
+	"select":   `(do (print (encode_json (select (list (rec a 1 b 2)) a))))`,
+	"group_by": `(do (print (encode_json (group_by x (list 1 2 3) (% x 2)))))`,
+	"switch":   `(do (let (v 2) (switch v (1 (print "one")) (2 (print "two")) (else (print "other")))))`,
+	// module/export are resolved by ast.ResolveModules before HFIR; the
+	// resolved program round-trips.
+	"module":      `(cli_app (module m (export (defun f () (return "1")))) (print 1))`,
+	"export":      `(cli_app (module m (export (defun f () (return "1")))) (print 1))`,
 	"ver_ge":      `(do (print (ver_ge "1.2.3" "1.2.0")))`,
 	"ver_gt":      `(do (print (ver_gt "1.2.3" "1.2.0")))`,
 	"unix_now":    `(do (print (unix_now)))`,
@@ -66,31 +70,29 @@ var adapterExemptForms = map[string]struct{ reason, sample string }{
 	"task":               {"agent task form; not lowered by HFIR", `(do (task "t" (print 1)))`},
 	"grants":             {"only valid as the grant list of spawn_agent/spawn; rejected standalone", `(do (grants) (print 1))`},
 	"llm_generate":       {"model call; not lowered by HFIR", `(do (print (llm_generate "hi")))`},
-	"lazy_synthesize":    {"model synthesis form; not lowered by HFIR", ``},
-	"neural_circuit":     {"model circuit form; not lowered by HFIR", ``},
-	"ephemeral_circuit":  {"model circuit form; not lowered by HFIR", ``},
-	"optimize_block":     {"optimizer directive; not lowered by HFIR", ``},
-	"optimize_signature": {"optimizer directive; not lowered by HFIR", ``},
-	"schema_bridge":      {"schema bridge; not lowered by HFIR", ``},
-	"db_connect":         {"database form; not lowered by HFIR", ``},
-	"sql_query":          {"database form; not lowered by HFIR", ``},
-	"store_open":         {"store form; not lowered by HFIR", ``},
-	"store_get":          {"store form; not lowered by HFIR", ``},
-	"store_put":          {"store form; not lowered by HFIR", ``},
-	"store_delete":       {"store form; not lowered by HFIR", ``},
-	"store_keys":         {"store form; not lowered by HFIR", ``},
-	"sget":               {"store sugar (store_get); not lowered by HFIR", ``},
-	"sput":               {"store sugar (store_put); not lowered by HFIR", ``},
-	"sinc":               {"store sugar (store_get/store_put); not lowered by HFIR", ``},
-	"http_server":        {"server root; routes are scoped by #165 first, not lowered by HFIR", ``},
-	"res":                {"route response; only inside http_server routes", ``},
-	"res_json":           {"route response; only inside http_server routes", ``},
-	"res_header":         {"route response; only inside http_server routes", ``},
-	"http_res":           {"desugars to res; only inside http_server routes", ``},
+	"lazy_synthesize":    {"model synthesis form; not lowered by HFIR", `(cli_app (lazy_synthesize my_add (a b) "sum") (print (call my_add "1" "2")))`},
+	"neural_circuit":     {"model circuit form; not lowered by HFIR", `(cli_app (let (r (neural_circuit (2 3) "multiply")) (print r)))`},
+	"ephemeral_circuit":  {"model circuit form; not lowered by HFIR", `(cli_app (let (r (ephemeral_circuit (2 3) "multiply")) (print r)))`},
+	"optimize_block":     {"optimizer directive; not lowered by HFIR", `(cli_app (optimize_block "latency" 10 (print 1)))`},
+	"optimize_signature": {"optimizer directive; not lowered by HFIR", `(cli_app (optimize_signature p (metric "accuracy") (test "t") (candidate "a" "x") (print 1)))`},
+	"schema_bridge":      {"schema bridge; not lowered by HFIR", `(cli_app (struct User (name string)) (let (s (schema_bridge User "{}")) (print s)))`},
+	"db_connect":         {"database form; not lowered by HFIR", `(cli_app (db_connect db "sqlite3" "t.db"))`},
+	"sql_query":          {"database form; not lowered by HFIR", `(cli_app (defun f (db) (sql_query db "SELECT 1")))`},
+	"store_open":         {"store form; not lowered by HFIR", `(cli_app (store_open s "memory://x"))`},
+	"store_get":          {"store form; not lowered by HFIR", `(cli_app (defun f (s) (print (store_get s "k")) (return "")))`},
+	"store_put":          {"store form; not lowered by HFIR", `(cli_app (defun f (s) (store_put s "k" "v")))`},
+	"store_delete":       {"store form; not lowered by HFIR", `(cli_app (defun f (s) (store_delete s "k")))`},
+	"store_keys":         {"store form; not lowered by HFIR", `(cli_app (defun f (s) (print (store_keys s)) (return "")))`},
+	"sget":               {"store sugar (store_get); not lowered by HFIR", `(cli_app (defun f (s) (print (sget s "k")) (return "")))`},
+	"sput":               {"store sugar (store_put); not lowered by HFIR", `(cli_app (defun f (s) (sput s "k" "v")))`},
+	"sinc":               {"store sugar (store_get/store_put); not lowered by HFIR", `(cli_app (defun f (s) (sinc s "k")))`},
+	"http_server":        {"server root; routes are scoped by #165 first, not lowered by HFIR", `(http_server 8080 (route "/" (lambda (req) (res 200 "text/plain" "x"))))`},
+	"res":                {"route response; only inside http_server routes", `(cli_app (res 200 "text/plain" "x"))`},
+	"res_json":           {"route response; only inside http_server routes", `(cli_app (res_json 200 (dict ("a" 1))))`},
+	"res_header":         {"route response; only inside http_server routes", `(cli_app (res_header "X-A" "1"))`},
+	"http_res":           {"desugars to res; only inside http_server routes", `(cli_app (let (r (dict ("status" 200) ("body" "x"))) (http_res r)))`},
 	"web_app":            {"JavaScript-target root; never compiled by HFIR", `(web_app (print 1))`},
 	"wasm_app":           {"Wasm-target root; never compiled by HFIR", `(wasm_app (print 1))`},
-	"module":             {"module declaration; resolved by ast.ResolveModules before HFIR", ``},
-	"export":             {"module export; resolved by ast.ResolveModules before HFIR", ``},
 }
 
 func adapterCorpus(t *testing.T) []string {
@@ -219,7 +221,14 @@ func TestModelAdapterCoversArityTable(t *testing.T) {
 		if covered[form] {
 			t.Errorf("exempt form %s (%s) is now lowered by -compile-hfir-bc and carried by the adapter; drop the exemption", form, ex.reason)
 		}
-		if ex.sample != "" {
+		if ex.sample == "" {
+			t.Errorf("exempt form %s has no sample", form)
+			continue
+		}
+		if !sourceHeads([]byte(ex.sample))[form] {
+			t.Errorf("exempt sample for %s does not use %s", form, form)
+		}
+		{
 			src := filepath.Join(sampleDir, "exempt_"+form+".howl")
 			os.WriteFile(src, []byte(ex.sample), 0o644)
 			if lowered, detail := adapterRoundTrip(t, bin, src); lowered || detail != "" {

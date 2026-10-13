@@ -128,7 +128,7 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 			t.Errorf("model-adapter transport does not carry %s, which the source lowerer emits", kind)
 		}
 	}
-	for _, kind := range []string{"match", "spawn_agent", "spawn", "grants", "llm_generate", "http_server", "http_server_start", "res", "store_put", "read_line", "http_request"} {
+	for _, kind := range []string{"match", "spawn_agent", "spawn", "grants", "llm_generate", "http_server", "http_server_start", "res", "store_put", "read_line", "http_request", "req_method"} {
 		kind := kind
 		t.Run("transport/"+kind, func(t *testing.T) {
 			candidate, diags := hfir.DecodeCandidate(transportRejecting(kind))
