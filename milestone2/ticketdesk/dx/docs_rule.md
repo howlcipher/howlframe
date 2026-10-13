@@ -18,7 +18,7 @@ Frozen 2026-10-13. A checker script (written by the implementer; the rule below 
    `http_server` program that has a `route` with a path parameter and one that reads `req.body` via `parse_json`.
 5. Every `howlframe` flag named in the guide (e.g. `--max-request-bytes`, `--access-log`, `--allow-caps`) MUST
    appear in `howlframe run --help` or in `docs/cli.md`; the grant list the guide gives for running the
-   example MUST be exactly the documented minimal grants of `ticketdesk/requirements/REQUIREMENTS.md` section 9.
+   example MUST be exactly the minimal grants of requirement R2 in `milestone2/ticketdesk/requirements/REQUIREMENTS.md`.
 6. The guide MUST link to `milestone2/ticketdesk/` (the worked example) and MUST NOT contain the strings of
    any real token secret used in the acceptance suite (it uses placeholders like `<token>`).
 7. A test (`go test` or script, run by `scripts/test.sh`) executes rules 1-6 and MUST fail when a block is
