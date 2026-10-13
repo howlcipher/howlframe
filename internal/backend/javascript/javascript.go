@@ -630,9 +630,10 @@ async function howlFrameFetch(url, method, body, headers) {
     if (previous.protocol === "https:" && u.protocol === "http:") howlFrameFetchDeny();
     var optHost = u.hostname.replace(/^\[|\]$/g, "");
     if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && u.hostname !== first.hostname) howlFrameFetchDeny();
+    if (u.username !== "" || u.password !== "") howlFrameFetchDeny();
     if (previous.origin !== u.origin) {
       Object.keys(init.headers || {}).forEach(function (name) {
-        if (/^(authorization|cookie)$/i.test(name)) delete init.headers[name];
+        if (howlFrameRedirectSafeHeaders.indexOf(String(name).toLowerCase()) < 0) delete init.headers[name];
       });
     }
     if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
@@ -1500,6 +1501,13 @@ func specialPrefixJSSource() string {
 			parts[i] = strconv.Itoa(int(x))
 		}
 		fmt.Fprintf(&b, "  [[%s], %d], // %s\n", strings.Join(parts, ","), bits, raw)
+	}
+	b.WriteString("];\n\nvar howlFrameRedirectSafeHeaders = [")
+	for i, h := range capability.RedirectSafeHeaders {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.Quote(strings.ToLower(h)))
 	}
 	b.WriteString("];\n\n")
 	return b.String()

@@ -708,6 +708,10 @@ func specialPrefixGoSource() string {
 	for _, p := range capability.SpecialPrefixes {
 		fmt.Fprintf(&b, "\tnetip.MustParsePrefix(%q),\n", p)
 	}
+	b.WriteString("}\n\nvar howlFrameRedirectSafeHeaders = []string{\n")
+	for _, h := range capability.RedirectSafeHeaders {
+		fmt.Fprintf(&b, "\t%q,\n", h)
+	}
 	b.WriteString("}\n\n")
 	b.WriteString(`// howlFrameForbiddenDest mirrors capability.ForbiddenDestination.
 func howlFrameForbiddenDest(a netip.Addr) bool {
@@ -944,6 +948,9 @@ var howlFrameFetchClient = &http.Client{
 		if previous.Scheme == "https" && req.URL.Scheme == "http" {
 			return howlFrameFetchDenied{}
 		}
+		if req.URL.User != nil {
+			return howlFrameFetchDenied{}
+		}
 		if host, opt := howlFrameOptOutHost(req.URL); opt {
 			if start, _ := howlFrameOptOutHost(via[0].URL); start != host {
 				return howlFrameFetchDenied{}
@@ -954,8 +961,15 @@ var howlFrameFetchClient = &http.Client{
 			changedOrigin = changedOrigin || !howlFrameFetchSameOrigin(via[i-1].URL, via[i].URL)
 		}
 		if changedOrigin {
-			req.Header.Del("Authorization")
-			req.Header.Del("Cookie")
+			for name := range req.Header {
+				keep := false
+				for _, safe := range howlFrameRedirectSafeHeaders {
+					keep = keep || strings.EqualFold(name, safe)
+				}
+				if !keep {
+					delete(req.Header, name)
+				}
+			}
 		}
 		if len(via) > 10 || !howlFrameFetchAllowed(req.URL) {
 			return howlFrameFetchDenied{}

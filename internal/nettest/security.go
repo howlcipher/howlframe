@@ -174,14 +174,63 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 		}
 	})
 
+	t.Run("CrossOriginHeaders", func(t *testing.T) {
+		seen := http.Header{}
+		var hits atomic.Int64
+		dst := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			seen = r.Header.Clone()
+		}))
+		defer dst.Close()
+		src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, dst.URL, 307) }))
+		defer src.Close()
+		c := client(grant(src.URL), grant(dst.URL))
+		req, _ := http.NewRequest("GET", src.URL, nil)
+		for _, h := range SensitiveHeaders {
+			req.Header.Set(h, "secret")
+		}
+		req.Header.Set("Accept", "text/plain")
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if hits.Load() != 1 {
+			t.Fatalf("hits=%d", hits.Load())
+		}
+		for name, v := range seen {
+			for _, x := range v {
+				if strings.Contains(x, "secret") {
+					t.Errorf("%s crossed origin", name)
+				}
+			}
+		}
+		if seen.Get("Accept") != "text/plain" {
+			t.Errorf("safe Accept header dropped: %v", seen)
+		}
+	})
+	t.Run("RedirectUserinfo", func(t *testing.T) {
+		c := client("network:fetch=api.example.com", "network:fetch=other.example.com")
+		first, _ := http.NewRequest("GET", "http://api.example.com/", nil)
+		for _, to := range []string{"http://user:pw@api.example.com/", "http://user@other.example.com/", "http://:pw@api.example.com/x"} {
+			next, _ := http.NewRequest("GET", to, nil)
+			if err := c.CheckRedirect(next, []*http.Request{first}); err == nil {
+				t.Errorf("redirect to %s allowed", to)
+			}
+		}
+	})
 	t.Run("CredentialsSameOrigin", func(t *testing.T) {
 		c := client("network:fetch=example.test")
 		first, _ := http.NewRequest("GET", "http://EXAMPLE.test/", nil)
 		next, _ := http.NewRequest("GET", "http://example.test:80/next", nil)
 		next.Header.Set("Authorization", "Bearer secret")
 		next.Header.Set("Cookie", "session=secret")
+		next.Header.Set("X-Api-Key", "secret")
 		if err := c.CheckRedirect(next, []*http.Request{first}); err != nil {
 			t.Fatal(err)
+		}
+		if next.Header.Get("X-Api-Key") != "secret" {
+			t.Fatal("same effective origin lost custom header")
 		}
 		if next.Header.Get("Authorization") != "Bearer secret" || next.Header.Get("Cookie") != "session=secret" {
 			t.Fatal("same effective origin lost credentials")
@@ -273,6 +322,9 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 		}
 	})
 }
+
+// SensitiveHeaders must never cross a change of origin on any target.
+var SensitiveHeaders = []string{"Authorization", "Proxy-Authorization", "Cookie", "X-Api-Key", "X-Auth-Token", "Private-Token", "X-Amz-Security-Token", "Api-Key"}
 
 // BlockedAddresses must be refused for a hostname grant on every target.
 var BlockedAddresses = []string{

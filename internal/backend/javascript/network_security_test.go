@@ -186,10 +186,16 @@ func TestJSSharedTables(t *testing.T) {
 		rows = append(rows, [2]any{ints, bits})
 	}
 	special, _ := json.Marshal(rows)
+	var lower []string
+	for _, h := range capability.RedirectSafeHeaders {
+		lower = append(lower, strings.ToLower(h))
+	}
+	headers, _ := json.Marshal(lower)
 	securityJS(t, `
  assert.deepEqual(howlFrameCodeLoadingEnvNames,`+string(names)+`);
  assert.deepEqual(howlFrameCodeLoadingEnvPrefixes,`+string(prefixes)+`);
  assert.deepEqual(howlFrameSpecialPrefixes,`+string(special)+`);
+ assert.deepEqual(howlFrameRedirectSafeHeaders,`+string(headers)+`);
 `)
 }
 func TestJSProxyEnvIgnored(t *testing.T) {
@@ -313,5 +319,32 @@ func TestJSLocalhostLoopbackAndPinAll(t *testing.T) {
   assert.deepEqual(await call({family:6}),["2606:4700::1",6]);
   assert.deepEqual(await call({}),["93.184.216.34",4]);
  } finally {dns.promises.lookup=original;}
+`)
+}
+
+// #177: only the shared safe headers cross an origin change; userinfo redirect targets are refused.
+func TestJSCrossOriginHeadersAndUserinfo(t *testing.T) {
+	sensitive, _ := json.Marshal(nettest.SensitiveHeaders)
+	securityJS(t, jsServers+`
+ let seen, hits=0;
+ const dst=await listen((req,res)=>{hits++;seen=req.headers;res.end("ok");});
+ const src=await listen((req,res)=>{res.writeHead(307,{location:url(dst)});res.end();});
+ const same=await listen((req,res)=>{ if(req.url==="/") {res.writeHead(307,{location:"/next"});return res.end();} seen=req.headers;res.end("ok");});
+ const headers={Accept:"text/plain"}; for (const h of `+string(sensitive)+`) headers[h]="secret";
+ try {
+  grants(url(src),url(dst));
+  assert.equal(await howlFrameFetch(url(src),"GET",undefined,Object.assign({},headers)),"ok");
+  assert.equal(hits,1);
+  for (const [k,v] of Object.entries(seen)) assert.ok(!String(v).includes("secret"),k+" crossed origin");
+  assert.equal(seen.accept,"text/plain");
+  grants(url(same));
+  assert.equal(await howlFrameFetch(url(same),"GET",undefined,Object.assign({},headers)),"ok");
+  assert.equal(seen["x-api-key"],"secret","same-origin custom header dropped");
+  for (const target of ["http://user:pw@127.0.0.1:"+dst.address().port+"/","http://user@127.0.0.1:"+dst.address().port+"/"]) {
+   const r=await listen((req,res)=>{res.writeHead(302,{location:target});res.end();});
+   hits=0; grants(url(r),url(dst));
+   await deny(()=>howlFrameFetch(url(r),"GET")); assert.equal(hits,0,target); r.close();
+  }
+ } finally {src.close();dst.close();same.close();}
 `)
 }

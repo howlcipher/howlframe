@@ -378,6 +378,9 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 			if previous.Scheme == "https" && req.URL.Scheme == "http" {
 				return &FetchDenied{Reason: "network: HTTPS redirect downgrade refused"}
 			}
+			if req.URL.User != nil {
+				return &FetchDenied{Reason: "network: redirect target with userinfo refused", Required: FetchGrantPrefix + "<invalid-url>"}
+			}
 			if redirectToOptOut(via[0].URL, req.URL) {
 				required := FetchGrantPrefix + "<invalid-url>"
 				if t, err := urlTarget(req.URL); err == nil {
@@ -391,8 +394,7 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 				changedOrigin = changedOrigin || !sameFetchOrigin(via[i-1].URL, via[i].URL)
 			}
 			if changedOrigin {
-				req.Header.Del("Authorization")
-				req.Header.Del("Cookie")
+				StripCrossOriginHeaders(req.Header)
 			}
 			grant, err := g.AuthorizeFetch(req.URL)
 			if onHop != nil {
@@ -461,4 +463,24 @@ func FetchPrivateOptOut(grant string) string {
 		return "explicit IP-literal or localhost grant"
 	}
 	return ""
+}
+
+// RedirectSafeHeaders are the only request headers that survive a redirect
+// that changes origin (scheme, host or effective port). Everything else,
+// including Authorization, Proxy-Authorization, Cookie and custom auth
+// headers such as X-Api-Key, is dropped (#172, #177). Generated Go and
+// JavaScript render this same list.
+var RedirectSafeHeaders = []string{"Accept", "Accept-Encoding", "Accept-Language", "Content-Type", "Content-Length", "Content-Encoding", "User-Agent"}
+
+// StripCrossOriginHeaders deletes every header not in RedirectSafeHeaders.
+func StripCrossOriginHeaders(h http.Header) {
+	for name := range h {
+		keep := false
+		for _, safe := range RedirectSafeHeaders {
+			keep = keep || strings.EqualFold(name, safe)
+		}
+		if !keep {
+			delete(h, name)
+		}
+	}
 }
