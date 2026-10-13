@@ -359,15 +359,45 @@ func (l LiveRunner) deadline() (time.Duration, error) {
 //
 // --unshare-pid puts the attempt in its own pid namespace, so killing bwrap
 // (or the parent dying, --die-with-parent) kills every descendant, setsid or
-// not. Host reads are not confined by the read-only bind.
+// not. /home, the operator's $HOME and ~/.claude are masked with empty tmpfs
+// so credentials (e.g. ~/.claude/.credentials.json) are unreadable (Lain C).
+// Other host reads are not confined by the read-only bind.
 func JailArgv(bwrap, dir string, argv []string) []string {
 	a := []string{bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"}
+	for _, m := range jailMasks() {
+		a = append(a, "--tmpfs", m)
+	}
 	a = append(a, "--bind", dir, dir, "--unshare-net", "--unshare-pid", "--die-with-parent", "--chdir", dir, "--")
 	return append(a, argv...)
 }
 
 const liveWaitDelay = 2 * time.Second
 
+// jailMasks lists existing credential-bearing directories to hide.
+func jailMasks() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		if fi, e := os.Stat(p); e == nil && fi.IsDir() {
+			for q := range seen { // skip paths already under a mask
+				if strings.HasPrefix(p, q+"/") {
+					return
+				}
+			}
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	add("/home")
+	if h, e := os.UserHomeDir(); e == nil {
+		add(h)
+		add(filepath.Join(h, ".claude"))
+	}
+	return out
+}
 
 // jailArtifacts are the only entries the child may create directly in dir.
 var jailArtifacts = map[string]bool{"candidate.howl": true, "candidate.plan.json": true, "prog.hfbc": true,

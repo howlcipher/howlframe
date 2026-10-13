@@ -1,6 +1,9 @@
 package harness
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,3 +40,32 @@ func TestJailArgvHasPidNamespace(t *testing.T) {
 	}
 }
 
+// Lain C: ~/.claude/.credentials.json must be unreadable inside the jail.
+func TestJailMasksClaudeCredentials(t *testing.T) {
+	bw := bwrapOK()
+	if bw == "" {
+		t.Skip("bwrap unavailable")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cred := filepath.Join(home, ".claude", ".credentials.json")
+	if e := os.MkdirAll(filepath.Dir(cred), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(cred, []byte("SECRET"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if b, e := os.ReadFile(cred); e != nil || string(b) != "SECRET" {
+		t.Fatal("setup")
+	}
+	dir := t.TempDir()
+	out, _ := exec.Command(JailArgv(bw, dir, []string{"/bin/cat", cred})[0], JailArgv(bw, dir, []string{"/bin/cat", cred})[1:]...).CombinedOutput()
+	if strings.Contains(string(out), "SECRET") {
+		t.Fatalf("credentials readable in jail: %s", out)
+	}
+	if fi, e := os.Stat("/home"); e == nil && fi.IsDir() {
+		if !strings.Contains(strings.Join(JailArgv(bw, dir, nil), " "), "--tmpfs /home") {
+			t.Fatal("/home not masked")
+		}
+	}
+}
