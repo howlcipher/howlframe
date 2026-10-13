@@ -40,6 +40,5 @@ Also: McNemar + cluster bootstrap DONE; repetitions combine as per-task mean, Mc
 
 ## Remaining
 - Lain's #178 items 1–5: not relayed here; reconcile.
-- #175 AdapterDeadlineFlag wiring after #179 merges.
-- Blind-set unit test against a vendored copy is not in CI (the set is not on this branch until #180 merges); verified locally by dry-run over rev 2 (54 cells, loader + compare + jail OK).
-- Update LiveBlindManifestSHA256 if #180 changes again before merge.
+- #175: hflive now takes -adapter-deadline via vm.AdapterDeadlineFlag (cap 30s, fixed at 1s for run, recorded). The howlframe CLI itself does not register the flag yet (#175 reopened); Arm A does not use the adapter path.
+- Main merged (6c969620, merge commit). Blind set loads from experiments/live-v1-blind (7686087c); TestLiveBlindSetLoadsAndCompares covers all 27 tasks. Feasibility: a hand-written v1 plan for b11 (text output) passes locally; not committed (no blind solutions in repo).
