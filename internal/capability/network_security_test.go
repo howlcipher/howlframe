@@ -42,14 +42,20 @@ func TestFetchTrailingDotDiagnostic(t *testing.T) {
 	}
 }
 func TestEnvGrantRefusesCodeLoading(t *testing.T) {
-	for _, name := range []string{"PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH"} {
-		for _, raw := range []string{name, strings.ToLower(name)} {
-			if _, err := ParseGrant(EnvGrantPrefix + raw); err == nil {
-				t.Errorf("allowed %s", raw)
-			}
-			if len((Grants{Capability(EnvGrantPrefix + raw)}).ExecEnv(func(string) (string, bool) { return "injected", true })) != 0 {
-				t.Errorf("raw grant allowed %s", raw)
-			}
+	for _, raw := range nettest.EnvRefused {
+		if _, err := ParseGrant(EnvGrantPrefix + raw); err == nil {
+			t.Errorf("allowed %s", raw)
+		}
+		if len((Grants{Capability(EnvGrantPrefix + raw)}).ExecEnv(func(string) (string, bool) { return "injected", true })) != 0 {
+			t.Errorf("raw grant allowed %s", raw)
+		}
+	}
+	for _, raw := range nettest.EnvAllowed {
+		if _, err := ParseGrant(EnvGrantPrefix + raw); err != nil {
+			t.Errorf("refused benign %s: %v", raw, err)
+		}
+		if env := (Grants{Capability(EnvGrantPrefix + raw)}).ExecEnv(func(string) (string, bool) { return "ok", true }); len(env) != 1 {
+			t.Errorf("benign %s not passed: %v", raw, env)
 		}
 	}
 }

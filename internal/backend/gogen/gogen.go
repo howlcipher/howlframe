@@ -525,7 +525,7 @@ func envHelperSource() string {
 // is spawned only after that grant is present, so a denial cannot run it
 // or include the command in the error.
 func execHelperSource() string {
-	return `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
+	return codeLoadingEnvGoSource() + `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
 // must be an absolute, clean, symlink-free path named by a process:exec=
 // grant whose argument pattern matches argv exactly. A bare process grant
 // never authorizes exec.
@@ -590,10 +590,18 @@ func howlFrameExecSlot(p, arg string) bool {
 }
 
 // howlFrameExecEnv passes only process:env=NAME variables; never the host env.
+// howlFrameCodeLoadingEnv mirrors capability.DynamicLoaderEnv over the shared tables.
 func howlFrameCodeLoadingEnv(name string) bool {
-	switch strings.ToUpper(name) {
-	case "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH":
-		return true
+	u := strings.ToUpper(name)
+	for _, n := range howlFrameCodeLoadingEnvNames {
+		if u == n {
+			return true
+		}
+	}
+	for _, p := range howlFrameCodeLoadingEnvPrefixes {
+		if strings.HasPrefix(u, p) {
+			return true
+		}
 	}
 	return false
 }
@@ -602,7 +610,7 @@ func howlFrameExecEnv() []string {
 	env := []string{}
 	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
 		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
-		if !ok || name == "" || strings.ContainsAny(name, "= ") || strings.HasPrefix(strings.ToUpper(name), "LD_") || strings.HasPrefix(strings.ToUpper(name), "DYLD_") || howlFrameCodeLoadingEnv(name) {
+		if !ok || name == "" || strings.ContainsAny(name, "= ") || howlFrameCodeLoadingEnv(name) {
 			continue
 		}
 		if v, ok := os.LookupEnv(name); ok {
@@ -674,6 +682,22 @@ func fetchImports(extra []string) string {
 		}
 	}
 	return out
+}
+
+// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames and
+// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+func codeLoadingEnvGoSource() string {
+	var b strings.Builder
+	b.WriteString("var howlFrameCodeLoadingEnvNames = []string{\n")
+	for _, n := range capability.CodeLoadingEnvNames {
+		fmt.Fprintf(&b, "\t%q,\n", n)
+	}
+	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvPrefixes = []string{\n")
+	for _, p := range capability.CodeLoadingEnvPrefixes {
+		fmt.Fprintf(&b, "\t%q,\n", p)
+	}
+	b.WriteString("}\n\n")
+	return b.String()
 }
 
 // specialPrefixGoSource renders capability.SpecialPrefixes, the one table

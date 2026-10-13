@@ -322,7 +322,7 @@ func envJSHelper() string {
 // put the command in the error. There is no shell. Stdout is returned
 // ahead of stderr, which matches CombinedOutput when only one stream writes.
 func execJSHelper() string {
-	return `function howlFrameExecAllowed(cmd, args) {
+	return codeLoadingEnvJSSource() + `function howlFrameExecAllowed(cmd, args) {
   var fs = require("fs");
   if (typeof cmd !== "string" || cmd.charAt(0) !== "/") return false;
   var prefix = "";
@@ -366,6 +366,16 @@ function howlFrameExecSlot(p, arg) {
   return p === arg;
 }
 
+// howlFrameCodeLoadingEnv mirrors capability.DynamicLoaderEnv over the shared tables.
+function howlFrameCodeLoadingEnv(name) {
+  var u = String(name).toUpperCase();
+  if (howlFrameCodeLoadingEnvNames.indexOf(u) >= 0) return true;
+  for (var i = 0; i < howlFrameCodeLoadingEnvPrefixes.length; i++) {
+    if (u.indexOf(howlFrameCodeLoadingEnvPrefixes[i]) === 0) return true;
+  }
+  return false;
+}
+
 // Only process:env=NAME variables reach the child; never the host environment.
 function howlFrameExecEnv() {
   var env = {};
@@ -374,7 +384,7 @@ function howlFrameExecEnv() {
     var grant = grants[i].trim();
     if (grant.indexOf("process:env=") !== 0) continue;
     var name = grant.slice("process:env=".length);
-    if (name === "" || /[= ]/.test(name) || /^(LD_|DYLD_)/i.test(name) || /^(PYTHONPATH|NODE_OPTIONS|BASH_ENV|ENV|PERL5LIB|PERL5OPT|RUBYOPT|RUBYLIB|PYTHONSTARTUP|NODE_PATH)$/i.test(name)) continue;
+    if (name === "" || /[= ]/.test(name) || howlFrameCodeLoadingEnv(name)) continue;
     if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
   }
   return env;
@@ -1477,4 +1487,18 @@ func specialPrefixJSSource() string {
 	}
 	b.WriteString("];\n\n")
 	return b.String()
+}
+
+// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames and
+// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+func codeLoadingEnvJSSource() string {
+	quote := func(xs []string) string {
+		out := make([]string, len(xs))
+		for i, x := range xs {
+			out[i] = strconv.Quote(x)
+		}
+		return strings.Join(out, ", ")
+	}
+	return "var howlFrameCodeLoadingEnvNames = [" + quote(capability.CodeLoadingEnvNames) + "];\n" +
+		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n\n"
 }

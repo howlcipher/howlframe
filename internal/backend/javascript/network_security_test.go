@@ -1,10 +1,13 @@
 package javascript
 
 import (
+	"encoding/json"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -149,13 +152,43 @@ func TestJSAmbiguousNumericGrant(t *testing.T) {
 `)
 }
 func TestJSCodeLoadingEnv(t *testing.T) {
+	refused, _ := json.Marshal(nettest.EnvRefused)
+	allowed, _ := json.Marshal(nettest.EnvAllowed)
 	securityJS(t, `
- for(const name of ["PYTHONPATH","NODE_OPTIONS","BASH_ENV","ENV","PERL5LIB","PERL5OPT","RUBYOPT","RUBYLIB","PYTHONSTARTUP","NODE_PATH"]) {
-  for(const raw of [name,name.toLowerCase()]) {
-   process.env[raw]="injected";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
-   assert.deepEqual(howlFrameExecEnv(),{},raw);delete process.env[raw];
-  }
+ for(const raw of `+string(refused)+`) {
+  process.env[raw]="injected";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
+  assert.deepEqual(howlFrameExecEnv(),{},raw);delete process.env[raw];
  }
+ for(const raw of `+string(allowed)+`) {
+  process.env[raw]="ok";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
+  assert.deepEqual(howlFrameExecEnv(),{[raw]:"ok"},raw);delete process.env[raw];
+ }
+`)
+}
+
+// The emitted tables are exactly capability's single-source tables.
+func TestJSSharedTables(t *testing.T) {
+	names, _ := json.Marshal(capability.CodeLoadingEnvNames)
+	prefixes, _ := json.Marshal(capability.CodeLoadingEnvPrefixes)
+	var rows [][2]any
+	for _, raw := range capability.SpecialPrefixes {
+		p := netip.MustParsePrefix(raw)
+		bits := p.Bits()
+		if p.Addr().Is4() {
+			bits += 96
+		}
+		b := p.Addr().As16()
+		ints := make([]int, 16)
+		for i := range b {
+			ints[i] = int(b[i])
+		}
+		rows = append(rows, [2]any{ints, bits})
+	}
+	special, _ := json.Marshal(rows)
+	securityJS(t, `
+ assert.deepEqual(howlFrameCodeLoadingEnvNames,`+string(names)+`);
+ assert.deepEqual(howlFrameCodeLoadingEnvPrefixes,`+string(prefixes)+`);
+ assert.deepEqual(howlFrameSpecialPrefixes,`+string(special)+`);
 `)
 }
 func TestJSProxyEnvIgnored(t *testing.T) {
