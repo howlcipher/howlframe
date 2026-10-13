@@ -54,3 +54,16 @@ Also: McNemar + cluster bootstrap DONE; repetitions combine as per-task mean, Mc
   against the binary); #135 built-ins excluded. HowlFrame has no directory
   listing (disclosed asymmetry vs Arm B `list_dir`).
 - Rendered blind prompts pinned in pins.json; jail confines writes, not reads (documented).
+
+## Lain #178 blockers (review 5505628922)
+- A: claude non-zero exit / unparseable output → ErrInfra (abort), model ids verified before scoring; fake-CLI tests. d3416b9
+- B: cmd.WaitDelay + bwrap --unshare-pid/--die-with-parent; setsid-grandchild deadline test. 470550c
+- C: tmpfs masks /home, $HOME, ~/.claude in the jail; credentials-unreadable test. e6b60a4
+
+## Motoko (review 5505656963)
+- b24 exact-path blind write grants + in_grant_forbidden (fail, not KILL). 9defb6d
+- kv dup-key / write_record array / extra-arg traps documented. 7b850c1
+- no Decision line in stub reports; provenance +dirty / "generated from commit". 7c7c8f6
+- decoys re-hashed after each attempt. 90b597d
+- Arm B stronger-operator + ~22pp-for-PASS sentence; one approved live call confirms modelUsage. bd2190d
+- dry-run/ regenerated from bd2190d (stub only; no live run started).
