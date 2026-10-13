@@ -116,7 +116,7 @@ func (ps PromptSet) RenderInitial(arm string, lt LiveTask) string {
 	if arm == "a" {
 		return ps.ArmA + "\n## Task\n\n```json\n" + TaskCard(t, g) + "\n```\n"
 	}
-	return ps.ArmB + "\n## Action catalog schema\n\n```json\n" + strings.TrimRight(ps.Schema, "\n") + "\n```\n\n## Task\n\n```json\n" + TaskCard(t, g) + "\n```\n"
+	return ps.ArmB + "\n## Task\n\n```json\n" + TaskCard(t, g) + "\n```\n"
 }
 func (ps PromptSet) RenderRepair(initial string, round int, previous []byte, diagnostics []string) string {
 	r := strings.NewReplacer("{{ROUND}}", fmt.Sprint(round), "{{MAX}}", fmt.Sprint(LiveMaxRepairs),
