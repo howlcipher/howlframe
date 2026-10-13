@@ -78,6 +78,7 @@ const (
 	OpHTMLEscape
 	OpAttrEscape
 	OpHttpRequest
+	OpReadStdin
 )
 
 type OperandType string
@@ -163,6 +164,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpAttrEscape:       {Code: OpAttrEscape, Name: "ATTR_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for a quoted HTML attribute"},
 	OpHttpRequest:      {Code: OpHttpRequest, Name: "HTTP_REQUEST", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Capability: capability.Network, Description: "HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack"},
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
+	OpReadStdin:        {Code: OpReadStdin, Name: "READ_STDIN", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads all remaining standard input, byte-exact (end of input is distinguishable from an empty line)"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},

@@ -400,6 +400,12 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		line = strings.TrimSuffix(line, "\n")
 		line = strings.TrimSuffix(line, "\r")
 		return line
+	case "read_stdin":
+		data, err := io.ReadAll(interp.lineReader)
+		if err != nil {
+			InterpErr(fmt.Sprintf("Failed to read stdin: %v", err), node)
+		}
+		return string(data)
 	case "return":
 		if len(node.Children) != 2 {
 			InterpErr("return expects (return val)", node)
@@ -3170,6 +3176,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				line = strings.TrimSuffix(line, "\r")
 				vm.push(line)
 			}
+		case bytecode.OpReadStdin:
+			data, err := io.ReadAll(vm.lineReader)
+			if err != nil {
+				panic(NewRuntimeError("IO_ERROR", "main", vm.ip, inst.Op, "Failed to read stdin: %v", err))
+			}
+			vm.chargeAlloc(len(data), ip, inst.Op)
+			vm.push(string(data))
 		case bytecode.OpBinop:
 			b := vm.pop(inst.Op)
 			a := vm.pop(inst.Op)

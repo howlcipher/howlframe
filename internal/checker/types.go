@@ -780,6 +780,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			a.add(node, fmt.Sprintf("read_line expects 0 arguments, got %d", len(node.Children)-1))
 		}
 		return ast.Layout(ast.String)
+	case "read_stdin":
+		if len(node.Children) != 1 {
+			a.add(node, fmt.Sprintf("read_stdin expects 0 arguments, got %d", len(node.Children)-1))
+		}
+		return ast.Layout(ast.String)
 	case "stderr":
 		if len(node.Children) != 2 {
 			a.add(node, fmt.Sprintf("stderr expects 1 argument, got %d", len(node.Children)-1))
@@ -1071,7 +1076,7 @@ func isKeyword(name string) bool {
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
 		"store_get", "store_put", "store_delete", "store_keys", "intent",
 		"optimize_signature", "schema_bridge", "cli_args", "rate_limit",
-		"void", "string", "int", "float", "bool", "read_line", "stderr", "exit":
+		"void", "string", "int", "float", "bool", "read_line", "read_stdin", "stderr", "exit":
 		return true
 	}
 	return false

@@ -107,6 +107,7 @@ neural_circuit
 optimize_block
 optimize_signature
 read_line
+read_stdin
 req_method
 res
 res_header

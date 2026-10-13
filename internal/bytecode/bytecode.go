@@ -773,6 +773,8 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "EXIT", Op: OpExit})
 		case "read_line":
 			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
+		case "read_stdin":
+			insts = append(insts, BCInstruction{OpString: "READ_STDIN", Op: OpReadStdin})
 		case "call":
 			funcName := node.Children[1].Value
 			for _, arg := range node.Children[2:] {

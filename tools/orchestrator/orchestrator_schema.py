@@ -248,6 +248,11 @@ class ReadLineInstruction(BaseModel):
     pass
 
 
+class ReadStdinInstruction(BaseModel):
+    op: Literal["READ_STDIN"]
+    pass
+
+
 class RegexMatchInstruction(BaseModel):
     op: Literal["REGEX_MATCH"]
     pass
@@ -413,6 +418,7 @@ Instruction = Annotated[
         PrintInstruction,
         ReadFileInstruction,
         ReadLineInstruction,
+        ReadStdinInstruction,
         RegexMatchInstruction,
         ResInstruction,
         ResJsonInstruction,

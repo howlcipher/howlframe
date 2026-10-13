@@ -50,6 +50,7 @@
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |
 | `READ_LINE` |  | 0 | 1 |  | Reads a line from standard input |
+| `READ_STDIN` |  | 0 | 1 |  | Reads all remaining standard input, byte-exact (end of input is distinguishable from an empty line) |
 | `REGEX_MATCH` |  | 2 | 1 |  | Matches a string against a regex |
 | `RES` |  | 2 | 0 |  | Sends an HTTP response |
 | `RES_JSON` |  | 2 | 0 |  | Sends a JSON HTTP response |

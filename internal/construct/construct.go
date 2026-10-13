@@ -183,6 +183,7 @@ var table = []Entry{
 	{Name: "read_file", Support: Supported, Note: "READ_FILE"},
 	{Name: "read_json", Support: CompileTimeOnly, Note: "records sugar; (read_json p) → parse_json of read_text by ast.Desugar (filesystem:read via read_file only)"},
 	{Name: "read_line", Support: Supported, Note: "READ_LINE"},
+	{Name: "read_stdin", Support: Supported, Note: "READ_STDIN"},
 	{Name: "read_text", Support: CompileTimeOnly, Note: "density sugar; expanded to bytes_to_string/read_file by ast.Desugar before lowering"},
 	{Name: "rec", Support: CompileTimeOnly, Note: "records sugar; (rec k v ...) record literal → dict with name/string keys by ast.Desugar (pure)"},
 	{Name: "reduce", Support: CompileTimeOnly, Note: "core-library sugar; (reduce acc init x lst expr) for/set fold by ast.Desugar (pure)"},
