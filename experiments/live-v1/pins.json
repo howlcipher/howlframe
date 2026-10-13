@@ -2,7 +2,7 @@
   "falsifiable-v0/harness/arma.go": "1538865a5660b83341f66c146a0e9f6d1e4e7a314aa4c99ef08706aa672ffe07",
   "falsifiable-v0/harness/armb.go": "034ee0b75337ec2bd5efd4637bc78052323d445e278ccd1ab100621e710b595c",
   "falsifiable-v0/harness/broker.go": "b3499ed4603c7d2e0533bd5ff1fc04a6e72ac1abcc09aecd9467d64264494b4b",
-  "falsifiable-v0/harness/live.go": "36add2b6872756ea938c7fd618dd6ccaf12ed3f72cb621099b6615db61c7bffb",
+  "falsifiable-v0/harness/live.go": "6242d2d1f06e0e3556ac56cfbb06f8665106a082be541be19d856baee77d5eeb",
   "falsifiable-v0/harness/live_blind.go": "74a55964f44bbb023b206b886fa54803571660c6c094669eaddb08f5b5e8e879",
   "falsifiable-v0/harness/live_models.go": "c32ad4ab141276e1a52a2919ad8be5663cf2cbabc248c108a9a362df1456e6c5",
   "falsifiable-v0/harness/live_pins.go": "8386d8943e9a7680a141f28f6526153c705dc3e52ee178ba9744bef5951318a3",

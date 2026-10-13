@@ -356,10 +356,18 @@ func (l LiveRunner) deadline() (time.Duration, error) {
 
 // JailArgv wraps argv in bubblewrap with a read-only root and only dir
 // writable. Writes anywhere else fail with EROFS inside the jail.
+//
+// --unshare-pid puts the attempt in its own pid namespace, so killing bwrap
+// (or the parent dying, --die-with-parent) kills every descendant, setsid or
+// not. Host reads are not confined by the read-only bind.
 func JailArgv(bwrap, dir string, argv []string) []string {
-	return append([]string{bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
-		"--bind", dir, dir, "--unshare-net", "--die-with-parent", "--chdir", dir, "--"}, argv...)
+	a := []string{bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"}
+	a = append(a, "--bind", dir, dir, "--unshare-net", "--unshare-pid", "--die-with-parent", "--chdir", dir, "--")
+	return append(a, argv...)
 }
+
+const liveWaitDelay = 2 * time.Second
+
 
 // jailArtifacts are the only entries the child may create directly in dir.
 var jailArtifacts = map[string]bool{"candidate.howl": true, "candidate.plan.json": true, "prog.hfbc": true,
@@ -411,6 +419,9 @@ func (l LiveRunner) child(arm string, t LiveTask, candidate []byte, dir string) 
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LANG=C", "TZ=UTC"}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// A setsid grandchild outside the process group may hold stderr open;
+	// WaitDelay bounds Wait so the deadline always returns (Lain B).
+	cmd.WaitDelay = liveWaitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	start := time.Now()
