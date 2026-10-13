@@ -57,7 +57,7 @@ func testReceiptFetch(t *testing.T, origin string) {
 	address := strings.Replace(origin, "http://", "http://user:pw@", 1) + "/path?token=secret#frag"
 	grant := fetchGrantFor(t, origin)
 	r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch %q "GET"))`, address), DefaultExecutionPolicy(), grant)
-	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", string(grant)}) {
+	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", string(grant), capability.FetchPrivateOptOut(string(grant))}) {
 		t.Fatalf("receipt: %s", raw)
 	}
 	for _, secret := range []string{"secret", "token", "pw", "/path", "user:"} {
@@ -266,6 +266,26 @@ func TestReceiptDeadlineUnits(t *testing.T) {
 		}
 		if r.Limits.DeadlineMS != want {
 			t.Fatalf("deadline %s: %d want %d", deadline, r.Limits.DeadlineMS, want)
+		}
+	}
+}
+
+func TestReceiptFetchPrivateOptOut(t *testing.T) {
+	defer capability.SetFetchTransportForTest(receiptRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: make(http.Header)}, nil
+	}))()
+	for _, host := range []string{"127.0.0.1", "localhost", "api.example.com"} {
+		grant := capability.Capability("network:fetch=" + host + ":8099")
+		r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch "http://%s:8099/" "GET"))`, host), DefaultExecutionPolicy(), grant)
+		if r.Exit.Code != 0 || len(r.Effects) != 1 {
+			t.Fatalf("receipt: %s", raw)
+		}
+		want := ""
+		if host != "api.example.com" {
+			want = "explicit IP-literal or localhost grant"
+		}
+		if r.Effects[0].PrivateDestinationOptOut != want {
+			t.Fatalf("%s opt-out = %q, want %q", host, r.Effects[0].PrivateDestinationOptOut, want)
 		}
 	}
 }

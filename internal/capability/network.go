@@ -27,8 +27,9 @@ import (
 //
 // Every redirect hop is re-checked against the same allow-list, an IP
 // literal matches only a grant that names that same IP, and a granted DNS
-// name may not resolve to a link-local or unspecified address (cloud
-// metadata services live there). Proxies from the environment are ignored.
+// name may not resolve to private, loopback, NAT64, link-local or unspecified
+// addresses, except for the explicit localhost opt-out. Multicast is always
+// refused. Proxies from the environment are ignored.
 const FetchGrantPrefix = "network:fetch="
 
 // FetchDenied is the typed detail of a refused outbound request. Required is
@@ -114,6 +115,9 @@ func normalizeHost(h string) (string, bool, error) {
 		return canonicalIP(addr), true, nil
 	}
 	h = strings.ToLower(h)
+	if strings.HasSuffix(h, ".") {
+		return "", false, fmt.Errorf("invalid host name: trailing dot")
+	}
 	if looksNumeric(h) {
 		return "", false, fmt.Errorf("ambiguous numeric host")
 	}
@@ -267,24 +271,23 @@ func (g Grants) AuthorizeFetch(u *url.URL) (string, error) {
 	return "", &FetchDenied{Reason: "network: fetch host is not in the allow-list", Required: FetchGrantPrefix + t.String()}
 }
 
-// forbiddenResolved reports addresses a granted DNS name may not reach:
-// link-local (169.254.0.0/16, fe80::/10, which hosts cloud metadata) and
-// unspecified addresses. Granting the IP literal itself is the only way in.
+// forbiddenResolved reports addresses a hostname grant may not reach by
+// default. Explicit IP-literal and localhost grants opt out, except multicast.
 func forbiddenResolved(a netip.Addr) bool {
 	a = a.Unmap()
-	return a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast()
+	return a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() || a.IsLoopback() || a.IsPrivate() || netip.MustParsePrefix("64:ff9b::/96").Contains(a)
 }
 
 // checkDial vets the resolved address a connection is about to use. A DNS
-// name (not an IP literal) may not land on a link-local, multicast or
-// unspecified address.
+// name may not land on a forbidden destination. Explicit literal and
+// localhost grants opt out of private-address checks, but never multicast.
 func checkDial(host string, literal bool, address string) error {
 	ap, err := netip.ParseAddrPort(address)
 	if err != nil {
 		return &FetchDenied{Reason: "network: fetch dial address is invalid", Required: FetchGrantPrefix + host}
 	}
-	if !literal && forbiddenResolved(ap.Addr()) {
-		return &FetchDenied{Reason: "network: granted host resolved to a link-local or unspecified address", Required: FetchGrantPrefix + canonicalIP(ap.Addr())}
+	if ap.Addr().IsMulticast() || !literal && !strings.EqualFold(host, "localhost") && forbiddenResolved(ap.Addr()) {
+		return &FetchDenied{Reason: "network: granted host resolved to a forbidden destination", Required: FetchGrantPrefix + canonicalIP(ap.Addr())}
 	}
 	return nil
 }
@@ -293,8 +296,8 @@ func checkDial(host string, literal bool, address string) error {
 const MaxFetchRedirects = 10
 
 // FetchClient returns an HTTP client that re-authorizes every redirect hop
-// against g, ignores proxy settings, and refuses to connect a granted DNS
-// name to a link-local or unspecified address. onHop is called for every
+// against g, ignores proxy settings, and vets the resolved destination at
+// connection time. onHop is called for every
 // redirect hop with the matched grant or the denial. A denial surfaces from
 // Do as an error that wraps *FetchDenied.
 func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *http.Client {
@@ -314,6 +317,31 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 			d.Control = func(_, address string, _ syscall.RawConn) error {
 				return checkDial(host, literal, address)
 			}
+			if !literal {
+				_, port, _ := net.SplitHostPort(addr)
+				addresses, err := fetchLookupIP(ctx, host)
+				if err != nil {
+					return nil, err
+				}
+				for _, address := range addresses {
+					target := net.JoinHostPort(address.IP.String(), port)
+					if err := checkDial(host, literal, target); err != nil {
+						return nil, err
+					}
+				}
+				var last error
+				for _, address := range addresses {
+					conn, err := d.DialContext(ctx, network, net.JoinHostPort(address.IP.String(), port))
+					if err == nil {
+						return conn, nil
+					}
+					last = err
+				}
+				if last != nil {
+					return nil, last
+				}
+				return nil, &FetchDenied{Reason: "network: host resolved to no addresses"}
+			}
 			return d.DialContext(ctx, network, addr)
 		},
 		ForceAttemptHTTP2:   true,
@@ -328,6 +356,18 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > MaxFetchRedirects {
 				return fmt.Errorf("stopped after %d redirects", MaxFetchRedirects)
+			}
+			previous := via[len(via)-1].URL
+			if previous.Scheme == "https" && req.URL.Scheme == "http" {
+				return &FetchDenied{Reason: "network: HTTPS redirect downgrade refused"}
+			}
+			changedOrigin := !sameFetchOrigin(previous, req.URL)
+			for i := 1; i < len(via); i++ {
+				changedOrigin = changedOrigin || !sameFetchOrigin(via[i-1].URL, via[i].URL)
+			}
+			if changedOrigin {
+				req.Header.Del("Authorization")
+				req.Header.Del("Cookie")
 			}
 			grant, err := g.AuthorizeFetch(req.URL)
 			if onHop != nil {
@@ -346,6 +386,8 @@ func AsFetchDenied(err error) (*FetchDenied, bool) {
 	}
 	return nil, false
 }
+
+var fetchLookupIP = net.DefaultResolver.LookupIPAddr
 
 var fetchTestTransport http.RoundTripper
 
@@ -376,3 +418,22 @@ func FetchGrantForURL(rawURL string) (string, bool) {
 // whose URL is not a compile-time constant. It is not a valid grant: the
 // operator must replace it with network:fetch=host[:port] entries.
 const DynamicFetchRequirement = FetchGrantPrefix + "<dynamic>"
+
+// sameFetchOrigin includes scheme and effective port, not just hostname.
+func sameFetchOrigin(a, b *url.URL) bool {
+	ta, ea := urlTarget(a)
+	tb, eb := urlTarget(b)
+	return ea == nil && eb == nil && strings.EqualFold(a.Scheme, b.Scheme) && ta.host == tb.host && ta.port == tb.port
+}
+
+// FetchPrivateOptOut describes explicit authority to reach private destinations.
+func FetchPrivateOptOut(grant string) string {
+	if !strings.HasPrefix(grant, FetchGrantPrefix) {
+		return ""
+	}
+	t, err := parseFetchSpec(strings.TrimPrefix(grant, FetchGrantPrefix))
+	if err == nil && (t.ip || t.host == "localhost") {
+		return "explicit IP-literal or localhost grant"
+	}
+	return ""
+}
