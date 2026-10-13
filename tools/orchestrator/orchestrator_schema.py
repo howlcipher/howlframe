@@ -238,6 +238,11 @@ class PrintInstruction(BaseModel):
     int_operand: int
 
 
+class RandHexInstruction(BaseModel):
+    op: Literal["RAND_HEX"]
+    pass
+
+
 class ReadFileInstruction(BaseModel):
     op: Literal["READ_FILE"]
     pass
@@ -273,9 +278,19 @@ class ReturnInstruction(BaseModel):
     pass
 
 
+class SecureEqualInstruction(BaseModel):
+    op: Literal["SECURE_EQUAL"]
+    pass
+
+
 class SetVarInstruction(BaseModel):
     op: Literal["SET_VAR"]
     string_operand: str
+
+
+class Sha256HexInstruction(BaseModel):
+    op: Literal["SHA256_HEX"]
+    pass
 
 
 class SleepInstruction(BaseModel):
@@ -416,6 +431,7 @@ Instruction = Annotated[
         NeuralCircuitInstruction,
         ParseJsonInstruction,
         PrintInstruction,
+        RandHexInstruction,
         ReadFileInstruction,
         ReadLineInstruction,
         ReadStdinInstruction,
@@ -423,7 +439,9 @@ Instruction = Annotated[
         ResInstruction,
         ResJsonInstruction,
         ReturnInstruction,
+        SecureEqualInstruction,
         SetVarInstruction,
+        Sha256HexInstruction,
         SleepInstruction,
         SpawnInstruction,
         SpawnAgentInstruction,

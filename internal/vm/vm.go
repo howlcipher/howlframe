@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -401,6 +402,34 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		line = strings.TrimSuffix(line, "\n")
 		line = strings.TrimSuffix(line, "\r")
 		return line
+	case "sha256_hex", "rand_hex", "secure_equal":
+		want := 2
+		if head != "secure_equal" {
+			want = 1
+		}
+		if len(node.Children) != want+1 {
+			InterpErr(fmt.Sprintf("%s expects %d argument(s)", head, want), node)
+		}
+		a := interp.eval(node.Children[1], env)
+		if head == "rand_hex" {
+			out, err := randHex(a)
+			if err != nil {
+				InterpErr(fmt.Sprintf("rand_hex: %v", err), node)
+			}
+			return out
+		}
+		as, ok := a.(string)
+		if !ok {
+			InterpErr(head+" expected string", node)
+		}
+		if head == "sha256_hex" {
+			return sha256Hex(as)
+		}
+		bs, ok := interp.eval(node.Children[2], env).(string)
+		if !ok {
+			InterpErr("secure_equal expected strings", node)
+		}
+		return subtle.ConstantTimeCompare([]byte(as), []byte(bs)) == 1
 	case "read_stdin":
 		data, err := io.ReadAll(interp.lineReader)
 		if err != nil {
@@ -3190,6 +3219,28 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				line = strings.TrimSuffix(line, "\r")
 				vm.push(line)
 			}
+		case bytecode.OpSha256Hex:
+			s, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sha256_hex expected string"))
+			}
+			vm.chargeAlloc(64, ip, inst.Op)
+			vm.push(sha256Hex(s))
+		case bytecode.OpRandHex:
+			nAny := vm.pop(inst.Op)
+			hexStr, err := randHex(nAny)
+			if err != nil {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "rand_hex: %v", err))
+			}
+			vm.chargeAlloc(len(hexStr), ip, inst.Op)
+			vm.push(hexStr)
+		case bytecode.OpSecureEqual:
+			b, okB := vm.pop(inst.Op).(string)
+			a, okA := vm.pop(inst.Op).(string)
+			if !okA || !okB {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "secure_equal expected strings"))
+			}
+			vm.push(subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1)
 		case bytecode.OpReadStdin:
 			data, err := io.ReadAll(vm.lineReader)
 			if err != nil {

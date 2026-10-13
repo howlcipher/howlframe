@@ -108,7 +108,10 @@
 | `read_file` | Yes | filesystem | No | No | - | AUTHORITATIVE |
 | `read_json` | No | None | Yes | No | - | AUTHORITATIVE |
 | `read_line` | Yes | None | No | No | - | AUTHORITATIVE |
+| `rand_hex` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_stdin` | Yes | None | No | No | - | AUTHORITATIVE |
+| `secure_equal` | Yes | None | No | No | - | AUTHORITATIVE |
+| `sha256_hex` | Yes | None | No | No | - | AUTHORITATIVE |
 | `read_text` | No | None | Yes | No | - | AUTHORITATIVE |
 | `rec` | No | None | Yes | No | - | AUTHORITATIVE |
 | `reduce` | No | None | Yes | No | - | AUTHORITATIVE |

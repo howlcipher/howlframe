@@ -270,7 +270,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		// Value-taking built-ins: nested sugar in their arguments must expand
 		// (heldout-v0 h05/h12). Kept complete by the registry drift test.
 		"write_file", "read_file", "mkdir", "to_lower", "to_upper", "str_trim",
-		"html_escape", "attr_escape", "regex_match", "is_nil", "map_keys",
+		"html_escape", "attr_escape", "regex_match", "sha256_hex", "rand_hex", "secure_equal", "is_nil", "map_keys",
 		"env", "sleep", "exec", "cli_args", "read_line", "read_stdin", "time_now",
 		"store_open", "store_keys", "res_header",
 		"req_header", "req_method", "req_path", "req_query",
@@ -1484,7 +1484,7 @@ var exprBodyHeads = map[string]bool{
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
 	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
 	"http_status": true, "list_contains": true, "not": true, "blank": true,
-	"unix_now": true, "regex_match": true,
+	"unix_now": true, "regex_match": true, "sha256_hex": true, "rand_hex": true, "secure_equal": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
 	"req_header": true, "req_method": true, "req_path": true, "req_query": true,

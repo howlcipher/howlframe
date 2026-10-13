@@ -107,7 +107,10 @@ neural_circuit
 optimize_block
 optimize_signature
 read_line
+rand_hex
 read_stdin
+secure_equal
+sha256_hex
 req_method
 res
 res_header

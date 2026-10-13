@@ -62,6 +62,9 @@ var adapterExemptForms = map[string]struct{ reason, sample string }{
 	// widening that lowering changes the locked prod-flip criteria.
 	"read_line":          {"promote-blocker fence; -compile-hfir-bc does not lower READ_LINE", `(do (print (read_line)))`},
 	"read_stdin":         {"promote-blocker fence; -compile-hfir-bc does not lower READ_STDIN", `(do (print (read_stdin)))`},
+	"sha256_hex":         {"promote-blocker fence; -compile-hfir-bc does not lower SHA256_HEX", `(do (print (sha256_hex "a")))`},
+	"rand_hex":           {"promote-blocker fence; -compile-hfir-bc does not lower RAND_HEX", `(do (print (rand_hex 4)))`},
+	"secure_equal":       {"promote-blocker fence; -compile-hfir-bc does not lower SECURE_EQUAL", `(do (print (secure_equal "a" "b")))`},
 	"confidence":         {"promote-blocker fence; model call (network grant); not lowered by HFIR", `(do (print (confidence 1)))`},
 	"http_request":       {"promote-blocker fence; not lowered by HFIR (fetch is the lowered network form)", `(do (print (http_request "http://127.0.0.1:9/" "GET")))`},
 	"req_method":         {"promote-blocker fence; not lowered by HFIR (req_query/req_header/req_path are)", `(do (let (r (dict ("method" "GET"))) (print (req_method r))))`},

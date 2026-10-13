@@ -773,6 +773,16 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "EXIT", Op: OpExit})
 		case "read_line":
 			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
+		case "sha256_hex":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "SHA256_HEX", Op: OpSha256Hex})
+		case "rand_hex":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "RAND_HEX", Op: OpRandHex})
+		case "secure_equal":
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "SECURE_EQUAL", Op: OpSecureEqual})
 		case "read_stdin":
 			insts = append(insts, BCInstruction{OpString: "READ_STDIN", Op: OpReadStdin})
 		case "call":

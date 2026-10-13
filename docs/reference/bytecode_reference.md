@@ -48,6 +48,7 @@
 | `NEURAL_CIRCUIT` | int64 | var | 1 | network | Executes an LLM logic circuit with a given number of inputs and an instruction |
 | `PARSE_JSON` | string | 0 | 1 |  | Parses JSON from a string variable |
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
+| `RAND_HEX` |  | 1 | 1 |  | Hex string of n (1..64) cryptographically secure random bytes |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |
 | `READ_LINE` |  | 0 | 1 |  | Reads a line from standard input |
 | `READ_STDIN` |  | 0 | 1 |  | Reads all remaining standard input, byte-exact (end of input is distinguishable from an empty line) |
@@ -55,7 +56,9 @@
 | `RES` |  | 2 | 0 |  | Sends an HTTP response |
 | `RES_JSON` |  | 2 | 0 |  | Sends a JSON HTTP response |
 | `RETURN` |  | 1 | 0 |  | Returns from a function |
+| `SECURE_EQUAL` |  | 2 | 1 |  | Constant-time equality of two strings |
 | `SET_VAR` | string | 1 | 0 |  | Pops a value and updates an existing variable |
+| `SHA256_HEX` |  | 1 | 1 |  | Lowercase hex SHA-256 digest of a string |
 | `SLEEP` |  | 1 | 0 |  | Sleeps for a duration |
 | `SPAWN` | int64 | 0 | 0 | process | Spawns a background task |
 | `SPAWN_AGENT` | string, int64 | 1 | 0 | process | Spawns an autonomous subagent |
