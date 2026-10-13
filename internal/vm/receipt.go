@@ -44,7 +44,8 @@ type ReceiptEffect struct {
 	// for a denied fetch, the network:fetch=host:port grant it would need.
 	// Allow-list entries are copied verbatim from the normalized grant, so
 	// pattern literals (exec argument literals, hosts) appear as written.
-	Grant string `json:"grant,omitempty"`
+	Grant                    string `json:"grant,omitempty"`
+	PrivateDestinationOptOut string `json:"private_destination_opt_out,omitempty"`
 }
 type ReceiptExit struct {
 	Status string        `json:"status"`
@@ -114,7 +115,7 @@ func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode,
 		r.truncated = true
 		return
 	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant})
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant, receiptPrivateOptOut(decision, grant)})
 }
 
 // recordHop records a redirect hop. Unlike recordEffectGrant it does not
@@ -134,7 +135,7 @@ func (vm *BCVM) recordHop(cap capability.Capability, op bytecode.Opcode, decisio
 		r.truncated = true
 		return
 	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant})
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant, receiptPrivateOptOut(decision, grant)})
 }
 
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match
@@ -242,4 +243,11 @@ func (vm *BCVM) effectSummary(inst bytecode.BCInstruction, env *BcEnv) string {
 		}
 	}
 	return summary
+}
+
+func receiptPrivateOptOut(decision, grant string) string {
+	if decision != "allowed" {
+		return ""
+	}
+	return capability.FetchPrivateOptOut(grant)
 }

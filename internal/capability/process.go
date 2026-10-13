@@ -92,11 +92,16 @@ func slotMatches(p, arg string) bool {
 const EnvGrantPrefix = "process:env="
 
 // DynamicLoaderEnv reports variables that steer the dynamic loader
-// (LD_PRELOAD, LD_LIBRARY_PATH, any LD_* and DYLD_*). Passing one to an exec
+// or interpreter code loading (LD_*, DYLD_*, PYTHONPATH, NODE_OPTIONS, etc.).
+// Passing one to an exec
 // child would let it load arbitrary code into an allow-listed program, so
 // process:env= refuses them.
 func DynamicLoaderEnv(name string) bool {
 	u := strings.ToUpper(name)
+	switch u {
+	case "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH":
+		return true
+	}
 	return strings.HasPrefix(u, "LD_") || strings.HasPrefix(u, "DYLD_")
 }
 

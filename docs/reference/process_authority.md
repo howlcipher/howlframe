@@ -120,7 +120,9 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
 
 * `process:env=NAME` refuses dynamic-loader variables: any name starting with
   `LD_` (including `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`) or `DYLD_`,
-  compared case-insensitively. Passing one to an allow-listed program would
+  plus interpreter code-loading variables `PYTHONPATH`, `PYTHONSTARTUP`,
+  `NODE_OPTIONS`, `NODE_PATH`, `BASH_ENV`, `ENV`, `PERL5LIB`, `PERL5OPT`,
+  `RUBYOPT` and `RUBYLIB`, compared case-insensitively. Passing one to an allow-listed program would
   let it load arbitrary code. The grant is rejected at parse time on the
   interpreter and `-run-bc`; generated Go and JavaScript skip such names
   when building the child environment.
