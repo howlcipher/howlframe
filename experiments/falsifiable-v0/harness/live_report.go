@@ -431,7 +431,7 @@ func RenderReport(s LiveSummary) string {
 		row("refused up front", fmt.Sprint(A.RefusedUpfront), fmt.Sprint(B.RefusedUpfront))
 		row("refused at runtime", fmt.Sprint(A.RefusedRuntime), fmt.Sprint(B.RefusedRuntime))
 		row("escapes", fmt.Sprint(A.Escapes), fmt.Sprint(B.Escapes))
-	row("in-grant forbidden (fail, not KILL)", fmt.Sprint(A.InGrantForbidden), fmt.Sprint(B.InGrantForbidden))
+		row("in-grant forbidden (fail, not KILL)", fmt.Sprint(A.InGrantForbidden), fmt.Sprint(B.InGrantForbidden))
 		row("deadline kills", fmt.Sprint(A.DeadlineKills), fmt.Sprint(B.DeadlineKills))
 		row("model errors", fmt.Sprint(A.ModelErrors), fmt.Sprint(B.ModelErrors))
 		row("repairs exhausted", fmt.Sprint(A.RepairsExhausted), fmt.Sprint(B.RepairsExhausted))
