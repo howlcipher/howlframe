@@ -371,7 +371,7 @@ function howlFrameExecEnv() {
     var grant = grants[i].trim();
     if (grant.indexOf("process:env=") !== 0) continue;
     var name = grant.slice("process:env=".length);
-    if (name === "" || /[= ]/.test(name) || /^(LD_|DYLD_)/i.test(name)) continue;
+    if (name === "" || /[= ]/.test(name) || /^(LD_|DYLD_)/i.test(name) || /^(PYTHONPATH|NODE_OPTIONS|BASH_ENV|ENV|PERL5LIB|PERL5OPT|RUBYOPT|RUBYLIB|PYTHONSTARTUP|NODE_PATH)$/i.test(name)) continue;
     if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
   }
   return env;
@@ -446,6 +446,8 @@ function howlFrameFetchAllowed(u) {
     if (spec === "" || /[\/@?#*%\s\\]/.test(spec) || spec.charAt(spec.length - 1) === ":") continue;
     var g;
     try { g = new URL("http://" + spec); } catch (e) { continue; }
+    var writtenHost = spec.charAt(0) === "[" ? spec.slice(0, spec.indexOf("]") + 1) : spec.split(":")[0].toLowerCase();
+    if (writtenHost.charAt(0) !== "[" && /(^|\.)[0-9][^.]*$/.test(writtenHost) && writtenHost !== g.hostname) continue;
     if (g.hostname !== u.hostname) continue;
     var gport = /:\d+$/.test(spec) ? spec.slice(spec.lastIndexOf(":") + 1) : def;
     if (String(Number(gport)) === gport && gport === port) return true;
@@ -453,42 +455,122 @@ function howlFrameFetchAllowed(u) {
   return false;
 }
 
+function howlFrameFetchURL(raw, base) {
+  var written = String(raw);
+  if (written.indexOf("\\") >= 0 || /^https?:/i.test(written) && !/^https?:\/\/[^/]/i.test(written)) howlFrameFetchDeny();
+  var u = new URL(written, base);
+  // WHATWG rewrites short, octal and hexadecimal IPv4 before grant matching.
+  var authority = /^(?:[a-z][a-z0-9+.-]*:)?\/\/([^/?#]*)/i.exec(written);
+  if (authority) {
+    var host = authority[1].slice(authority[1].lastIndexOf("@") + 1).split(":")[0].toLowerCase();
+    if (host.charAt(0) !== "[" && /(^|\.)[0-9][^.]*$/.test(host) && host !== u.hostname) howlFrameFetchDeny();
+  }
+  return u;
+}
+
 function howlFrameFetchDeny() {
   throw new Error("CAPABILITY_DENIED: capability denied: network");
 }
 
-// A granted DNS name may not resolve to a link-local or unspecified address
-// (cloud metadata). Node checks this before connecting; a browser cannot
-// resolve names, so there the browser's own network policy applies.
+// Node checks private and metadata DNS results and pins the connection. A
+// browser cannot inspect DNS, so its own network policy governs named hosts.
+function howlFrameForbiddenAddress(address, explicit) {
+  var a = String(address).toLowerCase().replace(/^\[|\]$/g, "");
+  if (a.indexOf(":") >= 0) {
+    try { a = new URL("http://[" + a + "]/").hostname.slice(1, -1); } catch (e) { return true; }
+  }
+  if (a.indexOf("::ffff:") === 0) {
+    var mapped = a.slice(7);
+    if (mapped.indexOf(".") < 0) {
+      var parts = mapped.split(":");
+      if (parts.length === 2) {
+        var n = parseInt(parts[0], 16) * 65536 + parseInt(parts[1], 16);
+        mapped = [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
+      }
+    }
+    a = mapped;
+  }
+  var v4 = /^\d+\.\d+\.\d+\.\d+$/.test(a);
+  var bytes = a.split(".").map(Number);
+  if (v4 && bytes[0] >= 224 && bytes[0] <= 239 || /^ff[0-9a-f]{2}:/.test(a)) return true;
+  if (explicit) return false;
+  return a === "::" || a === "::1" || /^f[cd][0-9a-f]{2}:/.test(a) || /^fe[89ab][0-9a-f]:/.test(a) || /^64:ff9b::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?)?$/.test(a) ||
+    v4 && (a === "0.0.0.0" || bytes[0] === 127 || bytes[0] === 10 || bytes[0] === 169 && bytes[1] === 254 ||
+      bytes[0] === 172 && bytes[1] >= 16 && bytes[1] <= 31 || bytes[0] === 192 && bytes[1] === 168);
+}
+
 async function howlFrameFetchResolvedOk(u) {
-  var host = u.hostname;
-  if (/^\[.*\]$/.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return true;
+  var host = u.hostname.replace(/^\[|\]$/g, "");
+  var literal = /^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+  if (literal) return !howlFrameForbiddenAddress(host, true);
   if (typeof require !== "function") return true;
   var addrs = await require("dns").promises.lookup(host, { all: true });
+  if (!addrs.length) return false;
   for (var i = 0; i < addrs.length; i++) {
-    var a = String(addrs[i].address).toLowerCase();
-    if (/^169\.254\./.test(a) || /^fe[89ab][0-9a-f]:/.test(a) || a === "0.0.0.0" || a === "::" || /^::ffff:169\.254\./.test(a)) return false;
+    if (howlFrameForbiddenAddress(addrs[i].address, host === "localhost")) return false;
   }
+  // Pin this request to a vetted address; do not resolve again at connect time.
+  u.howlFrameAddress = addrs[0];
   return true;
 }
 
-async function howlFrameFetch(url, method, body) {
+function howlFrameFetchRequest(u, init) {
+  if (typeof require !== "function") return fetch(u.href, init);
+  // Native requests ignore proxy environment variables, including Node 24's
+  // NODE_USE_ENV_PROXY. agent:false also prevents pooled connections bypassing lookup.
+  return new Promise(function (resolve, reject) {
+    var options = { method: init.method, headers: init.headers, agent: false };
+    if (u.howlFrameAddress) options.lookup = function (host, opts, cb) {
+      var a = u.howlFrameAddress;
+      cb(null, opts && opts.all ? [{ address: a.address, family: a.family }] : a.address, a.family);
+    };
+    var req = require(u.protocol === "https:" ? "https" : "http").request(u, options, function (res) {
+      var chunks = [];
+      res.on("data", function (chunk) { chunks.push(chunk); });
+      res.on("error", reject);
+      res.on("end", function () { resolve({
+        status: res.statusCode,
+        headers: { get: function (name) { return res.headers[name.toLowerCase()]; } },
+        text: async function () {
+          var data = Buffer.concat(chunks);
+          var encoding = String(res.headers["content-encoding"] || "").toLowerCase();
+          if (encoding === "gzip") data = require("zlib").gunzipSync(data);
+          else if (encoding === "deflate") data = require("zlib").inflateSync(data);
+          else if (encoding === "br") data = require("zlib").brotliDecompressSync(data);
+          return data.toString("utf8").replace(/^\uFEFF/, "");
+        }
+      }); });
+    });
+    req.on("error", reject);
+    if (init.body !== undefined) req.write(init.body);
+    req.end();
+  });
+}
+
+async function howlFrameFetch(url, method, body, headers) {
   var u;
-  try { u = new URL(String(url)); } catch (e) { howlFrameFetchDeny(); }
+  try { u = howlFrameFetchURL(url); } catch (e) { howlFrameFetchDeny(); }
   if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
-  var init = { method: method, redirect: "manual" };
+  var init = { method: method, redirect: "manual", headers: Object.assign({}, headers || {}) };
   if (arguments.length >= 3) {
     init.body = body;
   }
   for (var hop = 0; ; hop++) {
     if (!(await howlFrameFetchResolvedOk(u))) howlFrameFetchDeny();
-    var pending = fetch(u.href, init);
+    var pending = howlFrameFetchRequest(u, init);
     var r = await pending;
     if (r && r.type === "opaqueredirect") howlFrameFetchDeny();
     var loc = r && r.status >= 300 && r.status < 400 && r.headers && r.headers.get ? r.headers.get("location") : null;
     if (!loc) return r.text();
     if (hop >= 10) howlFrameFetchDeny();
-    try { u = new URL(loc, u); } catch (e) { howlFrameFetchDeny(); }
+    var previous = u;
+    try { u = howlFrameFetchURL(loc, u); } catch (e) { howlFrameFetchDeny(); }
+    if (previous.protocol === "https:" && u.protocol === "http:") howlFrameFetchDeny();
+    if (previous.origin !== u.origin) {
+      Object.keys(init.headers || {}).forEach(function (name) {
+        if (/^(authorization|cookie)$/i.test(name)) delete init.headers[name];
+      });
+    }
     if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
     if (r.status === 303 || (r.status === 301 || r.status === 302) && init.method === "POST") {
       init = { method: "GET", redirect: "manual" };

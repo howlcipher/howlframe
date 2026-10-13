@@ -103,7 +103,7 @@ func TestGenerateJSFetchWithBody(t *testing.T) {
 	appCode, _ := GenerateJSCode(root)
 	for _, want := range []string{
 		`howlFrameFetch("http://example.test/tasks", "POST", "{\"title\":\"Ship\"}")`,
-		`var pending = fetch(u.href, init);`,
+		`var pending = howlFrameFetchRequest(u, init);`,
 		`howlFrameParseJSON(response)`,
 	} {
 		if !strings.Contains(appCode, want) {
