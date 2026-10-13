@@ -43,13 +43,24 @@ capability at all: they only touch the request the server already accepted.
 * Hostname grants block DNS results in loopback (`127.0.0.0/8`, `::1`),
   RFC1918 (`10/8`, `172.16/12`, `192.168/16`), IPv6 ULA (`fc00::/7`),
   NAT64 (`64:ff9b::/96`), link-local (`169.254/16`, `fe80::/10`) and
-  unspecified ranges. IPv4-mapped IPv6 is checked as IPv4. Go checks the
+  unspecified ranges, plus every other non-global-unicast or special-purpose
+  range in the shared table `capability.SpecialPrefixes`: CGNAT
+  (`100.64/10`, which includes the `100.100.100.200` metadata address),
+  `0/8`, `192.0.0/24`, `198.18/15`, `240/4` (including broadcast), the
+  documentation ranges, `64:ff9b:1::/48`, Teredo (`2001::/32`), `100::/64`
+  and `fec0::/10`. Generated Go and JavaScript render the same table.
+  IPv4-mapped IPv6 is checked as IPv4, and IPv4 embedded in IPv4-compatible
+  (`::a.b.c.d`) and 6to4 (`2002::/16`) addresses is decoded and checked. Go checks the
   resolved address before dialing and again at socket creation. Node pins
   its connection to the address checked by its lookup.
 * Explicit IP-literal grants and the exact name `localhost` are deliberate
   opt-outs for those ranges. They still require the exact host and port;
   `localhost` does not authorize `127.0.0.1`, or vice versa. Multicast
   (`224.0.0.0/4`, `ff00::/8`) is always refused, even with a literal grant.
+* A redirect may land on an IP-literal or `localhost` destination only if
+  the request started on that same host. A hostname grant can't be
+  redirected into a granted private IP or `localhost`, and `localhost`
+  can't be redirected to `127.0.0.1` (or the reverse).
 * HTTPS-to-HTTP redirects are refused even when both hosts are granted.
   On any host, effective port or scheme change, Authorization and Cookie
   headers are removed for the rest of the chain, including subsequent hops
