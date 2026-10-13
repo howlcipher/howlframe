@@ -33,6 +33,7 @@ type Provenance struct {
 	Model              string            `json:"model"`
 	ClientVersion      string            `json:"client_version"`
 	Deadline           string            `json:"deadline"`
+	AdapterDeadline    string            `json:"adapter_deadline"`
 	Repetitions        []string          `json:"repetitions"`
 	Jail               string            `json:"os_detector"`
 	ReviewCounter      string            `json:"review_token_counter"`

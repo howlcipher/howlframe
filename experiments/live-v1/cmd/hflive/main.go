@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/howlcipher/howlframe/experiments/falsifiable-v0/harness"
+	"github.com/howlcipher/howlframe/internal/vm"
 )
 
 // Pre-registered run parameters. `run` refuses any other value.
@@ -94,6 +95,10 @@ func run(args []string) error {
 	approved := fs.Bool("seats-approved-protocol", false, "required for run")
 	expectCommit := fs.String("expect-commit", "", "run: the seat-approved commit")
 	expectHF := fs.String("expect-howlframe-sha256", "", "run: sha256 of the approved howlframe binary")
+	// #175: runner-owned model-adapter budget, validated and capped (30 s) by
+	// vm.AdapterDeadlineFlag. Recorded in provenance; fixed for run.
+	var policy vm.ExecutionPolicy
+	fs.Var(vm.AdapterDeadlineFlag{Policy: &policy}, "adapter-deadline", "model-adapter deadline (default 1s, cap 30s)")
 	if e := fs.Parse(args[1:]); e != nil {
 		return e
 	}
@@ -148,7 +153,11 @@ func run(args []string) error {
 	if e != nil {
 		return e
 	}
-	prov := harness.Provenance{Status: "running", Deadline: deadline.String(), Repetitions: strings.Split(*reps, ","), ArmOrderSeed: ArmOrderSeed,
+	adapterDeadline := vm.DefaultAdapterDeadline
+	if policy.AdapterDeadline != 0 {
+		adapterDeadline = policy.AdapterDeadline
+	}
+	prov := harness.Provenance{Status: "running", Deadline: deadline.String(), AdapterDeadline: adapterDeadline.String(), Repetitions: strings.Split(*reps, ","), ArmOrderSeed: ArmOrderSeed,
 		BootstrapResamples: harness.BootstrapResamples, BootstrapSeed: harness.BootstrapSeed}
 	repo := filepath.Dir(filepath.Dir(*live))
 	prov.Commit, _ = git(repo, "rev-parse", "HEAD")
@@ -183,6 +192,9 @@ func run(args []string) error {
 		}
 		if *deadline != harness.LiveDefaultDeadline {
 			bad = append(bad, "--deadline is fixed at "+harness.LiveDefaultDeadline.String())
+		}
+		if adapterDeadline != vm.DefaultAdapterDeadline {
+			bad = append(bad, "-adapter-deadline is fixed at "+vm.DefaultAdapterDeadline.String())
 		}
 		if *sets != "tuning,blind" {
 			bad = append(bad, "--set is fixed at tuning,blind")
