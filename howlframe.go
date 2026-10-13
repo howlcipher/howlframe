@@ -1293,6 +1293,44 @@ func rejectUnsupportedTargetControlflow(root *ast.Node, target string) {
 				}
 			}
 		}
+		// Binding and parameter lists are syntax containers, not calls.
+		// Visit initializer expressions without interpreting binding names as heads.
+		if len(n.Children) > 0 && n.Children[0].Type == "SYMBOL" {
+			switch n.Children[0].Value {
+			case "let", "try_let":
+				if len(n.Children) > 1 && n.Children[1] != nil {
+					for i, value := range n.Children[1].Children {
+						if i%2 == 1 {
+							walk(value)
+						}
+					}
+				}
+				for i := 2; i < len(n.Children); i++ {
+					walk(n.Children[i])
+				}
+				return
+			case "defun":
+				for i := 3; i < len(n.Children); i++ {
+					walk(n.Children[i])
+				}
+				return
+			case "lambda":
+				for i := 2; i < len(n.Children); i++ {
+					walk(n.Children[i])
+				}
+				return
+			case "dict":
+				for _, pair := range n.Children[1:] {
+					if pair != nil && pair.Type == "List" && len(pair.Children) == 2 {
+						walk(pair.Children[0])
+						walk(pair.Children[1])
+					} else {
+						walk(pair)
+					}
+				}
+				return
+			}
+		}
 		for _, c := range n.Children {
 			walk(c)
 		}
