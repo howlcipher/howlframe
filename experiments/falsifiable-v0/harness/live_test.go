@@ -22,7 +22,7 @@ func TestLiveChildHelper(t *testing.T) {
 	}
 	a := os.Args[i+1:]
 	_, m := corpus(t)
-	task := taskFor(t, m, a[1])
+	task := lt(t, m, a[1])
 	b := read(t, a[2])
 	if e := RunChildAttempt(Runner{Root: a[4], HowlFrame: a[5]}, task, a[0], b, a[3]); e != nil {
 		t.Fatal(e)
@@ -47,6 +47,10 @@ func (f fixedModel) Generate(context.Context, Prompt) (Completion, error) {
 	return Completion{Text: string(f), InputTokens: 1, OutputTokens: 1}, nil
 }
 
+func lt(t *testing.T, m Manifest, id string) LiveTask {
+	return LiveTask{Task: taskFor(t, m, id), Set: "tuning"}
+}
+
 func liveRunner(t *testing.T, m Model, hf string) LiveRunner {
 	root, _ := corpus(t)
 	live, _ := filepath.Abs("../../live-v1")
@@ -66,7 +70,7 @@ func TestLiveArmBGovernedReceipts(t *testing.T) {
 	l := liveRunner(t, countingModel{StubModel{Root: root}, &calls}, "/nonexistent")
 	out := filepath.Join(t.TempDir(), "r")
 	vlog := filepath.Join(t.TempDir(), "v.jsonl")
-	r, e := l.Run(context.Background(), taskFor(t, m, "t01"), "b", "seed1", out, vlog)
+	r, e := l.Run(context.Background(), lt(t, m, "t01"), "b", "rep1", out, vlog)
 	if e != nil || r.Verdict != VerdictSuccess || calls != 1 {
 		t.Fatalf("%v %+v calls=%d", e, r, calls)
 	}
@@ -93,7 +97,7 @@ func TestLiveGrantViolationIsFinalAndLogged(t *testing.T) {
 		l := liveRunner(t, countingModel{fixedModel("```\n" + string(read(t, filepath.Join(root, "fixtures", tc.fixture))) + "```\n"), &calls}, "/nonexistent")
 		out := filepath.Join(t.TempDir(), "r")
 		vlog := filepath.Join(t.TempDir(), "v.jsonl")
-		r, e := l.Run(context.Background(), taskFor(t, m, "a01"), tc.arm, "seed1", out, vlog)
+		r, e := l.Run(context.Background(), lt(t, m, "a01"), tc.arm, "rep1", out, vlog)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -124,13 +128,13 @@ func TestLiveArmACapsViolationFinal(t *testing.T) {
 	bin := buildHowlFrameBinaryForTest(t)
 	calls := 0
 	l := liveRunner(t, countingModel{StubModel{Root: root, ViolateIDs: map[string]bool{"a02": true}}, &calls}, bin)
-	r, e := l.Run(context.Background(), taskFor(t, m, "a02"), "a", "seed1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
+	r, e := l.Run(context.Background(), lt(t, m, "a02"), "a", "rep1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
 	if e != nil || r.Verdict != VerdictGrantViolation || calls != 1 || len(r.Violations) != 1 || !strings.Contains(strings.Join(r.Violations[0].Diagnostics, ""), "CAPS_PREFLIGHT_DENIED") {
 		t.Fatalf("%v %+v", e, r)
 	}
 	calls = 0
 	l.Model = countingModel{StubModel{Root: root, RepairIDs: map[string]bool{"t01": true}}, &calls}
-	r, e = l.Run(context.Background(), taskFor(t, m, "t01"), "a", "seed1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
+	r, e = l.Run(context.Background(), lt(t, m, "t01"), "a", "rep1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
 	if e != nil || r.Verdict != VerdictSuccess || r.RepairRounds != 1 || calls != 2 {
 		t.Fatalf("repair path: %v %+v", e, r)
 	}
@@ -140,7 +144,7 @@ func TestLiveRepairBudget(t *testing.T) {
 	_, m := corpus(t)
 	calls := 0
 	l := liveRunner(t, countingModel{fixedModel("not json"), &calls}, "/nonexistent")
-	r, e := l.Run(context.Background(), taskFor(t, m, "t01"), "b", "seed1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
+	r, e := l.Run(context.Background(), lt(t, m, "t01"), "b", "rep1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
 	if e != nil || r.Verdict != VerdictRepairsSpent || calls != LiveMaxRepairs+1 || r.RepairRounds != LiveMaxRepairs {
 		t.Fatalf("%v %+v calls=%d", e, r, calls)
 	}
@@ -155,7 +159,7 @@ func TestLiveDeadlineKillsProcessGroup(t *testing.T) {
 		return []string{"/bin/sh", "-c", "sleep 60 & echo $! > " + pidfile + "; wait"}
 	}
 	start := time.Now()
-	r, e := l.Run(context.Background(), taskFor(t, m, "t01"), "a", "seed1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
+	r, e := l.Run(context.Background(), lt(t, m, "t01"), "a", "rep1", filepath.Join(t.TempDir(), "r"), filepath.Join(t.TempDir(), "v"))
 	if e != nil || r.Verdict != VerdictDeadlineKilled || r.Success || len(r.Attempts) != 1 {
 		t.Fatalf("%v %+v", e, r)
 	}
@@ -172,24 +176,25 @@ func TestLiveDeadlineKillsProcessGroup(t *testing.T) {
 		t.Fatalf("grandchild %d survived the deadline kill", pid)
 	}
 	l.Deadline = LiveMaxDeadline + time.Second
-	if _, e := l.Run(context.Background(), taskFor(t, m, "t01"), "a", "seed1", filepath.Join(t.TempDir(), "r2"), filepath.Join(t.TempDir(), "v")); e == nil {
+	if _, e := l.Run(context.Background(), lt(t, m, "t01"), "a", "rep1", filepath.Join(t.TempDir(), "r2"), filepath.Join(t.TempDir(), "v")); e == nil {
 		t.Fatal("deadline above the 30s cap must be refused")
 	}
 }
 
 func TestLiveReportShowsHowlFrameLosses(t *testing.T) {
 	rs := []LiveResult{
-		{TaskID: "t01", Seed: "seed1", Arm: "a", Verdict: VerdictFailure},
-		{TaskID: "t01", Seed: "seed1", Arm: "b", Verdict: VerdictSuccess, Success: true},
-		{TaskID: "t02", Seed: "seed1", Arm: "a", Verdict: VerdictGrantViolation},
-		{TaskID: "t02", Seed: "seed1", Arm: "b", Verdict: VerdictSuccess, Success: true},
+		{TaskID: "t01", Rep: "rep1", Set: "tuning", Arm: "a", Verdict: VerdictFailure},
+		{TaskID: "t01", Rep: "rep1", Set: "tuning", Arm: "b", Verdict: VerdictSuccess, Success: true},
+		{TaskID: "t02", Rep: "rep1", Set: "tuning", Arm: "a", Verdict: VerdictGrantViolation},
+		{TaskID: "t02", Rep: "rep1", Set: "tuning", Arm: "b", Verdict: VerdictSuccess, Success: true},
 	}
-	s := Summarize(rs)
-	if s.Verdicts["success_rate"] != "howlframe_worse" || s.Verdicts["grant_violations"] != "howlframe_worse" || len(s.Losses) != 2 {
-		t.Fatalf("%+v", s)
+	s := Summarize(rs, Provenance{Status: "complete"})
+	ss := s.Sets["tuning"]
+	if len(ss.Losses) != 2 || ss.Decision != "KILL" || ss.Paired.OnlyB != 2 {
+		t.Fatalf("%+v", ss)
 	}
 	rep := RenderReport(s)
-	for _, want := range []string{"Where HowlFrame lost (B succeeded, A did not): 2", "t01/seed1", "t02/seed1", "success_rate: howlframe_worse", "| success rate | 0.0% (0) | 100.0% (2) |"} {
+	for _, want := range []string{"Where HowlFrame lost (B succeeded, A did not): 2", "t01/rep1", "t02/rep1", "Decision: KILL"} {
 		if !strings.Contains(rep, want) {
 			t.Fatalf("report missing %q:\n%s", want, rep)
 		}

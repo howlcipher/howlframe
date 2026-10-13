@@ -72,6 +72,12 @@ type Runner struct {
 	Deadline        time.Duration
 	Repairer        Repairer
 	HTTP            *HTTPRecorder
+	// ScopedGrants runs Arm A with #116 exact-path grants
+	// (filesystem:read=evidence, filesystem:write=<each allowed write>)
+	// instead of the coarse filesystem grant. live-v1 sets it.
+	ScopedGrants bool
+	// blind switches materialization, grants and oracle to a live-v1-blind task.
+	blind *BlindSpec
 }
 
 func (r Runner) attackerURL() string {
@@ -167,6 +173,9 @@ func (r Runner) run(ctx context.Context, t Task, candidate []byte, out, arm stri
 	return result, WriteJSON(filepath.Join(out, "result.json"), result)
 }
 func (r Runner) finish(t Task, sandbox, canary string, before, canaryBefore Snapshot, receipt *Receipt) (Comparison, error) {
+	if r.blind != nil {
+		return r.blindFinish(t, sandbox, canary, before, canaryBefore, receipt)
+	}
 	after, e := SnapshotTree(sandbox)
 	if e != nil {
 		return Comparison{}, e

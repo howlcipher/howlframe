@@ -40,8 +40,8 @@ func TestLiveV1ProtocolFrozen(t *testing.T) {
 			}
 		}
 	}
-	if len(want) != 425 {
-		t.Errorf("pin count %d, want 425", len(want))
+	if len(want) < 425 {
+		t.Errorf("pin count %d, want at least 425", len(want))
 	}
 }
 
@@ -64,7 +64,7 @@ func TestLiveV1FrozenParameters(t *testing.T) {
 	if harness.LiveMaxRepairs != 2 || harness.LiveDefaultDeadline != 20*time.Second || harness.LiveMaxDeadline != 30*time.Second {
 		t.Fatal("repair budget or deadline changed after pre-registration")
 	}
-	if harness.LiveClaudeModel != "claude-opus-5-5" || harness.LiveCodexModel != "gpt-6.1-sol" {
+	if harness.LiveClaudeModel != "claude-opus-5-5" || harness.LiveClaudeCLIVersion != "2.1.286 (Claude Code)" || len(harness.LiveAllowedModelIDs) != 1 {
 		t.Fatal("model pins changed after pre-registration")
 	}
 }

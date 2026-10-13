@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 func sha(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
@@ -40,11 +41,19 @@ func ComputeLivePins(liveRoot, root string) (map[string]string, error) {
 			return nil, e
 		}
 	}
-	for _, p := range []string{"prompts/arm_a.md", "prompts/arm_b.md", "prompts/repair.md"} {
+	for _, p := range []string{"prompts/arm_a.md", "prompts/arm_b.md", "prompts/repair.md", "PREREGISTRATION.md", "cmd/hflive/main.go"} {
 		if e := add("live-v1/"+p, filepath.Join(liveRoot, p)); e != nil {
 			return nil, e
 		}
 	}
+	code, e := LiveCodePins(root)
+	if e != nil {
+		return nil, e
+	}
+	for k, v := range code {
+		pins[k] = v
+	}
+	pins["live-v1-blind/manifest.json(pinned)"] = LiveBlindManifestSHA256
 	m, e := LoadManifest(root)
 	if e != nil {
 		return nil, e
@@ -69,8 +78,32 @@ func ComputeLivePins(liveRoot, root string) (map[string]string, error) {
 		}
 		t, _ := m.Task(id)
 		for _, arm := range []string{"a", "b"} {
-			pins["rendered/"+id+"/arm_"+arm] = sha([]byte(ps.RenderInitial(arm, t)))
+			pins["rendered/"+id+"/arm_"+arm] = sha([]byte(ps.RenderInitial(arm, LiveTask{Task: t, Set: "tuning"})))
 		}
 	}
 	return pins, nil
+}
+
+// LiveBlindManifestSHA256 pins Hange's blind set (howlframe#180) by the
+// sha256 of its manifest.json, which lists the sha256 of every file.
+const LiveBlindManifestSHA256 = "b4e525207b1b46b978415c92f54fdd6cc5eb23375506345512737d2f8b132fde"
+
+// LiveCodePins hashes every non-test Go file of the harness package.
+func LiveCodePins(root string) (map[string]string, error) {
+	files, e := filepath.Glob(filepath.Join(root, "harness", "*.go"))
+	if e != nil {
+		return nil, e
+	}
+	out := map[string]string{}
+	for _, p := range files {
+		if strings.HasSuffix(p, "_test.go") {
+			continue
+		}
+		b, e := os.ReadFile(p)
+		if e != nil {
+			return nil, e
+		}
+		out["falsifiable-v0/harness/"+filepath.Base(p)] = sha(b)
+	}
+	return out, nil
 }
