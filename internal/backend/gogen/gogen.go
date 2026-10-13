@@ -724,6 +724,13 @@ func howlFrameForbiddenDest(a netip.Addr) bool {
 		if compat && !(b[12] == 0 && b[13] == 0 && b[14] == 0) {
 			return howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
 		}
+		translated := b[8] == 0xff && b[9] == 0xff && b[10] == 0 && b[11] == 0
+		for _, x := range b[:8] {
+			translated = translated && x == 0
+		}
+		if translated {
+			return howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+		}
 	}
 	if !a.IsGlobalUnicast() {
 		return true

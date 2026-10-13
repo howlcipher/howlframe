@@ -524,6 +524,8 @@ function howlFrameIsSpecial(b) {
   if (b[0] === 0x20 && b[1] === 0x02 && howlFrameIsSpecial(mapped(b.slice(2, 6)))) return true;
   var compat = b.slice(0, 12).every(function (x) { return x === 0; });
   if (compat && !(b[12] === 0 && b[13] === 0 && b[14] === 0)) return howlFrameIsSpecial(mapped(b.slice(12, 16)));
+  var translated = b.slice(0, 8).every(function (x) { return x === 0; }) && b[8] === 255 && b[9] === 255 && b[10] === 0 && b[11] === 0;
+  if (translated) return howlFrameIsSpecial(mapped(b.slice(12, 16)));
   for (var i = 0; i < howlFrameSpecialPrefixes.length; i++) {
     var p = howlFrameSpecialPrefixes[i][0], bits = howlFrameSpecialPrefixes[i][1], ok = true;
     for (var k = 0; k < 16 && ok && bits > 0; k++, bits -= 8) {
