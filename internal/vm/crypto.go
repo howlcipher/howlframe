@@ -1,6 +1,10 @@
 package vm
 
 import (
+	"strings"
+
+	"github.com/howlcipher/howlframe/internal/capability"
+
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -33,4 +37,20 @@ func randHex(nAny any) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// capabilityGranted reports whether the runner granted a capability by its
+// coarse name. A scoped grant ("filesystem:read=/x") counts for its family,
+// except that "network:fetch=..." never counts as serving "network".
+func capabilityGranted(caps []capability.Capability, name string) bool {
+	for _, c := range caps {
+		s := string(c)
+		if s == name {
+			return true
+		}
+		if name != "network" && strings.HasPrefix(s, name+":") {
+			return true
+		}
+	}
+	return false
 }

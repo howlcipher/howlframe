@@ -298,6 +298,7 @@ type Server struct {
 	literals  map[string]http.HandlerFunc
 	patterns  []registered
 	skeletons map[string]struct{}
+	fallback  http.HandlerFunc
 }
 
 // NewServer wraps mux. A nil mux gets a fresh ServeMux.
@@ -321,6 +322,15 @@ func (s *Server) Handle(routePath string, handler http.HandlerFunc) error {
 	}
 	if handler == nil {
 		return runtimeError("route handler is missing")
+	}
+	// The path "*" registers the fallback handler: it receives every request
+	// that no literal or {name} route matched, instead of the plain-text 404.
+	if routePath == "*" {
+		if s.fallback != nil {
+			return runtimeError("duplicate fallback route %q", routePath)
+		}
+		s.fallback = handler
+		return nil
 	}
 	pattern, err := ParseRoute(routePath)
 	if err != nil {
@@ -361,6 +371,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		reg.handler(w, WithParams(r, params))
+		return
+	}
+	if s.fallback != nil {
+		s.fallback(w, r)
 		return
 	}
 	s.mux.ServeHTTP(w, r)

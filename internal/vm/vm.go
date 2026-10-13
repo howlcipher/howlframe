@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // interpreter.go implements Phase 1 of improvement #49 (Direct Neural
@@ -1798,7 +1799,8 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 			if err != nil && !os.IsNotExist(err) {
 				return nil, fmt.Errorf("read persisted store %q: %w", store.file, err)
 			}
-			if err == nil {
+			// A zero-byte (or whitespace-only) file is a valid empty store.
+			if err == nil && len(bytes.TrimSpace(data)) > 0 {
 				if unmarshalErr := json.Unmarshal(data, &store.records); unmarshalErr != nil {
 					return nil, fmt.Errorf("decode persisted store %q: %w", store.file, unmarshalErr)
 				}
@@ -1820,8 +1822,42 @@ func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
 	}
-	if err := os.WriteFile(s.file, data, 0644); err != nil {
+	if err := writeFileAtomic(s.file, data); err != nil {
 		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	return nil
+}
+
+// writeFileAtomic replaces path with data through a synced temporary sibling
+// and a rename, so a crash leaves either the old or the new complete file.
+func writeFileAtomic(path string, data []byte) error {
+	dir, base := filepath.Split(path)
+	tmp, err := os.CreateTemp(dir, base+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Chmod(name, 0o644); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		os.Remove(name)
+		return err
 	}
 	return nil
 }
@@ -2711,6 +2747,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			json.NewEncoder(w).Encode(data)
 		case bytecode.OpHttpServerStart:
 			port := inst.StringOperand
+			if inst.IntOperand&1 != 0 {
+				portVal := vm.pop(inst.Op)
+				n, convErr := strconv.Atoi(strings.TrimSpace(fmt.Sprint(portVal)))
+				if convErr != nil || n < 1 || n > 65535 {
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http_server port must be an integer 1..65535"))
+				}
+				port = strconv.Itoa(n)
+			}
+			if inst.IntOperand&2 != 0 {
+				env.vars["__http_serial"] = &sync.Mutex{}
+			}
 			mux := http.NewServeMux()
 			env.vars["__http_mux"] = mux
 			env.vars["__http_port"] = port
@@ -2747,6 +2794,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				// Every response carries a server-assigned id (never taken from
 				// the client) so a client report, an access line and a fault line
 				// can be matched.
+				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
+					serial.Lock()
+					defer serial.Unlock()
+				}
 				requestID := newRequestID()
 				started := time.Now()
 				r = httpreq.WithRequestID(r, requestID)
@@ -3256,6 +3307,49 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panicRequestRead(ip, inst.Op, err)
 			}
 			vm.push(id)
+		case bytecode.OpHttpReqBody:
+			recv := vm.pop(inst.Op)
+			req, ok := recv.(*http.Request)
+			if !ok || req == nil {
+				panicRequestRead(ip, inst.Op, fmt.Errorf("TYPE_ERROR: req_body expected *http.Request, got %T", recv))
+			}
+			maxBody := vm.Limits.MaxRequestBodyBytes
+			if maxBody <= 0 {
+				maxBody = DefaultLimits.MaxRequestBodyBytes
+			}
+			var data []byte
+			if req.Body != nil {
+				readData, readErr := io.ReadAll(io.LimitReader(req.Body, int64(maxBody)+1))
+				if readErr != nil {
+					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", readErr))
+				}
+				if len(readData) > maxBody {
+					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBody))
+				}
+				data = readData
+				req.Body = io.NopCloser(bytes.NewReader(data))
+			}
+			vm.chargeAlloc(len(data), ip, inst.Op)
+			vm.push(string(data))
+		case bytecode.OpHttpReqURLPath:
+			recv := vm.pop(inst.Op)
+			req, ok := recv.(*http.Request)
+			if !ok || req == nil || req.URL == nil {
+				panicRequestRead(ip, inst.Op, fmt.Errorf("TYPE_ERROR: req_url_path expected *http.Request, got %T", recv))
+			}
+			vm.push(req.URL.Path)
+		case bytecode.OpUTF8Valid:
+			s, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "utf8_valid expected string"))
+			}
+			vm.push(utf8.ValidString(s))
+		case bytecode.OpGranted:
+			name, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "granted expected a capability name string"))
+			}
+			vm.push(capabilityGranted(vm.AllowedCaps, name))
 		case bytecode.OpSha256Hex:
 			s, ok := vm.pop(inst.Op).(string)
 			if !ok {
@@ -4036,9 +4130,9 @@ func handlerFailureBodyFor(id string) string {
 }
 
 func newRequestID() string {
-	id, err := randHex(int64(8))
+	id, err := randHex(int64(16))
 	if err != nil {
-		return "0000000000000000"
+		return "00000000000000000000000000000000"
 	}
 	return id
 }

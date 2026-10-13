@@ -20,13 +20,16 @@
 | `FETCH` |  | 2 | 1 | network | Fetches a URL |
 | `FOR_INIT` |  | 1 | 1 |  | Initializes a for loop |
 | `FOR_NEXT` | string, int64 | 0 | 0 |  | Next iteration of a for loop |
+| `GRANTED` |  | 1 | 1 |  | True when the runner granted the named capability (introspection only; confers no authority) |
 | `HTML_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for HTML text |
 | `HTTP_REQUEST` | int64 | var | 1 | network | HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack |
+| `HTTP_REQ_BODY` |  | 1 | 1 |  | Reads the request body as a string, bounded by --max-request-bytes (LIMIT_EXCEEDED beyond it) |
 | `HTTP_REQ_HEADER` |  | 2 | 1 |  | Reads one request header from an already-accepted request |
 | `HTTP_REQ_ID` |  | 1 | 1 |  | Reads the server-assigned request id of an already-accepted request |
 | `HTTP_REQ_METHOD` |  | 0 | 1 |  | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |
 | `HTTP_REQ_QUERY` |  | 2 | 1 |  | Reads one query parameter from an already-accepted request |
+| `HTTP_REQ_URL_PATH` |  | 1 | 1 |  | Reads the request URL path without the query string |
 | `HTTP_RES_HEADER` |  | 2 | 0 |  | Sets HTTP response header |
 | `HTTP_ROUTE` | string, string, int64 | 0 | 0 | network | Registers an HTTP route |
 | `HTTP_SERVER_SERVE` |  | 0 | 0 | network | Serves HTTP requests |
@@ -76,6 +79,7 @@
 | `TASK` | string | 0 | 1 |  | Defines a task for a subagent |
 | `TIME_NOW` |  | 0 | 1 |  | Gets current unix timestamp |
 | `TRY_LET` | string, string, int64 | 0 | 0 |  | Try block with let binding |
+| `UTF8_VALID` |  | 1 | 1 |  | True when a string is valid UTF-8 |
 | `WRITE_FILE` |  | 2 | 0 | filesystem | Writes to a file |
 
 The capability column is the opcode field from `internal/bytecode/opcode.go`. `MAP_KEYS` is pure (empty). `STORE_KEYS` is `database`, and a `file://` store additionally requires `filesystem`. The hand-written note for that URI grant is [bytecode capability notes](bytecode_capability_notes.md).

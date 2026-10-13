@@ -378,8 +378,10 @@ func checkGoApp(node *ast.Node) {
 			ast.ReportError("http_server expects at least a port and 1 route", head.Line, head.Column)
 		}
 		portNode := node.Children[1]
-		if portNode.Type != "INT" {
-			ast.ReportError("Expected integer for port", portNode.Line, portNode.Column)
+		// A port may be a run-time expression ((to_int (env "PORT"))); only the
+		// standalone bytecode VM evaluates it. The Go backend still needs a literal.
+		if portNode.Type != "INT" && portNode.Type != "List" {
+			ast.ReportError("Expected integer for port, or an expression that evaluates to one", portNode.Line, portNode.Column)
 		}
 		startIndex = 2
 	}
@@ -497,6 +499,9 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 			}
 			checkGoAppHandler(routeNode, isCliApp)
 		}
+	case "serialize_requests":
+		// Standalone-VM option: handlers run one at a time. Compiled by the
+		// bytecode compiler; the Go backend ignores it.
 	case "grants":
 		// Server-wide default handler grants; compiled by the bytecode
 		// compiler, rejected by the Go/JS backends.

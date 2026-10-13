@@ -64,7 +64,7 @@ func TestRequestIDAccessLogAndFaultLine(t *testing.T) {
 		t.Fatalf("/id: %v %s\nlog: %s", resp, body, log)
 	}
 	rid := resp.Header.Get("X-Request-Id")
-	if !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(rid) || !strings.Contains(body, rid) {
+	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(rid) || !strings.Contains(body, rid) {
 		t.Fatalf("request id header %q body %q", rid, body)
 	}
 	resp2, _ := get("/id")

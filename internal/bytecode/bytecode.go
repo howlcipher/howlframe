@@ -611,7 +611,20 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: opName, Op: op})
 		case "http_server":
 			portNode := node.Children[1]
-			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})
+			// IntOperand bit 1: the port is an expression on the stack. Bit 2:
+			// (serialize_requests) was declared, so handlers run one at a time.
+			startFlags := int64(0)
+			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) == 1 && child.Children[0].Value == "serialize_requests" {
+					startFlags |= 2
+				}
+			}
+			if portNode.Type == "INT" {
+				insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value, IntOperand: startFlags})
+			} else {
+				insts = append(insts, c.compileNode(portNode)...)
+				insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, IntOperand: startFlags | 1})
+			}
 			// (grants ...) directly under http_server is the default handler
 			// grant list for routes that do not declare their own.
 			serverGrants := ""
@@ -628,6 +641,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			for _, child := range node.Children[2:] {
 				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "grants" {
+					continue
+				}
+				if child.Type == "List" && len(child.Children) == 1 && child.Children[0].Value == "serialize_requests" {
 					continue
 				}
 				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "route" {
@@ -773,6 +789,23 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "EXIT", Op: OpExit})
 		case "read_line":
 			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
+		case "serialize_requests":
+			// http_server option, consumed when the server is compiled; no instruction.
+		case "req_body", "req_url_path", "utf8_valid", "granted":
+			if len(node.Children) != 2 {
+				ast.ReportError(fmt.Sprintf("%s expects (%s arg)", head, head), node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			op, opName := OpHttpReqBody, "HTTP_REQ_BODY"
+			switch head {
+			case "req_url_path":
+				op, opName = OpHttpReqURLPath, "HTTP_REQ_URL_PATH"
+			case "utf8_valid":
+				op, opName = OpUTF8Valid, "UTF8_VALID"
+			case "granted":
+				op, opName = OpGranted, "GRANTED"
+			}
+			insts = append(insts, BCInstruction{OpString: opName, Op: op})
 		case "req_id":
 			if len(node.Children) != 2 {
 				ast.ReportError("req_id expects (req_id req)", node.Line, node.Column)
@@ -1007,6 +1040,10 @@ func compileSpawnGrants(node *ast.Node) string {
 	for _, g := range node.Children[1:] {
 		if g.Type != "STRING" {
 			ast.ReportError("grants entries must be string literals", g.Line, g.Column)
+		}
+		if g.Value == capability.InheritFilesystem {
+			out = append(out, capability.InheritFilesystem)
+			continue
 		}
 		parsed, err := capability.ParseGrant(g.Value)
 		if err != nil {

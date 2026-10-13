@@ -1251,8 +1251,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 			ast.ReportError(fmt.Sprintf("ARITY_ERROR: %s expects at least a port", head.Value), head.Line, head.Column)
 		}
 		portNode = node.Children[1]
-		if portNode.Type != "INT" {
-			// ast.ReportError("Expected integer for port", portNode.Line, portNode.Column)
+		if head.Value == "http_server" && portNode.Type == "List" {
+			ast.ReportError("UNSUPPORTED_ON_TARGET: a run-time port expression is supported only by the standalone bytecode VM", portNode.Line, portNode.Column)
 		}
 		startIndex = 2
 	}

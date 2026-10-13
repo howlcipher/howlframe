@@ -154,7 +154,7 @@ var DefaultLimits = VMLimits{
 	MaxMemoryBytes:      67108864,
 	MaxCallDepth:        1000,
 	MaxFetchBodyBytes:   10 * 1024 * 1024,
-	MaxRequestBodyBytes: 10 * 1024 * 1024,
+	MaxRequestBodyBytes: 1024 * 1024,
 	MaxExecOutputBytes:  10 * 1024 * 1024,
 }
 

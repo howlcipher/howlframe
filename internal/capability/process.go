@@ -218,9 +218,25 @@ func (g Grants) AuthorizeExec(program string, args []string) (string, string, er
 // the parent's grants. Nothing is inherited implicitly: an empty request yields
 // no grants. Every requested grant must be covered by the parent, otherwise
 // the whole request is refused.
+// InheritFilesystem is the attenuation request for the parent's own
+// filesystem grants.
+const InheritFilesystem = "inherit:filesystem"
+
 func Attenuate(parent Grants, requested []string) (Grants, error) {
 	child := Grants{}
 	for _, raw := range requested {
+		// "inherit:filesystem" hands the child exactly the filesystem grants the
+		// parent holds (scoped or coarse), whatever their run-time roots are.
+		// It can only narrow: the child never gets more than the parent.
+		if raw == InheritFilesystem {
+			for _, pg := range parent {
+				s := string(pg)
+				if pg == Filesystem || strings.HasPrefix(s, "filesystem:read=") || strings.HasPrefix(s, "filesystem:write=") {
+					child = append(child, pg)
+				}
+			}
+			continue
+		}
 		g, err := ParseGrant(raw)
 		if err != nil {
 			return nil, &ExecDenied{"child grant is invalid"}

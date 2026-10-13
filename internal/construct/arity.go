@@ -44,7 +44,7 @@ var arities = map[string]Arity{
 	"mkdir": {1, 1}, "neural_circuit": {2, Variadic}, "not": {1, 1}, "nz": {2, 2},
 	"optimize_block": {3, Variadic}, "optimize_signature": {1, Variadic}, "parse_json": {2, 2},
 	"print": {0, Variadic}, "read_file": {1, 1}, "read_line": {0, 0}, "rand_hex": {1, 1}, "read_stdin": {0, 0}, "secure_equal": {2, 2}, "sha256_hex": {1, 1}, "read_text": {1, 1},
-	"reduce": {5, 5}, "regex_match": {2, 2}, "req_header": {2, 2}, "req_id": {1, 1}, "req_method": {1, 1},
+	"reduce": {5, 5}, "regex_match": {2, 2}, "req_header": {2, 2}, "req_id": {1, 1}, "req_body": {1, 1}, "req_url_path": {1, 1}, "utf8_valid": {1, 1}, "granted": {1, 1}, "serialize_requests": {0, 0}, "req_method": {1, 1},
 	"req_path": {2, 2}, "req_query": {2, 2}, "res": {3, 3}, "res_header": {2, 2},
 	"res_json": {2, 2}, "return": {1, 1}, "reverse": {1, 1}, "schema_bridge": {2, 2},
 	"set": {2, 2}, "sget": {2, 2}, "sinc": {2, 2}, "sleep": {1, 1}, "sort": {1, 1},

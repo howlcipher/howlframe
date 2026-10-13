@@ -96,6 +96,11 @@ class ForNextInstruction(BaseModel):
     int_operand: int
 
 
+class GrantedInstruction(BaseModel):
+    op: Literal["GRANTED"]
+    pass
+
+
 class HtmlEscapeInstruction(BaseModel):
     op: Literal["HTML_ESCAPE"]
     pass
@@ -104,6 +109,11 @@ class HtmlEscapeInstruction(BaseModel):
 class HttpRequestInstruction(BaseModel):
     op: Literal["HTTP_REQUEST"]
     int_operand: int
+
+
+class HttpReqBodyInstruction(BaseModel):
+    op: Literal["HTTP_REQ_BODY"]
+    pass
 
 
 class HttpReqHeaderInstruction(BaseModel):
@@ -128,6 +138,11 @@ class HttpReqPathInstruction(BaseModel):
 
 class HttpReqQueryInstruction(BaseModel):
     op: Literal["HTTP_REQ_QUERY"]
+    pass
+
+
+class HttpReqUrlPathInstruction(BaseModel):
+    op: Literal["HTTP_REQ_URL_PATH"]
     pass
 
 
@@ -383,6 +398,11 @@ class TryLetInstruction(BaseModel):
     int_operand: int
 
 
+class Utf8ValidInstruction(BaseModel):
+    op: Literal["UTF8_VALID"]
+    pass
+
+
 class WriteFileInstruction(BaseModel):
     op: Literal["WRITE_FILE"]
     pass
@@ -408,13 +428,16 @@ Instruction = Annotated[
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
+        GrantedInstruction,
         HtmlEscapeInstruction,
         HttpRequestInstruction,
+        HttpReqBodyInstruction,
         HttpReqHeaderInstruction,
         HttpReqIdInstruction,
         HttpReqMethodInstruction,
         HttpReqPathInstruction,
         HttpReqQueryInstruction,
+        HttpReqUrlPathInstruction,
         HttpResHeaderInstruction,
         HttpRouteInstruction,
         HttpServerServeInstruction,
@@ -464,6 +487,7 @@ Instruction = Annotated[
         TaskInstruction,
         TimeNowInstruction,
         TryLetInstruction,
+        Utf8ValidInstruction,
         WriteFileInstruction,
     ],
     Field(discriminator="op")
