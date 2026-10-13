@@ -82,6 +82,7 @@ const (
 	OpSha256Hex
 	OpRandHex
 	OpSecureEqual
+	OpHttpReqID
 )
 
 type OperandType string
@@ -171,6 +172,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpSha256Hex:        {Code: OpSha256Hex, Name: "SHA256_HEX", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Lowercase hex SHA-256 digest of a string"},
 	OpRandHex:          {Code: OpRandHex, Name: "RAND_HEX", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Hex string of n (1..64) cryptographically secure random bytes"},
 	OpSecureEqual:      {Code: OpSecureEqual, Name: "SECURE_EQUAL", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Constant-time equality of two strings"},
+	OpHttpReqID:        {Code: OpHttpReqID, Name: "HTTP_REQ_ID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the server-assigned request id of an already-accepted request"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},

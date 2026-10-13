@@ -76,6 +76,26 @@ func Query(recv, name any) (string, error) {
 // Header returns the first value of a request header. Lookup is
 // case-insensitive. A missing header is "". Repeated values contribute only
 // the first one.
+type requestIDKey struct{}
+
+// WithRequestID returns r carrying the server-assigned request id.
+func WithRequestID(r *http.Request, id string) *http.Request {
+	if r == nil {
+		return nil
+	}
+	return r.WithContext(context.WithValue(r.Context(), requestIDKey{}, id))
+}
+
+// RequestID reads the id assigned by WithRequestID ("" when none).
+func RequestID(recv any) (string, error) {
+	req, err := readRequest("req_id", recv)
+	if err != nil {
+		return "", err
+	}
+	id, _ := req.Context().Value(requestIDKey{}).(string)
+	return id, nil
+}
+
 func Header(recv, name any) (string, error) {
 	req, err := readRequest("req_header", recv)
 	if err != nil {

@@ -1071,7 +1071,7 @@ func isKeyword(name string) bool {
 		"dict", "list_get", "map_get", "map_keys", "map_set", "map_delete", "append",
 		"to_int", "to_float", "to_string", "bytes_to_string", "to_lower", "to_upper", "str_trim",
 		"encode_json", "html_escape", "attr_escape", "str_split",
-		"str_join", "regex_match", "sha256_hex", "rand_hex", "secure_equal", "confidence", "achieve", "fuzzy_cast",
+		"str_join", "regex_match", "req_id", "sha256_hex", "rand_hex", "secure_equal", "confidence", "achieve", "fuzzy_cast",
 		"time_now", "lazy_synthesize", "semantic_match", "neural_circuit",
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
 		"store_get", "store_put", "store_delete", "store_keys", "intent",

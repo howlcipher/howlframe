@@ -23,6 +23,7 @@
 | `HTML_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for HTML text |
 | `HTTP_REQUEST` | int64 | var | 1 | network | HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack |
 | `HTTP_REQ_HEADER` |  | 2 | 1 |  | Reads one request header from an already-accepted request |
+| `HTTP_REQ_ID` |  | 1 | 1 |  | Reads the server-assigned request id of an already-accepted request |
 | `HTTP_REQ_METHOD` |  | 0 | 1 |  | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |
 | `HTTP_REQ_QUERY` |  | 2 | 1 |  | Reads one query parameter from an already-accepted request |

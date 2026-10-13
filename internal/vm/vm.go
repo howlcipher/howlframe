@@ -402,6 +402,15 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		line = strings.TrimSuffix(line, "\n")
 		line = strings.TrimSuffix(line, "\r")
 		return line
+	case "req_id":
+		if len(node.Children) != 2 {
+			InterpErr("req_id expects (req_id req)", node)
+		}
+		id, err := httpreq.RequestID(interp.eval(node.Children[1], env))
+		if err != nil {
+			InterpErr(err.Error(), node)
+		}
+		return id
 	case "sha256_hex", "rand_hex", "secure_equal":
 		want := 2
 		if head != "secure_equal" {
@@ -2735,7 +2744,24 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			prog := vm.prog
 			if err := dispatch.Handle(path, func(w http.ResponseWriter, r *http.Request) {
+				// Every response carries a server-assigned id (never taken from
+				// the client) so a client report, an access line and a fault line
+				// can be matched.
+				requestID := newRequestID()
+				started := time.Now()
+				r = httpreq.WithRequestID(r, requestID)
+				w.Header().Set("X-Request-Id", requestID)
 				recorder := &httpResponseRecorder{ResponseWriter: w}
+				if vm.Limits.LogRequests {
+					defer func() {
+						status := recorder.status
+						if status == 0 {
+							status = http.StatusOK
+						}
+						fmt.Fprintf(vm.ErrOut, "access method=%s path=%s status=%d duration_ms=%d request_id=%s\n",
+							r.Method, r.URL.Path, status, time.Since(started).Milliseconds(), requestID)
+					}()
+				}
 				reqEnv := NewBcEnv(capturedEnv)
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
@@ -2762,7 +2788,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						// Details (code, opcode, message) stay in the server log
 						// and the receipt; the client only learns that the
 						// request failed (#166).
-						fmt.Fprintln(vm.ErrOut, "HTTP handler failure:", failure.Error())
+						fmt.Fprintf(vm.ErrOut, "fault request_id=%s method=%s path=%s error=%s\n", requestID, r.Method, r.URL.Path, failure.Error())
 						if recorder.wrote {
 							// The handler already committed a response; the
 							// status line cannot be rewritten, so surface the
@@ -2771,7 +2797,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						}
 						recorder.Header().Set("Content-Type", "application/json")
 						recorder.WriteHeader(http.StatusInternalServerError)
-						_, _ = io.WriteString(recorder, handlerFailureBody)
+						_, _ = io.WriteString(recorder, handlerFailureBodyFor(requestID))
 					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
@@ -3223,6 +3249,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				line = strings.TrimSuffix(line, "\r")
 				vm.push(line)
 			}
+		case bytecode.OpHttpReqID:
+			recv := vm.pop(inst.Op)
+			id, err := httpreq.RequestID(recv)
+			if err != nil {
+				panicRequestRead(ip, inst.Op, err)
+			}
+			vm.push(id)
 		case bytecode.OpSha256Hex:
 			s, ok := vm.pop(inst.Op).(string)
 			if !ok {
@@ -3890,10 +3923,14 @@ func normalizeForJSON(v any) any {
 // before writing anything, so only the latter is converted into a 500.
 type httpResponseRecorder struct {
 	http.ResponseWriter
-	wrote bool
+	wrote  bool
+	status int
 }
 
 func (w *httpResponseRecorder) WriteHeader(status int) {
+	if !w.wrote {
+		w.status = status
+	}
 	w.wrote = true
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -3991,6 +4028,20 @@ func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) s
 // handlerFailureBody is the only thing an HTTP client sees when a route
 // handler fails; the full runtime error goes to the server log and receipt.
 const handlerFailureBody = `{"error":"internal server error"}` + "\n"
+
+// handlerFailureBodyFor is the same generic body plus the request id, so the
+// client can quote it and the operator can find the matching fault line.
+func handlerFailureBodyFor(id string) string {
+	return `{"error":"internal server error","request_id":"` + id + `"}` + "\n"
+}
+
+func newRequestID() string {
+	id, err := randHex(int64(8))
+	if err != nil {
+		return "0000000000000000"
+	}
+	return id
+}
 
 // requireFetch authorizes one outbound URL against the network:fetch=
 // allow-list before any connection is opened. A denial is a typed

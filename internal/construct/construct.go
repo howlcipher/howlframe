@@ -192,6 +192,7 @@ var table = []Entry{
 	{Name: "reduce", Support: CompileTimeOnly, Note: "core-library sugar; (reduce acc init x lst expr) for/set fold by ast.Desugar (pure)"},
 	{Name: "regex_match", Support: Supported, Note: "REGEX_MATCH"},
 	{Name: "req_header", Support: Supported, Note: "HTTP_REQ_HEADER; pure read of an already-accepted request"},
+	{Name: "req_id", Support: Supported, Note: "HTTP_REQ_ID; pure read of the server-assigned request id"},
 	{Name: "req_method", Support: Supported, Note: "REQ_METHOD"},
 	{Name: "req_path", Support: Supported, Note: "HTTP_REQ_PATH; pure read of a {name} path segment"},
 	{Name: "req_query", Support: Supported, Note: "HTTP_REQ_QUERY; pure read of an already-accepted request"},

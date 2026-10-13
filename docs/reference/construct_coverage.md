@@ -117,6 +117,7 @@
 | `reduce` | No | None | Yes | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_header` | Yes | None | No | No | - | AUTHORITATIVE |
+| `req_id` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_method` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_path` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_query` | Yes | None | No | No | - | AUTHORITATIVE |

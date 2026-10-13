@@ -86,7 +86,9 @@ type VMLimits struct {
 	MaxFetchBodyBytes int
 	// MaxRequestBodyBytes bounds a route's req.body read (parse_json); <=0 means the default.
 	MaxRequestBodyBytes int
-	MaxExecOutputBytes  int
+	// LogRequests (runner flag --access-log) writes one access line per HTTP request to stderr.
+	LogRequests        bool
+	MaxExecOutputBytes int
 }
 
 // ExecutionPolicy is authority supplied by the trusted bytecode runner. It

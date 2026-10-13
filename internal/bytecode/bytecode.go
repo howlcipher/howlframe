@@ -773,6 +773,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "EXIT", Op: OpExit})
 		case "read_line":
 			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
+		case "req_id":
+			if len(node.Children) != 2 {
+				ast.ReportError("req_id expects (req_id req)", node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[1])...)
+			insts = append(insts, BCInstruction{OpString: "HTTP_REQ_ID", Op: OpHttpReqID})
 		case "sha256_hex":
 			insts = append(insts, c.compileNode(node.Children[1])...)
 			insts = append(insts, BCInstruction{OpString: "SHA256_HEX", Op: OpSha256Hex})

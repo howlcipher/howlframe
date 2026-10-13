@@ -111,6 +111,11 @@ class HttpReqHeaderInstruction(BaseModel):
     pass
 
 
+class HttpReqIdInstruction(BaseModel):
+    op: Literal["HTTP_REQ_ID"]
+    pass
+
+
 class HttpReqMethodInstruction(BaseModel):
     op: Literal["HTTP_REQ_METHOD"]
     pass
@@ -406,6 +411,7 @@ Instruction = Annotated[
         HtmlEscapeInstruction,
         HttpRequestInstruction,
         HttpReqHeaderInstruction,
+        HttpReqIdInstruction,
         HttpReqMethodInstruction,
         HttpReqPathInstruction,
         HttpReqQueryInstruction,

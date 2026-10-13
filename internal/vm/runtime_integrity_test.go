@@ -351,12 +351,20 @@ func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
 	if denied.Code != http.StatusInternalServerError {
 		t.Fatalf("denied handler status = %d, want 500 (body %q)", denied.Code, denied.Body.String())
 	}
-	// #166: the client gets a generic 500; the runtime error stays in the log.
-	if denied.Body.String() != handlerFailureBody || strings.Contains(denied.Body.String(), "CAPABILITY_DENIED") || strings.Contains(denied.Body.String(), "STORE_OPEN") {
-		t.Fatalf("denied body = %q, want generic %q", denied.Body.String(), handlerFailureBody)
+	// #166: the client gets a generic 500 (plus a request id it can quote); the
+	// runtime error stays in the log next to the same id.
+	rid := denied.Header().Get("X-Request-Id")
+	if len(rid) != 16 {
+		t.Fatalf("X-Request-Id = %q, want a 16 hex digit id", rid)
+	}
+	if denied.Body.String() != handlerFailureBodyFor(rid) || strings.Contains(denied.Body.String(), "CAPABILITY_DENIED") || strings.Contains(denied.Body.String(), "STORE_OPEN") {
+		t.Fatalf("denied body = %q, want generic %q", denied.Body.String(), handlerFailureBodyFor(rid))
 	}
 	if !strings.Contains(errOut.String(), "CAPABILITY_DENIED") {
 		t.Errorf("failure not reported on ErrOut: %q", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "fault request_id="+rid+" method=GET path=/denied error=") {
+		t.Errorf("fault line lacks request context: %q", errOut.String())
 	}
 
 	// A handler that succeeds must be completely unaffected.

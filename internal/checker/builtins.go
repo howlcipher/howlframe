@@ -18,6 +18,7 @@ type builtinSignature struct {
 var builtinSignatures = map[string]builtinSignature{
 	"str_split":    {Params: []ast.ValueKind{ast.String, ast.String}, Result: stringList()},
 	"str_join":     {Params: []ast.ValueKind{ast.List, ast.String}, Result: ast.Layout(ast.String)},
+	"req_id":       {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
 	"sha256_hex":   {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.String)},
 	"rand_hex":     {Params: []ast.ValueKind{ast.Int}, Result: ast.Layout(ast.String)},
 	"secure_equal": {Params: []ast.ValueKind{ast.String, ast.String}, Result: ast.Layout(ast.Bool)},

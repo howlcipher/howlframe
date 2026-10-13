@@ -67,6 +67,7 @@ func main() {
 	maxFetch := flag.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
+	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
 	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
@@ -161,6 +162,7 @@ func main() {
 			os.Exit(1)
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
 	}
@@ -926,6 +928,7 @@ func runArtifact() {
 	maxFetch := runFlags.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
+	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
 	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
 	runFlags.Usage = func() {
@@ -999,6 +1002,7 @@ func runArtifact() {
 			os.Exit(1)
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 
 		var prog *bytecode.BCProgram

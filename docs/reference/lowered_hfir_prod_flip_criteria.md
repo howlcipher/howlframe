@@ -111,6 +111,7 @@ rand_hex
 read_stdin
 secure_equal
 sha256_hex
+req_id
 req_method
 res
 res_header
