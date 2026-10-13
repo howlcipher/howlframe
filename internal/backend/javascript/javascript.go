@@ -447,6 +447,20 @@ func fetchJSHelper() string {
 // Mirrors capability.Grants.AuthorizeFetch: exact host (WHATWG-canonical,
 // so IP literals compare in canonical form) and port; an omitted grant port
 // means the scheme default. The coarse network grant never fetches.
+// howlFrameCanonHost mirrors capability's canonicalIP: an IPv4-mapped IPv6
+// literal ([::ffff:a.b.c.d]) is the same host as a.b.c.d (#177).
+function howlFrameCanonHost(hostname) {
+  var h = String(hostname).toLowerCase();
+  if (h.charAt(0) !== "[") return h;
+  var b = howlFrameAddrBytes(h);
+  if (b && b.slice(0, 12).join(",") === "0,0,0,0,0,0,0,0,0,0,255,255") return b.slice(12).join(".");
+  return h;
+}
+
+function howlFrameFetchOrigin(u) {
+  return u.protocol + "//" + howlFrameCanonHost(u.hostname) + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+}
+
 function howlFrameFetchAllowed(u) {
   if (!u || (u.protocol !== "http:" && u.protocol !== "https:") || !u.hostname) return false;
   if (u.hostname.charAt(u.hostname.length - 1) === ".") return false;
@@ -461,7 +475,7 @@ function howlFrameFetchAllowed(u) {
     try { g = new URL("http://" + spec); } catch (e) { continue; }
     var writtenHost = spec.charAt(0) === "[" ? spec.slice(0, spec.indexOf("]") + 1) : spec.split(":")[0].toLowerCase();
     if (writtenHost.charAt(0) !== "[" && /(^|\.)[0-9][^.]*$/.test(writtenHost) && writtenHost !== g.hostname) continue;
-    if (g.hostname !== u.hostname) continue;
+    if (howlFrameCanonHost(g.hostname) !== howlFrameCanonHost(u.hostname)) continue;
     var gport = /:\d+$/.test(spec) ? spec.slice(spec.lastIndexOf(":") + 1) : def;
     if (String(Number(gport)) === gport && gport === port) return true;
   }
@@ -629,9 +643,9 @@ async function howlFrameFetch(url, method, body, headers) {
     try { u = howlFrameFetchURL(loc, u); } catch (e) { howlFrameFetchDeny(); }
     if (previous.protocol === "https:" && u.protocol === "http:") howlFrameFetchDeny();
     var optHost = u.hostname.replace(/^\[|\]$/g, "");
-    if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && u.hostname !== first.hostname) howlFrameFetchDeny();
+    if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && howlFrameCanonHost(u.hostname) !== howlFrameCanonHost(first.hostname)) howlFrameFetchDeny();
     if (u.username !== "" || u.password !== "") howlFrameFetchDeny();
-    if (previous.origin !== u.origin) {
+    if (howlFrameFetchOrigin(previous) !== howlFrameFetchOrigin(u)) {
       Object.keys(init.headers || {}).forEach(function (name) {
         if (howlFrameRedirectSafeHeaders.indexOf(String(name).toLowerCase()) < 0) delete init.headers[name];
       });

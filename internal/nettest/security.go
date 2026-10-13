@@ -312,6 +312,25 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 			})
 		}
 	})
+	t.Run("MappedLiteralGrants", func(t *testing.T) {
+		for _, tc := range MappedGrantCases {
+			c := client("network:fetch=" + tc.Grant)
+			req, _ := http.NewRequest("GET", tc.URL, nil)
+			first, _ := http.NewRequest("GET", tc.URL, nil)
+			// CheckRedirect re-authorizes the hop against the grant list.
+			err := c.CheckRedirect(req, []*http.Request{first})
+			if (err == nil) != tc.Allowed {
+				t.Errorf("grant %s url %s: err=%v want allowed=%v", tc.Grant, tc.URL, err, tc.Allowed)
+			}
+		}
+		c := client("network:fetch=1.2.3.4")
+		first, _ := http.NewRequest("GET", "http://1.2.3.4/", nil)
+		next, _ := http.NewRequest("GET", "http://[::ffff:1.2.3.4]/next", nil)
+		next.Header.Set("X-Api-Key", "secret")
+		if err := c.CheckRedirect(next, []*http.Request{first}); err != nil || next.Header.Get("X-Api-Key") != "secret" {
+			t.Errorf("mapped spelling of the same literal treated as another origin: %v %v", err, next.Header)
+		}
+	})
 	t.Run("MulticastDial", func(t *testing.T) {
 		for _, address := range []string{"224.0.0.1:80", "[ff02::1]:80"} {
 			c := client("network:fetch=" + address)
@@ -343,4 +362,21 @@ var PublicAddresses = []string{
 	"8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.1.1", "100.63.255.255", "100.128.0.1",
 	"198.17.255.255", "198.20.0.1", "2001:4860::1", "2606:4700::1", "2002:808:808::1", "::808:808",
 	"::ffff:0:808:808", "3fff:1000::1", "5f01::1",
+}
+
+// MappedGrantCases pin how every target treats IPv4-mapped IPv6 literals
+// (#177): [::ffff:a.b.c.d] is the same host as a.b.c.d, in either direction.
+var MappedGrantCases = []struct {
+	Grant, URL string
+	Allowed    bool
+}{
+	{"1.2.3.4", "http://[::ffff:1.2.3.4]/", true},
+	{"[::ffff:1.2.3.4]", "http://1.2.3.4/", true},
+	{"[::ffff:1.2.3.4]", "http://[::ffff:102:304]/", true},
+	{"1.2.3.4:8080", "http://[::ffff:1.2.3.4]:8080/", true},
+	{"1.2.3.4", "http://[::ffff:1.2.3.5]/", false},
+	{"1.2.3.4", "http://[::ffff:1.2.3.4]:8080/", false},
+	{"[::1.2.3.4]", "http://1.2.3.4/", false},
+	{"1.2.3.4", "http://[::1.2.3.4]/", false},
+	{"1.2.3.4", "http://[64:ff9b::102:304]/", false},
 }

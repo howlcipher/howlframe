@@ -348,3 +348,19 @@ func TestJSCrossOriginHeadersAndUserinfo(t *testing.T) {
  } finally {src.close();dst.close();same.close();}
 `)
 }
+
+// #177: Node agrees with core on [::ffff:a.b.c.d].
+func TestJSMappedLiteralGrants(t *testing.T) {
+	cases, _ := json.Marshal(nettest.MappedGrantCases)
+	securityJS(t, `
+ for (const tc of `+string(cases)+`) {
+  process.env.HOWLFRAME_ALLOW_CAPS="network:fetch="+tc.Grant;
+  assert.equal(howlFrameFetchAllowed(howlFrameFetchURL(tc.URL)),tc.Allowed,tc.Grant+" "+tc.URL);
+ }
+ let seen=[];
+ howlFrameFetchRequest=async (u,init)=>{seen.push(init.headers["X-Api-Key"]); return u.pathname==="/" ? {status:302,headers:{get:()=>"http://[::ffff:1.2.3.4]/next"}} : {status:200,headers:{get:()=>null},text:async()=>"ok"};};
+ process.env.HOWLFRAME_ALLOW_CAPS="network:fetch=1.2.3.4";
+ assert.equal(await howlFrameFetch("http://1.2.3.4/","GET",undefined,{"X-Api-Key":"secret"}),"ok");
+ assert.deepEqual(seen,["secret","secret"]);
+`)
+}
