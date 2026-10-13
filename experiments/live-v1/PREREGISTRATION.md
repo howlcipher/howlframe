@@ -52,6 +52,8 @@ for #177 and #175.
   run in an empty directory.
 - Every `modelUsage` key is recorded. Any id outside the allowed set
   `{claude-opus-5-5}`, or a response with no id, **aborts** the run.
+- Before the run, **one approved live call** confirms that `modelUsage`
+  reports only `claude-opus-5-5`; any other key aborts before any cell.
 - codex is not in v1, because its CLI doesn't report the serving model id.
 - The CLI exposes no seed or temperature. Round 1 is **one repetition**
   (`rep1`), so 87 tasks × 2 arms = 174 cells.
@@ -129,6 +131,11 @@ see the §2 contamination disclosure — the designer had seen the blind set:
 
 Limits: 256 steps, depth 8, 200,000 operations, 1 MiB of writes. v0 plans run
 unchanged.
+
+Arm B's v1 operators (e.g. `regex_find_all`, `parse_csv`, `render_md_table`,
+`semver_gt`, `list_dir`) may be stronger than HowlFrame's built-ins, which
+biases against Arm A; and with 27 blind tasks, PASS in practice needs about a
+22-point gap (≈6 net discordant tasks) for McNemar p < 0.05, not just 15.
 
 Known v1 traps (frozen as-is, documented rather than fixed so v1 stays frozen;
 none is in `arm_b.md`):
