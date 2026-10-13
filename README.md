@@ -525,3 +525,5 @@ or deployment authorization. A process.env bundler shim takes precedence and
 fails closed unless that shim supplies the environment grant.
 Browser bootstrap failures keep their original error rather than trying to
 call Node process.exit.
+
+Verification jobs set `HOWL_FORBID_LOCAL_INFERENCE=1`; deterministic compiler checks do not authorize local model inference.

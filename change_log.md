@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Verification
+* Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
+
 ### Fixed
 * HOWL-E2E-UX-001 EXT-001A: target validation distinguishes let/try_let bindings, function parameters and dictionary entries from executable forms. Ordinary names such as `rec` no longer prevent Board JavaScript compilation. Actual unsupported sugar remains rejected in initializer, dictionary value and function body positions.
 
