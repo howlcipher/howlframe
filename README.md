@@ -19,7 +19,7 @@ Adaptive operations may reason, classify, generate, rank, plan, and propose. Det
 LLMs are good at producing structure, but they often lose time on syntax details, invalid APIs, and large rewrites. HowlFrame keeps the source grammar small and uniform so generation can be constrained and validated before runtime.
 
 For Go and JavaScript targets, ordinary binding and parameter names such as
-`rec` and `range` remain valid identifiers. Actual record and control-flow
+`rec` are distinguished from executable forms. Actual record and control-flow
 sugar remains restricted to the bytecode target; using it in an initializer
 or function body still fails before output is written.
 
