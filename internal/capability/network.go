@@ -362,7 +362,12 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 				return &FetchDenied{Reason: "network: HTTPS redirect downgrade refused"}
 			}
 			if redirectToOptOut(via[0].URL, req.URL) {
-				return &FetchDenied{Reason: "network: redirect to an IP-literal or localhost destination refused"}
+				required := FetchGrantPrefix + "<invalid-url>"
+				if t, err := urlTarget(req.URL); err == nil {
+					required = FetchGrantPrefix + t.String()
+				}
+				err := &FetchDenied{Reason: "network: redirect to an IP-literal or localhost destination refused", Required: required}
+				return err
 			}
 			changedOrigin := !sameFetchOrigin(previous, req.URL)
 			for i := 1; i < len(via); i++ {
