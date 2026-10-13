@@ -1,0 +1,11 @@
+{
+  "category": "inventory",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b16",
+  "instruction": "in/assets/laptops.txt and in/assets/phones.txt list '<tag> <holder>' lines; holder '-' means unassigned. Write out/by_holder.txt: one line per holder sorted by name, '<holder> <tag>,<tag>' with tags sorted; unassigned tags go under the holder name UNASSIGNED.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

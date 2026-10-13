@@ -1,0 +1,4 @@
+2026-03-01T10:00:01 INFO user=ana login ok ip=10.0.0.4
+2026-03-01T10:00:07 WARN user=bo password reset email=bo@example.org
+2026-03-01T10:01:12 ERROR user=ana card=4111111111111111 declined
+2026-03-01T10:02:00 INFO user=cy contact email=cy.d@mail.example.net ip=192.168.1.20

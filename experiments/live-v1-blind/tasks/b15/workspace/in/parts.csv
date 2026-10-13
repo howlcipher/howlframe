@@ -1,0 +1,5 @@
+id,name,qty,reorder_at,supplier
+p1,cable,4,10,acme
+p2,switch,20,5,acme
+p3,fan,1,2,bolt
+p4,panel,2,2,bolt

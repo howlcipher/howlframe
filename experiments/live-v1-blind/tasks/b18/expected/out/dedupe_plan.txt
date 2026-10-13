@@ -1,0 +1,5 @@
+keep backup/report-copy.pdf
+delete docs/report.pdf
+delete old/report.pdf
+keep img/cat.png
+delete tmp/cat (1).png

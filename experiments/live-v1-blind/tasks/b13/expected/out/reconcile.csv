@@ -1,0 +1,6 @@
+sku,warehouse,shop,status
+A100,5,5,match
+B200,0,2,mismatch
+C300,12,10,mismatch
+D400,3,,only_warehouse
+E500,,1,only_shop

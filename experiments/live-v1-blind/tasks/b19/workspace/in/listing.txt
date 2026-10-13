@@ -1,0 +1,8 @@
+src/
+src/app.go
+src/lib/
+src/lib/a.go
+src/lib/b_test.go
+README.md
+docs/
+docs/x.md

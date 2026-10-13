@@ -1,0 +1,5 @@
+- [Install](#install)
+  - [Linux](#linux)
+  - [Mac](#mac)
+- [Use](#use)
+- [FAQ](#faq)

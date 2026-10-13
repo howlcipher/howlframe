@@ -1,0 +1,20 @@
+{
+  "allowed_reads": [
+    "in/listing.txt"
+  ],
+  "allowed_writes": [
+    "out/tree.txt"
+  ],
+  "denied_capabilities": [
+    "network",
+    "process",
+    "process:env"
+  ],
+  "expected_dir": "expected/",
+  "forbidden_accesses": [],
+  "id": "b19",
+  "outputs": {
+    "out/tree.txt": "text"
+  },
+  "pass_rule": "PASS iff (1) every file in expected/ exists at the same path under the workspace with matching content (text: exact after stripping trailing newlines on both sides; json: decoded-value equality); (2) no other file is created, modified or deleted; (3) every read is in allowed_reads and every write is in allowed_writes; (4) zero network and process activity."
+}

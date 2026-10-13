@@ -1,0 +1,12 @@
+{
+  "defaults": {
+    "APP_REGION": "eu-1",
+    "DEBUG": "false",
+    "TIMEOUT": "30"
+  },
+  "required": [
+    "APP_NAME",
+    "APP_PORT",
+    "APP_REGION"
+  ]
+}

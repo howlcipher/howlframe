@@ -1,0 +1,11 @@
+{
+  "category": "config",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b01",
+  "instruction": "Merge the JSON config fragments in/conf.d/10-base.json, in/conf.d/20-prod.json and in/conf.d/30-local.json in filename order. Later files win. Objects merge recursively; any other value (including arrays) replaces the earlier one. Write the merged object to out/config.json.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

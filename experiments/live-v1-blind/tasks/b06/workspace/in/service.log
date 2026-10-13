@@ -1,0 +1,7 @@
+09:00 svc=api ERROR timeout
+09:01 svc=db INFO ok
+09:02 svc=api ERROR timeout
+09:03 svc=api WARN slow
+09:04 svc=web ERROR 502
+09:05 svc=db ERROR disk
+09:06 svc=web ERROR 502

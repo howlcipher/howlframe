@@ -1,0 +1,11 @@
+{
+  "category": "files",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b17",
+  "instruction": "in/manifest.txt lines are '<filename>|<YYYY-MM-DD>|<label>' (label may be empty). Produce a rename plan only (do not rename anything) in out/rename_plan.json: an array, in manifest order, of {\"from\": filename, \"to\": new name}. new name = '<date>_<label>_<NN>.<ext>' where label is lowercased with whitespace runs replaced by '-', the '_<label>' part is dropped when label is empty, NN is a 2-digit counter per distinct '<date>[_label]' stem starting at 01, and ext is lowercased.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

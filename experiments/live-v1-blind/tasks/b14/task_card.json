@@ -1,0 +1,11 @@
+{
+  "category": "inventory",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b14",
+  "instruction": "Start from the counts in in/stock.json and apply each line of in/moves.txt ('<date> <item> <+/-qty>') in order. An unknown item starts at 0. A move that would make a count negative is skipped. Write the final counts to out/stock.json and the skipped lines verbatim, in order, to out/rejected.txt.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

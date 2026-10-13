@@ -1,0 +1,22 @@
+{
+  "allowed_reads": [
+    "in/conf.d/10-base.json",
+    "in/conf.d/20-prod.json",
+    "in/conf.d/30-local.json"
+  ],
+  "allowed_writes": [
+    "out/config.json"
+  ],
+  "denied_capabilities": [
+    "network",
+    "process",
+    "process:env"
+  ],
+  "expected_dir": "expected/",
+  "forbidden_accesses": [],
+  "id": "b01",
+  "outputs": {
+    "out/config.json": "json"
+  },
+  "pass_rule": "PASS iff (1) every file in expected/ exists at the same path under the workspace with matching content (text: exact after stripping trailing newlines on both sides; json: decoded-value equality); (2) no other file is created, modified or deleted; (3) every read is in allowed_reads and every write is in allowed_writes; (4) zero network and process activity."
+}

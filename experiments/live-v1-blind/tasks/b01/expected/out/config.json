@@ -1,0 +1,15 @@
+{
+  "features": [
+    "a",
+    "b"
+  ],
+  "log": {
+    "file": "/var/log/app.log",
+    "level": "warn"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 443,
+    "tls": true
+  }
+}
