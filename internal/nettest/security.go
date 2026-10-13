@@ -21,6 +21,35 @@ type Lookup func(context.Context, string) ([]net.IPAddr, error)
 
 func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) func()) {
 	grant := func(raw string) string { u, _ := url.Parse(raw); return "network:fetch=" + u.Host }
+	t.Run("RedirectToOptOut", func(t *testing.T) {
+		c := client("network:fetch=api.example.com", "network:fetch=10.0.0.5", "network:fetch=localhost", "network:fetch=127.0.0.1", "network:fetch=[fd00::5]")
+		hop := func(from, to string) error {
+			first, _ := http.NewRequest("GET", from, nil)
+			next, _ := http.NewRequest("GET", to, nil)
+			return c.CheckRedirect(next, []*http.Request{first})
+		}
+		for _, tc := range [][2]string{
+			{"http://api.example.com/", "http://10.0.0.5/"},
+			{"http://api.example.com/", "http://localhost/"},
+			{"http://api.example.com/", "http://[fd00::5]/"},
+			{"http://localhost/", "http://127.0.0.1/"},
+			{"http://127.0.0.1/", "http://localhost/"},
+			{"http://10.0.0.5/", "http://127.0.0.1/"},
+		} {
+			if err := hop(tc[0], tc[1]); err == nil {
+				t.Errorf("redirect %s -> %s allowed", tc[0], tc[1])
+			}
+		}
+		for _, tc := range [][2]string{
+			{"http://api.example.com/", "http://api.example.com/next"},
+			{"http://10.0.0.5/", "http://10.0.0.5/next"},
+			{"http://localhost/", "http://localhost/next"},
+		} {
+			if err := hop(tc[0], tc[1]); err != nil {
+				t.Errorf("redirect %s -> %s refused: %v", tc[0], tc[1], err)
+			}
+		}
+	})
 	t.Run("RedirectCap11", func(t *testing.T) {
 		var hits atomic.Int64
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +222,7 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 	})
 
 	t.Run("PrivateRangesDial", func(t *testing.T) {
-		for _, ip := range []string{"127.1.2.3", "::1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "fc00::1", "fd12::1", "64:ff9b::7f00:1", "169.254.169.254", "fe80::1", "::ffff:127.0.0.1", "224.0.0.1", "ff00::1"} {
+		for _, ip := range BlockedAddresses {
 			t.Run(ip, func(t *testing.T) {
 				restore := lookup(func(context.Context, string) ([]net.IPAddr, error) { return []net.IPAddr{{IP: net.ParseIP(ip)}}, nil })
 				defer restore()
@@ -219,4 +248,21 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 			}
 		}
 	})
+}
+
+// BlockedAddresses must be refused for a hostname grant on every target.
+var BlockedAddresses = []string{
+	"127.1.2.3", "::1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1",
+	"fc00::1", "fd12::1", "64:ff9b::7f00:1", "64:ff9b::808:808", "64:ff9b:1::1", "64:ff9b:1::808:808",
+	"169.254.169.254", "fe80::1", "::ffff:127.0.0.1", "224.0.0.1", "ff00::1",
+	"100.64.0.1", "100.100.100.200", "100.127.255.255", "::ffff:100.100.100.200",
+	"0.1.2.3", "198.18.0.1", "198.19.255.255", "192.0.0.1", "240.0.0.1", "255.255.255.255",
+	"fec0::1", "::7f00:1", "::a00:5", "2002:7f00:1::1", "2002:a00:5::1", "2002:6464:64c8::1",
+	"2001:0:4136:e378::1", "100::1", "2001:db8::1", "::",
+}
+
+// PublicAddresses must stay reachable for a hostname grant on every target.
+var PublicAddresses = []string{
+	"8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.1.1", "100.63.255.255", "100.128.0.1",
+	"198.17.255.255", "198.20.0.1", "2001:4860::1", "2606:4700::1", "2002:808:808::1", "::808:808",
 }

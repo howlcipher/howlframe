@@ -24,12 +24,12 @@ func TestFetchSecurity(t *testing.T) {
 	})
 }
 func TestFetchPrivateRanges(t *testing.T) {
-	for _, ip := range []string{"127.1.2.3", "::1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "fc00::1", "fd12::1", "64:ff9b::7f00:1", "169.254.169.254", "fe80::1", "::ffff:127.0.0.1", "224.0.0.1", "ff00::1"} {
+	for _, ip := range append(nettest.BlockedAddresses, "224.0.0.1", "ff00::1") {
 		if err := checkDial("private.test", false, net.JoinHostPort(ip, "80")); err == nil {
 			t.Errorf("allowed %s", ip)
 		}
 	}
-	for _, ip := range []string{"172.15.0.1", "172.32.0.1", "192.169.1.1", "2001:4860::1", "64:ff9b:1::1", "64:ff9b::1:0:0"} {
+	for _, ip := range nettest.PublicAddresses {
 		if forbiddenResolved(netip.MustParseAddr(ip)) {
 			t.Errorf("blocked public %s", ip)
 		}

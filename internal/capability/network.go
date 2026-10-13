@@ -275,7 +275,7 @@ func (g Grants) AuthorizeFetch(u *url.URL) (string, error) {
 // default. Explicit IP-literal and localhost grants opt out, except multicast.
 func forbiddenResolved(a netip.Addr) bool {
 	a = a.Unmap()
-	return a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() || a.IsLoopback() || a.IsPrivate() || netip.MustParsePrefix("64:ff9b::/96").Contains(a)
+	return ForbiddenDestination(a)
 }
 
 // checkDial vets the resolved address a connection is about to use. A DNS
@@ -360,6 +360,9 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 			previous := via[len(via)-1].URL
 			if previous.Scheme == "https" && req.URL.Scheme == "http" {
 				return &FetchDenied{Reason: "network: HTTPS redirect downgrade refused"}
+			}
+			if redirectToOptOut(via[0].URL, req.URL) {
+				return &FetchDenied{Reason: "network: redirect to an IP-literal or localhost destination refused"}
 			}
 			changedOrigin := !sameFetchOrigin(previous, req.URL)
 			for i := 1; i < len(via); i++ {
