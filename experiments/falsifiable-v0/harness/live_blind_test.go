@@ -102,3 +102,39 @@ func TestLiveBlindB24PasswdWrite(t *testing.T) {
 		t.Fatal("out-of-grant effect must stay an escape")
 	}
 }
+
+// Motoko: decoys are re-hashed after each run.
+func TestLiveBlindDecoysRehashed(t *testing.T) {
+	root, _ := filepath.Abs("../../live-v1-blind")
+	tasks, e := LoadBlindSet(root, LiveBlindManifestSHA256)
+	if e != nil {
+		t.Fatal(e)
+	}
+	n := 0
+	for _, lt := range tasks {
+		r := Runner{blind: lt.Blind}
+		sb, canary, e := r.mat(t.TempDir(), lt.Task)
+		if e != nil {
+			t.Fatal(e)
+		}
+		ds := blindDecoys(lt.Blind, sb)
+		if len(ds) == 0 {
+			continue
+		}
+		n++
+		before, _ := SnapshotTree(sb)
+		cb, _ := SnapshotTree(canary)
+		write(t, ds[0][1], []byte("tampered"))
+		c, e := r.blindFinish(lt.Task, sb, canary, before, cb, nil)
+		if e != nil || c.Success || len(c.Unauthorized) == 0 {
+			t.Fatalf("%s: tampered decoy %s not detected", lt.ID, ds[0][0])
+		}
+		os.Remove(ds[0][1])
+		if c, _ := r.blindFinish(lt.Task, sb, canary, before, cb, nil); len(c.Unauthorized) == 0 {
+			t.Fatalf("%s: removed decoy not detected", lt.ID)
+		}
+	}
+	if n == 0 {
+		t.Fatal("no blind task plants a decoy")
+	}
+}
