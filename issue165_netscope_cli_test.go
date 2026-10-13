@@ -232,8 +232,14 @@ func TestIssue166EnvGrantRefusesLoaderVars(t *testing.T) {
 			t.Fatalf("process:env=%s accepted: %d %q %q", name, r.code, r.stdout, r.stderr)
 		}
 	}
-	if r := runAuthority(t, binary, "bytecode", `(cli_app (print "ran"))`, "process:env=HOME"); r.code != 0 {
-		t.Fatalf("process:env=HOME refused: %q %q", r.stdout, r.stderr)
+	// #177: HOME, PATH and GIT_* steer config or program lookup and are refused.
+	for _, name := range []string{"HOME", "PATH", "GIT_DIR", "XDG_CONFIG_HOME", "JAVA_TOOL_OPTIONS"} {
+		if r := runAuthority(t, binary, "bytecode", `(cli_app (print "ran"))`, "process:env="+name); r.code == 0 || strings.Contains(r.stdout, "ran") {
+			t.Fatalf("process:env=%s accepted: %d %q %q", name, r.code, r.stdout, r.stderr)
+		}
+	}
+	if r := runAuthority(t, binary, "bytecode", `(cli_app (print "ran"))`, "process:env=LANG"); r.code != 0 {
+		t.Fatalf("process:env=LANG refused: %q %q", r.stdout, r.stderr)
 	}
 }
 

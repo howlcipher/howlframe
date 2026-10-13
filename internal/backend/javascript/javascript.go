@@ -322,7 +322,7 @@ func envJSHelper() string {
 // put the command in the error. There is no shell. Stdout is returned
 // ahead of stderr, which matches CombinedOutput when only one stream writes.
 func execJSHelper() string {
-	return `function howlFrameExecAllowed(cmd, args) {
+	return codeLoadingEnvJSSource() + `function howlFrameExecAllowed(cmd, args) {
   var fs = require("fs");
   if (typeof cmd !== "string" || cmd.charAt(0) !== "/") return false;
   var prefix = "";
@@ -366,6 +366,16 @@ function howlFrameExecSlot(p, arg) {
   return p === arg;
 }
 
+// howlFrameCodeLoadingEnv mirrors capability.DynamicLoaderEnv over the shared tables.
+function howlFrameCodeLoadingEnv(name) {
+  var u = String(name).toUpperCase();
+  if (howlFrameCodeLoadingEnvNames.indexOf(u) >= 0) return true;
+  for (var i = 0; i < howlFrameCodeLoadingEnvPrefixes.length; i++) {
+    if (u.indexOf(howlFrameCodeLoadingEnvPrefixes[i]) === 0) return true;
+  }
+  return false;
+}
+
 // Only process:env=NAME variables reach the child; never the host environment.
 function howlFrameExecEnv() {
   var env = {};
@@ -374,7 +384,7 @@ function howlFrameExecEnv() {
     var grant = grants[i].trim();
     if (grant.indexOf("process:env=") !== 0) continue;
     var name = grant.slice("process:env=".length);
-    if (name === "" || /[= ]/.test(name) || /^(LD_|DYLD_)/i.test(name) || /^(PYTHONPATH|NODE_OPTIONS|BASH_ENV|ENV|PERL5LIB|PERL5OPT|RUBYOPT|RUBYLIB|PYTHONSTARTUP|NODE_PATH)$/i.test(name)) continue;
+    if (name === "" || /[= ]/.test(name) || howlFrameCodeLoadingEnv(name)) continue;
     if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
   }
   return env;
@@ -437,6 +447,20 @@ func fetchJSHelper() string {
 // Mirrors capability.Grants.AuthorizeFetch: exact host (WHATWG-canonical,
 // so IP literals compare in canonical form) and port; an omitted grant port
 // means the scheme default. The coarse network grant never fetches.
+// howlFrameCanonHost mirrors capability's canonicalIP: an IPv4-mapped IPv6
+// literal ([::ffff:a.b.c.d]) is the same host as a.b.c.d (#177).
+function howlFrameCanonHost(hostname) {
+  var h = String(hostname).toLowerCase();
+  if (h.charAt(0) !== "[") return h;
+  var b = howlFrameAddrBytes(h);
+  if (b && b.slice(0, 12).join(",") === "0,0,0,0,0,0,0,0,0,0,255,255") return b.slice(12).join(".");
+  return h;
+}
+
+function howlFrameFetchOrigin(u) {
+  return u.protocol + "//" + howlFrameCanonHost(u.hostname) + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+}
+
 function howlFrameFetchAllowed(u) {
   if (!u || (u.protocol !== "http:" && u.protocol !== "https:") || !u.hostname) return false;
   if (u.hostname.charAt(u.hostname.length - 1) === ".") return false;
@@ -451,7 +475,7 @@ function howlFrameFetchAllowed(u) {
     try { g = new URL("http://" + spec); } catch (e) { continue; }
     var writtenHost = spec.charAt(0) === "[" ? spec.slice(0, spec.indexOf("]") + 1) : spec.split(":")[0].toLowerCase();
     if (writtenHost.charAt(0) !== "[" && /(^|\.)[0-9][^.]*$/.test(writtenHost) && writtenHost !== g.hostname) continue;
-    if (g.hostname !== u.hostname) continue;
+    if (howlFrameCanonHost(g.hostname) !== howlFrameCanonHost(u.hostname)) continue;
     var gport = /:\d+$/.test(spec) ? spec.slice(spec.lastIndexOf(":") + 1) : def;
     if (String(Number(gport)) === gport && gport === port) return true;
   }
@@ -514,6 +538,8 @@ function howlFrameIsSpecial(b) {
   if (b[0] === 0x20 && b[1] === 0x02 && howlFrameIsSpecial(mapped(b.slice(2, 6)))) return true;
   var compat = b.slice(0, 12).every(function (x) { return x === 0; });
   if (compat && !(b[12] === 0 && b[13] === 0 && b[14] === 0)) return howlFrameIsSpecial(mapped(b.slice(12, 16)));
+  var translated = b.slice(0, 8).every(function (x) { return x === 0; }) && b[8] === 255 && b[9] === 255 && b[10] === 0 && b[11] === 0;
+  if (translated) return howlFrameIsSpecial(mapped(b.slice(12, 16)));
   for (var i = 0; i < howlFrameSpecialPrefixes.length; i++) {
     var p = howlFrameSpecialPrefixes[i][0], bits = howlFrameSpecialPrefixes[i][1], ok = true;
     for (var k = 0; k < 16 && ok && bits > 0; k++, bits -= 8) {
@@ -523,6 +549,12 @@ function howlFrameIsSpecial(b) {
     if (ok) return true;
   }
   return false;
+}
+
+function howlFrameIsLoopback(b) {
+  if (!b) return false;
+  var v4 = b.slice(0, 12).join(",") === "0,0,0,0,0,0,0,0,0,0,255,255";
+  return v4 && b[12] === 127 || b.slice(0, 15).every(function (x) { return x === 0; }) && b[15] === 1;
 }
 
 function howlFrameForbiddenAddress(address, explicit) {
@@ -541,11 +573,14 @@ async function howlFrameFetchResolvedOk(u) {
   if (typeof require !== "function") return true;
   var addrs = await require("dns").promises.lookup(host, { all: true });
   if (!addrs.length) return false;
+  var localhost = host === "localhost";
   for (var i = 0; i < addrs.length; i++) {
-    if (howlFrameForbiddenAddress(addrs[i].address, host === "localhost")) return false;
+    if (howlFrameForbiddenAddress(addrs[i].address, localhost)) return false;
+    // The localhost opt-out reaches loopback only (127/8, ::1).
+    if (localhost && !howlFrameIsLoopback(howlFrameAddrBytes(addrs[i].address))) return false;
   }
-  // Pin this request to a vetted address; do not resolve again at connect time.
-  u.howlFrameAddress = addrs[0];
+  // Pin this request to the full vetted set; never resolve again at connect time.
+  u.howlFrameAddresses = addrs.map(function (a) { return { address: a.address, family: a.family }; });
   return true;
 }
 
@@ -555,9 +590,14 @@ function howlFrameFetchRequest(u, init) {
   // NODE_USE_ENV_PROXY. agent:false also prevents pooled connections bypassing lookup.
   return new Promise(function (resolve, reject) {
     var options = { method: init.method, headers: init.headers, agent: false };
-    if (u.howlFrameAddress) options.lookup = function (host, opts, cb) {
-      var a = u.howlFrameAddress;
-      cb(null, opts && opts.all ? [{ address: a.address, family: a.family }] : a.address, a.family);
+    if (u.howlFrameAddresses) options.lookup = function (host, opts, cb) {
+      if (typeof opts === "function") { cb = opts; opts = {}; }
+      var all = u.howlFrameAddresses.filter(function (a) {
+        return !opts || !opts.family || opts.family === a.family || opts.family === "IPv" + a.family;
+      });
+      if (!all.length) return cb(new Error("CAPABILITY_DENIED: capability denied: network"));
+      if (opts && opts.all) return cb(null, all.map(function (a) { return { address: a.address, family: a.family }; }));
+      cb(null, all[0].address, all[0].family);
     };
     var req = require(u.protocol === "https:" ? "https" : "http").request(u, options, function (res) {
       var chunks = [];
@@ -603,10 +643,11 @@ async function howlFrameFetch(url, method, body, headers) {
     try { u = howlFrameFetchURL(loc, u); } catch (e) { howlFrameFetchDeny(); }
     if (previous.protocol === "https:" && u.protocol === "http:") howlFrameFetchDeny();
     var optHost = u.hostname.replace(/^\[|\]$/g, "");
-    if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && u.hostname !== first.hostname) howlFrameFetchDeny();
-    if (previous.origin !== u.origin) {
+    if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && howlFrameCanonHost(u.hostname) !== howlFrameCanonHost(first.hostname)) howlFrameFetchDeny();
+    if (u.username !== "" || u.password !== "") howlFrameFetchDeny();
+    if (howlFrameFetchOrigin(previous) !== howlFrameFetchOrigin(u)) {
       Object.keys(init.headers || {}).forEach(function (name) {
-        if (/^(authorization|cookie)$/i.test(name)) delete init.headers[name];
+        if (howlFrameRedirectSafeHeaders.indexOf(String(name).toLowerCase()) < 0) delete init.headers[name];
       });
     }
     if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
@@ -1475,6 +1516,27 @@ func specialPrefixJSSource() string {
 		}
 		fmt.Fprintf(&b, "  [[%s], %d], // %s\n", strings.Join(parts, ","), bits, raw)
 	}
+	b.WriteString("];\n\nvar howlFrameRedirectSafeHeaders = [")
+	for i, h := range capability.RedirectSafeHeaders {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.Quote(strings.ToLower(h)))
+	}
 	b.WriteString("];\n\n")
 	return b.String()
+}
+
+// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames and
+// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+func codeLoadingEnvJSSource() string {
+	quote := func(xs []string) string {
+		out := make([]string, len(xs))
+		for i, x := range xs {
+			out[i] = strconv.Quote(x)
+		}
+		return strings.Join(out, ", ")
+	}
+	return "var howlFrameCodeLoadingEnvNames = [" + quote(capability.CodeLoadingEnvNames) + "];\n" +
+		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n\n"
 }

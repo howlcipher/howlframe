@@ -118,14 +118,24 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
 
 ## Environment pass-through and receipts (#166)
 
-* `process:env=NAME` refuses dynamic-loader variables: any name starting with
-  `LD_` (including `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`) or `DYLD_`,
-  plus interpreter code-loading variables `PYTHONPATH`, `PYTHONSTARTUP`,
-  `NODE_OPTIONS`, `NODE_PATH`, `BASH_ENV`, `ENV`, `PERL5LIB`, `PERL5OPT`,
-  `RUBYOPT` and `RUBYLIB`, compared case-insensitively. Passing one to an allow-listed program would
-  let it load arbitrary code. The grant is rejected at parse time on the
-  interpreter and `-run-bc`; generated Go and JavaScript skip such names
-  when building the child environment.
+* `process:env=NAME` refuses code-loading, startup, config-lookup, trust-store
+  and program-search variables, compared case-insensitively. The one table is
+  `capability.CodeLoadingEnvNames` plus the prefixes in
+  `capability.CodeLoadingEnvPrefixes` (`LD_*`, `DYLD_*`, `GIT_*`,
+  `BASH_FUNC_*`, `LUA_*`); generated Go and JavaScript render the same tables
+  and a parity test runs one independent list against all three (#177). It
+  includes `PATH`, `HOME`, `XDG_CONFIG_HOME`/`XDG_CONFIG_DIRS`, shell options
+  (`SHELLOPTS`, `BASHOPTS`, `PS4`, `PROMPT_COMMAND`, `IFS`), Python
+  (`PYTHONPATH`, `PYTHONHOME`, `PYTHONSTARTUP`, ...), Node (`NODE_OPTIONS`,
+  `NODE_PATH`, `NODE_EXTRA_CA_CERTS`), Perl (`PERL5LIB`, `PERLLIB`,
+  `PERL5OPT`, `PERL5DB`), Ruby, Go (`GOFLAGS`, `GODEBUG`, ...), Java
+  (`JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`, `CLASSPATH`),
+  `GCONV_PATH`/`LOCPATH` and TLS trust stores (`SSL_CERT_FILE`, ...). Passing
+  one to an allow-listed program would let it load arbitrary code or config.
+  The grant is rejected at parse time on the interpreter and `-run-bc`;
+  generated Go and JavaScript skip such names when building the child
+  environment. An exec child that needs a search path should be granted by
+  absolute path; it starts with no `PATH`.
 * Receipt `grant` strings are copied verbatim from the normalized grant. An
   allowed exec records the matched entry with every pattern literal exactly
   as written (for example `process:exec=/usr/bin/git log --oneline *`).

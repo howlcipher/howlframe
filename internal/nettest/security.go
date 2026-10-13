@@ -174,14 +174,63 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 		}
 	})
 
+	t.Run("CrossOriginHeaders", func(t *testing.T) {
+		seen := http.Header{}
+		var hits atomic.Int64
+		dst := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits.Add(1)
+			seen = r.Header.Clone()
+		}))
+		defer dst.Close()
+		src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, dst.URL, 307) }))
+		defer src.Close()
+		c := client(grant(src.URL), grant(dst.URL))
+		req, _ := http.NewRequest("GET", src.URL, nil)
+		for _, h := range SensitiveHeaders {
+			req.Header.Set(h, "secret")
+		}
+		req.Header.Set("Accept", "text/plain")
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if hits.Load() != 1 {
+			t.Fatalf("hits=%d", hits.Load())
+		}
+		for name, v := range seen {
+			for _, x := range v {
+				if strings.Contains(x, "secret") {
+					t.Errorf("%s crossed origin", name)
+				}
+			}
+		}
+		if seen.Get("Accept") != "text/plain" {
+			t.Errorf("safe Accept header dropped: %v", seen)
+		}
+	})
+	t.Run("RedirectUserinfo", func(t *testing.T) {
+		c := client("network:fetch=api.example.com", "network:fetch=other.example.com")
+		first, _ := http.NewRequest("GET", "http://api.example.com/", nil)
+		for _, to := range []string{"http://user:pw@api.example.com/", "http://user@other.example.com/", "http://:pw@api.example.com/x"} {
+			next, _ := http.NewRequest("GET", to, nil)
+			if err := c.CheckRedirect(next, []*http.Request{first}); err == nil {
+				t.Errorf("redirect to %s allowed", to)
+			}
+		}
+	})
 	t.Run("CredentialsSameOrigin", func(t *testing.T) {
 		c := client("network:fetch=example.test")
 		first, _ := http.NewRequest("GET", "http://EXAMPLE.test/", nil)
 		next, _ := http.NewRequest("GET", "http://example.test:80/next", nil)
 		next.Header.Set("Authorization", "Bearer secret")
 		next.Header.Set("Cookie", "session=secret")
+		next.Header.Set("X-Api-Key", "secret")
 		if err := c.CheckRedirect(next, []*http.Request{first}); err != nil {
 			t.Fatal(err)
+		}
+		if next.Header.Get("X-Api-Key") != "secret" {
+			t.Fatal("same effective origin lost custom header")
 		}
 		if next.Header.Get("Authorization") != "Bearer secret" || next.Header.Get("Cookie") != "session=secret" {
 			t.Fatal("same effective origin lost credentials")
@@ -239,6 +288,49 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 			})
 		}
 	})
+	t.Run("LocalhostLoopbackOnly", func(t *testing.T) {
+		for _, set := range [][]string{{"10.0.0.5"}, {"8.8.8.8"}, {"::ffff:10.0.0.5"}, {"fd00::1"}, {"169.254.169.254"}, {"127.0.0.1", "10.0.0.5"}, {"::1", "93.184.216.34"}} {
+			t.Run(strings.Join(set, ","), func(t *testing.T) {
+				restore := lookup(func(context.Context, string) ([]net.IPAddr, error) {
+					out := []net.IPAddr{}
+					for _, ip := range set {
+						out = append(out, net.IPAddr{IP: net.ParseIP(ip)})
+					}
+					return out, nil
+				})
+				defer restore()
+				c := client("network:fetch=localhost:80")
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+				conn, err := c.Transport.(*http.Transport).DialContext(ctx, "tcp", "localhost:80")
+				if conn != nil {
+					conn.Close()
+				}
+				if err == nil || !(strings.Contains(err.Error(), "network:") || strings.Contains(err.Error(), "capability denied")) {
+					t.Fatalf("localhost opt-out reached non-loopback %v: %v", set, err)
+				}
+			})
+		}
+	})
+	t.Run("MappedLiteralGrants", func(t *testing.T) {
+		for _, tc := range MappedGrantCases {
+			c := client("network:fetch=" + tc.Grant)
+			req, _ := http.NewRequest("GET", tc.URL, nil)
+			first, _ := http.NewRequest("GET", tc.URL, nil)
+			// CheckRedirect re-authorizes the hop against the grant list.
+			err := c.CheckRedirect(req, []*http.Request{first})
+			if (err == nil) != tc.Allowed {
+				t.Errorf("grant %s url %s: err=%v want allowed=%v", tc.Grant, tc.URL, err, tc.Allowed)
+			}
+		}
+		c := client("network:fetch=1.2.3.4")
+		first, _ := http.NewRequest("GET", "http://1.2.3.4/", nil)
+		next, _ := http.NewRequest("GET", "http://[::ffff:1.2.3.4]/next", nil)
+		next.Header.Set("X-Api-Key", "secret")
+		if err := c.CheckRedirect(next, []*http.Request{first}); err != nil || next.Header.Get("X-Api-Key") != "secret" {
+			t.Errorf("mapped spelling of the same literal treated as another origin: %v %v", err, next.Header)
+		}
+	})
 	t.Run("MulticastDial", func(t *testing.T) {
 		for _, address := range []string{"224.0.0.1:80", "[ff02::1]:80"} {
 			c := client("network:fetch=" + address)
@@ -250,6 +342,9 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 	})
 }
 
+// SensitiveHeaders must never cross a change of origin on any target.
+var SensitiveHeaders = []string{"Authorization", "Proxy-Authorization", "Cookie", "X-Api-Key", "X-Auth-Token", "Private-Token", "X-Amz-Security-Token", "Api-Key"}
+
 // BlockedAddresses must be refused for a hostname grant on every target.
 var BlockedAddresses = []string{
 	"127.1.2.3", "::1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1",
@@ -259,10 +354,29 @@ var BlockedAddresses = []string{
 	"0.1.2.3", "198.18.0.1", "198.19.255.255", "192.0.0.1", "240.0.0.1", "255.255.255.255",
 	"fec0::1", "::7f00:1", "::a00:5", "2002:7f00:1::1", "2002:a00:5::1", "2002:6464:64c8::1",
 	"2001:0:4136:e378::1", "100::1", "2001:db8::1", "::",
+	"3fff::1", "3fff:fff::1", "5f00::1", "5f00:ffff::1", "::ffff:0:7f00:1", "::ffff:0:a00:5", "::ffff:0:a9fe:a9fe",
 }
 
 // PublicAddresses must stay reachable for a hostname grant on every target.
 var PublicAddresses = []string{
 	"8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.1.1", "100.63.255.255", "100.128.0.1",
 	"198.17.255.255", "198.20.0.1", "2001:4860::1", "2606:4700::1", "2002:808:808::1", "::808:808",
+	"::ffff:0:808:808", "3fff:1000::1", "5f01::1",
+}
+
+// MappedGrantCases pin how every target treats IPv4-mapped IPv6 literals
+// (#177): [::ffff:a.b.c.d] is the same host as a.b.c.d, in either direction.
+var MappedGrantCases = []struct {
+	Grant, URL string
+	Allowed    bool
+}{
+	{"1.2.3.4", "http://[::ffff:1.2.3.4]/", true},
+	{"[::ffff:1.2.3.4]", "http://1.2.3.4/", true},
+	{"[::ffff:1.2.3.4]", "http://[::ffff:102:304]/", true},
+	{"1.2.3.4:8080", "http://[::ffff:1.2.3.4]:8080/", true},
+	{"1.2.3.4", "http://[::ffff:1.2.3.5]/", false},
+	{"1.2.3.4", "http://[::ffff:1.2.3.4]:8080/", false},
+	{"[::1.2.3.4]", "http://1.2.3.4/", false},
+	{"1.2.3.4", "http://[::1.2.3.4]/", false},
+	{"1.2.3.4", "http://[64:ff9b::102:304]/", false},
 }

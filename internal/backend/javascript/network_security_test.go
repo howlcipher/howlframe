@@ -1,10 +1,13 @@
 package javascript
 
 import (
+	"encoding/json"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -81,7 +84,8 @@ func TestJSPrivateRanges(t *testing.T) {
 func TestJSRedirectToOptOut(t *testing.T) {
 	securityJS(t, jsServers+`
  const dns=require("dns"); const original=dns.promises.lookup;
- dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4}];
+ // localhost now has to resolve to loopback (#177); every other name is public.
+ dns.promises.lookup=async h=>[{address:h==="localhost"?"127.0.0.1":"93.184.216.34",family:4}];
  let seen=[];
  howlFrameFetchRequest=async (u)=>{seen.push(u.href); const to=u.searchParams.get("to");
   return to ? {status:302,headers:{get:()=>to}} : {status:200,headers:{get:()=>null},text:async()=>"ok"};};
@@ -149,13 +153,49 @@ func TestJSAmbiguousNumericGrant(t *testing.T) {
 `)
 }
 func TestJSCodeLoadingEnv(t *testing.T) {
+	refused, _ := json.Marshal(nettest.EnvRefused)
+	allowed, _ := json.Marshal(nettest.EnvAllowed)
 	securityJS(t, `
- for(const name of ["PYTHONPATH","NODE_OPTIONS","BASH_ENV","ENV","PERL5LIB","PERL5OPT","RUBYOPT","RUBYLIB","PYTHONSTARTUP","NODE_PATH"]) {
-  for(const raw of [name,name.toLowerCase()]) {
-   process.env[raw]="injected";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
-   assert.deepEqual(howlFrameExecEnv(),{},raw);delete process.env[raw];
-  }
+ for(const raw of `+string(refused)+`) {
+  process.env[raw]="injected";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
+  assert.deepEqual(howlFrameExecEnv(),{},raw);delete process.env[raw];
  }
+ for(const raw of `+string(allowed)+`) {
+  process.env[raw]="ok";process.env.HOWLFRAME_ALLOW_CAPS="process:env="+raw;
+  assert.deepEqual(howlFrameExecEnv(),{[raw]:"ok"},raw);delete process.env[raw];
+ }
+`)
+}
+
+// The emitted tables are exactly capability's single-source tables.
+func TestJSSharedTables(t *testing.T) {
+	names, _ := json.Marshal(capability.CodeLoadingEnvNames)
+	prefixes, _ := json.Marshal(capability.CodeLoadingEnvPrefixes)
+	var rows [][2]any
+	for _, raw := range capability.SpecialPrefixes {
+		p := netip.MustParsePrefix(raw)
+		bits := p.Bits()
+		if p.Addr().Is4() {
+			bits += 96
+		}
+		b := p.Addr().As16()
+		ints := make([]int, 16)
+		for i := range b {
+			ints[i] = int(b[i])
+		}
+		rows = append(rows, [2]any{ints, bits})
+	}
+	special, _ := json.Marshal(rows)
+	var lower []string
+	for _, h := range capability.RedirectSafeHeaders {
+		lower = append(lower, strings.ToLower(h))
+	}
+	headers, _ := json.Marshal(lower)
+	securityJS(t, `
+ assert.deepEqual(howlFrameCodeLoadingEnvNames,`+string(names)+`);
+ assert.deepEqual(howlFrameCodeLoadingEnvPrefixes,`+string(prefixes)+`);
+ assert.deepEqual(howlFrameSpecialPrefixes,`+string(special)+`);
+ assert.deepEqual(howlFrameRedirectSafeHeaders,`+string(headers)+`);
 `)
 }
 func TestJSProxyEnvIgnored(t *testing.T) {
@@ -249,5 +289,78 @@ func TestJSFetchCompressedResponse(t *testing.T) {
   const s=await listen((req,res)=>{res.writeHead(200,{"content-encoding":encoding});res.end(body);});
   try {grants(url(s));assert.equal(await howlFrameFetch(url(s),"GET"),"compressed response");} finally {s.close();}
  }
+`)
+}
+
+// #177: localhost reaches loopback only, and Node pins every vetted address.
+func TestJSLocalhostLoopbackAndPinAll(t *testing.T) {
+	securityJS(t, `
+ const dns=require("dns"); const original=dns.promises.lookup;
+ try {
+  for (const set of [["10.0.0.5"],["8.8.8.8"],["::ffff:10.0.0.5"],["fd00::1"],["127.0.0.1","10.0.0.5"],["::1","93.184.216.34"]]) {
+   dns.promises.lookup=async()=>set.map(a=>({address:a,family:a.includes(":")?6:4}));
+   assert.equal(await howlFrameFetchResolvedOk(new URL("http://localhost/")),false,set.join(","));
+  }
+  for (const set of [["127.0.0.1"],["127.0.0.1","::1"],["127.9.9.9"]]) {
+   dns.promises.lookup=async()=>set.map(a=>({address:a,family:a.includes(":")?6:4}));
+   assert.equal(await howlFrameFetchResolvedOk(new URL("http://localhost/")),true,set.join(","));
+  }
+  dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4},{address:"10.0.0.5",family:4}];
+  assert.equal(await howlFrameFetchResolvedOk(new URL("http://api.example.com/")),false);
+  dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4},{address:"2606:4700::1",family:6}];
+  const u=new URL("http://api.example.com/");
+  assert.equal(await howlFrameFetchResolvedOk(u),true);
+  const http=require("http"); const realRequest=http.request; let lookupFn;
+  http.request=(url,options)=>{lookupFn=options.lookup; throw new Error("stop");};
+  try { await howlFrameFetchRequest(u,{method:"GET",headers:{}}); } catch(e) {}
+  http.request=realRequest;
+  const call=opts=>new Promise((res,rej)=>lookupFn("api.example.com",opts,(err,a,f)=>err?rej(err):res([a,f])));
+  assert.deepEqual((await call({all:true}))[0],[{address:"93.184.216.34",family:4},{address:"2606:4700::1",family:6}]);
+  assert.deepEqual(await call({family:6}),["2606:4700::1",6]);
+  assert.deepEqual(await call({}),["93.184.216.34",4]);
+ } finally {dns.promises.lookup=original;}
+`)
+}
+
+// #177: only the shared safe headers cross an origin change; userinfo redirect targets are refused.
+func TestJSCrossOriginHeadersAndUserinfo(t *testing.T) {
+	sensitive, _ := json.Marshal(nettest.SensitiveHeaders)
+	securityJS(t, jsServers+`
+ let seen, hits=0;
+ const dst=await listen((req,res)=>{hits++;seen=req.headers;res.end("ok");});
+ const src=await listen((req,res)=>{res.writeHead(307,{location:url(dst)});res.end();});
+ const same=await listen((req,res)=>{ if(req.url==="/") {res.writeHead(307,{location:"/next"});return res.end();} seen=req.headers;res.end("ok");});
+ const headers={Accept:"text/plain"}; for (const h of `+string(sensitive)+`) headers[h]="secret";
+ try {
+  grants(url(src),url(dst));
+  assert.equal(await howlFrameFetch(url(src),"GET",undefined,Object.assign({},headers)),"ok");
+  assert.equal(hits,1);
+  for (const [k,v] of Object.entries(seen)) assert.ok(!String(v).includes("secret"),k+" crossed origin");
+  assert.equal(seen.accept,"text/plain");
+  grants(url(same));
+  assert.equal(await howlFrameFetch(url(same),"GET",undefined,Object.assign({},headers)),"ok");
+  assert.equal(seen["x-api-key"],"secret","same-origin custom header dropped");
+  for (const target of ["http://user:pw@127.0.0.1:"+dst.address().port+"/","http://user@127.0.0.1:"+dst.address().port+"/"]) {
+   const r=await listen((req,res)=>{res.writeHead(302,{location:target});res.end();});
+   hits=0; grants(url(r),url(dst));
+   await deny(()=>howlFrameFetch(url(r),"GET")); assert.equal(hits,0,target); r.close();
+  }
+ } finally {src.close();dst.close();same.close();}
+`)
+}
+
+// #177: Node agrees with core on [::ffff:a.b.c.d].
+func TestJSMappedLiteralGrants(t *testing.T) {
+	cases, _ := json.Marshal(nettest.MappedGrantCases)
+	securityJS(t, `
+ for (const tc of `+string(cases)+`) {
+  process.env.HOWLFRAME_ALLOW_CAPS="network:fetch="+tc.Grant;
+  assert.equal(howlFrameFetchAllowed(howlFrameFetchURL(tc.URL)),tc.Allowed,tc.Grant+" "+tc.URL);
+ }
+ let seen=[];
+ howlFrameFetchRequest=async (u,init)=>{seen.push(init.headers["X-Api-Key"]); return u.pathname==="/" ? {status:302,headers:{get:()=>"http://[::ffff:1.2.3.4]/next"}} : {status:200,headers:{get:()=>null},text:async()=>"ok"};};
+ process.env.HOWLFRAME_ALLOW_CAPS="network:fetch=1.2.3.4";
+ assert.equal(await howlFrameFetch("http://1.2.3.4/","GET",undefined,{"X-Api-Key":"secret"}),"ok");
+ assert.deepEqual(seen,["secret","secret"]);
 `)
 }
