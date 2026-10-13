@@ -86,7 +86,7 @@ func ComputeLivePins(liveRoot, root string) (map[string]string, error) {
 
 // LiveBlindManifestSHA256 pins Hange's blind set (howlframe#180) by the
 // sha256 of its manifest.json, which lists the sha256 of every file.
-const LiveBlindManifestSHA256 = "b4e525207b1b46b978415c92f54fdd6cc5eb23375506345512737d2f8b132fde"
+const LiveBlindManifestSHA256 = "7686087c2c7a5fb7f11fd4f3c93173d69f4593e87ced1b4e6dd6d248f3d73cf7"
 
 // LiveCodePins hashes every non-test Go file of the harness package.
 func LiveCodePins(root string) (map[string]string, error) {
