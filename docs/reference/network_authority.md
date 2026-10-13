@@ -1,4 +1,4 @@
-# Network authority (#165)
+# Network authority (#165, #171, #172)
 
 HowlFrame is a capability-governed runtime, not a sandbox. Grants are
 checked inside the host process before an effect runs; they are not an
@@ -40,11 +40,29 @@ capability at all: they only touch the request the server already accepted.
 * Every redirect hop is re-checked against the same allow-list (at most 10
   hops). A hop to an ungranted host stops the fetch with `CAPABILITY_DENIED`
   before that host is contacted.
-* A granted DNS name may not connect to a link-local, multicast or
-  unspecified address (`169.254.0.0/16`, `fe80::/10`, `0.0.0.0`, `::`), which
-  is where cloud metadata services live. Granting the IP literal itself (for
-  example `network:fetch=169.254.169.254`) is the only way to reach one.
-* `HTTP_PROXY` / `HTTPS_PROXY` are ignored by governed fetches.
+* Hostname grants block DNS results in loopback (`127.0.0.0/8`, `::1`),
+  RFC1918 (`10/8`, `172.16/12`, `192.168/16`), IPv6 ULA (`fc00::/7`),
+  NAT64 (`64:ff9b::/96`), link-local (`169.254/16`, `fe80::/10`) and
+  unspecified ranges. IPv4-mapped IPv6 is checked as IPv4. Go checks the
+  resolved address before dialing and again at socket creation. Node pins
+  its connection to the address checked by its lookup.
+* Explicit IP-literal grants and the exact name `localhost` are deliberate
+  opt-outs for those ranges. They still require the exact host and port;
+  `localhost` does not authorize `127.0.0.1`, or vice versa. Multicast
+  (`224.0.0.0/4`, `ff00::/8`) is always refused, even with a literal grant.
+* HTTPS-to-HTTP redirects are refused even when both hosts are granted.
+  On any host, effective port or scheme change, Authorization and Cookie
+  headers are removed for the rest of the chain, including subsequent hops
+  on the new origin.
+* `HTTP_PROXY` / `HTTPS_PROXY` (and lowercase variants) are ignored by
+  governed fetches. Node 24 with `NODE_USE_ENV_PROXY=1` honors proxy env in
+  its native fetch; the governed Node path uses native HTTP requests with
+  `agent: false` and a pinned lookup instead. The proxy trap test also runs
+  with that setting enabled at Node startup.
+* JavaScript previously accepted `network:fetch=127.1` because WHATWG URL
+  parsing canonicalized it to `127.0.0.1`. Ambiguous numeric grants and URL
+  hosts are now refused like Go. Trailing-dot names are invalid hostnames.
+
 
 ## Denials and receipts
 
@@ -58,7 +76,11 @@ On `-run-bc` the receipt records a denied `FETCH` / `HTTP_REQUEST` effect
 whose `grant` field is the grant that would have authorized it
 (`network:fetch=host:port`; never the path, query or userinfo). An allowed
 fetch records the matched grant, and each followed redirect hop is recorded
-as its own effect with target summary `redirect`.
+as its own effect with target summary `redirect`. An allowed effect under
+an explicit IP-literal or localhost grant also records
+`private_destination_opt_out: "explicit IP-literal or localhost grant"`.
+This reports permission to reach private destinations; it does not claim
+that the request successfully connected or reached a private IP.
 
 Receipt `grant` strings are copied verbatim from the normalized grant. For
 `process:exec=` entries that includes every pattern literal exactly as
@@ -79,6 +101,16 @@ host:
     (lambda (req) (http_res (http_request "https://api.example.com/v1" "GET")))))
 ```
 
+Granting `network:fetch=localhost:<server-port>` lets a route reach its own
+`/admin` (and every other path on that origin). Grants do not restrict URL
+paths. An explicit loopback literal grants equivalent access when used
+as the URL host.
+
+The `apps/webhook_relay` route is pinned to `127.0.0.1:8099` but reads
+`UPSTREAM_URL` at request time. That environment variable selects the URL,
+not the grant: any other host or port is denied. To change the upstream,
+update the route grant and the runner's grant as well as `UPSTREAM_URL`.
+
 The runner must hold every grant a route lists, or registration fails with
 `CAPABILITY_DENIED` at `HTTP_ROUTE` before the server listens.
 
@@ -94,8 +126,8 @@ recorded).
 | Interpreter (`-run`) | Same host matching, redirect re-check and dial guard. No receipts. |
 | `-run-bc` (AST and HFIR artifacts) | Full enforcement plus receipts. |
 | Generated Go | Same host matching, redirect re-check and dial guard from `HOWLFRAME_ALLOW_CAPS`. Generated Go runs every route with the whole process's grants, so `fetch` / `http_request` inside a route or middleware fails closed at build time with `UNSUPPORTED_ON_TARGET`. |
-| Generated JavaScript (Node) | Same host matching (WHATWG-canonical hosts) and per-hop redirect re-check (`redirect: "manual"`); DNS names are resolved first and refused if they resolve to a link-local or unspecified address (a resolve-then-connect check, so a rebinding race remains). |
-| Generated JavaScript (browser) | Same host matching. Opaque redirects are refused. A browser cannot resolve names, so the link-local guard does not apply there. |
+| Generated JavaScript (Node) | Same strict grant matching, per-hop redirect checks and private/multicast guards; checked DNS addresses are pinned into native HTTP requests, which ignore proxy env. No receipt emission on this target. |
+| Generated JavaScript (browser) | Same host matching. Opaque redirects are refused. Literal multicast and HTTPS downgrades are refused. A browser cannot inspect DNS results or pin a connection, so private-name DNS enforcement depends on browser/network policy; it cannot provide the Node dial guard. |
 
 ## Required-capabilities profile
 
