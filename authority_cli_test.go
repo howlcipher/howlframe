@@ -466,7 +466,7 @@ func TestAuthorityRouteAttenuation(t *testing.T) {
 	t.Setenv("HOWL_ROUTE_SECRET", "route-secret-value")
 	for i, path := range []string{"bytecode", "hfir"} {
 		t.Run(path, func(t *testing.T) {
-			port := 18620 + i*2
+			port := 18620 + i*10
 			// Over-request refuses registration before the server listens.
 			over := fmt.Sprintf(`(http_server %d (route "/x" (grants "environment") (lambda (req) (res 200 "text/plain" "ok"))))`, port)
 			r := runAuthority(t, binary, path, over, "network")
@@ -480,6 +480,10 @@ func TestAuthorityRouteAttenuation(t *testing.T) {
 			}{
 				{`(route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "CAPABILITY_DENIED"},
 				{`(route "/x" (grants "environment") (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "route-secret-value"},
+				// A server-wide (grants ...) is the default for every route.
+				{`(grants "environment") (route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "route-secret-value"},
+				// A route's own list replaces the server default.
+				{`(grants "environment") (route "/x" (grants) (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "CAPABILITY_DENIED"},
 			} {
 				port++
 				src := fmt.Sprintf(`(http_server %d %s)`, port, tc.route)

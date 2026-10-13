@@ -110,5 +110,8 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   gets `network` alone, so store, environment, filesystem and process access
   in a handler must be listed. An over-request fails closed when the route is
   registered, before the server listens.
+* `(http_server PORT (grants "cap" ...) routes...)`: one `(grants ...)` form
+  directly under `http_server` is the default list for every route that does
+  not declare its own; a route's own `(grants ...)` (even empty) replaces it.
 * Both forms are bytecode-only; the Go checker/backends reject them with
   `UNSUPPORTED_ON_TARGET`.

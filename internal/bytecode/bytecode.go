@@ -611,14 +611,31 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "http_server":
 			portNode := node.Children[1]
 			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})
+			// (grants ...) directly under http_server is the default handler
+			// grant list for routes that do not declare their own.
+			serverGrants := ""
 			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "grants" {
+					if serverGrants != "" {
+						ast.ReportError("http_server accepts at most one (grants ...) form", child.Line, child.Column)
+					}
+					serverGrants = compileSpawnGrants(child)
+					if serverGrants == "" {
+						serverGrants = "\n"
+					}
+				}
+			}
+			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "grants" {
+					continue
+				}
 				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "route" {
 					path := child.Children[1].Value
 					if _, err := httpreq.ParseRoute(path); err != nil {
 						ast.ReportError(err.Error(), child.Children[1].Line, child.Children[1].Column)
 					}
 					handler := child.Children[len(child.Children)-1]
-					routeGrants := ""
+					routeGrants := strings.TrimSpace(serverGrants)
 					if len(child.Children) == 4 {
 						routeGrants = compileSpawnGrants(child.Children[2])
 					}

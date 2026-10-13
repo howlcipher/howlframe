@@ -1,15 +1,16 @@
 (http_server 8103
+  (grants "database")
   (store_open kv "memory://session")
   (sput kv "n" "0")
-  (route "/count" (grants "database") (lambda (req)
-    (res_json 200 (dict ("n" (nz (sget kv "n") "0"))))))
-  (route "/inc" (grants "database") (lambda (req)
+  (route "/count" (lambda (req)
+    (res_json 200 (dict ("n" (sget kv "n"))))))
+  (route "/inc" (lambda (req)
     (switch (req_method req)
       ("POST"
-        (let (n (+ (to_int (nz (sget kv "n") "0")) 1))
-          (do (sput kv "n" (to_string n)) (res_json 200 (dict ("n" (to_string n)))))))
+        (let (n (to_string (+ (to_int (sget kv "n")) 1)))
+          (do (sput kv "n" n) (res_json 200 (dict ("n" n))))))
       (else (res_json 405 (dict ("error" "method_not_allowed")))))))
-  (route "/reset" (grants "database") (lambda (req)
+  (route "/reset" (lambda (req)
     (switch (req_method req)
       ("POST"
         (do (sput kv "n" "0") (res_json 200 (dict ("n" "0")))))

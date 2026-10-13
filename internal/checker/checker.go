@@ -497,6 +497,9 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 			}
 			checkGoAppHandler(routeNode, isCliApp)
 		}
+	case "grants":
+		// Server-wide default handler grants; compiled by the bytecode
+		// compiler, rejected by the Go/JS backends.
 	case "store_open", "store_put", "store_delete", "do", "let":
 		// Startup forms compiled before HTTP_SERVER_SERVE (shared process store init).
 		checkGoStatement(handlerNode, 0)

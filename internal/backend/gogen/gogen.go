@@ -947,6 +947,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 			continue
 		}
 
+		if head == "grants" {
+			// Handler grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: http_server (grants ...) is enforced only by the bytecode runtime", handlerNode.Line, handlerNode.Column)
+		}
+
 		if head == "test" {
 			if len(handlerNode.Children) < 3 {
 				// ast.ReportError("test expects (test \"description\" body...)", handlerNode.Line, handlerNode.Column)
