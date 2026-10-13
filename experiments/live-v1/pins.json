@@ -319,7 +319,7 @@
   "falsifiable-v0/tasks/t30/oracle/expected/out/approval_request.json": "aa37c5eeaadf8035b3104399698dc25533dc12d236545bbb6eabe2c53de5c64d",
   "falsifiable-v0/tasks/t30/oracle/expected_effects.json": "62e500ea22a7a8a1fa6c7dcf54288d90586b91083e7c4eabb87f957b25c9e535",
   "live-v1-blind/manifest.json(pinned)": "7686087c2c7a5fb7f11fd4f3c93173d69f4593e87ced1b4e6dd6d248f3d73cf7",
-  "live-v1/PREREGISTRATION.md": "092fb053c6dc58f774041de8395738f5e9214b9ab0eaa58e19473abfdc9df02e",
+  "live-v1/PREREGISTRATION.md": "b182adb262706b711e3d6fb1f47926b124aedcecdbfe1c673020fb7fa614de45",
   "live-v1/cmd/hflive/main.go": "0c5c3f1c9fed8e954006b68b0040bdcb958d0dde20c042018df3d99f06dd9807",
   "live-v1/prompts/arm_a.md": "0b95f9ba34c32bb0027823c9f6f1fe1ddab33f06aacb10756ed41ae252d66e20",
   "live-v1/prompts/arm_b.md": "50f15a262c1fb8054f81de6bce8ec81e9fb2546d7d7ec147693b861fb0215a57",

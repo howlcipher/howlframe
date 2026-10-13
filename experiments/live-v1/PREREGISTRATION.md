@@ -130,6 +130,16 @@ see the §2 contamination disclosure — the designer had seen the blind set:
 Limits: 256 steps, depth 8, 200,000 operations, 1 MiB of writes. v0 plans run
 unchanged.
 
+Known v1 traps (frozen as-is, documented rather than fixed so v1 stays frozen;
+none is in `arm_b.md`):
+- **kv duplicate keys:** `kv` reads / `parse_kv` keep the **last** value for a
+  repeated key; lines without the separator are silently skipped; keys and
+  values are space-trimmed.
+- **write_record arrays:** `write_record` accepts only an object; a JSON array
+  (or scalar) is a runtime error (`record must be an object`), not a write.
+- **extra arguments:** operators check only a minimum argument count; extra
+  `args` are silently ignored rather than rejected.
+
 **Frozen:** `live_planv1.go`, `live_planarm.go`, `prompts/arm_a.md`,
 `arm_b.md` and `repair.md` are pinned by literal sha256 in
 `TestLiveV1LanguageAndPromptsFrozen` (independent of `pins.json`), and the
