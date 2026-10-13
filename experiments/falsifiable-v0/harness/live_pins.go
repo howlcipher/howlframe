@@ -81,7 +81,11 @@ func ComputeLivePins(liveRoot, root string) (map[string]string, error) {
 			pins["rendered/"+id+"/arm_"+arm] = sha([]byte(ps.RenderInitial(arm, LiveTask{Task: t, Set: "tuning"})))
 		}
 	}
-	blind, e := LoadBlindSet(filepath.Join(filepath.Dir(liveRoot), "live-v1-blind"), LiveBlindManifestSHA256)
+	absRoot, e := filepath.Abs(liveRoot)
+	if e != nil {
+		return nil, e
+	}
+	blind, e := LoadBlindSet(filepath.Join(filepath.Dir(absRoot), "live-v1-blind"), LiveBlindManifestSHA256)
 	if e != nil {
 		return nil, e
 	}

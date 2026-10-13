@@ -5,7 +5,7 @@
   "falsifiable-v0/harness/live.go": "36add2b6872756ea938c7fd618dd6ccaf12ed3f72cb621099b6615db61c7bffb",
   "falsifiable-v0/harness/live_blind.go": "74a55964f44bbb023b206b886fa54803571660c6c094669eaddb08f5b5e8e879",
   "falsifiable-v0/harness/live_models.go": "a81a2299a894e0e6ded218c6d963c396ad8239b618497b3de01fcd0f01b0620d",
-  "falsifiable-v0/harness/live_pins.go": "71c8981145816dad997de0fd08905bc20b57c4d1f2127c2fc8fad9837cea2e0d",
+  "falsifiable-v0/harness/live_pins.go": "8386d8943e9a7680a141f28f6526153c705dc3e52ee178ba9744bef5951318a3",
   "falsifiable-v0/harness/live_planarm.go": "3f50ef887ee690f5898e3eaa888211032c16e9b1f25f5789fe62cc356eed7aee",
   "falsifiable-v0/harness/live_planv1.go": "742b33e7e2e7b1b95a045d4ac587f3aabbc019497e3a74c2acd3c54534c52b09",
   "falsifiable-v0/harness/live_report.go": "0787c1ff08464523608f9c2bda8d3ca049b056771df669f1246440f8fe7e6104",
