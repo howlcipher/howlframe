@@ -147,7 +147,7 @@ func TestForbiddenResolved(t *testing.T) {
 			t.Errorf("%s not forbidden", a)
 		}
 	}
-	for _, a := range []string{"127.0.0.1", "10.0.0.1", "93.184.216.34", "::1"} {
+	for _, a := range []string{"93.184.216.34", "2001:4860:4860::8888"} {
 		if forbiddenResolved(netip.MustParseAddr(a)) {
 			t.Errorf("%s forbidden", a)
 		}

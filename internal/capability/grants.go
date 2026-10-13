@@ -17,7 +17,7 @@ func ParseGrant(raw string) (Capability, error) {
 	}
 	if name, ok := strings.CutPrefix(raw, EnvGrantPrefix); ok {
 		if DynamicLoaderEnv(name) {
-			return None, fmt.Errorf("process:env= refuses dynamic-loader variables (LD_*, DYLD_*): %q", raw)
+			return None, fmt.Errorf("process:env= refuses code-loading variables (including LD_*, DYLD_*): %q", raw)
 		}
 		if !validEnvName(name) {
 			return None, fmt.Errorf("unknown capability: %q", raw)
