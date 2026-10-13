@@ -1,0 +1,10 @@
+this is not json
+{"version": 2, "checks": {}}
+{"version": 1}
+{"version": 1, "checks": []}
+{"version": 1, "checks": {"a": {"health": "sideways", "since": 1, "last_run": 1, "last_status": "PASS", "last_http_status": 200, "consecutive_failures": 0}}}
+{"version": 1, "checks": {"a": {"health": "up", "since": "1", "last_run": 1, "last_status": "PASS", "last_http_status": 200, "consecutive_failures": 0}}}
+{"version": 1, "checks": {"a": {"health": "up", "since": 1, "last_run": 1, "last_status": "OK", "last_http_status": 200, "consecutive_failures": 0}}}
+{"version": 1, "checks": {"a": {"health": "up", "since": 1, "last_run": 1, "last_status": "PASS", "last_http_status": "200", "consecutive_failures": 0}}}
+{"version": 1, "checks": {"a": {"health": "up", "since": 1, "last_run": 1, "last_status": "PASS", "last_http_status": 200, "consecutive_failures": -1}}}
+{"version": 1, "checks": {"a": {"health": "up", "since": 1, "last_run": 1, "last_status": "PASS", "last_http_status": 200}}}
