@@ -80,11 +80,13 @@ func NewRuntimeError(code string, fn string, ip int, op bytecode.Opcode, msg str
 }
 
 type VMLimits struct {
-	MaxInstructions    int
-	MaxMemoryBytes     int
-	MaxCallDepth       int
-	MaxFetchBodyBytes  int
-	MaxExecOutputBytes int
+	MaxInstructions   int
+	MaxMemoryBytes    int
+	MaxCallDepth      int
+	MaxFetchBodyBytes int
+	// MaxRequestBodyBytes bounds a route's req.body read (parse_json); <=0 means the default.
+	MaxRequestBodyBytes int
+	MaxExecOutputBytes  int
 }
 
 // ExecutionPolicy is authority supplied by the trusted bytecode runner. It
@@ -146,11 +148,12 @@ func (f AdapterDeadlineFlag) Set(raw string) error {
 }
 
 var DefaultLimits = VMLimits{
-	MaxInstructions:    100000,
-	MaxMemoryBytes:     67108864,
-	MaxCallDepth:       1000,
-	MaxFetchBodyBytes:  10 * 1024 * 1024,
-	MaxExecOutputBytes: 10 * 1024 * 1024,
+	MaxInstructions:     100000,
+	MaxMemoryBytes:      67108864,
+	MaxCallDepth:        1000,
+	MaxFetchBodyBytes:   10 * 1024 * 1024,
+	MaxRequestBodyBytes: 10 * 1024 * 1024,
+	MaxExecOutputBytes:  10 * 1024 * 1024,
 }
 
 // DefaultExecutionPolicy returns a copy of the standalone VM's safe defaults.

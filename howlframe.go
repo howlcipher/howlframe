@@ -66,6 +66,7 @@ func main() {
 	maxMemory := flag.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
 	maxFetch := flag.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
@@ -76,7 +77,7 @@ func main() {
 		os.Exit(1)
 	}
 	if *runBc {
-		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline); err != nil {
+		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline); err != nil {
 			ast.ReportError(err.Error(), 0, 0)
 		}
 	}
@@ -154,7 +155,7 @@ func main() {
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline)
+		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
 		if policyErr != nil {
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(1)
@@ -924,6 +925,7 @@ func runArtifact() {
 	maxMemory := runFlags.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
 	maxFetch := runFlags.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
 	runFlags.Usage = func() {
@@ -991,7 +993,7 @@ func runArtifact() {
 		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 
 	case "bytecode", "bc":
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *deadline)
+		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
 		if policyErr != nil {
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(1)
@@ -1068,12 +1070,12 @@ func inspectArtifact() {
 	printRequiredCapabilities(data)
 }
 
-func resourcePolicy(memory, fetch, output int, deadline string) (vm.ExecutionPolicy, error) {
+func resourcePolicy(memory, fetch, output, request int, deadline string) (vm.ExecutionPolicy, error) {
 	policy := vm.DefaultExecutionPolicy()
 	for _, limit := range []struct {
 		name  string
 		value int
-	}{{"max-memory-bytes", memory}, {"max-fetch-bytes", fetch}, {"max-exec-output-bytes", output}} {
+	}{{"max-memory-bytes", memory}, {"max-fetch-bytes", fetch}, {"max-exec-output-bytes", output}, {"max-request-bytes", request}} {
 		if limit.value <= 0 {
 			return policy, fmt.Errorf("-%s must be greater than zero; unlimited resource usage is not supported", limit.name)
 		}
@@ -1081,6 +1083,7 @@ func resourcePolicy(memory, fetch, output int, deadline string) (vm.ExecutionPol
 	policy.Limits.MaxMemoryBytes = memory
 	policy.Limits.MaxFetchBodyBytes = fetch
 	policy.Limits.MaxExecOutputBytes = output
+	policy.Limits.MaxRequestBodyBytes = request
 	if deadline != "" {
 		d, err := time.ParseDuration(deadline)
 		if err != nil {

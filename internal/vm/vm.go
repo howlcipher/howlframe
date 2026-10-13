@@ -2605,9 +2605,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				if req.Body == nil {
 					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "request body is nil"))
 				}
-				// Bound request body read to 10MB to prevent unbounded memory DoS
-				const maxBodyBytes = 10 * 1024 * 1024
-				limitedReader := io.LimitReader(req.Body, maxBodyBytes+1)
+				// Bound the request body read (runner flag --max-request-bytes) to
+				// prevent unbounded memory use; the default is 10 MiB.
+				maxBodyBytes := vm.Limits.MaxRequestBodyBytes
+				if maxBodyBytes <= 0 {
+					maxBodyBytes = DefaultLimits.MaxRequestBodyBytes
+				}
+				limitedReader := io.LimitReader(req.Body, int64(maxBodyBytes)+1)
 				readData, err := io.ReadAll(limitedReader)
 				if err != nil {
 					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", err))

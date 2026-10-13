@@ -1,0 +1,14 @@
+(cli_app
+  ; dx fixture 5: if branches of different types (void on line 8, int on line 9).
+  (defun pick (flag)
+    (type_hint flag "bool")
+    (type_hint return "int")
+    (do
+      (if flag
+        (print "yes")
+        1)
+      (return 2)
+    )
+  )
+  (print (to_string (call pick true)))
+)

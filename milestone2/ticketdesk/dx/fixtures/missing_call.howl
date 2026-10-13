@@ -1,0 +1,13 @@
+(cli_app
+  ; dx fixture 3: a user-defined function invoked without (call ...), line 11.
+  (defun double (n)
+    (type_hint n "int")
+    (type_hint return "int")
+    (return (* n 2))
+  )
+
+  (print "start")
+  (let (x 5)
+    (print (to_string (double x)))
+  )
+)
