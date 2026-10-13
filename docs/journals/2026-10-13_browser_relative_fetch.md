@@ -23,3 +23,12 @@ passed real Chromium desktop/mobile ingestion of the immutable 35-event,
 not imply live campaign telemetry or default-branch availability. Separate
 native full-host failures on symlinked Rust coreutils reproduce unchanged in
 pristine Frame; supported Ubuntu full CI and final PR head must be inspected.
+
+Independent final review is CLEAN with code-only coverage. Its helper audit
+notes that existing Node network transport/DNS selection uses availability of
+CommonJS require, while URL-base selection uses presence of process. This
+change keeps Node process hosts without a relative base even if location is
+injected; it does not claim to repair the existing Node ESM transport fallback.
+Bundlers that expose process in a browser remain a fail-closed compatibility
+limit. The dependent PR includes PR183 ancestry; count the relative-fetch
+change once and merge the parent first if approved.
