@@ -4,7 +4,29 @@ Reviewer: independent final reviewer (did not write or help write any implementa
 Date: 2026-10-13. Reviewed tree: HEAD 2a95d364. Reviewed against the frozen
 `requirements/REQUIREMENTS.md` (not only the acceptance suite).
 
-## DECISION: NOT ACCEPTED
+## FINAL DECISION (re-review, HEAD a4539b7f): ACCEPTED
+
+Round 1 (HEAD 2a95d364) was NOT ACCEPTED because of blocker LL-1. The round-1 text below is kept
+as history; this section supersedes its decision.
+
+Re-review evidence (2026-10-13):
+* Freeze: `git diff 78bcf393 HEAD -- 'milestone1/*/requirements' 'milestone1/*/tests'` still empty.
+  New regression test lives in the non-frozen `tests/regression/`.
+* LL-1 fixed: `rules_err` now records the lowest-line problem and `parse_rules` reports it after
+  the whole file. My original reproduction now gives `rules: line 4: budget for unknown category`.
+  Additional precedence probes (all PASS): unknown budget (line 2) vs later invalid regex (line 4)
+  -> 2; invalid regex (line 2) vs later unknown budget -> 2; budget of a category defined LATER in
+  the file is valid (`OK: 1 rule(s), 1 budget(s)`); zero budget line 2 vs later errors -> 2;
+  duplicate budget (line 5) vs unknown budget after it (line 6) -> 5; unknown budget at line 4
+  vs duplicate at line 6 -> 4; entry outside section line 1 wins; `Uncategorized` budget accepted;
+  `rules_lowest_line.sh` prints PASS PASS. `summary --rules` with budgets still reports OVER correctly.
+* LL-m1 fixed: `--max-memory-bytes 30000` on a read now exits 70 `ledgerlens: resource limit reached while reading`.
+* README limitation text corrected (diff reviewed).
+* `clean_repro.sh 01-ledgerlens`: 35 tests, 35 passed, 0 failed. No regressions seen.
+* Remaining minors (non-blocking): LL-m2 (budget digit cap), LL-m3 (runner raw JSON on limit
+  stops, platform), LL-m5 (artifact not committed).
+
+Round-1 decision (superseded): NOT ACCEPTED
 
 One reproducible violation of an explicit written requirement (BLOCKER LL-1, rules error
 ordering, REQUIREMENTS 3.2 / R5). It is small and cheap to fix, but the requirement is

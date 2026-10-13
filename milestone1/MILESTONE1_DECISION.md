@@ -2,7 +2,23 @@
 
 Date: 2026-10-13. Independent final reviewer (no part in the implementation). Reviewed HEAD 2a95d364.
 
-## OVERALL DECISION: NOT ACCEPTED (pending one blocker in ledgerlens)
+## FINAL OVERALL DECISION (re-review at HEAD a4539b7f, 2026-10-13): ACCEPTED
+
+| App | Final decision |
+|---|---|
+| 01-ledgerlens | ACCEPTED (LL-1 fixed and independently re-verified with 12 extra rules-precedence probes plus the new regression script) |
+| 02-healthwatch | ACCEPTED |
+| 03-taskflow | ACCEPTED |
+
+Re-review: frozen requirements/tests diff vs 78bcf393 empty; `clean_repro.sh` rerun by me:
+ledgerlens 35/35, healthwatch 29/29, taskflow 32/32. Confirmed fixed: read-time limit exits 70 in all
+three apps, taskflow report/history preflight order, healthwatch status JSON escaping, ledgerlens README.
+The carryover list below remains open as non-blocking items, minus the fixed ones (LL-1, 70-vs-66,
+TF-m1, HW status escaping). The stop rule applies: record the outcome and stop the Milestone 1 loop.
+
+### Round-1 record (superseded)
+
+## ROUND 1 DECISION: NOT ACCEPTED (pending one blocker in ledgerlens)
 
 Milestone 1 requires an independent reviewer to accept all three applications. Two are accepted;
 ledgerlens has one reproducible violation of a written requirement.

@@ -3,7 +3,11 @@
 Reviewer: independent final reviewer (did not write or help write any implementation).
 Date: 2026-10-13. Reviewed tree: HEAD 2a95d364, against the frozen `requirements/REQUIREMENTS.md`.
 
-## DECISION: ACCEPTED
+## RE-REVIEW (HEAD a4539b7f): ACCEPTED, confirmed
+
+Fixes verified: read-time resource limit now exits 70 (`resource limit reached while reading`); `status --format json` escapes names (name `a"b\c` round-trips through a JSON parser, text output unchanged). `clean_repro.sh` 02-healthwatch: 29/29. Frozen paths unchanged. No regressions found.
+
+## DECISION (round 1): ACCEPTED
 
 No violation of a written requirement found after about 90 extra black-box probes against real
 loopback HTTP servers. Minor defects and platform notes are listed and carried over.

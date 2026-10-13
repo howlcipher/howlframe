@@ -3,7 +3,11 @@
 Reviewer: independent final reviewer (did not write or help write any implementation).
 Date: 2026-10-13. Reviewed tree: HEAD 2a95d364, against the frozen `requirements/REQUIREMENTS.md`.
 
-## DECISION: ACCEPTED
+## RE-REVIEW (HEAD a4539b7f): ACCEPTED, confirmed
+
+Fixes verified: read-time resource limit now exits 70 (`resource limit reached while reading`); provisional `--report` is written only after history is validated and proven writable (invalid history: pre-existing report left untouched, exit 65; history denied: no report created, exit 77; valid run writes the final report). `clean_repro.sh` 03-taskflow: 32/32. Frozen paths unchanged. No regressions found.
+
+## DECISION (round 1): ACCEPTED
 
 No violation of a written requirement found after about 120 extra black-box probes, including
 argv fidelity with hostile `-D` values, exact error lines, failure policies, denial behavior and
