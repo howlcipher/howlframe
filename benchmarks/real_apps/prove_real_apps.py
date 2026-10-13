@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,7 +132,7 @@ APPS = {
         "go": HERE / "fetch_cli/go/main.go",
         "node": HERE / "fetch_cli/node/main.js",
         "kind": "cli_fetch",
-        "howl_caps": "network",
+        "howl_caps": "network:fetch=<origin>",
         "test_pkg": "./apps/fetch_cli/",
     },
     "template_cli": {
@@ -806,6 +807,8 @@ def run_cli_fetch(lang: str, source: Path, howl_bin: str, caps: str, url: str, c
 
 def parity_fetch(lang: str, source: Path, howl_bin: str, caps: str) -> None:
     srv, url = start_fetch_origin()
+    # Outbound fetch needs a host-scoped grant; coarse network never fetches (#165).
+    caps = f"network:fetch={urllib.parse.urlsplit(url).netloc}"
     try:
         with tempfile.TemporaryDirectory() as td:
             r = run_cli_fetch(lang, source, howl_bin, caps, url, Path(td))
