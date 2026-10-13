@@ -55,6 +55,7 @@ func main() {
 	runMode := flag.Bool("run", false, "interpret and execute a cli_app script directly (Phase 1 of improvement #49: no Go/JS text generated, no go build/go run invoked)")
 	compileBc := flag.Bool("compile-bc", false, "compile AST to bytecode JSON")
 	compileHfirBc := flag.Bool("compile-hfir-bc", false, "EXPERIMENTAL: compile directly from semantic HFIR to bytecode JSON")
+	hfirAdapterRoundTrip := flag.Bool("hfir-adapter-roundtrip", false, "EXPERIMENTAL (with -compile-hfir-bc): route the HFIR graph through the model-adapter JSON transport (encode, strict decode, CompileCandidate) before lowering")
 	compileWasm := flag.Bool("compile-wasm", false, "compile typed SSA/CFG to WebAssembly Text")
 	requiredCaps := flag.Bool("required-caps", false, "report required capabilities as compact JSON without execution")
 	receiptPath := flag.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
@@ -227,7 +228,13 @@ func main() {
 	// Not a replacement compiler backend.
 	if *compileHfirBc {
 		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
-		prog, diags := hfir.LowerToBytecode(graph)
+		var prog *bytecode.BCProgram
+		var diags []hfir.Diagnostic
+		if *hfirAdapterRoundTrip {
+			prog, diags = compileViaModelAdapter(graph)
+		} else {
+			prog, diags = hfir.LowerToBytecode(graph)
+		}
 		if len(diags) > 0 {
 			ast.ReportError(fmt.Sprintf("HFIR direct lowering failed: %s", diags[0].Message), diags[0].Location.Line, diags[0].Location.Column)
 		}
@@ -1291,4 +1298,24 @@ func rejectUnsupportedTargetControlflow(root *ast.Node, target string) {
 		}
 	}
 	walk(root)
+}
+
+// compileViaModelAdapter sends a source-lowered graph through the public model
+// adapter boundary exactly as a model candidate would arrive: encoded as
+// hfir-model-adapter/v1 JSON, strictly decoded, verified and lowered by
+// CompileCandidate. It exists so tests can prove the adapter covers every
+// program -compile-hfir-bc accepts.
+func compileViaModelAdapter(graph *hfir.Graph) (*bytecode.BCProgram, []hfir.Diagnostic) {
+	data, err := hfir.EncodeCandidateTransport(graph)
+	if err != nil {
+		return nil, []hfir.Diagnostic{{Code: "HFIR_TRANSPORT_INVALID", Severity: hfir.SeverityError, Message: err.Error()}}
+	}
+	candidate, diags := hfir.DecodeCandidate(data)
+	if len(diags) > 0 {
+		for i := range diags {
+			diags[i].Message = fmt.Sprintf("model adapter: %s: %s (node %s)", diags[i].Code, diags[i].Message, diags[i].RelatedNode)
+		}
+		return nil, diags
+	}
+	return hfir.CompileCandidate(candidate)
 }

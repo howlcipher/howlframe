@@ -23,7 +23,7 @@ The checklist that holds the current limit is `docs/reference/lowered_hfir_prod_
 
 The shared conformance form is `(fetch url method)` with no body (`tests/conformance/abi_v1/08_fetch_capability.howl`, `20_nested_fetch.howl`). `21_nested_multi_effect.howl` has one untaken `(fetch url "PUT" "phase2d-body-not-sent")`. That call has a `body` edge. Neither bytecode artifact contains the string, and the untaken branch does not run. `TestHFIRBytecodeFetchOperandOrder` sends that same string on a taken `PUT` and records an empty request body, because both compilers drop it. `TestProdFlipCriteriaLock` requires `OpFetch` to pop 2 with an empty operand list, and its `fetch_body` subtest requires the body string to be absent from both artifacts.
 
-The model-adapter transport still rejects kind `fetch` with `HFIR_TRANSPORT_KIND`. #88 stays Pending. Wasm's infeasible set stays `exec`, `spawn_agent`, and `http_server_start`. `fetch` is not in that set, and this note does not add it.
+The model-adapter transport carries kind `fetch` since #88. Wasm's infeasible set stays `exec`, `spawn_agent`, and `http_server_start`. `fetch` is not in that set, and this note does not add it.
 
 ## Why the body is an accepted shared limit
 

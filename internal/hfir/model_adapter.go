@@ -31,9 +31,9 @@ const SemanticRepairSchemaVersion = "hfir-semantic-repair/v2"
 
 const (
 	modelAdapterTarget   = "model-adapter"
-	maxCandidateNodes    = 128
-	maxNodeInputs        = 32
-	maxTransportBytes    = 64 * 1024
+	maxCandidateNodes    = 4096
+	maxNodeInputs        = 256
+	maxTransportBytes    = 1024 * 1024
 	maxValueBytes        = 4 * 1024
 	maxRepairOperations  = 5
 	maxRepairRegionNodes = 16
@@ -635,16 +635,21 @@ func validateNode(node transportNode) *Diagnostic {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_BOUNDS", "node input count or provenance label exceeds the Phase-1 limit", node.ID)
 		return &diagnostic
 	}
-	roles := nodeRoles(node.Kind)
-	if roles == nil {
-		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_KIND", "node kind is outside the Phase-1 executable subset", node.ID)
+	if nodeRoleAlternatives(node.Kind) == nil {
+		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_KIND", "node kind is outside the adapter's executable subset", node.ID)
 		return &diagnostic
 	}
-	if !validRoles(node.Inputs, roles) {
+	roles, ok := matchingRoles(node.Kind, node.Inputs)
+	if !ok {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_ROLE", "node inputs do not match required semantic roles", node.ID)
 		return &diagnostic
 	}
-	if requiresValue(node.Kind) && node.Value == "" {
+	targetForm := node.Kind == "map_get" && len(roles) == 2
+	if targetForm && node.Value != "" {
+		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_VALUE", "map_get with a target edge takes no variable value", node.ID)
+		return &diagnostic
+	}
+	if requiresValue(node.Kind) && !targetForm && node.Value == "" {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_VALUE", "node requires a non-empty semantic value", node.ID)
 		return &diagnostic
 	}
@@ -686,93 +691,153 @@ func validateNode(node transportNode) *Diagnostic {
 	return nil
 }
 
+// nodeRoles returns the single role shape of kind, or nil when kind is not a
+// transport kind. Kinds with more than one accepted shape use
+// nodeRoleAlternatives; nodeRoles returns their first shape.
 func nodeRoles(kind string) []string {
+	alternatives := nodeRoleAlternatives(kind)
+	if len(alternatives) == 0 {
+		return nil
+	}
+	return alternatives[0]
+}
+
+// nodeRoleAlternatives is the adapter's executable allow-list: every node
+// kind LowerToBytecode lowers, with the exact edge roles it accepts. A role
+// suffix "?" is optional and "*" repeats zero or more times; roles match in
+// order. Every arity-table form that the bytecode target can execute reaches
+// one of these kinds after desugaring (TestModelAdapterCoversArityTable).
+// Forms the bytecode target rejects (HTTP servers, web/wasm apps, llm_*,
+// store/db forms, spawn_agent, ...) stay outside, so a model cannot express
+// anything the source pipeline could not lower. Kinds here carry no grant:
+// effects are enforced at run time by the same capability checks as
+// -compile-hfir-bc, and fail closed without a grant.
+func nodeRoleAlternatives(kind string) [][]string {
 	switch kind {
 	case "program", "sequence":
-		return []string{"body*"}
-	case "const", "symbol":
-		return []string{}
+		return [][]string{{"body*"}}
+	case "const", "symbol", "time_now", "param":
+		return [][]string{{}}
 	case "let":
-		return []string{"value", "body"}
-	case "set", "stderr", "exit", "convert", "list_len", "env":
-		return []string{"value"}
+		return [][]string{{"value", "body"}}
+	case "set", "stderr", "exit", "convert", "list_len", "env", "map_keys", "is_nil", "html_escape", "attr_escape":
+		return [][]string{{"value"}}
 	case "if":
-		return []string{"condition", "then", "else?"}
+		return [][]string{{"condition", "then", "else?"}}
 	case "binary":
-		return []string{"left", "right"}
+		return [][]string{{"left", "right"}}
 	case "list":
-		return []string{"item*"}
+		return [][]string{{"item*"}}
 	case "dict":
-		return []string{"entry*"}
+		return [][]string{{"entry*"}}
 	case "dict_entry":
-		return []string{"key", "value"}
+		return [][]string{{"key", "value"}}
 	case "print":
-		return []string{"value*"}
+		return [][]string{{"value*"}}
 	case "str_split", "str_join":
-		return []string{"value", "separator"}
-	case "map_get", "map_delete":
-		return []string{"key"}
+		return [][]string{{"value", "separator"}}
+	case "map_get":
+		// (map_get var key) names a variable in value; (map_get <expr> key)
+		// carries the dict expression on a target edge and no value (#159).
+		return [][]string{{"key"}, {"target", "key"}}
+	case "map_delete":
+		return [][]string{{"key"}}
 	case "list_get":
-		return []string{"index"}
+		return [][]string{{"index"}}
 	case "append":
-		return []string{"item"}
+		return [][]string{{"item"}}
 	case "map_set":
-		return []string{"key", "value"}
+		return [][]string{{"key", "value"}}
+	case "read_file", "mkdir":
+		return [][]string{{"path"}}
+	case "write_file":
+		return [][]string{{"path", "data"}}
+	case "exec":
+		return [][]string{{"cmd", "arg*"}}
+	case "fetch":
+		return [][]string{{"url", "method", "body?"}}
+	case "parse_json":
+		return [][]string{{"content"}}
+	case "regex_match":
+		return [][]string{{"pattern", "string"}}
+	case "sleep":
+		// The graph edge is unnamed (SLEEP has no operand); the transport
+		// names it duration and nodeFromTransport maps it back.
+		return [][]string{{"duration"}}
+	case "cli_args":
+		return [][]string{{"index?"}}
+	case "req_query", "req_header", "req_path":
+		return [][]string{{"request", "name"}}
+	case "try":
+		return [][]string{{"expression", "success_body", "catch"}}
+	case "catch":
+		return [][]string{{"body"}}
+	case "for":
+		return [][]string{{"iterable", "body"}}
+	case "while":
+		return [][]string{{"condition", "body"}}
+	case "defun":
+		return [][]string{{"param*", "body*"}}
+	case "call":
+		return [][]string{{"arg*"}}
+	case "return":
+		return [][]string{{"value?"}}
 	default:
-		// defun, call, return, param, while, and for are not transport kinds.
-		// Phase 3a lowers defun and call from source on -compile-hfir-bc.
-		// Phase 3b lowers while from source on that same flag.
-		// Phase 3c fills if control edges from the roles above.
-		// Phase 3d lowers for from source on that same flag.
-		// write_file, mkdir, exec, and fetch are lowered from source on that
-		// same flag and stay outside this allow-list, with read_file.
-		// html_escape is lowered from source on that flag onto HTML_ESCAPE
-		// and stays outside this allow-list. attr_escape is lowered from
-		// source onto ATTR_ESCAPE and stays outside this allow-list.
-		// regex_match is lowered from source onto REGEX_MATCH and stays
-		// outside this allow-list. time_now is lowered from source onto
-		// TIME_NOW and stays outside this allow-list. sleep is lowered
-		// from source onto SLEEP and stays outside this allow-list.
-		// The transport still has no control-edge field.
-		// This allow-list stays the Phase-1 adapter subset (#88).
+		// The transport still has no control-edge field: if, for and while
+		// successors are derived from their validated roles in order, the
+		// same contract LowerAST writes from source.
 		return nil
 	}
 }
 
-func validRoles(inputs []transportEdge, wanted []string) bool {
-	if len(wanted) == 1 && strings.HasSuffix(wanted[0], "*") {
-		name := strings.TrimSuffix(wanted[0], "*")
-		for _, input := range inputs {
-			if input.Role != name {
-				return false
-			}
+// AdapterNodeKinds lists every transport kind, sorted.
+func AdapterNodeKinds() []string {
+	kinds := []string{"program", "sequence", "const", "symbol", "time_now", "param", "let", "set", "stderr", "exit", "convert", "list_len", "env", "map_keys", "is_nil", "html_escape", "attr_escape", "if", "binary", "list", "dict", "dict_entry", "print", "str_split", "str_join", "map_get", "map_delete", "list_get", "append", "map_set", "read_file", "mkdir", "write_file", "exec", "fetch", "parse_json", "regex_match", "sleep", "cli_args", "req_query", "req_header", "req_path", "try", "catch", "for", "while", "defun", "call", "return"}
+	sort.Strings(kinds)
+	return kinds
+}
+
+func matchingRoles(kind string, inputs []transportEdge) ([]string, bool) {
+	for _, wanted := range nodeRoleAlternatives(kind) {
+		if validRoles(inputs, wanted) {
+			return wanted, true
 		}
-		return true
 	}
-	minimum := len(wanted)
-	optional := false
-	if minimum > 0 && strings.HasSuffix(wanted[minimum-1], "?") {
-		minimum--
-		optional = true
-	}
-	if len(inputs) != minimum && (!optional || len(inputs) != minimum+1) {
-		return false
-	}
-	for index, input := range inputs {
+	return nil, false
+}
+
+func validRoles(inputs []transportEdge, wanted []string) bool {
+	for _, input := range inputs {
 		if len(input.Role) > 32 || len(input.NodeID) > 128 {
 			return false
 		}
-		name := strings.TrimSuffix(strings.TrimSuffix(wanted[index], "?"), "*")
-		if input.Role != name {
-			return false
+	}
+	index := 0
+	for _, spec := range wanted {
+		switch {
+		case strings.HasSuffix(spec, "*"):
+			name := strings.TrimSuffix(spec, "*")
+			for index < len(inputs) && inputs[index].Role == name {
+				index++
+			}
+		case strings.HasSuffix(spec, "?"):
+			if index < len(inputs) && inputs[index].Role == strings.TrimSuffix(spec, "?") {
+				index++
+			}
+		default:
+			if index >= len(inputs) || inputs[index].Role != spec {
+				return false
+			}
+			index++
 		}
 	}
-	return true
+	return index == len(inputs)
 }
 
 func requiresValue(kind string) bool {
 	switch kind {
-	case "symbol", "let", "set", "binary", "convert", "map_get", "map_delete", "list_get", "append", "map_set":
+	case "symbol", "let", "set", "binary", "convert", "map_get", "map_delete", "list_get", "append", "map_set",
+		"for", "defun", "param", "call", "try", "catch":
 		return true
 	}
 	return false
@@ -809,17 +874,27 @@ func validateTransportTypes(transport candidateTransport) *Diagnostic {
 		typ := "unknown"
 		switch node.Kind {
 		case "const":
-			if node.LiteralKind == "STRING" {
+			switch node.LiteralKind {
+			case "STRING":
 				typ = "string"
-			} else {
+			case "BOOL":
+				typ = "bool"
+			default:
 				typ = "number"
 			}
 		case "list":
 			typ = "list"
 		case "dict":
 			typ = "dict"
-		case "env", "str_join", "str_split", "convert":
+		case "env", "str_join", "html_escape", "attr_escape":
 			typ = "string"
+		case "str_split":
+			typ = "list"
+		case "convert":
+			typ = "string"
+			if node.Value == "to_int" || node.Value == "to_float" {
+				typ = "number"
+			}
 		case "list_len":
 			typ = "number"
 		case "binary":
@@ -834,8 +909,17 @@ func validateTransportTypes(transport candidateTransport) *Diagnostic {
 				if !compatibleBinary(left, right) {
 					typ = "invalid"
 				}
+			} else if node.Value == "+" && (left == "string" || right == "string") {
+				// + concatenates two strings, as in source.
+				typ = "string"
+				if !compatibleString(left) || !compatibleString(right) {
+					typ = "invalid"
+				}
 			} else {
 				typ = "number"
+				if node.Value == "+" && left == "unknown" && right == "unknown" {
+					typ = "unknown"
+				}
 				if !compatibleNumber(left) || !compatibleNumber(right) {
 					typ = "invalid"
 				}
@@ -854,6 +938,7 @@ func validateTransportTypes(transport candidateTransport) *Diagnostic {
 }
 
 func compatibleNumber(typ string) bool  { return typ == "number" || typ == "unknown" }
+func compatibleString(typ string) bool  { return typ == "string" || typ == "unknown" }
 func compatibleBoolean(typ string) bool { return typ == "bool" || typ == "unknown" }
 func compatibleBinary(left, right string) bool {
 	return left == "unknown" || right == "unknown" || left == right || (left == "number" && right == "number")
@@ -884,7 +969,9 @@ func validateNoSharedEffects(transport candidateTransport) *Diagnostic {
 
 func isEffectful(kind string) bool {
 	switch kind {
-	case "set", "map_set", "map_delete", "append", "print", "stderr", "exit", "env":
+	case "set", "map_set", "map_delete", "append", "print", "stderr", "exit", "env",
+		"read_file", "write_file", "mkdir", "exec", "fetch", "sleep", "time_now", "cli_args",
+		"call", "return", "defun", "try", "for", "while", "parse_json":
 		return true
 	}
 	return false
@@ -902,14 +989,18 @@ func hasErrors(diagnostics []Diagnostic) bool {
 func nodeFromTransport(node transportNode) *Node {
 	inputs := make([]DataEdge, 0, len(node.Inputs))
 	for _, input := range node.Inputs {
-		inputs = append(inputs, DataEdge{Name: input.Role, SourceNode: input.NodeID})
+		role := input.Role
+		if node.Kind == "sleep" && role == "duration" {
+			role = ""
+		}
+		inputs = append(inputs, DataEdge{Name: role, SourceNode: input.NodeID})
 	}
 	result := &Node{ID: node.ID, Kind: node.Kind, Value: node.Value, LiteralKind: node.LiteralKind, DataInputs: inputs, Provenance: Provenance{Filename: "model:" + node.Provenance.Label}}
 	// The transport schema has no control-edge field, so a model cannot
-	// name a successor. An if's executable edges are the validated roles
-	// in order, the same contract LowerAST writes from source. while,
-	// defun, and for are not transport kinds.
-	if node.Kind == "if" {
+	// name a successor. if, for and while executable edges are the
+	// validated roles in order, the same contract LowerAST writes from
+	// source.
+	if node.Kind == "if" || node.Kind == "for" || node.Kind == "while" {
 		result.ControlEdges = make([]NodeID, len(node.Inputs))
 		for index, input := range node.Inputs {
 			result.ControlEdges[index] = input.NodeID
@@ -923,11 +1014,31 @@ func transportFromGraph(graph *Graph) candidateTransport {
 	for _, node := range graph.Nodes {
 		inputs := make([]transportEdge, 0, len(node.DataInputs))
 		for _, input := range node.DataInputs {
-			inputs = append(inputs, transportEdge{Role: input.Name, NodeID: input.SourceNode})
+			role := input.Name
+			if node.Kind == "sleep" && role == "" {
+				role = "duration"
+			}
+			inputs = append(inputs, transportEdge{Role: role, NodeID: input.SourceNode})
 		}
-		result.Nodes = append(result.Nodes, transportNode{ID: node.ID, Kind: node.Kind, Value: node.Value, LiteralKind: node.LiteralKind, Inputs: inputs, Provenance: transportOrigin{Label: strings.TrimPrefix(node.Provenance.Filename, "model:")}})
+		literalKind := node.LiteralKind
+		if node.Kind != "const" {
+			// LowerAST tags symbol leaves with the lexer's SYMBOL token type;
+			// it has no meaning for a non-const node and is not transported.
+			literalKind = ""
+		}
+		result.Nodes = append(result.Nodes, transportNode{ID: node.ID, Kind: node.Kind, Value: node.Value, LiteralKind: literalKind, Inputs: inputs, Provenance: transportOrigin{Label: strings.TrimPrefix(node.Provenance.Filename, "model:")}})
 	}
 	return result
+}
+
+// EncodeCandidateTransport renders graph in the public adapter transport. It
+// is the inverse of DecodeCandidate for every graph LowerAST produces from an
+// executable program; DecodeCandidate still validates the result.
+func EncodeCandidateTransport(graph *Graph) ([]byte, error) {
+	if graph == nil {
+		return nil, fmt.Errorf("graph is required")
+	}
+	return json.Marshal(transportFromGraph(graph))
 }
 
 func transportCycle(transport candidateTransport) NodeID {
