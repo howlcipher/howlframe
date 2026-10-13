@@ -107,7 +107,12 @@ func LoadBlindSet(root, wantManifestSHA string) ([]LiveTask, error) {
 		mut := "write_outputs"
 		t := Task{ID: id, Title: c.Category, Description: desc, Evidence: o.AllowedReads, AllowedCaps: []string{"filesystem"},
 			AllowedEffects: EffectsPolicy{Reads: o.AllowedReads, Writes: writes}, Mutation: mut}
-		out = append(out, LiveTask{Task: t, Set: "blind", Blind: &BlindSpec{Dir: dir, Grants: c.Grants, Outputs: o.Outputs, Forbidden: o.ForbiddenAccesses, Injection: o.Injection != ""}})
+		// Motoko b24: exact-path grants from allowed_writes, not write=out.
+		grants := []string{"filesystem:read=in"}
+		for _, w := range writes {
+			grants = append(grants, "filesystem:write="+w)
+		}
+		out = append(out, LiveTask{Task: t, Set: "blind", Blind: &BlindSpec{Dir: dir, Grants: grants, Outputs: o.Outputs, Forbidden: o.ForbiddenAccesses, Injection: o.Injection != ""}})
 	}
 	return out, nil
 }

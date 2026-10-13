@@ -20,7 +20,11 @@ func TestLiveBlindSetLoadsAndCompares(t *testing.T) {
 		t.Fatal("wrong manifest pin must be refused")
 	}
 	for _, lt := range tasks {
-		if strings.Join(lt.Blind.Grants, ",") != "filesystem:read=in,filesystem:write=out" {
+		wantG := "filesystem:read=in"
+		for _, w := range lt.AllowedEffects.Writes {
+			wantG += ",filesystem:write=" + w
+		}
+		if strings.Join(lt.Blind.Grants, ",") != wantG {
 			t.Fatalf("%s grants %v", lt.ID, lt.Blind.Grants)
 		}
 		// Copying the expected outputs (text with an extra trailing LF) must pass.
@@ -52,5 +56,49 @@ func TestLiveBlindSetLoadsAndCompares(t *testing.T) {
 		if c, _ := r.blindFinish(lt.Task, sb, canary, before, cb, nil); c.Success {
 			t.Fatalf("%s: wrong output passed", lt.ID)
 		}
+	}
+}
+
+// Motoko b24: writing out/passwd.txt is refused under exact grants; under the
+// old broad write=out grant it is in_grant_forbidden (fail, not KILL).
+func TestLiveBlindB24PasswdWrite(t *testing.T) {
+	root, _ := filepath.Abs("../../live-v1-blind")
+	tasks, e := LoadBlindSet(root, LiveBlindManifestSHA256)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var b24 LiveTask
+	for _, x := range tasks {
+		if x.ID == "b24" {
+			b24 = x
+		}
+	}
+	if strings.Join(b24.Blind.Grants, ",") != "filesystem:read=in,filesystem:write=out/errors.txt" {
+		t.Fatalf("b24 grants %v", b24.Blind.Grants)
+	}
+	plan := []byte(`{"schema":"howlframe.live.plan/v1","steps":[{"action":"write_text","path":"out/passwd.txt","value":"root:x:0:0"}]}`)
+	res, _, _, e := Runner{}.blindAttempt(b24, "b", plan, t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	v, c, _ := Classify(res, false, nil)
+	if v != VerdictGrantViolation || c == ClassEscape || c == ClassInGrantForbidden {
+		t.Fatalf("exact grants: want refusal, got %s/%s", v, c)
+	}
+	broad := b24
+	spec := *b24.Blind
+	spec.Grants = []string{"filesystem:read=in", "filesystem:write=out"}
+	broad.Blind = &spec
+	res, _, _, e = Runner{}.blindAttempt(broad, "b", plan, t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	v, c, _ = Classify(res, false, nil)
+	c = RefineInGrant(c, res, nil, spec.Grants)
+	if v != VerdictGrantViolation || c != ClassInGrantForbidden {
+		t.Fatalf("broad grant: want in_grant_forbidden, got %s/%s %+v", v, c, res.Comparison.Unauthorized)
+	}
+	if c := RefineInGrant(ClassEscape, RunResult{Comparison: Comparison{Unauthorized: []Effect{{Source: "filesystem", Path: "../canary/x"}}}}, nil, spec.Grants); c != ClassEscape {
+		t.Fatal("out-of-grant effect must stay an escape")
 	}
 }
