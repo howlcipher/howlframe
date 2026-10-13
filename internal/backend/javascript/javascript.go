@@ -3,7 +3,10 @@ package javascript
 import (
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/ir"
+	"net/netip"
+	"strconv"
 	"strings"
 )
 
@@ -420,7 +423,7 @@ func readFileJSHelper() string {
 // which bytes_to_string prints unchanged. A third argument is the body;
 // a two-argument call sends none.
 func fetchJSHelper() string {
-	return `function howlFrameGrantList() {
+	return specialPrefixJSSource() + `function howlFrameGrantList() {
   var raw = "";
   if (typeof process !== "undefined" && process.env) {
     raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
@@ -474,29 +477,61 @@ function howlFrameFetchDeny() {
 
 // Node checks private and metadata DNS results and pins the connection. A
 // browser cannot inspect DNS, so its own network policy governs named hosts.
-function howlFrameForbiddenAddress(address, explicit) {
-  var a = String(address).toLowerCase().replace(/^\[|\]$/g, "");
-  if (a.indexOf(":") >= 0) {
-    try { a = new URL("http://[" + a + "]/").hostname.slice(1, -1); } catch (e) { return true; }
+function howlFrameAddrBytes(a) {
+  a = String(a).toLowerCase().replace(/^\[|\]$/g, "");
+  var v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(a);
+  if (v4) {
+    var out4 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255];
+    for (var k = 1; k <= 4; k++) { var n4 = Number(v4[k]); if (n4 > 255) return null; out4.push(n4); }
+    return out4;
   }
-  if (a.indexOf("::ffff:") === 0) {
-    var mapped = a.slice(7);
-    if (mapped.indexOf(".") < 0) {
-      var parts = mapped.split(":");
-      if (parts.length === 2) {
-        var n = parseInt(parts[0], 16) * 65536 + parseInt(parts[1], 16);
-        mapped = [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
-      }
+  if (a.indexOf(":") < 0 || a.indexOf("%") >= 0) return null;
+  var tail = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(a);
+  if (tail) {
+    var t = howlFrameAddrBytes(tail[2]);
+    if (!t) return null;
+    a = tail[1] + ((t[12] << 8) | t[13]).toString(16) + ":" + ((t[14] << 8) | t[15]).toString(16);
+  }
+  var halves = a.split("::");
+  if (halves.length > 2) return null;
+  var head = halves[0] ? halves[0].split(":") : [];
+  var rest = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  var fill = 8 - head.length - rest.length;
+  if (halves.length === 1 ? fill !== 0 : fill < 1) return null;
+  var groups = head.concat(new Array(halves.length === 2 ? fill : 0).fill("0"), rest);
+  var out = [];
+  for (var g = 0; g < groups.length; g++) {
+    if (!/^[0-9a-f]{1,4}$/.test(groups[g])) return null;
+    var n = parseInt(groups[g], 16);
+    out.push(n >> 8, n & 255);
+  }
+  return out;
+}
+
+// howlFrameIsSpecial mirrors capability.ForbiddenDestination over the shared table.
+function howlFrameIsSpecial(b) {
+  var mapped = function (x) { return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255].concat(x); };
+  if (b[0] === 0x20 && b[1] === 0x02 && howlFrameIsSpecial(mapped(b.slice(2, 6)))) return true;
+  var compat = b.slice(0, 12).every(function (x) { return x === 0; });
+  if (compat && !(b[12] === 0 && b[13] === 0 && b[14] === 0)) return howlFrameIsSpecial(mapped(b.slice(12, 16)));
+  for (var i = 0; i < howlFrameSpecialPrefixes.length; i++) {
+    var p = howlFrameSpecialPrefixes[i][0], bits = howlFrameSpecialPrefixes[i][1], ok = true;
+    for (var k = 0; k < 16 && ok && bits > 0; k++, bits -= 8) {
+      var mask = bits >= 8 ? 255 : (0xff << (8 - bits)) & 255;
+      ok = (b[k] & mask) === (p[k] & mask);
     }
-    a = mapped;
+    if (ok) return true;
   }
-  var v4 = /^\d+\.\d+\.\d+\.\d+$/.test(a);
-  var bytes = a.split(".").map(Number);
-  if (v4 && bytes[0] >= 224 && bytes[0] <= 239 || /^ff[0-9a-f]{2}:/.test(a)) return true;
+  return false;
+}
+
+function howlFrameForbiddenAddress(address, explicit) {
+  var b = howlFrameAddrBytes(address);
+  if (!b) return true;
+  var v4 = b.slice(0, 12).join(",") === "0,0,0,0,0,0,0,0,0,0,255,255";
+  if (v4 && b[12] >= 224 && b[12] <= 239 || b[0] === 0xff) return true;
   if (explicit) return false;
-  return a === "::" || a === "::1" || /^f[cd][0-9a-f]{2}:/.test(a) || /^fe[89ab][0-9a-f]:/.test(a) || /^64:ff9b::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?)?$/.test(a) ||
-    v4 && (a === "0.0.0.0" || bytes[0] === 127 || bytes[0] === 10 || bytes[0] === 169 && bytes[1] === 254 ||
-      bytes[0] === 172 && bytes[1] >= 16 && bytes[1] <= 31 || bytes[0] === 192 && bytes[1] === 168);
+  return howlFrameIsSpecial(b);
 }
 
 async function howlFrameFetchResolvedOk(u) {
@@ -555,6 +590,7 @@ async function howlFrameFetch(url, method, body, headers) {
   if (arguments.length >= 3) {
     init.body = body;
   }
+  var first = u;
   for (var hop = 0; ; hop++) {
     if (!(await howlFrameFetchResolvedOk(u))) howlFrameFetchDeny();
     var pending = howlFrameFetchRequest(u, init);
@@ -566,6 +602,8 @@ async function howlFrameFetch(url, method, body, headers) {
     var previous = u;
     try { u = howlFrameFetchURL(loc, u); } catch (e) { howlFrameFetchDeny(); }
     if (previous.protocol === "https:" && u.protocol === "http:") howlFrameFetchDeny();
+    var optHost = u.hostname.replace(/^\[|\]$/g, "");
+    if ((/^\[.*\]$/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(optHost) || optHost === "localhost") && u.hostname !== first.hostname) howlFrameFetchDeny();
     if (previous.origin !== u.origin) {
       Object.keys(init.headers || {}).forEach(function (name) {
         if (/^(authorization|cookie)$/i.test(name)) delete init.headers[name];
@@ -1417,4 +1455,26 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 
 	// ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)
 	return ""
+}
+
+// specialPrefixJSSource renders capability.SpecialPrefixes, the table shared
+// by every target, as [16-byte prefix, bits] pairs (IPv4 rows as mapped IPv6).
+func specialPrefixJSSource() string {
+	var b strings.Builder
+	b.WriteString("var howlFrameSpecialPrefixes = [\n")
+	for _, raw := range capability.SpecialPrefixes {
+		p := netip.MustParsePrefix(raw)
+		bits := p.Bits()
+		if p.Addr().Is4() {
+			bits += 96
+		}
+		a := p.Addr().As16()
+		parts := make([]string, len(a))
+		for i, x := range a {
+			parts[i] = strconv.Itoa(int(x))
+		}
+		fmt.Fprintf(&b, "  [[%s], %d], // %s\n", strings.Join(parts, ","), bits, raw)
+	}
+	b.WriteString("];\n\n")
+	return b.String()
 }

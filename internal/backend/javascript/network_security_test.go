@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/howlcipher/howlframe/internal/nettest"
 )
 
 func securityJS(t *testing.T, script string, env ...string) {
@@ -68,11 +70,30 @@ func TestJSNamePrivateDial(t *testing.T) {
 `)
 }
 func TestJSPrivateRanges(t *testing.T) {
+	list := func(xs []string) string { return `["` + strings.Join(xs, `","`) + `"]` }
 	securityJS(t, `
- for (const ip of ["127.1.2.3","0:0:0:0:0:0:0:1","::1","10.1.2.3","172.16.0.1","172.31.255.255","192.168.1.1","fc00::1","fd12::1","64:ff9b::7f00:1","169.254.169.254","fe80::1","::ffff:127.0.0.1","::ffff:7f00:1"]) {
+ for (const ip of `+list(append(nettest.BlockedAddresses, "0:0:0:0:0:0:0:1", "::ffff:7f00:1"))+`) {
   assert.equal(howlFrameForbiddenAddress(ip,false),true,ip);
  }
- for (const ip of ["172.15.0.1","172.32.0.1","192.169.1.1","2001:4860::1","64:ff9b:1::1","64:ff9b::1:0:0"]) assert.equal(howlFrameForbiddenAddress(ip,false),false,ip);
+ for (const ip of `+list(nettest.PublicAddresses)+`) assert.equal(howlFrameForbiddenAddress(ip,false),false,ip);
+`)
+}
+func TestJSRedirectToOptOut(t *testing.T) {
+	securityJS(t, jsServers+`
+ const dns=require("dns"); const original=dns.promises.lookup;
+ dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4}];
+ let seen=[];
+ howlFrameFetchRequest=async (u)=>{seen.push(u.href); const to=u.searchParams.get("to");
+  return to ? {status:302,headers:{get:()=>to}} : {status:200,headers:{get:()=>null},text:async()=>"ok"};};
+ process.env.HOWLFRAME_ALLOW_CAPS="network:fetch=api.example.com,network:fetch=10.0.0.5,network:fetch=localhost,network:fetch=127.0.0.1,network:fetch=[fd00::5]";
+ try {
+  for (const [from,to] of [["http://api.example.com/","http://10.0.0.5/"],["http://api.example.com/","http://localhost/"],["http://api.example.com/","http://[fd00::5]/"],["http://localhost/","http://127.0.0.1/"],["http://127.0.0.1/","http://localhost/"],["http://10.0.0.5/","http://127.0.0.1/"]]) {
+   seen=[]; await deny(()=>howlFrameFetch(from+"?to="+encodeURIComponent(to),"GET")); assert.equal(seen.length,1,from+" -> "+to);
+  }
+  for (const [from,to] of [["http://api.example.com/","http://api.example.com/next"],["http://10.0.0.5/","http://10.0.0.5/next"],["http://localhost/","http://localhost/next"]]) {
+   assert.equal(await howlFrameFetch(from+"?to="+encodeURIComponent(to),"GET"),"ok",from+" -> "+to);
+  }
+ } finally {dns.promises.lookup=original;}
 `)
 }
 func TestJSMulticastDial(t *testing.T) {
