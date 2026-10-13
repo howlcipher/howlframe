@@ -161,6 +161,10 @@ func run(args []string) error {
 		BootstrapResamples: harness.BootstrapResamples, BootstrapSeed: harness.BootstrapSeed}
 	repo := filepath.Dir(filepath.Dir(*live))
 	prov.Commit, _ = git(repo, "rev-parse", "HEAD")
+	// Motoko: never report a commit that does not match the code that ran.
+	if st, _ := git(repo, "status", "--porcelain", "--", "experiments", "internal", "cmd"); strings.TrimSpace(st) != "" {
+		prov.Commit += "+dirty"
+	}
 	prov.HarnessTree, _ = git(repo, "rev-parse", "HEAD:experiments/falsifiable-v0/harness")
 	prov.CodePins, _ = harness.LiveCodePins(*root)
 	prov.HowlFrameSHA256, _ = fileSHA(abs(*hf))

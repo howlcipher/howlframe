@@ -154,3 +154,16 @@ func TestLiveDecisionRule(t *testing.T) {
 		t.Fatalf("aborted run must be incomplete, got %s", d)
 	}
 }
+
+// Motoko: stub dry-run reports carry no Decision line; live reports do.
+func TestLiveReportNoDecisionForStub(t *testing.T) {
+	s := LiveSummary{Sets: map[string]SetSummary{"blind": {Decision: "KILL", Arms: map[string]LiveArmSummary{}}}}
+	s.Provenance.Model = StubModel{}.Name()
+	if strings.Contains(RenderReport(s), "Decision:") {
+		t.Fatal("stub report states a decision")
+	}
+	s.Provenance.Model = "claude-code/" + LiveClaudeModel
+	if !strings.Contains(RenderReport(s), "**Decision: KILL**") {
+		t.Fatal("live report lacks the decision")
+	}
+}

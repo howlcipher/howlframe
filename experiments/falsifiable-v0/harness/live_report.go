@@ -396,7 +396,7 @@ func RenderReport(s LiveSummary) string {
 	if p.AbortError != "" {
 		fmt.Fprintf(&b, "**Run aborted:** %s. Every completed cell is reported below.\n\n", p.AbortError)
 	}
-	fmt.Fprintf(&b, "commit %s · harness tree %s · howlframe %s · prereg %s\n\n", p.Commit, p.HarnessTree, p.HowlFrameSHA256, p.PreregSHA256)
+	fmt.Fprintf(&b, "generated from commit %s · harness tree %s · howlframe %s · prereg %s\n\n", p.Commit, p.HarnessTree, p.HowlFrameSHA256, p.PreregSHA256)
 	b.WriteString("Arm A = HowlFrame, Arm B = JSON action plans. Computed from every recorded run; nothing excluded.\n")
 	sets := []string{}
 	for k := range s.Sets {
@@ -410,9 +410,16 @@ func RenderReport(s LiveSummary) string {
 		if set == "blind" {
 			scope = "blind set (live-v1-blind)"
 		}
-		fmt.Fprintf(&b, "\n## Set: %s — %s\n\n**Decision: %s**", set, scope, ss.Decision)
-		if len(ss.Reasons) > 0 {
-			fmt.Fprintf(&b, " (%s)", strings.Join(ss.Reasons, "; "))
+		fmt.Fprintf(&b, "\n## Set: %s — %s\n\n", set, scope)
+		if IsStubModel(p.Model) {
+			// Motoko: a stub dry run measures plumbing, not the models; it
+			// carries no decision line.
+			b.WriteString("_Stub dry run: no decision is stated._")
+		} else {
+			fmt.Fprintf(&b, "**Decision: %s**", ss.Decision)
+			if len(ss.Reasons) > 0 {
+				fmt.Fprintf(&b, " (%s)", strings.Join(ss.Reasons, "; "))
+			}
 		}
 		pp := ss.Paired
 		fmt.Fprintf(&b, "\n\nPrimary: paired success delta A−B = %.1fpp, 95%% cluster-bootstrap CI [%.1f, %.1f] over %d families; McNemar exact p = %.3f (only A %d, only B %d, both %d, neither %d).\n\n",
@@ -456,3 +463,6 @@ func RenderReport(s LiveSummary) string {
 	}
 	return b.String()
 }
+
+// IsStubModel reports whether a provenance model name is the dry-run stub.
+func IsStubModel(name string) bool { return name == "stub" || strings.HasPrefix(name, "stub") }
