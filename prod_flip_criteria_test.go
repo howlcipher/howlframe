@@ -113,11 +113,22 @@ func TestProdFlipCriteriaLock(t *testing.T) {
 		t.Fatalf("WasmInfeasibleKinds = %v", hfir.WasmInfeasibleKinds)
 	}
 
+	// #88: the model-adapter transport carries every kind the source lowerer
+	// emits, and still rejects every kind it does not lower.
+	adapterKinds := map[string]bool{}
+	for _, kind := range hfir.AdapterNodeKinds() {
+		adapterKinds[kind] = true
+	}
 	for _, kind := range []string{
 		"defun", "call", "return", "while", "for",
 		"read_file", "write_file", "mkdir", "exec", "fetch",
-		"regex_match", "html_escape", "attr_escape", "time_now", "sleep", "match", "try",
+		"regex_match", "html_escape", "attr_escape", "time_now", "sleep", "try",
 	} {
+		if !adapterKinds[kind] {
+			t.Errorf("model-adapter transport does not carry %s, which the source lowerer emits", kind)
+		}
+	}
+	for _, kind := range []string{"match", "spawn_agent", "spawn", "grants", "llm_generate", "http_server", "http_server_start", "res", "store_put", "read_line", "http_request", "req_method"} {
 		kind := kind
 		t.Run("transport/"+kind, func(t *testing.T) {
 			candidate, diags := hfir.DecodeCandidate(transportRejecting(kind))
