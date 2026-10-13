@@ -18,7 +18,9 @@ func TestGoFetchSecurity(t *testing.T) {
 	source := `package consumer
 import (
  "context"; "errors"; "fmt"; "io"; "net"; "net/http"; "net/netip"; "net/url"; "os"; "os/exec"; "strconv"; "strings"; "syscall"; "time"; "testing"
+ "github.com/howlcipher/howlframe/internal/capability"
  "github.com/howlcipher/howlframe/internal/nettest"
+ "reflect"
 )
 ` + fetchHelperSource() + execHelperSource() + `
 func TestSecurity(t *testing.T) {
@@ -32,13 +34,27 @@ func TestSecurity(t *testing.T) {
  })
 }
 func TestCodeLoadingEnv(t *testing.T) {
- for _,name:=range []string{"PYTHONPATH","NODE_OPTIONS","BASH_ENV","ENV","PERL5LIB","PERL5OPT","RUBYOPT","RUBYLIB","PYTHONSTARTUP","NODE_PATH"} {
-  for _,raw:=range []string{name,strings.ToLower(name)} {
-   t.Setenv(raw,"injected")
-   t.Setenv("HOWLFRAME_ALLOW_CAPS","process:env="+raw)
-   if env:=howlFrameExecEnv();len(env)!=0 {t.Fatalf("code-loading variable passed: %v",env)}
-  }
+ for _,name:=range nettest.EnvRefused {
+  t.Setenv(name,"injected")
+  t.Setenv("HOWLFRAME_ALLOW_CAPS","process:env="+name)
+  if env:=howlFrameExecEnv();len(env)!=0 {t.Fatalf("code-loading variable passed: %v",env)}
  }
+ for _,name:=range nettest.EnvAllowed {
+  t.Setenv(name,"ok")
+  t.Setenv("HOWLFRAME_ALLOW_CAPS","process:env="+name)
+  if env:=howlFrameExecEnv();len(env)!=1||env[0]!=name+"=ok" {t.Fatalf("benign variable %s refused: %v",name,env)}
+ }
+}
+func TestSharedTables(t *testing.T) {
+ if !reflect.DeepEqual(howlFrameCodeLoadingEnvNames,capability.CodeLoadingEnvNames)||!reflect.DeepEqual(howlFrameCodeLoadingEnvPrefixes,capability.CodeLoadingEnvPrefixes) {t.Fatal("env tables drifted")}
+ if !reflect.DeepEqual(howlFrameRedirectSafeHeaders,capability.RedirectSafeHeaders) {t.Fatal("redirect header table drifted")}
+ got:=[]string{}
+ for _,p:=range howlFrameSpecialPrefixes {got=append(got,p.String())}
+ if !reflect.DeepEqual(got,capability.SpecialPrefixes) {t.Fatalf("prefix table drifted: %v",got)}
+}
+func TestAddressLists(t *testing.T) {
+ for _,ip:=range nettest.BlockedAddresses {if !howlFrameForbiddenDest(netip.MustParseAddr(ip)) {t.Errorf("allowed %s",ip)}}
+ for _,ip:=range nettest.PublicAddresses {if howlFrameForbiddenDest(netip.MustParseAddr(ip)) {t.Errorf("blocked public %s",ip)}}
 }
 `
 	if err := os.WriteFile(filepath.Join(dir, "security_test.go"), []byte(source), 0600); err != nil {

@@ -525,7 +525,7 @@ func envHelperSource() string {
 // is spawned only after that grant is present, so a denial cannot run it
 // or include the command in the error.
 func execHelperSource() string {
-	return `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
+	return codeLoadingEnvGoSource() + `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
 // must be an absolute, clean, symlink-free path named by a process:exec=
 // grant whose argument pattern matches argv exactly. A bare process grant
 // never authorizes exec.
@@ -590,10 +590,18 @@ func howlFrameExecSlot(p, arg string) bool {
 }
 
 // howlFrameExecEnv passes only process:env=NAME variables; never the host env.
+// howlFrameCodeLoadingEnv mirrors capability.DynamicLoaderEnv over the shared tables.
 func howlFrameCodeLoadingEnv(name string) bool {
-	switch strings.ToUpper(name) {
-	case "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH":
-		return true
+	u := strings.ToUpper(name)
+	for _, n := range howlFrameCodeLoadingEnvNames {
+		if u == n {
+			return true
+		}
+	}
+	for _, p := range howlFrameCodeLoadingEnvPrefixes {
+		if strings.HasPrefix(u, p) {
+			return true
+		}
 	}
 	return false
 }
@@ -602,7 +610,7 @@ func howlFrameExecEnv() []string {
 	env := []string{}
 	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
 		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
-		if !ok || name == "" || strings.ContainsAny(name, "= ") || strings.HasPrefix(strings.ToUpper(name), "LD_") || strings.HasPrefix(strings.ToUpper(name), "DYLD_") || howlFrameCodeLoadingEnv(name) {
+		if !ok || name == "" || strings.ContainsAny(name, "= ") || howlFrameCodeLoadingEnv(name) {
 			continue
 		}
 		if v, ok := os.LookupEnv(name); ok {
@@ -676,6 +684,22 @@ func fetchImports(extra []string) string {
 	return out
 }
 
+// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames and
+// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+func codeLoadingEnvGoSource() string {
+	var b strings.Builder
+	b.WriteString("var howlFrameCodeLoadingEnvNames = []string{\n")
+	for _, n := range capability.CodeLoadingEnvNames {
+		fmt.Fprintf(&b, "\t%q,\n", n)
+	}
+	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvPrefixes = []string{\n")
+	for _, p := range capability.CodeLoadingEnvPrefixes {
+		fmt.Fprintf(&b, "\t%q,\n", p)
+	}
+	b.WriteString("}\n\n")
+	return b.String()
+}
+
 // specialPrefixGoSource renders capability.SpecialPrefixes, the one table
 // shared by every target, into the emitted helper.
 func specialPrefixGoSource() string {
@@ -683,6 +707,10 @@ func specialPrefixGoSource() string {
 	b.WriteString("var howlFrameSpecialPrefixes = []netip.Prefix{\n")
 	for _, p := range capability.SpecialPrefixes {
 		fmt.Fprintf(&b, "\tnetip.MustParsePrefix(%q),\n", p)
+	}
+	b.WriteString("}\n\nvar howlFrameRedirectSafeHeaders = []string{\n")
+	for _, h := range capability.RedirectSafeHeaders {
+		fmt.Fprintf(&b, "\t%q,\n", h)
 	}
 	b.WriteString("}\n\n")
 	b.WriteString(`// howlFrameForbiddenDest mirrors capability.ForbiddenDestination.
@@ -698,6 +726,13 @@ func howlFrameForbiddenDest(a netip.Addr) bool {
 			compat = compat && x == 0
 		}
 		if compat && !(b[12] == 0 && b[13] == 0 && b[14] == 0) {
+			return howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+		}
+		translated := b[8] == 0xff && b[9] == 0xff && b[10] == 0 && b[11] == 0
+		for _, x := range b[:8] {
+			translated = translated && x == 0
+		}
+		if translated {
 			return howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
 		}
 	}
@@ -869,7 +904,14 @@ var howlFrameFetchClient = &http.Client{
 					return howlFrameFetchDenied{}
 				}
 				a := ap.Addr().Unmap()
-				if a.IsMulticast() || litErr != nil && !strings.EqualFold(host, "localhost") && howlFrameForbiddenDest(a) {
+				if a.IsMulticast() {
+					return howlFrameFetchDenied{}
+				}
+				if litErr != nil && strings.EqualFold(host, "localhost") {
+					if !a.IsLoopback() {
+						return howlFrameFetchDenied{}
+					}
+				} else if litErr != nil && howlFrameForbiddenDest(a) {
 					return howlFrameFetchDenied{}
 				}
 				return nil
@@ -906,6 +948,9 @@ var howlFrameFetchClient = &http.Client{
 		if previous.Scheme == "https" && req.URL.Scheme == "http" {
 			return howlFrameFetchDenied{}
 		}
+		if req.URL.User != nil {
+			return howlFrameFetchDenied{}
+		}
 		if host, opt := howlFrameOptOutHost(req.URL); opt {
 			if start, _ := howlFrameOptOutHost(via[0].URL); start != host {
 				return howlFrameFetchDenied{}
@@ -916,8 +961,15 @@ var howlFrameFetchClient = &http.Client{
 			changedOrigin = changedOrigin || !howlFrameFetchSameOrigin(via[i-1].URL, via[i].URL)
 		}
 		if changedOrigin {
-			req.Header.Del("Authorization")
-			req.Header.Del("Cookie")
+			for name := range req.Header {
+				keep := false
+				for _, safe := range howlFrameRedirectSafeHeaders {
+					keep = keep || strings.EqualFold(name, safe)
+				}
+				if !keep {
+					delete(req.Header, name)
+				}
+			}
 		}
 		if len(via) > 10 || !howlFrameFetchAllowed(req.URL) {
 			return howlFrameFetchDenied{}

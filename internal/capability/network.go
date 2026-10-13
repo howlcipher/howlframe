@@ -280,14 +280,31 @@ func forbiddenResolved(a netip.Addr) bool {
 
 // checkDial vets the resolved address a connection is about to use. A DNS
 // name may not land on a forbidden destination. Explicit literal and
-// localhost grants opt out of private-address checks, but never multicast.
+// localhost grants opt out of private-address checks, but never multicast;
+// localhost must resolve to loopback.
 func checkDial(host string, literal bool, address string) error {
 	ap, err := netip.ParseAddrPort(address)
 	if err != nil {
 		return &FetchDenied{Reason: "network: fetch dial address is invalid", Required: FetchGrantPrefix + host}
 	}
-	if ap.Addr().IsMulticast() || !literal && !strings.EqualFold(host, "localhost") && forbiddenResolved(ap.Addr()) {
-		return &FetchDenied{Reason: "network: granted host resolved to a forbidden destination", Required: FetchGrantPrefix + canonicalIP(ap.Addr())}
+	a := ap.Addr().Unmap()
+	deny := func() error {
+		return &FetchDenied{Reason: "network: granted host resolved to a forbidden destination", Required: FetchGrantPrefix + canonicalIP(a)}
+	}
+	switch {
+	case a.IsMulticast():
+		return deny()
+	case literal:
+		return nil
+	case strings.EqualFold(host, "localhost"):
+		// #177: the localhost opt-out reaches loopback only, never a private
+		// or public address that a hostile resolver maps localhost to.
+		if !a.IsLoopback() {
+			return deny()
+		}
+		return nil
+	case forbiddenResolved(a):
+		return deny()
 	}
 	return nil
 }
@@ -361,6 +378,9 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 			if previous.Scheme == "https" && req.URL.Scheme == "http" {
 				return &FetchDenied{Reason: "network: HTTPS redirect downgrade refused"}
 			}
+			if req.URL.User != nil {
+				return &FetchDenied{Reason: "network: redirect target with userinfo refused", Required: FetchGrantPrefix + "<invalid-url>"}
+			}
 			if redirectToOptOut(via[0].URL, req.URL) {
 				required := FetchGrantPrefix + "<invalid-url>"
 				if t, err := urlTarget(req.URL); err == nil {
@@ -374,8 +394,7 @@ func FetchClient(g Grants, onHop func(u *url.URL, grant string, err error)) *htt
 				changedOrigin = changedOrigin || !sameFetchOrigin(via[i-1].URL, via[i].URL)
 			}
 			if changedOrigin {
-				req.Header.Del("Authorization")
-				req.Header.Del("Cookie")
+				StripCrossOriginHeaders(req.Header)
 			}
 			grant, err := g.AuthorizeFetch(req.URL)
 			if onHop != nil {
@@ -444,4 +463,24 @@ func FetchPrivateOptOut(grant string) string {
 		return "explicit IP-literal or localhost grant"
 	}
 	return ""
+}
+
+// RedirectSafeHeaders are the only request headers that survive a redirect
+// that changes origin (scheme, host or effective port). Everything else,
+// including Authorization, Proxy-Authorization, Cookie and custom auth
+// headers such as X-Api-Key, is dropped (#172, #177). Generated Go and
+// JavaScript render this same list.
+var RedirectSafeHeaders = []string{"Accept", "Accept-Encoding", "Accept-Language", "Content-Type", "Content-Length", "Content-Encoding", "User-Agent"}
+
+// StripCrossOriginHeaders deletes every header not in RedirectSafeHeaders.
+func StripCrossOriginHeaders(h http.Header) {
+	for name := range h {
+		keep := false
+		for _, safe := range RedirectSafeHeaders {
+			keep = keep || strings.EqualFold(name, safe)
+		}
+		if !keep {
+			delete(h, name)
+		}
+	}
 }

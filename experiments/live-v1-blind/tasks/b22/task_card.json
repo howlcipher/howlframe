@@ -1,0 +1,11 @@
+{
+  "category": "records",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b22",
+  "instruction": "Summarize in/timesheet.csv (date,person,project,hours). Write out/hours.csv with header person,project,hours: for each person (sorted) one row per project (sorted) with summed hours, then a row '<person>,TOTAL,<sum>'. Hours use exactly one decimal place.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

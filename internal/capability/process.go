@@ -91,18 +91,51 @@ func slotMatches(p, arg string) bool {
 // exec child. exec children otherwise start with an empty environment.
 const EnvGrantPrefix = "process:env="
 
-// DynamicLoaderEnv reports variables that steer the dynamic loader
-// or interpreter code loading (LD_*, DYLD_*, PYTHONPATH, NODE_OPTIONS, etc.).
-// Passing one to an exec
-// child would let it load arbitrary code into an allow-listed program, so
-// process:env= refuses them.
+// CodeLoadingEnvNames and CodeLoadingEnvPrefixes are the single source of
+// the process:env= refusal list (#166, #172, #177). Generated Go and
+// JavaScript render these same tables, so the three targets cannot drift.
+// Matching is case-insensitive. Each entry steers code loading, startup
+// scripts, config or trust lookup, or program search in an exec child.
+var CodeLoadingEnvNames = []string{
+	// shells
+	"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4", "PROMPT_COMMAND", "IFS", "CDPATH", "GLOBIGNORE", "ZDOTDIR",
+	// program search, home and config directories
+	"PATH", "HOME", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS", "XDG_DATA_HOME", "XDG_DATA_DIRS",
+	// Python
+	"PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONINSPECT", "PYTHONWARNINGS", "PYTHONBREAKPOINT", "PYTHONEXECUTABLE",
+	// Node
+	"NODE_OPTIONS", "NODE_PATH", "NODE_EXTRA_CA_CERTS", "NODE_TLS_REJECT_UNAUTHORIZED", "NODE_REPL_EXTERNAL_MODULE",
+	// Perl and Ruby
+	"PERL5LIB", "PERLLIB", "PERL5OPT", "PERL5DB", "RUBYOPT", "RUBYLIB",
+	// Go and Java
+	"GOFLAGS", "GODEBUG", "GOROOT", "GOPATH", "GOTOOLCHAIN", "GOENV", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH",
+	// libc locale, iconv and resolver lookups
+	"GCONV_PATH", "LOCPATH", "NLSPATH", "HOSTALIASES", "RESOLV_HOST_CONF",
+	// TLS trust stores
+	"SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
+}
+
+// CodeLoadingEnvPrefixes refuses whole families: the dynamic loader (LD_*,
+// DYLD_*), git hooks/config/exec path (GIT_*), exported bash functions
+// (BASH_FUNC_*) and Lua module paths and init (LUA_*).
+var CodeLoadingEnvPrefixes = []string{"LD_", "DYLD_", "GIT_", "BASH_FUNC_", "LUA_"}
+
+// DynamicLoaderEnv reports variables in the shared code-loading refusal
+// list. Passing one to an exec child would let it load arbitrary code into
+// an allow-listed program, so process:env= refuses them.
 func DynamicLoaderEnv(name string) bool {
 	u := strings.ToUpper(name)
-	switch u {
-	case "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH":
-		return true
+	for _, n := range CodeLoadingEnvNames {
+		if u == n {
+			return true
+		}
 	}
-	return strings.HasPrefix(u, "LD_") || strings.HasPrefix(u, "DYLD_")
+	for _, p := range CodeLoadingEnvPrefixes {
+		if strings.HasPrefix(u, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func validEnvName(name string) bool {

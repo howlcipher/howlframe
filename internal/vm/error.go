@@ -52,6 +52,55 @@ type ExecutionPolicy struct {
 	Limits VMLimits
 	// Deadline is an optional wall-clock duration; zero means no deadline.
 	Deadline time.Duration
+	// AdapterDeadline is the runner-owned wall-clock budget for programs
+	// produced by hfir.CompileCandidate (#175). Zero means
+	// DefaultAdapterDeadline; values above MaxAdapterDeadline are clamped to
+	// it. Model-authored candidates cannot set or widen it. A shorter
+	// Deadline still applies.
+	AdapterDeadline time.Duration
+}
+
+// DefaultAdapterDeadline is the model-adapter budget when the runner sets none.
+const DefaultAdapterDeadline = time.Second
+
+// MaxAdapterDeadline is the hard cap on a runner-owned adapter budget (#175).
+const MaxAdapterDeadline = 30 * time.Second
+
+// ParseAdapterDeadline validates a runner flag value such as "5s". It refuses
+// zero, negative and over-cap durations instead of clamping them, so a runner
+// typo cannot silently change the budget.
+func ParseAdapterDeadline(raw string) (time.Duration, error) {
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("-adapter-deadline invalid duration: %w", err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("-adapter-deadline must be greater than zero")
+	}
+	if d > MaxAdapterDeadline {
+		return 0, fmt.Errorf("-adapter-deadline %s exceeds the %s hard cap", d, MaxAdapterDeadline)
+	}
+	return d, nil
+}
+
+// AdapterDeadlineFlag is a flag.Value for a runner's -adapter-deadline flag.
+// It writes the validated budget into the runner's ExecutionPolicy.
+type AdapterDeadlineFlag struct{ Policy *ExecutionPolicy }
+
+func (f AdapterDeadlineFlag) String() string {
+	if f.Policy == nil || f.Policy.AdapterDeadline == 0 {
+		return DefaultAdapterDeadline.String()
+	}
+	return f.Policy.AdapterDeadline.String()
+}
+
+func (f AdapterDeadlineFlag) Set(raw string) error {
+	d, err := ParseAdapterDeadline(raw)
+	if err != nil {
+		return err
+	}
+	f.Policy.AdapterDeadline = d
+	return nil
 }
 
 var DefaultLimits = VMLimits{

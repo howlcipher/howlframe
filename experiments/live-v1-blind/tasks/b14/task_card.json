@@ -1,0 +1,11 @@
+{
+  "category": "inventory",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b14",
+  "instruction": "Triage in/batches.csv (header lot,item,qty,expires; expires is YYYY-MM-DD) against the date in in/today.txt. Ignore rows with qty 0. A lot is expired if expires is before today, use_soon if expires is today or at most 7 days after today, otherwise ok. Write out/triage.json: {\"expired\": [lots in file order], \"use_soon\": [lots in file order], \"ok_qty\": {item: summed qty of ok lots}}.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

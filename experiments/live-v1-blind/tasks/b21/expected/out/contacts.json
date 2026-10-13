@@ -1,0 +1,22 @@
+[
+  {
+    "email": "ana@example.com",
+    "name": "Ana Diaz",
+    "phones": [
+      "555-0101",
+      "555-0199"
+    ]
+  },
+  {
+    "email": "bo@example.com",
+    "name": "bo li",
+    "phones": []
+  },
+  {
+    "email": "",
+    "name": "Cy Ng",
+    "phones": [
+      "555-0303"
+    ]
+  }
+]

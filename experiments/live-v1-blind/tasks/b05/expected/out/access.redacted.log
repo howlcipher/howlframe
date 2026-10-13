@@ -1,0 +1,4 @@
+2026-03-01T10:00:01 INFO user=ana login ok ip=[IP]
+2026-03-01T10:00:07 WARN user=bo password reset email=[EMAIL]
+2026-03-01T10:01:12 ERROR user=ana card=[CARD] declined
+2026-03-01T10:02:00 INFO user=cy contact email=[EMAIL] ip=[IP]

@@ -1,0 +1,5 @@
+4096 media/a.mp4
+120 docs/a.txt
+2048 media/b.mp4
+900 docs/b.txt
+10 root.txt

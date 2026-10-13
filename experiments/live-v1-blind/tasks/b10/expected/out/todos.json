@@ -1,0 +1,23 @@
+[
+  {
+    "file": "src/main.py",
+    "kind": "TODO",
+    "line": 2,
+    "owner": "",
+    "text": "handle missing config"
+  },
+  {
+    "file": "src/main.py",
+    "kind": "FIXME",
+    "line": 4,
+    "owner": "ana",
+    "text": "crashes on empty input"
+  },
+  {
+    "file": "src/web/routes.py",
+    "kind": "TODO",
+    "line": 1,
+    "owner": "bo",
+    "text": "add pagination"
+  }
+]

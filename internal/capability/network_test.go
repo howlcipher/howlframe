@@ -163,7 +163,11 @@ func TestEnvGrantRefusesDynamicLoader(t *testing.T) {
 			t.Errorf("ExecEnv passed %s", name)
 		}
 	}
-	if _, err := ParseGrant(EnvGrantPrefix + "HOME"); err != nil {
+	// #177: HOME steers config/startup lookup and is refused; LANG still passes.
+	if _, err := ParseGrant(EnvGrantPrefix + "HOME"); err == nil {
+		t.Error("process:env=HOME accepted")
+	}
+	if _, err := ParseGrant(EnvGrantPrefix + "LANG"); err != nil {
 		t.Error(err)
 	}
 	if _, err := ParseGrant(EnvGrantPrefix + "OLD_PATH"); err != nil {

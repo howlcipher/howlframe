@@ -1,0 +1,7 @@
+worker-1 | step one
+worker-2 | boot
+worker-1 | Traceback:
+worker-1 |   at parse()
+worker-1 |   at main()
+worker-2 | ready
+worker-1 | step two
