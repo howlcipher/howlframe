@@ -397,21 +397,17 @@ func TestTaskAPICapabilities(t *testing.T) {
 		}
 	})
 
-	t.Run("network only starts but store access is denied", func(t *testing.T) {
-		startServer(t, srcDir, bcPath, "network")
-		// This subtest previously asserted the opposite: that a
-		// capability-denied panic inside a route handler was swallowed and the
-		// client saw a 200 with an empty body. That made the platform's core
-		// safety mechanism indistinguishable from success at the client, and
-		// the VM now fails closed instead, surfacing the structured VMError
-		// with its code intact. See TestHTTPHandlerFailuresFailClosed in
-		// internal/vm for the unit-level regression test.
-		status, data := doRaw(t, "POST", "/tasks/create", `{"title":"x"}`)
-		if status != 500 {
-			t.Errorf("expected 500 on capability-denied store access, got %d body=%q", status, data)
-		}
-		if !strings.Contains(string(data), "CAPABILITY_DENIED") {
-			t.Errorf("denial response does not carry its code: %q", data)
+	t.Run("network only refuses the database route grant at startup", func(t *testing.T) {
+		// Each route handler receives only network plus its (grants ...)
+		// list, which must be covered by the runner grant. A route that
+		// asks for database under a network-only grant fails closed when it
+		// is registered, before the server listens (previously the denial
+		// surfaced per request as a 500).
+		cmd := exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network", bcPath)
+		cmd.Dir = srcDir
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "CAPABILITY_DENIED") || !strings.Contains(string(out), "HTTP_ROUTE") {
+			t.Errorf("expected HTTP_ROUTE CAPABILITY_DENIED at startup, got err=%v out=%s", err, out)
 		}
 	})
 

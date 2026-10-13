@@ -10,7 +10,7 @@
           (store_put kv "next_id" (dict ("val" (to_string (+ n 1)))))
           (return (to_string n))))))
 
-  (route "/tasks" (lambda (req)
+  (route "/tasks" (grants "database") (lambda (req)
     (cond
       ((= (req_method req) "GET")
         (do
@@ -35,7 +35,7 @@
                   (res_json 201 task)))))))
       (else (res_json 405 (dict ("error" "method_not_allowed")))))))
 
-  (route "/tasks/{id}" (lambda (req)
+  (route "/tasks/{id}" (grants "database") (lambda (req)
     (let (id (req_path req "id") m (req_method req))
       (cond
         ((= m "GET")

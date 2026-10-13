@@ -341,11 +341,14 @@ func execJSHelper() string {
     var fields = grant.slice("process:exec=".length).split(/\s+/).filter(function (f) { return f !== ""; });
     if (fields.length === 0 || fields[0] !== cmd) continue;
     var pats = fields.slice(1);
+    for (var q = 0; q < pats.length - 1; q++) {
+      if (pats[q] === "**") throw new Error("CAPABILITY_DENIED: capability denied: process: invalid process:exec grant (** must be last)");
+    }
     var ok = true;
     var rest = false;
     for (var k = 0; k < pats.length; k++) {
-      if (pats[k] === "**" && k === pats.length - 1) { rest = true; break; }
-      if (k >= args.length || (pats[k] !== "*" && pats[k] !== String(args[k]))) { ok = false; break; }
+      if (pats[k] === "**") { rest = true; break; }
+      if (k >= args.length || !howlFrameExecSlot(pats[k], String(args[k]))) { ok = false; break; }
     }
     if (ok && !rest && args.length !== pats.length) ok = false;
     if (ok) return true;
@@ -353,11 +356,32 @@ func execJSHelper() string {
   return false;
 }
 
+// "*" refuses empty and "-"-prefixed arguments; a leading backslash escapes a literal.
+function howlFrameExecSlot(p, arg) {
+  if (p === "*") return arg !== "" && arg.charAt(0) !== "-";
+  if (p.charAt(0) === "\\") return arg === p.slice(1);
+  return p === arg;
+}
+
+// Only process:env=NAME variables reach the child; never the host environment.
+function howlFrameExecEnv() {
+  var env = {};
+  var grants = String(process.env.HOWLFRAME_ALLOW_CAPS || "").split(",");
+  for (var i = 0; i < grants.length; i++) {
+    var grant = grants[i].trim();
+    if (grant.indexOf("process:env=") !== 0) continue;
+    var name = grant.slice("process:env=".length);
+    if (name === "" || /[= ]/.test(name)) continue;
+    if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
+  }
+  return env;
+}
+
 function howlFrameExec(cmd, args) {
   if (!howlFrameExecAllowed(cmd, args)) {
     throw new Error("CAPABILITY_DENIED: capability denied: process");
   }
-  var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8" });
+  var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8", env: howlFrameExecEnv() });
   if (result.error) {
     throw new Error("IO_ERROR: exec failed: " + result.error.message);
   }

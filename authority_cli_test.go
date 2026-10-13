@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/howlcipher/howlframe/internal/vm"
 )
@@ -102,7 +105,7 @@ func requireDenied(t *testing.T, path string, r authorityRun, opcode string, for
 	}
 	found := false
 	for _, e := range r.receipt.Effects {
-		if e.Op == opcode && e.Capability == "process" && e.Decision == "denied" {
+		if e.Op == opcode && (e.Capability == "process" || opcode == "HTTP_ROUTE") && e.Decision == "denied" {
 			found = true
 		}
 	}
@@ -260,7 +263,7 @@ func TestAuthoritySpawnAgentAttenuation(t *testing.T) {
 			// The refusal is a typed error inside Outer, isolated like any child failure.
 			source:      `(cli_app (spawn_agent "Outer" (grants "process") (task "o" (spawn_agent "Inner" (grants "environment") (task "i" (print "child-ran"))))) (print "parent-after"))`,
 			want:        "parent-after",
-			failedChild: `CAPABILITY_DENIED: capability denied: spawn_agent: child requested "environment", which the parent does not hold`,
+			failedChild: "CAPABILITY_DENIED: capability denied: spawn_agent: child requested a grant the parent does not hold",
 			receiptDeny: true,
 		},
 		{
@@ -349,4 +352,186 @@ func TestAuthorityGrantsMustBeLiteral(t *testing.T) {
 			}
 		})
 	}
+}
+
+func runAuthorityEnv(t *testing.T, binary, path, source, grant string, env ...string) authorityRun {
+	t.Helper()
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		t.Setenv(k, v)
+	}
+	return runAuthority(t, binary, path, source, grant)
+}
+
+// A "*" slot never matches an empty argument or one that starts with "-", so
+// a wildcard cannot smuggle in a flag. Literal flags and an escaped literal
+// "*" still match.
+func TestAuthorityExecFlagInjection(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	printf := canonicalProgram(t, "printf")
+	call := func(args ...string) string {
+		quoted := make([]string, len(args))
+		for i, a := range args {
+			quoted[i] = fmt.Sprintf("%q", a)
+		}
+		return fmt.Sprintf(`(cli_app (print (bytes_to_string (exec %q %s))))`, printf, strings.Join(quoted, " "))
+	}
+	grant := "process:exec=" + printf + " %s *"
+	for _, path := range authorityPaths() {
+		t.Run(path, func(t *testing.T) {
+			if r := runAuthority(t, binary, path, call("%s", "plain"), grant); r.code != 0 || strings.TrimSpace(r.stdout) != "plain" {
+				t.Fatalf("plain slot: %d %q %q", r.code, r.stdout, r.stderr)
+			}
+			requireDenied(t, path, runAuthority(t, binary, path, call("%s", "-v"), grant), "EXEC", "-v")
+			requireDenied(t, path, runAuthority(t, binary, path, call("%s", "--help"), grant), "EXEC", "help")
+			requireDenied(t, path, runAuthority(t, binary, path, call("%s", ""), grant), "EXEC")
+			// A literal flag in the grant still matches.
+			if r := runAuthority(t, binary, path, call("-flag-literal-%s"), "process:exec="+printf+" -flag-literal-%s"); r.code != 0 || strings.TrimSpace(r.stdout) != "-flag-literal-" {
+				t.Fatalf("literal flag: %d %q %q", r.code, r.stdout, r.stderr)
+			}
+			// `\*` matches a literal "*" and nothing else.
+			if r := runAuthority(t, binary, path, call("%s", "*"), "process:exec="+printf+` %s \*`); r.code != 0 || strings.TrimSpace(r.stdout) != "*" {
+				t.Fatalf("escaped star: %d %q %q", r.code, r.stdout, r.stderr)
+			}
+			requireDenied(t, path, runAuthority(t, binary, path, call("%s", "x"), "process:exec="+printf+` %s \*`), "EXEC")
+		})
+	}
+}
+
+// exec children start with an empty environment; only process:env=NAME
+// variables pass through.
+func TestAuthorityExecEnvironment(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	envProg := canonicalProgram(t, "env")
+	src := fmt.Sprintf(`(cli_app (print (bytes_to_string (exec %q))))`, envProg)
+	for _, path := range authorityPaths() {
+		t.Run(path, func(t *testing.T) {
+			r := runAuthorityEnv(t, binary, path, src, "process:exec="+envProg, "FOO=leakme")
+			if r.code != 0 || strings.Contains(r.stdout, "leakme") || strings.Contains(r.stdout, "PATH=") || strings.TrimSpace(r.stdout) != "" {
+				t.Fatalf("default env: code %d stdout %q stderr %q", r.code, r.stdout, r.stderr)
+			}
+			r = runAuthorityEnv(t, binary, path, src, "process:exec="+envProg+",process:env=FOO", "FOO=leakme", "BAR=other")
+			if r.code != 0 || strings.TrimSpace(r.stdout) != "FOO=leakme" {
+				t.Fatalf("granted FOO: code %d stdout %q stderr %q", r.code, r.stdout, r.stderr)
+			}
+		})
+	}
+}
+
+// Receipts name the matched allow-list entry for an allowed exec.
+func TestAuthorityReceiptMatchedGrant(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	printf := canonicalProgram(t, "printf")
+	grant := "process:exec=" + printf + " **"
+	for _, path := range []string{"bytecode", "hfir"} {
+		r := runAuthority(t, binary, path, fmt.Sprintf(`(cli_app (print (bytes_to_string (exec %q "x"))))`, printf), grant)
+		if r.code != 0 || r.receipt == nil || len(r.receipt.Effects) != 1 || r.receipt.Effects[0].Grant != grant || r.receipt.Effects[0].Decision != "allowed" {
+			t.Fatalf("%s: receipt %+v", path, r.receipt)
+		}
+	}
+}
+
+// spawn (in-agent background task) bodies get no grants by default and only
+// an explicit subset of the parent's.
+func TestAuthoritySpawnAttenuation(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	t.Setenv("HOWL_SPAWN_SECRET", "spawn-secret-value")
+	inherit := `(cli_app (spawn (lambda () (print (env "HOWL_SPAWN_SECRET")))) (sleep 200) (print "parent-done"))`
+	explicit := `(cli_app (spawn (grants "environment") (lambda () (print (env "HOWL_SPAWN_SECRET")))) (sleep 200) (print "parent-done"))`
+	over := `(cli_app (spawn (grants "environment") (lambda () (print "child-ran"))) (sleep 200) (print "parent-done"))`
+	for _, path := range authorityPaths() {
+		t.Run(path, func(t *testing.T) {
+			r := runAuthority(t, binary, path, inherit, "process,environment")
+			if strings.Contains(r.stdout, "spawn-secret-value") {
+				t.Fatalf("default spawn inherited environment: %q", r.stdout)
+			}
+			r = runAuthority(t, binary, path, over, "process")
+			if strings.Contains(r.stdout, "child-ran") {
+				t.Fatalf("over-request ran: %q", r.stdout)
+			}
+			if path == "bytecode" {
+				requireDenied(t, path, r, "SPAWN", "child-ran")
+				if r := runAuthority(t, binary, path, explicit, "process,environment"); r.code != 0 || !strings.Contains(r.stdout, "spawn-secret-value") {
+					t.Fatalf("explicit spawn grant: %d %q %q", r.code, r.stdout, r.stderr)
+				}
+			}
+		})
+	}
+}
+
+// HTTP route handlers keep network (needed to respond) and otherwise only
+// their (grants ...) list, which must be covered by the runner grant.
+func TestAuthorityRouteAttenuation(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+	t.Setenv("HOWL_ROUTE_SECRET", "route-secret-value")
+	for i, path := range []string{"bytecode", "hfir"} {
+		t.Run(path, func(t *testing.T) {
+			port := 18620 + i*2
+			// Over-request refuses registration before the server listens.
+			over := fmt.Sprintf(`(http_server %d (route "/x" (grants "environment") (lambda (req) (res 200 "text/plain" "ok"))))`, port)
+			r := runAuthority(t, binary, path, over, "network")
+			if r.code == -1 {
+				t.Skipf("%s does not compile routes: %s", path, r.stdout)
+			}
+			requireDenied(t, path, r, "HTTP_ROUTE")
+
+			for _, tc := range []struct {
+				route, want string
+			}{
+				{`(route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "CAPABILITY_DENIED"},
+				{`(route "/x" (grants "environment") (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "route-secret-value"},
+			} {
+				port++
+				src := fmt.Sprintf(`(http_server %d %s)`, port, tc.route)
+				body := serveOnce(t, binary, path, src, "network,environment", port)
+				if !strings.Contains(body, tc.want) || tc.want == "CAPABILITY_DENIED" && strings.Contains(body, "route-secret-value") {
+					t.Fatalf("route %s: body %q, want %q", tc.route, body, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func serveOnce(t *testing.T, binary, path, source, grant string, port int) string {
+	t.Helper()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "srv.howl")
+	if err := os.WriteFile(src, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	flag := "-compile-bc"
+	if path == "hfir" {
+		flag = "-compile-hfir-bc"
+	}
+	artifact := filepath.Join(dir, "srv.hfbc")
+	if out, err := exec.Command(binary, flag, src, "-o", artifact).CombinedOutput(); err != nil {
+		t.Fatalf("compile: %v %s", err, out)
+	}
+	cmd := exec.Command(binary, "-allow-caps", grant, "-run-bc", artifact)
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { cmd.Process.Kill(); cmd.Wait() }()
+	url := fmt.Sprintf("http://127.0.0.1:%d/x", port)
+	for i := 0; i < 100; i++ {
+		resp, err := httpGet(url)
+		if err == nil {
+			return resp
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("server never answered: %s", out.String())
+	return ""
+}
+
+func httpGet(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	return string(b), err
 }

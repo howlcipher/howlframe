@@ -20,7 +20,7 @@
     )
   )
 
-  (route "/tasks/create" (lambda (req)
+  (route "/tasks/create" (grants "database") (lambda (req)
     (try_let (body (parse_json TaskInput req.body))
       (catch parse_err
         (res_json 400 (dict ("error" "invalid_json")))
@@ -42,7 +42,7 @@
     )
   ))
 
-  (route "/tasks/list" (lambda (req)
+  (route "/tasks/list" (grants "database") (lambda (req)
     (do
       (store_open kv "memory://session")
       (let (next_rec (store_get kv "next_id"))
@@ -78,7 +78,7 @@
     )
   ))
 
-  (route "/tasks/get" (lambda (req)
+  (route "/tasks/get" (grants "database") (lambda (req)
     (try_let (body (parse_json TaskInput req.body))
       (catch parse_err
         (res_json 400 (dict ("error" "invalid_json")))
@@ -100,7 +100,7 @@
     )
   ))
 
-  (route "/tasks/complete" (lambda (req)
+  (route "/tasks/complete" (grants "database") (lambda (req)
     (try_let (body (parse_json TaskInput req.body))
       (catch parse_err
         (res_json 400 (dict ("error" "invalid_json")))
@@ -129,7 +129,7 @@
     )
   ))
 
-  (route "/tasks/delete" (lambda (req)
+  (route "/tasks/delete" (grants "database") (lambda (req)
     (try_let (body (parse_json TaskInput req.body))
       (catch parse_err
         (res_json 400 (dict ("error" "invalid_json")))

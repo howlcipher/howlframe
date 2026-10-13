@@ -127,7 +127,7 @@ var table = []Entry{
 	{Name: "fuzzy_cast", Support: Unsupported, Note: "LLM struct coercion; no opcode, Go backend only"},
 	{Name: "get", Support: CompileTimeOnly, Note: "records sugar; (get m k ...) nested path read via map_get/list_get by ast.Desugar (pure)"},
 	{Name: "go_import", Support: Unsupported, Note: "Go-backend-only directive; the standalone VM cannot honour a Go package dependency"},
-	{Name: "grants", Support: Supported, Opaque: true, Note: "spawn_agent child grant list (S9 attenuation); string literals compiled into SPAWN_AGENT string_operand_2; never evaluated"},
+	{Name: "grants", Support: Supported, Opaque: true, Note: "child grant list (S9 attenuation) for spawn_agent, spawn and route; string literals compiled into SPAWN_AGENT string_operand_2, SPAWN string_operand, HTTP_ROUTE string_operand_3; never evaluated"},
 	{Name: "group_by", Support: CompileTimeOnly, Note: "records sugar; (group_by x lst key) via for/nz/append/map_set by ast.Desugar (pure)"},
 	{Name: "html_escape", Support: Supported, Note: "HTML_ESCAPE; encodes &, <, >, \", and ' with no capability"},
 	{Name: "http_body", Support: CompileTimeOnly, Note: "density sugar; (http_body r) → bytes_to_string of map_get body by ast.Desugar"},

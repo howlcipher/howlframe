@@ -108,10 +108,15 @@ func ValidateShared(node *ast.Node) (string, bool) {
 		}
 		return "", true
 	case "spawn":
-		if reason := requireArguments(node, 1); reason != "" {
+		// (spawn (lambda () body)) or (spawn (grants "cap" ...) (lambda () body)).
+		if len(node.Children) == 3 {
+			if g := node.Children[1]; g.Type != "List" || len(g.Children) == 0 || g.Children[0].Value != "grants" {
+				return "spawn expects (spawn (grants ...) lambda)", true
+			}
+		} else if reason := requireArguments(node, 1); reason != "" {
 			return reason, true
 		}
-		lambda := node.Children[1]
+		lambda := node.Children[len(node.Children)-1]
 		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
 			return "spawn expects a lambda", true
 		}

@@ -133,3 +133,32 @@ func TestGoExecZeroArgsIsMediated(t *testing.T) {
 		t.Fatalf("granted stdout = %q, want zero-arg-ok", granted)
 	}
 }
+
+// Generated Go exec children start with an empty environment, and a "*" slot
+// refuses flags, matching the bytecode runtime.
+func TestGoExecEnvironmentAndFlagSlots(t *testing.T) {
+	const source = `(cli_app (print (bytes_to_string (exec "/usr/bin/env"))))`
+	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
+	checker.Check(root)
+	code, _ := GenerateCode(root)
+	rootDir := moduleRoot(t)
+	out, errOut := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env", "FOO=leakme")
+	if errOut != "" || strings.Contains(out, "leakme") || strings.TrimSpace(out) != "" {
+		t.Fatalf("default env leaked: out %q err %q", out, errOut)
+	}
+	out, errOut = runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env,process:env=FOO", "FOO=leakme")
+	if errOut != "" || strings.TrimSpace(out) != "FOO=leakme" {
+		t.Fatalf("granted env: out %q err %q", out, errOut)
+	}
+
+	const flagSource = `(cli_app (print (bytes_to_string (exec "/usr/bin/printf" "%s" "-v"))))`
+	root = parser.NewParser(lexer.NewLexer(flagSource), "exec.howl").ParseExpression()
+	checker.Check(root)
+	code, _ = GenerateCode(root)
+	if _, errOut := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf %s *"); errOut == "" {
+		t.Fatal("a * slot matched a flag")
+	}
+	if _, errOut := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf ** %s"); errOut == "" {
+		t.Fatal("a non-final ** grant was accepted")
+	}
+}

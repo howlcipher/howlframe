@@ -45,7 +45,7 @@ func TestAuthorizeExec(t *testing.T) {
 		{prog, []string{"a", "b"}}, {prog, []string{"a", "b", "c", "d"}},
 	}
 	for _, c := range allow {
-		if _, err := g.AuthorizeExec(c.program, c.args); err != nil {
+		if _, _, err := g.AuthorizeExec(c.program, c.args); err != nil {
 			t.Fatalf("AuthorizeExec(%q, %q) = %v", c.program, c.args, err)
 		}
 	}
@@ -57,11 +57,11 @@ func TestAuthorizeExec(t *testing.T) {
 		{"tool", []string{"a", "b"}}, {link, nil}, {dir + "/./tool", []string{"a", "b"}},
 	}
 	for _, c := range deny {
-		if _, err := g.AuthorizeExec(c.program, c.args); err == nil {
+		if _, _, err := g.AuthorizeExec(c.program, c.args); err == nil {
 			t.Fatalf("AuthorizeExec(%q, %q) allowed", c.program, c.args)
 		}
 	}
-	if _, err := (Grants{Process}).AuthorizeExec(prog, nil); err == nil {
+	if _, _, err := (Grants{Process}).AuthorizeExec(prog, nil); err == nil {
 		t.Fatal("bare process authorized exec")
 	}
 }
@@ -82,5 +82,39 @@ func TestAttenuate(t *testing.T) {
 		if _, err := Attenuate(parent, req); err == nil {
 			t.Fatalf("Attenuate(%q) allowed escalation", req)
 		}
+	}
+}
+
+func TestExecSlotsAndEnv(t *testing.T) {
+	for _, c := range []struct {
+		pat, arg string
+		ok       bool
+	}{
+		{"*", "x", true}, {"*", "-x", false}, {"*", "--", false}, {"*", "", false},
+		{"-x", "-x", true}, {`\*`, "*", true}, {`\*`, "x", false}, {`\-v`, "-v", true},
+	} {
+		if got := slotMatches(c.pat, c.arg); got != c.ok {
+			t.Fatalf("slotMatches(%q, %q) = %v", c.pat, c.arg, got)
+		}
+	}
+	if _, err := ParseGrant("process:env=FOO_1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"process:env=", "process:env=1A", "process:env=A=B"} {
+		if _, err := ParseGrant(bad); err == nil {
+			t.Fatalf("ParseGrant(%q) accepted", bad)
+		}
+	}
+	env := Grants{"process:env=FOO", "process:env=MISSING"}.ExecEnv(func(k string) (string, bool) {
+		if k == "FOO" {
+			return "v", true
+		}
+		return "", false
+	})
+	if len(env) != 1 || env[0] != "FOO=v" {
+		t.Fatalf("ExecEnv = %q", env)
+	}
+	if env := (Grants{Process}).ExecEnv(func(string) (string, bool) { return "x", true }); env == nil || len(env) != 0 {
+		t.Fatalf("default ExecEnv = %#v, want empty non-nil", env)
 	}
 }

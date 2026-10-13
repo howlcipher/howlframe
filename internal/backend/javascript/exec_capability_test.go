@@ -110,3 +110,30 @@ func TestJSExecExpressionPositionIsMediated(t *testing.T) {
 		t.Fatalf("expression-position exec bypasses the grant:\n%s", code)
 	}
 }
+
+// Generated JS exec children start with an empty environment, and a "*" slot
+// refuses flags, matching the bytecode runtime.
+func TestJSExecEnvironmentAndFlagSlots(t *testing.T) {
+	gen := func(source string) string {
+		root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
+		checker.Check(root)
+		code, _ := GenerateJSCode(root)
+		return code
+	}
+	code := gen(`(web_app (print (bytes_to_string (exec "/usr/bin/env"))))`)
+	out, errOut, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env", "FOO=leakme")
+	if exit != 0 || strings.Contains(out, "leakme") || strings.TrimSpace(out) != "" {
+		t.Fatalf("default env leaked: %d out %q err %q", exit, out, errOut)
+	}
+	out, errOut, exit = runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env,process:env=FOO", "FOO=leakme")
+	if exit != 0 || strings.TrimSpace(out) != "FOO=leakme" {
+		t.Fatalf("granted env: %d out %q err %q", exit, out, errOut)
+	}
+	code = gen(`(web_app (print (bytes_to_string (exec "/usr/bin/printf" "%s" "-v"))))`)
+	if _, _, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf %s *"); exit == 0 {
+		t.Fatal("a * slot matched a flag")
+	}
+	if _, _, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf ** %s"); exit == 0 {
+		t.Fatal("a non-final ** grant was accepted")
+	}
+}

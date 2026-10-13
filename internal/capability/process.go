@@ -66,11 +66,60 @@ func argvMatches(pats, args []string) bool {
 		if i >= len(args) {
 			return false
 		}
-		if p != "*" && p != args[i] {
+		if !slotMatches(p, args[i]) {
 			return false
 		}
 	}
 	return len(args) == len(pats)
+}
+
+// slotMatches matches one argument. "*" refuses empty arguments and anything
+// that starts with "-", so a wildcard slot cannot smuggle in a flag; flags
+// must be granted as literals. A leading backslash escapes a token, so `\*`
+// matches a literal "*" and `\-x` a literal "-x".
+func slotMatches(p, arg string) bool {
+	if p == "*" {
+		return arg != "" && !strings.HasPrefix(arg, "-")
+	}
+	if strings.HasPrefix(p, "\\") {
+		return arg == p[1:]
+	}
+	return p == arg
+}
+
+// EnvGrantPrefix names one host environment variable passed through to every
+// exec child. exec children otherwise start with an empty environment.
+const EnvGrantPrefix = "process:env="
+
+func validEnvName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// ExecEnv returns the environment for an exec child: only variables named by
+// process:env= grants and present in the host environment. It is never nil,
+// so os/exec does not fall back to inheriting the host environment.
+func (g Grants) ExecEnv(lookup func(string) (string, bool)) []string {
+	env := []string{}
+	seen := map[string]bool{}
+	for _, grant := range g {
+		name, ok := strings.CutPrefix(string(grant), EnvGrantPrefix)
+		if !ok || !validEnvName(name) || seen[name] {
+			continue
+		}
+		seen[name] = true
+		if v, ok := lookup(name); ok {
+			env = append(env, name+"="+v)
+		}
+	}
+	return env
 }
 
 // HasCoarse reports whether the exact coarse grant c is present.
@@ -90,19 +139,20 @@ func (g Grants) HasCoarse(c Capability) bool {
 // Relative or bare names, non-canonical paths and paths that are
 // or traverse a symlink are refused, so PATH lookup and link swaps cannot
 // change which binary runs.
-func (g Grants) AuthorizeExec(program string, args []string) (string, error) {
+// The second result is the matched allow-list entry, for receipts.
+func (g Grants) AuthorizeExec(program string, args []string) (string, string, error) {
 	if !filepath.IsAbs(program) {
-		return "", &ExecDenied{"process: exec program is not an absolute path (no PATH lookup)"}
+		return "", "", &ExecDenied{"process: exec program is not an absolute path (no PATH lookup)"}
 	}
 	if filepath.Clean(program) != program {
-		return "", &ExecDenied{"process: exec program is not a clean path"}
+		return "", "", &ExecDenied{"process: exec program is not a clean path"}
 	}
 	resolved, err := filepath.EvalSymlinks(program)
 	if err != nil {
-		return "", &ExecDenied{"process: exec program cannot be resolved"}
+		return "", "", &ExecDenied{"process: exec program cannot be resolved"}
 	}
 	if resolved != program {
-		return "", &ExecDenied{"process: exec program is or traverses a symlink; grant and call its canonical path"}
+		return "", "", &ExecDenied{"process: exec program is or traverses a symlink; grant and call its canonical path"}
 	}
 	for _, grant := range g {
 		parsed, ok, err := parseExecGrant(string(grant))
@@ -111,10 +161,10 @@ func (g Grants) AuthorizeExec(program string, args []string) (string, error) {
 		}
 		gp, pats, _ := parseExecSpec(strings.TrimPrefix(string(parsed), ExecGrantPrefix))
 		if gp == program && argvMatches(pats, args) {
-			return program, nil
+			return program, string(parsed), nil
 		}
 	}
-	return "", &ExecDenied{"process: exec argv is not in the allow-list"}
+	return "", "", &ExecDenied{"process: exec argv is not in the allow-list"}
 }
 
 // Attenuate returns the child grant set for an explicitly requested subset of
@@ -126,10 +176,11 @@ func Attenuate(parent Grants, requested []string) (Grants, error) {
 	for _, raw := range requested {
 		g, err := ParseGrant(raw)
 		if err != nil {
-			return nil, &ExecDenied{fmt.Sprintf("spawn_agent: invalid grant %q", raw)}
+			return nil, &ExecDenied{"child grant is invalid"}
 		}
 		if !parent.covers(g) {
-			return nil, &ExecDenied{fmt.Sprintf("spawn_agent: child requested %q, which the parent does not hold", string(g))}
+			// Never echo the requested grant: it can name paths or programs.
+			return nil, &ExecDenied{"child requested a grant the parent does not hold"}
 		}
 		child = append(child, g)
 	}

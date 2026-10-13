@@ -15,9 +15,16 @@ process:exec=<absolute program path>[ <pattern>...]
 
 | pattern | matches |
 | --- | --- |
-| `literal` | exactly one argument equal to `literal` |
-| `*` | exactly one argument, any value |
-| `**` | (last token only) zero or more remaining arguments |
+| `literal` | exactly one argument equal to `literal` (literal flags such as `-n` work) |
+| `\literal` | a backslash escapes a token: `\*` matches a literal `*`, `\**` a literal `**` |
+| `*` | exactly one argument that is **non-empty and does not start with `-`** |
+| `**` | (last token only) zero or more remaining arguments, **including flags** |
+
+`*` refuses flags so a wildcard slot cannot inject `-o`, `--exec`, etc.; grant
+any flag as a literal. `**` is an explicit "anything" and accepts flags; use it
+only for programs where any argv is acceptable. A non-final `**` is an invalid
+grant on every path (`-allow-caps` parse error; generated Go/JS refuse the
+exec).
 
 With no pattern, the program may run only with zero arguments. Examples:
 
@@ -31,6 +38,10 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
 (`HOWLFRAME_ALLOW_CAPS`):
 
 * No shell is ever involved; argv is passed verbatim.
+* exec children start with an **empty environment** (no `PATH`, `HOME`, ...).
+  Each `process:env=NAME` grant passes one host variable through to every exec
+  child; nothing else is inherited. `process:env=` is independent of the
+  `environment` capability (which governs `(env ...)` reads by the program).
 * No PATH lookup: the requested program must be an absolute, clean path.
   `printf`, `./printf` and `/usr/bin/../bin/printf` are refused.
 * The program path must be symlink-free (it must equal its own
@@ -43,7 +54,11 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   allow-list`, `not an absolute path`, `is or traverses a symlink`, ...). The
   reason never echoes the program or its arguments. On `-run-bc` the receipt
   records `{"op":"EXEC","capability":"process","decision":"denied"}` and the
-  exit error.
+  exit error; an allowed exec records the matched entry in the effect's
+  `grant` field.
+* Interpreter (`-run`) denials are typed `CAPABILITY_DENIED` errors but write
+  no receipt: `--receipt` requires `-run-bc`, and the interpreter has no
+  receipt recorder. Use `-run-bc` when an audit trail is required.
 * Concurrent replacement of a program file after the check is a TOCTOU
   caveat, as for filesystem grants.
 
@@ -67,14 +82,33 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   not let an agent spawn. A nested spawner must therefore be handed
   `(grants "process")`.
 * A request for more than the parent holds raises `CAPABILITY_DENIED` at the
-  `SPAWN_AGENT` instruction (`spawn_agent: child requested "<grant>", which the
-  parent does not hold`) before any child instruction runs, and the receipt
+  `SPAWN_AGENT` instruction (`spawn_agent: child requested a grant the parent
+  does not hold`; the requested grant text is never echoed) before any child
+  instruction runs, and the receipt
   records a denied `SPAWN_AGENT` effect. Inside an agent body this is isolated
   like any other child failure.
 * The grant list is carried in `SPAWN_AGENT`'s `string_operand_2`
   (newline-separated). No opcode was added; older artifacts without it run
   their children with no grants.
-* `spawn_agent` remains bytecode-only: the interpreter and the experimental
-  HFIR lowering refuse it, and generated Go/JavaScript reject the `(grants ...)`
-  form with `UNSUPPORTED_ON_TARGET`.
-* `spawn` (an in-agent background task) keeps its agent's grants.
+* `spawn_agent` executes its body only on the bytecode VM. The interpreter and
+  the experimental HFIR lowering refuse it. Generated Go/JavaScript accept the
+  two-argument form but **do not run the task body**: they only print the
+  spawning/completed lines. They reject the `(grants ...)` form with
+  `UNSUPPORTED_ON_TARGET`.
+
+## `spawn` and HTTP route handlers are attenuated too
+
+* `(spawn (lambda () body))` runs its background body with **no grants**;
+  `(spawn (grants "cap" ...) (lambda () body))` hands an explicit subset,
+  checked against the spawner like `spawn_agent` (`SPAWN` `string_operand`
+  carries the list). An over-request raises `CAPABILITY_DENIED` at `SPAWN`.
+  Failures inside a spawned body stay silent, as before.
+* `(route "/path" (grants "cap" ...) (lambda (req) body))`: a handler runs with
+  `network` (required to answer: `res`, `res_json` and `res_header` are
+  network-classified, and `HTTP_ROUTE` already required it) **plus only** its
+  `(grants ...)` list (`HTTP_ROUTE` `string_operand_3`). A route without a list
+  gets `network` alone, so store, environment, filesystem and process access
+  in a handler must be listed. An over-request fails closed when the route is
+  registered, before the server listens.
+* Both forms are bytecode-only; the Go checker/backends reject them with
+  `UNSUPPORTED_ON_TARGET`.

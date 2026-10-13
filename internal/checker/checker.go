@@ -453,14 +453,17 @@ func checkGoAppHandler(handlerNode *ast.Node, isCliApp bool) {
 		bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
 		checkGoStatement(bodyNode, 0)
 	case "route":
-		if len(handlerNode.Children) != 3 {
+		// (route path handler) or (route path (grants "cap" ...) handler); the
+		// grant list is enforced by the bytecode runtime only.
+		grantsForm := len(handlerNode.Children) == 4 && handlerNode.Children[2].Type == "List" && len(handlerNode.Children[2].Children) > 0 && handlerNode.Children[2].Children[0].Value == "grants"
+		if len(handlerNode.Children) != 3 && !grantsForm {
 			ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
 		}
 		pathNode := handlerNode.Children[1]
 		if pathNode.Type != "STRING" {
 			ast.ReportError("route path must be a string", pathNode.Line, pathNode.Column)
 		}
-		lambdaNode := handlerNode.Children[2]
+		lambdaNode := handlerNode.Children[len(handlerNode.Children)-1]
 		if lambdaNode.Type != "List" || len(lambdaNode.Children) != 3 || lambdaNode.Children[0].Value != "lambda" {
 			ast.ReportError("route expects a lambda handler (lambda (req) body)", lambdaNode.Line, lambdaNode.Column)
 		}
@@ -588,6 +591,9 @@ func checkGoStatement(node *ast.Node, depth int) {
 			successBodyCode := node.Children[3]
 			checkGoStatement(successBodyCode, depth+1)
 		case "spawn":
+			if len(node.Children) != 2 {
+				ast.ReportError("UNSUPPORTED_ON_TARGET: spawn with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
+			}
 			lambdaNode := node.Children[1]
 			checkGoStatement(lambdaNode.Children[2], depth+1)
 		case "call":

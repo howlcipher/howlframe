@@ -534,12 +534,17 @@ func howlFrameExecAllowed(cmd string, args []string) bool {
 			continue
 		}
 		pats := fields[1:]
+		for i, p := range pats {
+			if p == "**" && i != len(pats)-1 {
+				panic("CAPABILITY_DENIED: capability denied: process: invalid process:exec grant (** must be last)")
+			}
+		}
 		matched := func() bool {
 			for i, p := range pats {
-				if p == "**" && i == len(pats)-1 {
+				if p == "**" {
 					return true
 				}
-				if i >= len(args) || p != "*" && p != args[i] {
+				if i >= len(args) || !howlFrameExecSlot(p, args[i]) {
 					return false
 				}
 			}
@@ -552,11 +557,40 @@ func howlFrameExecAllowed(cmd string, args []string) bool {
 	return false
 }
 
+// howlFrameExecSlot: "*" refuses empty and "-"-prefixed arguments (no flag
+// injection); a leading backslash escapes a literal token.
+func howlFrameExecSlot(p, arg string) bool {
+	if p == "*" {
+		return arg != "" && !strings.HasPrefix(arg, "-")
+	}
+	if strings.HasPrefix(p, "\\") {
+		return arg == p[1:]
+	}
+	return p == arg
+}
+
+// howlFrameExecEnv passes only process:env=NAME variables; never the host env.
+func howlFrameExecEnv() []string {
+	env := []string{}
+	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
+		if !ok || name == "" || strings.ContainsAny(name, "= ") {
+			continue
+		}
+		if v, ok := os.LookupEnv(name); ok {
+			env = append(env, name+"="+v)
+		}
+	}
+	return env
+}
+
 func howlFrameExec(cmd string, args ...string) []byte {
 	if !howlFrameExecAllowed(cmd, args) {
 		panic("CAPABILITY_DENIED: capability denied: process")
 	}
-	out, err := exec.Command(cmd, args...).CombinedOutput()
+	child := exec.Command(cmd, args...)
+	child.Env = howlFrameExecEnv()
+	out, err := child.CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("IO_ERROR: exec failed: %v", err))
 	}
@@ -1177,7 +1211,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "route" {
 			if len(handlerNode.Children) != 3 {
-				// ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
+				// Per-route grant attenuation is enforced only by the bytecode runtime.
+				ast.ReportError("UNSUPPORTED_ON_TARGET: route with (grants ...) is enforced only by the bytecode runtime", handlerNode.Line, handlerNode.Column)
 			}
 			pathNode := handlerNode.Children[1]
 			if pathNode.Type != "STRING" {
@@ -1216,7 +1251,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 					// ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
 				}
 				if len(routeNode.Children) != 3 {
-					// ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
+					// Per-route grant attenuation is enforced only by the bytecode runtime.
+					ast.ReportError("UNSUPPORTED_ON_TARGET: route with (grants ...) is enforced only by the bytecode runtime", routeNode.Line, routeNode.Column)
 				}
 				pathNode := routeNode.Children[1]
 				if pathNode.Type != "STRING" {

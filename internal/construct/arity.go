@@ -48,7 +48,7 @@ var arities = map[string]Arity{
 	"req_path": {2, 2}, "req_query": {2, 2}, "res": {3, 3}, "res_header": {2, 2},
 	"res_json": {2, 2}, "return": {1, 1}, "reverse": {1, 1}, "schema_bridge": {2, 2},
 	"set": {2, 2}, "sget": {2, 2}, "sinc": {2, 2}, "sleep": {1, 1}, "sort": {1, 1},
-	"spawn": {1, 1}, "spawn_agent": {2, 3}, "sput": {3, 3}, "sql_query": {2, Variadic},
+	"spawn": {1, 2}, "spawn_agent": {2, 3}, "sput": {3, 3}, "sql_query": {2, Variadic},
 	"starts_with": {2, 2}, "stderr": {1, 1}, "store_delete": {2, 2}, "store_get": {2, 2},
 	"store_keys": {1, 1}, "store_open": {2, 2}, "store_put": {3, 3}, "str": {1, Variadic},
 	"str_contains": {2, 2}, "str_join": {2, 2}, "str_len": {1, 1}, "str_replace": {3, 3},

@@ -15,6 +15,12 @@ func ParseGrant(raw string) (Capability, error) {
 			return c, nil
 		}
 	}
+	if name, ok := strings.CutPrefix(raw, EnvGrantPrefix); ok {
+		if !validEnvName(name) {
+			return None, fmt.Errorf("unknown capability: %q", raw)
+		}
+		return Capability(raw), nil
+	}
 	if c, ok, err := parseExecGrant(raw); ok {
 		if err != nil {
 			return None, err
