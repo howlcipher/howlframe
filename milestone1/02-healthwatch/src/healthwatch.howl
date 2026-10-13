@@ -13,7 +13,7 @@
     (call die 65 (str "config: " path ": " msg)))
 
   (defun usage_fail ((msg string)) void
-    (call die 2 (str msg "\nusage: healthwatch <run|validate|status|version> ...")))
+    (call die 2 (str msg " (try: healthwatch help)")))
 
   (defun usage_text () string
     (return "usage: healthwatch <command> [options]\n\ncommands:\n  run      [--state FILE] [--format text|json] CONFIG\n  validate CONFIG\n  status   [--format text|json] [--fail-if-down] STATE\n  version\n\nCONFIG is a JSON file path, or - for standard input."))

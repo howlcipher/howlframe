@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -813,10 +814,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr("exec expects (exec cmd args...)", node)
 		}
 		cmd := fmt.Sprint(interp.eval(node.Children[1], env))
-		args := make([]string, 0, len(node.Children)-2)
+		rawArgs := make([]any, 0, len(node.Children)-2)
 		for _, argNode := range node.Children[2:] {
-			args = append(args, fmt.Sprint(interp.eval(argNode, env)))
+			rawArgs = append(rawArgs, interp.eval(argNode, env))
 		}
+		args := execArgv(rawArgs)
 		cmd, _, denied := capability.Grants(interp.AllowedCaps).AuthorizeExec(cmd, args)
 		if denied != nil {
 			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
@@ -2253,7 +2255,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						if e, ok := r.(*VMError); ok && e.Code == "HFIR_DEADLINE_EXCEEDED" {
 							panic(r)
 						}
-						tryErr = fmt.Errorf("%v", r)
+						if e, ok := r.(*VMError); ok {
+							tryErr = errors.New(e.CatchString())
+						} else {
+							tryErr = fmt.Errorf("%v", r)
+						}
 					}
 				}()
 				vm.run(valInsts, env)
@@ -2514,10 +2520,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpExec:
 			numArgs := int(inst.IntOperand)
-			var args []string
-			for i := 0; i < numArgs; i++ {
-				args = append([]string{fmt.Sprint(vm.pop(inst.Op))}, args...)
+			rawArgs := make([]any, numArgs)
+			for i := numArgs - 1; i >= 0; i-- {
+				rawArgs[i] = vm.pop(inst.Op)
 			}
+			args := execArgv(rawArgs)
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
 			cmdStr = vm.requireExec(cmdStr, args, inst.Op)
 			max := vm.Limits.MaxExecOutputBytes
@@ -2543,7 +2550,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			out := output.buffer.Bytes()
 			if err != nil {
 				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err))
+				execErr := NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err)
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) && exitErr.ExitCode() > 0 {
+					execErr.ExecExitCode = exitErr.ExitCode()
+					execErr.ExecOutput = out
+					vm.chargeBytes(len(out), ip, inst.Op)
+				}
+				panic(execErr)
 			}
 			vm.chargeBytes(len(out), ip, inst.Op)
 			vm.push(bytesToAnySlice(out))

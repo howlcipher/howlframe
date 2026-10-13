@@ -208,7 +208,7 @@
 
   ; ---------------------------------------------------------------- arguments (section 2)
   (defun usage_fail ((msg string)) void
-    (call die 2 (str msg "\nusage: ledgerlens <summary|categorize|check-rules|version> ...")))
+    (call die 2 (str msg " (try: ledgerlens help)")))
 
   (defun parse_args ((args list)) dict
     (let (cmd (list_get args 0) n (list_len args) cfg (dict) pos (list) i 1)

@@ -1,0 +1,718 @@
+; taskflow 1.0.0 - declarative task runner with governed process execution
+; (Milestone 1, application 3). Spec: milestone1/03-taskflow/requirements/REQUIREMENTS.md.
+; No shell is ever involved: command lines are split into words first, variables are
+; inserted afterwards, and the words become the argument vector of a governed exec.
+(cli_app
+
+  ; ---------------------------------------------------------------- diagnostics
+  (defun die ((code int) (msg string)) void
+    (do
+      (stderr (str "taskflow: " msg "\n"))
+      (exit code)))
+
+  (defun usage_fail ((msg string)) void
+    (call die 2 (str msg " (try: taskflow help)")))
+
+  (defun fail_at ((fname string) (line int) (msg string)) void
+    (call die 65 (str fname ":" line ": " msg)))
+
+  (defun usage_text () string
+    (return "usage: taskflow <command> [options]\n\ncommands:\n  run     [-f FILE] [-D NAME=VALUE]... [--dry-run] [--keep-going] [--report FILE] [--history FILE] [TASK...]\n  list    [-f FILE]\n  plan    [-f FILE] [TASK...]\n  history [--last N] FILE\n  version"))
+
+  (defun is_denied ((e string)) bool
+    (return (regex_match "CAPABILITY_DENIED" e)))
+
+  (defun read_path ((p string)) string
+    (do
+      (try_let (b (read_file p))
+        (catch e
+          (do
+            (if (call is_denied e)
+              (call die 77 "capability denied: filesystem")
+              (call die 66 (str "cannot read " p)))
+            (return "")))
+        (return (bytes_to_string b)))
+      (return "")))
+
+  (defun write_path ((p string) (data string)) void
+    (try_let (w (do (write_file p data) 1))
+      (catch e
+        (if (call is_denied e)
+          (call die 77 "capability denied: filesystem")
+          (call die 73 (str "cannot write " p))))
+      (set w w)))
+
+  ; ---------------------------------------------------------------- environment
+  (defun get_env ((name string) (X dict)) string
+    (let (envc (map_get X "envc"))
+      (do
+        (if (map_has envc name) (return (map_get envc name)))
+        (let (v "")
+          (do
+            (try_let (x (env name))
+              (catch e (call die 77 "capability denied: environment"))
+              (set v x))
+            (map_set envc name v)
+            (return v))))))
+
+  ; ---------------------------------------------------------------- variables (section 3.2)
+  (defun cycle_fail ((name string) (X dict)) void
+    (let (path (map_get X "path") depth (map_get X "depth") vl (map_get X "VL") members (list) k 0 start 0)
+      (do
+        (while (< k depth)
+          (do
+            (if (= (map_get path (str k)) name) (set start k))
+            (set k (+ k 1))))
+        (set k start)
+        (while (< k depth)
+          (do
+            (append members (map_get path (str k)))
+            (set k (+ k 1))))
+        ; rotate so the member defined first in the file leads
+        (let (first 0 j 0)
+          (do
+            (for m members
+              (do
+                (if (< (map_get vl m) (map_get vl (list_get members first))) (set first j))
+                (set j (+ j 1))))
+            (let (ordered (list))
+              (do
+                (set j 0)
+                (while (< j (list_len members))
+                  (do
+                    (append ordered (list_get members (% (+ first j) (list_len members))))
+                    (set j (+ j 1))))
+                (append ordered (list_get ordered 0))
+                (call fail_at (map_get X "fname") (map_get vl (list_get ordered 0)) (str "variable cycle: " (str_join ordered " -> "))))))))))
+
+  ; value of ${NAME}: set values are expanded at use, -D values are literal
+  (defun var_value ((name string) (X dict) (line int)) string
+    (let (V (map_get X "V"))
+      (do
+        (if (not (map_has V name)) (call fail_at (map_get X "fname") line (str "undefined variable " name)))
+        (if (map_has (map_get X "DL") name) (return (map_get V name)))
+        (return (call expand_var name X)))))
+
+  (defun resolve_ref ((inner string) (X dict) (line int) (mode int)) string
+    (do
+      (if (starts_with inner "env:")
+        (do
+          (if (= mode 2) (return (str "${" inner "}")))
+          (return (call get_env (str_slice inner 4) X))))
+      (return (call var_value inner X line))))
+
+  (defun valid_ref ((inner string)) bool
+    (return (or (regex_match "^[A-Za-z_][A-Za-z0-9_]*$" inner) (regex_match "^env:[A-Za-z_][A-Za-z0-9_]*$" inner))))
+
+  ; Expands $$ and ${...} in plain text (a set value). Quotes are ordinary characters here.
+  ; mode 0 only validates and returns an error message ("" when fine).
+  (defun expand_text ((s string) (mode int) (X dict) (line int)) dict
+    (do
+      (if (not (str_contains s "$")) (return (dict ("err" "") ("out" s))))
+      (let (cs (str_split s "") n (list_len cs) i 0 out "" err "")
+        (do
+          (while (and (< i n) (= err ""))
+            (let (c (list_get cs i))
+              (if (!= c "$")
+                (do (set out (str out c)) (set i (+ i 1)))
+                (let (nx "")
+                  (do
+                    (if (< (+ i 1) n) (set nx (list_get cs (+ i 1))))
+                    (if (= nx "$")
+                      (do (set out (str out "$")) (set i (+ i 2)))
+                      (if (= nx "{")
+                        (let (j (+ i 2) inner "")
+                          (do
+                            (while (and (< j n) (!= (list_get cs j) "}"))
+                              (do (set inner (str inner (list_get cs j))) (set j (+ j 1))))
+                            (if (>= j n)
+                              (set err "unterminated ${")
+                              (if (not (call valid_ref inner))
+                                (set err "invalid ${...} reference")
+                                (do
+                                  (if (> mode 0) (set out (str out (call resolve_ref inner X line mode))))
+                                  (set i (+ j 1)))))))
+                        (set err "invalid $ (use $$ for a literal dollar sign)"))))))))
+          (return (dict ("err" err) ("out" out)))))))
+
+  (defun expand_var ((name string) (X dict)) string
+    (let (memo (map_get X "memo") inprog (map_get X "inprog") path (map_get X "path"))
+      (do
+        (if (map_has memo name) (return (map_get memo name)))
+        (if (map_has inprog name) (call cycle_fail name X))
+        (let (d (map_get X "depth") vl (map_get X "VL"))
+          (do
+            (map_set inprog name 1)
+            (map_set path (str d) name)
+            (map_set X "depth" (+ d 1))
+            (let (r (call expand_text (map_get (map_get X "V") name) 1 X (map_get vl name)))
+              (do
+                (map_set X "depth" d)
+                (map_delete inprog name)
+                (map_set memo name (map_get r "out"))
+                (return (map_get r "out")))))))))
+
+  ; ---------------------------------------------------------------- command words (section 3.1)
+  ; mode 0: validate only; 1: expand (env read); 2: dry run (env references stay verbatim)
+  (defun lex ((text string) (mode int) (X dict) (line int)) dict
+    (let (cs (str_split text "") n (list_len cs) i 0 words (list) cur "" inw 0 q "" err "")
+      (do
+        (while (and (< i n) (= err ""))
+          (do
+          (let (c (list_get cs i))
+            (if (= q "'")
+              (if (= c "'") (set q "") (set cur (str cur c)))
+              (if (and (= q "") (or (= c " ") (= c "\t")))
+                (if (= inw 1) (do (append words cur) (set cur "") (set inw 0)))
+                (if (and (= q "") (= c "'"))
+                  (do (set q "'") (set inw 1))
+                  (if (and (= q "") (= c "\""))
+                    (do (set q "\"") (set inw 1))
+                    (if (and (= q "\"") (= c "\""))
+                      (set q "")
+                      (if (and (= q "\"") (= c "\\") (< (+ i 1) n) (or (= (list_get cs (+ i 1)) "\"") (= (list_get cs (+ i 1)) "\\")))
+                        (do (set cur (str cur (list_get cs (+ i 1)))) (set i (+ i 1)))
+                        (if (= c "$")
+                          (let (nx "")
+                            (do
+                              (set inw 1)
+                              (if (< (+ i 1) n) (set nx (list_get cs (+ i 1))))
+                              (if (= nx "$")
+                                (do (set cur (str cur "$")) (set i (+ i 1)))
+                                (if (= nx "{")
+                                  (let (j (+ i 2) inner "")
+                                    (do
+                                      (while (and (< j n) (!= (list_get cs j) "}"))
+                                        (do (set inner (str inner (list_get cs j))) (set j (+ j 1))))
+                                      (if (>= j n)
+                                        (set err "unterminated ${")
+                                        (if (not (call valid_ref inner))
+                                          (set err "invalid ${...} reference")
+                                          (do
+                                            (if (> mode 0) (set cur (str cur (call resolve_ref inner X line mode))))
+                                            (set i j))))))
+                                  (set err "invalid $ (use $$ for a literal dollar sign)")))))
+                          (do (set cur (str cur c)) (set inw 1))))))))))
+          (set i (+ i 1))))
+        (if (and (= err "") (!= q "")) (set err "unterminated quote"))
+        (if (and (= err "") (= inw 1)) (append words cur))
+        (return (dict ("err" err) ("words" words))))))
+
+  (defun shq ((w string)) string
+    (if (regex_match "^[A-Za-z0-9_@%+=:,./-]+$" w)
+      (return w)
+      (return (str "'" (str_replace w "'" "'\\''") "'"))))
+
+  ; ---------------------------------------------------------------- Flowfile loading (section 3)
+  (defun note ((E dict) (line int) (msg string)) void
+    (if (< line (map_get E "line"))
+      (do (map_set E "line" line) (map_set E "msg" msg))))
+
+  (defun split_blanks ((s string)) list
+    (return (filter w (str_split (str_replace s "\t" " ") " ") (!= w ""))))
+
+  (defun dfs_cycle ((name string) (F dict) (color dict) (path dict) (st dict)) void
+    (let (deps (map_get F "deps") tline (map_get F "tline") ds (call split_blanks (map_get deps name)) d (map_get st "depth"))
+      (do
+        (map_set color name 1)
+        (map_set path (str d) name)
+        (map_set st "depth" (+ d 1))
+        (for dep ds
+          (if (and (= (map_get st "found") 0) (map_has tline dep))
+            (if (= (nz (map_get color dep) 0) 1)
+              (call record_cycle dep F path st)
+              (if (= (nz (map_get color dep) 0) 0) (call dfs_cycle dep F color path st)))))
+        (map_set st "depth" d)
+        (map_set color name 2))))
+
+  (defun record_cycle ((name string) (F dict) (path dict) (st dict)) void
+    (let (tline (map_get F "tline") depth (map_get st "depth") members (list) k 0 start 0)
+      (do
+        (while (< k depth)
+          (do (if (= (map_get path (str k)) name) (set start k)) (set k (+ k 1))))
+        (set k start)
+        (while (< k depth) (do (append members (map_get path (str k))) (set k (+ k 1))))
+        (let (first 0 j 0)
+          (do
+            (for m members
+              (do
+                (if (< (map_get tline m) (map_get tline (list_get members first))) (set first j))
+                (set j (+ j 1))))
+            (let (ordered (list))
+              (do
+                (set j 0)
+                (while (< j (list_len members))
+                  (do (append ordered (list_get members (% (+ first j) (list_len members)))) (set j (+ j 1))))
+                (append ordered (list_get ordered 0))
+                (map_set st "found" 1)
+                (map_set st "cyc_line" (map_get tline (list_get ordered 0)))
+                (map_set st "cyc_msg" (str "dependency cycle: " (str_join ordered " -> "))))))))))
+
+  (defun load_flow ((text string) (fname string)) dict
+    (let (ls (str_split text "\n") E (dict ("line" 2000000000) ("msg" ""))
+          tnames (list) deps (dict) desc (dict) hasdesc (dict) cmdn (dict) cmdtext (dict) cmdline (dict) tline (dict)
+          V (dict) VL (dict) cur "" ln 0)
+      (do
+        (for raw ls
+          (do
+            (set ln (+ ln 1))
+            (let (line raw)
+              (do
+                (if (ends_with line "\r") (set line (str_slice line 0 -1)))
+                (let (t (str_trim line))
+                  (if (or (= t "") (starts_with t "#"))
+                    (set ln ln)
+                    (if (or (starts_with line " ") (starts_with line "\t"))
+                      ; ---- indented: belongs to the current task
+                      (if (= cur "")
+                        (call note E ln "indented directive outside a task")
+                        (let (ws (call split_blanks t) kw (list_get (call split_blanks t) 0))
+                          (if (= kw "desc")
+                            (if (map_has hasdesc cur)
+                              (call note E ln "duplicate desc")
+                              (do
+                                (map_set hasdesc cur 1)
+                                (map_set desc cur (str_trim (str_slice t 4)))))
+                            (if (= kw "run")
+                              (let (rest (str_trim (str_slice t 3)))
+                                (if (= rest "")
+                                  (call note E ln "run needs a program")
+                                  (let (r (call lex rest 0 (dict) ln))
+                                    (if (!= (map_get r "err") "")
+                                      (call note E ln (map_get r "err"))
+                                      (let (k (map_get cmdn cur))
+                                        (do
+                                          (map_set cmdtext (str cur "#" k) rest)
+                                          (map_set cmdline (str cur "#" k) ln)
+                                          (map_set cmdn cur (+ k 1))))))))
+                              (call note E ln (str "unknown directive: " kw))))))
+                      ; ---- column 0
+                      (let (ws (call split_blanks t) kw (list_get (call split_blanks t) 0))
+                        (if (= kw "set")
+                          (let (rest (str_trim (str_slice t 3)))
+                            (if (or (not (str_contains rest "=")) (not (or (starts_with t "set ") (starts_with t "set\t"))))
+                              (call note E ln "set needs NAME = VALUE")
+                              (let (kv (str_split rest "="))
+                                (let (name (str_trim (list_get kv 0)) val (str_trim (str_join (list_slice kv 1) "=")))
+                                  (if (not (regex_match "^[A-Za-z_][A-Za-z0-9_]*$" name))
+                                    (call note E ln "invalid variable name")
+                                    (if (map_has V name)
+                                      (call note E ln (str "duplicate variable " name))
+                                      (let (r (call expand_text val 0 (dict) ln))
+                                        (if (!= (map_get r "err") "")
+                                          (call note E ln (map_get r "err"))
+                                          (do (map_set V name val) (map_set VL name ln))))))))))
+                          (if (= kw "task")
+                            (let (ok 1)
+                              (do
+                                (if (< (list_len ws) 2) (do (call note E ln "task needs a name") (set ok 0)))
+                                (if (= ok 1)
+                                  (if (not (regex_match "^[A-Za-z0-9_.-]+$" (list_get ws 1)))
+                                    (do (call note E ln "invalid task name") (set ok 0))))
+                                (if (and (= ok 1) (> (list_len ws) 2))
+                                  (do
+                                    (if (!= (list_get ws 2) "after") (do (call note E ln "expected 'after' or end of line") (set ok 0)))
+                                    (if (and (= ok 1) (= (list_len ws) 3)) (do (call note E ln "after needs at least one dependency") (set ok 0)))
+                                    (if (= ok 1)
+                                      (for dn (list_slice ws 3)
+                                        (if (not (regex_match "^[A-Za-z0-9_.-]+$" dn)) (do (call note E ln "invalid dependency name") (set ok 0)))))))
+                                (if (= ok 1)
+                                  (let (name (list_get ws 1))
+                                    (if (map_has tline name)
+                                      (call note E ln (str "duplicate task " name))
+                                      (do
+                                        (if (>= (list_len tnames) 1000) (call die 70 "task limit exceeded (max 1000)"))
+                                        (append tnames name)
+                                        (map_set tline name ln)
+                                        (map_set deps name (str_join (list_slice ws 3) " "))
+                                        (map_set cmdn name 0)
+                                        (set cur name))))
+                                  (set cur ""))))
+                            (call note E ln (str "unknown directive: " kw))))))))))))
+        ; unknown dependencies are reported at the dependent's task line
+        (for name tnames
+          (for dep (call split_blanks (map_get deps name))
+            (if (not (map_has tline dep)) (call note E (map_get tline name) (str "unknown dependency " dep)))))
+        ; cycles anywhere in the file
+        (let (color (dict) path (dict) st (dict ("depth" 0) ("found" 0) ("cyc_line" 0) ("cyc_msg" "")))
+          (do
+            (for name tnames
+              (if (and (= (map_get st "found") 0) (= (nz (map_get color name) 0) 0))
+                (call dfs_cycle name (dict ("deps" deps) ("tline" tline)) color path st)))
+            (if (= (map_get st "found") 1) (call note E (map_get st "cyc_line") (map_get st "cyc_msg")))))
+        (if (< (map_get E "line") 2000000000) (call fail_at fname (map_get E "line") (map_get E "msg")))
+        (return (dict ("tnames" tnames) ("deps" deps) ("desc" desc) ("cmdn" cmdn) ("cmdtext" cmdtext) ("cmdline" cmdline)
+                      ("tline" tline) ("V" V) ("VL" VL) ("fname" fname))))))
+
+  ; ---------------------------------------------------------------- planning (section R5)
+  (defun plan_visit ((name string) (F dict) (planned dict) (order dict)) void
+    (if (not (map_has planned name))
+      (do
+        (map_set planned name 1)
+        (for dep (call split_blanks (map_get (map_get F "deps") name))
+          (call plan_visit dep F planned order))
+        (let (n (map_get order "n"))
+          (do (map_set order (str n) name) (map_set order "n" (+ n 1)))))))
+
+  (defun make_plan ((F dict) (targets list)) list
+    (let (planned (dict) order (dict ("n" 0)) out (list) k 0)
+      (do
+        (for tg targets (call plan_visit tg F planned order))
+        (while (< k (map_get order "n"))
+          (do (append out (map_get order (str k))) (set k (+ k 1))))
+        (return out))))
+
+  ; ---------------------------------------------------------------- arguments (section 2)
+  (defun parse_args ((args list)) dict
+    (let (cmd (list_get args 0) n (list_len args) cfg (dict) pos (list) i 1 vnames (list) vvals (list))
+      (do
+        (map_set cfg "cmd" cmd)
+        (map_set cfg "file" "Flowfile")
+        (map_set cfg "dry" 0)
+        (map_set cfg "keep" 0)
+        (map_set cfg "report" "")
+        (map_set cfg "history" "")
+        (map_set cfg "last" 0)
+        (if (or (= cmd "help") (= cmd "--help") (= cmd "-h"))
+          (do
+            (if (> n 1) (call usage_fail "help takes no operands"))
+            (print (call usage_text))
+            (exit 0)))
+        (if (not (list_contains (list "run" "list" "plan" "history" "version") cmd)) (call usage_fail (str "unknown command: " cmd)))
+        (while (< i n)
+          (let (a (list_get args i))
+            (do
+              (if (and (starts_with a "-") (!= a "-"))
+                (do
+                  (if (not (list_contains (list "-f" "-D" "--dry-run" "--keep-going" "--report" "--history" "--last") a))
+                    (call usage_fail (str "unknown option " a)))
+                  (if (= cmd "version") (call usage_fail "version takes no options"))
+                  (if (and (= cmd "list") (!= a "-f")) (call usage_fail (str "option " a " is not valid for list")))
+                  (if (and (= cmd "plan") (!= a "-f")) (call usage_fail (str "option " a " is not valid for plan")))
+                  (if (and (= cmd "history") (!= a "--last")) (call usage_fail (str "option " a " is not valid for history")))
+                  (if (and (= cmd "run") (= a "--last")) (call usage_fail "--last is only valid for history"))
+                  (if (list_contains (list "--dry-run" "--keep-going") a)
+                    (do
+                      (if (= (map_get cfg (if (= a "--dry-run") "dry" "keep")) 1) (call usage_fail (str "duplicate option " a)))
+                      (map_set cfg (if (= a "--dry-run") "dry" "keep") 1))
+                    (do
+                      (if (>= (+ i 1) n) (call usage_fail (str "missing value for " a)))
+                      (let (v (list_get args (+ i 1)))
+                        (if (= a "-D")
+                          (do
+                            (if (not (regex_match "^[A-Za-z_][A-Za-z0-9_]*=" v)) (call usage_fail "-D needs NAME=VALUE"))
+                            (let (kv (str_split v "="))
+                              (do
+                                (append vnames (list_get kv 0))
+                                (append vvals (str_join (list_slice kv 1) "=")))))
+                          (do
+                            (if (map_has cfg (str "seen" a)) (call usage_fail (str "duplicate option " a)))
+                            (map_set cfg (str "seen" a) 1)
+                            (if (= a "-f") (map_set cfg "file" v))
+                            (if (= a "--report") (map_set cfg "report" v))
+                            (if (= a "--history") (map_set cfg "history" v))
+                            (if (= a "--last")
+                              (do
+                                (if (not (regex_match "^[1-9][0-9]{0,8}$" v)) (call usage_fail "--last needs a positive integer"))
+                                (map_set cfg "last" (to_int v)))))))
+                      (set i (+ i 1)))))
+                (append pos a))
+              (set i (+ i 1)))))
+        (if (= cmd "version") (if (> (list_len pos) 0) (call usage_fail "version takes no operands")))
+        (if (= cmd "list") (if (> (list_len pos) 0) (call usage_fail "list takes no operands")))
+        (if (= cmd "history") (if (!= (list_len pos) 1) (call usage_fail "history takes exactly one FILE")))
+        (if (and (map_has cfg "seen-f") (= (map_get cfg "file") "")) (call usage_fail "empty -f value"))
+        (if (or (and (map_has cfg "seen--report") (= (map_get cfg "report") "")) (and (map_has cfg "seen--history") (= (map_get cfg "history") "")))
+          (call usage_fail "empty file name"))
+        (return (dict ("cfg" cfg) ("pos" pos) ("vnames" vnames) ("vvals" vvals))))))
+
+  ; ---------------------------------------------------------------- JSON helpers
+  (defun jc ((v any)) string
+    (let (e (encode_json v))
+      (let (c (str_slice e 0 1))
+        (do
+          (if (= c "{") (return "o"))
+          (if (= c "[") (return "a"))
+          (if (= c "\"") (return "s"))
+          (if (or (= c "t") (= c "f")) (return "b"))
+          (if (= c "n") (return "z"))
+          (if (regex_match "^-?[0-9]+$" e) (return "i"))
+          (return "n")))))
+
+  (defun is_nonneg ((v any)) bool
+    (return (and (= (call jc v) "i") (>= v 0))))
+
+  ; ---------------------------------------------------------------- history
+  (defun hist_err ((msg string)) void
+    (call die 65 (str "history: " msg)))
+
+  ; the history file's runs as a list of dicts, validated (exits 65 when invalid)
+  (defun parse_history ((text string)) list
+    (let (src text out (list))
+      (do
+        (try_let (doc (parse_json Any src))
+          (catch e (call hist_err "invalid JSON"))
+          (do
+            (if (!= (call jc doc) "o") (call hist_err "document must be an object"))
+            (if (or (not (map_has doc "version")) (!= (call jc (map_get doc "version")) "i") (!= (map_get doc "version") 1)) (call hist_err "version must be 1"))
+            (if (or (not (map_has doc "runs")) (!= (call jc (map_get doc "runs")) "a")) (call hist_err "runs must be an array"))
+            (for r (map_get doc "runs")
+              (do
+                (if (!= (call jc r) "o") (call hist_err "run must be an object"))
+                (for req (list "started" "targets" "status" "ok" "failed" "skipped")
+                  (if (not (map_has r req)) (call hist_err (str "run is missing " req))))
+                (for k (map_keys r)
+                  (if (not (list_contains (list "started" "targets" "status" "ok" "failed" "skipped") k)) (call hist_err "unknown key in run")))
+                (if (not (call is_nonneg (map_get r "started"))) (call hist_err "bad started"))
+                (if (!= (call jc (map_get r "targets")) "a") (call hist_err "bad targets"))
+                (for tg (map_get r "targets") (if (!= (call jc tg) "s") (call hist_err "bad target")))
+                (if (not (list_contains (list "ok" "failed") (map_get r "status"))) (call hist_err "bad status"))
+                (for cnt (list "ok" "failed" "skipped")
+                  (if (not (call is_nonneg (map_get r cnt))) (call hist_err (str "bad " cnt))))
+                (append out r)))))
+        (return out))))
+
+  (defun run_json ((r dict)) string
+    (return (str "{\"started\":" (map_get r "started") ",\"targets\":" (encode_json (map_get r "targets")) ",\"status\":\"" (map_get r "status")
+                 "\",\"ok\":" (map_get r "ok") ",\"failed\":" (map_get r "failed") ",\"skipped\":" (map_get r "skipped") "}")))
+
+  (defun history_doc ((runs list)) string
+    (return (str "{\"version\":1,\"runs\":[" (str_join (map_list r runs (call run_json r)) ",") "]}")))
+
+  (defun cmd_history ((cfg dict) (pos list)) void
+    (let (runs (call parse_history (call read_path (list_get pos 0))) lines (list) total (list_len (call parse_history (call read_path (list_get pos 0)))) skip 0)
+      (do
+        (if (and (> (map_get cfg "last") 0) (> total (map_get cfg "last"))) (set skip (- total (map_get cfg "last"))))
+        (let (k 0)
+          (for r runs
+            (do
+              (if (>= k skip)
+                (append lines (str (map_get r "started") "\t" (map_get r "status") "\t" (str_join (map_get r "targets") ",") "\t"
+                                   (map_get r "ok") "\t" (map_get r "failed") "\t" (map_get r "skipped"))))
+              (set k (+ k 1)))))
+        (if (> (list_len lines) 0) (print (str_join lines "\n")))
+        (exit 0))))
+
+  ; ---------------------------------------------------------------- execution
+  (defun run_cmd ((prog string) (argv list)) dict
+    (do
+      (try_let (o (exec prog argv))
+        (catch e
+          (do
+            (if (call is_denied e) (return (dict ("kind" "denied") ("out" "") ("code" 0))))
+            (if (regex_match "exec output exceeds" e) (return (dict ("kind" "limit") ("out" "") ("code" 0))))
+            (if (regex_match "wall-clock deadline" e) (call die 70 "deadline exceeded"))
+            (if (regex_match "\"exit_code\":" e)
+              (let (src e)
+                (try_let (d (parse_json Any src))
+                  (catch x (return (dict ("kind" "error") ("out" "") ("code" 0))))
+                  (return (dict ("kind" "exit") ("out" (map_get d "output")) ("code" (map_get d "exit_code")))))))
+              (return (dict ("kind" "error") ("out" "") ("code" 0)))))
+          (return (dict ("kind" "ok") ("out" (bytes_to_string o)) ("code" 0))))
+      (return (dict ("kind" "error") ("out" "") ("code" 0)))))
+
+  (defun last_of ((l list)) string
+    (return (list_get l (- (list_len l) 1))))
+
+
+  (defun print_output ((o string)) void
+    (if (!= o "")
+      (let (parts (str_split o "\n"))
+        (do
+          (if (= (call last_of parts) "") (set parts (list_slice parts 0 -1)))
+          (for p parts (print (str "| " p)))))))
+
+  (defun reason_of ((kind string)) string
+    (do
+      (if (= kind "exit") (return "exit"))
+      (if (= kind "error") (return "error"))
+      (if (= kind "limit") (return "output_limit"))
+      (return "denied")))
+
+  (defun status_text ((kind string) (code int)) string
+    (do
+      (if (= kind "exit") (return (str "FAILED (exit " code ")")))
+      (if (= kind "error") (return "FAILED (error)"))
+      (if (= kind "limit") (return "FAILED (output limit exceeded)"))
+      (return "FAILED (denied)")))
+
+  (defun json_or_null ((v any)) string
+    (if (is_nil v) (return "null") (return (to_string v))))
+
+  (defun report_doc ((targets list) (plan list) (st dict) (ex dict) (rs dict) (nc dict) (overall string)) string
+    (let (items (list))
+      (do
+        (for nm plan
+          (append items (str "{\"name\":\"" nm "\",\"status\":\"" (map_get st nm) "\",\"exit\":" (call json_or_null (map_get ex nm))
+                             ",\"reason\":" (if (map_has rs nm) (str "\"" (map_get rs nm) "\"") "null") ",\"commands\":" (map_get nc nm) "}")))
+        (return (str "{\"version\":1,\"status\":\"" overall "\",\"targets\":" (encode_json targets) ",\"tasks\":[" (str_join items ",") "]}")))))
+
+  (defun concat1 ((first string) (rest list)) list
+    (let (out (list first))
+      (do
+        (for r rest (append out r))
+        (return out))))
+
+
+  (defun execute ((F dict) (plan list) (targets list) (argvs dict) (progs dict) (cfg dict)) void
+    (let (report (map_get cfg "report") history (map_get cfg "history") keep (map_get cfg "keep") started (time_now)
+          st (dict) ex (dict) rs (dict) nc (dict) okn 0 failn 0 skipn 0 denied 0 aborted 0 old_runs (list) deps (map_get F "deps"))
+      (do
+        ; ---- preflight: prove report and history can be written before any command runs
+        (if (!= report "")
+          (call write_path report (str "{\"version\":1,\"status\":\"running\",\"targets\":" (encode_json targets) ",\"tasks\":[]}")))
+        (if (!= history "")
+          (let (has 0 raw "")
+            (do
+              (try_let (b (read_file history))
+                (catch e
+                  (if (call is_denied e)
+                    (call die 77 "capability denied: filesystem")
+                    (if (regex_match "no such file" e) (set has 0) (call die 66 (str "cannot read " history)))))
+                (do (set raw (bytes_to_string b)) (set has 1)))
+              (if (= has 1) (set old_runs (call parse_history raw)))
+              (call write_path history (if (= has 1) raw "{\"version\":1,\"runs\":[]}")))))
+        ; ---- run the plan
+        (for tn plan
+          (let (n (map_get (map_get F "cmdn") tn) blocker "")
+            (do
+              (map_set nc tn 0)
+              (map_set ex tn (map_get (dict) "none"))
+              ; first dependency (declaration order) whose status is not ok
+              (for dp (call split_blanks (map_get deps tn))
+                (if (and (= blocker "") (map_has st dp) (!= (map_get st dp) "ok")) (set blocker dp)))
+              (if (and (= aborted 1) (= keep 0))
+                (do
+                  (print (str "<== " tn " skipped (aborted)"))
+                  (map_set st tn "skipped")
+                  (map_set rs tn "aborted")
+                  (set skipn (+ skipn 1)))
+                (if (!= blocker "")
+                  (do
+                    (print (str "<== " tn " skipped (dependency " blocker " failed)"))
+                    (map_set st tn "skipped")
+                    (map_set rs tn "dependency_failed")
+                    (set skipn (+ skipn 1)))
+                  (let (k 0 bad "" badcode 0)
+                    (do
+                      (print (str "==> " tn))
+                      (while (and (< k n) (= bad ""))
+                        (let (key (str tn "#" k) r (call run_cmd (map_get progs key) (map_get argvs key)))
+                          (do
+                            (if (!= (map_get r "kind") "denied") (map_set nc tn (+ (map_get nc tn) 1)))
+                            (if (= (map_get r "kind") "limit")
+                              (set bad "limit")
+                              (do
+                                (call print_output (map_get r "out"))
+                                (if (!= (map_get r "kind") "ok") (do (set bad (map_get r "kind")) (set badcode (map_get r "code"))))))
+                            (set k (+ k 1)))))
+                      (if (= bad "")
+                        (do (print (str "<== " tn " ok")) (map_set st tn "ok") (map_set ex tn 0) (set okn (+ okn 1)))
+                        (do
+                          (print (str "<== " tn " " (call status_text bad badcode)))
+                          (map_set st tn "failed")
+                          (map_set rs tn (call reason_of bad))
+                          (if (= bad "exit") (map_set ex tn badcode))
+                          (if (= bad "denied")
+                            (do (set denied 1) (stderr (str "taskflow: capability denied: process (" tn ")\n"))))
+                          (set failn (+ failn 1))
+                          (set aborted 1))))))))))
+        (print (str "SUMMARY ok=" okn " failed=" failn " skipped=" skipn))
+        ; ---- report and history
+        (let (overall (if (= failn 0) "ok" "failed"))
+          (do
+            (if (!= report "") (call write_path report (call report_doc targets plan st ex rs nc overall)))
+            (if (!= history "")
+              (let (runs old_runs rec (dict ("started" started) ("targets" targets) ("status" overall) ("ok" okn) ("failed" failn) ("skipped" skipn)) out (list) drop 0)
+                (do
+                  (append runs rec)
+                  (if (> (list_len runs) 50) (set drop (- (list_len runs) 50)))
+                  (set out (list_slice runs drop))
+                  (call write_path history (call history_doc out)))))))
+        (if (= denied 1) (exit 77))
+        (if (> failn 0) (exit 1))
+        (exit 0))))
+
+
+  (defun cmd_run ((cfg dict) (pos list) (vnames list) (vvals list) (dry int)) void
+    (let (fname (map_get cfg "file") F (dict) targets pos
+          X (dict ("V" (dict)) ("VL" (dict)) ("DL" (dict)) ("memo" (dict)) ("inprog" (dict)) ("path" (dict)) ("depth" 0) ("envc" (dict)) ("fname" "")))
+      (do
+        (set F (call load_flow (if (= fname "-") (read_stdin) (call read_path fname)) fname))
+        (if (= (list_len targets) 0)
+          (if (map_has (map_get F "tline") "default")
+            (set targets (list "default"))
+            (call die 2 "no task given and no 'default' task")))
+        (for tg targets
+          (if (not (map_has (map_get F "tline") tg)) (call die 2 (str "unknown task: " tg))))
+        (let (plan (call make_plan F targets) V (map_get X "V") VL (map_get X "VL") DL (map_get X "DL") j 0)
+          (do
+            (map_set X "fname" fname)
+            ; variables: set values, overridden by -D (a later -D of the same name wins)
+            (for nm (map_keys (map_get F "V")) (do (map_set V nm (map_get (map_get F "V") nm)) (map_set VL nm (map_get (map_get F "VL") nm))))
+            (for nm vnames
+              (do (map_set V nm (list_get vvals j)) (map_set DL nm 1) (set j (+ j 1))))
+            ; ---- expand every run line of every planned task before anything runs
+            (let (argvs (dict) progs (dict) mode (if (= dry 1) 2 1))
+              (do
+                (for tn plan
+                  (let (k 0 n (map_get (map_get F "cmdn") tn))
+                    (while (< k n)
+                      (let (key (str tn "#" k) line (map_get (map_get F "cmdline") key))
+                        (let (r (call lex (map_get (map_get F "cmdtext") key) mode X line))
+                          (let (words (map_get r "words"))
+                            (do
+                              (if (not (starts_with (list_get words 0) "/")) (call fail_at fname line "program must be an absolute path"))
+                              (map_set progs key (list_get words 0))
+                              (map_set argvs key (list_slice words 1))
+                              (set k (+ k 1)))))))))
+                (if (= dry 1)
+                  (do
+                    (for tn plan
+                      (do
+                        (print (str "==> " tn))
+                        (let (k 0 n (map_get (map_get F "cmdn") tn))
+                          (while (< k n)
+                            (let (key (str tn "#" k))
+                              (do
+                                (print (str "| would run: " (str_join (map_list w (call concat1 (map_get progs key) (map_get argvs key)) (call shq w)) " ")))
+                                (set k (+ k 1))))))
+                        (print (str "<== " tn " dry-run"))))
+                    (print (str "SUMMARY dry-run tasks=" (list_len plan)))
+                    (exit 0))
+                  (call execute F plan targets argvs progs cfg)))))))))
+
+  ; ---------------------------------------------------------------- main
+  (let (args (cli_args))
+    (do
+      (if (= (list_len args) 0) (call usage_fail "no command"))
+      (let (a (call parse_args args))
+        (let (cfg (map_get a "cfg") pos (map_get a "pos") cmd (map_get cfg "cmd"))
+          (do
+            (if (= cmd "version") (do (print "taskflow 1.0.0") (exit 0)))
+            (if (= cmd "history") (call cmd_history cfg pos))
+            (if (or (= cmd "list") (= cmd "plan"))
+              (let (fname (map_get cfg "file"))
+                (let (F (call load_flow (if (= fname "-") (read_stdin) (call read_path fname)) fname))
+                  (do
+                    (if (= cmd "list")
+                      (let (lines (list))
+                        (do
+                          (for nm (sort (map_list x (map_get F "tnames") (str x)))
+                            (let (ds (str_replace (map_get (map_get F "deps") nm) " " ","))
+                              (append lines (str nm "\t" (if (= ds "") "-" ds) "\t"
+                                                 (if (map_has (map_get F "desc") nm) (if (= (map_get (map_get F "desc") nm) "") "-" (map_get (map_get F "desc") nm)) "-")))))
+                          (if (> (list_len lines) 0) (print (str_join lines "\n")))
+                          (exit 0)))
+                      (let (targets pos)
+                        (do
+                          (if (= (list_len targets) 0)
+                            (if (map_has (map_get F "tline") "default")
+                              (set targets (list "default"))
+                              (call die 2 "no task given and no 'default' task")))
+                          (for tg targets
+                            (if (not (map_has (map_get F "tline") tg)) (call die 2 (str "unknown task: " tg))))
+                          (let (plan (call make_plan F targets) k 1)
+                            (for nm plan (do (print (str k "\t" nm)) (set k (+ k 1)))))
+                          (exit 0))))))))
+            (call cmd_run cfg pos (map_get a "vnames") (map_get a "vvals") (map_get cfg "dry"))))))))
