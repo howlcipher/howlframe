@@ -42,3 +42,15 @@ Also: McNemar + cluster bootstrap DONE; repetitions combine as per-task mean, Mc
 - Lain's #178 items 1–5: not relayed here; reconcile.
 - #175: hflive now takes -adapter-deadline via vm.AdapterDeadlineFlag (cap 30s, fixed at 1s for run, recorded). The howlframe CLI itself does not register the flag yet (#175 reopened); Arm A does not use the adapter path.
 - Main merged (6c969620, merge commit). Blind set loads from experiments/live-v1-blind (7686087c); TestLiveBlindSetLoadsAndCompares covers all 27 tasks. Feasibility: a hand-written v1 plan for b11 (text output) passes locally; not committed (no blind solutions in repo).
+
+## Heinrich re-review at 874d5997 (2026-10-13)
+
+- Contamination: the designer had seen the blind set; b11 was hand-solved in v1
+  as a feasibility check (uncommitted); "not from any blind task" is
+  unverifiable and withdrawn (PREREGISTRATION §2/§5b). v1 + prompts frozen by
+  literal hash (`TestLiveV1LanguageAndPromptsFrozen`). Quatre to confirm v1
+  maps to generic categories; fresh blind set may follow.
+- Prompt parity: arm_a.md is now a full general reference (every form checked
+  against the binary); #135 built-ins excluded. HowlFrame has no directory
+  listing (disclosed asymmetry vs Arm B `list_dir`).
+- Rendered blind prompts pinned in pins.json; jail confines writes, not reads (documented).

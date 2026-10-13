@@ -2,7 +2,9 @@
 package livev1
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"sort"
@@ -66,5 +68,27 @@ func TestLiveV1FrozenParameters(t *testing.T) {
 	}
 	if harness.LiveClaudeModel != "claude-opus-5-5" || harness.LiveClaudeCLIVersion != "2.1.286 (Claude Code)" || len(harness.LiveAllowedModelIDs) != 1 {
 		t.Fatal("model pins changed after pre-registration")
+	}
+}
+
+// Heinrich re-review: the Arm B v1 language and every prompt are frozen by
+// literal hash, independent of pins.json, because the designer had seen the
+// blind set (PREREGISTRATION.md §2). Never update these hashes.
+func TestLiveV1LanguageAndPromptsFrozen(t *testing.T) {
+	want := map[string]string{
+		"../falsifiable-v0/harness/live_planv1.go":  "742b33e7e2e7b1b95a045d4ac587f3aabbc019497e3a74c2acd3c54534c52b09",
+		"../falsifiable-v0/harness/live_planarm.go": "3f50ef887ee690f5898e3eaa888211032c16e9b1f25f5789fe62cc356eed7aee",
+		"prompts/arm_a.md":                          "0b95f9ba34c32bb0027823c9f6f1fe1ddab33f06aacb10756ed41ae252d66e20",
+		"prompts/arm_b.md":                          "50f15a262c1fb8054f81de6bce8ec81e9fb2546d7d7ec147693b861fb0215a57",
+		"prompts/repair.md":                         "bd54b4f6f5087021f32c87fe67ae5a2aeafd2f17479cdfb14affa92156d774b8",
+	}
+	for p, h := range want {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != h {
+			t.Errorf("%s changed after the v1 freeze: %s", p, got)
+		}
 	}
 }

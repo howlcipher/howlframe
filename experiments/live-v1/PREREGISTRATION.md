@@ -31,7 +31,13 @@ plans run by a governed interpreter (Arm B)?
     `7686087c2c7a5fb7f11fd4f3c93173d69f4593e87ced1b4e6dd6d248f3d73cf7`, and
     every listed file is verified against the manifest.
   - Grants are `filesystem:read=in` and `filesystem:write=out`.
-  - Neither arm's prompt nor the Arm B language was tuned to its contents (§5b).
+  - **Contamination (disclosed):** the designer of the Arm B v1 language and
+    of both prompts (the harness author) had seen the blind set before
+    writing them, and hand-wrote a v1 plan for **b11** as a feasibility check
+    (passed locally, never committed). The claim that v1 was "not derived from
+    any blind task" therefore **cannot be verified** and is withdrawn. v1 and
+    all prompts are frozen by hash (§5b). Quatre will independently check that
+    v1 maps only to generic categories; a fresh blind set may replace #180.
   - Only blind-set results may be stated beyond the tuning corpus.
 
 No task in either set needs network or process:env. Network and env tasks wait
@@ -62,10 +68,14 @@ for #177 and #175.
 - No evidence contents are included. No token budget is claimed or equalized;
   prompt and response tokens, cache tokens included, are measured per arm.
 - The candidate is the first fenced block of the reply.
-- The Arm A construct list is the #114 frozen list. It deliberately omits the
-  tuned #135 built-ins, so that tuning-corpus artifacts aren't advertised.
-  Candidates may still use them. This works against Arm A, while Arm B's
-  language lists `semver_gt` (disclosed).
+- Prompt parity: `arm_a.md` is a general HowlFrame reference as complete as
+  `arm_b.md` (lists, sort/sort_by, filter/map/reduce, sum/min/max, `%`,
+  regex_match, str_slice, pad_left, text/CSV/Markdown output via
+  `str_join`+`write_file`). Every listed form was checked against the binary.
+  It omits the tuned #135 built-ins (`ver_gt`/`ver_ge`, `all`/`any`);
+  candidates may still use them. Arm B's language lists `semver_gt` (disclosed).
+- Known asymmetry: HowlFrame has no directory-listing form; Arm B v1 has
+  `list_dir`. Every task card names its evidence files, so no task needs one.
 
 ## 5. Equal grants
 
@@ -92,7 +102,9 @@ How each arm runs:
 Both arms are audited by the same `AuditReceipt` code, sandbox and canary diffs,
 and the oracle. Each attempt also runs under an **independent OS detector**:
 - bubblewrap with a read-only root, only the attempt directory writable, and no
-  network
+  network. It confines **writes only**: reads anywhere on the host are not
+  blocked by the read-only bind, so read escapes are caught by the receipt
+  audit and the decoy files, not by the jail. Dry runs use bwrap when present.
 - `os_jail_erofs` fires when the OS refuses a write
 - `os_jail_dir` fires when an unexpected entry appears in the attempt directory
 
@@ -101,9 +113,9 @@ attempt directory). Accessing one fails the task even when it is refused.
 
 ### 5b. Arm B v1 language
 
-Specified in `prompts/arm_b.md` and `harness/live_planv1.go`. It was designed
-from the generic categories (config, logs, notes, inventory, files, records),
-not from any blind task:
+Specified in `prompts/arm_b.md` and `harness/live_planv1.go`. It was intended to
+cover the generic categories (config, logs, notes, inventory, files, records);
+see the §2 contamination disclosure — the designer had seen the blind set:
 - text, lines, json, kv and csv reads; `list_dir`
 - variables, `for_each`, `if`
 - `write_text` and `write_record`
@@ -112,6 +124,12 @@ not from any blind task:
 
 Limits: 256 steps, depth 8, 200,000 operations, 1 MiB of writes. v0 plans run
 unchanged.
+
+**Frozen:** `live_planv1.go`, `live_planarm.go`, `prompts/arm_a.md`,
+`arm_b.md` and `repair.md` are pinned by literal sha256 in
+`TestLiveV1LanguageAndPromptsFrozen` (independent of `pins.json`), and the
+rendered initial prompts of every tuning and blind task are pinned in
+`pins.json`. No change after this freeze.
 
 ## 6. Budgets
 
