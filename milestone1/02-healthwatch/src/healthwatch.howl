@@ -1,0 +1,532 @@
+; healthwatch 1.0.0 - HTTP health probes with retries, assertions and a persisted state file
+; (Milestone 1, application 2). Spec: milestone1/02-healthwatch/requirements/REQUIREMENTS.md.
+; Never prints URLs, hosts, bodies or environment values.
+(cli_app
+
+  ; ---------------------------------------------------------------- diagnostics
+  (defun die ((code int) (msg string)) void
+    (do
+      (stderr (str "healthwatch: " msg "\n"))
+      (exit code)))
+
+  (defun cfg_err ((path string) (msg string)) void
+    (call die 65 (str "config: " path ": " msg)))
+
+  (defun usage_fail ((msg string)) void
+    (call die 2 (str msg "\nusage: healthwatch <run|validate|status|version> ...")))
+
+  (defun usage_text () string
+    (return "usage: healthwatch <command> [options]\n\ncommands:\n  run      [--state FILE] [--format text|json] CONFIG\n  validate CONFIG\n  status   [--format text|json] [--fail-if-down] STATE\n  version\n\nCONFIG is a JSON file path, or - for standard input."))
+
+  (defun is_denied ((e string)) bool
+    (return (regex_match "CAPABILITY_DENIED" e)))
+
+  ; ---------------------------------------------------------------- JSON classes
+  ; o object, a array, s string, i integer, n other number, b bool, z null
+  (defun jc ((v any)) string
+    (let (e (encode_json v))
+      (let (c (str_slice e 0 1))
+        (do
+          (if (= c "{") (return "o"))
+          (if (= c "[") (return "a"))
+          (if (= c "\"") (return "s"))
+          (if (or (= c "t") (= c "f")) (return "b"))
+          (if (= c "n") (return "z"))
+          (if (regex_match "^-?[0-9]+$" e) (return "i"))
+          (return "n")))))
+
+  (defun is_int_in ((v any) (lo int) (hi int)) bool
+    (do
+      (if (!= (call jc v) "i") (return false))
+      (return (and (>= v lo) (<= v hi)))))
+
+  ; ---------------------------------------------------------------- IO
+  (defun read_path ((p string)) string
+    (do
+      (try_let (b (read_file p))
+        (catch e
+          (do
+            (if (call is_denied e)
+              (call die 77 (str "capability denied: filesystem (read " p ")"))
+              (call die 66 (str "cannot read " p)))
+            (return "")))
+        (return (bytes_to_string b)))
+      (return "")))
+
+  (defun read_source ((p string)) string
+    (if (= p "-") (return (read_stdin)) (return (call read_path p))))
+
+  (defun write_path ((p string) (data string)) void
+    (try_let (w (do (write_file p data) 1))
+      (catch e
+        (if (call is_denied e)
+          (call die 77 (str "capability denied: filesystem (write " p ")"))
+          (call die 73 (str "cannot write " p))))
+      (set w w)))
+
+  ; ---------------------------------------------------------------- ${ENV:NAME} references
+  ; names of all references in s, or dict with "err" for a malformed ${...} sequence
+  (defun env_refs ((s string)) dict
+    (let (parts (str_split s "${") names (list) k 1)
+      (do
+        (while (< k (list_len parts))
+          (let (part (list_get parts k))
+            (do
+              (if (not (str_contains part "}")) (return (dict ("err" 1))))
+              (let (inner (list_get (str_split part "}") 0))
+                (do
+                  (if (not (regex_match "^ENV:[A-Z_][A-Z0-9_]*$" inner)) (return (dict ("err" 1))))
+                  (append names (str_slice inner 4))
+                  (set k (+ k 1)))))))
+        (return (dict ("err" 0) ("names" names))))))
+
+  (defun expand_env ((s string) (vals dict)) string
+    (let (parts (str_split s "${") out (list_get (str_split s "${") 0) k 1)
+      (do
+        (while (< k (list_len parts))
+          (let (segs (str_split (list_get parts k) "}"))
+            (do
+              (set out (str out (map_get vals (str_slice (list_get segs 0) 4)) (str_join (list_slice segs 1) "}")))
+              (set k (+ k 1)))))
+        (return out))))
+
+  ; ---------------------------------------------------------------- config validation (section 3.1)
+  (defun check_status ((v any) (path string)) void
+    (do
+      (if (= (call jc v) "a")
+        (do
+          (if (= (list_len v) 0) (call cfg_err path "expect_status must not be empty"))
+          (for e v
+            (if (not (call is_int_in e 100 599)) (call cfg_err path "expect_status must contain integers 100..599"))))
+        (if (not (call is_int_in v 100 599)) (call cfg_err path "expect_status must be an integer 100..599 or a non-empty array of them")))))
+
+  (defun check_method ((v any) (path string)) void
+    (if (or (!= (call jc v) "s") (not (list_contains (list "GET" "HEAD" "POST" "PUT" "PATCH" "DELETE") v)))
+      (call cfg_err path "method must be one of GET HEAD POST PUT PATCH DELETE")))
+
+  (defun normalize_status ((v any)) list
+    (if (= (call jc v) "a") (return v) (return (list v))))
+
+  (defun validate_defaults ((d any)) dict
+    (let (dm "GET" de (list 200) dr 0 dd 0)
+      (do
+        (if (!= (call jc d) "o") (call cfg_err "defaults" "must be an object"))
+        (if (map_has d "method") (do (call check_method (map_get d "method") "defaults.method") (set dm (map_get d "method"))))
+        (if (map_has d "expect_status") (do (call check_status (map_get d "expect_status") "defaults.expect_status") (set de (call normalize_status (map_get d "expect_status")))))
+        (if (map_has d "retries")
+          (do
+            (if (not (call is_int_in (map_get d "retries") 0 5)) (call cfg_err "defaults.retries" "retries must be an integer 0..5"))
+            (set dr (map_get d "retries"))))
+        (if (map_has d "retry_delay_ms")
+          (do
+            (if (not (call is_int_in (map_get d "retry_delay_ms") 0 5000)) (call cfg_err "defaults.retry_delay_ms" "retry_delay_ms must be an integer 0..5000"))
+            (set dd (map_get d "retry_delay_ms"))))
+        (for k (sort (map_keys d))
+          (if (not (list_contains (list "method" "expect_status" "retries" "retry_delay_ms") k))
+            (call cfg_err (str "defaults." k) "unknown key")))
+        (return (dict ("method" dm) ("expect" de) ("retries" dr) ("delay" dd))))))
+
+  (defun validate_assert ((it any) (path string)) void
+    (do
+      (if (!= (call jc it) "o") (call cfg_err path "json_assert item must be an object"))
+      (if (or (not (map_has it "path")) (!= (call jc (map_get it "path")) "s") (= (map_get it "path") ""))
+        (call cfg_err (str path ".path") "path must be a non-empty string"))
+      (if (str_contains (map_get it "path") "${ENV:") (call cfg_err (str path ".path") "environment references are not allowed here"))
+      (let (has_eq (map_has it "equals") has_ex (map_has it "exists"))
+        (do
+          (if (= has_eq has_ex) (call cfg_err path "exactly one of equals or exists is required"))
+          (if has_ex (if (!= (call jc (map_get it "exists")) "b") (call cfg_err path "exists must be a boolean")))
+          (if has_eq
+            (do
+              (if (or (= (call jc (map_get it "equals")) "o") (= (call jc (map_get it "equals")) "a")) (call cfg_err path "equals must be a string, number, boolean or null"))
+              (if (and (= (call jc (map_get it "equals")) "s") (str_contains (map_get it "equals") "${ENV:")) (call cfg_err path "environment references are not allowed here"))))
+          (for k (sort (map_keys it))
+            (if (not (list_contains (list "path" "equals" "exists") k)) (call cfg_err path "unknown key in json_assert item")))))))
+
+  (defun validate_check ((c any) (i int) (dflt dict) (seen dict)) dict
+    (let (p (str "checks[" i "]") method (map_get dflt "method") expect (map_get dflt "expect") retries (map_get dflt "retries") delay (map_get dflt "delay")
+          body "" has_body 0 bc "" has_bc 0 ja (list) name "" url "")
+      (do
+        (if (!= (call jc c) "o") (call cfg_err p "check must be an object"))
+        ; name
+        (if (or (not (map_has c "name")) (!= (call jc (map_get c "name")) "s") (not (regex_match "^[A-Za-z0-9._-]{1,64}$" (map_get c "name"))))
+          (call cfg_err (str p ".name") "name is required and must match [A-Za-z0-9._-]{1,64}"))
+        (set name (map_get c "name"))
+        (if (map_has seen name) (call cfg_err (str p ".name") "duplicate check name"))
+        (map_set seen name 1)
+        ; url
+        (if (or (not (map_has c "url")) (!= (call jc (map_get c "url")) "s"))
+          (call cfg_err (str p ".url") "url is required and must be a string"))
+        (set url (map_get c "url"))
+        (if (not (regex_match "^https?://[^/?#]+" url)) (call cfg_err (str p ".url") "url must be http or https with a host"))
+        (if (= (map_get (call env_refs url) "err") 1) (call cfg_err (str p ".url") "malformed ${...} reference"))
+        ; method
+        (if (map_has c "method") (do (call check_method (map_get c "method") (str p ".method")) (set method (map_get c "method"))))
+        ; body
+        (if (map_has c "body")
+          (do
+            (if (not (list_contains (list "POST" "PUT" "PATCH") method)) (call cfg_err (str p ".body") "body is only allowed with POST, PUT or PATCH"))
+            (if (!= (call jc (map_get c "body")) "s") (call cfg_err (str p ".body") "body must be a string"))
+            (if (= (map_get (call env_refs (map_get c "body")) "err") 1) (call cfg_err (str p ".body") "malformed ${...} reference"))
+            (set body (map_get c "body"))
+            (set has_body 1)))
+        ; expect_status
+        (if (map_has c "expect_status") (do (call check_status (map_get c "expect_status") (str p ".expect_status")) (set expect (call normalize_status (map_get c "expect_status")))))
+        ; body_contains
+        (if (map_has c "body_contains")
+          (do
+            (if (= method "HEAD") (call cfg_err (str p ".body_contains") "body_contains is not allowed with HEAD"))
+            (if (or (!= (call jc (map_get c "body_contains")) "s") (= (map_get c "body_contains") "")) (call cfg_err (str p ".body_contains") "body_contains must be a non-empty string"))
+            (if (str_contains (map_get c "body_contains") "${ENV:") (call cfg_err (str p ".body_contains") "environment references are not allowed here"))
+            (set bc (map_get c "body_contains"))
+            (set has_bc 1)))
+        ; json_assert
+        (if (map_has c "json_assert")
+          (let (arr (map_get c "json_assert"))
+            (do
+              (if (= method "HEAD") (call cfg_err (str p ".json_assert") "json_assert is not allowed with HEAD"))
+              (if (or (!= (call jc arr) "a") (= (list_len arr) 0)) (call cfg_err (str p ".json_assert") "json_assert must be a non-empty array"))
+              (let (j 0)
+                (for it arr
+                  (do
+                    (call validate_assert it (str p ".json_assert[" j "]"))
+                    (append ja it)
+                    (set j (+ j 1))))))))
+        ; retries, retry_delay_ms
+        (if (map_has c "retries")
+          (do
+            (if (not (call is_int_in (map_get c "retries") 0 5)) (call cfg_err (str p ".retries") "retries must be an integer 0..5"))
+            (set retries (map_get c "retries"))))
+        (if (map_has c "retry_delay_ms")
+          (do
+            (if (not (call is_int_in (map_get c "retry_delay_ms") 0 5000)) (call cfg_err (str p ".retry_delay_ms") "retry_delay_ms must be an integer 0..5000"))
+            (set delay (map_get c "retry_delay_ms"))))
+        (for k (sort (map_keys c))
+          (if (not (list_contains (list "name" "url" "method" "body" "expect_status" "body_contains" "json_assert" "retries" "retry_delay_ms") k))
+            (call cfg_err (str p "." k) "unknown key")))
+        (return (dict ("name" name) ("url" url) ("method" method) ("body" body) ("has_body" has_body) ("expect" expect)
+                      ("bc" bc) ("has_bc" has_bc) ("ja" ja) ("retries" retries) ("delay" delay))))))
+
+  (defun validate_config ((text string)) list
+    (let (src text out (list) seen (dict) dflt (dict ("method" "GET") ("expect" (list 200)) ("retries" 0) ("delay" 0)))
+      (do
+      (try_let (doc (parse_json Any src))
+        (catch e (call cfg_err "$" "invalid JSON"))
+        (do
+          (if (!= (call jc doc) "o") (call cfg_err "$" "document must be an object"))
+          (if (or (not (map_has doc "version")) (!= (call jc (map_get doc "version")) "i") (!= (map_get doc "version") 1))
+            (call cfg_err "version" "version must be the integer 1"))
+          (if (map_has doc "defaults") (set dflt (call validate_defaults (map_get doc "defaults"))))
+          (if (or (not (map_has doc "checks")) (!= (call jc (map_get doc "checks")) "a") (= (list_len (map_get doc "checks")) 0))
+            (call cfg_err "checks" "checks must be a non-empty array"))
+          (if (> (list_len (map_get doc "checks")) 500) (call die 70 "check limit exceeded (max 500)"))
+          (let (i 0)
+            (for c (map_get doc "checks")
+              (do
+                (append out (call validate_check c i dflt seen))
+                (set i (+ i 1)))))
+          (for k (sort (map_keys doc))
+            (if (not (list_contains (list "version" "defaults" "checks") k)) (call cfg_err k "unknown key")))))
+      (return out))))
+
+  ; ---------------------------------------------------------------- state file (section 3.2)
+  (defun state_err ((msg string)) void
+    (call die 65 (str "state: " msg)))
+
+  (defun parse_state ((text string)) dict
+    (let (src text)
+      (do
+      (try_let (doc (parse_json Any src))
+        (catch e (call state_err "invalid JSON"))
+        (do
+          (if (!= (call jc doc) "o") (call state_err "document must be an object"))
+          (if (or (not (map_has doc "version")) (!= (call jc (map_get doc "version")) "i") (!= (map_get doc "version") 1)) (call state_err "version must be 1"))
+          (if (or (not (map_has doc "checks")) (!= (call jc (map_get doc "checks")) "o")) (call state_err "checks must be an object"))
+          (for k (sort (map_keys doc))
+            (if (not (list_contains (list "version" "checks") k)) (call state_err "unknown key")))
+          (for name (map_keys (map_get doc "checks"))
+            (let (e (map_get (map_get doc "checks") name))
+              (do
+                (if (!= (call jc e) "o") (call state_err (str "entry " name " must be an object")))
+                (for req (list "health" "since" "last_run" "last_status" "last_http_status" "consecutive_failures")
+                  (if (not (map_has e req)) (call state_err (str "entry " name " is missing " req))))
+                (for k (map_keys e)
+                  (if (not (list_contains (list "health" "since" "last_run" "last_status" "last_http_status" "consecutive_failures") k))
+                    (call state_err (str "entry " name " has unknown key"))))
+                (if (not (list_contains (list "up" "down") (map_get e "health"))) (call state_err (str "entry " name ": bad health")))
+                (if (not (call is_int_in (map_get e "since") 0 9223372036854775807)) (call state_err (str "entry " name ": bad since")))
+                (if (not (call is_int_in (map_get e "last_run") 0 9223372036854775807)) (call state_err (str "entry " name ": bad last_run")))
+                (if (not (list_contains (list "PASS" "FAIL" "ERROR") (map_get e "last_status"))) (call state_err (str "entry " name ": bad last_status")))
+                (if (not (or (= (call jc (map_get e "last_http_status")) "z") (call is_int_in (map_get e "last_http_status") 100 599)))
+                  (call state_err (str "entry " name ": bad last_http_status")))
+                (if (not (call is_int_in (map_get e "consecutive_failures") 0 9223372036854775807)) (call state_err (str "entry " name ": bad consecutive_failures"))))))
+          (return doc)))
+      (return (dict)))))
+
+  ; ---------------------------------------------------------------- one attempt (section R3/R4)
+  (defun path_get ((root any) (path string)) dict
+    (let (cur root segs (str_split path ".") alive 1)
+      (do
+        (for seg segs
+          (if (= alive 1)
+            (let (t (call jc cur))
+              (if (= t "o")
+                (if (map_has cur seg) (set cur (map_get cur seg)) (set alive 0))
+                (if (and (= t "a") (regex_match "^(0|[1-9][0-9]*)$" seg) (< (to_int seg) (list_len cur)))
+                  (set cur (list_get cur (to_int seg)))
+                  (set alive 0))))))
+        (return (dict ("found" alive) ("v" cur))))))
+
+  (defun json_equal ((a any) (b any)) bool
+    (let (ta (call jc a) tb (call jc b))
+      (do
+        (if (and (list_contains (list "i" "n") ta) (list_contains (list "i" "n") tb)) (return (= a b)))
+        (if (!= ta tb) (return false))
+        (if (= ta "s") (return (= a b)))
+        (if (or (= ta "b") (= ta "z")) (return (= (encode_json a) (encode_json b))))
+        (return false))))
+
+  (defun nilv () any
+    (return (map_get (dict) "none")))
+
+  (defun result ((status string) (http any) (reason string)) dict
+    (return (dict ("status" status) ("http" http) ("reason" reason))))
+
+  (defun attempt ((ck dict) (url string) (body string)) dict
+    (let (rr (dict) method (map_get ck "method"))
+      (do
+        (try_let (r (if (= (map_get ck "has_body") 1) (http_request url method body) (http_request url method)))
+          (catch e
+            (do
+              (if (call is_denied e) (return (call result "DENIED" (call nilv) "capability_denied")))
+              (if (regex_match "LIMIT_EXCEEDED" e) (return (call result "ERROR" (call nilv) "response_too_large")))
+              (return (call result "ERROR" (call nilv) "request_failed"))))
+          (set rr r))
+        (let (st (http_status rr) text (http_body rr))
+          (do
+            (if (not (list_contains (map_get ck "expect") st)) (return (call result "FAIL" st "status_mismatch")))
+            (if (and (= (map_get ck "has_bc") 1) (not (str_contains text (map_get ck "bc")))) (return (call result "FAIL" st "body_missing")))
+            (if (> (list_len (map_get ck "ja")) 0)
+              (let (src text)
+                (try_let (doc (parse_json Any src))
+                  (catch e (return (call result "FAIL" st "json_invalid")))
+                  (for it (map_get ck "ja")
+                    (let (g (call path_get doc (map_get it "path")))
+                      (if (map_has it "exists")
+                        (if (!= (= (map_get g "found") 1) (map_get it "exists")) (return (call result "FAIL" st "json_mismatch")))
+                        (if (or (= (map_get g "found") 0) (not (call json_equal (map_get g "v") (map_get it "equals"))))
+                          (return (call result "FAIL" st "json_mismatch")))))))))
+            (return (call result "PASS" st "ok")))))))
+
+  ; ---------------------------------------------------------------- arguments (section 2)
+  (defun parse_args ((args list)) dict
+    (let (cmd (list_get args 0) n (list_len args) cfg (dict) pos (list) i 1)
+      (do
+        (map_set cfg "cmd" cmd)
+        (map_set cfg "format" "text")
+        (map_set cfg "state" "")
+        (map_set cfg "fail_if_down" 0)
+        (if (or (= cmd "help") (= cmd "--help") (= cmd "-h"))
+          (do
+            (if (> n 1) (call usage_fail "help takes no operands"))
+            (print (call usage_text))
+            (exit 0)))
+        (if (not (list_contains (list "run" "validate" "status" "version") cmd)) (call usage_fail (str "unknown command: " cmd)))
+        (while (< i n)
+          (let (a (list_get args i))
+            (do
+              (if (and (starts_with a "-") (!= a "-"))
+                (do
+                  (if (= a "--fail-if-down")
+                    (do
+                      (if (!= cmd "status") (call usage_fail "--fail-if-down is only valid for status"))
+                      (if (= (map_get cfg "fail_if_down") 1) (call usage_fail "duplicate option --fail-if-down"))
+                      (map_set cfg "fail_if_down" 1))
+                    (do
+                      (if (not (or (= a "--format") (= a "--state"))) (call usage_fail (str "unknown option " a)))
+                      (if (and (= a "--state") (!= cmd "run")) (call usage_fail "--state is only valid for run"))
+                      (if (and (= a "--format") (or (= cmd "validate") (= cmd "version"))) (call usage_fail "--format is not valid here"))
+                      (if (= cmd "version") (call usage_fail "version takes no options"))
+                      (if (>= (+ i 1) n) (call usage_fail (str "missing value for " a)))
+                      (let (key (str_slice a 2))
+                        (do
+                          (if (map_has cfg (str "seen_" key)) (call usage_fail (str "duplicate option " a)))
+                          (map_set cfg (str "seen_" key) 1)
+                          (map_set cfg key (list_get args (+ i 1)))))
+                      (set i (+ i 1)))))
+                (append pos a))
+              (set i (+ i 1)))))
+        (if (= cmd "version") (if (> (list_len pos) 0) (call usage_fail "version takes no operands")))
+        (if (not (= cmd "version")) (if (!= (list_len pos) 1) (call usage_fail (str cmd " takes exactly one operand"))))
+        (if (and (!= (map_get cfg "format") "text") (!= (map_get cfg "format") "json")) (call usage_fail "--format must be text or json"))
+        (if (and (map_has cfg "seen_state") (= (map_get cfg "state") "")) (call usage_fail "empty --state value"))
+        (if (> (list_len pos) 0) (map_set cfg "operand" (list_get pos 0)))
+        (return cfg))))
+
+  ; ---------------------------------------------------------------- commands
+  (defun fmt_http ((h any)) string
+    (if (is_nil h) (return "-") (return (to_string h))))
+
+  (defun json_http ((h any)) string
+    (if (is_nil h) (return "null") (return (to_string h))))
+
+  (defun cmd_status ((cfg dict)) void
+    (let (st (call parse_state (call read_path (map_get cfg "operand"))) lines (list) any_down 0 fmt (map_get cfg "format"))
+      (do
+        (for name (sort (map_keys (map_get st "checks")))
+          (let (e (map_get (map_get st "checks") name))
+            (do
+              (if (= (map_get e "health") "down") (set any_down 1))
+              (if (= fmt "json")
+                (append lines (str "{\"name\":\"" name "\",\"health\":\"" (map_get e "health") "\",\"since\":" (map_get e "since") ",\"last_run\":" (map_get e "last_run")
+                                   ",\"last_status\":\"" (map_get e "last_status") "\",\"last_http_status\":" (call json_http (map_get e "last_http_status"))
+                                   ",\"consecutive_failures\":" (map_get e "consecutive_failures") "}"))
+                (append lines (str (map_get e "health") "\t" name "\t" (map_get e "since") "\t" (map_get e "last_run") "\t" (map_get e "last_status") "\t"
+                                   (call fmt_http (map_get e "last_http_status")) "\t" (map_get e "consecutive_failures")))))))
+        (if (= fmt "json")
+          (print (str "{\"checks\":[" (str_join lines ",") "]}"))
+          (if (> (list_len lines) 0) (print (str_join lines "\n"))))
+        (if (and (= (map_get cfg "fail_if_down") 1) (= any_down 1)) (exit 1))
+        (exit 0))))
+
+  ; Reads each referenced variable once. Needs the environment grant; an unset or
+  ; empty variable is a config error at the path of its first use.
+  (defun ensure_env ((names list) (vals dict) (path string)) void
+    (for nm names
+      (if (not (map_has vals nm))
+        (let (v "")
+          (do
+            (try_let (x (env nm))
+              (catch e
+                (if (call is_denied e)
+                  (call die 77 "capability denied: environment")
+                  (call die 77 "capability denied: environment")))
+              (set v x))
+            (if (= v "") (call cfg_err path (str "undefined environment variable " nm)))
+            (map_set vals nm v))))))
+
+  (defun expand_field ((s string) (vals dict) (path string)) string
+    (let (refs (call env_refs s))
+      (do
+        (call ensure_env (map_get refs "names") vals path)
+        (if (> (list_len (map_get refs "names")) 0) (return (call expand_env s vals)) (return s)))))
+
+  (defun entry ((h string) (since int) (now int) (st string) (http any) (cf int)) dict
+    (return (dict ("health" h) ("since" since) ("last_run" now) ("last_status" st) ("last_http_status" http) ("consecutive_failures" cf))))
+
+  (defun cmd_run ((cfg dict)) void
+    (let (checks (call validate_config (call read_source (map_get cfg "operand"))) fmt (map_get cfg "format") state_path (map_get cfg "state")
+          vals (dict) urls (list) bodies (list) results (list) events (list) removed (list)
+          old_checks (dict) raw_state "" has_state 0 now (time_now) pass 0 fail 0 err 0 den 0 i 0
+          new_checks (dict) cfgnames (dict))
+      (do
+        ; ---- environment references (before any request and before the state preflight)
+        (for ck checks
+          (do
+            (append urls (call expand_field (map_get ck "url") vals (str "checks[" i "].url")))
+            (append bodies (call expand_field (map_get ck "body") vals (str "checks[" i "].body")))
+            (set i (+ i 1))))
+        ; ---- state preflight: validate, and prove the file can be rewritten
+        (if (!= state_path "")
+          (do
+            (try_let (b (read_file state_path))
+              (catch e
+                (if (call is_denied e)
+                  (call die 77 (str "capability denied: filesystem (read " state_path ")"))
+                  (if (regex_match "no such file" e)
+                    (set has_state 0)
+                    (call die 66 (str "cannot read " state_path)))))
+              (do (set raw_state (bytes_to_string b)) (set has_state 1)))
+            (if (= has_state 1)
+              (set old_checks (map_get (call parse_state raw_state) "checks"))
+              (set raw_state "{\"version\":1,\"checks\":{}}"))
+            (call write_path state_path raw_state)))
+        ; ---- run the checks in order
+        (set i 0)
+        (for ck checks
+          (let (u (list_get urls i) b (list_get bodies i) tries 0 mx (+ 1 (map_get ck "retries")) done 0 res (dict))
+            (do
+              (while (and (= done 0) (< tries mx))
+                (do
+                  (set res (call attempt ck u b))
+                  (set tries (+ tries 1))
+                  (if (or (= (map_get res "status") "PASS") (= (map_get res "status") "DENIED"))
+                    (set done 1)
+                    (if (and (< tries mx) (> (map_get ck "delay") 0)) (sleep (map_get ck "delay"))))))
+              (map_set res "attempts" tries)
+              (map_set res "name" (map_get ck "name"))
+              (map_set cfgnames (map_get ck "name") 1)
+              (append results res)
+              (if (= (map_get res "status") "PASS") (set pass (+ pass 1)))
+              (if (= (map_get res "status") "FAIL") (set fail (+ fail 1)))
+              (if (= (map_get res "status") "ERROR") (set err (+ err 1)))
+              (if (= (map_get res "status") "DENIED") (set den (+ den 1)))
+              (set i (+ i 1)))))
+        ; ---- state transitions and events
+        (if (!= state_path "")
+          (do
+            (for res results
+              (let (nm (map_get res "name") prev (map_get old_checks nm) st (map_get res "status"))
+                (if (= st "DENIED")
+                  (if (map_has old_checks nm) (map_set new_checks nm prev))
+                  (let (up (= st "PASS"))
+                    (let (h "down" cf 1)
+                      (do
+                        (if up (do (set h "up") (set cf 0)))
+                        (if (not (map_has old_checks nm))
+                          (do
+                            (append events (str "new|" nm))
+                            (map_set new_checks nm (call entry h now now st (map_get res "http") cf)))
+                          (if (and (= (map_get prev "health") "up") (not up))
+                            (do
+                              (append events (str "down|" nm))
+                              (map_set new_checks nm (call entry h now now st (map_get res "http") 1)))
+                            (if (and (= (map_get prev "health") "down") up)
+                              (do
+                                (append events (str "recovered|" nm))
+                                (map_set new_checks nm (call entry h now now st (map_get res "http") 0)))
+                              (map_set new_checks nm (call entry h (map_get prev "since") now st (map_get res "http")
+                                                           (if up 0 (+ (map_get prev "consecutive_failures") 1)))))))))))))
+            (for nm (sort (map_keys old_checks))
+              (if (not (map_has cfgnames nm)) (append removed nm)))
+            (for nm removed (append events (str "removed|" nm)))
+            (call write_path state_path (encode_json (dict ("version" 1) ("checks" new_checks))))))
+        ; ---- report
+        (if (= fmt "json")
+          (let (rl (list) el (list))
+            (do
+              (for res results
+                (append rl (str "{\"name\":\"" (map_get res "name") "\",\"status\":\"" (map_get res "status") "\",\"http_status\":" (call json_http (map_get res "http"))
+                                ",\"attempts\":" (map_get res "attempts") ",\"reason\":\"" (map_get res "reason") "\"}")))
+              (for ev events
+                (let (pr (str_split ev "|"))
+                  (append el (str "{\"kind\":\"" (list_get pr 0) "\",\"name\":\"" (list_get pr 1) "\"}"))))
+              (print (str "{\"results\":[" (str_join rl ",") "],\"events\":[" (str_join el ",") "],\"summary\":{\"pass\":" pass ",\"fail\":" fail ",\"error\":" err ",\"denied\":" den "}}"))))
+          (let (ol (list))
+            (do
+              (for res results
+                (append ol (str (map_get res "status") "\t" (map_get res "name") "\t" (call fmt_http (map_get res "http")) "\t" (map_get res "attempts") "\t" (map_get res "reason"))))
+              (for ev events
+                (let (pr (str_split ev "|"))
+                  (append ol (str "EVENT\t" (list_get pr 0) "\t" (list_get pr 1)))))
+              (append ol (str "SUMMARY\tpass=" pass "\tfail=" fail "\terror=" err "\tdenied=" den))
+              (print (str_join ol "\n")))))
+        (for res results
+          (if (= (map_get res "status") "DENIED")
+            (stderr (str "healthwatch: capability denied: network (" (map_get res "name") ")\n"))))
+        (if (> den 0) (exit 77))
+        (if (> (+ fail err) 0) (exit 1))
+        (exit 0))))
+
+  (let (args (cli_args))
+    (do
+      (if (= (list_len args) 0) (call usage_fail "no command"))
+      (let (cfg (call parse_args args))
+        (let (cmd (map_get cfg "cmd"))
+          (do
+            (if (= cmd "version") (do (print "healthwatch 1.0.0") (exit 0)))
+            (if (= cmd "validate")
+              (let (checks (call validate_config (call read_source (map_get cfg "operand"))))
+                (do (print (str "OK: " (list_len checks) " check(s)")) (exit 0))))
+            (if (= cmd "status") (call cmd_status cfg))
+            (call cmd_run cfg)))))))
