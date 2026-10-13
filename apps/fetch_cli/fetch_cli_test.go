@@ -21,7 +21,7 @@ func TestFetchCLI(t *testing.T) {
 		t.Fatalf("compile: %v", err)
 	}
 
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network",
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network:fetch="+strings.TrimPrefix(srv.URL, "http://"),
 		"fetch_cli.howl.bc.bin", srv.URL)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
@@ -33,7 +33,8 @@ func TestFetchCLI(t *testing.T) {
 		t.Fatalf("unexpected: %s", got)
 	}
 
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc",
+	// #165: the coarse network grant no longer authorizes outbound fetch.
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network",
 		"fetch_cli.howl.bc.bin", srv.URL)
 	cmd.Dir = "."
 	out, _ = cmd.CombinedOutput()

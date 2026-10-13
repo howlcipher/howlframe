@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +26,9 @@ func runResourceTest(t *testing.T, source string, policy ExecutionPolicy) *bytec
 	if sh, err := filepath.EvalSymlinks("/bin/sh"); err == nil && strings.Contains(source, `"/bin/sh"`) {
 		source = strings.ReplaceAll(source, `"/bin/sh"`, fmt.Sprintf("%q", sh))
 		caps = append(caps, capability.Capability("process:exec="+sh+" -c *"))
+	}
+	for _, origin := range regexp.MustCompile(`https?://[^"/]+`).FindAllString(source, -1) {
+		caps = append(caps, fetchGrantFor(t, origin))
 	}
 	_, prog := parseAndCompile(t, source)
 	var out, stderr bytes.Buffer
@@ -165,6 +169,7 @@ func TestFetchLimitsInMemory(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("0123456789"))}, nil
 	})}
+	defer capability.SetFetchTransportForTest(http.DefaultClient.Transport)()
 	for _, max := range []int{-1, 0, 9, 10, 11} {
 		policy := DefaultExecutionPolicy()
 		policy.Limits.MaxFetchBodyBytes = max
@@ -246,6 +251,7 @@ func TestDeadlineHTTPResponseBodies(t *testing.T) {
 	http.DefaultClient = &http.Client{Transport: resourceTransport(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: deadlineBody{r.Context()}}, nil
 	})}
+	defer capability.SetFetchTransportForTest(http.DefaultClient.Transport)()
 	for _, source := range []string{
 		`(cli_app (fetch "http://test/body" "GET"))`,
 		`(cli_app (print (confidence "statement")))`,

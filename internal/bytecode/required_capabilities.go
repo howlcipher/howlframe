@@ -35,6 +35,25 @@ func RequiredCapabilities(prog *BCProgram) Report {
 			if spec.Capability != capability.None {
 				requirements[spec.Capability] = "opcode registry"
 			}
+			if inst.Op == OpFetch || inst.Op == OpHttpRequest {
+				// Outbound HTTP needs a host-scoped grant, never coarse network (#165).
+				delete(requirements, spec.Capability)
+				urlAt := i - 2
+				if inst.Op == OpHttpRequest && inst.IntOperand == 1 {
+					urlAt = i - 3
+				}
+				grant, ok := "", false
+				if urlAt >= 0 && instructions[urlAt].Op == OpLoadConst && instructions[urlAt+1].Op == OpLoadConst {
+					if raw, isString := instructions[urlAt].ValueOperand.(string); isString {
+						grant, ok = capability.FetchGrantForURL(raw)
+					}
+				}
+				if ok {
+					requirements[capability.Capability(grant)] = "outbound fetch to a constant URL"
+				} else {
+					requirements[capability.Capability(capability.DynamicFetchRequirement)] = "outbound fetch to a computed URL; grant network:fetch=host[:port] for each host it may reach"
+				}
+			}
 			if inst.Op == OpStoreOpen {
 				required, valid := capability.StoreRequirements(inst.StringOperand2)
 				for _, c := range required {

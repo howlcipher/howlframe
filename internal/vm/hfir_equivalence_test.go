@@ -1523,7 +1523,7 @@ func TestHFIRBytecodeFetchFixture(t *testing.T) {
 		t.Fatalf("denial hits = %d bodies = %d, want no request", hits.Load(), bodies.Load())
 	}
 
-	caps := []capability.Capability{capability.Network}
+	caps := []capability.Capability{fetchGrantFor(t, abiFetchURL)}
 	legacyGranted := runBytecodeOutcome(legacy, "", caps)
 	directGranted := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
@@ -1588,7 +1588,7 @@ func TestHFIRBytecodeFetchOperandOrder(t *testing.T) {
 	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) || !reflect.DeepEqual(got, wantShapes) {
 		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v\nwant %#v", got, want, wantShapes)
 	}
-	caps := []capability.Capability{capability.Network}
+	caps := []capability.Capability{fetchGrantFor(t, abiFetchURL)}
 	legacyOutcome := runBytecodeOutcome(legacy, "", caps)
 	directOutcome := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyOutcome, directOutcome)
@@ -1639,7 +1639,7 @@ func TestHFIRBytecodeNestedFetchFixture(t *testing.T) {
 		t.Fatalf("denial hits = %d bodies = %d, want no request", hits.Load(), bodies.Load())
 	}
 
-	caps := []capability.Capability{capability.Network}
+	caps := []capability.Capability{fetchGrantFor(t, abiFetchURL)}
 	legacyGranted := runBytecodeOutcome(legacy, "", caps)
 	directGranted := runBytecodeOutcome(direct, "", caps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
@@ -1787,7 +1787,7 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	legacyPartial, legacyPartialFS := runOne(legacy, partialCaps)
 	directPartial, directPartialFS := runOne(direct, partialCaps)
 	requireSameBytecodeOutcome(t, legacyPartial, directPartial)
-	if legacyPartial.vmError == nil || legacyPartial.vmError.Code != "CAPABILITY_DENIED" || legacyPartial.vmError.Opcode != "FETCH" || legacyPartial.vmError.Message != "capability denied: network" {
+	if legacyPartial.vmError == nil || legacyPartial.vmError.Code != "CAPABILITY_DENIED" || legacyPartial.vmError.Opcode != "FETCH" || !strings.HasPrefix(legacyPartial.vmError.Message, "capability denied: network") {
 		t.Fatalf("partial denial = %#v, want CAPABILITY_DENIED FETCH", legacyPartial)
 	}
 	if strings.Contains(legacyPartial.vmError.Message, abiFetchURL) || strings.Contains(legacyPartial.stdout, abiFetchMarker) || strings.Contains(legacyPartial.stdout, deadBody) {
@@ -1804,7 +1804,7 @@ func TestHFIRBytecodeNestedMultiEffectFixture(t *testing.T) {
 	}
 
 	const wantStdout = "phase1-token\nmulti-read-marker\nphase2b-exec-marker\n" + abiFetchMarker + "\nL a 0\nL b 0\nkept 2\nphase1-token\nmulti-kept-read\nphase2b-exec-kept\n" + abiFetchMarker + "\nresult 2\nmiss\nphase1-token\nmulti-miss-read\nphase2b-exec-miss\n" + abiFetchMarker + "\nempty 0\n"
-	grantedCaps := []capability.Capability{capability.Environment, capability.Filesystem, capability.Network, printfExecGrant}
+	grantedCaps := []capability.Capability{capability.Environment, capability.Filesystem, fetchGrantFor(t, abiFetchURL), printfExecGrant}
 	legacyGranted, legacyFS := runOne(legacy, grantedCaps)
 	directGranted, directFS := runOne(direct, grantedCaps)
 	requireSameBytecodeOutcome(t, legacyGranted, directGranted)
@@ -2700,7 +2700,7 @@ func requireProcessDenial(t *testing.T, outcome bytecodeOutcome, command, marker
 
 func requireNetworkDenial(t *testing.T, outcome bytecodeOutcome, url, marker string) {
 	t.Helper()
-	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != "FETCH" || outcome.vmError.Message != "capability denied: network" {
+	if outcome.vmError == nil || outcome.vmError.Code != "CAPABILITY_DENIED" || outcome.vmError.Opcode != "FETCH" || !strings.HasPrefix(outcome.vmError.Message, "capability denied: network") {
 		t.Fatalf("denial = %#v, want CAPABILITY_DENIED FETCH", outcome)
 	}
 	if outcome.stdout != "" || outcome.stderr != "" {

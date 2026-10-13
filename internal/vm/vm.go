@@ -20,6 +20,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,6 +100,22 @@ func (interp *Interpreter) requireCapability(cap capability.Capability, node *as
 		}
 	}
 	InterpErr(fmt.Sprintf("capability denied: %s", cap), node)
+}
+
+// requireFetch mirrors BCVM.requireFetch for -run: the URL must match a
+// network:fetch= grant before any connection opens, and every redirect hop
+// is re-checked by the returned client.
+func (interp *Interpreter) requireFetch(rawURL string, node *ast.Node) *http.Client {
+	grants := capability.Grants(interp.AllowedCaps)
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		u = nil
+	}
+	if _, err := grants.AuthorizeFetch(u); err != nil {
+		d, _ := capability.AsFetchDenied(err)
+		InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
+	}
+	return capability.FetchClient(grants, nil)
 }
 
 type VmExit struct {
@@ -304,7 +321,8 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return interp.evalBinop(head, node, env)
 	}
 
-	if reqCap := capability.ForConstruct(head); reqCap != capability.None {
+	if reqCap := capability.ForConstruct(head); reqCap != capability.None && head != "fetch" && head != "http_request" {
+		// fetch and http_request are authorized per URL by requireFetch.
 		interp.requireCapability(reqCap, node)
 	}
 	if head == "neural_circuit" || head == "ephemeral_circuit" {
@@ -864,12 +882,16 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if len(node.Children) == 4 {
 			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
 		}
+		client := interp.requireFetch(urlStr, node)
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: fetch request creation failed: %v", err), node)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
+			if d, ok := capability.AsFetchDenied(err); ok {
+				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
+			}
 			InterpErr(fmt.Sprintf("IO_ERROR: fetch failed: %v", err), node)
 		}
 		defer resp.Body.Close()
@@ -888,12 +910,16 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if len(node.Children) == 4 {
 			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
 		}
+		client := interp.requireFetch(urlStr, node)
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: http_request creation failed: %v", err), node)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
+			if d, ok := capability.AsFetchDenied(err); ok {
+				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
+			}
 			InterpErr(fmt.Sprintf("IO_ERROR: http_request failed: %v", err), node)
 		}
 		defer resp.Body.Close()
@@ -1950,6 +1976,11 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 }
 
 func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
+	if op == bytecode.OpFetch || op == bytecode.OpHttpRequest {
+		// Outbound HTTP is authorized per URL by requireFetch, against
+		// network:fetch= grants only; the coarse network grant never fetches.
+		return
+	}
 	if cap == capability.Process && (op == bytecode.OpSpawn || op == bytecode.OpSpawnAgent) && !capability.Grants(vm.AllowedCaps).HasCoarse(capability.Process) {
 		// Spawning needs the coarse process grant; an exec allow-list alone does not spawn.
 		vm.recordEffect(cap, op, "denied")
@@ -2180,6 +2211,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		if spec.Capability != capability.None {
 			vm.requireCapability(spec.Capability, inst.Op)
 		}
+		if inst.Op == bytecode.OpFetch || inst.Op == bytecode.OpHttpRequest {
+			vm.preauthorizeFetch(inst)
+		}
 
 		switch inst.Op {
 
@@ -2363,13 +2397,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
 			}
+			client := vm.requireFetch(urlStr, inst.Op)
 			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, nil)
 			if err != nil {
 				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch request creation failed: %v", err))
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := client.Do(req)
 			if err != nil {
+				vm.denyFetchHop(err, inst.Op)
 				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch failed: %v", err))
 			}
@@ -2400,13 +2436,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
 			}
+			client := vm.requireFetch(urlStr, inst.Op)
 			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
 			if err != nil {
 				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request creation failed: %v", err))
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := client.Do(req)
 			if err != nil {
+				vm.denyFetchHop(err, inst.Op)
 				vm.checkDeadline(ip, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request failed: %v", err))
 			}
@@ -2622,13 +2660,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 
 			dispatch := requireHTTPDispatch(env, ip, inst, "http_route")
-			// A handler always keeps network: HTTP_ROUTE already required it and
-			// res/res_json/res_header are network-classified, so a handler could
-			// not answer without it. Everything else must be listed explicitly.
-			routeGrants := "network"
-			if inst.StringOperand3 != "" {
-				routeGrants += "\n" + inst.StringOperand3
-			}
+			// A handler holds only its explicit (grants ...) subset (or the
+			// server-level default). Nothing is implicit, not even network:
+			// res/res_json/res_header need no capability, and outbound fetch
+			// needs a host-scoped network:fetch= grant (#165).
+			routeGrants := inst.StringOperand3
 			routeCaps := vm.attenuateChild(routeGrants, bytecode.Registry[inst.Op].Capability, inst.Op, ip, "route")
 
 			capturedEnv := NewBcEnv(nil)
@@ -2666,6 +2702,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 								Message: fmt.Sprint(recovered),
 							}
 						}
+						// Details (code, opcode, message) stay in the server log
+						// and the receipt; the client only learns that the
+						// request failed (#166).
 						fmt.Fprintln(vm.ErrOut, "HTTP handler failure:", failure.Error())
 						if recorder.wrote {
 							// The handler already committed a response; the
@@ -2675,7 +2714,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						}
 						recorder.Header().Set("Content-Type", "application/json")
 						recorder.WriteHeader(http.StatusInternalServerError)
-						_ = json.NewEncoder(recorder).Encode(failure)
+						_, _ = io.WriteString(recorder, handlerFailureBody)
 					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
@@ -3850,6 +3889,82 @@ func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) s
 	}
 	vm.recordEffectGrant(capability.Process, op, "allowed", grant)
 	return path
+}
+
+// handlerFailureBody is the only thing an HTTP client sees when a route
+// handler fails; the full runtime error goes to the server log and receipt.
+const handlerFailureBody = `{"error":"internal server error"}` + "\n"
+
+// requireFetch authorizes one outbound URL against the network:fetch=
+// allow-list before any connection is opened. A denial is a typed
+// CAPABILITY_DENIED recorded in the receipt with the grant it would need.
+// The returned client re-authorizes every redirect hop the same way.
+func (vm *BCVM) requireFetch(rawURL string, op bytecode.Opcode) *http.Client {
+	grants := capability.Grants(vm.AllowedCaps)
+	u, perr := url.Parse(rawURL)
+	if perr != nil {
+		u = nil
+	}
+	grant, err := grants.AuthorizeFetch(u)
+	if err != nil {
+		vm.failFetch(err, op, false)
+	}
+	vm.recordEffectGrant(capability.Network, op, "allowed", grant)
+	return capability.FetchClient(grants, func(_ *url.URL, grant string, err error) {
+		if err != nil {
+			return // recorded by failFetch once Do returns the denial
+		}
+		vm.recordHop(capability.Network, op, "allowed", grant)
+	})
+}
+
+// preauthorizeFetch runs the URL check before any operand is popped, so a
+// denial is reported exactly where the registry gate used to report it
+// (even on a malformed stack) and nothing about the request is evaluated.
+// A non-string URL with some fetch grant present falls through to the
+// opcode's own TYPE_ERROR; the opcode re-runs requireFetch regardless.
+func (vm *BCVM) preauthorizeFetch(inst bytecode.BCInstruction) {
+	urlIdx := 1
+	if inst.Op == bytecode.OpHttpRequest && inst.IntOperand == 1 {
+		urlIdx = 2
+	}
+	i := len(vm.stack) - 1 - urlIdx
+	if i >= 0 {
+		typed := true
+		for _, v := range vm.stack[i:] {
+			if _, ok := v.(string); !ok {
+				typed = false
+			}
+		}
+		if s, ok := vm.stack[i].(string); ok && typed {
+			vm.requireFetch(s, inst.Op)
+			return
+		}
+	}
+	if !capability.Grants(vm.AllowedCaps).HasFetch() {
+		vm.failFetch(&capability.FetchDenied{Reason: "network: no network:fetch= grant", Required: capability.FetchGrantPrefix + "<host>"}, inst.Op, false)
+	}
+}
+
+// denyFetchHop turns a redirect or dial denial surfaced by client.Do into
+// a typed CAPABILITY_DENIED; other errors fall through to IO_ERROR.
+func (vm *BCVM) denyFetchHop(err error, op bytecode.Opcode) {
+	if _, ok := capability.AsFetchDenied(err); ok {
+		vm.failFetch(err, op, true)
+	}
+}
+
+func (vm *BCVM) failFetch(err error, op bytecode.Opcode, recorded bool) {
+	d, ok := capability.AsFetchDenied(err)
+	if !ok {
+		d = &capability.FetchDenied{Reason: "network: fetch denied", Required: capability.FetchGrantPrefix + "<invalid-url>"}
+	}
+	if !recorded {
+		vm.recordEffectGrant(capability.Network, op, "denied", d.Required)
+	} else {
+		vm.recordHop(capability.Network, op, "denied", d.Required)
+	}
+	panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s (requires %s)", d.Reason, d.Required))
 }
 
 // attenuateChild computes a child's grants (S9 attenuation) for spawn_agent,

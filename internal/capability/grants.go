@@ -16,10 +16,19 @@ func ParseGrant(raw string) (Capability, error) {
 		}
 	}
 	if name, ok := strings.CutPrefix(raw, EnvGrantPrefix); ok {
+		if DynamicLoaderEnv(name) {
+			return None, fmt.Errorf("process:env= refuses dynamic-loader variables (LD_*, DYLD_*): %q", raw)
+		}
 		if !validEnvName(name) {
 			return None, fmt.Errorf("unknown capability: %q", raw)
 		}
 		return Capability(raw), nil
+	}
+	if c, ok, err := parseFetchGrant(raw); ok {
+		if err != nil {
+			return None, err
+		}
+		return c, nil
 	}
 	if c, ok, err := parseExecGrant(raw); ok {
 		if err != nil {

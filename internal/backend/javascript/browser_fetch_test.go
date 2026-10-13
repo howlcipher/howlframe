@@ -26,7 +26,11 @@ func TestBrowserFetchRequiresExplicitHostGrant(t *testing.T) {
 		{"empty", `""`, false},
 		{"wrong", `"filesystem"`, false},
 		{"invalid", "42", false},
-		{"network", `"network"`, true},
+		{"coarse network (#165)", `"network"`, false},
+		{"other host", `"network:fetch=example.com"`, false},
+		{"suffix host", `"network:fetch=invalid"`, false},
+		{"other port", `"network:fetch=example.invalid:8443"`, false},
+		{"host grant", `"network:fetch=example.invalid"`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// vm supplies browser globals without Node's process or require.
@@ -34,6 +38,7 @@ func TestBrowserFetchRequiresExplicitHostGrant(t *testing.T) {
 let calls = 0;
 const logs = [];
 const browser = {
+  URL,
   console: {log: value => logs.push(String(value)), error: () => {}},
   fetch: async () => { calls++; return {text: async () => "browser response"}; }
 };
@@ -70,7 +75,7 @@ func TestNodeEnvironmentCannotBeWidenedByBrowserGrant(t *testing.T) {
 	root := parser.NewParser(lexer.NewLexer(`(web_app (print (bytes_to_string (fetch "https://example.invalid" "GET"))))`), "node.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
-	wrapper := `globalThis.HOWLFRAME_ALLOW_CAPS = "network";
+	wrapper := `globalThis.HOWLFRAME_ALLOW_CAPS = "network:fetch=example.invalid";
 globalThis.fetch = () => { throw new Error("UNEXPECTED_REQUEST"); };
 ` + code
 	stdout, stderr, exit := runJS(t, wrapper, "HOWLFRAME_ALLOW_CAPS=")
@@ -90,7 +95,8 @@ func TestBrowserBootstrapPreservesOriginalError(t *testing.T) {
 	wrapper := `const vm = require("node:vm");
 const original = new Error("NETWORK_FAILED");
 const browser = {
-  HOWLFRAME_ALLOW_CAPS: "network",
+  URL,
+  HOWLFRAME_ALLOW_CAPS: "network:fetch=example.invalid",
   console: {log: () => {}, error: () => {}},
   fetch: async () => { throw original; }
 };

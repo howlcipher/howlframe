@@ -436,6 +436,25 @@ func sanitizeGoName(name string) string {
 	return res
 }
 
+// rejectRouteFetch fails closed on outbound HTTP inside a route or
+// middleware body. Generated Go runs every handler with the whole process's
+// HOWLFRAME_ALLOW_CAPS, so it cannot give a route its own (empty by default)
+// network:fetch= scope the way the bytecode runtime does (#165).
+func rejectRouteFetch(node *ast.Node) {
+	if node == nil {
+		return
+	}
+	if node.Type == "List" && len(node.Children) > 0 {
+		switch node.Children[0].Value {
+		case "fetch", "http_request":
+			ast.ReportError("UNSUPPORTED_ON_TARGET: outbound "+node.Children[0].Value+" inside a route is enforced only by the bytecode runtime", node.Line, node.Column)
+		}
+	}
+	for _, child := range node.Children {
+		rejectRouteFetch(child)
+	}
+}
+
 func handlersNeedDispatch(handlers []*ast.Node) bool {
 	for _, handlerNode := range handlers {
 		if handlerNode == nil || handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
@@ -574,7 +593,7 @@ func howlFrameExecEnv() []string {
 	env := []string{}
 	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
 		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
-		if !ok || name == "" || strings.ContainsAny(name, "= ") {
+		if !ok || name == "" || strings.ContainsAny(name, "= ") || strings.HasPrefix(strings.ToUpper(name), "LD_") || strings.HasPrefix(strings.ToUpper(name), "DYLD_") {
 			continue
 		}
 		if v, ok := os.LookupEnv(name); ok {
@@ -633,17 +652,173 @@ func howlFrameReadFileBytes(path string) []byte {
 // howlFrameFetch keeps the (bytes, error) pair that try_let already binds.
 // howlFrameFetchBytes is the single value let and bytes_to_string expect;
 // an IO failure there panics after the grant check.
+// fetchImports lists the packages the fetch helper needs beyond the default
+// header, skipping any the program already imports.
+func fetchImports(extra []string) string {
+	have := map[string]bool{}
+	for _, imp := range extra {
+		have[imp] = true
+	}
+	out := ""
+	for _, imp := range []string{"context", "errors", "net", "net/netip", "net/url", "syscall"} {
+		if !have[imp] {
+			out += fmt.Sprintf("\t%q\n", imp)
+		}
+	}
+	return out
+}
+
 func fetchHelperSource() string {
-	return `func howlFrameFetch(url string, method string, body io.Reader) ([]byte, error) {
-	if !howlFrameGrantHas("network") {
+	return `// howlFrameFetchAllowed mirrors capability.Grants.AuthorizeFetch: the URL's
+// host must equal a network:fetch=host[:port] grant exactly (no suffix
+// match; an omitted port means the scheme default). The coarse network grant
+// never authorizes an outbound request. Redirect hops are re-checked and a
+// granted DNS name may not connect to a link-local or unspecified address.
+func howlFrameFetchNormHost(h string) (string, bool) {
+	if strings.HasPrefix(h, "[") {
+		if !strings.HasSuffix(h, "]") {
+			return "", false
+		}
+		a, err := netip.ParseAddr(h[1 : len(h)-1])
+		if err != nil || !a.Is6() || a.Zone() != "" {
+			return "", false
+		}
+		return a.Unmap().String(), true
+	}
+	if a, err := netip.ParseAddr(h); err == nil {
+		if !a.Is4() {
+			return "", false
+		}
+		return a.String(), true
+	}
+	h = strings.ToLower(h)
+	if h == "" || strings.HasPrefix(h, ".") || strings.HasSuffix(h, ".") {
+		return "", false
+	}
+	last := h[strings.LastIndex(h, ".")+1:]
+	if last == "" || last[0] >= '0' && last[0] <= '9' {
+		return "", false
+	}
+	for _, label := range strings.Split(h, ".") {
+		if label == "" || label[0] == '-' || label[len(label)-1] == '-' {
+			return "", false
+		}
+		for _, r := range label {
+			if !(r == '-' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+				return "", false
+			}
+		}
+	}
+	return h, true
+}
+
+func howlFrameFetchSplit(s string) (string, string) {
+	if strings.HasPrefix(s, "[") {
+		end := strings.Index(s, "]")
+		if end < 0 {
+			return "", ""
+		}
+		return s[:end+1], strings.TrimPrefix(s[end+1:], ":")
+	}
+	if i := strings.LastIndex(s, ":"); i >= 0 {
+		return s[:i], s[i+1:]
+	}
+	return s, ""
+}
+
+func howlFrameFetchPort(p string) bool {
+	n, err := strconv.Atoi(p)
+	return err == nil && n >= 1 && n <= 65535 && strconv.Itoa(n) == p
+}
+
+func howlFrameFetchAllowed(u *url.URL) bool {
+	if u == nil || u.Host == "" || strings.HasSuffix(u.Host, ":") {
+		return false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	def := "80"
+	if scheme == "https" {
+		def = "443"
+	} else if scheme != "http" {
+		return false
+	}
+	h, p := howlFrameFetchSplit(u.Host)
+	if p == "" {
+		p = def
+	} else if !howlFrameFetchPort(p) {
+		return false
+	}
+	host, ok := howlFrameFetchNormHost(h)
+	if !ok {
+		return false
+	}
+	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		spec, ok := strings.CutPrefix(strings.TrimSpace(grant), "network:fetch=")
+		if !ok || spec == "" || strings.ContainsAny(spec, "/@?#*% \t\\") {
+			continue
+		}
+		gh, gp := howlFrameFetchSplit(spec)
+		if gp != "" && !howlFrameFetchPort(gp) || strings.HasSuffix(spec, ":") {
+			continue
+		}
+		ghost, ok := howlFrameFetchNormHost(gh)
+		if ok && ghost == host && (gp == p || gp == "" && p == def) {
+			return true
+		}
+	}
+	return false
+}
+
+type howlFrameFetchDenied struct{}
+
+func (howlFrameFetchDenied) Error() string { return "capability denied: network" }
+
+var howlFrameFetchClient = &http.Client{
+	Transport: &http.Transport{
+		Proxy: nil,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			_, litErr := netip.ParseAddr(host)
+			d := net.Dialer{Timeout: 30 * time.Second, Control: func(_, address string, _ syscall.RawConn) error {
+				ap, err := netip.ParseAddrPort(address)
+				if err != nil {
+					return howlFrameFetchDenied{}
+				}
+				a := ap.Addr().Unmap()
+				if litErr != nil && (a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast()) {
+					return howlFrameFetchDenied{}
+				}
+				return nil
+			}}
+			return d.DialContext(ctx, network, addr)
+		},
+	},
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) > 10 || !howlFrameFetchAllowed(req.URL) {
+			return howlFrameFetchDenied{}
+		}
+		return nil
+	},
+}
+
+func howlFrameFetch(rawURL string, method string, body io.Reader) ([]byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || !howlFrameFetchAllowed(u) {
 		panic("CAPABILITY_DENIED: capability denied: network")
 	}
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequest(method, rawURL, body)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := howlFrameFetchClient.Do(req)
 	if err != nil {
+		var denied howlFrameFetchDenied
+		if errors.As(err, &denied) {
+			panic("CAPABILITY_DENIED: capability denied: network")
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -1229,6 +1404,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			}
 			reqVar := reqNodeList.Children[0].Value
 			bodyNode := handlerNode.Children[2].Children[2]
+			rejectRouteFetch(bodyNode)
 			bodyCode := generateStatement(bodyNode, reqVar, 0)
 			traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{%q: %s.URL.Path})()\n", "route:"+pathNode.Value, reqVar, reqVar)
 			routesCode += formatRouteRegistration(pathNode.Value, reqVar, traceInject, bodyCode, useDispatch)
@@ -1268,6 +1444,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 				routeReqList := routeLambdaNode.Children[1]
 				routeReqVar := routeReqList.Children[0].Value
 				routeBodyNode := routeLambdaNode.Children[2]
+				rejectRouteFetch(routeBodyNode)
+				rejectRouteFetch(mwBodyNode)
 
 				clonedMwBody := ast.CopyNode(mwBodyNode)
 				clonedRouteBody := ast.CopyNode(routeBodyNode)
@@ -1326,6 +1504,9 @@ import (
 	}
 	if gogenNumeric {
 		code += "\t\"math\"\n"
+	}
+	if gogenNeedsFetch {
+		code += fetchImports(extraImports)
 	}
 	code += `)
 `
@@ -1427,6 +1608,9 @@ import (
 		}
 		if gogenNumeric {
 			fullTestCode += "\t\"math\"\n"
+		}
+		if gogenNeedsFetch {
+			fullTestCode += fetchImports(extraImports)
 		}
 		fullTestCode += `)
 

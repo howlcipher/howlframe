@@ -233,9 +233,9 @@ func TestEffectGateEmptyGrantConformance(t *testing.T) {
 	// and an empty stack must be denied before the case performs any work.
 	bare := []bytecode.Opcode{
 		bytecode.OpDbConnect, bytecode.OpSqlQuery,
-		bytecode.OpRes, bytecode.OpResJson, bytecode.OpHttpServerStart,
-		bytecode.OpHttpRoute, bytecode.OpHttpServerServe, bytecode.OpHttpReqMethod,
-		bytecode.OpHttpResHeader, bytecode.OpStorePut, bytecode.OpStoreGet,
+		bytecode.OpHttpServerStart,
+		bytecode.OpHttpRoute, bytecode.OpHttpServerServe,
+		bytecode.OpStorePut, bytecode.OpStoreGet,
 		bytecode.OpStoreDelete, bytecode.OpStoreKeys,
 	}
 	programs := map[bytecode.Opcode]*bytecode.BCProgram{}

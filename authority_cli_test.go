@@ -459,8 +459,8 @@ func TestAuthoritySpawnAttenuation(t *testing.T) {
 	}
 }
 
-// HTTP route handlers keep network (needed to respond) and otherwise only
-// their (grants ...) list, which must be covered by the runner grant.
+// HTTP route handlers hold only their (grants ...) list (no implicit network,
+// #165), which must be covered by the runner grant.
 func TestAuthorityRouteAttenuation(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
 	t.Setenv("HOWL_ROUTE_SECRET", "route-secret-value")
@@ -478,17 +478,17 @@ func TestAuthorityRouteAttenuation(t *testing.T) {
 			for _, tc := range []struct {
 				route, want string
 			}{
-				{`(route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "CAPABILITY_DENIED"},
+				{`(route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "internal server error"},
 				{`(route "/x" (grants "environment") (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "route-secret-value"},
 				// A server-wide (grants ...) is the default for every route.
 				{`(grants "environment") (route "/x" (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "route-secret-value"},
 				// A route's own list replaces the server default.
-				{`(grants "environment") (route "/x" (grants) (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "CAPABILITY_DENIED"},
+				{`(grants "environment") (route "/x" (grants) (lambda (req) (res 200 "text/plain" (env "HOWL_ROUTE_SECRET"))))`, "internal server error"},
 			} {
 				port++
 				src := fmt.Sprintf(`(http_server %d %s)`, port, tc.route)
 				body := serveOnce(t, binary, path, src, "network,environment", port)
-				if !strings.Contains(body, tc.want) || tc.want == "CAPABILITY_DENIED" && strings.Contains(body, "route-secret-value") {
+				if !strings.Contains(body, tc.want) || tc.want == "internal server error" && (strings.Contains(body, "route-secret-value") || strings.Contains(body, "CAPABILITY_DENIED")) {
 					t.Fatalf("route %s: body %q, want %q", tc.route, body, tc.want)
 				}
 			}

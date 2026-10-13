@@ -37,7 +37,7 @@ func TestGoFetchRequiresGrantBeforeRequest(t *testing.T) {
 	if strings.Contains(code, "http.NewRequest(") && strings.Count(code, "http.NewRequest(") != 1 {
 		t.Fatalf("fetch builds a request outside the helper:\n%s", code)
 	}
-	if strings.Contains(code, "http.DefaultClient.Do(") && strings.Count(code, "http.DefaultClient.Do(") != 1 {
+	if strings.Contains(code, "howlFrameFetchClient.Do(") && strings.Count(code, "howlFrameFetchClient.Do(") != 1 {
 		t.Fatalf("fetch dials outside the helper:\n%s", code)
 	}
 	if !strings.Contains(code, "howlFrameFetchBytes(") {
@@ -50,7 +50,7 @@ func TestGoFetchRequiresGrantBeforeRequest(t *testing.T) {
 	helper := code[helperAt:]
 	denyAt := strings.Index(helper, "CAPABILITY_DENIED")
 	reqAt := strings.Index(helper, "http.NewRequest")
-	doAt := strings.Index(helper, "http.DefaultClient.Do")
+	doAt := strings.Index(helper, "howlFrameFetchClient.Do")
 	if denyAt < 0 || reqAt < 0 || doAt < 0 || denyAt > reqAt || denyAt > doAt {
 		t.Fatalf("grant check must precede the HTTP request:\n%s", helper)
 	}
@@ -92,7 +92,12 @@ func TestGoFetchRequiresGrantBeforeRequest(t *testing.T) {
 	otherOut, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
 	assertDenied("filesystem grant", otherOut, otherErr)
 
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network")
+	coarseOut, coarseErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network")
+	assertDenied("coarse network grant (#165)", coarseOut, coarseErr)
+	otherHostOut, otherHostErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network:fetch=localhost:"+srv.URL[strings.LastIndex(srv.URL, ":")+1:])
+	assertDenied("other host grant", otherHostOut, otherHostErr)
+
+	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network:fetch="+strings.TrimPrefix(srv.URL, "http://"))
 	if grantErr != "" {
 		t.Fatalf("network grant failed: %s\n%s", grantErr, granted)
 	}
@@ -128,7 +133,7 @@ func TestGoFetchTryLetDeniesBeforeRequest(t *testing.T) {
 	if !strings.Contains(code, "value, err := howlFrameFetch(") {
 		t.Fatalf("try_let fetch is not mediated:\n%s", code)
 	}
-	if strings.Count(code, "http.DefaultClient.Do(") != 1 {
+	if strings.Count(code, "howlFrameFetchClient.Do(") != 1 {
 		t.Fatalf("try_let fetch dials at the call site:\n%s", code)
 	}
 
@@ -171,7 +176,7 @@ func TestGoFetchTryLetDeniesBeforeRequest(t *testing.T) {
 	missRoot := parser.NewParser(lexer.NewLexer(missSource), "fetch.howl").ParseExpression()
 	checker.Check(missRoot)
 	missCode, _ := GenerateCode(missRoot)
-	granted, grantErr := runGenerated(t, rootDir, missCode, "HOWLFRAME_ALLOW_CAPS=network")
+	granted, grantErr := runGenerated(t, rootDir, missCode, "HOWLFRAME_ALLOW_CAPS=network:fetch="+ln.Addr().String())
 	if grantErr != "" {
 		t.Fatalf("network grant failed: %s\n%s", grantErr, granted)
 	}
@@ -188,7 +193,7 @@ func TestGoFetchExpressionPositionIsMediated(t *testing.T) {
 	if !strings.Contains(code, `howlFrameFetchBytes("http://phase2d-expr.invalid", "GET", nil)`) {
 		t.Fatalf("expression-position fetch is not mediated:\n%s", code)
 	}
-	if strings.Count(code, "http.NewRequest(") != 1 || strings.Count(code, "http.DefaultClient.Do(") != 1 {
+	if strings.Count(code, "http.NewRequest(") != 1 || strings.Count(code, "howlFrameFetchClient.Do(") != 1 {
 		t.Fatalf("expression-position fetch bypasses the grant:\n%s", code)
 	}
 }

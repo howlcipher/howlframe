@@ -23,10 +23,10 @@
 | `HTML_ESCAPE` |  | 1 | 1 |  | Encodes &, <, >, ", and ' for HTML text |
 | `HTTP_REQUEST` | int64 | var | 1 | network | HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack |
 | `HTTP_REQ_HEADER` |  | 2 | 1 |  | Reads one request header from an already-accepted request |
-| `HTTP_REQ_METHOD` |  | 0 | 1 | network | Reads HTTP request method |
+| `HTTP_REQ_METHOD` |  | 0 | 1 |  | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |
 | `HTTP_REQ_QUERY` |  | 2 | 1 |  | Reads one query parameter from an already-accepted request |
-| `HTTP_RES_HEADER` |  | 2 | 0 | network | Sets HTTP response header |
+| `HTTP_RES_HEADER` |  | 2 | 0 |  | Sets HTTP response header |
 | `HTTP_ROUTE` | string, string, int64 | 0 | 0 | network | Registers an HTTP route |
 | `HTTP_SERVER_SERVE` |  | 0 | 0 | network | Serves HTTP requests |
 | `HTTP_SERVER_START` | string | 0 | 0 | network | Starts an HTTP server |
@@ -51,8 +51,8 @@
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |
 | `READ_LINE` |  | 0 | 1 |  | Reads a line from standard input |
 | `REGEX_MATCH` |  | 2 | 1 |  | Matches a string against a regex |
-| `RES` |  | 2 | 0 | network | Sends an HTTP response |
-| `RES_JSON` |  | 2 | 0 | network | Sends a JSON HTTP response |
+| `RES` |  | 2 | 0 |  | Sends an HTTP response |
+| `RES_JSON` |  | 2 | 0 |  | Sends a JSON HTTP response |
 | `RETURN` |  | 1 | 0 |  | Returns from a function |
 | `SET_VAR` | string | 1 | 0 |  | Pops a value and updates an existing variable |
 | `SLEEP` |  | 1 | 0 |  | Sleeps for a duration |

@@ -10,7 +10,7 @@ It does **NOT** provide or guarantee:
 - Formal verification of all programs
 - Production-grade protection against novel VM escapes
 
-HowlFrame is a capability-governed runtime, not a sandbox. The instruction limits and capability gating (including `process:exec=` allow-lists and `spawn_agent` grant attenuation, see `docs/reference/process_authority.md`) are logic-level restrictions evaluated within the host process, not a strict isolation boundary provided by the operating system. Do not use HowlFrame to execute untrusted code in a sensitive production environment without proper external containerization.
+HowlFrame is a capability-governed runtime, not a sandbox. The instruction limits and capability gating (including `process:exec=` allow-lists, `spawn_agent` grant attenuation and host-scoped `network:fetch=` grants, see `docs/reference/process_authority.md` and `docs/reference/network_authority.md`) are logic-level restrictions evaluated within the host process, not a strict isolation boundary provided by the operating system. Do not use HowlFrame to execute untrusted code in a sensitive production environment without proper external containerization.
 
 ## Reporting a Vulnerability
 

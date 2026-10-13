@@ -138,7 +138,7 @@
     {
       "name": "fetch_granted",
       "fixture": "tests/conformance/abi_v1/08_fetch_capability.howl",
-      "allow_caps": "network",
+      "allow_caps": "network:fetch=127.0.0.1:47653",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
@@ -308,7 +308,7 @@
     {
       "name": "nested_fetch_granted",
       "fixture": "tests/conformance/abi_v1/20_nested_fetch.howl",
-      "allow_caps": "network",
+      "allow_caps": "network:fetch=127.0.0.1:47653",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",
@@ -337,7 +337,7 @@
     {
       "name": "nested_multi_effect_granted",
       "fixture": "tests/conformance/abi_v1/21_nested_multi_effect.howl",
-      "allow_caps": "environment,filesystem,process:exec=/usr/bin/printf *,network",
+      "allow_caps": "environment,filesystem,process:exec=/usr/bin/printf *,network:fetch=127.0.0.1:47653",
       "targets": ["hfir_bytecode", "bytecode", "interpreter", "go", "javascript"],
       "javascript_root": "web_app",
       "expect": "PASS",

@@ -113,12 +113,12 @@
 | `reduce` | No | None | Yes | No | - | AUTHORITATIVE |
 | `regex_match` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_header` | Yes | None | No | No | - | AUTHORITATIVE |
-| `req_method` | Yes | network | No | No | - | AUTHORITATIVE |
+| `req_method` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_path` | Yes | None | No | No | - | AUTHORITATIVE |
 | `req_query` | Yes | None | No | No | - | AUTHORITATIVE |
-| `res` | Yes | network | No | No | - | AUTHORITATIVE |
-| `res_header` | Yes | network | No | No | - | AUTHORITATIVE |
-| `res_json` | Yes | network | No | No | - | AUTHORITATIVE |
+| `res` | Yes | None | No | No | - | AUTHORITATIVE |
+| `res_header` | Yes | None | No | No | - | AUTHORITATIVE |
+| `res_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `return` | Yes | None | No | No | - | AUTHORITATIVE |
 | `reverse` | No | None | Yes | No | - | AUTHORITATIVE |
 | `rtrim` | No | None | Yes | No | - | AUTHORITATIVE |
