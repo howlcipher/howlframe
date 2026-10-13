@@ -3,6 +3,7 @@ package gogen
 import (
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/httpreq"
 	"github.com/howlcipher/howlframe/internal/ir"
 	"strconv"
@@ -675,8 +676,59 @@ func fetchImports(extra []string) string {
 	return out
 }
 
+// specialPrefixGoSource renders capability.SpecialPrefixes, the one table
+// shared by every target, into the emitted helper.
+func specialPrefixGoSource() string {
+	var b strings.Builder
+	b.WriteString("var howlFrameSpecialPrefixes = []netip.Prefix{\n")
+	for _, p := range capability.SpecialPrefixes {
+		fmt.Fprintf(&b, "\tnetip.MustParsePrefix(%q),\n", p)
+	}
+	b.WriteString("}\n\n")
+	b.WriteString(`// howlFrameForbiddenDest mirrors capability.ForbiddenDestination.
+func howlFrameForbiddenDest(a netip.Addr) bool {
+	a = a.Unmap()
+	if a.Is6() {
+		b := a.As16()
+		if b[0] == 0x20 && b[1] == 0x02 && howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]})) {
+			return true
+		}
+		compat := true
+		for _, x := range b[:12] {
+			compat = compat && x == 0
+		}
+		if compat && !(b[12] == 0 && b[13] == 0 && b[14] == 0) {
+			return howlFrameForbiddenDest(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+		}
+	}
+	if !a.IsGlobalUnicast() {
+		return true
+	}
+	for _, p := range howlFrameSpecialPrefixes {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// howlFrameOptOutHost reports an IP-literal or localhost destination.
+func howlFrameOptOutHost(u *url.URL) (string, bool) {
+	h, _ := howlFrameFetchSplit(u.Host)
+	n, ok := howlFrameFetchNormHost(h)
+	if !ok {
+		return "", false
+	}
+	_, err := netip.ParseAddr(n)
+	return n, err == nil || n == "localhost"
+}
+
+`)
+	return b.String()
+}
+
 func fetchHelperSource() string {
-	return `// howlFrameFetchAllowed mirrors capability.Grants.AuthorizeFetch: the URL's
+	return specialPrefixGoSource() + `// howlFrameFetchAllowed mirrors capability.Grants.AuthorizeFetch: the URL's
 // host must equal a network:fetch=host[:port] grant exactly (no suffix
 // match; an omitted port means the scheme default). The coarse network grant
 // never authorizes an outbound request. Redirect hops are re-checked and a
@@ -817,7 +869,7 @@ var howlFrameFetchClient = &http.Client{
 					return howlFrameFetchDenied{}
 				}
 				a := ap.Addr().Unmap()
-				if a.IsMulticast() || litErr != nil && !strings.EqualFold(host, "localhost") && (a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsLoopback() || a.IsPrivate() || netip.MustParsePrefix("64:ff9b::/96").Contains(a)) {
+				if a.IsMulticast() || litErr != nil && !strings.EqualFold(host, "localhost") && howlFrameForbiddenDest(a) {
 					return howlFrameFetchDenied{}
 				}
 				return nil
@@ -853,6 +905,11 @@ var howlFrameFetchClient = &http.Client{
 		previous := via[len(via)-1].URL
 		if previous.Scheme == "https" && req.URL.Scheme == "http" {
 			return howlFrameFetchDenied{}
+		}
+		if host, opt := howlFrameOptOutHost(req.URL); opt {
+			if start, _ := howlFrameOptOutHost(via[0].URL); start != host {
+				return howlFrameFetchDenied{}
+			}
 		}
 		changedOrigin := !howlFrameFetchSameOrigin(previous, req.URL)
 		for i := 1; i < len(via); i++ {
