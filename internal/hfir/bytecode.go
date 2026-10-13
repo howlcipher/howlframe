@@ -23,8 +23,13 @@ func LowerToBytecode(graph *Graph) (*bytecode.BCProgram, []Diagnostic) {
 // LowerToBytecodeIncremental converts the Phase-1 semantic HFIR subset into a
 // BCProgram, reusing cached bytecode fragments for preserved subgraphs.
 func LowerToBytecodeIncremental(graph *Graph, preservedCache map[NodeID][]bytecode.BCInstruction) (*bytecode.BCProgram, map[NodeID][]bytecode.BCInstruction, int, []Diagnostic) {
+	return lowerToBytecode(graph, preservedCache, nil)
+}
+
+func lowerToBytecode(graph *Graph, preservedCache map[NodeID][]bytecode.BCInstruction, shared map[NodeID]string) (*bytecode.BCProgram, map[NodeID][]bytecode.BCInstruction, int, []Diagnostic) {
 	compiler := &bytecodeLowerer{
 		graph:       graph,
+		shared:      shared,
 		compiling:   make(map[NodeID]bool),
 		cachedNodes: preservedCache,
 		reusedNodes: make(map[NodeID]bool),
@@ -53,19 +58,39 @@ func LowerToBytecodeIncremental(graph *Graph, preservedCache map[NodeID][]byteco
 }
 
 type bytecodeLowerer struct {
-	graph        *Graph
-	prog         *bytecode.BCProgram
-	compiling    map[NodeID]bool
-	cachedNodes  map[NodeID][]bytecode.BCInstruction
-	reusedNodes  map[NodeID]bool
-	nodeInsts    map[NodeID][]bytecode.BCInstruction
-	loweredCount int
+	shared         map[NodeID]string
+	buildingShared map[NodeID]bool
+	graph          *Graph
+	prog           *bytecode.BCProgram
+	compiling      map[NodeID]bool
+	cachedNodes    map[NodeID][]bytecode.BCInstruction
+	reusedNodes    map[NodeID]bool
+	nodeInsts      map[NodeID][]bytecode.BCInstruction
+	loweredCount   int
 }
 
 func (c *bytecodeLowerer) compile(node *Node) (instructions []bytecode.BCInstruction, diagnostic *Diagnostic) {
 	if node == nil {
 		value := c.diagnostic(nil, "HFIR node is missing")
 		return nil, &value
+	}
+	if name, ok := c.shared[node.ID]; ok && !c.buildingShared[node.ID] {
+		if c.prog.Functions[name] == nil {
+			if c.buildingShared == nil {
+				c.buildingShared = map[NodeID]bool{}
+			}
+			c.buildingShared[node.ID] = true
+			body, d := c.compile(node)
+			delete(c.buildingShared, node.ID)
+			if d != nil {
+				return nil, d
+			}
+			body = append(body, instruction(bytecode.OpReturn, "RETURN", nil))
+			c.prog.Functions[name] = &bytecode.BCFunction{Name: name, Instructions: body}
+		}
+		inst := instruction(bytecode.OpCall, "CALL", func(i *bytecode.BCInstruction) { i.StringOperand = name })
+		bytecode.SetSemanticOrigin(&inst, string(node.ID))
+		return []bytecode.BCInstruction{inst}, nil
 	}
 	// A defun registers a BCFunction. That side effect is not stored in the
 	// instruction cache, so a preserved defun is lowered again and the
