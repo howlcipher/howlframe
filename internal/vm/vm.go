@@ -4050,8 +4050,15 @@ func TextOf(v any) string {
 }
 
 func effectiveExecutionPolicy(prog *bytecode.BCProgram, policy ExecutionPolicy) ExecutionPolicy {
-	if prog.IsModelAdapter() && (policy.Deadline <= 0 || policy.Deadline > time.Second) {
-		policy.Deadline = time.Second
+	if !prog.IsModelAdapter() {
+		return policy
+	}
+	budget := DefaultAdapterDeadline
+	if policy.AdapterDeadline > 0 {
+		budget = min(policy.AdapterDeadline, MaxAdapterDeadline)
+	}
+	if policy.Deadline <= 0 || policy.Deadline > budget {
+		policy.Deadline = budget
 	}
 	return policy
 }
