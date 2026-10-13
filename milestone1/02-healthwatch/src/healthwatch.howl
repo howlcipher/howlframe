@@ -46,6 +46,7 @@
       (try_let (b (read_file p))
         (catch e
           (do
+            (if (regex_match "LIMIT_EXCEEDED" e) (call die 70 "resource limit reached while reading"))
             (if (call is_denied e)
               (call die 77 (str "capability denied: filesystem (read " p ")"))
               (call die 66 (str "cannot read " p)))
@@ -378,7 +379,7 @@
             (do
               (if (= (map_get e "health") "down") (set any_down 1))
               (if (= fmt "json")
-                (append lines (str "{\"name\":\"" name "\",\"health\":\"" (map_get e "health") "\",\"since\":" (map_get e "since") ",\"last_run\":" (map_get e "last_run")
+                (append lines (str "{\"name\":" (encode_json name) ",\"health\":\"" (map_get e "health") "\",\"since\":" (map_get e "since") ",\"last_run\":" (map_get e "last_run")
                                    ",\"last_status\":\"" (map_get e "last_status") "\",\"last_http_status\":" (call json_http (map_get e "last_http_status"))
                                    ",\"consecutive_failures\":" (map_get e "consecutive_failures") "}"))
                 (append lines (str (map_get e "health") "\t" name "\t" (map_get e "since") "\t" (map_get e "last_run") "\t" (map_get e "last_status") "\t"

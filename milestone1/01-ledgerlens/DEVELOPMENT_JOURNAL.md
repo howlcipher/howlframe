@@ -37,3 +37,12 @@ repaired implementation code.
 * Missing coverage added: byte-exact stdin, memory charge, empty-subject prefix.
 * Known baseline failures unrelated to this change: exec tests on this host (symlinked
   `/usr/bin/{printf,echo,touch}`), see `docs/journals/2026-10-13_milestone1_baseline.md`.
+
+## Review round 1 (2026-10-13)
+
+The independent reviewer (`REVIEW.md`) found blocker LL-1: `check-rules` must report the lowest-line
+error, but the unknown-budget-category check (which needs the whole file) was deferred while syntax
+errors exited at once, so an early unknown budget lost to a later syntax error. Fix: `parse_rules`
+records the lowest-line problem and reports it after the whole file was seen. Regression:
+`tests/regression/rules_lowest_line.sh`. Also fixed from the review's minor list: a memory/limit
+stop during a file read now exits 70 (was 66); README limitation text corrected.

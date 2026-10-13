@@ -141,6 +141,7 @@
       (try_let (b (read_file p))
         (catch e
           (do
+            (if (regex_match "LIMIT_EXCEEDED" e) (call die 70 "resource limit reached while reading"))
             (if (call is_denied e)
               (call die 77 (str "capability denied: filesystem (read " p ")"))
               (call die 66 (str "cannot read " p)))
@@ -153,11 +154,13 @@
       (if (starts_with s bom) (return (str_slice s 1)) (return s))))
 
   ; ---------------------------------------------------------------- rules (section 3.2)
-  (defun rules_err ((n int) (msg string)) void
-    (call die 65 (str "rules: line " n ": " msg)))
+  ; records the lowest-line rules problem; parse_rules reports it after the whole file was seen
+  (defun rules_err ((E dict) (n int) (msg string)) void
+    (if (< n (map_get E "line"))
+      (do (map_set E "line" n) (map_set E "msg" msg))))
 
   (defun parse_rules ((content string)) dict
-    (let (ls (str_split content "\n") names (list) pats (list) bnames (list) bvals (list) blines (list) section "" n 0 seen (dict) known (dict))
+    (let (ls (str_split content "\n") names (list) pats (list) bnames (list) bvals (list) blines (list) section "" n 0 seen (dict) known (dict) E (dict ("line" 2000000000) ("msg" "")))
       (do
         (for raw ls
           (do
@@ -173,37 +176,38 @@
                       (if (= t "[budgets]")
                         (set section "b")
                         (do
-                          (if (= section "") (call rules_err n "entry outside a section"))
-                          (if (not (str_contains t "=")) (call rules_err n "expected NAME = VALUE"))
+                          (if (= section "") (call rules_err E n "entry outside a section"))
+                          (if (not (str_contains t "=")) (call rules_err E n "expected NAME = VALUE"))
                           (let (kv (str_split t "="))
                             (let (name (call trim_sp (list_get kv 0)) val (call trim_sp (str_join (list_slice kv 1) "=")))
                               (if (= section "c")
                                 (do
-                                  (if (not (regex_match "^[A-Za-z][A-Za-z0-9 _-]{0,39}$" name)) (call rules_err n "invalid category name"))
-                                  (if (= name "Uncategorized") (call rules_err n "reserved category name"))
-                                  (if (= val "") (call rules_err n "empty regular expression"))
+                                  (if (not (regex_match "^[A-Za-z][A-Za-z0-9 _-]{0,39}$" name)) (call rules_err E n "invalid category name"))
+                                  (if (= name "Uncategorized") (call rules_err E n "reserved category name"))
+                                  (if (= val "") (call rules_err E n "empty regular expression"))
                                   (try_let (ok (regex_match val ""))
-                                    (catch e (call rules_err n "invalid regular expression"))
+                                    (catch e (call rules_err E n "invalid regular expression"))
                                     (set n n))
                                   (append names name)
                                   (append pats val)
                                   (map_set known name 1))
                                 (do
-                                  (if (not (regex_match "^[0-9]{1,12}(\\.[0-9]{1,2})?$" val)) (call rules_err n "invalid budget amount"))
+                                  (if (not (regex_match "^[0-9]{1,12}(\\.[0-9]{1,2})?$" val)) (call rules_err E n "invalid budget amount"))
                                   (let (bc (call parse_amount val))
-                                    (if (<= (map_get bc "c") 0) (call rules_err n "budget must be greater than zero")))
-                                  (if (map_has seen name) (call rules_err n "duplicate budget"))
+                                    (if (<= (nz (map_get bc "c") 0) 0) (call rules_err E n "budget must be greater than zero")))
+                                  (if (map_has seen name) (call rules_err E n "duplicate budget"))
                                   (map_set seen name 1)
                                   (append bnames name)
-                                  (append bvals (map_get (call parse_amount val) "c"))
+                                  (append bvals (nz (map_get (call parse_amount val) "c") 0))
                                   (append blines n))))))))))))))
         ; budget names must name a category (or Uncategorized); report the lowest offending line
         (let (j 0)
           (while (< j (list_len bnames))
             (do
               (if (and (!= (list_get bnames j) "Uncategorized") (not (map_has known (list_get bnames j))))
-                (call rules_err (list_get blines j) "budget for unknown category"))
+                (call rules_err E (list_get blines j) "budget for unknown category"))
               (set j (+ j 1)))))
+        (if (< (map_get E "line") 2000000000) (call die 65 (str "rules: line " (map_get E "line") ": " (map_get E "msg"))))
         (return (dict ("names" names) ("pats" pats) ("bnames" bnames) ("bvals" bvals))))))
 
   ; ---------------------------------------------------------------- arguments (section 2)

@@ -36,3 +36,9 @@ suite written by the independent selector. No human wrote or repaired implementa
 * Existing tests re-run: all internal/vm exec, receipt and resource-limit tests, plus the full
   regression gate (see baseline journal for the 14 known host failures, unchanged).
 * New coverage: `internal/vm/exec_exit_test.go`.
+
+## Review round 1 (2026-10-13)
+
+Accepted by the independent reviewer. Minor fixes applied: the provisional `--report` is now written
+only after the history file is validated and proven writable (an invalid history no longer leaves or
+overwrites a report), and a memory/limit stop during a file read exits 70 (was 66).

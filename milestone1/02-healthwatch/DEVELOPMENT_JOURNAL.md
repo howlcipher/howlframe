@@ -29,3 +29,8 @@ suite written by the independent selector. No human wrote or repaired implementa
 * Behavior changed: none in the language or runtime for this app.
 * Regression protection: the frozen suite (29 tests) plus `scripts/clean_repro.sh`.
 * Known unrelated baseline failures: exec tests on this host (see baseline journal).
+
+## Review round 1 (2026-10-13)
+
+Accepted by the independent reviewer. Minor fixes applied: `status --format json` escapes check
+names; a memory/limit stop during a file read exits 70 (was 66).

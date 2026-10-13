@@ -65,4 +65,4 @@ Groceries = 300.00
   Data read at run time is byte-exact.
 * Output is built in memory and written once, so very large reports are bounded by the
   runner's memory ceiling.
-* Rules errors found after a syntax error line are not reported (first syntax error wins).
+* Budget amounts are capped at 12 integer digits.
