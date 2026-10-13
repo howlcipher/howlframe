@@ -15,6 +15,18 @@ func ParseGrant(raw string) (Capability, error) {
 			return c, nil
 		}
 	}
+	if name, ok := strings.CutPrefix(raw, EnvGrantPrefix); ok {
+		if !validEnvName(name) {
+			return None, fmt.Errorf("unknown capability: %q", raw)
+		}
+		return Capability(raw), nil
+	}
+	if c, ok, err := parseExecGrant(raw); ok {
+		if err != nil {
+			return None, err
+		}
+		return c, nil
+	}
 	for _, mode := range []string{"read", "write"} {
 		prefix := "filesystem:" + mode + "="
 		if strings.HasPrefix(raw, prefix) && len(raw) > len(prefix) {
@@ -33,7 +45,7 @@ type Grants []Capability
 func (g Grants) Has(c Capability) bool {
 	for _, grant := range g {
 		parsed, err := ParseGrant(string(grant))
-		if err == nil && (parsed == c || c == Filesystem && strings.HasPrefix(string(parsed), "filesystem:")) {
+		if err == nil && (parsed == c || c == Filesystem && strings.HasPrefix(string(parsed), "filesystem:") || c == Process && strings.HasPrefix(string(parsed), ExecGrantPrefix)) {
 			return true
 		}
 	}

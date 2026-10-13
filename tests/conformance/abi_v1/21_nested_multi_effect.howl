@@ -14,7 +14,7 @@
                       (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-skip-read.txt")))
                       (write_file "/tmp/howlframe-abi-v1-multi-skip-write.txt" "no")
                       (mkdir "/tmp/howlframe-abi-v1-multi-skip-dir")
-                      (print (bytes_to_string (exec "printf" "no-skip")))
+                      (print (bytes_to_string (exec "/usr/bin/printf" "no-skip")))
                       (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
                       (print "no"))
                     (do
@@ -22,7 +22,7 @@
                       (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-read.txt")))
                       (write_file "/tmp/howlframe-abi-v1-multi-write.txt" "multi-write-marker")
                       (mkdir "/tmp/howlframe-abi-v1-multi-dir")
-                      (print (bytes_to_string (exec "printf" "phase2b-exec-marker")))
+                      (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-marker")))
                       (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
                       (for name names
                         (if (= name "z")
@@ -31,7 +31,7 @@
                             (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-else-read.txt")))
                             (write_file "/tmp/howlframe-abi-v1-multi-else-write.txt" "no")
                             (mkdir "/tmp/howlframe-abi-v1-multi-else-dir")
-                            (print (bytes_to_string (exec "printf" "no-else")))
+                            (print (bytes_to_string (exec "/usr/bin/printf" "no-else")))
                             (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
                             (print "no"))
                           (do
@@ -43,7 +43,7 @@
                           (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-empty-read.txt")))
                           (write_file "/tmp/howlframe-abi-v1-multi-empty-write.txt" "no")
                           (mkdir "/tmp/howlframe-abi-v1-multi-empty-dir")
-                          (print (bytes_to_string (exec "printf" "no-empty")))
+                          (print (bytes_to_string (exec "/usr/bin/printf" "no-empty")))
                           (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))
                           (print "no")))
                       (while false
@@ -52,7 +52,7 @@
                           (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-dead-read.txt")))
                           (write_file "/tmp/howlframe-abi-v1-multi-dead-write.txt" "no")
                           (mkdir "/tmp/howlframe-abi-v1-multi-dead-dir")
-                          (print (bytes_to_string (exec "printf" "no-dead")))
+                          (print (bytes_to_string (exec "/usr/bin/printf" "no-dead")))
                           (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "PUT" "phase2d-dead-branch-body")))
                           (print "no"))))))
                 (set n (+ n 1))))
@@ -63,7 +63,7 @@
                 (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-kept-read.txt")))
                 (write_file "/tmp/howlframe-abi-v1-multi-kept-write.txt" "multi-kept-write")
                 (mkdir "/tmp/howlframe-abi-v1-multi-kept-dir")
-                (print (bytes_to_string (exec "printf" "phase2b-exec-kept")))
+                (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-kept")))
                 (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET"))))
               (do
                 (print "miss")
@@ -71,7 +71,7 @@
                 (print (bytes_to_string (read_file "/tmp/howlframe-abi-v1-multi-miss-read.txt")))
                 (write_file "/tmp/howlframe-abi-v1-multi-miss-write.txt" "multi-miss-write")
                 (mkdir "/tmp/howlframe-abi-v1-multi-miss-dir")
-                (print (bytes_to_string (exec "printf" "phase2b-exec-miss")))
+                (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-miss")))
                 (print (bytes_to_string (fetch "http://127.0.0.1:47653/howlframe-abi-v1-phase2d" "GET")))))
             (return total))))))
   (print "result" (call probe 1))

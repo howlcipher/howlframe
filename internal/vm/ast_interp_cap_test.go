@@ -90,11 +90,11 @@ func TestInterpretExecDeniedBeforeSpawn(t *testing.T) {
 }
 
 func TestInterpretExecGrantedRuns(t *testing.T) {
-	source := `(cli_app (print (bytes_to_string (exec "printf" "phase2b-exec-marker"))))`
+	source := `(cli_app (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-marker"))))`
 	node, _ := parseAndCompile(t, source)
 
 	var stdout, stderr bytes.Buffer
-	allowed := []capability.Capability{capability.Process}
+	allowed := []capability.Capability{capability.Process, "process:exec=/usr/bin/printf phase2b-exec-marker"}
 	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
 	if exitCode != 0 {
 		t.Fatalf("expected Interpret to run exec with process, got exit %d; stderr=%s", exitCode, stderr.String())

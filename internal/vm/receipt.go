@@ -40,6 +40,8 @@ type ReceiptEffect struct {
 	Capability    string `json:"capability"`
 	TargetSummary string `json:"target_summary"`
 	Decision      string `json:"decision"`
+	// Grant is the matched allow-list entry for an allowed exec.
+	Grant string `json:"grant,omitempty"`
 }
 type ReceiptExit struct {
 	Status string        `json:"status"`
@@ -82,6 +84,10 @@ func (r *receiptRecorder) finish(instructions int) {
 	r.finalized = true
 }
 func (vm *BCVM) recordEffect(cap capability.Capability, op bytecode.Opcode, decision string) {
+	vm.recordEffectGrant(cap, op, decision, "")
+}
+
+func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode, decision, grant string) {
 	if vm.receipt == nil {
 		return
 	}
@@ -105,7 +111,7 @@ func (vm *BCVM) recordEffect(cap capability.Capability, op bytecode.Opcode, deci
 		r.truncated = true
 		return
 	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision})
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant})
 }
 
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match

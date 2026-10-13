@@ -14,24 +14,24 @@ From the repository root:
 go build -o /tmp/howlframe-repo-analyst howlframe.go
 /tmp/howlframe-repo-analyst -validate examples/repo_analyst/repo_analyst.howl
 /tmp/howlframe-repo-analyst -compile-bc examples/repo_analyst/repo_analyst.howl -o /tmp/repo_analyst.hfbc
-/tmp/howlframe-repo-analyst -run-bc -allow-caps process,filesystem /tmp/repo_analyst.hfbc <repository-path>
+/tmp/howlframe-repo-analyst -run-bc -allow-caps "process:exec=/usr/bin/find **,filesystem" /tmp/repo_analyst.hfbc <repository-path>
 ```
 
 The default runner policy permits 100,000 instructions. For a larger legitimate workload, the trusted runner can authorize a higher finite ceiling without changing the application or artifact:
 
 ```bash
-/tmp/howlframe-repo-analyst -run-bc -allow-caps process,filesystem --max-instructions 1000000 /tmp/repo_analyst.hfbc <repository-path>
+/tmp/howlframe-repo-analyst -run-bc -allow-caps "process:exec=/usr/bin/find **,filesystem" --max-instructions 1000000 /tmp/repo_analyst.hfbc <repository-path>
 ```
 
 Pass a second application argument to write the report instead of printing it:
 
 ```bash
-/tmp/howlframe-repo-analyst -run-bc -allow-caps process,filesystem /tmp/repo_analyst.hfbc <repository-path> /tmp/repo-report.txt
+/tmp/howlframe-repo-analyst -run-bc -allow-caps "process:exec=/usr/bin/find **,filesystem" /tmp/repo_analyst.hfbc <repository-path> /tmp/repo-report.txt
 ```
 
 The runtime policy grants exactly the effects used by the application:
 
-- `process` runs the host `find` command for recursive discovery.
+- `process:exec=/usr/bin/find **` lets the program run exactly the host `find` binary (absolute, symlink-free path; any arguments) for recursive discovery. A bare `process` grant no longer authorizes `exec`.
 - `filesystem` reads candidate text files and, when requested, writes the report.
 
 No network, environment, database, model, or agent capability is used. Host `find` is an intentional composition of today's primitives, not a Repo Analyst-specific runtime operation.

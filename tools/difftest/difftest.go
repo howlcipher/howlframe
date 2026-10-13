@@ -149,7 +149,10 @@ func NormalizeError(errStr string) string {
 	}
 }
 
-const allKnownCaps = "network,filesystem,process,environment,database"
+// allKnownCaps grants every capability class. process is scoped to the exact
+// programs the parity corpus runs, because a bare process grant never
+// authorizes exec.
+const allKnownCaps = "network,filesystem,process,process:exec=/usr/bin/rm **,environment,database"
 
 // RunOptions controls one differential execution.
 // A nil AllowCaps keeps the historical grant of every known capability.

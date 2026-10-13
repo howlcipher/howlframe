@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/construct"
 
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/httpreq"
 	"strconv"
+	"strings"
 )
 
 type BCInstruction struct {
@@ -543,13 +545,21 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			bodyVar := node.Children[2].Value
 			insts = append(insts, BCInstruction{OpString: "PARSE_JSON", Op: OpParseJson, StringOperand: bodyVar})
 		case "spawn":
-			lambdaNode := node.Children[1]
+			lambdaNode := node.Children[len(node.Children)-1]
+			spawnGrants := ""
+			if len(node.Children) == 3 {
+				spawnGrants = compileSpawnGrants(node.Children[1])
+			}
 			bodyInsts := c.compileNode(lambdaNode.Children[2])
-			insts = append(insts, BCInstruction{OpString: "SPAWN", Op: OpSpawn, IntOperand: int64(float64(len(bodyInsts)))})
+			insts = append(insts, BCInstruction{OpString: "SPAWN", Op: OpSpawn, StringOperand: spawnGrants, IntOperand: int64(float64(len(bodyInsts)))})
 			insts = append(insts, bodyInsts...)
 		case "spawn_agent":
 			agentName := node.Children[1].Value
-			taskNode := node.Children[2]
+			taskNode := node.Children[len(node.Children)-1]
+			childGrants := ""
+			if len(node.Children) == 4 {
+				childGrants = compileSpawnGrants(node.Children[2])
+			}
 			var bodyInsts []BCInstruction
 			if taskNode.Type == "List" && len(taskNode.Children) >= 2 && taskNode.Children[0].Value == "task" {
 				insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: taskNode.Children[1].Value})
@@ -561,8 +571,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				// onto the stack; SPAWN_AGENT still type-checks a string task.
 				insts = append(insts, c.compileNode(taskNode)...)
 			}
-			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName, IntOperand: int64(len(bodyInsts))})
+			insts = append(insts, BCInstruction{OpString: "SPAWN_AGENT", Op: OpSpawnAgent, StringOperand: agentName, StringOperand2: childGrants, IntOperand: int64(len(bodyInsts))})
 			insts = append(insts, bodyInsts...)
+		case "grants":
+			// Only spawn_agent's (grants ...) argument is legal; it is read by
+			// compileSpawnGrants and never evaluated as an expression.
+			ast.ReportError("grants is only valid as the child grant list of spawn_agent, spawn or route", node.Line, node.Column)
 		case "task":
 			insts = append(insts, BCInstruction{OpString: "TASK", Op: OpTask, StringOperand: node.Children[1].Value})
 		case "res":
@@ -597,15 +611,37 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		case "http_server":
 			portNode := node.Children[1]
 			insts = append(insts, BCInstruction{OpString: "HTTP_SERVER_START", Op: OpHttpServerStart, StringOperand: portNode.Value})
+			// (grants ...) directly under http_server is the default handler
+			// grant list for routes that do not declare their own.
+			serverGrants := ""
 			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "grants" {
+					if serverGrants != "" {
+						ast.ReportError("http_server accepts at most one (grants ...) form", child.Line, child.Column)
+					}
+					serverGrants = compileSpawnGrants(child)
+					if serverGrants == "" {
+						serverGrants = "\n"
+					}
+				}
+			}
+			for _, child := range node.Children[2:] {
+				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "grants" {
+					continue
+				}
 				if child.Type == "List" && len(child.Children) > 0 && child.Children[0].Value == "route" {
 					path := child.Children[1].Value
 					if _, err := httpreq.ParseRoute(path); err != nil {
 						ast.ReportError(err.Error(), child.Children[1].Line, child.Children[1].Column)
 					}
-					reqVar := child.Children[2].Children[1].Children[0].Value
-					bodyInsts := c.compileNode(child.Children[2].Children[2])
-					insts = append(insts, BCInstruction{OpString: "HTTP_ROUTE", Op: OpHttpRoute, StringOperand: path, StringOperand2: reqVar, IntOperand: int64(float64(len(bodyInsts)))})
+					handler := child.Children[len(child.Children)-1]
+					routeGrants := strings.TrimSpace(serverGrants)
+					if len(child.Children) == 4 {
+						routeGrants = compileSpawnGrants(child.Children[2])
+					}
+					reqVar := handler.Children[1].Children[0].Value
+					bodyInsts := c.compileNode(handler.Children[2])
+					insts = append(insts, BCInstruction{OpString: "HTTP_ROUTE", Op: OpHttpRoute, StringOperand: path, StringOperand2: reqVar, StringOperand3: routeGrants, IntOperand: int64(float64(len(bodyInsts)))})
 					insts = append(insts, bodyInsts...)
 				} else {
 					insts = append(insts, c.compileNode(child)...)
@@ -938,4 +974,26 @@ func ShortCircuit(op string, left, right []BCInstruction) []BCInstruction {
 		BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: false},
 		BCInstruction{OpString: "BINOP", Op: OpBinop, StringOperand: "or"})
 	return out
+}
+
+// compileSpawnGrants validates (grants "cap" ...) for spawn_agent, spawn and route. Every entry
+// must be a string literal naming a valid grant; the runtime attenuates the
+// list against the parent's grants. Entries are newline-joined, which no
+// valid grant contains.
+func compileSpawnGrants(node *ast.Node) string {
+	if node.Type != "List" || len(node.Children) == 0 || node.Children[0].Value != "grants" {
+		ast.ReportError("expected (grants \"cap\" ...)", node.Line, node.Column)
+	}
+	var out []string
+	for _, g := range node.Children[1:] {
+		if g.Type != "STRING" {
+			ast.ReportError("grants entries must be string literals", g.Line, g.Column)
+		}
+		parsed, err := capability.ParseGrant(g.Value)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("grants: %v", err), g.Line, g.Column)
+		}
+		out = append(out, string(parsed))
+	}
+	return strings.Join(out, "\n")
 }

@@ -319,11 +319,69 @@ func envJSHelper() string {
 // put the command in the error. There is no shell. Stdout is returned
 // ahead of stderr, which matches CombinedOutput when only one stream writes.
 func execJSHelper() string {
-	return `function howlFrameExec(cmd, args) {
-  if (!howlFrameGrantHas("process")) {
+	return `function howlFrameExecAllowed(cmd, args) {
+  var fs = require("fs");
+  if (typeof cmd !== "string" || cmd.charAt(0) !== "/") return false;
+  var prefix = "";
+  var parts = cmd.slice(1).split("/");
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (part === "" || part === "." || part === "..") return false;
+    prefix += "/" + part;
+    try {
+      if (fs.lstatSync(prefix).isSymbolicLink()) return false;
+    } catch (e) {
+      return false;
+    }
+  }
+  var grants = String(process.env.HOWLFRAME_ALLOW_CAPS || "").split(",");
+  for (var g = 0; g < grants.length; g++) {
+    var grant = grants[g].trim();
+    if (grant.indexOf("process:exec=") !== 0) continue;
+    var fields = grant.slice("process:exec=".length).split(/\s+/).filter(function (f) { return f !== ""; });
+    if (fields.length === 0 || fields[0] !== cmd) continue;
+    var pats = fields.slice(1);
+    for (var q = 0; q < pats.length - 1; q++) {
+      if (pats[q] === "**") throw new Error("CAPABILITY_DENIED: capability denied: process: invalid process:exec grant (** must be last)");
+    }
+    var ok = true;
+    var rest = false;
+    for (var k = 0; k < pats.length; k++) {
+      if (pats[k] === "**") { rest = true; break; }
+      if (k >= args.length || !howlFrameExecSlot(pats[k], String(args[k]))) { ok = false; break; }
+    }
+    if (ok && !rest && args.length !== pats.length) ok = false;
+    if (ok) return true;
+  }
+  return false;
+}
+
+// "*" refuses empty and "-"-prefixed arguments; a leading backslash escapes a literal.
+function howlFrameExecSlot(p, arg) {
+  if (p === "*") return arg !== "" && arg.charAt(0) !== "-";
+  if (p.charAt(0) === "\\") return arg === p.slice(1);
+  return p === arg;
+}
+
+// Only process:env=NAME variables reach the child; never the host environment.
+function howlFrameExecEnv() {
+  var env = {};
+  var grants = String(process.env.HOWLFRAME_ALLOW_CAPS || "").split(",");
+  for (var i = 0; i < grants.length; i++) {
+    var grant = grants[i].trim();
+    if (grant.indexOf("process:env=") !== 0) continue;
+    var name = grant.slice("process:env=".length);
+    if (name === "" || /[= ]/.test(name)) continue;
+    if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
+  }
+  return env;
+}
+
+function howlFrameExec(cmd, args) {
+  if (!howlFrameExecAllowed(cmd, args)) {
     throw new Error("CAPABILITY_DENIED: capability denied: process");
   }
-  var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8" });
+  var result = require("child_process").spawnSync(cmd, args, { encoding: "utf8", env: howlFrameExecEnv() });
   if (result.error) {
     throw new Error("IO_ERROR: exec failed: " + result.error.message);
   }
@@ -1172,7 +1230,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return jsFetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// Child grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
 		agentNameStr := generateJSExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateJSExpression(node.Children[2], reqVar, depth+1)

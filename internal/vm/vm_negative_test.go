@@ -690,7 +690,7 @@ func TestVMSpawnAndHTTPRouteBodyLengthBounds(t *testing.T) {
 					}()
 					prog := &bytecode.BCProgram{Main: []bytecode.BCInstruction{
 						{Op: bytecode.OpLoadConst, ValueOperand: "prefix"},
-						{Op: op.op, StringOperand: "/test", StringOperand2: "req", IntOperand: tc.length},
+						{Op: op.op, StringOperand: routePathOperand(op.op), StringOperand2: "req", IntOperand: tc.length},
 						{Op: bytecode.OpLoadConst, ValueOperand: "unexpected body"},
 						{Op: bytecode.OpPrint, IntOperand: 1},
 					}}
@@ -718,7 +718,7 @@ func TestVMSpawnAndHTTPRouteBodyLengthBounds(t *testing.T) {
 					insts = append(insts, bytecode.BCInstruction{Op: bytecode.OpHttpServerStart, StringOperand: "0"})
 				}
 				// A const-only spawn body avoids asynchronous writes to test buffers.
-				insts = append(insts, bytecode.BCInstruction{Op: op.op, StringOperand: "/test", StringOperand2: "req", IntOperand: 1}, bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: "body"})
+				insts = append(insts, bytecode.BCInstruction{Op: op.op, StringOperand: routePathOperand(op.op), StringOperand2: "req", IntOperand: 1}, bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: "body"})
 				var out, stderr bytes.Buffer
 				ev := RunBytecodeWithEvidence(&bytecode.BCProgram{Main: insts}, nil, DefaultExecutionPolicy(), []capability.Capability{op.cap}, nil, &out, &stderr, 0)
 				if ev.RuntimeFailure != nil || ev.ExitCode != 0 || out.Len() != 0 || stderr.Len() != 0 {
@@ -1371,4 +1371,13 @@ func TestInterpExitToIntSafety(t *testing.T) {
 			}
 		})
 	}
+}
+
+// routePathOperand is HTTP_ROUTE's path; SPAWN's string operand is its child
+// grant list, so it stays empty (no grants).
+func routePathOperand(op bytecode.Opcode) string {
+	if op == bytecode.OpHttpRoute {
+		return "/test"
+	}
+	return ""
 }

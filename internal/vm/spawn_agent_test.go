@@ -10,8 +10,19 @@ import (
 	"github.com/howlcipher/howlframe/internal/capability"
 )
 
+// spawnTestBody delegates "process" to a child that itself spawns, because a
+// child receives only the grants its spawn_agent lists (S9 attenuation).
 func spawnTestBody(name string, body ...bytecode.BCInstruction) []bytecode.BCInstruction {
-	return append([]bytecode.BCInstruction{{Op: bytecode.OpTask, StringOperand: "work"}, {Op: bytecode.OpSpawnAgent, StringOperand: name, IntOperand: int64(len(body))}}, body...)
+	grants := ""
+	for _, inst := range body {
+		if inst.Op == bytecode.OpSpawnAgent {
+			grants = "process"
+		}
+	}
+	return spawnTestBodyGrants(name, grants, body...)
+}
+func spawnTestBodyGrants(name, grants string, body ...bytecode.BCInstruction) []bytecode.BCInstruction {
+	return append([]bytecode.BCInstruction{{Op: bytecode.OpTask, StringOperand: "work"}, {Op: bytecode.OpSpawnAgent, StringOperand: name, StringOperand2: grants, IntOperand: int64(len(body))}}, body...)
 }
 func spawnTestPrint(s string) []bytecode.BCInstruction {
 	return []bytecode.BCInstruction{{Op: bytecode.OpLoadConst, ValueOperand: s}, {Op: bytecode.OpPrint, IntOperand: 1}}
@@ -52,7 +63,7 @@ func TestVMSpawnAgentNesting(t *testing.T) {
 		{"three levels", three, spawnTestStart("Outer") + spawnTestStart("Middle") + spawnTestStart("Inner") + "leaf\n" + spawnTestDone("Inner") + spawnTestDone("Middle") + spawnTestDone("Outer"), "", "", 0, 0},
 		{"nested failure", nestedFailure, spawnTestStart("Outer") + spawnTestStart("Inner") + "outer after\n" + spawnTestDone("Outer"), "[Swarm VM] Agent \"Inner\" failed task: \"work\": CAPABILITY_DENIED: capability denied: environment\n", "", 0, 0},
 		{"failed child then sibling", append(append(spawnTestBody("Bad", failure...), spawnTestBody("Good", spawnTestPrint("sibling")...)...), spawnTestPrint("parent after")...), spawnTestStart("Bad") + spawnTestStart("Good") + "sibling\n" + spawnTestDone("Good") + "parent after\n", "[Swarm VM] Agent \"Bad\" failed task: \"work\": CAPABILITY_DENIED: capability denied: environment\n", "", 0, 0},
-		{"type error isolated", append(spawnTestBody("Bad", bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: int64(1)}, bytecode.BCInstruction{Op: bytecode.OpEnv}), spawnTestPrint("after")...), spawnTestStart("Bad") + "after\n", "[Swarm VM] Agent \"Bad\" failed task: \"work\": TYPE_ERROR: env expected string name, got int64\n", "", 0, 0},
+		{"type error isolated", append(spawnTestBodyGrants("Bad", "environment", bytecode.BCInstruction{Op: bytecode.OpLoadConst, ValueOperand: int64(1)}, bytecode.BCInstruction{Op: bytecode.OpEnv}), spawnTestPrint("after")...), spawnTestStart("Bad") + "after\n", "[Swarm VM] Agent \"Bad\" failed task: \"work\": TYPE_ERROR: env expected string name, got int64\n", "", 0, 0},
 		{"map writes before failure stay isolated", maps, spawnTestStart("Writer") + "parent\n", "[Swarm VM] Agent \"Writer\" failed task: \"work\": CAPABILITY_DENIED: capability denied: environment\n", "", 0, 0},
 		{"bindings and stack", vars, spawnTestStart("Writer") + spawnTestDone("Writer") + "sentinel\nparent\n", "", "", 0, 0},
 		{"exact shared budget", three, spawnTestStart("Outer") + spawnTestStart("Middle") + spawnTestStart("Inner") + "leaf\n" + spawnTestDone("Inner") + spawnTestDone("Middle") + spawnTestDone("Outer"), "", "", 8, 0},

@@ -505,11 +505,92 @@ func envHelperSource() string {
 // is spawned only after that grant is present, so a denial cannot run it
 // or include the command in the error.
 func execHelperSource() string {
-	return `func howlFrameExec(cmd string, args ...string) []byte {
-	if !howlFrameGrantHas("process") {
+	return `// howlFrameExecAllowed mirrors capability.Grants.AuthorizeExec: the program
+// must be an absolute, clean, symlink-free path named by a process:exec=
+// grant whose argument pattern matches argv exactly. A bare process grant
+// never authorizes exec.
+func howlFrameExecAllowed(cmd string, args []string) bool {
+	if !strings.HasPrefix(cmd, "/") {
+		return false
+	}
+	prefix := ""
+	for _, part := range strings.Split(cmd[1:], "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+		prefix += "/" + part
+		info, err := os.Lstat(prefix)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return false
+		}
+	}
+	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		spec, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:exec=")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(spec)
+		if len(fields) == 0 || fields[0] != cmd {
+			continue
+		}
+		pats := fields[1:]
+		for i, p := range pats {
+			if p == "**" && i != len(pats)-1 {
+				panic("CAPABILITY_DENIED: capability denied: process: invalid process:exec grant (** must be last)")
+			}
+		}
+		matched := func() bool {
+			for i, p := range pats {
+				if p == "**" {
+					return true
+				}
+				if i >= len(args) || !howlFrameExecSlot(p, args[i]) {
+					return false
+				}
+			}
+			return len(args) == len(pats)
+		}()
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+// howlFrameExecSlot: "*" refuses empty and "-"-prefixed arguments (no flag
+// injection); a leading backslash escapes a literal token.
+func howlFrameExecSlot(p, arg string) bool {
+	if p == "*" {
+		return arg != "" && !strings.HasPrefix(arg, "-")
+	}
+	if strings.HasPrefix(p, "\\") {
+		return arg == p[1:]
+	}
+	return p == arg
+}
+
+// howlFrameExecEnv passes only process:env=NAME variables; never the host env.
+func howlFrameExecEnv() []string {
+	env := []string{}
+	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
+		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
+		if !ok || name == "" || strings.ContainsAny(name, "= ") {
+			continue
+		}
+		if v, ok := os.LookupEnv(name); ok {
+			env = append(env, name+"="+v)
+		}
+	}
+	return env
+}
+
+func howlFrameExec(cmd string, args ...string) []byte {
+	if !howlFrameExecAllowed(cmd, args) {
 		panic("CAPABILITY_DENIED: capability denied: process")
 	}
-	out, err := exec.Command(cmd, args...).CombinedOutput()
+	child := exec.Command(cmd, args...)
+	child.Env = howlFrameExecEnv()
+	out, err := child.CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("IO_ERROR: exec failed: %v", err))
 	}
@@ -866,6 +947,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 			continue
 		}
 
+		if head == "grants" {
+			// Handler grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: http_server (grants ...) is enforced only by the bytecode runtime", handlerNode.Line, handlerNode.Column)
+		}
+
 		if head == "test" {
 			if len(handlerNode.Children) < 3 {
 				// ast.ReportError("test expects (test \"description\" body...)", handlerNode.Line, handlerNode.Column)
@@ -1130,7 +1216,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if head == "route" {
 			if len(handlerNode.Children) != 3 {
-				// ast.ReportError("route expects (route path handler)", handlerNode.Line, handlerNode.Column)
+				// Per-route grant attenuation is enforced only by the bytecode runtime.
+				ast.ReportError("UNSUPPORTED_ON_TARGET: route with (grants ...) is enforced only by the bytecode runtime", handlerNode.Line, handlerNode.Column)
 			}
 			pathNode := handlerNode.Children[1]
 			if pathNode.Type != "STRING" {
@@ -1169,7 +1256,8 @@ func GenerateCode(node *ast.Node) (string, string) {
 					// ast.ReportError("middleware block can only contain routes", routeNode.Line, routeNode.Column)
 				}
 				if len(routeNode.Children) != 3 {
-					// ast.ReportError("route expects (route path handler)", routeNode.Line, routeNode.Column)
+					// Per-route grant attenuation is enforced only by the bytecode runtime.
+					ast.ReportError("UNSUPPORTED_ON_TARGET: route with (grants ...) is enforced only by the bytecode runtime", routeNode.Line, routeNode.Column)
 				}
 				pathNode := routeNode.Children[1]
 				if pathNode.Type != "STRING" {
@@ -1894,7 +1982,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
-			// ast.ReportError("spawn_agent expects (spawn_agent name task)", node.Line, node.Column)
+			// Child grant attenuation is enforced only by the bytecode runtime.
+			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
 		agentNameStr := generateExpression(node.Children[1], reqVar, depth+1)
 		taskDescStr := generateExpression(node.Children[2], reqVar, depth+1)

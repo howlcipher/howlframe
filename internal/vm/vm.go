@@ -793,7 +793,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, argNode := range node.Children[2:] {
 			args = append(args, fmt.Sprint(interp.eval(argNode, env)))
 		}
-		out, err := exec.Command(cmd, args...).CombinedOutput()
+		cmd, _, denied := capability.Grants(interp.AllowedCaps).AuthorizeExec(cmd, args)
+		if denied != nil {
+			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
+		}
+		child := exec.Command(cmd, args...)
+		// Children never inherit the host environment; only process:env= names pass.
+		child.Env = capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv)
+		out, err := child.CombinedOutput()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
 		}
@@ -1943,9 +1950,18 @@ func (vm *BCVM) storeHandle(env *BcEnv, name string, op bytecode.Opcode) *bcMemo
 }
 
 func (vm *BCVM) requireCapability(cap capability.Capability, op bytecode.Opcode) {
+	if cap == capability.Process && (op == bytecode.OpSpawn || op == bytecode.OpSpawnAgent) && !capability.Grants(vm.AllowedCaps).HasCoarse(capability.Process) {
+		// Spawning needs the coarse process grant; an exec allow-list alone does not spawn.
+		vm.recordEffect(cap, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", cap))
+	}
 	for _, allowed := range vm.AllowedCaps {
 		if capability.Grants([]capability.Capability{allowed}).Has(cap) {
-			// A scoped filesystem class check is provisional until its path check.
+			// A scoped filesystem class check is provisional until its path
+			// check; exec and spawn_agent are provisional until argv/attenuation checks.
+			if op == bytecode.OpExec || op == bytecode.OpSpawnAgent || op == bytecode.OpSpawn || op == bytecode.OpHttpRoute {
+				return
+			}
 			if cap != capability.Filesystem || capability.Grants(vm.AllowedCaps).HasUnrestrictedFilesystem() {
 				vm.recordEffect(cap, op, "allowed")
 			}
@@ -2455,12 +2471,15 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				args = append([]string{fmt.Sprint(vm.pop(inst.Op))}, args...)
 			}
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
+			cmdStr = vm.requireExec(cmdStr, args, inst.Op)
 			max := vm.Limits.MaxExecOutputBytes
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
 			}
 			cmdCtx, cancel := context.WithCancel(vm.ctx)
 			cmd := exec.CommandContext(cmdCtx, cmdStr, args...)
+			// Children never inherit the host environment; only process:env= names pass.
+			cmd.Env = capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv)
 			output := &limitedOutput{max: max, cancel: cancel}
 			cmd.Stdout, cmd.Stderr = output, output
 			// Bound inherited pipe waits when the runner has a deadline.
@@ -2532,6 +2551,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
+			spawnCaps := vm.attenuateChild(inst.StringOperand, capability.Process, inst.Op, ip, "spawn")
 			capturedEnv := NewBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
 				for k, v := range e.vars {
@@ -2542,7 +2562,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			go func(cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: spawnCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				childVM.run(bodyInsts, cEnv)
 			}(capturedEnv)
 			ip += bodyLen
@@ -2602,6 +2622,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 
 			dispatch := requireHTTPDispatch(env, ip, inst, "http_route")
+			// A handler always keeps network: HTTP_ROUTE already required it and
+			// res/res_json/res_header are network-classified, so a handler could
+			// not answer without it. Everything else must be listed explicitly.
+			routeGrants := "network"
+			if inst.StringOperand3 != "" {
+				routeGrants += "\n" + inst.StringOperand3
+			}
+			routeCaps := vm.attenuateChild(routeGrants, bytecode.Registry[inst.Op].Capability, inst.Op, ip, "route")
 
 			capturedEnv := NewBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
@@ -2619,7 +2647,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: routeCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
 						recovered := recover()
@@ -3390,6 +3418,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "spawn_agent expected string task, got %T", v))
 			}
 			name := inst.StringOperand
+			childCaps := vm.attenuateChild(inst.StringOperand2, capability.Process, inst.Op, ip, "spawn_agent")
 			if vm.spawnDepth >= vm.Limits.MaxCallDepth {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "spawn nesting depth limit exceeded"))
 			}
@@ -3412,7 +3441,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: vm.AllowedCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
@@ -3808,6 +3837,36 @@ func (b *limitedOutput) Write(p []byte) (int, error) {
 		return 0, io.ErrShortWrite
 	}
 	return b.buffer.Write(p)
+}
+
+// requireExec enforces the exact-argv process allow-list. A denial is a typed
+// CAPABILITY_DENIED error and is recorded in the receipt before anything runs;
+// an allowed run records the matched allow-list entry.
+func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) string {
+	path, grant, err := capability.Grants(vm.AllowedCaps).AuthorizeExec(program, args)
+	if err != nil {
+		vm.recordEffect(capability.Process, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", err.Error()))
+	}
+	vm.recordEffectGrant(capability.Process, op, "allowed", grant)
+	return path
+}
+
+// attenuateChild computes a child's grants (S9 attenuation) for spawn_agent,
+// spawn and http_route bodies: only the explicit (grants ...) subset, never
+// more than the parent holds; none by default.
+func (vm *BCVM) attenuateChild(list string, cap capability.Capability, op bytecode.Opcode, ip int, what string) []capability.Capability {
+	var requested []string
+	if list != "" {
+		requested = strings.Split(list, "\n")
+	}
+	child, err := capability.Attenuate(capability.Grants(vm.AllowedCaps), requested)
+	if err != nil {
+		vm.recordEffect(cap, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", ip, op, "capability denied: %s: %s", what, err.Error()))
+	}
+	vm.recordEffect(cap, op, "allowed")
+	return child
 }
 
 func (vm *BCVM) requireFilesystem(path string, write bool, op bytecode.Opcode) string {

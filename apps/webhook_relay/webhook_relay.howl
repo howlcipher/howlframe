@@ -1,5 +1,5 @@
 (http_server 8098
-  (route "/relay" (lambda (req)
+  (route "/relay" (grants "environment") (lambda (req)
     (let (upstream (env "UPSTREAM_URL"))
       (if (= upstream "")
         (res_json 500 (dict ("error" "missing_UPSTREAM_URL")))

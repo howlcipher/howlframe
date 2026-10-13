@@ -17,14 +17,14 @@ func TestJSExecRequiresGrantBeforeSpawn(t *testing.T) {
 		t.Skip("node runtime not available")
 	}
 	marker := filepath.Join(t.TempDir(), "phase2b-secret-out")
-	source := `(web_app (exec "touch" "` + marker + `"))`
+	source := `(web_app (exec "/usr/bin/touch" "` + marker + `"))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
 	if strings.Contains(code, `spawnSync("touch"`) || strings.Contains(code, "execFileSync") {
 		t.Fatalf("exec spawns at the call site:\n%s", code)
 	}
-	if !strings.Contains(code, `howlFrameExec("touch", ["`+marker+`"])`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/touch", ["`+marker+`"])`) {
 		t.Fatalf("exec is not mediated:\n%s", code)
 	}
 	helper := code[strings.Index(code, "function howlFrameExec"):]
@@ -63,7 +63,10 @@ func TestJSExecRequiresGrantBeforeSpawn(t *testing.T) {
 	otherOut, otherErr, otherCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=environment")
 	assertDenied("environment grant", otherOut, otherErr, otherCode)
 
-	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process")
+	bareOut, bareErr, bareCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process")
+	assertDenied("bare process grant (no allow-list)", bareOut, bareErr, bareCode)
+
+	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true")
 	if grantedCode != 0 {
 		t.Fatalf("process grant failed (%d): %s", grantedCode, grantedErr)
 	}
@@ -78,15 +81,15 @@ func TestJSExecGrantedPrintsCapturedOutput(t *testing.T) {
 		t.Skip("node runtime not available")
 	}
 	const source = `(web_app
-  (let (value (exec "printf" "phase2b-exec-marker"))
+  (let (value (exec "/usr/bin/printf" "phase2b-exec-marker"))
     (print (bytes_to_string value))))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
-	if !strings.Contains(code, `howlFrameExec("printf", ["phase2b-exec-marker"])`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/printf", ["phase2b-exec-marker"])`) {
 		t.Fatalf("let-bound exec is not mediated:\n%s", code)
 	}
-	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process")
+	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true")
 	if grantedCode != 0 {
 		t.Fatalf("process grant failed (%d): %s", grantedCode, grantedErr)
 	}
@@ -96,14 +99,41 @@ func TestJSExecGrantedPrintsCapturedOutput(t *testing.T) {
 }
 
 func TestJSExecExpressionPositionIsMediated(t *testing.T) {
-	const source = `(web_app (print (bytes_to_string (exec "printf" "phase2b-exec-marker"))))`
+	const source = `(web_app (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-marker"))))`
 	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
 	checker.Check(root)
 	code, _ := GenerateJSCode(root)
-	if !strings.Contains(code, `howlFrameExec("printf", ["phase2b-exec-marker"])`) {
+	if !strings.Contains(code, `howlFrameExec("/usr/bin/printf", ["phase2b-exec-marker"])`) {
 		t.Fatalf("expression-position exec is not mediated:\n%s", code)
 	}
 	if strings.Contains(code, `spawnSync("printf"`) {
 		t.Fatalf("expression-position exec bypasses the grant:\n%s", code)
+	}
+}
+
+// Generated JS exec children start with an empty environment, and a "*" slot
+// refuses flags, matching the bytecode runtime.
+func TestJSExecEnvironmentAndFlagSlots(t *testing.T) {
+	gen := func(source string) string {
+		root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
+		checker.Check(root)
+		code, _ := GenerateJSCode(root)
+		return code
+	}
+	code := gen(`(web_app (print (bytes_to_string (exec "/usr/bin/env"))))`)
+	out, errOut, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env", "FOO=leakme")
+	if exit != 0 || strings.Contains(out, "leakme") || strings.TrimSpace(out) != "" {
+		t.Fatalf("default env leaked: %d out %q err %q", exit, out, errOut)
+	}
+	out, errOut, exit = runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/env,process:env=FOO", "FOO=leakme")
+	if exit != 0 || strings.TrimSpace(out) != "FOO=leakme" {
+		t.Fatalf("granted env: %d out %q err %q", exit, out, errOut)
+	}
+	code = gen(`(web_app (print (bytes_to_string (exec "/usr/bin/printf" "%s" "-v"))))`)
+	if _, _, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf %s *"); exit == 0 {
+		t.Fatal("a * slot matched a flag")
+	}
+	if _, _, exit := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/printf ** %s"); exit == 0 {
+		t.Fatal("a non-final ** grant was accepted")
 	}
 }

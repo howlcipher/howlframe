@@ -3,7 +3,7 @@
     (type_hint repository_path "string")
     (type_hint return "any")
     (try_let (command_output
-        (exec "find" repository_path "-type" "f" "-not" "-path" "*/.git/*" "-print"))
+        (exec "/usr/bin/find" repository_path "-type" "f" "-not" "-path" "*/.git/*" "-print"))
       (catch err
         (do
           (stderr (str_join

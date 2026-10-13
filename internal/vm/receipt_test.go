@@ -55,7 +55,7 @@ func testReceiptFetch(t *testing.T, origin string) {
 	t.Helper()
 	address := strings.Replace(origin, "http://", "http://user:pw@", 1) + "/path?token=secret#frag"
 	r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch %q "GET"))`, address), DefaultExecutionPolicy(), capability.Network)
-	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed"}) {
+	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", ""}) {
 		t.Fatalf("receipt: %s", raw)
 	}
 	for _, secret := range []string{"secret", "token", "pw", "/path", "user:"} {
@@ -66,7 +66,7 @@ func testReceiptFetch(t *testing.T, origin string) {
 }
 func TestReceiptEnvironmentAndExec(t *testing.T) {
 	t.Setenv("HF_RECEIPT_TEST", "secret-value-123")
-	r, raw, _ := receiptRun(t, `(cli_app (env "HF_RECEIPT_TEST") (exec "/bin/echo" "secret-argument-456"))`, DefaultExecutionPolicy(), capability.Environment, capability.Process, capability.Environment)
+	r, raw, _ := receiptRun(t, `(cli_app (env "HF_RECEIPT_TEST") (exec "/usr/bin/echo" "secret-argument-456"))`, DefaultExecutionPolicy(), capability.Environment, capability.Capability("process:exec=/usr/bin/echo *"), capability.Environment)
 	if r.Exit.Code != 0 || len(r.Effects) != 2 || r.Effects[0].TargetSummary != "HF_RECEIPT_TEST" || r.Effects[1].TargetSummary != "echo" || len(r.Grant) != 2 {
 		t.Fatalf("receipt: %s", raw)
 	}
@@ -90,7 +90,7 @@ func TestReceiptDeniedAndLimit(t *testing.T) {
 }
 func TestReceiptSpawnAgent(t *testing.T) {
 	t.Setenv("HF_RECEIPT_CHILD", "child-secret")
-	r, raw, _ := receiptRun(t, `(cli_app (spawn_agent "child" (task "work" (env "HF_RECEIPT_CHILD"))))`, DefaultExecutionPolicy(), capability.Process, capability.Environment)
+	r, raw, _ := receiptRun(t, `(cli_app (spawn_agent "child" (grants "environment") (task "work" (env "HF_RECEIPT_CHILD"))))`, DefaultExecutionPolicy(), capability.Process, capability.Environment)
 	if len(r.Effects) != 2 || r.Effects[0].Op != "SPAWN_AGENT" || r.Effects[1].Op != "ENV" || r.Effects[1].TargetSummary != "HF_RECEIPT_CHILD" || r.InstructionsUsed < 4 {
 		t.Fatal(raw)
 	}

@@ -1,6 +1,6 @@
 (cli_app
   (print "swarm argv start")
-  (spawn_agent "Outer" (task "argv and stdin"
+  (spawn_agent "Outer" (grants "process") (task "argv and stdin"
     (print (cli_args 0))
     (print (cli_args))
     (print (read_line))

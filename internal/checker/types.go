@@ -538,8 +538,8 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		a.infer(node.Children[3], loopEnv)
 		return ast.Layout(ast.Void)
 	case "spawn":
-		if len(node.Children) >= 2 && node.Children[1].Type == "List" && len(node.Children[1].Children) >= 3 {
-			a.infer(node.Children[1].Children[2], cloneEnv(env))
+		if lambda := node.Children[len(node.Children)-1]; len(node.Children) >= 2 && lambda.Type == "List" && len(lambda.Children) >= 3 {
+			a.infer(lambda.Children[2], cloneEnv(env))
 		}
 		return ast.Layout(ast.Void)
 	case "match":

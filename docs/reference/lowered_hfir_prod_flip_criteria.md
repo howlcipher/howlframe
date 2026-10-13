@@ -98,6 +98,7 @@ achieve
 confidence
 db_connect
 ephemeral_circuit
+grants
 http_request
 http_server
 lazy_synthesize

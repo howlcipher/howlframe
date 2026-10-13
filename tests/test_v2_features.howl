@@ -5,6 +5,6 @@
         (catch err (print err))
         (print file_content)
     )
-    (exec "rm" "test_v2.txt")
+    (exec "/usr/bin/rm" "test_v2.txt")
     (print "done")
 )

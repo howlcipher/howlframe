@@ -1,10 +1,10 @@
 (http_server 8090
   (route "/health" (lambda (req) (res_json 200 (dict ("status" "ok")))))
-  (route "/ready" (lambda (req)
+  (route "/ready" (grants "environment") (lambda (req)
     (if (!= (env "REQUIRED_ENV") "")
       (res_json 200 (dict ("status" "ready")))
       (res_json 503 (dict ("status" "not ready") ("reason" "missing REQUIRED_ENV"))))))
   (route "/version" (lambda (req)
     (res_json 200 (dict ("version" "1.0.0") ("app" "status_api")))))
-  (route "/config" (lambda (req)
+  (route "/config" (grants "environment") (lambda (req)
     (res_json 200 (dict ("public_config" (env "PUBLIC_CONFIG")))))))

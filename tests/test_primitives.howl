@@ -21,6 +21,6 @@
         )
       )
     )
-    (exec "rm" "test_prims.txt")
+    (exec "/usr/bin/rm" "test_prims.txt")
   )
 )

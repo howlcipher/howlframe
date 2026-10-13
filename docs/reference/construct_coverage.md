@@ -52,6 +52,7 @@
 | `fuzzy_cast` | No | None | No | Yes | - | AUTHORITATIVE |
 | `get` | No | None | Yes | No | - | AUTHORITATIVE |
 | `go_import` | No | None | No | Yes | - | AUTHORITATIVE |
+| `grants` | Yes | None | No | No | - | AUTHORITATIVE |
 | `group_by` | No | None | Yes | No | - | AUTHORITATIVE |
 | `html_escape` | Yes | None | No | No | - | AUTHORITATIVE |
 | `http_body` | No | None | Yes | No | - | AUTHORITATIVE |
