@@ -47,24 +47,34 @@ capability at all: they only touch the request the server already accepted.
   range in the shared table `capability.SpecialPrefixes`: CGNAT
   (`100.64/10`, which includes the `100.100.100.200` metadata address),
   `0/8`, `192.0.0/24`, `198.18/15`, `240/4` (including broadcast), the
-  documentation ranges, `64:ff9b:1::/48`, Teredo (`2001::/32`), `100::/64`
-  and `fec0::/10`. Generated Go and JavaScript render the same table.
+  documentation ranges, `64:ff9b:1::/48`, Teredo (`2001::/32`), `100::/64`,
+  `fec0::/10`, `3fff::/20` and `5f00::/16`. Generated Go and JavaScript render the same table.
   IPv4-mapped IPv6 is checked as IPv4, and IPv4 embedded in IPv4-compatible
-  (`::a.b.c.d`) and 6to4 (`2002::/16`) addresses is decoded and checked. Go checks the
-  resolved address before dialing and again at socket creation. Node pins
-  its connection to the address checked by its lookup.
+  (`::a.b.c.d`), IPv4-translated (`::ffff:0:a.b.c.d`) and 6to4 (`2002::/16`)
+  addresses is decoded and checked. Go checks every resolved address before
+  dialing and again at socket creation. Node vets every address its lookup
+  returns and pins the connection to that whole vetted set (#177).
 * Explicit IP-literal grants and the exact name `localhost` are deliberate
-  opt-outs for those ranges. They still require the exact host and port;
+  opt-outs for those ranges. `localhost` reaches loopback only: if it
+  resolves to any non-loopback address the fetch is refused (#177). They
+  still require the exact host and port;
   `localhost` does not authorize `127.0.0.1`, or vice versa. Multicast
   (`224.0.0.0/4`, `ff00::/8`) is always refused, even with a literal grant.
 * A redirect may land on an IP-literal or `localhost` destination only if
   the request started on that same host. A hostname grant can't be
   redirected into a granted private IP or `localhost`, and `localhost`
   can't be redirected to `127.0.0.1` (or the reverse).
+* An IPv4-mapped literal `[::ffff:a.b.c.d]` is the same host as `a.b.c.d`
+  on every target, for grant matching, opt-out redirects and origin
+  comparison (#177).
+* A redirect target carrying userinfo (`user:pw@` or `user@`) is refused.
 * HTTPS-to-HTTP redirects are refused even when both hosts are granted.
-  On any host, effective port or scheme change, Authorization and Cookie
-  headers are removed for the rest of the chain, including subsequent hops
-  on the new origin.
+  On any host, effective port or scheme change, every request header except
+  the shared `capability.RedirectSafeHeaders` (`Accept`, `Accept-Encoding`,
+  `Accept-Language`, `Content-Type`, `Content-Length`, `Content-Encoding`,
+  `User-Agent`) is removed for the rest of the chain, including subsequent
+  hops on the new origin. This drops `Authorization`, `Proxy-Authorization`,
+  `Cookie` and custom auth headers such as `X-Api-Key` (#177).
 * `HTTP_PROXY` / `HTTPS_PROXY` (and lowercase variants) are ignored by
   governed fetches. Node 24 with `NODE_USE_ENV_PROXY=1` honors proxy env in
   its native fetch; the governed Node path uses native HTTP requests with
