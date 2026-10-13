@@ -1,6 +1,0 @@
-{
-  "mode": "fast",
-  "owner": "ops",
-  "retries": 3,
-  "timeout": 30
-}

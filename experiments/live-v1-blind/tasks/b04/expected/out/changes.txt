@@ -1,4 +1,0 @@
-~ mode: "fast" -> "safe"
-- owner: "ops"
-+ region: "us-2"
-~ retries: 3 -> 5

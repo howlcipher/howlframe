@@ -1,0 +1,6 @@
+command,runs_per_day,first,last
+backup.sh,1,02:00,02:00
+poll-queue,96,00:00,23:45
+report --daily,2,06:30,18:30
+rotate-logs,4,00:05,18:05
+standup-reminder,2,09:00,09:30

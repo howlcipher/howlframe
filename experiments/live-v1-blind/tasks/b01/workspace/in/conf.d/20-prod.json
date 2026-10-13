@@ -1,9 +1,0 @@
-{
-  "log": {
-    "file": "/var/log/app.log",
-    "level": "warn"
-  },
-  "server": {
-    "port": 443
-  }
-}

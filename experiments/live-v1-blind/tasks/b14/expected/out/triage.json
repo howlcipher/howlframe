@@ -1,0 +1,13 @@
+{
+  "expired": [
+    "L1"
+  ],
+  "ok_qty": {
+    "cheese": 9
+  },
+  "use_soon": [
+    "L2",
+    "L3",
+    "L5"
+  ]
+}

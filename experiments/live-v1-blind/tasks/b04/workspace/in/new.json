@@ -1,6 +1,0 @@
-{
-  "mode": "safe",
-  "region": "us-2",
-  "retries": 5,
-  "timeout": 30
-}

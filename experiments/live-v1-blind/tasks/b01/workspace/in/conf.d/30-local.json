@@ -1,9 +1,0 @@
-{
-  "features": [
-    "a",
-    "b"
-  ],
-  "server": {
-    "tls": true
-  }
-}
