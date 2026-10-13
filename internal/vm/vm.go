@@ -1841,6 +1841,7 @@ func RunBytecodeWithEvidence(prog *bytecode.BCProgram, cliArgs []string, policy 
 }
 
 func runBytecodeEvidence(prog *bytecode.BCProgram, cliArgs []string, policy ExecutionPolicy, allowedCaps []capability.Capability, in io.Reader, out io.Writer, errOut io.Writer, traceLimit int, recorder *receiptRecorder) (evidence bytecode.ExecutionEvidence) {
+	policy = effectiveExecutionPolicy(prog, policy)
 	ctx := context.Background()
 	if policy.Deadline > 0 {
 		var cancel context.CancelFunc
@@ -2241,6 +2242,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				defer func() {
 					if r := recover(); r != nil {
 						if _, ok := r.(VmReturn); ok {
+							panic(r)
+						}
+						if e, ok := r.(*VMError); ok && e.Code == "HFIR_DEADLINE_EXCEEDED" {
 							panic(r)
 						}
 						tryErr = fmt.Errorf("%v", r)
@@ -3438,6 +3442,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %T", msAny))
 			}
+			if deadline, ok := vm.ctx.Deadline(); ok && ms > 0 && (ms > int64(time.Until(deadline)/time.Millisecond)) {
+				code := "LIMIT_EXCEEDED"
+				if vm.prog.IsModelAdapter() {
+					code = "HFIR_DEADLINE_EXCEEDED"
+				}
+				panic(NewRuntimeError(code, "main", ip, inst.Op, "wall-clock deadline exceeded: sleep exceeds remaining budget"))
+			}
 			timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
 			select {
 			case <-timer.C:
@@ -3845,7 +3856,11 @@ func (vm *BCVM) chargeBytes(n, ip int, op bytecode.Opcode) {
 
 func (vm *BCVM) checkDeadline(ip int, op bytecode.Opcode) {
 	if vm.ctx != nil && vm.ctx.Err() != nil {
-		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "wall-clock deadline exceeded"))
+		code := "LIMIT_EXCEEDED"
+		if vm.prog.IsModelAdapter() {
+			code = "HFIR_DEADLINE_EXCEEDED"
+		}
+		panic(NewRuntimeError(code, "main", ip, op, "wall-clock deadline exceeded"))
 	}
 }
 
@@ -4032,4 +4047,11 @@ func TextOf(v any) string {
 		return ""
 	}
 	return fmt.Sprint(v)
+}
+
+func effectiveExecutionPolicy(prog *bytecode.BCProgram, policy ExecutionPolicy) ExecutionPolicy {
+	if prog.IsModelAdapter() && (policy.Deadline <= 0 || policy.Deadline > time.Second) {
+		policy.Deadline = time.Second
+	}
+	return policy
 }

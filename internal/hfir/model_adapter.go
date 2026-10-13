@@ -183,16 +183,20 @@ func CompileCandidate(candidate Candidate) (*bytecode.BCProgram, []Diagnostic) {
 	if candidate.Graph == nil {
 		return nil, []Diagnostic{adapterDiagnostic("HFIR_TRANSPORT_INVALID", "candidate graph is required", "")}
 	}
+	if diagnostic := validateTransport(transportFromGraph(candidate.Graph)); diagnostic != nil {
+		return nil, []Diagnostic{*diagnostic}
+	}
 	if diagnostics := NewVerifier(candidate.Graph, TargetBytecode).Verify(); hasErrors(diagnostics) {
 		return nil, diagnostics
 	}
-	program, diagnostics := LowerToBytecode(candidate.Graph)
+	program, _, _, diagnostics := lowerToBytecode(candidate.Graph, nil, adapterSharedPure(candidate.Graph))
 	if len(diagnostics) != 0 {
 		return nil, diagnostics
 	}
 	if err := bytecode.ValidateProgram(program); err != nil {
 		return nil, []Diagnostic{adapterDiagnostic("HFIR_BYTECODE_INVALID", err.Error(), candidate.Graph.EntryNode)}
 	}
+	program.MarkModelAdapter()
 	return program, nil
 }
 
@@ -618,6 +622,9 @@ func validateTransport(transport candidateTransport) *Diagnostic {
 	if cycle := transportCycle(transport); cycle != "" {
 		diagnostic := adapterDiagnostic("HFIR_TRANSPORT_CYCLE", "cyclic data dependency is not executable", cycle)
 		return &diagnostic
+	}
+	if diagnostic := validateAdapterExpansion(transport); diagnostic != nil {
+		return diagnostic
 	}
 	if diagnostic := validateReturnPlacement(transport); diagnostic != nil {
 		return diagnostic

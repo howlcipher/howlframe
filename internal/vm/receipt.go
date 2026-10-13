@@ -140,6 +140,7 @@ func (vm *BCVM) recordHop(cap capability.Capability, op bytecode.Opcode, decisio
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match
 // RunBytecodeWithPolicy; the caller must persist the receipt before process exit.
 func RunBytecodeWithReceipt(prog *bytecode.BCProgram, args []string, policy ExecutionPolicy, caps []capability.Capability, in io.Reader, out, errOut io.Writer, artifactSHA256, compilerVersion string) (int, ExecutionReceipt) {
+	policy = effectiveExecutionPolicy(prog, policy)
 	recorder := &receiptRecorder{effects: []ReceiptEffect{}}
 	ev := runBytecodeEvidence(prog, args, policy, caps, in, out, errOut, 0, recorder)
 	grant := []string{}

@@ -52,9 +52,10 @@ func (inst *BCInstruction) UnmarshalJSON(data []byte) error {
 }
 
 type BCProgram struct {
-	Version   int                    `json:"version"`
-	Functions map[string]*BCFunction `json:"functions"`
-	Main      []BCInstruction        `json:"main"`
+	modelAdapter bool
+	Version      int                    `json:"version"`
+	Functions    map[string]*BCFunction `json:"functions"`
+	Main         []BCInstruction        `json:"main"`
 
 	// mainOrigins is an ephemeral direct-lowering sidecar. It is deliberately
 	// unexported: provenance is useful only while the trusted lowerer program
@@ -997,3 +998,7 @@ func compileSpawnGrants(node *ast.Node) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// MarkModelAdapter attaches a trusted, in-memory runner constraint.
+func (p *BCProgram) MarkModelAdapter()    { p.modelAdapter = true }
+func (p *BCProgram) IsModelAdapter() bool { return p != nil && p.modelAdapter }
