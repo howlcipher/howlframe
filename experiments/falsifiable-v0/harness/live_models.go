@@ -62,11 +62,16 @@ var StubModelIDs = map[string]bool{"stub": true}
 type ClaudeModel struct {
 	Work    string
 	Allowed map[string]bool
+	Bin     string // CLI path; "" means "claude" on PATH (tests use a fake)
 }
 
 func (ClaudeModel) Name() string { return "claude-code/" + LiveClaudeModel }
 func (m ClaudeModel) Argv() []string {
-	return []string{"claude", "-p", "--model", LiveClaudeModel, "--output-format", "json", "--tools", ""}
+	bin := m.Bin
+	if bin == "" {
+		bin = "claude"
+	}
+	return []string{bin, "-p", "--model", LiveClaudeModel, "--output-format", "json", "--tools", ""}
 }
 func (m ClaudeModel) Generate(ctx context.Context, p Prompt) (Completion, error) {
 	var c Completion
@@ -81,7 +86,8 @@ func (m ClaudeModel) Generate(ctx context.Context, p Prompt) (Completion, error)
 	var out, er bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &er
 	if e := cmd.Run(); e != nil {
-		return c, fmt.Errorf("claude: %v: %s", e, er.String())
+		// A failed client is infrastructure, never a model_error cell.
+		return c, ErrInfra{fmt.Errorf("claude: %v: %s", e, er.String())}
 	}
 	return ParseClaudeJSON(out.Bytes(), m.Allowed)
 }
@@ -100,7 +106,7 @@ func ParseClaudeJSON(b []byte, allowed map[string]bool) (Completion, error) {
 		ModelUsage map[string]json.RawMessage `json:"modelUsage"`
 	}
 	if e := json.Unmarshal(b, &r); e != nil {
-		return c, e
+		return c, ErrInfra{fmt.Errorf("claude output unparseable: %v", e)}
 	}
 	c.Text, c.InputTokens, c.OutputTokens = r.Result, r.Usage.In, r.Usage.Out
 	c.CacheReadTokens, c.CacheCreateTokens = r.Usage.CacheRead, r.Usage.CacheCreate
