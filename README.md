@@ -23,6 +23,11 @@ For Go and JavaScript targets, ordinary binding and parameter names such as
 sugar remains restricted to the bytecode target; using it in an initializer
 or function body still fails before output is written.
 
+In hosts with a page `location` and no Node `process`, browser `fetch`
+resolves relative URLs against the page URL before checking
+the explicit `network:fetch=host[:port]` grant. Node callers require an
+absolute URL; page globals do not provide Node authority or a URL base.
+
 ## Install
 
 ### Release binaries

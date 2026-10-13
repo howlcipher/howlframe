@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+* HOWL-E2E-UX-001 EXT-001C: browser relative fetch uses the host page URL before the existing exact-host grant checks. Node keeps its absolute-URL requirement; coarse network and cross-host requests remain denied.
 * HOWL-E2E-UX-001 EXT-001A: target validation distinguishes let/try_let bindings, function parameters and dictionary entries from executable forms. Ordinary names such as `rec` no longer prevent Board JavaScript compilation. Actual unsupported sugar remains rejected in initializer, dictionary value and function body positions.
 
 ### Breaking

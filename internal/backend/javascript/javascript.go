@@ -624,7 +624,11 @@ function howlFrameFetchRequest(u, init) {
 
 async function howlFrameFetch(url, method, body, headers) {
   var u;
-  try { u = howlFrameFetchURL(url); } catch (e) { howlFrameFetchDeny(); }
+  // Browser-relative URLs resolve against the host page, then face the same
+  // exact destination grant checks as absolute URLs. Node has no implicit base.
+  var base = typeof process === "undefined" && typeof location !== "undefined" ? location.href : undefined;
+  try { u = howlFrameFetchURL(url, base); } catch (e) { howlFrameFetchDeny(); }
+  if (base && (u.username !== "" || u.password !== "")) howlFrameFetchDeny();
   if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
   var init = { method: method, redirect: "manual", headers: Object.assign({}, headers || {}) };
   if (arguments.length >= 3) {
