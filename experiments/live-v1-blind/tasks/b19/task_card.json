@@ -1,0 +1,11 @@
+{
+  "category": "files",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b19",
+  "instruction": "in/listing.txt lists relative paths, one per line; directories end with '/'. Write out/tree.txt: all entries sorted byte-wise (ordinal) ascending by path (with the trailing '/' removed for sorting), each shown as its last path component indented two spaces per directory depth, with directories keeping a trailing '/'.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

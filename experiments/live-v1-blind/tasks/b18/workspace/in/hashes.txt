@@ -1,0 +1,6 @@
+a1 docs/report.pdf
+b2 img/cat.png
+a1 backup/report-copy.pdf
+c3 img/dog.png
+b2 tmp/cat (1).png
+a1 old/report.pdf

@@ -1,0 +1,11 @@
+{
+  "category": "notes",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b09",
+  "instruction": "Every file in in/notes/ starts with front matter between --- lines holding 'title: ...' and 'tags: a, b'. Write out/INDEX.md: the line '# Index', a blank line, then for each tag in sorted order a '## <tag>' heading, the notes with that tag as '- [<title>](<filename>)' sorted by title, and a blank line between tag sections (no trailing blank line). The files are garden.md, budget.md and trip.md.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

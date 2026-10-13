@@ -1,0 +1,6 @@
+port,users
+2525,mailer.listen
+8080,billing.listen gateway.listen
+8081,search.listen
+9100,billing.admin search.admin
+9101,mailer.admin

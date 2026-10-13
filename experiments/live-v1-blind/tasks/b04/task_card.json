@@ -1,0 +1,11 @@
+{
+  "category": "config",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b04",
+  "instruction": "in/crontab.txt is a crontab. Skip blank lines, lines starting with #, and environment lines whose first space-separated token contains '='. Every other line is '<minute> <hour> * * * <command>' (command may contain spaces). Minute and hour fields are '*', '*/N' (every N starting at 0), or a comma list of integers. Write out/cron_plan.csv with header command,runs_per_day,first,last and one row per job in file order: how many times it runs in one day, and its earliest and latest run times as HH:MM (zero-padded).",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

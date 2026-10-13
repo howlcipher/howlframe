@@ -1,0 +1,4 @@
+api_db_pw
+api_token
+smtp_pw
+backup_key

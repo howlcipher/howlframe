@@ -1,0 +1,6 @@
+GET /a 200 12ms
+GET /b 500 340ms
+POST /a 201 40ms
+GET /a 200 8ms
+GET /b 200 90ms
+POST /a 500 400ms

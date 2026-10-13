@@ -1,0 +1,11 @@
+{
+  "category": "records",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b21",
+  "instruction": "Deduplicate in/contacts.csv (name,email,phone). Two rows are the same person when their lowercased email matches, or, when email is empty, their lowercased name matches. Write out/contacts.json: an array in first-seen order of {\"name\": first-seen name, \"email\": lowercased email, \"phones\": non-empty distinct phones in order seen}.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

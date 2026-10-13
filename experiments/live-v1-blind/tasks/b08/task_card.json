@@ -1,0 +1,11 @@
+{
+  "category": "logs",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b08",
+  "instruction": "Each line of in/requests.log is '<METHOD> <path> <status> <N>ms'. Write out/summary.csv with header path,requests,errors,max_ms and one row per path sorted by path: total requests, requests with status >= 500, and the largest latency in ms.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

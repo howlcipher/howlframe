@@ -1,0 +1,11 @@
+{
+  "category": "config",
+  "grants": [
+    "filesystem:read=in",
+    "filesystem:write=out"
+  ],
+  "id": "b02",
+  "instruction": "Audit secret references in in/deploy/api.properties and in/deploy/worker.properties against in/vault_index.txt (one available secret name per line). A reference is ${secret:<name>} anywhere in a line; lines starting with # are comments and are skipped. Write out/secret_refs.txt: one line per reference, files in byte-wise path order then by line, formatted '<path relative to in/>:<1-based line> <name> ok' or '... MISSING' if the name is not in the vault index. Write out/unreferenced.txt: vault names never referenced (outside comments), sorted byte-wise ascending.",
+  "note": "All paths are relative to the workspace root.",
+  "workspace": "workspace/"
+}

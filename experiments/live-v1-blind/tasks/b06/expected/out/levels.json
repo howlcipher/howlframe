@@ -1,0 +1,17 @@
+{
+  "api": {
+    "ERROR": 2,
+    "INFO": 0,
+    "WARN": 1
+  },
+  "db": {
+    "ERROR": 1,
+    "INFO": 1,
+    "WARN": 0
+  },
+  "web": {
+    "ERROR": 2,
+    "INFO": 0,
+    "WARN": 0
+  }
+}

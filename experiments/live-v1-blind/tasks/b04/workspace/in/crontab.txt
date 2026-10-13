@@ -1,0 +1,8 @@
+# nightly maintenance
+SHELL=/bin/sh
+0 2 * * * backup.sh
+*/15 * * * * poll-queue
+30 6,18 * * * report --daily
+
+5 */6 * * * rotate-logs
+0,30 9 * * * standup-reminder
