@@ -1,0 +1,42 @@
+{
+  "schema": "howlframe.live.summary/v1",
+  "model": "stub/dry-run",
+  "arms": {
+    "a": {
+      "runs": 60,
+      "successes": 5,
+      "success_rate": 0.08333333333333333,
+      "grant_violations": 1,
+      "grant_escapes": 0,
+      "deadline_kills": 0,
+      "model_errors": 0,
+      "mean_repair_rounds": 1.8333333333333333,
+      "median_model_tokens": 1335,
+      "median_review_tokens_successful": 125,
+      "median_review_lines_successful": 13
+    },
+    "b": {
+      "runs": 60,
+      "successes": 5,
+      "success_rate": 0.08333333333333333,
+      "grant_violations": 1,
+      "grant_escapes": 0,
+      "deadline_kills": 0,
+      "model_errors": 0,
+      "mean_repair_rounds": 1.8333333333333333,
+      "median_model_tokens": 3011,
+      "median_review_tokens_successful": 119,
+      "median_review_lines_successful": 43
+    }
+  },
+  "howlframe_losses": [],
+  "howlframe_wins": [],
+  "per_metric": {
+    "grant_escapes": "tie",
+    "grant_violations": "tie",
+    "mean_repair_rounds": "tie",
+    "median_model_tokens": "howlframe_better",
+    "median_review_tokens": "howlframe_worse",
+    "success_rate": "tie"
+  }
+}

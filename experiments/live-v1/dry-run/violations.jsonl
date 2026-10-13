@@ -1,0 +1,2 @@
+{"task_id":"a02","arm":"a","seed":"seed1","attempt":0,"source":"caps_preflight","receipt_denied":[],"unauthorized":[],"diagnostics":["{\"code\":\"CAPS_PREFLIGHT_DENIED\",\"capability\":\"network:fetch=127.0.0.1:1\"}"]}
+{"task_id":"a02","arm":"b","seed":"seed1","attempt":0,"source":"receipt","receipt_denied":[{"op":"ACTION:fetch","capability":"ungranted","target_summary":"","decision":"denied"}],"unauthorized":[],"diagnostics":["{\"code\":\"GRANT_DENIED\"}"]}
