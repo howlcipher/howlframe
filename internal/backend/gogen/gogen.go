@@ -589,11 +589,19 @@ func howlFrameExecSlot(p, arg string) bool {
 }
 
 // howlFrameExecEnv passes only process:env=NAME variables; never the host env.
+func howlFrameCodeLoadingEnv(name string) bool {
+	switch strings.ToUpper(name) {
+	case "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "PERL5LIB", "PERL5OPT", "RUBYOPT", "RUBYLIB", "PYTHONSTARTUP", "NODE_PATH":
+		return true
+	}
+	return false
+}
+
 func howlFrameExecEnv() []string {
 	env := []string{}
 	for _, grant := range strings.Split(os.Getenv("HOWLFRAME_ALLOW_CAPS"), ",") {
 		name, ok := strings.CutPrefix(strings.TrimSpace(grant), "process:env=")
-		if !ok || name == "" || strings.ContainsAny(name, "= ") || strings.HasPrefix(strings.ToUpper(name), "LD_") || strings.HasPrefix(strings.ToUpper(name), "DYLD_") {
+		if !ok || name == "" || strings.ContainsAny(name, "= ") || strings.HasPrefix(strings.ToUpper(name), "LD_") || strings.HasPrefix(strings.ToUpper(name), "DYLD_") || howlFrameCodeLoadingEnv(name) {
 			continue
 		}
 		if v, ok := os.LookupEnv(name); ok {
@@ -615,7 +623,6 @@ func howlFrameExec(cmd string, args ...string) []byte {
 	}
 	return out
 }
-
 `
 }
 
@@ -673,7 +680,8 @@ func fetchHelperSource() string {
 // host must equal a network:fetch=host[:port] grant exactly (no suffix
 // match; an omitted port means the scheme default). The coarse network grant
 // never authorizes an outbound request. Redirect hops are re-checked and a
-// granted DNS name may not connect to a link-local or unspecified address.
+// granted DNS name may not connect to a private or metadata address unless
+// it is localhost. Multicast and HTTPS downgrades are always refused.
 func howlFrameFetchNormHost(h string) (string, bool) {
 	if strings.HasPrefix(h, "[") {
 		if !strings.HasSuffix(h, "]") {
@@ -773,6 +781,27 @@ type howlFrameFetchDenied struct{}
 
 func (howlFrameFetchDenied) Error() string { return "capability denied: network" }
 
+func howlFrameFetchSameOrigin(a, b *url.URL) bool {
+	origin := func(u *url.URL) string {
+		h, p := howlFrameFetchSplit(u.Host)
+		h, ok := howlFrameFetchNormHost(h)
+		if !ok {
+			return ""
+		}
+		scheme := strings.ToLower(u.Scheme)
+		if p == "" {
+			p = "80"
+			if scheme == "https" {
+				p = "443"
+			}
+		}
+		return scheme + "://" + net.JoinHostPort(h, p)
+	}
+	return origin(a) != "" && origin(a) == origin(b)
+}
+
+var howlFrameFetchLookupIP = net.DefaultResolver.LookupIPAddr
+
 var howlFrameFetchClient = &http.Client{
 	Transport: &http.Transport{
 		Proxy: nil,
@@ -788,15 +817,51 @@ var howlFrameFetchClient = &http.Client{
 					return howlFrameFetchDenied{}
 				}
 				a := ap.Addr().Unmap()
-				if litErr != nil && (a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast()) {
+				if a.IsMulticast() || litErr != nil && !strings.EqualFold(host, "localhost") && (a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsLoopback() || a.IsPrivate() || netip.MustParsePrefix("64:ff9b::/96").Contains(a)) {
 					return howlFrameFetchDenied{}
 				}
 				return nil
 			}}
+			if litErr != nil {
+				_, port, _ := net.SplitHostPort(addr)
+				addresses, err := howlFrameFetchLookupIP(ctx, host)
+				if err != nil {
+					return nil, err
+				}
+				for _, address := range addresses {
+					if err := d.Control("", net.JoinHostPort(address.IP.String(), port), nil); err != nil {
+						return nil, err
+					}
+				}
+				var last error
+				for _, address := range addresses {
+					conn, err := d.DialContext(ctx, network, net.JoinHostPort(address.IP.String(), port))
+					if err == nil {
+						return conn, nil
+					}
+					last = err
+				}
+				if last != nil {
+					return nil, last
+				}
+				return nil, howlFrameFetchDenied{}
+			}
 			return d.DialContext(ctx, network, addr)
 		},
 	},
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		previous := via[len(via)-1].URL
+		if previous.Scheme == "https" && req.URL.Scheme == "http" {
+			return howlFrameFetchDenied{}
+		}
+		changedOrigin := !howlFrameFetchSameOrigin(previous, req.URL)
+		for i := 1; i < len(via); i++ {
+			changedOrigin = changedOrigin || !howlFrameFetchSameOrigin(via[i-1].URL, via[i].URL)
+		}
+		if changedOrigin {
+			req.Header.Del("Authorization")
+			req.Header.Del("Cookie")
+		}
 		if len(via) > 10 || !howlFrameFetchAllowed(req.URL) {
 			return howlFrameFetchDenied{}
 		}
@@ -832,7 +897,6 @@ func howlFrameFetchBytes(url string, method string, body io.Reader) []byte {
 	}
 	return b
 }
-
 `
 }
 
