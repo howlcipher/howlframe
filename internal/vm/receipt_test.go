@@ -48,14 +48,16 @@ func TestReceiptFetchRedactionInMemory(t *testing.T) {
 	http.DefaultClient = &http.Client{Transport: receiptRoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: make(http.Header)}, nil
 	})}
+	defer capability.SetFetchTransportForTest(http.DefaultClient.Transport)()
 	defer func() { http.DefaultClient = old }()
 	testReceiptFetch(t, "http://127.0.0.1:12345")
 }
 func testReceiptFetch(t *testing.T, origin string) {
 	t.Helper()
 	address := strings.Replace(origin, "http://", "http://user:pw@", 1) + "/path?token=secret#frag"
-	r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch %q "GET"))`, address), DefaultExecutionPolicy(), capability.Network)
-	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", ""}) {
+	grant := fetchGrantFor(t, origin)
+	r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch %q "GET"))`, address), DefaultExecutionPolicy(), grant)
+	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", string(grant)}) {
 		t.Fatalf("receipt: %s", raw)
 	}
 	for _, secret := range []string{"secret", "token", "pw", "/path", "user:"} {
@@ -164,7 +166,6 @@ func TestReceiptDeniedSummaryPolicy(t *testing.T) {
 		{op: bytecode.OpDbConnect, inst: bytecode.BCInstruction{StringOperand: "db", StringOperand2: "sqlite", StringOperand3: "dsn-secret"}, want: "sqlite"},
 		{op: bytecode.OpSqlQuery, inst: bytecode.BCInstruction{StringOperand: "db", StringOperand2: "query-secret"}, want: "db"},
 		{op: bytecode.OpHttpRoute, inst: bytecode.BCInstruction{StringOperand: "/route"}, want: "/route"},
-		{op: bytecode.OpResJson, operands: []any{int64(200), "body-secret"}, want: ""},
 		{op: bytecode.OpLlmGenerate, operands: []any{"prompt-secret"}, inst: bytecode.BCInstruction{StringOperand: "model"}, want: ""},
 		{op: bytecode.OpEnv, operands: []any{strings.Repeat("x", 300)}, want: strings.Repeat("x", 256)},
 	} {

@@ -263,7 +263,7 @@ func TestVMFileAndNetworkTypeAssertions(t *testing.T) {
 		},
 		{
 			name: "fetch with number url",
-			caps: []capability.Capability{capability.Network},
+			caps: []capability.Capability{capability.Capability("network:fetch=127.0.0.1:1")},
 			insts: []bytecode.BCInstruction{
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(42)},
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "GET"},
@@ -273,7 +273,7 @@ func TestVMFileAndNetworkTypeAssertions(t *testing.T) {
 		},
 		{
 			name: "fetch with number method",
-			caps: []capability.Capability{capability.Network},
+			caps: []capability.Capability{capability.Capability("network:fetch=127.0.0.1:1")},
 			insts: []bytecode.BCInstruction{
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "http://127.0.0.1:0"},
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(42)},
@@ -283,7 +283,7 @@ func TestVMFileAndNetworkTypeAssertions(t *testing.T) {
 		},
 		{
 			name: "fetch with both number url and method",
-			caps: []capability.Capability{capability.Network},
+			caps: []capability.Capability{capability.Capability("network:fetch=127.0.0.1:1")},
 			insts: []bytecode.BCInstruction{
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(100)},
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(200)},
@@ -444,7 +444,7 @@ func TestVMFileAndNetworkTypeAssertionTryLetCatchable(t *testing.T) {
 		},
 		{
 			name: "fetch",
-			caps: []capability.Capability{capability.Network},
+			caps: []capability.Capability{capability.Capability("network:fetch=127.0.0.1:1")},
 			insts: []bytecode.BCInstruction{
 				tryLetInstruction(3),
 				{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: float64(123)},
@@ -490,7 +490,7 @@ func TestVMFileAndNetworkPositiveFetch(t *testing.T) {
 		},
 	}
 	var outBuf, errBuf bytes.Buffer
-	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{capability.Network}, strings.NewReader(""), &outBuf, &errBuf, 0)
+	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), []capability.Capability{fetchGrantFor(t, srv.URL)}, strings.NewReader(""), &outBuf, &errBuf, 0)
 	if evidence.RuntimeFailure != nil {
 		t.Fatalf("unexpected runtime failure: %#v", evidence.RuntimeFailure)
 	}
@@ -530,6 +530,9 @@ func TestVMFetchDeniedBeforeRequest(t *testing.T) {
 	}{
 		{"empty grant", nil},
 		{"filesystem grant", []capability.Capability{capability.Filesystem}},
+		{"coarse network grant (#165)", []capability.Capability{capability.Network}},
+		{"other port", []capability.Capability{capability.Capability("network:fetch=127.0.0.1:1")}},
+		{"localhost name for 127.0.0.1", []capability.Capability{capability.Capability("network:fetch=localhost:" + srv.URL[strings.LastIndex(srv.URL, ":")+1:])}},
 	} {
 		text, failure := run(tc.caps)
 		if failure == nil || failure.Code != "CAPABILITY_DENIED" {
@@ -543,7 +546,7 @@ func TestVMFetchDeniedBeforeRequest(t *testing.T) {
 		}
 	}
 
-	text, failure := run([]capability.Capability{capability.Network})
+	text, failure := run([]capability.Capability{fetchGrantFor(t, srv.URL)})
 	if failure != nil {
 		t.Fatalf("network grant failed: %#v\n%s", failure, text)
 	}

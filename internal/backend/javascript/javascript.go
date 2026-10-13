@@ -371,7 +371,7 @@ function howlFrameExecEnv() {
     var grant = grants[i].trim();
     if (grant.indexOf("process:env=") !== 0) continue;
     var name = grant.slice("process:env=".length);
-    if (name === "" || /[= ]/.test(name)) continue;
+    if (name === "" || /[= ]/.test(name) || /^(LD_|DYLD_)/i.test(name)) continue;
     if (Object.prototype.hasOwnProperty.call(process.env, name)) env[name] = process.env[name];
   }
   return env;
@@ -420,15 +420,80 @@ func readFileJSHelper() string {
 // which bytes_to_string prints unchanged. A third argument is the body;
 // a two-argument call sends none.
 func fetchJSHelper() string {
-	return `function howlFrameFetch(url, method, body) {
-  if (!howlFrameGrantHas("network")) {
-    throw new Error("CAPABILITY_DENIED: capability denied: network");
+	return `function howlFrameGrantList() {
+  var raw = "";
+  if (typeof process !== "undefined" && process.env) {
+    raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
+  } else if (typeof globalThis !== "undefined") {
+    raw = globalThis.HOWLFRAME_ALLOW_CAPS;
   }
-  var init = { method: method };
+  if (typeof raw !== "string") return [];
+  return raw.split(",").map(function (p) { return p.trim(); });
+}
+
+// Mirrors capability.Grants.AuthorizeFetch: exact host (WHATWG-canonical,
+// so IP literals compare in canonical form) and port; an omitted grant port
+// means the scheme default. The coarse network grant never fetches.
+function howlFrameFetchAllowed(u) {
+  if (!u || (u.protocol !== "http:" && u.protocol !== "https:") || !u.hostname) return false;
+  if (u.hostname.charAt(u.hostname.length - 1) === ".") return false;
+  var def = u.protocol === "https:" ? "443" : "80";
+  var port = u.port || def;
+  var grants = howlFrameGrantList();
+  for (var i = 0; i < grants.length; i++) {
+    if (grants[i].indexOf("network:fetch=") !== 0) continue;
+    var spec = grants[i].slice("network:fetch=".length);
+    if (spec === "" || /[\/@?#*%\s\\]/.test(spec) || spec.charAt(spec.length - 1) === ":") continue;
+    var g;
+    try { g = new URL("http://" + spec); } catch (e) { continue; }
+    if (g.hostname !== u.hostname) continue;
+    var gport = /:\d+$/.test(spec) ? spec.slice(spec.lastIndexOf(":") + 1) : def;
+    if (String(Number(gport)) === gport && gport === port) return true;
+  }
+  return false;
+}
+
+function howlFrameFetchDeny() {
+  throw new Error("CAPABILITY_DENIED: capability denied: network");
+}
+
+// A granted DNS name may not resolve to a link-local or unspecified address
+// (cloud metadata). Node checks this before connecting; a browser cannot
+// resolve names, so there the browser's own network policy applies.
+async function howlFrameFetchResolvedOk(u) {
+  var host = u.hostname;
+  if (/^\[.*\]$/.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return true;
+  if (typeof require !== "function") return true;
+  var addrs = await require("dns").promises.lookup(host, { all: true });
+  for (var i = 0; i < addrs.length; i++) {
+    var a = String(addrs[i].address).toLowerCase();
+    if (/^169\.254\./.test(a) || /^fe[89ab][0-9a-f]:/.test(a) || a === "0.0.0.0" || a === "::" || /^::ffff:169\.254\./.test(a)) return false;
+  }
+  return true;
+}
+
+async function howlFrameFetch(url, method, body) {
+  var u;
+  try { u = new URL(String(url)); } catch (e) { howlFrameFetchDeny(); }
+  if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
+  var init = { method: method, redirect: "manual" };
   if (arguments.length >= 3) {
     init.body = body;
   }
-  return fetch(url, init).then(function (r) { return r.text(); });
+  for (var hop = 0; ; hop++) {
+    if (!(await howlFrameFetchResolvedOk(u))) howlFrameFetchDeny();
+    var pending = fetch(u.href, init);
+    var r = await pending;
+    if (r && r.type === "opaqueredirect") howlFrameFetchDeny();
+    var loc = r && r.status >= 300 && r.status < 400 && r.headers && r.headers.get ? r.headers.get("location") : null;
+    if (!loc) return r.text();
+    if (hop >= 10) howlFrameFetchDeny();
+    try { u = new URL(loc, u); } catch (e) { howlFrameFetchDeny(); }
+    if (!howlFrameFetchAllowed(u)) howlFrameFetchDeny();
+    if (r.status === 303 || (r.status === 301 || r.status === 302) && init.method === "POST") {
+      init = { method: "GET", redirect: "manual" };
+    }
+  }
 }
 
 `

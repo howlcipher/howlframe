@@ -145,6 +145,9 @@ func TestRequiredCapsFixtureSoundness(t *testing.T) {
 			report := bytecode.RequiredCapabilities(prog)
 			unsafe := false
 			for _, site := range report.Sites {
+				if strings.HasPrefix(site.Capability, "network:fetch=") {
+					unsafe = true // outbound fetch (#165)
+				}
 				switch site.Capability {
 				case "network":
 					unsafe = true

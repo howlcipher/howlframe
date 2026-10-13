@@ -40,7 +40,10 @@ type ReceiptEffect struct {
 	Capability    string `json:"capability"`
 	TargetSummary string `json:"target_summary"`
 	Decision      string `json:"decision"`
-	// Grant is the matched allow-list entry for an allowed exec.
+	// Grant is the matched allow-list entry for an allowed exec or fetch, or,
+	// for a denied fetch, the network:fetch=host:port grant it would need.
+	// Allow-list entries are copied verbatim from the normalized grant, so
+	// pattern literals (exec argument literals, hosts) appear as written.
 	Grant string `json:"grant,omitempty"`
 }
 type ReceiptExit struct {
@@ -112,6 +115,26 @@ func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode,
 		return
 	}
 	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant})
+}
+
+// recordHop records a redirect hop. Unlike recordEffectGrant it does not
+// collapse repeated capabilities within one instruction: every hop of a
+// fetch is its own effect.
+func (vm *BCVM) recordHop(cap capability.Capability, op bytecode.Opcode, decision, grant string) {
+	if vm.receipt == nil || vm.receiptDecision == nil {
+		return
+	}
+	r := vm.receipt
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.finalized {
+		return
+	}
+	if len(r.effects) >= maxReceiptEffects {
+		r.truncated = true
+		return
+	}
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant})
 }
 
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match

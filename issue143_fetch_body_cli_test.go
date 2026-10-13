@@ -47,21 +47,22 @@ func TestIssue143FetchBodyEveryPath(t *testing.T) {
 		got = nil
 		return r
 	}
+	fetchGrant := "network:fetch=" + strings.TrimPrefix(srv.URL, "http://")
 	paths := map[string]func() (string, int){
-		"interpreter": func() (string, int) { return issue141Run(bin, "-allow-caps", "network", "-run", src) },
+		"interpreter": func() (string, int) { return issue141Run(bin, "-allow-caps", fetchGrant, "-run", src) },
 		"ast_bytecode": func() (string, int) {
 			art := filepath.Join(dir, "ast.hfbc")
 			if out, code := issue141Run(bin, "build", src, "-o", art); code != 0 {
 				return out, code
 			}
-			return issue141Run(bin, "-run-bc", "-allow-caps", "network", art)
+			return issue141Run(bin, "-run-bc", "-allow-caps", fetchGrant, art)
 		},
 		"hfir_bytecode": func() (string, int) {
 			art := filepath.Join(dir, "hfir.hfbc")
 			if out, code := issue141Run(bin, "-compile-hfir-bc", src, "-o", art); code != 0 {
 				return out, code
 			}
-			return issue141Run(bin, "-run-bc", "-allow-caps", "network", art)
+			return issue141Run(bin, "-run-bc", "-allow-caps", fetchGrant, art)
 		},
 	}
 	for _, name := range []string{"interpreter", "ast_bytecode", "hfir_bytecode"} {
@@ -83,12 +84,19 @@ func TestIssue143FetchBodyEveryPath(t *testing.T) {
 			t.Fatalf("%v: %s", compile, out)
 		}
 		reset()
-		out, code := issue141Run(bin, "-run-bc", art)
-		if code == 0 || !strings.Contains(out, "capability denied: network") {
-			t.Errorf("%v denied: exit %d %s", compile, code, out)
-		}
-		if reqs := reset(); len(reqs) != 0 {
-			t.Errorf("%v denied sent %q", compile, reqs)
+		// #165: no grant, and the coarse network grant, both deny.
+		for _, grant := range []string{"", "network"} {
+			args := []string{"-run-bc", art}
+			if grant != "" {
+				args = []string{"-run-bc", "-allow-caps", grant, art}
+			}
+			out, code := issue141Run(bin, args...)
+			if code == 0 || !strings.Contains(out, "capability denied: network") {
+				t.Errorf("%v denied (%q): exit %d %s", compile, grant, code, out)
+			}
+			if reqs := reset(); len(reqs) != 0 {
+				t.Errorf("%v denied (%q) sent %q", compile, grant, reqs)
+			}
 		}
 	}
 }

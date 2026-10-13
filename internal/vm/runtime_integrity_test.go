@@ -351,12 +351,9 @@ func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
 	if denied.Code != http.StatusInternalServerError {
 		t.Fatalf("denied handler status = %d, want 500 (body %q)", denied.Code, denied.Body.String())
 	}
-	var failure VMError
-	if err := json.Unmarshal(denied.Body.Bytes(), &failure); err != nil {
-		t.Fatalf("denied body = %q, want structured VMError JSON: %v", denied.Body.String(), err)
-	}
-	if failure.Code != "CAPABILITY_DENIED" {
-		t.Fatalf("denied code = %q, want CAPABILITY_DENIED", failure.Code)
+	// #166: the client gets a generic 500; the runtime error stays in the log.
+	if denied.Body.String() != handlerFailureBody || strings.Contains(denied.Body.String(), "CAPABILITY_DENIED") || strings.Contains(denied.Body.String(), "STORE_OPEN") {
+		t.Fatalf("denied body = %q, want generic %q", denied.Body.String(), handlerFailureBody)
 	}
 	if !strings.Contains(errOut.String(), "CAPABILITY_DENIED") {
 		t.Errorf("failure not reported on ErrOut: %q", errOut.String())

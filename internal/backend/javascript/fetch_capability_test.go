@@ -47,7 +47,7 @@ func TestJSFetchRequiresGrantBeforeRequest(t *testing.T) {
 	}
 	helper := code[helperAt:]
 	denyAt := strings.Index(helper, "CAPABILITY_DENIED")
-	fetchAt := strings.Index(helper, "return fetch(")
+	fetchAt := strings.Index(helper, "fetch(u.href, init)")
 	if denyAt < 0 || fetchAt < 0 || denyAt > fetchAt {
 		t.Fatalf("grant check must precede the HTTP request:\n%s", helper)
 	}
@@ -81,7 +81,10 @@ func TestJSFetchRequiresGrantBeforeRequest(t *testing.T) {
 	otherOut, otherErr, otherCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
 	assertDenied("filesystem grant", otherOut, otherErr, otherCode)
 
-	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=network")
+	coarseOut, coarseErr, coarseCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=network")
+	assertDenied("coarse network grant (#165)", coarseOut, coarseErr, coarseCode)
+
+	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=network:fetch="+strings.TrimPrefix(srv.URL, "http://"))
 	if grantedCode != 0 {
 		t.Fatalf("network grant failed (%d): %s", grantedCode, grantedErr)
 	}
@@ -118,7 +121,7 @@ func TestJSFetchBodyIsMediated(t *testing.T) {
 		t.Fatalf("fetch body bypasses the grant:\n%s", code)
 	}
 	helperAt := strings.Index(code, "function howlFrameFetch")
-	if helperAt < 0 || strings.Index(code[helperAt:], "CAPABILITY_DENIED") > strings.Index(code[helperAt:], "return fetch(") {
+	if helperAt < 0 || strings.Index(code[helperAt:], "CAPABILITY_DENIED") > strings.Index(code[helperAt:], "fetch(u.href, init)") {
 		t.Fatalf("grant check must precede fetch:\n%s", code)
 	}
 }

@@ -25,13 +25,18 @@ func All() []Capability {
 	}
 }
 
+// Response forms (res, res_json, res_header, http_res_header) and
+// req_method only touch the request a route already accepted, so they need
+// no capability. fetch and http_request are classified as network here but
+// are authorized only by a host-scoped network:fetch= grant (see network.go).
+//
 // ForConstruct returns the capability required by a canonical HowlFrame operation or construct name.
 // If the construct does not require a capability, it returns None.
 func ForConstruct(name string) Capability {
 	switch name {
 	case "db_connect", "sql_query", "store_open", "store_put", "store_get", "store_delete", "store_keys":
 		return Database
-	case "fetch", "http_request", "res", "res_json", "res_header", "http_res_header", "req_method", "http_req_method", "http_server_start", "http_route", "http_server_serve", "llm_generate", "achieve", "confidence", "neural_circuit", "ephemeral_circuit":
+	case "fetch", "http_request", "http_server_start", "http_route", "http_server_serve", "llm_generate", "achieve", "confidence", "neural_circuit", "ephemeral_circuit":
 		return Network
 	case "read_file", "write_file", "mkdir":
 		return Filesystem

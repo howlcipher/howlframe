@@ -115,3 +115,18 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   not declare its own; a route's own `(grants ...)` (even empty) replaces it.
 * Both forms are bytecode-only; the Go checker/backends reject them with
   `UNSUPPORTED_ON_TARGET`.
+
+## Environment pass-through and receipts (#166)
+
+* `process:env=NAME` refuses dynamic-loader variables: any name starting with
+  `LD_` (including `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`) or `DYLD_`,
+  compared case-insensitively. Passing one to an allow-listed program would
+  let it load arbitrary code. The grant is rejected at parse time on the
+  interpreter and `-run-bc`; generated Go and JavaScript skip such names
+  when building the child environment.
+* Receipt `grant` strings are copied verbatim from the normalized grant. An
+  allowed exec records the matched entry with every pattern literal exactly
+  as written (for example `process:exec=/usr/bin/git log --oneline *`).
+  Pattern literals are therefore visible to anyone who can read receipts; do
+  not put secrets in grant patterns.
+

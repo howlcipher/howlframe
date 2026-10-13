@@ -349,7 +349,7 @@ func TestInterpretFetchGrantedReads(t *testing.T) {
 	node, _ := parseAndCompile(t, source)
 
 	var stdout, stderr bytes.Buffer
-	allowed := []capability.Capability{capability.Network}
+	allowed := []capability.Capability{fetchGrantFor(t, srv.URL)}
 	exitCode := Interpret(node, nil, allowed, strings.NewReader(""), &stdout, &stderr)
 	if exitCode != 0 {
 		t.Fatalf("expected Interpret to fetch with network, got exit %d; stderr=%s", exitCode, stderr.String())

@@ -26,6 +26,7 @@ func TestRequiredCapabilitiesExecution(t *testing.T) {
 		requests++
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: make(http.Header)}, nil
 	})}
+	defer capability.SetFetchTransportForTest(http.DefaultClient.Transport)()
 	t.Cleanup(func() { http.DefaultClient = previous })
 	path := filepath.Join(t.TempDir(), "store.json")
 	source := fmt.Sprintf(`(cli_app

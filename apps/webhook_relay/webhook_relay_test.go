@@ -3,6 +3,7 @@ package webhook_relay_test
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -13,7 +14,9 @@ import (
 )
 
 func TestWebhookRelay(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// The relay route is granted exactly one upstream host (#165), so the
+	// upstream listens on that fixed address.
+	upstream := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		if r.Method == http.MethodGet {
 			w.WriteHeader(201)
@@ -23,6 +26,13 @@ func TestWebhookRelay(t *testing.T) {
 		w.WriteHeader(202)
 		w.Write(append([]byte(`echo:`), body...))
 	}))
+	ln, err := net.Listen("tcp", "127.0.0.1:8099")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	upstream.Listener.Close()
+	upstream.Listener = ln
+	upstream.Start()
 	defer upstream.Close()
 
 	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "webhook_relay.howl")
@@ -31,7 +41,7 @@ func TestWebhookRelay(t *testing.T) {
 		t.Fatalf("compile: %v", err)
 	}
 
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment", "webhook_relay.howl.bc.bin")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment,network:fetch=127.0.0.1:8099", "webhook_relay.howl.bc.bin")
 	cmd.Dir = "."
 	cmd.Env = append(cmd.Environ(), "UPSTREAM_URL="+upstream.URL+"/")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

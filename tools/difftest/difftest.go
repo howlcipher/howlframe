@@ -151,8 +151,9 @@ func NormalizeError(errStr string) string {
 
 // allKnownCaps grants every capability class. process is scoped to the exact
 // programs the parity corpus runs, because a bare process grant never
-// authorizes exec.
-const allKnownCaps = "network,filesystem,process,process:exec=/usr/bin/rm **,environment,database"
+// authorizes exec. network is likewise coarse; outbound fetch is scoped to
+// the ABI fixture's loopback host (#165).
+const allKnownCaps = "network,network:fetch=127.0.0.1:47653,filesystem,process,process:exec=/usr/bin/rm **,environment,database"
 
 // RunOptions controls one differential execution.
 // A nil AllowCaps keeps the historical grant of every known capability.

@@ -2,6 +2,7 @@ package bytecode
 
 import (
 	"encoding/json"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"reflect"
@@ -49,9 +50,13 @@ func TestRequiredCapabilities(t *testing.T) {
 	for op, spec := range Registry {
 		if spec.Capability != "" {
 			r := RequiredCapabilities(&BCProgram{Main: []BCInstruction{{Op: op}}})
+			want := string(spec.Capability)
+			if op == OpFetch || op == OpHttpRequest {
+				want = capability.DynamicFetchRequirement // #165: never coarse network
+			}
 			found := false
 			for _, c := range r.Capabilities {
-				found = found || c == string(spec.Capability)
+				found = found || c == want
 			}
 			if !found {
 				t.Fatalf("missing %s", spec.Name)

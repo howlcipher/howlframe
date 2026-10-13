@@ -91,8 +91,17 @@ func slotMatches(p, arg string) bool {
 // exec child. exec children otherwise start with an empty environment.
 const EnvGrantPrefix = "process:env="
 
+// DynamicLoaderEnv reports variables that steer the dynamic loader
+// (LD_PRELOAD, LD_LIBRARY_PATH, any LD_* and DYLD_*). Passing one to an exec
+// child would let it load arbitrary code into an allow-listed program, so
+// process:env= refuses them.
+func DynamicLoaderEnv(name string) bool {
+	u := strings.ToUpper(name)
+	return strings.HasPrefix(u, "LD_") || strings.HasPrefix(u, "DYLD_")
+}
+
 func validEnvName(name string) bool {
-	if name == "" {
+	if name == "" || DynamicLoaderEnv(name) {
 		return false
 	}
 	for i, r := range name {
