@@ -280,14 +280,31 @@ func forbiddenResolved(a netip.Addr) bool {
 
 // checkDial vets the resolved address a connection is about to use. A DNS
 // name may not land on a forbidden destination. Explicit literal and
-// localhost grants opt out of private-address checks, but never multicast.
+// localhost grants opt out of private-address checks, but never multicast;
+// localhost must resolve to loopback.
 func checkDial(host string, literal bool, address string) error {
 	ap, err := netip.ParseAddrPort(address)
 	if err != nil {
 		return &FetchDenied{Reason: "network: fetch dial address is invalid", Required: FetchGrantPrefix + host}
 	}
-	if ap.Addr().IsMulticast() || !literal && !strings.EqualFold(host, "localhost") && forbiddenResolved(ap.Addr()) {
-		return &FetchDenied{Reason: "network: granted host resolved to a forbidden destination", Required: FetchGrantPrefix + canonicalIP(ap.Addr())}
+	a := ap.Addr().Unmap()
+	deny := func() error {
+		return &FetchDenied{Reason: "network: granted host resolved to a forbidden destination", Required: FetchGrantPrefix + canonicalIP(a)}
+	}
+	switch {
+	case a.IsMulticast():
+		return deny()
+	case literal:
+		return nil
+	case strings.EqualFold(host, "localhost"):
+		// #177: the localhost opt-out reaches loopback only, never a private
+		// or public address that a hostile resolver maps localhost to.
+		if !a.IsLoopback() {
+			return deny()
+		}
+		return nil
+	case forbiddenResolved(a):
+		return deny()
 	}
 	return nil
 }

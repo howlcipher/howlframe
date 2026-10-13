@@ -537,6 +537,12 @@ function howlFrameIsSpecial(b) {
   return false;
 }
 
+function howlFrameIsLoopback(b) {
+  if (!b) return false;
+  var v4 = b.slice(0, 12).join(",") === "0,0,0,0,0,0,0,0,0,0,255,255";
+  return v4 && b[12] === 127 || b.slice(0, 15).every(function (x) { return x === 0; }) && b[15] === 1;
+}
+
 function howlFrameForbiddenAddress(address, explicit) {
   var b = howlFrameAddrBytes(address);
   if (!b) return true;
@@ -553,11 +559,14 @@ async function howlFrameFetchResolvedOk(u) {
   if (typeof require !== "function") return true;
   var addrs = await require("dns").promises.lookup(host, { all: true });
   if (!addrs.length) return false;
+  var localhost = host === "localhost";
   for (var i = 0; i < addrs.length; i++) {
-    if (howlFrameForbiddenAddress(addrs[i].address, host === "localhost")) return false;
+    if (howlFrameForbiddenAddress(addrs[i].address, localhost)) return false;
+    // The localhost opt-out reaches loopback only (127/8, ::1).
+    if (localhost && !howlFrameIsLoopback(howlFrameAddrBytes(addrs[i].address))) return false;
   }
-  // Pin this request to a vetted address; do not resolve again at connect time.
-  u.howlFrameAddress = addrs[0];
+  // Pin this request to the full vetted set; never resolve again at connect time.
+  u.howlFrameAddresses = addrs.map(function (a) { return { address: a.address, family: a.family }; });
   return true;
 }
 
@@ -567,9 +576,14 @@ function howlFrameFetchRequest(u, init) {
   // NODE_USE_ENV_PROXY. agent:false also prevents pooled connections bypassing lookup.
   return new Promise(function (resolve, reject) {
     var options = { method: init.method, headers: init.headers, agent: false };
-    if (u.howlFrameAddress) options.lookup = function (host, opts, cb) {
-      var a = u.howlFrameAddress;
-      cb(null, opts && opts.all ? [{ address: a.address, family: a.family }] : a.address, a.family);
+    if (u.howlFrameAddresses) options.lookup = function (host, opts, cb) {
+      if (typeof opts === "function") { cb = opts; opts = {}; }
+      var all = u.howlFrameAddresses.filter(function (a) {
+        return !opts || !opts.family || opts.family === a.family || opts.family === "IPv" + a.family;
+      });
+      if (!all.length) return cb(new Error("CAPABILITY_DENIED: capability denied: network"));
+      if (opts && opts.all) return cb(null, all.map(function (a) { return { address: a.address, family: a.family }; }));
+      cb(null, all[0].address, all[0].family);
     };
     var req = require(u.protocol === "https:" ? "https" : "http").request(u, options, function (res) {
       var chunks = [];

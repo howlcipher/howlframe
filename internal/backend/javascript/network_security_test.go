@@ -84,7 +84,8 @@ func TestJSPrivateRanges(t *testing.T) {
 func TestJSRedirectToOptOut(t *testing.T) {
 	securityJS(t, jsServers+`
  const dns=require("dns"); const original=dns.promises.lookup;
- dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4}];
+ // localhost now has to resolve to loopback (#177); every other name is public.
+ dns.promises.lookup=async h=>[{address:h==="localhost"?"127.0.0.1":"93.184.216.34",family:4}];
  let seen=[];
  howlFrameFetchRequest=async (u)=>{seen.push(u.href); const to=u.searchParams.get("to");
   return to ? {status:302,headers:{get:()=>to}} : {status:200,headers:{get:()=>null},text:async()=>"ok"};};
@@ -282,5 +283,35 @@ func TestJSFetchCompressedResponse(t *testing.T) {
   const s=await listen((req,res)=>{res.writeHead(200,{"content-encoding":encoding});res.end(body);});
   try {grants(url(s));assert.equal(await howlFrameFetch(url(s),"GET"),"compressed response");} finally {s.close();}
  }
+`)
+}
+
+// #177: localhost reaches loopback only, and Node pins every vetted address.
+func TestJSLocalhostLoopbackAndPinAll(t *testing.T) {
+	securityJS(t, `
+ const dns=require("dns"); const original=dns.promises.lookup;
+ try {
+  for (const set of [["10.0.0.5"],["8.8.8.8"],["::ffff:10.0.0.5"],["fd00::1"],["127.0.0.1","10.0.0.5"],["::1","93.184.216.34"]]) {
+   dns.promises.lookup=async()=>set.map(a=>({address:a,family:a.includes(":")?6:4}));
+   assert.equal(await howlFrameFetchResolvedOk(new URL("http://localhost/")),false,set.join(","));
+  }
+  for (const set of [["127.0.0.1"],["127.0.0.1","::1"],["127.9.9.9"]]) {
+   dns.promises.lookup=async()=>set.map(a=>({address:a,family:a.includes(":")?6:4}));
+   assert.equal(await howlFrameFetchResolvedOk(new URL("http://localhost/")),true,set.join(","));
+  }
+  dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4},{address:"10.0.0.5",family:4}];
+  assert.equal(await howlFrameFetchResolvedOk(new URL("http://api.example.com/")),false);
+  dns.promises.lookup=async()=>[{address:"93.184.216.34",family:4},{address:"2606:4700::1",family:6}];
+  const u=new URL("http://api.example.com/");
+  assert.equal(await howlFrameFetchResolvedOk(u),true);
+  const http=require("http"); const realRequest=http.request; let lookupFn;
+  http.request=(url,options)=>{lookupFn=options.lookup; throw new Error("stop");};
+  try { await howlFrameFetchRequest(u,{method:"GET",headers:{}}); } catch(e) {}
+  http.request=realRequest;
+  const call=opts=>new Promise((res,rej)=>lookupFn("api.example.com",opts,(err,a,f)=>err?rej(err):res([a,f])));
+  assert.deepEqual((await call({all:true}))[0],[{address:"93.184.216.34",family:4},{address:"2606:4700::1",family:6}]);
+  assert.deepEqual(await call({family:6}),["2606:4700::1",6]);
+  assert.deepEqual(await call({}),["93.184.216.34",4]);
+ } finally {dns.promises.lookup=original;}
 `)
 }

@@ -900,7 +900,14 @@ var howlFrameFetchClient = &http.Client{
 					return howlFrameFetchDenied{}
 				}
 				a := ap.Addr().Unmap()
-				if a.IsMulticast() || litErr != nil && !strings.EqualFold(host, "localhost") && howlFrameForbiddenDest(a) {
+				if a.IsMulticast() {
+					return howlFrameFetchDenied{}
+				}
+				if litErr != nil && strings.EqualFold(host, "localhost") {
+					if !a.IsLoopback() {
+						return howlFrameFetchDenied{}
+					}
+				} else if litErr != nil && howlFrameForbiddenDest(a) {
 					return howlFrameFetchDenied{}
 				}
 				return nil

@@ -239,6 +239,30 @@ func Run(t *testing.T, client func(...string) *http.Client, lookup func(Lookup) 
 			})
 		}
 	})
+	t.Run("LocalhostLoopbackOnly", func(t *testing.T) {
+		for _, set := range [][]string{{"10.0.0.5"}, {"8.8.8.8"}, {"::ffff:10.0.0.5"}, {"fd00::1"}, {"169.254.169.254"}, {"127.0.0.1", "10.0.0.5"}, {"::1", "93.184.216.34"}} {
+			t.Run(strings.Join(set, ","), func(t *testing.T) {
+				restore := lookup(func(context.Context, string) ([]net.IPAddr, error) {
+					out := []net.IPAddr{}
+					for _, ip := range set {
+						out = append(out, net.IPAddr{IP: net.ParseIP(ip)})
+					}
+					return out, nil
+				})
+				defer restore()
+				c := client("network:fetch=localhost:80")
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+				conn, err := c.Transport.(*http.Transport).DialContext(ctx, "tcp", "localhost:80")
+				if conn != nil {
+					conn.Close()
+				}
+				if err == nil || !(strings.Contains(err.Error(), "network:") || strings.Contains(err.Error(), "capability denied")) {
+					t.Fatalf("localhost opt-out reached non-loopback %v: %v", set, err)
+				}
+			})
+		}
+	})
 	t.Run("MulticastDial", func(t *testing.T) {
 		for _, address := range []string{"224.0.0.1:80", "[ff02::1]:80"} {
 			c := client("network:fetch=" + address)
