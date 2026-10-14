@@ -13,6 +13,10 @@ The VM enforces runner-owned capability grants and finite instruction budgets.
 Relative file stores perform atomic replacement using a temporary sibling in the
 working directory; they do not depend on the system temporary directory or require
 it to share a filesystem with the destination.
+Positive exec tests select installed canonical executable paths and matching argv
+grants, so symlinked system coreutils do not invalidate successful-execution
+fixtures. Runtime symlink rejection and explicit denial tests remain unchanged;
+missing fixture executables fail rather than silently skipping acceptance.
 
 ## Why does it exist?
 
