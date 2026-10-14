@@ -78,6 +78,15 @@ const (
 	OpHTMLEscape
 	OpAttrEscape
 	OpHttpRequest
+	OpReadStdin
+	OpSha256Hex
+	OpRandHex
+	OpSecureEqual
+	OpHttpReqID
+	OpHttpReqBody
+	OpHttpReqURLPath
+	OpUTF8Valid
+	OpGranted
 )
 
 type OperandType string
@@ -163,6 +172,15 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpAttrEscape:       {Code: OpAttrEscape, Name: "ATTR_ESCAPE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Encodes &, <, >, \", and ' for a quoted HTML attribute"},
 	OpHttpRequest:      {Code: OpHttpRequest, Name: "HTTP_REQUEST", Operands: []OperandType{OperandInt}, Pops: -1, Pushes: 1, Capability: capability.Network, Description: "HTTP request returning dict with status and body; IntOperand 1 means a body is on the stack"},
 	OpReadLine:         {Code: OpReadLine, Name: "READ_LINE", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads a line from standard input"},
+	OpReadStdin:        {Code: OpReadStdin, Name: "READ_STDIN", Operands: []OperandType{}, Pops: 0, Pushes: 1, Description: "Reads all remaining standard input, byte-exact (end of input is distinguishable from an empty line)"},
+	OpSha256Hex:        {Code: OpSha256Hex, Name: "SHA256_HEX", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Lowercase hex SHA-256 digest of a string"},
+	OpRandHex:          {Code: OpRandHex, Name: "RAND_HEX", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Hex string of n (1..64) cryptographically secure random bytes"},
+	OpSecureEqual:      {Code: OpSecureEqual, Name: "SECURE_EQUAL", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Constant-time equality of two strings"},
+	OpHttpReqID:        {Code: OpHttpReqID, Name: "HTTP_REQ_ID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the server-assigned request id of an already-accepted request"},
+	OpHttpReqBody:      {Code: OpHttpReqBody, Name: "HTTP_REQ_BODY", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request body as a string, bounded by --max-request-bytes (LIMIT_EXCEEDED beyond it)"},
+	OpHttpReqURLPath:   {Code: OpHttpReqURLPath, Name: "HTTP_REQ_URL_PATH", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request URL path without the query string"},
+	OpUTF8Valid:        {Code: OpUTF8Valid, Name: "UTF8_VALID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when a string is valid UTF-8"},
+	OpGranted:          {Code: OpGranted, Name: "GRANTED", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when the runner granted the named capability (introspection only; confers no authority)"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},

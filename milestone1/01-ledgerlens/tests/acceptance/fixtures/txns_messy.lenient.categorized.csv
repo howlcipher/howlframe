@@ -1,0 +1,6 @@
+date,description,amount,category
+2024-02-29,""" quoted "" name, with comma",-1234.56,Uncategorized
+2026-03-01,padded,5.00,Uncategorized
+2026-03-02,zero,0.00,Uncategorized
+2026-03-02,negzero,0.00,Uncategorized
+2026-03-31,big,999999999999.99,Uncategorized

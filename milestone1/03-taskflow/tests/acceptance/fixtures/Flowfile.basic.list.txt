@@ -1,0 +1,7 @@
+build	gen	compile
+default	build,test	-
+flaky	lint	-
+gen	-	generate sources
+lint	-	-
+package	test	build artifacts
+test	build,gen	-

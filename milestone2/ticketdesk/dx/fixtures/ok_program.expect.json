@@ -1,0 +1,15 @@
+{
+  "item": 0,
+  "description": "Control: a correct program must still pass check and build with no diagnostics.",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": true,
+  "must_match": [],
+  "must_not_match": [
+    "(?i)\\berror\\b",
+    "\"reason\""
+  ],
+  "must_differ_from_old_output": false
+}

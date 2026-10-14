@@ -1,0 +1,15 @@
+(cli_app
+  ; dx control: a correct program must keep building cleanly.
+  (defun triple (n)
+    (type_hint n "int")
+    (type_hint return "int")
+    (return (* n 3))
+  )
+  (print (to_string (call triple (call triple 2))))
+  (let (x 5)
+    (do
+      (print "value:")
+      (print (to_string x))
+    )
+  )
+)

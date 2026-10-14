@@ -1,0 +1,11 @@
+(cli_app
+  ; dx fixture 3: user-defined function triple invoked without (call ...) on line 10.
+  (defun triple (n)
+    (type_hint n "int")
+    (type_hint return "int")
+    (return (* n 3))
+  )
+
+  (print "start")
+  (print (to_string (triple (triple 2))))
+)

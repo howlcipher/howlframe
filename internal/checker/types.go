@@ -780,6 +780,11 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			a.add(node, fmt.Sprintf("read_line expects 0 arguments, got %d", len(node.Children)-1))
 		}
 		return ast.Layout(ast.String)
+	case "read_stdin":
+		if len(node.Children) != 1 {
+			a.add(node, fmt.Sprintf("read_stdin expects 0 arguments, got %d", len(node.Children)-1))
+		}
+		return ast.Layout(ast.String)
 	case "stderr":
 		if len(node.Children) != 2 {
 			a.add(node, fmt.Sprintf("stderr expects 1 argument, got %d", len(node.Children)-1))
@@ -1066,12 +1071,12 @@ func isKeyword(name string) bool {
 		"dict", "list_get", "map_get", "map_keys", "map_set", "map_delete", "append",
 		"to_int", "to_float", "to_string", "bytes_to_string", "to_lower", "to_upper", "str_trim",
 		"encode_json", "html_escape", "attr_escape", "str_split",
-		"str_join", "regex_match", "confidence", "achieve", "fuzzy_cast",
+		"str_join", "regex_match", "req_id", "req_body", "req_url_path", "utf8_valid", "granted", "sha256_hex", "rand_hex", "secure_equal", "confidence", "achieve", "fuzzy_cast",
 		"time_now", "lazy_synthesize", "semantic_match", "neural_circuit",
 		"ephemeral_circuit", "db_connect", "sql_query", "store_open",
 		"store_get", "store_put", "store_delete", "store_keys", "intent",
 		"optimize_signature", "schema_bridge", "cli_args", "rate_limit",
-		"void", "string", "int", "float", "bool", "read_line", "stderr", "exit":
+		"void", "string", "int", "float", "bool", "read_line", "read_stdin", "stderr", "exit":
 		return true
 	}
 	return false

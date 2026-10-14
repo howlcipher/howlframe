@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -351,12 +352,20 @@ func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
 	if denied.Code != http.StatusInternalServerError {
 		t.Fatalf("denied handler status = %d, want 500 (body %q)", denied.Code, denied.Body.String())
 	}
-	// #166: the client gets a generic 500; the runtime error stays in the log.
-	if denied.Body.String() != handlerFailureBody || strings.Contains(denied.Body.String(), "CAPABILITY_DENIED") || strings.Contains(denied.Body.String(), "STORE_OPEN") {
-		t.Fatalf("denied body = %q, want generic %q", denied.Body.String(), handlerFailureBody)
+	// #166: the client gets a generic 500 (plus a request id it can quote); the
+	// runtime error stays in the log next to the same id.
+	rid := denied.Header().Get("X-Request-Id")
+	if len(rid) != 32 {
+		t.Fatalf("X-Request-Id = %q, want a 32 hex digit id", rid)
+	}
+	if denied.Body.String() != handlerFailureBodyFor(rid) || strings.Contains(denied.Body.String(), "CAPABILITY_DENIED") || strings.Contains(denied.Body.String(), "STORE_OPEN") {
+		t.Fatalf("denied body = %q, want generic %q", denied.Body.String(), handlerFailureBodyFor(rid))
 	}
 	if !strings.Contains(errOut.String(), "CAPABILITY_DENIED") {
 		t.Errorf("failure not reported on ErrOut: %q", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "fault request_id="+rid+" method=GET path=/denied error=") {
+		t.Errorf("fault line lacks request context: %q", errOut.String())
 	}
 
 	// A handler that succeeds must be completely unaffected.
@@ -364,5 +373,41 @@ func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
 	mux.ServeHTTP(ok, httptest.NewRequest(http.MethodGet, "/ok", nil))
 	if ok.Code != http.StatusOK || !strings.Contains(ok.Body.String(), `"ok":"yes"`) {
 		t.Fatalf("healthy handler = %d %q, want 200 with body", ok.Code, ok.Body.String())
+	}
+}
+
+// Milestone 2: a zero-byte store file is valid empty state, and persistence
+// replaces the file atomically (no temporary sibling is left behind and the file
+// is always complete JSON).
+func TestFileStoreEmptyFileAndAtomicWrite(t *testing.T) {
+	uri := fileStoreURI(t, "empty.json")
+	path := strings.TrimPrefix(uri, "file://")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if failure := runStoreOpen(t, uri, capability.Database, capability.Filesystem); failure != nil {
+		t.Fatalf("zero-byte store must open as empty, got %#v", failure)
+	}
+	vm := newStoreTestVM()
+	vm.AllowedCaps = []capability.Capability{capability.Database, capability.Filesystem}
+	for i := 0; i < 5; i++ {
+		putStoreRecord(vm, "store", uri, fmt.Sprintf("k%d", i), map[string]any{"n": float64(i)})
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "empty.json" {
+			t.Fatalf("temporary file left behind: %s", e.Name())
+		}
+	}
+	var persisted map[string]any
+	data, _ := os.ReadFile(path)
+	if err := json.Unmarshal(data, &persisted); err != nil || len(persisted) != 5 {
+		t.Fatalf("persisted store = %q (%v)", data, err)
+	}
+	if err := writeFileAtomic(filepath.Join(filepath.Dir(path), "missing", "x.json"), []byte("{}")); err == nil {
+		t.Fatalf("writing into a missing directory must fail")
 	}
 }

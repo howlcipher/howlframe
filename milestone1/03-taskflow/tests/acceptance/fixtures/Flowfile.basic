@@ -1,0 +1,19 @@
+# demo pipeline (placeholders are substituted by the acceptance suite)
+set GREETING = hello world
+
+task default after build test
+task gen
+  desc generate sources
+  run @PY@ -c "print('gen:${GREETING}')"
+task build after gen
+  desc compile
+  run @PY@ -c "print('build ok')"
+task test after build gen
+  run @PY@ -c "print('t1')"
+  run @PY@ -c "print('t2')"
+task lint
+  run @PY@ -c "import sys; print('lint failed'); sys.exit(3)"
+task flaky after lint
+  run @PY@ -c "print('never')"
+task package after test
+  desc build artifacts

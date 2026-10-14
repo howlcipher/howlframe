@@ -1,0 +1,18 @@
+{
+  "item": 3,
+  "description": "let given two body expressions (line 3); the diagnostic must say a let takes one body expression and suggest wrapping several in (do ...).",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "\\blet\\b",
+    "\\(do\\b",
+    "(?i)one (body )?(expression|form)|single (body )?(expression|form)",
+    "\\b3\\b"
+  ],
+  "must_not_match": [],
+  "must_differ_from_old_output": true,
+  "old_output": "{\"reason\":\"ARITY_ERROR: let expects 2 args, got 3\",\"line\":3,\"column\":4}"
+}

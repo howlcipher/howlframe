@@ -270,10 +270,10 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		// Value-taking built-ins: nested sugar in their arguments must expand
 		// (heldout-v0 h05/h12). Kept complete by the registry drift test.
 		"write_file", "read_file", "mkdir", "to_lower", "to_upper", "str_trim",
-		"html_escape", "attr_escape", "regex_match", "is_nil", "map_keys",
-		"env", "sleep", "exec", "cli_args", "read_line", "time_now",
+		"html_escape", "attr_escape", "regex_match", "sha256_hex", "rand_hex", "secure_equal", "is_nil", "map_keys",
+		"env", "sleep", "exec", "cli_args", "read_line", "read_stdin", "time_now",
 		"store_open", "store_keys", "res_header",
-		"req_header", "req_method", "req_path", "req_query",
+		"req_header", "req_id", "req_body", "req_url_path", "utf8_valid", "granted", "req_method", "req_path", "req_query",
 		"llm_generate", "confidence",
 		// Core-library sugar (heldout-v1).
 		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort",
@@ -1274,6 +1274,23 @@ func desugarStartsEndsWith(node *Node) {
 				{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
 			},
 		}
+		// An empty subject splits to [""], which would match every non-empty
+		// prefix; only a non-empty subject can start with a non-empty prefix.
+		test = &Node{
+			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+			Children: []*Node{
+				{Type: "SYMBOL", Value: "and", Line: node.Line, Column: node.Column, Filename: node.Filename},
+				{
+					Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
+					Children: []*Node{
+						{Type: "SYMBOL", Value: "!=", Line: node.Line, Column: node.Column, Filename: node.Filename},
+						sSym,
+						{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
+					},
+				},
+				test,
+			},
+		}
 	} else {
 		sentinel := &Node{Type: "STRING", Value: "\x1e", Line: node.Line, Column: node.Column, Filename: node.Filename}
 		hay := &Node{
@@ -1463,14 +1480,14 @@ var exprBodyHeads = map[string]bool{
 	"map_get": true, "list_get": true, "list_len": true, "map_keys": true,
 	"to_int": true, "to_float": true, "to_string": true, "bytes_to_string": true,
 	"to_lower": true, "to_upper": true, "str_trim": true,
-	"env": true, "read_file": true, "read_line": true, "read_text": true, "cli_args": true,
+	"env": true, "read_file": true, "read_line": true, "read_stdin": true, "read_text": true, "cli_args": true,
 	"lines": true, "str_split": true, "str_join": true, "str": true, "str_contains": true,
 	"str_replace": true, "starts_with": true, "ends_with": true, "http_body": true,
 	"http_status": true, "list_contains": true, "not": true, "blank": true,
-	"unix_now": true, "regex_match": true,
+	"unix_now": true, "regex_match": true, "sha256_hex": true, "rand_hex": true, "secure_equal": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
-	"req_header": true, "req_method": true, "req_path": true, "req_query": true,
+	"req_header": true, "req_id": true, "req_body": true, "req_url_path": true, "utf8_valid": true, "granted": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,
 }
 

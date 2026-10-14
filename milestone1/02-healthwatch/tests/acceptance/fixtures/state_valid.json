@@ -1,0 +1,5 @@
+{"version": 1, "checks": {
+  "zeta":  {"health": "up",   "since": 1760000000, "last_run": 1760000300, "last_status": "PASS",  "last_http_status": 200,  "consecutive_failures": 0},
+  "alpha": {"health": "down", "since": 1760000100, "last_run": 1760000300, "last_status": "ERROR", "last_http_status": null, "consecutive_failures": 3},
+  "mid.1": {"health": "down", "since": 1760000200, "last_run": 1760000300, "last_status": "FAIL",  "last_http_status": 503,  "consecutive_failures": 1}
+}}
