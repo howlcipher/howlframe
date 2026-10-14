@@ -14,6 +14,10 @@ HFBC readers resolve known serialized opcode names before structural validation,
 so internal numeric enum changes do not alter older artifact semantics. Both
 accepted envelope versions retain unknown-opcode, jump and function checks;
 execution still requires the named instruction's capabilities.
+Positive exec tests select installed canonical executable paths and matching argv
+grants, so symlinked system coreutils do not invalidate successful-execution
+fixtures. Runtime symlink rejection and explicit denial tests remain unchanged;
+missing fixture executables fail rather than silently skipping acceptance.
 
 ## Why does it exist?
 
