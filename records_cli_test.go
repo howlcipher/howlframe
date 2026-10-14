@@ -194,6 +194,12 @@ func TestRecordsRejectedOnGoJS(t *testing.T) {
 		`(print (rec a 1))`, `(let (m (dict)) (print (get m "a")))`, `(let (m (dict)) (put m "a" 1))`,
 		`(print (read_json "x.json"))`, `(write_json "x.json" (list))`, `(print (pluck (list) "a"))`,
 		`(print (select (list) a))`, `(print (group_by x (list) x))`, `(print (merge (dict)))`,
+		`(let (rec (rec a 1)) (print rec))`,
+		`(let (x 1 rec (rec a 1)) (print rec))`,
+		`(try_let (rec (rec a 1)) (catch err (print err)) (print rec))`,
+		`(defun f (rec) (return (get rec "a")))`,
+		`(let (f (lambda (rec) (get rec "a"))) (print "ok"))`,
+		`(print (dict ("a" (rec b 1))))`,
 	}
 	for _, f := range forms {
 		for _, target := range []string{"go", "js"} {
@@ -229,6 +235,27 @@ func TestRecordsGovernedFailsClosed(t *testing.T) {
 		out, err := exec.Command(bin, "build", "--profile", "governed", p, "-o", filepath.Join(dir, "g.hfbc")).CombinedOutput()
 		if err == nil || !strings.Contains(string(out), "PROFILE_FORBIDDEN_CONSTRUCT") {
 			t.Errorf("%s: err=%v out=%s", src, err, out)
+		}
+	}
+}
+
+func TestTargetSugarNamesInBindings(t *testing.T) {
+	bin := c1c2Binary(t)
+	for _, target := range []string{"go", "js"} {
+		for _, body := range []string{
+			`(let (rec (dict ("delta" 1))) (print (map_get rec "delta")))`,
+			`(let (range 1 rec 2) (print range rec))`,
+			`(defun echo (rec) (return rec)) (print (call echo "ok"))`,
+			`(let (f (lambda (rec) (print rec))) (print "ok"))`,
+		} {
+			t.Run(target+body, func(t *testing.T) {
+				dir := t.TempDir()
+				p := writeTemp(t, dir, "binding.howl", "(do "+body+")")
+				out, err := exec.Command(bin, "build", "--target", target, p, "-o", filepath.Join(dir, "out")).CombinedOutput()
+				if err != nil {
+					t.Fatalf("ordinary binding rejected: %v %s", err, out)
+				}
+			})
 		}
 	}
 }

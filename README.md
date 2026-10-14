@@ -18,6 +18,11 @@ Adaptive operations may reason, classify, generate, rank, plan, and propose. Det
 
 LLMs are good at producing structure, but they often lose time on syntax details, invalid APIs, and large rewrites. HowlFrame keeps the source grammar small and uniform so generation can be constrained and validated before runtime.
 
+For Go and JavaScript targets, ordinary binding and parameter names such as
+`rec` are distinguished from executable forms. Actual record and control-flow
+sugar remains restricted to the bytecode target; using it in an initializer
+or function body still fails before output is written.
+
 ## Install
 
 ### Release binaries
@@ -520,3 +525,5 @@ or deployment authorization. A process.env bundler shim takes precedence and
 fails closed unless that shim supplies the environment grant.
 Browser bootstrap failures keep their original error rather than trying to
 call Node process.exit.
+
+Verification jobs set `HOWL_FORBID_LOCAL_INFERENCE=1`; deterministic compiler checks do not authorize local model inference.
