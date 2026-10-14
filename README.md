@@ -10,6 +10,10 @@ HowlFrame is an experimental AI-native language and capability-bounded execution
 
 The VM enforces runner-owned capability grants and finite instruction budgets.
 
+Relative file stores perform atomic replacement using a temporary sibling in the
+working directory; they do not depend on the system temporary directory or require
+it to share a filesystem with the destination.
+
 ## Why does it exist?
 
 The governing principle is simple: **intent is not authority**.
