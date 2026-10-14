@@ -999,7 +999,7 @@ func runArtifact() {
 		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
 		if policyErr != nil {
 			fmt.Fprintln(os.Stderr, policyErr)
-			os.Exit(1)
+			os.Exit(2) // usage error: an invalid resource flag value
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
 		executionPolicy.Limits.LogRequests = *accessLog

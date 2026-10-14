@@ -178,7 +178,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpSecureEqual:      {Code: OpSecureEqual, Name: "SECURE_EQUAL", Operands: []OperandType{}, Pops: 2, Pushes: 1, Description: "Constant-time equality of two strings"},
 	OpHttpReqID:        {Code: OpHttpReqID, Name: "HTTP_REQ_ID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the server-assigned request id of an already-accepted request"},
 	OpHttpReqBody:      {Code: OpHttpReqBody, Name: "HTTP_REQ_BODY", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request body as a string, bounded by --max-request-bytes (LIMIT_EXCEEDED beyond it)"},
-	OpHttpReqURLPath:   {Code: OpHttpReqURLPath, Name: "HTTP_REQ_URL_PATH", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request URL path without the query string"},
+	OpHttpReqURLPath:   {Code: OpHttpReqURLPath, Name: "HTTP_REQ_URL_PATH", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request URL path (percent-encoded, as sent) without the query string"},
 	OpUTF8Valid:        {Code: OpUTF8Valid, Name: "UTF8_VALID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when a string is valid UTF-8"},
 	OpGranted:          {Code: OpGranted, Name: "GRANTED", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when the runner granted the named capability (introspection only; confers no authority)"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},

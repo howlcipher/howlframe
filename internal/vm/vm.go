@@ -2813,7 +2813,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							status = http.StatusOK
 						}
 						fmt.Fprintf(vm.ErrOut, "access method=%s path=%s status=%d duration_ms=%d request_id=%s\n",
-							r.Method, r.URL.Path, status, time.Since(started).Milliseconds(), requestID)
+							r.Method, r.URL.EscapedPath(), status, time.Since(started).Milliseconds(), requestID)
 					}()
 				}
 				reqEnv := NewBcEnv(capturedEnv)
@@ -2842,7 +2842,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						// Details (code, opcode, message) stay in the server log
 						// and the receipt; the client only learns that the
 						// request failed (#166).
-						fmt.Fprintf(vm.ErrOut, "fault request_id=%s method=%s path=%s error=%s\n", requestID, r.Method, r.URL.Path, failure.Error())
+						fmt.Fprintf(vm.ErrOut, "fault request_id=%s method=%s path=%s error=%s\n", requestID, r.Method, r.URL.EscapedPath(), failure.Error())
 						if recorder.wrote {
 							// The handler already committed a response; the
 							// status line cannot be rewritten, so surface the
@@ -3340,7 +3340,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok || req == nil || req.URL == nil {
 				panicRequestRead(ip, inst.Op, fmt.Errorf("TYPE_ERROR: req_url_path expected *http.Request, got %T", recv))
 			}
-			vm.push(req.URL.Path)
+			vm.push(req.URL.EscapedPath())
 		case bytecode.OpUTF8Valid:
 			s, ok := vm.pop(inst.Op).(string)
 			if !ok {

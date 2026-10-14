@@ -108,6 +108,10 @@ func TestHTTPServerM2Features(t *testing.T) {
 	if code, out := get("GET", "/v1/nope/", ""); code != 404 || !strings.Contains(out, "no_route") || !strings.Contains(out, "/v1/nope/") {
 		t.Fatalf("fallback: %d %s", code, out)
 	}
+	// The path is reported percent-encoded as sent, so a log line can never be split by it.
+	if code, out := get("GET", "/odd%20x%0Ay", ""); code != 404 || !strings.Contains(out, `/odd%20x%0Ay`) {
+		t.Fatalf("encoded path: %d %s", code, out)
+	}
 	if code, out := get("PUT", "/info/abc", strings.Repeat("x", 100)); code == 200 {
 		t.Fatalf("oversize body must raise LIMIT_EXCEEDED in the handler (500), got %d %s", code, out)
 	}

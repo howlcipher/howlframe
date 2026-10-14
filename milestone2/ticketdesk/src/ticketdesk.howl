@@ -1,0 +1,501 @@
+; ticketdesk 1.0.0 - issue-tracker HTTP API (Milestone 2 demonstration backend).
+; Spec: milestone2/ticketdesk/requirements/REQUIREMENTS.md (frozen 2026-10-13).
+; Runs on the standalone VM with exactly:
+;   network,database,environment,filesystem:read=<DIR>,filesystem:write=<DIR>
+; State lives in one file-backed native store at TICKETDESK_DATA. Handlers run one at a
+; time ((serialize_requests)) so every read-modify-write is atomic.
+(http_server (call preflight)
+  (serialize_requests)
+  (grants "database" "inherit:filesystem")
+
+  ; ---------------------------------------------------------------- startup
+  (defun die ((code int) (msg string)) int
+    (do
+      (stderr (str "ticketdesk: " msg "\n"))
+      (exit code)
+      (return 0)))
+
+  (defun is_denied ((e string)) bool
+    (return (regex_match "CAPABILITY_DENIED" e)))
+
+  (defun denied_name ((e string)) string
+    (do
+      (if (str_contains e "environment") (return "environment"))
+      (if (str_contains e "database") (return "database"))
+      (if (str_contains e "network") (return "network"))
+      (return "filesystem")))
+
+  (defun envv ((name string)) string
+    (do
+      (try_let (v (env name))
+        (catch e (call die 77 "capability denied: environment"))
+        (return v))
+      (return "")))
+
+  (defun nilv () any
+    (return (map_get (dict) "none")))
+
+  (defun open_state ((uri string)) any
+    (do (store_open kv uri) (return kv)))
+
+  (defun prove_write ((st any)) int
+    (let (meta (store_get st "meta"))
+      (do
+        (if (is_nil meta)
+          (store_put st "meta" (dict ("next_ticket" 1) ("next_token" 1)))
+          (store_put st "meta" meta))
+        (return 1))))
+
+  ; Validates the environment, the data path and every grant, in the order of the spec
+  ; (environment 2, data 66/65, grants 77), prepares the in-memory configuration and
+  ; returns the TCP port. Nothing is listening before this returns.
+  (defun preflight () int
+    (let (tok (call envv "TICKETDESK_ADMIN_TOKEN") data (call envv "TICKETDESK_DATA") port_raw (call envv "TICKETDESK_PORT")
+          dbg (call envv "TICKETDESK_ALLOW_DEBUG_FAULT") port 8080 dir "")
+      (do
+        (if (not (regex_match "^[\\x21-\\x7e]{16,256}$" tok)) (call die 2 "TICKETDESK_ADMIN_TOKEN must be 16 to 256 printable ASCII characters without spaces"))
+        (if (= data "") (call die 2 "TICKETDESK_DATA is required"))
+        (if (not (starts_with data "/")) (call die 2 "TICKETDESK_DATA must be an absolute path"))
+        (if (!= port_raw "")
+          (do
+            (if (not (regex_match "^[0-9]{1,5}$" port_raw)) (call die 2 "TICKETDESK_PORT must be an integer 1..65535"))
+            (set port (to_int port_raw))
+            (if (or (< port 1) (> port 65535)) (call die 2 "TICKETDESK_PORT must be an integer 1..65535"))))
+        (let (parts (str_split data "/"))
+          (set dir (str_join (list_slice parts 0 -1) "/")))
+        (if (= dir "") (set dir "/"))
+        ; the directory must exist (66); the data path must not be unreadable or a directory (65)
+        (try_let (d (read_file dir))
+          (catch e
+            (do
+              (if (call is_denied e) (call die 77 "capability denied: filesystem"))
+              (if (str_contains e "no such file") (call die 66 "data directory does not exist"))))
+          (set d d))
+        (try_let (f (read_file data))
+          (catch e
+            (do
+              (if (call is_denied e) (call die 77 "capability denied: filesystem"))
+              (if (not (str_contains e "no such file")) (call die 65 "data path is not readable as ticketdesk state"))))
+          (set f f))
+        (let (uri (str "file://" data) ok 0)
+          (do
+            (try_let (st (call open_state uri))
+              (catch e
+                (if (call is_denied e)
+                  (call die 77 (str "capability denied: " (call denied_name e)))
+                  (call die 65 "data file is not valid ticketdesk state")))
+              ; prove the state can be written (also creates an absent file)
+              (try_let (w (call prove_write st))
+                (catch e
+                  (if (call is_denied e)
+                    (call die 77 (str "capability denied: " (call denied_name e)))
+                    (call die 73 "cannot write the data file")))
+                (set ok w)))))
+        (if (not (granted "network")) (call die 77 "capability denied: network"))
+        (store_open cfg "memory://ticketdesk-config")
+        (store_put cfg "c" (dict ("data" data) ("boot" (sha256_hex tok)) ("debug" (if (= dbg "1") 1 0))))
+        (return port))))
+
+  ; ---------------------------------------------------------------- shared helpers
+  (defun db () any
+    (let (c (call cfgrec))
+      (do
+        (store_open kv (str "file://" (map_get c "data")))
+        (return kv))))
+
+  (defun cfgrec () any
+    (do
+      (store_open cfg "memory://ticketdesk-config")
+      (return (store_get cfg "c"))))
+
+  ; o object, a array, s string, i integer, n other number, b bool, z null
+  (defun jc ((v any)) string
+    (let (e (encode_json v))
+      (let (c (str_slice e 0 1))
+        (do
+          (if (= c "{") (return "o"))
+          (if (= c "[") (return "a"))
+          (if (= c "\"") (return "s"))
+          (if (or (= c "t") (= c "f")) (return "b"))
+          (if (= c "n") (return "z"))
+          (if (regex_match "^-?[0-9]+$" e) (return "i"))
+          (return "n")))))
+
+  (defun send_err ((req any) (status int) (code string) (msg string)) int
+    (do
+      (res_json status (dict ("error" (dict ("code" code) ("message" msg) ("request_id" (req_id req))))))
+      (return 0)))
+
+  (defun send_fields ((req any) (fields list)) int
+    (do
+      (res_json 400 (dict ("error" (dict ("code" "validation_failed") ("message" "Request validation failed.") ("request_id" (req_id req)) ("fields" fields)))))
+      (return 0)))
+
+  (defun field ((name string) (code string) (msg string)) dict
+    (return (dict ("field" name) ("code" code) ("message" msg))))
+
+  (defun unauthorized ((req any)) int
+    (do
+      (res_header "WWW-Authenticate" "Bearer realm=\"ticketdesk\"")
+      (return (call send_err req 401 "unauthorized" "Invalid or missing credentials."))))
+
+  (defun allow_for ((route string)) string
+    (do
+      (if (= route "health") (return "GET"))
+      (if (= route "me") (return "GET"))
+      (if (= route "tickets") (return "GET, POST"))
+      (if (= route "ticket") (return "DELETE, GET, PATCH"))
+      (if (= route "tokens") (return "GET, POST"))
+      (return "DELETE")))
+
+  ; ---------------------------------------------------------------- authentication
+  ; {"ok":1,"id","name","role"} or {"ok":0}
+  (defun authenticate ((req any)) dict
+    (let (h (req_header req "Authorization") c (call cfgrec))
+      (do
+        (if (< (str_len h) 8) (return (dict ("ok" 0))))
+        (if (!= (to_lower (str_slice h 0 7)) "bearer ") (return (dict ("ok" 0))))
+        (let (secret (str_slice h 7))
+          (do
+            (if (not (regex_match "^[\\x21-\\x7e]+$" secret)) (return (dict ("ok" 0))))
+            (let (hh (sha256_hex secret))
+              (do
+                (if (secure_equal hh (map_get c "boot"))
+                  (return (dict ("ok" 1) ("id" "bootstrap") ("name" "bootstrap") ("role" "admin"))))
+                (let (s (call db) link (store_get s (str "h:" hh)))
+                  (do
+                    (if (is_nil link) (return (dict ("ok" 0))))
+                    (let (rec (store_get s (str "k:" (map_get link "id"))))
+                      (do
+                        (if (is_nil rec) (return (dict ("ok" 0))))
+                        (if (not (secure_equal (map_get rec "hash") hh)) (return (dict ("ok" 0))))
+                        (if (= (map_get rec "revoked") 1) (return (dict ("ok" 0))))
+                        (return (dict ("ok" 1) ("id" (map_get rec "id")) ("name" (map_get rec "name")) ("role" (map_get rec "role")))))))))))))))
+
+  ; ---------------------------------------------------------------- request bodies
+  (defun media_ok ((req any)) bool
+    (let (ct (req_header req "Content-Type"))
+      (do
+        (if (= ct "") (return false))
+        (return (= (to_lower (str_trim (list_get (str_split ct ";") 0))) "application/json")))))
+
+  ; {"kind":"ok","doc":obj} | {"kind":"err","status","code","msg"} | {"kind":"fields","fields":list} | {"kind":"fault","text"}
+  (defun read_object ((req any)) dict
+    (let (raw "")
+      (do
+        (if (not (call media_ok req))
+          (return (dict ("kind" "err") ("status" 415) ("code" "unsupported_media_type") ("msg" "Content-Type must be application/json."))))
+        (try_let (b (req_body req))
+          (catch e
+            (do
+              (if (regex_match "LIMIT_EXCEEDED" e)
+                (return (dict ("kind" "err") ("status" 413) ("code" "payload_too_large") ("msg" "Request body is too large."))))
+              (return (dict ("kind" "fault") ("text" e)))))
+          (set raw b))
+        (if (not (utf8_valid raw))
+          (return (dict ("kind" "err") ("status" 400) ("code" "invalid_json") ("msg" "Request body is not valid JSON."))))
+        (let (src raw)
+          (try_let (doc (parse_json Any src))
+            (catch e (return (dict ("kind" "err") ("status" 400) ("code" "invalid_json") ("msg" "Request body is not valid JSON."))))
+            (do
+              (if (!= (call jc doc) "o")
+                (return (dict ("kind" "fields") ("fields" (list (call field "$" "invalid_type" "Request body must be a JSON object."))))))
+              (return (dict ("kind" "ok") ("doc" doc))))))
+        (return (dict ("kind" "fault") ("text" "unreachable"))))))
+
+  ; ---------------------------------------------------------------- field validation (R7)
+  ; {"fields": list, "vals": dict}
+  (defun check_ticket ((doc any) (create int)) dict
+    (let (fields (list) vals (dict) keys (sort (map_keys doc)) n (list_len (map_keys doc)))
+      (do
+        (for k keys
+          (if (not (list_contains (list "title" "body" "priority" "status") k))
+            (append fields (call field k "unknown_field" (str k " is not a known field")))
+            (if (and (= k "status") (= create 1))
+              (append fields (call field k "unknown_field" "status cannot be set when creating a ticket"))
+              (let (v (map_get doc k) t (call jc (map_get doc k)))
+                (if (= k "title")
+                  (if (!= t "s")
+                    (append fields (call field k "invalid_type" "title must be a string"))
+                    (if (= (str_len v) 0)
+                      (append fields (call field k "too_short" "title must be at least 1 character"))
+                      (if (> (str_len v) 120)
+                        (append fields (call field k "too_long" "title must be at most 120 characters"))
+                        (map_set vals k v))))
+                  (if (= k "body")
+                    (if (!= t "s")
+                      (append fields (call field k "invalid_type" "body must be a string"))
+                      (if (> (str_len v) 4000)
+                        (append fields (call field k "too_long" "body must be at most 4000 characters"))
+                        (map_set vals k v)))
+                    (if (!= t "s")
+                      (append fields (call field k "invalid_type" (str k " must be a string")))
+                      (if (not (list_contains (if (= k "priority") (list "low" "normal" "high") (list "open" "in_progress" "done")) v))
+                        (append fields (call field k "invalid_value" (str k " has an unsupported value")))
+                        (map_set vals k v)))))))))
+        (if (and (= create 1) (not (map_has doc "title")))
+          (append fields (call field "title" "required" "title is required")))
+        (if (and (= create 0) (= n 0))
+          (append fields (call field "$" "required" "at least one field is required")))
+        (return (dict ("fields" fields) ("vals" vals))))))
+
+  (defun check_token ((doc any)) dict
+    (let (fields (list) vals (dict))
+      (do
+        (for k (sort (map_keys doc))
+          (if (not (list_contains (list "name" "role") k))
+            (append fields (call field k "unknown_field" (str k " is not a known field")))
+            (let (v (map_get doc k))
+              (if (!= (call jc v) "s")
+                (append fields (call field k "invalid_type" (str k " must be a string")))
+                (if (= k "name")
+                  (if (= (str_len v) 0)
+                    (append fields (call field k "too_short" "name must be at least 1 character"))
+                    (if (> (str_len v) 64)
+                      (append fields (call field k "too_long" "name must be at most 64 characters"))
+                      (map_set vals k v)))
+                  (if (not (list_contains (list "admin" "member" "viewer") v))
+                    (append fields (call field k "invalid_value" "role must be admin, member or viewer"))
+                    (map_set vals k v)))))))
+        (if (not (map_has doc "name")) (append fields (call field "name" "required" "name is required")))
+        (if (not (map_has doc "role")) (append fields (call field "role" "required" "role is required")))
+        (return (dict ("fields" fields) ("vals" vals))))))
+
+  ; ---------------------------------------------------------------- tickets
+  (defun ticket_key ((id string)) string
+    (do
+      (if (not (regex_match "^t[1-9][0-9]{0,8}$" id)) (return ""))
+      (return (str "t:" (pad_left (str_slice id 1) 10 "0")))))
+
+  (defun ticket_out ((r any)) dict
+    (return (dict ("id" (map_get r "id")) ("title" (map_get r "title")) ("body" (map_get r "body")) ("priority" (map_get r "priority"))
+                  ("status" (map_get r "status")) ("owner" (map_get r "owner")) ("created_at" (map_get r "created_at")) ("updated_at" (map_get r "updated_at")))))
+
+  (defun body_or_fail ((req any)) dict
+    (let (r (call read_object req))
+      (do
+        (if (= (map_get r "kind") "err")
+          (do (call send_err req (map_get r "status") (map_get r "code") (map_get r "msg")) (return (dict ("sent" 1)))))
+        (if (= (map_get r "kind") "fields")
+          (do (call send_fields req (map_get r "fields")) (return (dict ("sent" 1)))))
+        (if (= (map_get r "kind") "fault")
+          (return (dict ("sent" 1) ("fault" (map_get r "text")))))
+        (return (dict ("sent" 0) ("doc" (map_get r "doc")))))))
+
+  (defun tickets_create ((req any) (who dict)) int
+    (let (b (call body_or_fail req))
+      (do
+        (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
+        (if (= (map_get b "sent") 1) (return 0))
+        (let (v (call check_ticket (map_get b "doc") 1))
+          (do
+            (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
+            (let (s (call db) meta (store_get s "meta") vals (map_get v "vals") now (time_now))
+              (let (seq (map_get meta "next_ticket") id (str "t" (map_get meta "next_ticket")))
+                (do
+                  (store_put s "meta" (dict ("next_ticket" (+ seq 1)) ("next_token" (map_get meta "next_token"))))
+                  (let (rec (dict ("id" id) ("title" (map_get vals "title")) ("body" (nz (map_get vals "body") ""))
+                                  ("priority" (nz (map_get vals "priority") "normal")) ("status" "open") ("owner" (map_get who "id"))
+                                  ("created_at" now) ("updated_at" now)))
+                    (do
+                      (store_put s (call ticket_key id) rec)
+                      (res_header "Location" (str "/v1/tickets/" id))
+                      (res_json 201 (call ticket_out rec))
+                      (return 0)))))))))))
+
+  (defun tickets_list ((req any)) int
+    (let (fields (list) limit 20 status "" cursor 0 lraw (req_query req "limit") sraw (req_query req "status") craw (req_query req "cursor"))
+      (do
+        (if (!= lraw "")
+          (if (or (not (regex_match "^[0-9]{1,9}$" lraw)) (< (to_int lraw) 1) (> (to_int lraw) 100))
+            (append fields (call field "limit" "invalid_value" "limit must be an integer 1..100"))
+            (set limit (to_int lraw))))
+        (if (!= sraw "")
+          (if (not (list_contains (list "open" "in_progress" "done") sraw))
+            (append fields (call field "status" "invalid_value" "status must be open, in_progress or done"))
+            (set status sraw)))
+        (if (!= craw "")
+          (if (not (regex_match "^[A-Za-z0-9_-]{1,64}$" craw))
+            (append fields (call field "cursor" "invalid_value" "cursor is not valid"))
+            (if (regex_match "^[0-9]{1,9}$" craw) (set cursor (to_int craw)))))
+        (if (> (list_len fields) 0) (return (call send_fields req fields)))
+        (let (s (call db) keys (list) items (list) more 0 last 0)
+          (do
+            (for k (store_keys s)
+              (if (starts_with k "t:") (append keys k)))
+            (for k (sort keys)
+              (let (seq (to_int (str_slice k 2)))
+                (if (and (> seq cursor) (= more 0))
+                  (let (rec (store_get s k))
+                    (if (or (= status "") (= (map_get rec "status") status))
+                      (if (>= (list_len items) limit)
+                        (set more 1)
+                        (do (append items (call ticket_out rec)) (set last seq))))))))
+            (res_json 200 (dict ("items" items) ("next_cursor" (if (= more 1) (to_string last) (call nilv)))))
+            (return 0))))))
+
+  (defun tickets_get ((req any) (id string)) int
+    (let (key (call ticket_key id))
+      (do
+        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
+        (let (s (call db) rec (store_get s key))
+          (do
+            (if (is_nil rec) (return (call send_err req 404 "not_found" "Ticket not found.")))
+            (res_json 200 (call ticket_out rec))
+            (return 0))))))
+
+  (defun tickets_patch ((req any) (who dict) (id string)) int
+    (let (key (call ticket_key id))
+      (do
+        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
+        (let (s (call db) rec (store_get s key))
+          (do
+            (if (is_nil rec) (return (call send_err req 404 "not_found" "Ticket not found.")))
+            (if (and (!= (map_get who "role") "admin") (!= (map_get rec "owner") (map_get who "id")))
+              (return (call send_err req 403 "forbidden" "You may only change your own tickets.")))
+            (let (b (call body_or_fail req))
+              (do
+                (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
+                (if (= (map_get b "sent") 1) (return 0))
+                (let (v (call check_ticket (map_get b "doc") 0))
+                  (do
+                    (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
+                    (let (vals (map_get v "vals") now (time_now) out (dict))
+                      (do
+                        (for k (list "id" "title" "body" "priority" "status" "owner" "created_at")
+                          (map_set out k (map_get rec k)))
+                        (for k (map_keys vals) (map_set out k (map_get vals k)))
+                        (map_set out "updated_at" (if (> now (map_get rec "updated_at")) now (map_get rec "updated_at")))
+                        (store_put s key out)
+                        (res_json 200 (call ticket_out out))
+                        (return 0))))))))))))
+
+  (defun tickets_delete ((req any) (id string)) int
+    (let (key (call ticket_key id))
+      (do
+        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
+        (let (s (call db))
+          (do
+            (if (is_nil (store_get s key)) (return (call send_err req 404 "not_found" "Ticket not found.")))
+            (store_delete s key)
+            (res_json 200 (dict ("id" id) ("deleted" true)))
+            (return 0))))))
+
+  ; ---------------------------------------------------------------- tokens
+  (defun token_out ((r any)) dict
+    (return (dict ("id" (map_get r "id")) ("name" (map_get r "name")) ("role" (map_get r "role")) ("created_at" (map_get r "created_at"))
+                  ("revoked" (= (map_get r "revoked") 1)))))
+
+  (defun tokens_create ((req any)) int
+    (let (b (call body_or_fail req))
+      (do
+        (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
+        (if (= (map_get b "sent") 1) (return 0))
+        (let (v (call check_token (map_get b "doc")))
+          (do
+            (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
+            (let (s (call db) meta (store_get s "meta") vals (map_get v "vals") now (time_now)
+                  id (str "tok_" (rand_hex 8)) secret (str "td_" (rand_hex 32)))
+              (let (seq (map_get meta "next_token") hh (sha256_hex secret))
+                (do
+                  (store_put s "meta" (dict ("next_ticket" (map_get meta "next_ticket")) ("next_token" (+ seq 1))))
+                  (let (rec (dict ("id" id) ("name" (map_get vals "name")) ("role" (map_get vals "role")) ("created_at" now) ("revoked" 0) ("hash" hh) ("seq" seq)))
+                    (do
+                      (store_put s (str "k:" id) rec)
+                      (store_put s (str "h:" hh) (dict ("id" id)))
+                      (store_put s (str "q:" (pad_left (to_string seq) 10 "0")) (dict ("id" id)))
+                      (let (out (call token_out rec))
+                        (do
+                          (map_set out "token" secret)
+                          (res_header "Location" (str "/v1/tokens/" id))
+                          (res_header "Cache-Control" "no-store")
+                          (res_json 201 out)
+                          (return 0)))))))))))))
+
+  (defun tokens_list ((req any)) int
+    (let (s (call db) qs (list) items (list))
+      (do
+        (for k (store_keys s)
+          (if (starts_with k "q:") (append qs k)))
+        (for k (sort qs)
+          (append items (call token_out (store_get s (str "k:" (map_get (store_get s k) "id"))))))
+        (res_json 200 (dict ("items" items)))
+        (return 0))))
+
+  (defun tokens_revoke ((req any) (id string)) int
+    (do
+      (if (= id "bootstrap") (return (call send_err req 409 "conflict" "The bootstrap token cannot be revoked.")))
+      (if (not (regex_match "^tok_[0-9a-f]{16}$" id)) (return (call send_err req 404 "not_found" "Token not found.")))
+      (let (s (call db) rec (store_get s (str "k:" id)))
+        (do
+          (if (is_nil rec) (return (call send_err req 404 "not_found" "Token not found.")))
+          (let (out (dict))
+            (do
+              (for k (map_keys rec) (map_set out k (map_get rec k)))
+              (map_set out "revoked" 1)
+              (store_put s (str "k:" id) out)
+              (res_json 200 (call token_out out))
+              (return 0)))))))
+
+  ; ---------------------------------------------------------------- faults
+  (defun fault ((req any) (text any)) int
+    (do
+      (stderr (str "fault request_id=" (req_id req) " method=" (req_method req) " path=" (req_url_path req) " error=" (str_replace (to_string text) "\n" " ") "\n"))
+      (return (call send_err req 500 "internal_error" "An internal error occurred."))))
+
+  ; ---------------------------------------------------------------- dispatch
+  (defun process ((req any) (route string)) int
+    (let (m (req_method req) c (call cfgrec))
+      (do
+        ; deliberate fault (testing aid): evaluated first, on known paths only
+        (if (and (= (map_get c "debug") 1) (!= route "notfound") (= (req_header req "X-Debug-Fault") "1"))
+          (return (call fault req (to_int "deliberate-fault"))))
+        (if (= route "notfound") (return (call send_err req 404 "not_found" "No such route.")))
+        (let (allow (call allow_for route))
+          (do
+          (if (not (list_contains (str_split allow ", ") m))
+            (do
+              (res_header "Allow" allow)
+              (return (call send_err req 405 "method_not_allowed" "Method not allowed."))))
+          (if (= route "health") (do (res_json 200 (dict ("status" "ok"))) (return 0)))
+          (let (who (call authenticate req))
+            (do
+              (if (= (map_get who "ok") 0) (return (call unauthorized req)))
+              (let (role (map_get who "role"))
+                (do
+                  (if (= route "me")
+                    (do (res_json 200 (dict ("id" (map_get who "id")) ("name" (map_get who "name")) ("role" role))) (return 0)))
+                  (if (= route "tickets")
+                    (do
+                      (if (= m "GET") (return (call tickets_list req)))
+                      (if (= role "viewer") (return (call send_err req 403 "forbidden" "Your role may not create tickets.")))
+                      (return (call tickets_create req who))))
+                  (if (= route "ticket")
+                    (let (id (req_path req "id"))
+                      (do
+                        (if (= m "GET") (return (call tickets_get req id)))
+                        (if (= m "PATCH")
+                          (do
+                            (if (= role "viewer") (return (call send_err req 403 "forbidden" "Your role may not change tickets.")))
+                            (return (call tickets_patch req who id))))
+                        (if (!= role "admin") (return (call send_err req 403 "forbidden" "Only administrators may delete tickets.")))
+                        (return (call tickets_delete req id)))))
+                  (if (!= role "admin") (return (call send_err req 403 "forbidden" "Only administrators may manage tokens.")))
+                  (if (= route "tokens")
+                    (do
+                      (if (= m "GET") (return (call tokens_list req)))
+                      (return (call tokens_create req))))
+                  (return (call tokens_revoke req (req_path req "id"))))))))))))
+
+  (defun serve ((req any) (route string)) void
+    (try_let (r (call process req route))
+      (catch e (call fault req e))
+      (set r r)))
+
+  (route "/v1/health" (lambda (req) (call serve req "health")))
+  (route "/v1/me" (lambda (req) (call serve req "me")))
+  (route "/v1/tickets" (lambda (req) (call serve req "tickets")))
+  (route "/v1/tickets/{id}" (lambda (req) (call serve req "ticket")))
+  (route "/v1/tokens" (lambda (req) (call serve req "tokens")))
+  (route "/v1/tokens/{id}" (lambda (req) (call serve req "token")))
+  (route "*" (lambda (req) (call serve req "notfound"))))
