@@ -109,3 +109,70 @@ Promise.resolve(vm.runInNewContext(` + string(encoded) + `, browser)).then(
 		t.Fatalf("bootstrap replaced the browser error: exit=%d stdout=%q stderr=%q", exit, stdout, stderr)
 	}
 }
+
+func TestBrowserRelativeFetchChecksResolvedHost(t *testing.T) {
+	for _, tc := range []struct {
+		name, url, grant, base string
+		allowed                bool
+		wantURL                string
+	}{
+		{"same origin", "missions.json", "network:fetch=example.invalid", "https://example.invalid/docs/index.html", true, "https://example.invalid/docs/missions.json"},
+		{"relative path", "../missions.json", "network:fetch=example.invalid", "https://example.invalid/docs/index.html", true, "https://example.invalid/missions.json"},
+		{"other host", "//evil.invalid/missions.json", "network:fetch=example.invalid", "https://example.invalid/docs/index.html", false, ""},
+		{"coarse grant", "missions.json", "network", "https://example.invalid/docs/index.html", false, ""},
+		{"wrong port", "missions.json", "network:fetch=example.invalid:8443", "https://example.invalid/docs/index.html", false, ""},
+		{"no browser base", "missions.json", "network:fetch=example.invalid", "", false, ""},
+		{"credential base", "missions.json", "network:fetch=example.invalid", "https://user:pw@example.invalid/docs/", false, ""},
+		{"file base", "missions.json", "network:fetch=example.invalid", "file:///tmp/index.html", false, ""},
+		{"explicit port", "missions.json", "network:fetch=example.invalid:8443", "https://example.invalid:8443/docs/", true, "https://example.invalid:8443/docs/missions.json"},
+		{"ungranted port", "missions.json", "network:fetch=example.invalid", "https://example.invalid:8443/docs/", false, ""},
+		{"absolute otherhost", "https://evil.invalid/x", "network:fetch=example.invalid", "https://example.invalid/docs/", false, ""},
+		{"three slash host", "///evil.invalid/x", "network:fetch=example.invalid", "https://example.invalid/docs/", false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `(web_app (print (bytes_to_string (fetch "` + tc.url + `" "GET"))))`
+			root := parser.NewParser(lexer.NewLexer(src), "relative.howl").ParseExpression()
+			checker.Check(root)
+			code, _ := GenerateJSCode(root)
+			encoded, _ := json.Marshal(code)
+			grant, _ := json.Marshal(tc.grant)
+			base, _ := json.Marshal(tc.base)
+			wrapper := `const vm=require("node:vm"); let calls=0; let seen=""; const browser={URL,HOWLFRAME_ALLOW_CAPS:` + string(grant) + `,console:{log:()=>{},error:()=>{}},fetch:async u=>{calls++;seen=String(u);return{text:async()=>"ok"}}};
+const base=` + string(base) + `;if(base)browser.location={href:base};
+Promise.resolve(vm.runInNewContext(` + string(encoded) + `,browser)).then(()=>console.log(JSON.stringify({calls,seen,error:""})),e=>console.log(JSON.stringify({calls,seen,error:String(e.message)})));`
+			stdout, stderr, exit := runJS(t, wrapper)
+			if exit != 0 {
+				t.Fatalf("harness: %s %s", stdout, stderr)
+			}
+			var result struct {
+				Calls int
+				Seen  string
+				Error string
+			}
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatal(err)
+			}
+			if tc.allowed {
+				if result.Calls != 1 || result.Error != "" || result.Seen != tc.wantURL {
+					t.Fatalf("relative browser fetch failed: %+v", result)
+				}
+			} else if result.Calls != 0 || !strings.Contains(result.Error, "CAPABILITY_DENIED") {
+				t.Fatalf("must deny before request: %+v", result)
+			}
+		})
+	}
+}
+
+func TestNodeRelativeFetchHasNoBrowserBase(t *testing.T) {
+	root := parser.NewParser(lexer.NewLexer(`(web_app (print (bytes_to_string (fetch "missions.json" "GET"))))`), "node-relative.howl").ParseExpression()
+	checker.Check(root)
+	code, _ := GenerateJSCode(root)
+	wrapper := `process.env.HOWLFRAME_ALLOW_CAPS="network:fetch=example.invalid";
+ globalThis.location={href:"https://example.invalid/docs/index.html"};
+ globalThis.fetch=()=>{throw new Error("UNEXPECTED_REQUEST")};
+` + code
+	stdout, stderr, exit := runJS(t, wrapper)
+	if exit == 0 || stdout != "" || !strings.Contains(stderr, "CAPABILITY_DENIED") || strings.Contains(stderr, "UNEXPECTED_REQUEST") {
+		t.Fatalf("Node gained implicit browser base: exit=%d stdout=%q stderr=%q", exit, stdout, stderr)
+	}
+}
