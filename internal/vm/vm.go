@@ -1832,6 +1832,9 @@ func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
 // and a rename, so a crash leaves either the old or the new complete file.
 func writeFileAtomic(path string, data []byte) error {
 	dir, base := filepath.Split(path)
+	if dir == "" {
+		dir = "." // CreateTemp("") would use system temp, possibly another device.
+	}
 	tmp, err := os.CreateTemp(dir, base+".tmp-*")
 	if err != nil {
 		return err
