@@ -12,6 +12,13 @@ type Parser struct {
 	lexer    *lexer.Lexer
 	Cur      lexer.Token
 	filename string
+
+	depth int
+	// The most recently completed top-level form: its head word and where it
+	// opened and closed. Used to explain trailing tokens after the program.
+	rootHead                  string
+	rootLine, rootCol         int
+	rootCloseLine, rootCloseC int
 }
 
 func NewParser(lexer *lexer.Lexer, filename string) *Parser {
@@ -24,11 +31,27 @@ func (p *Parser) ParseExpression() *ast.Node {
 	if p.Cur.Type == lexer.TokenLParen {
 		node := &ast.Node{Type: "List", Line: p.Cur.Line, Column: p.Cur.Column, Filename: p.filename}
 		p.Cur = p.lexer.NextToken() // consume '('
+		p.depth++
 		for p.Cur.Type != lexer.TokenRParen && p.Cur.Type != lexer.TokenEOF {
 			node.Children = append(node.Children, p.ParseExpression())
 		}
 		if p.Cur.Type != lexer.TokenRParen {
-			ast.ReportError("Expected ')'", p.Cur.Line, p.Cur.Column)
+			// The first list to meet end of file is the innermost unclosed one:
+			// point at its opening parenthesis, not at the end of the file.
+			head := "(empty)"
+			if len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" {
+				head = node.Children[0].Value
+			}
+			ast.ReportError(fmt.Sprintf("Unclosed '(' (form: %s) opened here is never closed; the file ends at line %d without its matching ')'. Add a ')' where this form ends", head, p.Cur.Line), node.Line, node.Column)
+		}
+		p.depth--
+		if p.depth == 0 {
+			p.rootHead = "(empty)"
+			if len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" {
+				p.rootHead = node.Children[0].Value
+			}
+			p.rootLine, p.rootCol = node.Line, node.Column
+			p.rootCloseLine, p.rootCloseC = p.Cur.Line, p.Cur.Column
 		}
 		p.Cur = p.lexer.NextToken() // consume ')'
 		return node
@@ -40,6 +63,20 @@ func (p *Parser) ParseExpression() *ast.Node {
 	}
 	ast.ReportError(fmt.Sprintf("Unexpected token: %s", p.Cur.Value), p.Cur.Line, p.Cur.Column)
 	return nil
+}
+
+// ReportTrailing reports tokens left over after the program's top-level form.
+// A stray ')' is named as such; any other leftover is explained by saying
+// where the program's form was closed, because an extra ')' earlier in the
+// file is the usual cause.
+func (p *Parser) ReportTrailing() {
+	if p.Cur.Type == lexer.TokenRParen {
+		ast.ReportError(fmt.Sprintf("Unexpected ')' here: there is no open '(' for it. The program's form %s (opened on line %d) was already complete; remove this extra ')' or add a matching '('", p.rootHead, p.rootLine), p.Cur.Line, p.Cur.Column)
+	}
+	if p.rootHead != "" {
+		ast.ReportError(fmt.Sprintf("The program's form %s (opened on line %d, column %d) is closed here, but more code follows at line %d, column %d. An extra ')' on or before this line closes %s too early; remove it", p.rootHead, p.rootLine, p.rootCol, p.Cur.Line, p.Cur.Column, p.rootHead), p.rootCloseLine, p.rootCloseC)
+	}
+	ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
 }
 
 func ExpandIncludes(node *ast.Node, baseDir string, depth int) {

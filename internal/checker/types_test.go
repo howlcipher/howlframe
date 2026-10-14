@@ -383,7 +383,7 @@ func TestAnalyzeRejectsIncompatibleBranchAndCallLayouts(t *testing.T) {
 	assertDiagnosticReasons(t, Analyze(root).Diagnostics, []string{
 		`function "choose" expects 1 argument, got 0`,
 		`function "choose" expects 1 argument, got 2`,
-		"if branches have incompatible types int and float64",
+		"if branches have incompatible types int and float64 (then-branch at line 5, else-branch at line 5); both branches of an if must have the same type: make helper functions that only act return type void, or use (return ...) so the branch yields a value",
 		"+ requires numeric operands, got bool and bool",
 	})
 }

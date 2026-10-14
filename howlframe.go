@@ -172,7 +172,7 @@ func main() {
 	root := p.ParseExpression()
 
 	if p.Cur.Type != lexer.TokenEOF {
-		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+		p.ReportTrailing()
 	}
 
 	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
@@ -690,7 +690,7 @@ func checkSource() {
 	p := parser.NewParser(lx, filepath.Base(inputFile))
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
-		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+		p.ReportTrailing()
 	}
 
 	profile, profileErr := construct.LookupProfile(*profileName)
@@ -786,7 +786,7 @@ func buildSource() {
 	p := parser.NewParser(lx, filepath.Base(inputFile))
 	root := p.ParseExpression()
 	if p.Cur.Type != lexer.TokenEOF {
-		ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+		p.ReportTrailing()
 	}
 
 	profile, profileErr := construct.LookupProfile(*profileName)
@@ -981,7 +981,7 @@ func runArtifact() {
 		p := parser.NewParser(lx, filepath.Base(inputFile))
 		root := p.ParseExpression()
 		if p.Cur.Type != lexer.TokenEOF {
-			ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+			p.ReportTrailing()
 		}
 		parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
 		ast.ResolveModules(root)
@@ -1011,7 +1011,7 @@ func runArtifact() {
 			p := parser.NewParser(lx, filepath.Base(inputFile))
 			root := p.ParseExpression()
 			if p.Cur.Type != lexer.TokenEOF {
-				ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
+				p.ReportTrailing()
 			}
 			parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
 			ast.ResolveModules(root)

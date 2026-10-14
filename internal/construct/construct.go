@@ -368,7 +368,36 @@ func (v Violation) Message() string {
 func Scan(root *ast.Node) []Violation {
 	var out []Violation
 	scanNode(root, "", &out, ProfileDefault)
+	hintUserFunctions(root, out)
 	return out
+}
+
+// hintUserFunctions rewrites the reason of a violation whose "construct" is
+// really a function defined in the same program and invoked without call. The
+// usual cause is writing (f x) instead of (call f x) where the form is nested.
+func hintUserFunctions(root *ast.Node, violations []Violation) {
+	if len(violations) == 0 {
+		return
+	}
+	defined := map[string]bool{}
+	var walk func(n *ast.Node)
+	walk = func(n *ast.Node) {
+		if n == nil || n.Type != "List" {
+			return
+		}
+		if len(n.Children) >= 2 && n.Children[0].Value == "defun" && n.Children[1].Type == "SYMBOL" {
+			defined[n.Children[1].Value] = true
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(root)
+	for i := range violations {
+		if violations[i].Reason == "no bytecode lowering exists for it" && defined[violations[i].Name] {
+			violations[i].Reason = "it is a function defined in this program, so it must be invoked as (call " + violations[i].Name + " ...), not as (" + violations[i].Name + " ...)"
+		}
+	}
 }
 
 func scanNode(node *ast.Node, parentHead string, out *[]Violation, profile Profile) {

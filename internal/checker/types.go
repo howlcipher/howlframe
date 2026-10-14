@@ -496,7 +496,8 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		if len(node.Children) == 4 {
 			elseType := a.inferChild(node, 3, env)
 			if known(thenType) && known(elseType) && !compatible(thenType, elseType) {
-				a.add(node, fmt.Sprintf("if branches have incompatible types %s and %s", typeName(thenType), typeName(elseType)))
+				a.add(node, fmt.Sprintf("if branches have incompatible types %s and %s (then-branch at line %d, else-branch at line %d); both branches of an if must have the same type: make helper functions that only act return type void, or use (return ...) so the branch yields a value",
+					typeName(thenType), typeName(elseType), node.Children[2].Line, node.Children[3].Line))
 			}
 			return join(thenType, elseType)
 		}

@@ -132,7 +132,11 @@ func (v ArityViolation) Message() string {
 	default:
 		want = fmt.Sprintf("%d to %d args", v.Want.Min, v.Want.Max)
 	}
-	return fmt.Sprintf("ARITY_ERROR: %s expects %s, got %d", v.Name, want, v.Got)
+	msg := fmt.Sprintf("ARITY_ERROR: %s expects %s, got %d", v.Name, want, v.Got)
+	if v.Name == "let" && v.Got > 2 {
+		msg += ": a let takes one body expression; wrap several body forms in (do ...)"
+	}
+	return msg
 }
 
 // CheckArity walks the AST in construct position (binding lists, parameter
