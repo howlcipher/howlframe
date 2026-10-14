@@ -96,6 +96,11 @@ class ForNextInstruction(BaseModel):
     int_operand: int
 
 
+class GrantedInstruction(BaseModel):
+    op: Literal["GRANTED"]
+    pass
+
+
 class HtmlEscapeInstruction(BaseModel):
     op: Literal["HTML_ESCAPE"]
     pass
@@ -106,8 +111,18 @@ class HttpRequestInstruction(BaseModel):
     int_operand: int
 
 
+class HttpReqBodyInstruction(BaseModel):
+    op: Literal["HTTP_REQ_BODY"]
+    pass
+
+
 class HttpReqHeaderInstruction(BaseModel):
     op: Literal["HTTP_REQ_HEADER"]
+    pass
+
+
+class HttpReqIdInstruction(BaseModel):
+    op: Literal["HTTP_REQ_ID"]
     pass
 
 
@@ -123,6 +138,11 @@ class HttpReqPathInstruction(BaseModel):
 
 class HttpReqQueryInstruction(BaseModel):
     op: Literal["HTTP_REQ_QUERY"]
+    pass
+
+
+class HttpReqUrlPathInstruction(BaseModel):
+    op: Literal["HTTP_REQ_URL_PATH"]
     pass
 
 
@@ -238,6 +258,11 @@ class PrintInstruction(BaseModel):
     int_operand: int
 
 
+class RandHexInstruction(BaseModel):
+    op: Literal["RAND_HEX"]
+    pass
+
+
 class ReadFileInstruction(BaseModel):
     op: Literal["READ_FILE"]
     pass
@@ -245,6 +270,11 @@ class ReadFileInstruction(BaseModel):
 
 class ReadLineInstruction(BaseModel):
     op: Literal["READ_LINE"]
+    pass
+
+
+class ReadStdinInstruction(BaseModel):
+    op: Literal["READ_STDIN"]
     pass
 
 
@@ -268,9 +298,19 @@ class ReturnInstruction(BaseModel):
     pass
 
 
+class SecureEqualInstruction(BaseModel):
+    op: Literal["SECURE_EQUAL"]
+    pass
+
+
 class SetVarInstruction(BaseModel):
     op: Literal["SET_VAR"]
     string_operand: str
+
+
+class Sha256HexInstruction(BaseModel):
+    op: Literal["SHA256_HEX"]
+    pass
 
 
 class SleepInstruction(BaseModel):
@@ -358,6 +398,11 @@ class TryLetInstruction(BaseModel):
     int_operand: int
 
 
+class Utf8ValidInstruction(BaseModel):
+    op: Literal["UTF8_VALID"]
+    pass
+
+
 class WriteFileInstruction(BaseModel):
     op: Literal["WRITE_FILE"]
     pass
@@ -383,12 +428,16 @@ Instruction = Annotated[
         FetchInstruction,
         ForInitInstruction,
         ForNextInstruction,
+        GrantedInstruction,
         HtmlEscapeInstruction,
         HttpRequestInstruction,
+        HttpReqBodyInstruction,
         HttpReqHeaderInstruction,
+        HttpReqIdInstruction,
         HttpReqMethodInstruction,
         HttpReqPathInstruction,
         HttpReqQueryInstruction,
+        HttpReqUrlPathInstruction,
         HttpResHeaderInstruction,
         HttpRouteInstruction,
         HttpServerServeInstruction,
@@ -411,13 +460,17 @@ Instruction = Annotated[
         NeuralCircuitInstruction,
         ParseJsonInstruction,
         PrintInstruction,
+        RandHexInstruction,
         ReadFileInstruction,
         ReadLineInstruction,
+        ReadStdinInstruction,
         RegexMatchInstruction,
         ResInstruction,
         ResJsonInstruction,
         ReturnInstruction,
+        SecureEqualInstruction,
         SetVarInstruction,
+        Sha256HexInstruction,
         SleepInstruction,
         SpawnInstruction,
         SpawnAgentInstruction,
@@ -434,6 +487,7 @@ Instruction = Annotated[
         TaskInstruction,
         TimeNowInstruction,
         TryLetInstruction,
+        Utf8ValidInstruction,
         WriteFileInstruction,
     ],
     Field(discriminator="op")

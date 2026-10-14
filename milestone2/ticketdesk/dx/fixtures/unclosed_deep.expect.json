@@ -1,0 +1,17 @@
+{
+  "item": 1,
+  "description": "Unclosed form at end of a long file: the diagnostic must name the line and column of the innermost unclosed '(' (the 'if' on line 33, column 5) and its head word, not only the end of file.",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "\\b33\\D{1,14}\\b5\\b",
+    "\\bif\\b",
+    "(?i)unclosed|not closed|never closed|missing"
+  ],
+  "must_not_match": [],
+  "must_differ_from_old_output": true,
+  "old_output": "{\"reason\":\"Expected ')'\",\"line\":37,\"column\":1}"
+}

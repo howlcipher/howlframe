@@ -1,0 +1,17 @@
+{
+  "item": 1,
+  "description": "A stray ')' on line 6 closes the root form cli_app (opened on line 1) early; the diagnostic must point at line 6 and name the closed form, not only 'Unexpected tokens after EOF' at line 7.",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "\\b6\\b",
+    "cli_app",
+    "(?i)(unexpected|stray|extra)[^a-z]{0,3}\\)"
+  ],
+  "must_not_match": [],
+  "must_differ_from_old_output": true,
+  "old_output": "{\"reason\":\"Unexpected tokens after EOF\",\"line\":7,\"column\":3}"
+}

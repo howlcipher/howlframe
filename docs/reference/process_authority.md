@@ -142,3 +142,21 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   Pattern literals are therefore visible to anyone who can read receipts; do
   not put secrets in grant patterns.
 
+
+## Dynamic argument vectors and failed children (Milestone 1)
+
+* `(exec program args...)` takes a fixed number of arguments chosen at compile
+  time. When exactly one trailing argument is given and it is a **list**, that
+  list is the whole argument vector, each element printed as text:
+  `(exec "/usr/bin/tool" argv)`. Use it when the argument count is only known
+  at run time. The `process:exec=` allow-list is evaluated against the final
+  vector, so a grant that allows two arguments still denies a four-element
+  vector. This applies to the interpreter and to `-run-bc`; generated Go and
+  JavaScript do not support it.
+* A child that runs and exits non-zero makes `exec` fail with the unchanged
+  error (`IO_ERROR`, message `exec failed: exit status N`). Inside
+  `try_let ... (catch e ...)` the bound error text additionally carries
+  `"exit_code":N` and `"output":"..."` (the child's combined stdout and
+  stderr, up to the exec output limit; invalid UTF-8 is replaced). An uncaught
+  failure, receipts and evidence still record the message only, never the
+  output. A signal death or a failure to start has no `exit_code`.

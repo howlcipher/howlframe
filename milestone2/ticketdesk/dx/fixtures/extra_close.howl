@@ -1,0 +1,8 @@
+(cli_app
+  ; dx fixture 2: a stray ')' on line 7 closes the program early.
+  (print "one")
+  (print "two")
+  (print "three")
+  (print "four"))
+  (print "five")
+)

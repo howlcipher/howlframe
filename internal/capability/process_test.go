@@ -118,3 +118,29 @@ func TestExecSlotsAndEnv(t *testing.T) {
 		t.Fatalf("default ExecEnv = %#v, want empty non-nil", env)
 	}
 }
+
+func TestAttenuateInheritFilesystemOnlyNarrows(t *testing.T) {
+	parent := Grants{Capability("network"), Capability("database"), Capability("filesystem:read=/data"), Capability("filesystem:write=/data"), Capability("process:env=FOO")}
+	child, err := Attenuate(parent, []string{"database", InheritFilesystem})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, c := range child {
+		got[string(c)] = true
+	}
+	want := map[string]bool{"database": true, "filesystem:read=/data": true, "filesystem:write=/data": true}
+	if len(got) != len(want) {
+		t.Fatalf("child = %v, want %v", got, want)
+	}
+	for k := range want {
+		if !got[k] {
+			t.Fatalf("child = %v missing %s", got, k)
+		}
+	}
+	// A parent with no filesystem grants yields no filesystem grants (never an escalation).
+	child, err = Attenuate(Grants{Capability("network")}, []string{InheritFilesystem})
+	if err != nil || len(child) != 0 {
+		t.Fatalf("child of a parent without filesystem = %v, %v", child, err)
+	}
+}

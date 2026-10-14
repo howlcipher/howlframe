@@ -1,0 +1,16 @@
+{
+  "item": 1,
+  "description": "A stray ')' after the program's last form (line 4); the diagnostic must call it an unexpected/extra ')' and give its position.",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "\\b4\\b",
+    "(?i)(unexpected|stray|extra)[^a-z]{0,3}\\)"
+  ],
+  "must_not_match": [],
+  "must_differ_from_old_output": true,
+  "old_output": "{\"reason\":\"Unexpected tokens after EOF\",\"line\":4,\"column\":1}"
+}

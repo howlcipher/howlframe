@@ -1,0 +1,19 @@
+{
+  "item": 4,
+  "description": "if with a void branch (line 8) and an int branch (line 9); the diagnostic must name both branch lines and the usual remedy (return / make helpers void).",
+  "commands": [
+    "check",
+    "build"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "\\b8\\b",
+    "\\b9\\b",
+    "\\bvoid\\b",
+    "\\bint\\b",
+    "(?i)\\breturn\\b"
+  ],
+  "must_not_match": [],
+  "must_differ_from_old_output": true,
+  "old_output": "{\"reason\":\"if branches have incompatible types void and int\",\"line\":7,\"column\":7}"
+}

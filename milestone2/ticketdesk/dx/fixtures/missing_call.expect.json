@@ -1,0 +1,21 @@
+{
+  "item": 2,
+  "description": "triple is a defun in the same program but is invoked as (triple ...) on line 10; the diagnostic must name the function and say to write (call triple ...). 'howlframe check' accepts this program today; 'build' is mandatory to improve, 'check' is optional.",
+  "commands": [
+    "build"
+  ],
+  "optional_commands": [
+    "check"
+  ],
+  "expect_ok": false,
+  "must_match": [
+    "triple",
+    "\\(call triple",
+    "\\b10\\b"
+  ],
+  "must_not_match": [
+    "no bytecode lowering exists for it"
+  ],
+  "must_differ_from_old_output": true,
+  "old_output": "[{\"code\":\"HFIR_TARGET_INFEASIBLE\",\"severity\":\"ERROR\",\"message\":\"construct \\\"triple\\\" cannot be compiled for the standalone bytecode target: no bytecode lowering exists for it\",\"location\":{\"filename\":\"missing_call.howl\",\"line\":10,\"column\":30},\"contract_version\":\"v1\",\"target\":\"bytecode\"}]"
+}

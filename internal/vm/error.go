@@ -15,6 +15,48 @@ type VMError struct {
 	Opcode      string `json:"opcode,omitempty"`
 	NodeID      string `json:"node_id,omitempty"`
 	Message     string `json:"message"`
+
+	// ExecExitCode and ExecOutput describe a child that ran and exited
+	// non-zero. They are never part of Error() (receipts, evidence and server
+	// logs stay unchanged); only a try_let/catch binding sees them, through
+	// CatchString, so a program can recover the exit status and the output.
+	ExecExitCode int    `json:"-"`
+	ExecOutput   []byte `json:"-"`
+}
+
+// execArgv turns the evaluated trailing arguments of exec into the argument
+// vector. Each value is printed as text. As a special case, exactly one
+// trailing argument that is a list is the whole argument vector, so a program
+// can run a command whose argument count is only known at run time. The
+// process:exec allow-list is checked against the final vector.
+func execArgv(raw []any) []string {
+	if len(raw) == 1 {
+		if list, ok := raw[0].([]any); ok {
+			raw = list
+		}
+	}
+	args := make([]string, len(raw))
+	for i, v := range raw {
+		args[i] = fmt.Sprint(v)
+	}
+	return args
+}
+
+type vmErrorWithExec struct {
+	VMError
+	ExitCode int    `json:"exit_code"`
+	Output   string `json:"output"`
+}
+
+// CatchString is the error value a try_let catch binding receives. It equals
+// Error() unless the error is a non-zero child exit, which adds "exit_code"
+// and "output" (the child's combined stdout and stderr).
+func (e *VMError) CatchString() string {
+	if e.ExecExitCode == 0 {
+		return e.Error()
+	}
+	b, _ := json.Marshal(vmErrorWithExec{VMError: *e, ExitCode: e.ExecExitCode, Output: string(e.ExecOutput)})
+	return string(b)
 }
 
 func (e *VMError) Error() string {
@@ -38,10 +80,14 @@ func NewRuntimeError(code string, fn string, ip int, op bytecode.Opcode, msg str
 }
 
 type VMLimits struct {
-	MaxInstructions    int
-	MaxMemoryBytes     int
-	MaxCallDepth       int
-	MaxFetchBodyBytes  int
+	MaxInstructions   int
+	MaxMemoryBytes    int
+	MaxCallDepth      int
+	MaxFetchBodyBytes int
+	// MaxRequestBodyBytes bounds a route's req.body read (parse_json); <=0 means the default.
+	MaxRequestBodyBytes int
+	// LogRequests (runner flag --access-log) writes one access line per HTTP request to stderr.
+	LogRequests        bool
 	MaxExecOutputBytes int
 }
 
@@ -104,11 +150,12 @@ func (f AdapterDeadlineFlag) Set(raw string) error {
 }
 
 var DefaultLimits = VMLimits{
-	MaxInstructions:    100000,
-	MaxMemoryBytes:     67108864,
-	MaxCallDepth:       1000,
-	MaxFetchBodyBytes:  10 * 1024 * 1024,
-	MaxExecOutputBytes: 10 * 1024 * 1024,
+	MaxInstructions:     100000,
+	MaxMemoryBytes:      67108864,
+	MaxCallDepth:        1000,
+	MaxFetchBodyBytes:   10 * 1024 * 1024,
+	MaxRequestBodyBytes: 1024 * 1024,
+	MaxExecOutputBytes:  10 * 1024 * 1024,
 }
 
 // DefaultExecutionPolicy returns a copy of the standalone VM's safe defaults.

@@ -16,9 +16,17 @@ type builtinSignature struct {
 }
 
 var builtinSignatures = map[string]builtinSignature{
-	"str_split":   {Params: []ast.ValueKind{ast.String, ast.String}, Result: stringList()},
-	"str_join":    {Params: []ast.ValueKind{ast.List, ast.String}, Result: ast.Layout(ast.String)},
-	"regex_match": {Params: []ast.ValueKind{ast.String, ast.String}, Result: ast.Layout(ast.Bool)},
+	"str_split":    {Params: []ast.ValueKind{ast.String, ast.String}, Result: stringList()},
+	"str_join":     {Params: []ast.ValueKind{ast.List, ast.String}, Result: ast.Layout(ast.String)},
+	"req_body":     {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
+	"req_url_path": {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
+	"utf8_valid":   {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.Bool)},
+	"granted":      {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.Bool)},
+	"req_id":       {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
+	"sha256_hex":   {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.String)},
+	"rand_hex":     {Params: []ast.ValueKind{ast.Int}, Result: ast.Layout(ast.String)},
+	"secure_equal": {Params: []ast.ValueKind{ast.String, ast.String}, Result: ast.Layout(ast.Bool)},
+	"regex_match":  {Params: []ast.ValueKind{ast.String, ast.String}, Result: ast.Layout(ast.Bool)},
 	// Empty kind: list_len accepts list, string, or bytes (runtime-enforced).
 	"list_len": {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.Int)},
 }

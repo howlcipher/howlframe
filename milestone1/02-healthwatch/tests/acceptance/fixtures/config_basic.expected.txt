@@ -1,0 +1,9 @@
+PASS	web	200	1	ok
+PASS	api	200	1	ok
+FAIL	broken	503	1	status_mismatch
+PASS	moved	200	1	ok
+EVENT	new	web
+EVENT	new	api
+EVENT	new	broken
+EVENT	new	moved
+SUMMARY	pass=3	fail=1	error=0	denied=0

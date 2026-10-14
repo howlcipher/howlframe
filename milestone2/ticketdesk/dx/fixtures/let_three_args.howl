@@ -1,0 +1,7 @@
+(cli_app
+  ; dx fixture 4: a let with two body expressions instead of one (line 3).
+  (let (x 5)
+    (print "value:")
+    (print (to_string x))
+  )
+)

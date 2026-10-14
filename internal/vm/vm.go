@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -31,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // interpreter.go implements Phase 1 of improvement #49 (Direct Neural
@@ -400,6 +403,49 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		line = strings.TrimSuffix(line, "\n")
 		line = strings.TrimSuffix(line, "\r")
 		return line
+	case "req_id":
+		if len(node.Children) != 2 {
+			InterpErr("req_id expects (req_id req)", node)
+		}
+		id, err := httpreq.RequestID(interp.eval(node.Children[1], env))
+		if err != nil {
+			InterpErr(err.Error(), node)
+		}
+		return id
+	case "sha256_hex", "rand_hex", "secure_equal":
+		want := 2
+		if head != "secure_equal" {
+			want = 1
+		}
+		if len(node.Children) != want+1 {
+			InterpErr(fmt.Sprintf("%s expects %d argument(s)", head, want), node)
+		}
+		a := interp.eval(node.Children[1], env)
+		if head == "rand_hex" {
+			out, err := randHex(a)
+			if err != nil {
+				InterpErr(fmt.Sprintf("rand_hex: %v", err), node)
+			}
+			return out
+		}
+		as, ok := a.(string)
+		if !ok {
+			InterpErr(head+" expected string", node)
+		}
+		if head == "sha256_hex" {
+			return sha256Hex(as)
+		}
+		bs, ok := interp.eval(node.Children[2], env).(string)
+		if !ok {
+			InterpErr("secure_equal expected strings", node)
+		}
+		return subtle.ConstantTimeCompare([]byte(as), []byte(bs)) == 1
+	case "read_stdin":
+		data, err := io.ReadAll(interp.lineReader)
+		if err != nil {
+			InterpErr(fmt.Sprintf("Failed to read stdin: %v", err), node)
+		}
+		return string(data)
 	case "return":
 		if len(node.Children) != 2 {
 			InterpErr("return expects (return val)", node)
@@ -807,10 +853,11 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr("exec expects (exec cmd args...)", node)
 		}
 		cmd := fmt.Sprint(interp.eval(node.Children[1], env))
-		args := make([]string, 0, len(node.Children)-2)
+		rawArgs := make([]any, 0, len(node.Children)-2)
 		for _, argNode := range node.Children[2:] {
-			args = append(args, fmt.Sprint(interp.eval(argNode, env)))
+			rawArgs = append(rawArgs, interp.eval(argNode, env))
 		}
+		args := execArgv(rawArgs)
 		cmd, _, denied := capability.Grants(interp.AllowedCaps).AuthorizeExec(cmd, args)
 		if denied != nil {
 			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
@@ -1752,7 +1799,8 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 			if err != nil && !os.IsNotExist(err) {
 				return nil, fmt.Errorf("read persisted store %q: %w", store.file, err)
 			}
-			if err == nil {
+			// A zero-byte (or whitespace-only) file is a valid empty store.
+			if err == nil && len(bytes.TrimSpace(data)) > 0 {
 				if unmarshalErr := json.Unmarshal(data, &store.records); unmarshalErr != nil {
 					return nil, fmt.Errorf("decode persisted store %q: %w", store.file, unmarshalErr)
 				}
@@ -1774,8 +1822,42 @@ func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
 	}
-	if err := os.WriteFile(s.file, data, 0644); err != nil {
+	if err := writeFileAtomic(s.file, data); err != nil {
 		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	return nil
+}
+
+// writeFileAtomic replaces path with data through a synced temporary sibling
+// and a rename, so a crash leaves either the old or the new complete file.
+func writeFileAtomic(path string, data []byte) error {
+	dir, base := filepath.Split(path)
+	tmp, err := os.CreateTemp(dir, base+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Chmod(name, 0o644); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		os.Remove(name)
+		return err
 	}
 	return nil
 }
@@ -2247,7 +2329,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						if e, ok := r.(*VMError); ok && e.Code == "HFIR_DEADLINE_EXCEEDED" {
 							panic(r)
 						}
-						tryErr = fmt.Errorf("%v", r)
+						if e, ok := r.(*VMError); ok {
+							tryErr = errors.New(e.CatchString())
+						} else {
+							tryErr = fmt.Errorf("%v", r)
+						}
 					}
 				}()
 				vm.run(valInsts, env)
@@ -2508,10 +2594,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpExec:
 			numArgs := int(inst.IntOperand)
-			var args []string
-			for i := 0; i < numArgs; i++ {
-				args = append([]string{fmt.Sprint(vm.pop(inst.Op))}, args...)
+			rawArgs := make([]any, numArgs)
+			for i := numArgs - 1; i >= 0; i-- {
+				rawArgs[i] = vm.pop(inst.Op)
 			}
+			args := execArgv(rawArgs)
 			cmdStr := fmt.Sprint(vm.pop(inst.Op))
 			cmdStr = vm.requireExec(cmdStr, args, inst.Op)
 			max := vm.Limits.MaxExecOutputBytes
@@ -2537,7 +2624,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			out := output.buffer.Bytes()
 			if err != nil {
 				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err))
+				execErr := NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err)
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) && exitErr.ExitCode() > 0 {
+					execErr.ExecExitCode = exitErr.ExitCode()
+					execErr.ExecOutput = out
+					vm.chargeBytes(len(out), ip, inst.Op)
+				}
+				panic(execErr)
 			}
 			vm.chargeBytes(len(out), ip, inst.Op)
 			vm.push(bytesToAnySlice(out))
@@ -2556,9 +2650,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				if req.Body == nil {
 					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "request body is nil"))
 				}
-				// Bound request body read to 10MB to prevent unbounded memory DoS
-				const maxBodyBytes = 10 * 1024 * 1024
-				limitedReader := io.LimitReader(req.Body, maxBodyBytes+1)
+				// Bound the request body read (runner flag --max-request-bytes) to
+				// prevent unbounded memory use; the default is 10 MiB.
+				maxBodyBytes := vm.Limits.MaxRequestBodyBytes
+				if maxBodyBytes <= 0 {
+					maxBodyBytes = DefaultLimits.MaxRequestBodyBytes
+				}
+				limitedReader := io.LimitReader(req.Body, int64(maxBodyBytes)+1)
 				readData, err := io.ReadAll(limitedReader)
 				if err != nil {
 					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", err))
@@ -2649,6 +2747,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			json.NewEncoder(w).Encode(data)
 		case bytecode.OpHttpServerStart:
 			port := inst.StringOperand
+			if inst.IntOperand&1 != 0 {
+				portVal := vm.pop(inst.Op)
+				n, convErr := strconv.Atoi(strings.TrimSpace(fmt.Sprint(portVal)))
+				if convErr != nil || n < 1 || n > 65535 {
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "http_server port must be an integer 1..65535"))
+				}
+				port = strconv.Itoa(n)
+			}
+			if inst.IntOperand&2 != 0 {
+				env.vars["__http_serial"] = &sync.Mutex{}
+			}
 			mux := http.NewServeMux()
 			env.vars["__http_mux"] = mux
 			env.vars["__http_port"] = port
@@ -2682,7 +2791,28 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			prog := vm.prog
 			if err := dispatch.Handle(path, func(w http.ResponseWriter, r *http.Request) {
+				// Every response carries a server-assigned id (never taken from
+				// the client) so a client report, an access line and a fault line
+				// can be matched.
+				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
+					serial.Lock()
+					defer serial.Unlock()
+				}
+				requestID := newRequestID()
+				started := time.Now()
+				r = httpreq.WithRequestID(r, requestID)
+				w.Header().Set("X-Request-Id", requestID)
 				recorder := &httpResponseRecorder{ResponseWriter: w}
+				if vm.Limits.LogRequests {
+					defer func() {
+						status := recorder.status
+						if status == 0 {
+							status = http.StatusOK
+						}
+						fmt.Fprintf(vm.ErrOut, "access method=%s path=%s status=%d duration_ms=%d request_id=%s\n",
+							r.Method, r.URL.Path, status, time.Since(started).Milliseconds(), requestID)
+					}()
+				}
 				reqEnv := NewBcEnv(capturedEnv)
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
@@ -2709,7 +2839,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						// Details (code, opcode, message) stay in the server log
 						// and the receipt; the client only learns that the
 						// request failed (#166).
-						fmt.Fprintln(vm.ErrOut, "HTTP handler failure:", failure.Error())
+						fmt.Fprintf(vm.ErrOut, "fault request_id=%s method=%s path=%s error=%s\n", requestID, r.Method, r.URL.Path, failure.Error())
 						if recorder.wrote {
 							// The handler already committed a response; the
 							// status line cannot be rewritten, so surface the
@@ -2718,7 +2848,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						}
 						recorder.Header().Set("Content-Type", "application/json")
 						recorder.WriteHeader(http.StatusInternalServerError)
-						_, _ = io.WriteString(recorder, handlerFailureBody)
+						_, _ = io.WriteString(recorder, handlerFailureBodyFor(requestID))
 					}()
 					childVM.run(bodyInsts, reqEnv)
 				}()
@@ -3170,6 +3300,85 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				line = strings.TrimSuffix(line, "\r")
 				vm.push(line)
 			}
+		case bytecode.OpHttpReqID:
+			recv := vm.pop(inst.Op)
+			id, err := httpreq.RequestID(recv)
+			if err != nil {
+				panicRequestRead(ip, inst.Op, err)
+			}
+			vm.push(id)
+		case bytecode.OpHttpReqBody:
+			recv := vm.pop(inst.Op)
+			req, ok := recv.(*http.Request)
+			if !ok || req == nil {
+				panicRequestRead(ip, inst.Op, fmt.Errorf("TYPE_ERROR: req_body expected *http.Request, got %T", recv))
+			}
+			maxBody := vm.Limits.MaxRequestBodyBytes
+			if maxBody <= 0 {
+				maxBody = DefaultLimits.MaxRequestBodyBytes
+			}
+			var data []byte
+			if req.Body != nil {
+				readData, readErr := io.ReadAll(io.LimitReader(req.Body, int64(maxBody)+1))
+				if readErr != nil {
+					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", readErr))
+				}
+				if len(readData) > maxBody {
+					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBody))
+				}
+				data = readData
+				req.Body = io.NopCloser(bytes.NewReader(data))
+			}
+			vm.chargeAlloc(len(data), ip, inst.Op)
+			vm.push(string(data))
+		case bytecode.OpHttpReqURLPath:
+			recv := vm.pop(inst.Op)
+			req, ok := recv.(*http.Request)
+			if !ok || req == nil || req.URL == nil {
+				panicRequestRead(ip, inst.Op, fmt.Errorf("TYPE_ERROR: req_url_path expected *http.Request, got %T", recv))
+			}
+			vm.push(req.URL.Path)
+		case bytecode.OpUTF8Valid:
+			s, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "utf8_valid expected string"))
+			}
+			vm.push(utf8.ValidString(s))
+		case bytecode.OpGranted:
+			name, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "granted expected a capability name string"))
+			}
+			vm.push(capabilityGranted(vm.AllowedCaps, name))
+		case bytecode.OpSha256Hex:
+			s, ok := vm.pop(inst.Op).(string)
+			if !ok {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sha256_hex expected string"))
+			}
+			vm.chargeAlloc(64, ip, inst.Op)
+			vm.push(sha256Hex(s))
+		case bytecode.OpRandHex:
+			nAny := vm.pop(inst.Op)
+			hexStr, err := randHex(nAny)
+			if err != nil {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "rand_hex: %v", err))
+			}
+			vm.chargeAlloc(len(hexStr), ip, inst.Op)
+			vm.push(hexStr)
+		case bytecode.OpSecureEqual:
+			b, okB := vm.pop(inst.Op).(string)
+			a, okA := vm.pop(inst.Op).(string)
+			if !okA || !okB {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "secure_equal expected strings"))
+			}
+			vm.push(subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1)
+		case bytecode.OpReadStdin:
+			data, err := io.ReadAll(vm.lineReader)
+			if err != nil {
+				panic(NewRuntimeError("IO_ERROR", "main", vm.ip, inst.Op, "Failed to read stdin: %v", err))
+			}
+			vm.chargeAlloc(len(data), ip, inst.Op)
+			vm.push(string(data))
 		case bytecode.OpBinop:
 			b := vm.pop(inst.Op)
 			a := vm.pop(inst.Op)
@@ -3808,10 +4017,14 @@ func normalizeForJSON(v any) any {
 // before writing anything, so only the latter is converted into a 500.
 type httpResponseRecorder struct {
 	http.ResponseWriter
-	wrote bool
+	wrote  bool
+	status int
 }
 
 func (w *httpResponseRecorder) WriteHeader(status int) {
+	if !w.wrote {
+		w.status = status
+	}
 	w.wrote = true
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -3909,6 +4122,20 @@ func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) s
 // handlerFailureBody is the only thing an HTTP client sees when a route
 // handler fails; the full runtime error goes to the server log and receipt.
 const handlerFailureBody = `{"error":"internal server error"}` + "\n"
+
+// handlerFailureBodyFor is the same generic body plus the request id, so the
+// client can quote it and the operator can find the matching fault line.
+func handlerFailureBodyFor(id string) string {
+	return `{"error":"internal server error","request_id":"` + id + `"}` + "\n"
+}
+
+func newRequestID() string {
+	id, err := randHex(int64(16))
+	if err != nil {
+		return "00000000000000000000000000000000"
+	}
+	return id
+}
 
 // requireFetch authorizes one outbound URL against the network:fetch=
 // allow-list before any connection is opened. A denial is a typed

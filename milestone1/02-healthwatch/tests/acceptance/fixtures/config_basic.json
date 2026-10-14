@@ -1,0 +1,9 @@
+{"version": 1,
+ "defaults": {"retries": 0},
+ "checks": [
+  {"name": "web", "url": "http://127.0.0.1:@PORT@/ok", "body_contains": "healthy"},
+  {"name": "api", "url": "http://127.0.0.1:@PORT@/json", "expect_status": [200, 204],
+   "json_assert": [{"path": "status", "equals": "ok"}, {"path": "items.1.id", "equals": 2}, {"path": "debug", "exists": false}]},
+  {"name": "broken", "url": "http://127.0.0.1:@PORT@/status/503"},
+  {"name": "moved", "url": "http://127.0.0.1:@PORT@/redirect"}
+ ]}

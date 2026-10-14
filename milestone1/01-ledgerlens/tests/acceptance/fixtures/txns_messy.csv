@@ -1,0 +1,7 @@
+note,AMOUNT , Description ,extra,date
+x,"-1234.56",""" quoted "" name, with comma",y,2024-02-29
+ ,+5,  padded  ,,2026-03-01
+,0.00,zero,,2026-03-02
+,-0,negzero,,2026-03-02
+,999999999999.99,big,,2026-03-31
+,.50,bad-leading-dot,,2026-03-04

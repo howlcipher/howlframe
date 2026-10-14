@@ -76,6 +76,26 @@ func Query(recv, name any) (string, error) {
 // Header returns the first value of a request header. Lookup is
 // case-insensitive. A missing header is "". Repeated values contribute only
 // the first one.
+type requestIDKey struct{}
+
+// WithRequestID returns r carrying the server-assigned request id.
+func WithRequestID(r *http.Request, id string) *http.Request {
+	if r == nil {
+		return nil
+	}
+	return r.WithContext(context.WithValue(r.Context(), requestIDKey{}, id))
+}
+
+// RequestID reads the id assigned by WithRequestID ("" when none).
+func RequestID(recv any) (string, error) {
+	req, err := readRequest("req_id", recv)
+	if err != nil {
+		return "", err
+	}
+	id, _ := req.Context().Value(requestIDKey{}).(string)
+	return id, nil
+}
+
 func Header(recv, name any) (string, error) {
 	req, err := readRequest("req_header", recv)
 	if err != nil {
@@ -278,6 +298,7 @@ type Server struct {
 	literals  map[string]http.HandlerFunc
 	patterns  []registered
 	skeletons map[string]struct{}
+	fallback  http.HandlerFunc
 }
 
 // NewServer wraps mux. A nil mux gets a fresh ServeMux.
@@ -301,6 +322,15 @@ func (s *Server) Handle(routePath string, handler http.HandlerFunc) error {
 	}
 	if handler == nil {
 		return runtimeError("route handler is missing")
+	}
+	// The path "*" registers the fallback handler: it receives every request
+	// that no literal or {name} route matched, instead of the plain-text 404.
+	if routePath == "*" {
+		if s.fallback != nil {
+			return runtimeError("duplicate fallback route %q", routePath)
+		}
+		s.fallback = handler
+		return nil
 	}
 	pattern, err := ParseRoute(routePath)
 	if err != nil {
@@ -341,6 +371,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		reg.handler(w, WithParams(r, params))
+		return
+	}
+	if s.fallback != nil {
+		s.fallback(w, r)
 		return
 	}
 	s.mux.ServeHTTP(w, r)
