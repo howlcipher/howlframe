@@ -10,6 +10,11 @@ HowlFrame is an experimental AI-native language and capability-bounded execution
 
 The VM enforces runner-owned capability grants and finite instruction budgets.
 
+HFBC readers resolve known serialized opcode names before structural validation,
+so internal numeric enum changes do not alter older artifact semantics. Both
+accepted envelope versions retain unknown-opcode, jump and function checks;
+execution still requires the named instruction's capabilities.
+
 ## Why does it exist?
 
 The governing principle is simple: **intent is not authority**.
