@@ -239,6 +239,21 @@ func TestLoweredHFIRABIConformance(t *testing.T) {
 				t.Fatal("case sets both deny_all and allow_caps")
 			}
 			fixture := filepath.Join(root, tc.Fixture)
+			original, err := os.ReadFile(fixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			canonical := testutil.CanonicalExecFixture(t, string(original))
+			if canonical != string(original) {
+				fixture = filepath.Join(t.TempDir(), filepath.Base(fixture))
+				if err := os.WriteFile(fixture, []byte(canonical), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.AllowCaps != nil {
+				caps := testutil.CanonicalExecFixture(t, *tc.AllowCaps)
+				tc.AllowCaps = &caps
+			}
 			switch tc.Name {
 			case "write_file_denied", "write_file_granted":
 				os.Remove(writeMarkerPath)
