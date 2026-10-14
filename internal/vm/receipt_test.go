@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +69,7 @@ func testReceiptFetch(t *testing.T, origin string) {
 }
 func TestReceiptEnvironmentAndExec(t *testing.T) {
 	t.Setenv("HF_RECEIPT_TEST", "secret-value-123")
-	r, raw, _ := receiptRun(t, `(cli_app (env "HF_RECEIPT_TEST") (exec "/usr/bin/echo" "secret-argument-456"))`, DefaultExecutionPolicy(), capability.Environment, capability.Capability("process:exec=/usr/bin/echo *"), capability.Environment)
+	r, raw, _ := receiptRun(t, testutil.CanonicalExecFixture(t, `(cli_app (env "HF_RECEIPT_TEST") (exec "/usr/bin/echo" "secret-argument-456"))`), DefaultExecutionPolicy(), capability.Environment, capability.Capability(testutil.CanonicalExecFixture(t, "process:exec=/usr/bin/echo *")), capability.Environment)
 	if r.Exit.Code != 0 || len(r.Effects) != 2 || r.Effects[0].TargetSummary != "HF_RECEIPT_TEST" || r.Effects[1].TargetSummary != "echo" || len(r.Grant) != 2 {
 		t.Fatalf("receipt: %s", raw)
 	}
