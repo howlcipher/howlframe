@@ -10,6 +10,10 @@ HowlFrame is an experimental AI-native language and capability-bounded execution
 
 The VM enforces runner-owned capability grants and finite instruction budgets.
 
+HFBC readers resolve known serialized opcode names before structural validation,
+so internal numeric enum changes do not alter older artifact semantics. Both
+accepted envelope versions retain unknown-opcode, jump and function checks;
+execution still requires the named instruction's capabilities.
 Relative file stores perform atomic replacement using a temporary sibling in the
 working directory; they do not depend on the system temporary directory or require
 it to share a filesystem with the destination.

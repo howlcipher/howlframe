@@ -6,6 +6,7 @@
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 
 ### Fixed
+* EXT-006: gob artifact decoding resolves stable opcode names before structural verification, matching JSON decoding. Release-era CONVERT instructions no longer become CALL after enum additions; unknown names and malformed jumps/calls remain rejected.
 * EXT-007: bare relative file stores create atomic-write temporary siblings in the current directory rather than system temp, preventing cross-device rename failure.
 * EXT-008: positive exec fixtures bind canonical installed executable paths in both source and exact grants. Frozen ABI source assets and explicit symlink-denial tests stay intact; the conformance runner uses isolated fixture copies.
 * HOWL-E2E-UX-001 EXT-001C: browser relative fetch uses the host page URL before the existing exact-host grant checks. Node keeps its absolute-URL requirement; coarse network and cross-host requests remain denied. Existing ESM transport and process-polyfill limits are explicit in the consumer journal.

@@ -193,6 +193,9 @@ func ReadArtifact(r io.Reader) (*BCProgram, error) {
 		prog = decoded
 	}
 
+	if err := resolveArtifactOpcodeNames(prog); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidProgram, err)
+	}
 	if err := ValidateProgram(prog); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidProgram, err)
 	}
@@ -201,6 +204,37 @@ func ReadArtifact(r io.Reader) (*BCProgram, error) {
 }
 
 var ErrInvalidProgram = errors.New("structurally invalid bytecode program")
+
+// Gob preserves the internal numeric enum, whose values have changed as
+// instructions were added. Resolve the stable wire names, as JSON decoding
+// already does, before validating or executing either supported envelope.
+func resolveArtifactOpcodeNames(prog *BCProgram) error {
+	resolve := func(instructions []BCInstruction) error {
+		for i := range instructions {
+			if instructions[i].OpString == "" {
+				continue // Numeric-only current programs retain structural validation.
+			}
+			op, ok := NameToOpcode(instructions[i].OpString)
+			if !ok {
+				return fmt.Errorf("instruction %d: unknown opcode %q", i, instructions[i].OpString)
+			}
+			instructions[i].Op = op
+		}
+		return nil
+	}
+	if err := resolve(prog.Main); err != nil {
+		return fmt.Errorf("main: %w", err)
+	}
+	for name, fn := range prog.Functions {
+		if fn == nil {
+			continue // ValidateProgram reports malformed function records.
+		}
+		if err := resolve(fn.Instructions); err != nil {
+			return fmt.Errorf("function %q: %w", name, err)
+		}
+	}
+	return nil
+}
 
 // ValidateProgram performs structural verification on a decoded BCProgram
 // to ensure it cannot violate VM invariants (e.g., out-of-bounds jumps,
