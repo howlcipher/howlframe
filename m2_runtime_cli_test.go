@@ -136,3 +136,23 @@ func TestHTTPServerPortMustBeValid(t *testing.T) {
 		t.Fatalf("log: %s", log)
 	}
 }
+
+// The memory ceiling bounds one request, not the whole lifetime of a server.
+func TestHTTPServerMemoryBudgetIsPerRequest(t *testing.T) {
+	port := freeTCPPort(t)
+	src := fmt.Sprintf(`(http_server %d (route "/m" (lambda (req) (res_json 200 (dict ("s" (str_repeat "x" 20)))))))`, port)
+	log, _ := startM2Server(t, src, nil, "network", "--max-memory-bytes", "20000")
+	url := fmt.Sprintf("http://127.0.0.1:%d/m", port)
+	waitHTTP(t, url, log)
+	for i := 0; i < 200; i++ {
+		resp, err := http.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("request %d failed with %d: a process-wide budget would be exhausted by now\n%s", i, resp.StatusCode, log)
+		}
+	}
+}

@@ -2820,7 +2820,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
 				reqEnv.vars[reqVar] = r
 				reqEnv.vars["req"] = r
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: routeCaps, Out: vm.Out, ErrOut: vm.ErrOut}
+				// The memory budget is per request: a long-running server must not
+				// slowly exhaust one never-reclaimed process-wide budget.
+				childVM := &BCVM{ctx: vm.ctx, allocations: &allocationBudget{}, receipt: vm.receipt, prog: prog, env: reqEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: routeCaps, Out: vm.Out, ErrOut: vm.ErrOut}
 				func() {
 					defer func() {
 						recovered := recover()
