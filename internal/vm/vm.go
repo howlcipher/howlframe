@@ -2815,7 +2815,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						if limit <= 0 {
 							limit = DefaultLimits.MaxRequestBodyBytes
 						}
-						buffered, _ := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+						buffered, readErr := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+						if readErr != nil {
+							// A truncated or stalled upload is never executed.
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(http.StatusBadRequest)
+							_, _ = io.WriteString(w, `{"error":"request body was not received completely"}`+"\n")
+							return
+						}
 						r.Body = io.NopCloser(bytes.NewReader(buffered))
 					}
 					serial.Lock()

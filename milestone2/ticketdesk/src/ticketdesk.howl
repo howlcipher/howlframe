@@ -282,6 +282,33 @@
     (return (dict ("id" (map_get r "id")) ("title" (map_get r "title")) ("body" (map_get r "body")) ("priority" (map_get r "priority"))
                   ("status" (map_get r "status")) ("owner" (map_get r "owner")) ("created_at" (map_get r "created_at")) ("updated_at" (map_get r "updated_at")))))
 
+  ; Live ticket ids are indexed in buckets of 64 consecutive ids ("b:<n>" -> {"ids": [...]}),
+  ; so a listing page costs O(page + empty buckets), however many tickets were deleted.
+  (defun bucket_no ((seq int)) int
+    (return (to_int (/ seq 64))))
+
+  (defun bucket_key ((b int)) string
+    (return (str "b:" (pad_left (to_string b) 8 "0"))))
+
+  (defun bucket_add ((s any) (seq int)) int
+    (let (key (call bucket_key (call bucket_no seq)) rec (store_get s (call bucket_key (call bucket_no seq))))
+      (let (ids (list))
+        (do
+          (if (not (is_nil rec)) (set ids (map_get rec "ids")))
+          (append ids seq)
+          (store_put s key (dict ("ids" ids)))
+          (return 0)))))
+
+  (defun bucket_remove ((s any) (seq int)) int
+    (let (key (call bucket_key (call bucket_no seq)) rec (store_get s (call bucket_key (call bucket_no seq))))
+      (do
+        (if (is_nil rec) (return 0))
+        (let (ids (map_get rec "ids") kept (list))
+          (do
+            (for x ids (if (!= x seq) (append kept x)))
+            (store_put s key (dict ("ids" kept)))
+            (return 0))))))
+
   (defun body_or_fail ((req any)) dict
     (let (r (call read_object req))
       (do
@@ -310,6 +337,7 @@
                                   ("created_at" now) ("updated_at" now)))
                     (do
                       (store_put s (call ticket_key id) rec)
+                      (call bucket_add s seq)
                       (res_header "Location" (str "/v1/tickets/" id))
                       (res_json 201 (call ticket_out rec))
                       (return 0)))))))))))
@@ -330,18 +358,21 @@
             (append fields (call field "cursor" "invalid_value" "cursor is not valid"))
             (if (regex_match "^[0-9]{1,9}$" craw) (set cursor (to_int craw)))))
         (if (> (list_len fields) 0) (return (call send_fields req fields)))
-        (let (s (call db) items (list) more 0 last 0 seq (+ cursor 1) top (- (map_get (store_get s "meta") "next_ticket") 1))
+        (let (s (call db) items (list) more 0 last 0 b (call bucket_no (+ cursor 1)) topb 0)
           (do
-            ; walk the creation counter: a page costs O(page + gaps), not O(all tickets)
-            (while (and (<= seq top) (= more 0))
-              (let (rec (store_get s (str "t:" (pad_left (to_string seq) 10 "0"))))
+            (set topb (call bucket_no (- (map_get (store_get s "meta") "next_ticket") 1)))
+            (while (and (<= b topb) (= more 0))
+              (let (brec (store_get s (call bucket_key b)))
                 (do
-                  (if (not (is_nil rec))
-                    (if (or (= status "") (= (map_get rec "status") status))
-                      (if (>= (list_len items) limit)
-                        (set more 1)
-                        (do (append items (call ticket_out rec)) (set last seq)))))
-                  (set seq (+ seq 1)))))
+                  (if (not (is_nil brec))
+                    (for id (map_get brec "ids")
+                      (if (and (> id cursor) (= more 0))
+                        (let (rec (store_get s (str "t:" (pad_left (to_string id) 10 "0"))))
+                          (if (or (= status "") (= (map_get rec "status") status))
+                            (if (>= (list_len items) limit)
+                              (set more 1)
+                              (do (append items (call ticket_out rec)) (set last id))))))))
+                  (set b (+ b 1)))))
             (res_json 200 (dict ("items" items) ("next_cursor" (if (= more 1) (to_string last) (call nilv)))))
             (return 0))))))
 
@@ -389,6 +420,7 @@
           (do
             (if (is_nil (store_get s key)) (return (call send_err req 404 "not_found" "Ticket not found.")))
             (store_delete s key)
+            (call bucket_remove s (to_int (str_slice id 1)))
             (res_json 200 (dict ("id" id) ("deleted" true)))
             (return 0))))))
 

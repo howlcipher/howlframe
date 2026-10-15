@@ -173,7 +173,62 @@ def wrong_shape_state():
         shutil.rmtree(d, ignore_errors=True)
 
 
-TESTS = [b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
+def b5_listing_survives_mass_deletion():
+    s = Srv().wait()
+    try:
+        ids = []
+        for i in range(700):
+            st, t = s.req("POST", "/v1/tickets", ADMIN, {"title": "t%d" % i})
+            check(st == 201, "create %d -> %s" % (i, st))
+            ids.append(t["id"])
+        for tid in ids[:600]:
+            st, _ = s.req("DELETE", "/v1/tickets/" + tid, ADMIN)
+            check(st == 200, "delete %s -> %s" % (tid, st))
+        st, page = s.req("GET", "/v1/tickets?limit=1", ADMIN)
+        check(st == 200 and page["items"][0]["id"] == ids[600], "oldest survivor first after deleting 600 oldest: %s %r" % (st, page))
+        seen, cursor = 0, None
+        while True:
+            st, page = s.req("GET", "/v1/tickets?limit=100" + ("&cursor=" + cursor if cursor else ""), ADMIN)
+            check(st == 200, "page -> %s" % st)
+            seen += len(page["items"])
+            cursor = page["next_cursor"]
+            if not cursor:
+                break
+        check(seen == 100, "walk saw %d, want 100" % seen)
+    finally:
+        s.stop()
+
+
+def m11_truncated_upload_is_not_executed():
+    s = Srv().wait()
+    try:
+        sock = socket.create_connection(("127.0.0.1", s.port))
+        sock.sendall(("POST /v1/tickets HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\n"
+                      "Content-Length: 100\r\n\r\n{\"title\":\"x\"}" % ADMIN).encode())
+        time.sleep(0.3)
+        sock.shutdown(socket.SHUT_WR)
+        sock.close()
+        time.sleep(0.5)
+        st, page = s.req("GET", "/v1/tickets", ADMIN)
+        check(st == 200 and page["items"] == [], "a truncated upload created a ticket: %r" % page)
+    finally:
+        s.stop()
+
+
+def m13_encoded_slash_is_not_an_alias():
+    s = Srv().wait()
+    try:
+        for path in ["/v1%2Ftickets", "/v1/tickets%2F", "/v1%2ftickets"]:
+            st, _ = s.req("GET", path, ADMIN)
+            check(st == 404, "%s -> %s (want 404)" % (path, st))
+        st, t = s.req("POST", "/v1/tickets", ADMIN, {"title": "x"})
+        st, got = s.req("GET", "/v1/tickets/" + t["id"], ADMIN)
+        check(st == 200 and got["id"] == t["id"], "plain id lookup still works")
+    finally:
+        s.stop()
+
+
+TESTS = [b5_listing_survives_mass_deletion, m11_truncated_upload_is_not_executed, m13_encoded_slash_is_not_an_alias, b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
 failed = 0
 for t in TESTS:
     try:

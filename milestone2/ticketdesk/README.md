@@ -51,9 +51,10 @@ curl -s 'localhost:8080/v1/tickets?status=open&limit=10' -H "Authorization: Bear
 ## Known limitations
 
 * The server is single-process and serializes requests: it is a functional backend, not a throughput benchmark.
-* A listing page costs time proportional to the page size plus the number of deleted tickets it has to skip (it walks the
-  creation counter); a very sparse history of deletions makes pages slower.
-* Request bodies are fully read before the handler runs; a client that stalls is dropped by the server's read timeouts.
+* Live ticket ids are indexed in buckets of 64, so a listing page costs time proportional to the page size plus the
+  number of empty buckets it crosses (about one lookup per 64 deleted tickets), however many tickets were deleted.
+  State written by an earlier build without the index is not migrated.
+* Request bodies are fully read before the handler runs; a stalled or truncated upload is dropped (read timeouts) and never executed.
 * Paths match exactly as sent: `/v1//tickets`, `/v1/./tickets` and `/v1/tickets/` are unknown routes.
 * A trailing space after a bearer secret is removed by the HTTP layer before the application sees it.
 * TLS, rate limiting and token expiry are out of scope (PLAN.md section 6).

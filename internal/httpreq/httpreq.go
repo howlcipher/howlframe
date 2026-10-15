@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 )
@@ -375,7 +376,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// than aliases of "/v1/x". Without a fallback the legacy cleaning applies.
 	exact := s.fallback != nil
 	cleaned := r.URL.Path
-	if !exact {
+	if exact {
+		// Match the path as sent, still percent-encoded: "/v1%2Ftickets" is one
+		// segment, not an alias of "/v1/tickets".
+		cleaned = r.URL.EscapedPath()
+	} else {
 		cleaned = cleanRoutePath(r.URL.Path)
 	}
 	if handler, ok := s.literals[cleaned]; ok {
@@ -387,6 +392,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		if exact {
 			params, ok = reg.pattern.matchExact(cleaned)
+			for k, v := range params {
+				if dec, err := url.PathUnescape(v); err == nil {
+					params[k] = dec
+				} else {
+					ok = false
+				}
+			}
 		} else {
 			params, ok = reg.pattern.Match(cleaned)
 		}

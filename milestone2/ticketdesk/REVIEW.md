@@ -1,5 +1,100 @@
 # Milestone 2 independent final review: ticketdesk
 
+Reviewer: independent final reviewer. This file has two parts. **Round 2 (delta re-review, 2026-10-14) is the
+current record.** Round 1 (commit `3b79b7a3`) follows unchanged below as superseded history.
+
+# ROUND 2 (current): delta re-review of commit `ec9182dd`
+
+No frozen file changed: `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md`
+is empty (new tests live in `tests/regression/`, a new directory). Working tree clean before this edit.
+
+## R2.1 Decision: NOT ACCEPTED (one new blocker, B5)
+
+Round 1 blockers B1 to B4 are fixed and verified. A re-run of the reviewer harness under default runner
+ceilings found a new blocker: the new counter-walking listing returns a permanent 500 once about 450 consecutive
+ticket ids have been deleted (routine housekeeping), which the README describes as merely "slower".
+
+## R2.2 Per-gate verdicts (round 2)
+
+| Gate | Round 1 | Round 2 | Reason |
+|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | B1 and B4 fixed; B5: `GET /v1/tickets` is permanently 500 after about 450 consecutive deletions under the documented command (R6, R5 workflow) |
+| C Auth | PASS | PASS | unchanged; new pre-read and exit change do not touch it; bootstrap and issued-token checks re-run, all pass |
+| D Validation and errors | PASS with caveats | PASS with caveats | all ADV input-class checks pass again; truncated uploads are now executed (m11); transport-level plain-text rejections remain (m3) |
+| G Standalone | FAIL | PASS | clean_repro 101/101, 5 regression, 13 DX; busy port gives `ticketdesk: port N is already in use`; documented command now works for max-size tickets; five-grant removal still gives 77. Residual race in the port probe (m12) |
+| H Developer experience | PASS with caveat | PASS with caveat | diagnostics and logs unchanged and pass; README claim about listing is now inaccurate (B5), guide example now answers 413 |
+
+## R2.3 Re-verification of round 1 blockers (own probes, default ceilings, no extra flags)
+
+| Id | Probe | Round 1 | Round 2 |
+|---|---|---|---|
+| B1 | largest body OK at default `--max-instructions` (binary search) | 2856 | 3999 (4000 tested separately: 201, also with 4000 two-byte chars); title 120 ok |
+| B1 | list with 200/500/1000/2000 live tickets, `limit=100` and `limit=1` | 500 from about 100 tickets | 200 everywhere; 2000 tickets: 23 ms (was more than 8 s at raised ceilings) |
+| B2 | ADV87 busy port | exit 1, raw `{"phase":...}` | exit 1, stderr `ticketdesk: port 38659 is already in use`, no raw object |
+| B3 | ADV66/ADV93: authenticated stalled-body POST, health probes at 1, 10 and 25 s | blocked | health answers 200 immediately and at every probe |
+| B3 | handler sleeping 35 s (other-app style) and `(exit 7)` in a handler | n/a | 35 s handler completes 200 (ReadTimeout does not cut handler time); exit in handler gives 500 and the server continues, identical to the old build (`hf_old`) |
+| B4 | ADV33 18 path variants (`//`, `/./`, `/../`, trailing slash, case) | 5 served | all 404 `not_found`; HEAD/OPTIONS/PUT 405 unchanged (ADV31 passes) |
+| Minor m5 to m9 | cli.md memory text, README claims, guide 413 example, dir fsync, zero request id | open | text fixed (cli.md, README, guide); fsync of the directory present in diff; request-id fallback replaced by a safe 500; wrong-shape `meta` now exit 65 (ADV53-meta-wrong) |
+
+Reviewer harness rerun against the new build: ADV01 to ADV100 plus sub-cases: 76 PASS, 4 FAIL, 21 NOTE in `adv.py`;
+the 4 FAILs are the same invalid tests documented in round 1 (ADV34 percent-decoding of `t%31`, ADV70 to ADV72 with
+no environment grant), plus ADV84b (parent directory not granted); adv2 and t9 re-ran with correct dirs and pass
+(ADV81 to ADV86, ADV97 to ADV100). Every previously real failure (ADV33, ADV66, ADV87, ADV93, ADV97, ADV98) now passes.
+SIGKILL durability (ADV50, ADV52) and secret checks (ADV46 to ADV48, ADV59, ADV64) still pass.
+
+## R2.4 New problems looked for (N01 to N10, `t11.py`, `t12.py`, `t13.py`)
+
+| Id | Probe | Result |
+|---|---|---|
+| N01 | upload with `Content-Length: 100`, only a complete 15-byte JSON object sent, then half-close | FAIL (m11): ticket created and 201 sent to a client that never finished its upload |
+| N02 | same, connection left open until ReadTimeout (30 s) | FAIL (m11): ticket created after the timeout |
+| N03 | encoded path aliases: `/v1%2Ftickets`, `/v1%2ftickets`, `/%76%31/tickets` | `%2F` variants and `%76%31` served 200 (m13); `/v1/tickets%2F` and `/v1/tickets/t1%2F..%2F` 404 |
+| N04 | encoded slash inside an id (`a%2Fb`) | 404 |
+| N05 | unauthenticated 1 MiB body | 401 in 10 ms (body pre-read costs nothing material) |
+| N06, N07 | ceiling+1 and 3 MiB bodies, Content-Length and chunked (ADV11) | 413 `payload_too_large`, server healthy |
+| N08 | client with a 1 KB receive buffer never reading a ~1 MB list response | does not block others |
+| N09 | `port_available` called from a handler whose route grants lack network | denied (`catch` branch hit) |
+| N10 | 2000 tickets, list at default ceilings | 200, 23 ms |
+| N11 (`t12`, `t13`) | create 1200 to 1500 tickets, delete the oldest ones, list under default ceilings | FAIL (B5): list returns 500 `instruction limit exceeded` once about 450 consecutive ids are deleted (first at 450 deleted of 1200); permanent until new tickets bridge the gap, even `limit=1` |
+
+Analysis of the specific risks requested:
+* Pre-read vs chunked/huge: read is capped at ceiling+1 and then `req_body` raises `LIMIT_EXCEEDED`, so 413 still works (N06, N07, ADV06 to ADV12 pass). The read error is discarded (`buffered, _ :=`), which is the cause of m11.
+* Timeouts: ReadHeaderTimeout 10 s, ReadTimeout 30 s, IdleTimeout 120 s apply to every `http_server` program. A client needs about 35 KB/s to upload a 1 MiB body. No WriteTimeout, so slow readers cannot hold the lock (N08), and 35 s handlers still complete. Behaviour change for other apps; documented only in the guide and README.
+* Exact routing: only active when a `"*"` fallback exists; encoded-slash residual m13; HEAD/OPTIONS unaffected.
+* `port_available`: a startup probe binds and releases, so another process can still take the port between probe and listen (the old raw error then reappears, m12). Needs the network capability; abuse from a handler is blocked unless it holds network (N09).
+* `exit` change: `(exit n)` is no longer catchable by `try_let`; handler behaviour unchanged (500 and the server lives, same as the old build). Preflight `die` paths still exit with the right codes (ADV53, ADV81 to ADV86).
+
+## R2.5 Defects (round 2)
+
+**Blocker B5.** Listing walks the creation counter and skips deleted ids one by one inside the language, so its instruction
+cost is proportional to the gap of deleted ids. Under the README's documented command (default `--max-instructions 100000`) a gap
+of about 450 consecutive deleted ids yields `500 internal_error` for every `GET /v1/tickets`, including `limit=1`, until new tickets
+bridge the gap. Deleting the oldest tickets is ordinary admin housekeeping, so this is a reachable permanent failure of a core
+endpoint (R6: tickets deleted do not break the walk). README says "slower", which is wrong. Fix: keep a live-ticket index (or skip
+pointers / a compact first-live cursor) so cost depends on page size; add a default-flags regression test deleting 500+ ids.
+
+Minor additions: m11 truncated uploads are executed (check the read error and answer 400 or drop the connection); m12 port probe is a
+TOCTOU, so a lost race still prints the raw runtime error; m13 `%2F` inside the path aliases the route (compare against `RawPath` or
+`EscapedPath`); m14 server timeouts change behaviour for every `http_server` program and are not in `docs/cli.md`.
+
+## R2.6 Evidence
+
+* `bash milestone2/scripts/clean_repro.sh`: 101 tests, 101 passed; review-finding regressions 5 tests, 0 failed; DX 13/13.
+* Full regression: `go test -count=1 ./...`: 76 packages ok, exit 0 (run against HEAD `ec9182dd`; this edit adds only review files).
+* Runtime review of the new changes: `port_available` (network capability, probe only), `matchExact` (fallback servers only),
+  pre-read before lock, server timeouts, `VmExit` re-panic in `try_let`, directory fsync, request-id failure now a safe 500. None
+  weakens capability enforcement; `inherit:filesystem`, `granted`, fallback and attenuation checks from round 1 are untouched.
+
+## R2.7 Recorded decision
+
+**NOT ACCEPTED.** Gates: A FAIL (B5), C PASS, D PASS with caveats, G PASS, H PASS with caveat. After B5 is fixed and a default-flag
+deletion regression test passes, the milestone should be accepted on a delta check; m11 to m14 may be carryover.
+
+---
+
+# ROUND 1 (superseded by Round 2 above; kept as history)
+
+
 Reviewer: independent final reviewer (did not write any implementation). Date: 2026-10-14.
 Reviewed commit: `3b79b7a3` ("milestone2: per-request memory budget, HTTP API guide ..."). Scope: PLAN.md and
 directive section 6 (Milestone 2, D19, D29 A, C, D, G, H). Nothing in `milestone2/ticketdesk/src`,

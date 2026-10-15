@@ -1,5 +1,46 @@
 # Milestone 2 decision
 
+# ROUND 2 (current), 2026-10-14, commit `ec9182dd`
+
+## Decision: NOT ACCEPTED
+
+Round 1 blockers B1 to B4 are fixed and verified by independent probes under the default runner ceilings. One new
+blocker (B5) remains: listing returns a permanent 500 after about 450 consecutive deleted ticket ids under the documented
+command. Details: `milestone2/ticketdesk/REVIEW.md` Round 2.
+
+| Gate | Round 1 | Round 2 |
+|---|---|---|
+| A Practical HTTP API | FAIL | FAIL (B5) |
+| C Authentication and authorization | PASS | PASS |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat |
+
+| Check | Result |
+|---|---|
+| Freeze integrity (`git diff 10d9c2a8 HEAD` on frozen paths) | empty: PASS |
+| `bash milestone2/scripts/clean_repro.sh` | 101/101 acceptance, 5/5 regression, 13/13 DX: PASS |
+| `go test -count=1 ./...` | 76 packages ok, exit 0 |
+| B1 (default ceilings) | fixed: max body 4000 ok, list fast with 2000 tickets |
+| B2 (busy port) | fixed: `ticketdesk: port N is already in use` |
+| B3 (stalled body) | fixed: probes answered at 1/10/25 s |
+| B4 (path aliasing) | fixed for `//`, `/./`, `/../`; encoded `%2F` residual (minor) |
+| New: B5 listing after deletions | FAIL: 500 once about 450 consecutive ids deleted |
+| New minors | m11 truncated upload executed, m12 port probe race, m13 `%2F` alias, m14 server timeouts undocumented in cli.md |
+
+## Carryover (required before acceptance)
+
+1. B5: make listing cost independent of deleted-id gaps (live index or skip pointers); add a default-flags regression test
+   that creates 600 tickets, deletes the first 550, and lists with `limit=1` and `limit=100`; correct the README sentence.
+2. Recommended: reject (400 or close) when the pre-read body hits a read error or is shorter than Content-Length (m11).
+3. Recommended: compare routes with the escaped path so `%2F` is not an alias (m13); document the server timeouts in
+   `docs/cli.md` (m14); make the port-probe loss of race print a `ticketdesk:` line (m12).
+4. Request a delta check of B5 only. If it passes with the full suite, record ACCEPTED and stop the milestone.
+
+---
+
+# ROUND 1 (superseded by Round 2; kept as history)
+
 Date: 2026-10-14. Reviewer: independent final reviewer (no implementation role).
 Reviewed commit: `3b79b7a3`. Detailed evidence: `milestone2/ticketdesk/REVIEW.md`.
 

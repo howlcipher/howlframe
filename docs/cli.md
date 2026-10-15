@@ -29,6 +29,7 @@ Executes a compiled HowlFrame bytecode artifact.
 * `--max-fetch-bytes` : Positive fetch response body ceiling (default `10485760`, 10 MiB).
 * `--max-exec-output-bytes` : Positive combined stdout/stderr ceiling for exec (default `10485760`, 10 MiB).
 * `--max-request-bytes` : Positive ceiling in bytes for an HTTP route's request body (default `1048576`, 1 MiB). Reading a larger body with `(req_body req)` or `parse_json` over `req.body` raises a catchable `LIMIT_EXCEEDED`, so an application can answer `413`. Zero, negative and non-numeric values exit with status 2.
+* HTTP servers started by `run` always apply these connection timeouts: 10 s to read request headers, 30 s to read the whole request (a stalled upload is dropped and its handler never runs), 120 s idle. A handler may run longer than that; only reading the request is bounded.
 * `--access-log` : Write one line per HTTP request to stderr: `access method=GET path=/v1/x status=200 duration_ms=3 request_id=<id>`. The path is the request path as sent (percent-encoded, no query string). Off by default. A handler fault always writes a `fault request_id=<id> method=<M> path=<P> error=<text>` line, with or without this flag. See `docs/guides/http_api.md`.
 * `--deadline` : Optional positive duration such as `5s` or `100ms`; absent means no wall-clock deadline. Explicit `0s`, negative durations, and invalid durations are rejected. Cancels bytecode fetch, exec, sleep, and model requests and checks between instructions.
 

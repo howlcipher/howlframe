@@ -74,3 +74,13 @@ The independent reviewer found what the frozen harness hid: it launches the serv
   inside a `try_let` value was swallowed (now uncatchable, test mutation-checked); percent-encoded paths;
   directory fsync after the atomic rename; no constant request id on entropy failure; guide example returns
   413; `docs/cli.md` budget text; README claims corrected.
+
+## Review round 2 (2026-10-14): NOT ACCEPTED, one new blocker (B5), fixed
+
+B1-B4 verified fixed by the reviewer. New blocker B5: my fix for B1 made listings walk the creation counter,
+so after ~450 consecutive deletions a page cost more instructions than the default ceiling allowed (a permanent
+500). Replaced by a bucketed live-id index (64 ids per bucket record): a page now costs O(page + empty buckets).
+Also fixed minors m11 (a truncated upload was executed: now rejected before the handler runs), m13 (`%2F` aliased a
+route: exact mode matches the percent-encoded path and unescapes captured segments) and m14 (server timeouts are
+now in `docs/cli.md`). Regression tests added (mass deletion, truncated upload, encoded slash) run under the
+default ceilings. Carryover: m12 (port probe can lose a race and then fails with the runtime error).
