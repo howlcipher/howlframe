@@ -1,9 +1,101 @@
 # Milestone 2 independent final review: ticketdesk
 
+Reviewer: independent final reviewer. Three parts: **Round 3 (delta check of commit `4900538a`, 2026-10-14) is the
+current record**; Round 2 (commit `ec9182dd`) and Round 1 (commit `3b79b7a3`) follow as superseded history.
+
+# ROUND 3 (current): delta check of commit `4900538a`
+
+Frozen files unchanged (`git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` empty). Working tree clean before this edit.
+
+## R3.1 Decision: NOT ACCEPTED (one new blocker, B6)
+
+B5, m11, m13 and m14 are fixed and verified. The new bucket index is written in a second, separate store write after the
+ticket write; a SIGKILL between the two writes of a DELETE leaves an index entry whose ticket is gone, after which every
+listing page touching it returns 500 permanently and the id cannot be deleted (404). I reproduced this by crafting the state
+and by a real SIGKILL storm (3 of 25 kills left the listing permanently broken). This is a one-line fix class (tolerate missing records, or write
+the index first), so acceptance should follow a delta check.
+
+## R3.2 Per-gate verdicts (round 3)
+
+| Gate | R1 | R2 | R3 | Reason |
+|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL | B5 fixed; B6: list can be left permanently 500 by a crash in the middle of DELETE (R13/R6) |
+| C Auth | PASS | PASS | PASS | unchanged; ADV41 to ADV48 and header/token checks re-run, pass |
+| D Validation and errors | PASS w/ caveats | PASS w/ caveats | PASS w/ caveats | all input-class checks re-run, pass; m11 now answers 400 (not in the uniform error shape, minor) |
+| G Standalone | FAIL | PASS | PASS | clean_repro 101/101, 8/8 regression, 13/13 DX; documented command works at default ceilings; grants/precedence/busy port re-run, pass |
+| H Developer experience | PASS w/ caveat | PASS w/ caveat | PASS | README listing text now matches behaviour, timeouts documented in cli.md; DX 13/13; logs unchanged |
+
+## R3.3 B5 re-verification (own probes, default runner ceilings, documented command)
+
+State: 3000 tickets created, oldest 2900 deleted (`t15.py`).
+
+| Probe | Result |
+|---|---|
+| P01 `limit=1`, and full walk (limit 50) after 2900 front deletions | 200, exactly t2901 to t3000 |
+| P02 delete a middle block of 40 ids, walk with limit 7 | exact survivors (60 of 60) |
+| P03 recreate after deletes | id `t3001`, not reused, listed last |
+| P04 cursor walk, previous page deleted between requests | cursor still valid, next 5 returned |
+| P05 status filter walk (limit 3) across the sparse index | all 20 matches |
+| P06 SIGKILL after the work above, restart | index persisted, identical list |
+| P07 delete all, list empty (`next_cursor` null), create again | works |
+| P08 bucket boundaries (ids 63, 64, 65, 127, 128, 129 deleted), limit 64 walk | exact (194 of 194) |
+| P09 60 concurrent create+delete pairs | no errors, list equals prior survivors |
+| Earlier t7/t12/t13 scenarios (list after 1499 deletions, 450-id gap) | now 200 |
+
+Cost: creating 3000 tickets took 171 s (57 ms per create at that size) because every mutation rewrites the whole state file;
+acceptable for the stated scope, listing is fast.
+
+## R3.4 Crash consistency of the index (requested judgement)
+
+Each `store_put`/`store_delete` is its own atomic file replacement, so a request that touches a ticket and its bucket is two
+durable steps.
+
+* **Window A (create: ticket written, bucket not yet).** Leaves an unindexed ticket. Reproduced by editing state (P10): `GET`, `PATCH`
+  and `DELETE` of the ticket work, the list omits it. The client never received a response, so R13 ("confirmed mutations survive") is not
+  violated and nothing breaks. Acceptable as a minor consistency defect (m16: invisible ticket until deleted; also `next_ticket` already advanced).
+* **Window B (delete: ticket removed, bucket not yet).** Leaves a dangling id. Reproduced by editing state (P11) and by a real kill storm
+  (`t16.py`: 25 runs of SIGKILL at a random time during a DELETE loop on a 1500-ticket, 640 KB state: **3 of 25** left the listing returning 500
+  `TYPE_ERROR map_get` for every page containing the dangling id). The id then cannot be deleted (`DELETE` is 404), so the endpoint stays broken
+  until the file is edited by hand. This is not an R13 loss of a confirmed mutation, but it turns a crash of an unconfirmed request into permanent
+  failure of a core endpoint, and it breaks the R15 intent that a fault leaves the server serving. **Blocker B6.**
+  Fix options: remove the id from the bucket before deleting the ticket (a crash then yields window A, benign); make the listing skip ids whose
+  ticket record is missing; or store the index and tickets in one record.
+
+## R3.5 m11 and m13 verification and new-problem search (`t17.py`)
+
+| Probe | Result |
+|---|---|
+| Q01, Q02 truncated upload (`Content-Length: 100`, 15-byte valid JSON prefix), early close and 30 s stall | nothing created; stalled case answered `400` |
+| Q03 `/v1%2Ftickets`, `%2f`, `/%76%31/tickets`, `/v1/tickets%2F`, `%2e` segments, double-encoded `%252F`, `/v1/tickets/%2F` | all 404 `not_found` |
+| Q04 id path `t%31`, `%74%31` (decode to `t1`) | 200 (RFC-equivalent); `t1%20`, `t%C3%A9`, `t1%00`, `%FF`, `t1%2F`, `t%2F1`, `%20`, `t%0A1`, trailing slash: 404 |
+| Q05 HEAD, OPTIONS, PUT on encoded and plain ticket paths | 405 with exact `Allow`; HEAD on alias 404 |
+| Q06 access log with encoded paths and CRLF | one line each, percent-encoded |
+| Q07, Q08 Location header, encoded underscore in a token id | correct |
+| ADV01 to ADV100 harness rerun | 76 PASS; the only FAILs are the invalid tests documented earlier (ADV34, ADV70 to ADV72, ADV83/84 in adv2 which t9 redoes correctly) |
+
+New minors: m15 the stored state format changed (bucket index): a state file written by an earlier build lists no tickets (verified: list empty,
+`GET /v1/tickets/t1` 200) because there is no migration; relevant only to upgrades, not to the frozen contract. m17 the m11 `400` body is
+`{"error":"request body was not received completely"}`, not the uniform error shape and without a request id.
+
+## R3.6 Evidence
+
+* `bash milestone2/scripts/clean_repro.sh`: 101 passed; regression 8 tests 0 failed; DX 13 passed.
+* `go test -count=1 ./...`: no failing package, exit 0 (76 packages ok), HEAD `4900538a` plus review files only.
+* No weakening of capability enforcement in this delta (changes: httpreq path matching on `EscapedPath` with capture unescape, pre-read error handling, ticketdesk bucket index).
+
+## R3.7 Recorded decision
+
+**NOT ACCEPTED.** A FAIL (B6), C PASS, D PASS with caveats, G PASS, H PASS. Carryover to acceptance: fix B6 and add a regression test (state with a dangling
+bucket id must still list and be repairable); then a delta check. m12, m15 to m17 are non-blocking carryover.
+
+---
+
+# ROUND 2 (superseded by Round 3; kept as history)
+
 Reviewer: independent final reviewer. This file has two parts. **Round 2 (delta re-review, 2026-10-14) is the
 current record.** Round 1 (commit `3b79b7a3`) follows unchanged below as superseded history.
 
-# ROUND 2 (current): delta re-review of commit `ec9182dd`
+# ROUND 2: delta re-review of commit `ec9182dd`
 
 No frozen file changed: `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md`
 is empty (new tests live in `tests/regression/`, a new directory). Working tree clean before this edit.

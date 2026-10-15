@@ -2807,6 +2807,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				// Every response carries a server-assigned id (never taken from
 				// the client) so a client report, an access line and a fault line
 				// can be matched.
+				requestID := newRequestID()
+				started := time.Now()
 				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
 					// Read the body (bounded) before taking the lock, so a slow
 					// client cannot hold every other request hostage.
@@ -2820,7 +2822,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							// A truncated or stalled upload is never executed.
 							w.Header().Set("Content-Type", "application/json")
 							w.WriteHeader(http.StatusBadRequest)
-							_, _ = io.WriteString(w, `{"error":"request body was not received completely"}`+"\n")
+							_, _ = io.WriteString(w, `{"error":"request body was not received completely","request_id":"`+requestID+`"}`+"\n")
 							return
 						}
 						r.Body = io.NopCloser(bytes.NewReader(buffered))
@@ -2828,8 +2830,6 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					serial.Lock()
 					defer serial.Unlock()
 				}
-				requestID := newRequestID()
-				started := time.Now()
 				r = httpreq.WithRequestID(r, requestID)
 				w.Header().Set("X-Request-Id", requestID)
 				recorder := &httpResponseRecorder{ResponseWriter: w}

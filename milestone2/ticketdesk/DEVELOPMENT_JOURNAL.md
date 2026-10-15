@@ -84,3 +84,13 @@ Also fixed minors m11 (a truncated upload was executed: now rejected before the 
 route: exact mode matches the percent-encoded path and unescapes captured segments) and m14 (server timeouts are
 now in `docs/cli.md`). Regression tests added (mass deletion, truncated upload, encoded slash) run under the
 default ceilings. Carryover: m12 (port probe can lose a race and then fails with the runtime error).
+
+## Review round 3 (2026-10-14): NOT ACCEPTED, one new blocker (B6), fixed
+
+B5/m11/m13/m14 verified. B6: DELETE removed the ticket before its index entry, so a crash between the steps
+left an index id without a ticket and every listing page touching it returned 500 (reproduced with a kill storm).
+Fixed twice over: DELETE unindexes first (a crash then leaves an unindexed, still readable ticket, the same
+benign state as a crash in create), and listing skips index ids that have no ticket. Regression
+`b6_dangling_index_entry_does_not_break_listing` (mutation-checked). m17 partly addressed: the runtime's 400
+for a truncated upload now carries the request id. Carryover: m12 port probe race, m15 no migration of
+state written by an earlier build, m16 a crash in create can leave an unindexed ticket (unconfirmed request).

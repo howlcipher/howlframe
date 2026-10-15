@@ -228,7 +228,37 @@ def m13_encoded_slash_is_not_an_alias():
         s.stop()
 
 
-TESTS = [b5_listing_survives_mass_deletion, m11_truncated_upload_is_not_executed, m13_encoded_slash_is_not_an_alias, b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
+def b6_dangling_index_entry_does_not_break_listing():
+    s = Srv().wait()
+    data = s.data
+    try:
+        for i in range(3):
+            st, _ = s.req("POST", "/v1/tickets", ADMIN, {"title": "t%d" % i})
+            check(st == 201, "create")
+    finally:
+        s.p.terminate()
+        s.p.wait(5)
+    with open(data) as f:
+        state = json.load(f)
+    # simulate a crash between 'ticket removed' and 'index entry removed'
+    del state["t:0000000002"]
+    with open(data, "w") as f:
+        json.dump(state, f)
+    s2 = Srv(data=data, port=s.port).wait()
+    try:
+        st, page = s2.req("GET", "/v1/tickets", ADMIN)
+        check(st == 200 and [t["id"] for t in page["items"]] == ["t1", "t3"], "list with a dangling index id: %s %r" % (st, page))
+        st, _ = s2.req("POST", "/v1/tickets", ADMIN, {"title": "after"})
+        check(st == 201, "create after the dangling entry")
+        st, got = s2.req("DELETE", "/v1/tickets/t3", ADMIN)
+        st, page = s2.req("GET", "/v1/tickets", ADMIN)
+        check(st == 200 and [t["id"] for t in page["items"]] == ["t1", "t4"], "list after delete: %r" % page)
+    finally:
+        s2.stop()
+        shutil.rmtree(s.dir, ignore_errors=True)
+
+
+TESTS = [b6_dangling_index_entry_does_not_break_listing, b5_listing_survives_mass_deletion, m11_truncated_upload_is_not_executed, m13_encoded_slash_is_not_an_alias, b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
 failed = 0
 for t in TESTS:
     try:

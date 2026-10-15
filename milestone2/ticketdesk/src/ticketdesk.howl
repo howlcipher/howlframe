@@ -368,7 +368,7 @@
                     (for id (map_get brec "ids")
                       (if (and (> id cursor) (= more 0))
                         (let (rec (store_get s (str "t:" (pad_left (to_string id) 10 "0"))))
-                          (if (or (= status "") (= (map_get rec "status") status))
+                          (if (and (not (is_nil rec)) (or (= status "") (= (map_get rec "status") status)))
                             (if (>= (list_len items) limit)
                               (set more 1)
                               (do (append items (call ticket_out rec)) (set last id))))))))
@@ -419,8 +419,10 @@
         (let (s (call db))
           (do
             (if (is_nil (store_get s key)) (return (call send_err req 404 "not_found" "Ticket not found.")))
-            (store_delete s key)
+            ; unindex first: a crash between the two steps leaves an unindexed ticket
+            ; (still readable), never an index entry without a ticket
             (call bucket_remove s (to_int (str_slice id 1)))
+            (store_delete s key)
             (res_json 200 (dict ("id" id) ("deleted" true)))
             (return 0))))))
 

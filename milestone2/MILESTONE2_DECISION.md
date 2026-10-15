@@ -1,6 +1,45 @@
 # Milestone 2 decision
 
-# ROUND 2 (current), 2026-10-14, commit `ec9182dd`
+# ROUND 3 (current), 2026-10-14, commit `4900538a`
+
+## Decision: NOT ACCEPTED
+
+B1 to B5, m11, m13 and m14 are fixed and verified by independent probes at default runner ceilings. One blocker remains: B6.
+The bucketed listing index is updated in a separate store write after the ticket write. A crash between the ticket delete and the
+index update leaves a dangling id: listing then returns 500 permanently and the id cannot be deleted. Reproduced by a real SIGKILL storm
+(3 of 25 kills during a DELETE loop). A crash between a ticket create and the index update only leaves an unindexed ticket, which is acceptable.
+
+| Gate | Round 1 | Round 2 | Round 3 |
+|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) |
+| C Authentication and authorization | PASS | PASS | PASS |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS |
+
+| Check | Result |
+|---|---|
+| Freeze integrity | frozen paths unchanged: PASS |
+| `bash milestone2/scripts/clean_repro.sh` | 101/101 acceptance, 8/8 regression, 13/13 DX |
+| `go test -count=1 ./...` | no failures, exit 0 |
+| B5 probes (3000 tickets, 2900 front deletions, middle deletions, recreate, cursor and status walks, restart, bucket boundaries, concurrency) | all pass |
+| B6 crash window | FAIL (state with dangling id: list 500, DELETE 404; 3 of 25 SIGKILL runs) |
+| m11, m13 | fixed; `%2F`, `%252F`, encoded dots, `%20`, unicode ids, HEAD/OPTIONS all behave |
+
+## Carryover (required before acceptance)
+
+1. B6: make a crash between the two writes harmless. Either remove the id from its bucket before deleting the ticket, or make the listing skip ids
+   without a ticket record (and let DELETE clean the index), or keep ticket and index in one record. Add a regression test with a state containing a
+   dangling bucket id (list must return 200).
+2. Request a delta check of B6 only; if it passes with the full suite, record ACCEPTED and stop.
+3. Non-blocking: m12 port-probe race; m15 no migration for state files written by earlier builds (they list empty); m16 unindexed ticket after a crash
+   in create; m17 the m11 400 body is not the uniform error shape.
+
+---
+
+# ROUND 2 (superseded by Round 3; kept as history)
+
+# ROUND 2, 2026-10-14, commit `ec9182dd`
 
 ## Decision: NOT ACCEPTED
 
