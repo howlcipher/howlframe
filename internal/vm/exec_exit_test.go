@@ -90,3 +90,14 @@ func TestExecListIsArgumentVector(t *testing.T) {
 		t.Fatalf("a 4-element vector must not match a 2-element pattern: %#v", ev.RuntimeFailure)
 	}
 }
+
+// (exit n) inside a try_let value must end the program, not be caught and
+// turned into an error branch (found by the Milestone 2 review).
+func TestExitIsNotCatchableByTryLet(t *testing.T) {
+	_, prog := parseAndCompile(t, `(cli_app (try_let (x (do (print "before") (exit 7) 1)) (catch e (print "caught")) (print "after")))`)
+	var out, errOut bytes.Buffer
+	code := RunBytecode(prog, nil, nil, nil, &out, &errOut)
+	if code != 7 || out.String() != "before\n" {
+		t.Fatalf("exit 7 inside try_let: code %d stdout %q (a catch must not see it)", code, out.String())
+	}
+}

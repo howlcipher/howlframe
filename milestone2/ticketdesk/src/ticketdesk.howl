@@ -32,6 +32,14 @@
         (return v))
       (return "")))
 
+  ; True when s has more than max code points. The byte length bounds the code
+  ; point count from above and costs nothing, so only a string that could exceed
+  ; the limit is counted exactly (str_len splits the string).
+  (defun cp_over ((s string) (lim int)) bool
+    (do
+      (if (<= (list_len s) lim) (return false))
+      (return (> (str_len s) lim))))
+
   (defun nilv () any
     (return (map_get (dict) "none")))
 
@@ -41,6 +49,8 @@
   (defun prove_write ((st any)) int
     (let (meta (store_get st "meta"))
       (do
+        (if (and (not (is_nil meta)) (or (!= (call jc (map_get meta "next_ticket")) "i") (!= (call jc (map_get meta "next_token")) "i")))
+          (call die 65 "data file is not valid ticketdesk state"))
         (if (is_nil meta)
           (store_put st "meta" (dict ("next_ticket" 1) ("next_token" 1)))
           (store_put st "meta" meta))
@@ -92,6 +102,7 @@
                     (call die 73 "cannot write the data file")))
                 (set ok w)))))
         (if (not (granted "network")) (call die 77 "capability denied: network"))
+        (if (not (port_available port)) (call die 1 (str "port " port " is already in use")))
         (store_open cfg "memory://ticketdesk-config")
         (store_put cfg "c" (dict ("data" data) ("boot" (sha256_hex tok)) ("debug" (if (= dbg "1") 1 0))))
         (return port))))
@@ -111,15 +122,15 @@
   ; o object, a array, s string, i integer, n other number, b bool, z null
   (defun jc ((v any)) string
     (let (e (encode_json v))
-      (let (c (str_slice e 0 1))
-        (do
-          (if (= c "{") (return "o"))
-          (if (= c "[") (return "a"))
-          (if (= c "\"") (return "s"))
-          (if (or (= c "t") (= c "f")) (return "b"))
-          (if (= c "n") (return "z"))
-          (if (regex_match "^-?[0-9]+$" e) (return "i"))
-          (return "n")))))
+      (do
+        ; anchored regexes: constant instruction cost whatever the value's size
+        (if (regex_match "^\\{" e) (return "o"))
+        (if (regex_match "^\\[" e) (return "a"))
+        (if (regex_match "^\"" e) (return "s"))
+        (if (regex_match "^(true|false)$" e) (return "b"))
+        (if (regex_match "^null$" e) (return "z"))
+        (if (regex_match "^-?[0-9]+$" e) (return "i"))
+        (return "n"))))
 
   (defun send_err ((req any) (status int) (code string) (msg string)) int
     (do
@@ -217,15 +228,15 @@
                 (if (= k "title")
                   (if (!= t "s")
                     (append fields (call field k "invalid_type" "title must be a string"))
-                    (if (= (str_len v) 0)
+                    (if (= (list_len v) 0)
                       (append fields (call field k "too_short" "title must be at least 1 character"))
-                      (if (> (str_len v) 120)
+                      (if (call cp_over v 120)
                         (append fields (call field k "too_long" "title must be at most 120 characters"))
                         (map_set vals k v))))
                   (if (= k "body")
                     (if (!= t "s")
                       (append fields (call field k "invalid_type" "body must be a string"))
-                      (if (> (str_len v) 4000)
+                      (if (call cp_over v 4000)
                         (append fields (call field k "too_long" "body must be at most 4000 characters"))
                         (map_set vals k v)))
                     (if (!= t "s")
@@ -249,9 +260,9 @@
               (if (!= (call jc v) "s")
                 (append fields (call field k "invalid_type" (str k " must be a string")))
                 (if (= k "name")
-                  (if (= (str_len v) 0)
+                  (if (= (list_len v) 0)
                     (append fields (call field k "too_short" "name must be at least 1 character"))
-                    (if (> (str_len v) 64)
+                    (if (call cp_over v 64)
                       (append fields (call field k "too_long" "name must be at most 64 characters"))
                       (map_set vals k v)))
                   (if (not (list_contains (list "admin" "member" "viewer") v))
@@ -319,18 +330,18 @@
             (append fields (call field "cursor" "invalid_value" "cursor is not valid"))
             (if (regex_match "^[0-9]{1,9}$" craw) (set cursor (to_int craw)))))
         (if (> (list_len fields) 0) (return (call send_fields req fields)))
-        (let (s (call db) keys (list) items (list) more 0 last 0)
+        (let (s (call db) items (list) more 0 last 0 seq (+ cursor 1) top (- (map_get (store_get s "meta") "next_ticket") 1))
           (do
-            (for k (store_keys s)
-              (if (starts_with k "t:") (append keys k)))
-            (for k (sort keys)
-              (let (seq (to_int (str_slice k 2)))
-                (if (and (> seq cursor) (= more 0))
-                  (let (rec (store_get s k))
+            ; walk the creation counter: a page costs O(page + gaps), not O(all tickets)
+            (while (and (<= seq top) (= more 0))
+              (let (rec (store_get s (str "t:" (pad_left (to_string seq) 10 "0"))))
+                (do
+                  (if (not (is_nil rec))
                     (if (or (= status "") (= (map_get rec "status") status))
                       (if (>= (list_len items) limit)
                         (set more 1)
-                        (do (append items (call ticket_out rec)) (set last seq))))))))
+                        (do (append items (call ticket_out rec)) (set last seq)))))
+                  (set seq (+ seq 1)))))
             (res_json 200 (dict ("items" items) ("next_cursor" (if (= more 1) (to_string last) (call nilv)))))
             (return 0))))))
 
@@ -413,12 +424,13 @@
                           (return 0)))))))))))))
 
   (defun tokens_list ((req any)) int
-    (let (s (call db) qs (list) items (list))
+    (let (s (call db) items (list) seq 1 top (- (map_get (store_get s "meta") "next_token") 1))
       (do
-        (for k (store_keys s)
-          (if (starts_with k "q:") (append qs k)))
-        (for k (sort qs)
-          (append items (call token_out (store_get s (str "k:" (map_get (store_get s k) "id"))))))
+        (while (<= seq top)
+          (let (q (store_get s (str "q:" (pad_left (to_string seq) 10 "0"))))
+            (do
+              (if (not (is_nil q)) (append items (call token_out (store_get s (str "k:" (map_get q "id"))))))
+              (set seq (+ seq 1)))))
         (res_json 200 (dict ("items" items)))
         (return 0))))
 

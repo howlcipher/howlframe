@@ -29,7 +29,7 @@
 | `HTTP_REQ_METHOD` |  | 0 | 1 |  | Reads HTTP request method |
 | `HTTP_REQ_PATH` |  | 2 | 1 |  | Reads one path parameter from an already-accepted request |
 | `HTTP_REQ_QUERY` |  | 2 | 1 |  | Reads one query parameter from an already-accepted request |
-| `HTTP_REQ_URL_PATH` |  | 1 | 1 |  | Reads the request URL path without the query string |
+| `HTTP_REQ_URL_PATH` |  | 1 | 1 |  | Reads the request URL path (percent-encoded, as sent) without the query string |
 | `HTTP_RES_HEADER` |  | 2 | 0 |  | Sets HTTP response header |
 | `HTTP_ROUTE` | string, string, int64 | 0 | 0 | network | Registers an HTTP route |
 | `HTTP_SERVER_SERVE` |  | 0 | 0 | network | Serves HTTP requests |
@@ -51,6 +51,7 @@
 | `MKDIR` |  | 1 | 0 | filesystem | Creates a directory |
 | `NEURAL_CIRCUIT` | int64 | var | 1 | network | Executes an LLM logic circuit with a given number of inputs and an instruction |
 | `PARSE_JSON` | string | 0 | 1 |  | Parses JSON from a string variable |
+| `PORT_AVAILABLE` |  | 1 | 1 | network | True when a TCP port can be bound right now (binds and releases it) |
 | `PRINT` | int64 | var | 0 |  | Prints values to standard output |
 | `RAND_HEX` |  | 1 | 1 |  | Hex string of n (1..64) cryptographically secure random bytes |
 | `READ_FILE` |  | 1 | 1 | filesystem | Reads a file |

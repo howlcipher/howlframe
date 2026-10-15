@@ -178,6 +178,7 @@ var table = []Entry{
 	{Name: "parse_json", Support: Supported, Opaque: true, Note: "PARSE_JSON; reads child .Value directly"},
 	{Name: "patch", Support: CompileTimeOnly, Note: "applied and removed by ast.ApplyPatches before lowering"},
 	{Name: "pluck", Support: CompileTimeOnly, Note: "records sugar; (pluck lst k) via map_list/map_get by ast.Desugar (pure)"},
+	{Name: "port_available", Support: Supported, Note: "PORT_AVAILABLE; network capability; true when a TCP port can be bound"},
 	{Name: "print", Support: Supported, Note: "PRINT"},
 	{Name: "put", Support: CompileTimeOnly, Note: "records sugar; (put m k ... v) nested in-place write via map_get/map_set/dict by ast.Desugar (pure)"},
 	{Name: "rand_hex", Support: Supported, Note: "RAND_HEX; n secure random bytes as hex; no capability"},

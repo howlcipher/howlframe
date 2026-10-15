@@ -17,8 +17,9 @@ export TICKETDESK_DATA=/var/lib/ticketdesk/state.json            # directory mus
     --max-request-bytes 1048576 --access-log ticketdesk.hfbc
 ```
 
-`TICKETDESK_PORT` (default 8080) selects the port. Without a runner `--max-memory-bytes` large enough for the
-expected load the default (64 MiB) applies per request. A missing grant stops the server at startup with
+`TICKETDESK_PORT` (default 8080) selects the port. The command above uses the runner's default ceilings:
+instruction, call-depth and memory limits apply to each request separately, and a ticket of the maximum size
+(120-character title, 4000-character body) fits in them. A missing grant stops the server at startup with
 `ticketdesk: capability denied: <name>` and exit status 77; invalid environment gives status 2, an unusable
 data file 65, a missing data directory 66.
 
@@ -50,5 +51,9 @@ curl -s 'localhost:8080/v1/tickets?status=open&limit=10' -H "Authorization: Bear
 ## Known limitations
 
 * The server is single-process and serializes requests: it is a functional backend, not a throughput benchmark.
-* Listing reads every ticket key and sorts in the language (quadratic); suitable for thousands of tickets, not millions.
+* A listing page costs time proportional to the page size plus the number of deleted tickets it has to skip (it walks the
+  creation counter); a very sparse history of deletions makes pages slower.
+* Request bodies are fully read before the handler runs; a client that stalls is dropped by the server's read timeouts.
+* Paths match exactly as sent: `/v1//tickets`, `/v1/./tickets` and `/v1/tickets/` are unknown routes.
+* A trailing space after a bearer secret is removed by the HTTP layer before the application sees it.
 * TLS, rate limiting and token expiry are out of scope (PLAN.md section 6).

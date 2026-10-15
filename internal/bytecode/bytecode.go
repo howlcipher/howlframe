@@ -791,7 +791,7 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			insts = append(insts, BCInstruction{OpString: "READ_LINE", Op: OpReadLine})
 		case "serialize_requests":
 			// http_server option, consumed when the server is compiled; no instruction.
-		case "req_body", "req_url_path", "utf8_valid", "granted":
+		case "req_body", "req_url_path", "utf8_valid", "granted", "port_available":
 			if len(node.Children) != 2 {
 				ast.ReportError(fmt.Sprintf("%s expects (%s arg)", head, head), node.Line, node.Column)
 			}
@@ -804,6 +804,8 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				op, opName = OpUTF8Valid, "UTF8_VALID"
 			case "granted":
 				op, opName = OpGranted, "GRANTED"
+			case "port_available":
+				op, opName = OpPortAvailable, "PORT_AVAILABLE"
 			}
 			insts = append(insts, BCInstruction{OpString: opName, Op: op})
 		case "req_id":

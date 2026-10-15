@@ -36,7 +36,7 @@ func ForConstruct(name string) Capability {
 	switch name {
 	case "db_connect", "sql_query", "store_open", "store_put", "store_get", "store_delete", "store_keys":
 		return Database
-	case "fetch", "http_request", "http_server_start", "http_route", "http_server_serve", "llm_generate", "achieve", "confidence", "neural_circuit", "ephemeral_circuit":
+	case "fetch", "http_request", "http_server_start", "http_route", "http_server_serve", "port_available", "llm_generate", "achieve", "confidence", "neural_circuit", "ephemeral_circuit":
 		return Network
 	case "read_file", "write_file", "mkdir":
 		return Filesystem

@@ -253,6 +253,11 @@ class ParseJsonInstruction(BaseModel):
     string_operand: str
 
 
+class PortAvailableInstruction(BaseModel):
+    op: Literal["PORT_AVAILABLE"]
+    pass
+
+
 class PrintInstruction(BaseModel):
     op: Literal["PRINT"]
     int_operand: int
@@ -459,6 +464,7 @@ Instruction = Annotated[
         MkdirInstruction,
         NeuralCircuitInstruction,
         ParseJsonInstruction,
+        PortAvailableInstruction,
         PrintInstruction,
         RandHexInstruction,
         ReadFileInstruction,

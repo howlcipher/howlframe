@@ -231,10 +231,20 @@ func validParamName(name string) bool {
 // preserved. An empty capture does not match. Literal patterns do not match
 // here; the server compares those by exact cleaned path.
 func (p Pattern) Match(requestPath string) (map[string]string, bool) {
+	return p.match(cleanRoutePath(requestPath))
+}
+
+// matchExact matches the path exactly as sent: no dot-segment, duplicate-slash
+// or trailing-slash normalization.
+func (p Pattern) matchExact(requestPath string) (map[string]string, bool) {
+	return p.match(requestPath)
+}
+
+func (p Pattern) match(path string) (map[string]string, bool) {
 	if !p.Parametric {
 		return nil, false
 	}
-	parts := strings.Split(cleanRoutePath(requestPath), "/")
+	parts := strings.Split(path, "/")
 	if len(parts) != len(p.segments) {
 		return nil, false
 	}
@@ -360,13 +370,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	cleaned := cleanRoutePath(r.URL.Path)
+	// A server with a "*" fallback owns its routing: paths match exactly as
+	// sent, so "/v1//x", "/v1/./x" and "/v1/a/../x" are unknown routes rather
+	// than aliases of "/v1/x". Without a fallback the legacy cleaning applies.
+	exact := s.fallback != nil
+	cleaned := r.URL.Path
+	if !exact {
+		cleaned = cleanRoutePath(r.URL.Path)
+	}
 	if handler, ok := s.literals[cleaned]; ok {
 		handler(w, r)
 		return
 	}
 	for _, reg := range s.patterns {
-		params, ok := reg.pattern.Match(cleaned)
+		var params map[string]string
+		var ok bool
+		if exact {
+			params, ok = reg.pattern.matchExact(cleaned)
+		} else {
+			params, ok = reg.pattern.Match(cleaned)
+		}
 		if !ok {
 			continue
 		}

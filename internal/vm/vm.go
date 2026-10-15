@@ -21,6 +21,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1862,6 +1863,11 @@ func writeFileAtomic(path string, data []byte) error {
 		os.Remove(name)
 		return err
 	}
+	// Make the rename itself durable.
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		d.Sync()
+		d.Close()
+	}
 	return nil
 }
 
@@ -2327,6 +2333,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				defer func() {
 					if r := recover(); r != nil {
 						if _, ok := r.(VmReturn); ok {
+							panic(r)
+						}
+						// (exit n) ends the program; a catch must never turn it into an error.
+						if _, ok := r.(VmExit); ok {
 							panic(r)
 						}
 						if e, ok := r.(*VMError); ok && e.Code == "HFIR_DEADLINE_EXCEEDED" {
@@ -2798,6 +2808,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				// the client) so a client report, an access line and a fault line
 				// can be matched.
 				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
+					// Read the body (bounded) before taking the lock, so a slow
+					// client cannot hold every other request hostage.
+					if r.Body != nil {
+						limit := vm.Limits.MaxRequestBodyBytes
+						if limit <= 0 {
+							limit = DefaultLimits.MaxRequestBodyBytes
+						}
+						buffered, _ := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+						r.Body = io.NopCloser(bytes.NewReader(buffered))
+					}
 					serial.Lock()
 					defer serial.Unlock()
 				}
@@ -2872,7 +2892,16 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "http_server_serve expected string port, got %T", portAny))
 			}
 			fmt.Fprintln(vm.Out, "Listening on "+port)
-			err := http.ListenAndServe(":"+port, dispatch)
+			// Timeouts keep a stalled client from holding a connection (and, with
+			// (serialize_requests), the handler lock) forever.
+			server := &http.Server{
+				Addr:              ":" + port,
+				Handler:           dispatch,
+				ReadHeaderTimeout: 10 * time.Second,
+				ReadTimeout:       30 * time.Second,
+				IdleTimeout:       120 * time.Second,
+			}
+			err := server.ListenAndServe()
 			if err != nil {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http listen failed: %v", err))
 			}
@@ -3349,6 +3378,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "utf8_valid expected string"))
 			}
 			vm.push(utf8.ValidString(s))
+		case bytecode.OpPortAvailable:
+			portVal := vm.pop(inst.Op)
+			n, convErr := strconv.Atoi(strings.TrimSpace(fmt.Sprint(portVal)))
+			if convErr != nil || n < 1 || n > 65535 {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "port_available: port must be an integer 1..65535"))
+			}
+			ln, listenErr := net.Listen("tcp", ":"+strconv.Itoa(n))
+			if listenErr == nil {
+				ln.Close()
+			}
+			vm.push(listenErr == nil)
 		case bytecode.OpGranted:
 			name, ok := vm.pop(inst.Op).(string)
 			if !ok {
@@ -4137,7 +4177,8 @@ func handlerFailureBodyFor(id string) string {
 func newRequestID() string {
 	id, err := randHex(int64(16))
 	if err != nil {
-		return "00000000000000000000000000000000"
+		// No entropy: fail the request (a safe 500) rather than issue a constant id.
+		panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, bytecode.OpHttpRoute, "request id: %v", err))
 	}
 	return id
 }

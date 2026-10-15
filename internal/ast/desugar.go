@@ -273,7 +273,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 		"html_escape", "attr_escape", "regex_match", "sha256_hex", "rand_hex", "secure_equal", "is_nil", "map_keys",
 		"env", "sleep", "exec", "cli_args", "read_line", "read_stdin", "time_now",
 		"store_open", "store_keys", "res_header",
-		"req_header", "req_id", "req_body", "req_url_path", "utf8_valid", "granted", "req_method", "req_path", "req_query",
+		"req_header", "req_id", "req_body", "req_url_path", "utf8_valid", "granted", "port_available", "req_method", "req_path", "req_query",
 		"llm_generate", "confidence",
 		// Core-library sugar (heldout-v1).
 		"list_slice", "str_slice", "str_len", "index_of", "map_list", "filter", "reduce", "sum", "min", "max", "reverse", "count_by", "sort",
@@ -1487,7 +1487,7 @@ var exprBodyHeads = map[string]bool{
 	"unix_now": true, "regex_match": true, "sha256_hex": true, "rand_hex": true, "secure_equal": true,
 	"parse_json": true, "encode_json": true, "is_nil": true, "nz": true, "map_has": true,
 	"html_escape": true, "attr_escape": true, "time_now": true,
-	"req_header": true, "req_id": true, "req_body": true, "req_url_path": true, "utf8_valid": true, "granted": true, "req_method": true, "req_path": true, "req_query": true,
+	"req_header": true, "req_id": true, "req_body": true, "req_url_path": true, "utf8_valid": true, "granted": true, "port_available": true, "req_method": true, "req_path": true, "req_query": true,
 	"http_request": true, "fetch": true,
 }
 

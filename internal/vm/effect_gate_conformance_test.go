@@ -214,6 +214,7 @@ func TestEffectGateEmptyGrantConformance(t *testing.T) {
 	sources := map[bytecode.Opcode]string{
 		bytecode.OpFetch:            `(fetch ` + quote(server.URL) + ` "GET")`,
 		bytecode.OpHttpRequest:      `(http_request ` + quote(server.URL) + ` "GET")`,
+		bytecode.OpPortAvailable:    `(port_available 8080)`,
 		bytecode.OpReadFile:         `(read_file ` + quote(marker) + `)`,
 		bytecode.OpWriteFile:        `(write_file ` + quote(marker) + ` "changed")`,
 		bytecode.OpMkdir:            `(mkdir ` + quote(marker) + `)`,

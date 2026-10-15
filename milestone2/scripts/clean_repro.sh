@@ -15,5 +15,7 @@ mkdir -p "$work/out"
 export HF_BIN="$work/howlframe" APP_ARTIFACT="$work/out/ticketdesk.hfbc"
 echo "== acceptance"
 python3 "$app/tests/acceptance/run_acceptance.py" "$app/tests/acceptance/launcher.example.sh" "$@" | tail -4
+echo "== review-finding regressions (default runner ceilings)"
+python3 "$app/tests/regression/review_round1.py" "$app/tests/acceptance/launcher.example.sh" | tail -3
 echo "== developer-experience checker"
 python3 "$app/dx/check_dx.py" | tail -2

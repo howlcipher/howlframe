@@ -53,3 +53,24 @@ Behavior changed: HTTP runtime (ids, logging, fallback, body, port, serializatio
 store persistence, grants attenuation, six new built-ins, run-flag exit status, four diagnostics.
 Existing tests re-run in full; the only failures are the 14 known host-specific exec tests (symlinked
 coreutils), unchanged from the Milestone 1 baseline.
+
+## Review round 1 (2026-10-14): NOT ACCEPTED, four blockers, all fixed
+
+The independent reviewer found what the frozen harness hid: it launches the server with raised ceilings
+(`--max-instructions 4000000000 ...`) while the documented command uses the defaults.
+
+* **B1** (documented command, default ceilings): a 2857+ character body returned 500 and listings failed after
+  ~100 tickets. Causes: my type classifier cost instructions proportional to the value size (`str_slice` over
+  the whole encoded value), and listings read and sorted every key. Fixed: anchored regexes (constant cost), a
+  byte-length pre-check before counting code points, listings that walk the creation counter (cost grows with
+  the page, not the dataset). Regression `tests/regression/review_round1.py` runs with default ceilings.
+* **B2** (port in use printed a raw runtime object): new `port_available` built-in (network capability,
+  registered, gated, denial-tested); the server probes before listening and exits 1 with a prefixed line.
+* **B3** (a stalled upload froze the server under `(serialize_requests)`): the body is read, bounded, before
+  the lock is taken, and the server has read-header/read/idle timeouts.
+* **B4** (`/v1//tickets`, `/v1/./tickets` answered 200): with a `"*"` fallback the dispatcher matches paths
+  exactly as sent instead of cleaning them.
+* Also: state file with a wrong-shaped `meta` is rejected (65); the fix exposed a language bug, `(exit n)`
+  inside a `try_let` value was swallowed (now uncatchable, test mutation-checked); percent-encoded paths;
+  directory fsync after the atomic rename; no constant request id on entropy failure; guide example returns
+  413; `docs/cli.md` budget text; README claims corrected.

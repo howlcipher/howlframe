@@ -107,6 +107,7 @@ llm_generate
 neural_circuit
 optimize_block
 optimize_signature
+port_available
 rand_hex
 read_line
 read_stdin

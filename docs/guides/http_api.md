@@ -33,7 +33,7 @@ carries an `X-Request-Id` header chosen by the server, and `(req_id req)` return
 
 ## JSON bodies
 
-`(req_body req)` returns the request body as a string, bounded by `--max-request-bytes`. Check
+`(req_body req)` returns the request body as a string, bounded by `--max-request-bytes`; a larger body raises a catchable `LIMIT_EXCEEDED` (answer `413`, as the second example does). Check
 `(utf8_valid body)` first, then parse with `parse_json`, which needs a variable name and a type hint.
 Inside a `try_let` a malformed body becomes an ordinary `catch` branch. Types are not coerced: classify a
 value yourself, for example by the first character of `(encode_json value)`.
@@ -45,7 +45,11 @@ value yourself, for example by the first character of `(encode_json value)`.
       (catch err (res_json 400 (dict ("error" "invalid_json"))))
       (res_json 200 (dict ("keys" (map_keys doc)))))))
   (route "/v1/echo-checked" (lambda (req)
-    (let (raw (req_body req))
+    (try_let (raw (req_body req))
+      (catch err
+        (if (regex_match "LIMIT_EXCEEDED" err)
+          (res_json 413 (dict ("error" "payload_too_large")))
+          (res_json 500 (dict ("error" "internal_error")))))
       (if (not (utf8_valid raw))
         (res_json 400 (dict ("error" "invalid_json")))
         (try_let (doc (parse_json Any raw))
@@ -113,7 +117,7 @@ The runner enforces the limits; an application only reacts. `--max-request-bytes
 (default 1 MiB): reading a larger body with `req_body` or `parse_json` raises a catchable `LIMIT_EXCEEDED`
 that you can turn into a `413`. `--max-instructions`, `--max-memory-bytes`, `--max-call-depth` and
 `--deadline` bound a run, and `(serialize_requests)` directly under `http_server` makes handlers run one at
-a time, which makes every read-modify-write atomic.
+a time, which makes every read-modify-write atomic (the body is read before the lock is taken, and the server drops stalled connections). With a `"*"` fallback route, paths are matched exactly as sent, so `/v1//x` and `/v1/./x` are unknown routes.
 
 ```bash
 howlframe run --allow-caps network --max-request-bytes 65536 server.hfbc

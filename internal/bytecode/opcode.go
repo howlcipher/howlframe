@@ -87,6 +87,7 @@ const (
 	OpHttpReqURLPath
 	OpUTF8Valid
 	OpGranted
+	OpPortAvailable
 )
 
 type OperandType string
@@ -181,6 +182,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpHttpReqURLPath:   {Code: OpHttpReqURLPath, Name: "HTTP_REQ_URL_PATH", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.None, Description: "Reads the request URL path (percent-encoded, as sent) without the query string"},
 	OpUTF8Valid:        {Code: OpUTF8Valid, Name: "UTF8_VALID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when a string is valid UTF-8"},
 	OpGranted:          {Code: OpGranted, Name: "GRANTED", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when the runner granted the named capability (introspection only; confers no authority)"},
+	OpPortAvailable:    {Code: OpPortAvailable, Name: "PORT_AVAILABLE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.Network, Description: "True when a TCP port can be bound right now (binds and releases it)"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},

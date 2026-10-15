@@ -103,6 +103,7 @@
 | `parse_json` | Yes | None | No | No | - | AUTHORITATIVE |
 | `patch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `pluck` | No | None | Yes | No | - | AUTHORITATIVE |
+| `port_available` | Yes | network | No | No | - | AUTHORITATIVE |
 | `print` | Yes | None | No | No | - | AUTHORITATIVE |
 | `put` | No | None | Yes | No | - | AUTHORITATIVE |
 | `rand_hex` | Yes | None | No | No | - | AUTHORITATIVE |

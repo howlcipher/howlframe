@@ -64,6 +64,7 @@ var adapterExemptForms = map[string]struct{ reason, sample string }{
 	"read_stdin":         {"promote-blocker fence; -compile-hfir-bc does not lower READ_STDIN", `(do (print (read_stdin)))`},
 	"sha256_hex":         {"promote-blocker fence; -compile-hfir-bc does not lower SHA256_HEX", `(do (print (sha256_hex "a")))`},
 	"req_id":             {"promote-blocker fence; -compile-hfir-bc does not lower HTTP_REQ_ID", `(do (print (req_id 1)))`},
+	"port_available":     {"promote-blocker fence; -compile-hfir-bc does not lower PORT_AVAILABLE", `(do (print (port_available 8080)))`},
 	"granted":            {"promote-blocker fence; -compile-hfir-bc does not lower GRANTED", `(do (print (granted "network")))`},
 	"req_body":           {"promote-blocker fence; -compile-hfir-bc does not lower HTTP_REQ_BODY", `(do (print (req_body 1)))`},
 	"req_url_path":       {"promote-blocker fence; -compile-hfir-bc does not lower HTTP_REQ_URL_PATH", `(do (print (req_url_path 1)))`},
