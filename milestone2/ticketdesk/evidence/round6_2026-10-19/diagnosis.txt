@@ -1,0 +1,175 @@
+Round 6 timeout diagnosis, 2026-10-19
+Classification: box, provisional (transient scheduling or I/O stall inferred).
+The exact cause is unproven; these post-timeout samples cannot exclude a transient
+server delay. This classification does not waive the failure or permit a rerun.
+
+Only reason: run=11 TimeoutError. grep -c '^DIAG' = 63 (one block,
+including 40 dump-tail lines). Only failure directory: run11_failure/.
+Contents (synthetic ticket state; not copied into this small text evidence):
+total 860
+drwxr-xr-x 2 box box   4096 Oct 19 10:35 .
+drwxr-xr-x 3 box box   8192 Oct 19 11:03 ..
+-rw-r--r-- 1 box box 371026 Oct 19 10:35 state.json
+-rw------- 1 box box 494782 Oct 19 10:34 state.json.tmp-486736558
+
+The failed client request was DELETE /v1/tickets/t400, elapsed 68.756 s;
+last completed request was repeat DELETE t399, 404 in 1 ms. The server logged
+t400 as 200 after 68.768 s, then health 200 in 11 ms. Health probe measured
+12 ms. The deletion completed after the client deadline; it is not counted as
+a successful survivor check. No persistent store mutex hang is demonstrated.
+
+Before SIGQUIT: server sleeping, main wchan futex_wait_queue, 11 threads;
+one runnable task, others futex/sleep/epoll; no T (stopped) or D (uninterruptible)
+state captured. utime 65.52 s, stime 11.94 s are cumulative, not stall CPU deltas.
+Load 0.48/0.82/1.23 on 8 CPUs; available memory 13706840 kB;
+I/O pressure avg10=0.00, avg60=0.64, avg300=0.81. These are post-stall
+observations and do not prove absence of an earlier host pause.
+
+SIGQUIT exited 2 without SIGKILL fallback. Full dump has only goroutines 0-14:
+listener, runtime maintenance and idle GC workers. No live request, store-lock
+waiter, or blocked fsync stack survived until capture. Thus the dump cannot
+locate where the request spent its 68 seconds. Independent long recovery
+maxima in passing runs 37 (21801.7 ms) and 61 (34616.3 ms), plus the client's
+nominal 10 s timeout surfacing after 68.756 s, support a box/scheduling pause
+as the provisional explanation. They do not establish it as fact or explain
+historical Round 4. No concurrent heavy job was launched by this reviewer.
+
+Relevant full DIAG block:
+DIAG run=11 failure state snapshot: state.json(371361B), state.json.tmp-486736558(494782B) -> run11_failure/
+DIAG reason=run=11 TimeoutError
+DIAG inflight method=DELETE path=/v1/tickets/t400 ticket=t400 elapsed=68.756s
+DIAG last_completed method=DELETE path=/v1/tickets/t399 status=404 elapsed=0.001s
+DIAG server pid=1311352 alive state=S utime=65.52s stime=11.94s threads=11
+DIAG wchan=futex_wait_queue
+DIAG status: Name:	howlframe | State:	S (sleeping) | Pid:	1311352 | PPid:	1309869 | Threads:	11 | voluntary_ctxt_switches:	7055 | nonvoluntary_ctxt_switches:	10
+DIAG task 1311352 state=S wchan=futex_wait_queue
+DIAG task 1311353 state=S wchan=hrtimer_nanosleep
+DIAG task 1311354 state=R wchan=0
+DIAG task 1311355 state=S wchan=futex_wait_queue
+DIAG task 1311356 state=S wchan=futex_wait_queue
+DIAG task 1311357 state=S wchan=futex_wait_queue
+DIAG task 1311358 state=S wchan=futex_wait_queue
+DIAG task 1311359 state=S wchan=futex_wait_queue
+DIAG task 1311360 state=S wchan=ep_poll
+DIAG task 1311361 state=S wchan=futex_wait_queue
+DIAG task 1311362 state=S wchan=futex_wait_queue
+DIAG health_probe status=200 elapsed=0.012s
+DIAG sigquit sent; server exited code=2; goroutine dump in run11_recovery.log
+DIAG box loadavg=0.48 0.82 1.23 cpus=8; mem_available=13706840 kB; io_pressure: some avg10=0.00 avg60=0.64 avg300=0.81 total=83337651
+DIAG saved state files: state.json(371026B), state.json.tmp-486736558(494782B) -> run11_failure/
+DIAG server_output_tail (4096 of 456702 bytes):
+DIAG | runtime.gcBgMarkStartWorkers.gowrap1()
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0x17 fp=0x2ea895a67fe0 sp=0x2ea895a67fc8 pc=0x47f077
+DIAG | runtime.goexit({})
+DIAG | 	/usr/local/go/src/runtime/asm_amd64.s:1264 +0x1 fp=0x2ea895a67fe8 sp=0x2ea895a67fe0 pc=0x48eb41
+DIAG | created by runtime.gcBgMarkStartWorkers in goroutine 1
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0xfc
+DIAG | 
+DIAG | goroutine 14 gp=0x2ea895abf0e0 m=nil [GC worker (idle)]:
+DIAG | runtime.gopark(0x992de627fcb?, 0x3?, 0x92?, 0x4a?, 0x0?)
+DIAG | 	/usr/local/go/src/runtime/proc.go:474 +0xca fp=0x2ea895a68740 sp=0x2ea895a68720 pc=0x487e4a
+DIAG | runtime.gcBgMarkWorker(0x2ea895aa20e0)
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1807 +0xeb fp=0x2ea895a687c8 sp=0x2ea895a68740 pc=0x4303ab
+DIAG | runtime.gcBgMarkStartWorkers.gowrap1()
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0x17 fp=0x2ea895a687e0 sp=0x2ea895a687c8 pc=0x47f077
+DIAG | runtime.goexit({})
+DIAG | 	/usr/local/go/src/runtime/asm_amd64.s:1264 +0x1 fp=0x2ea895a687e8 sp=0x2ea895a687e0 pc=0x48eb41
+DIAG | created by runtime.gcBgMarkStartWorkers in goroutine 1
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0xfc
+DIAG | 
+DIAG | rax    0xca
+DIAG | rbx    0x0
+DIAG | rcx    0x490683
+DIAG | rdx    0x0
+DIAG | rdi    0xd9a098
+DIAG | rsi    0x80
+DIAG | rbp    0x7ffcdadcca88
+DIAG | rsp    0x7ffcdadcca40
+DIAG | r8     0x0
+DIAG | r9     0x0
+DIAG | r10    0x0
+DIAG | r11    0x286
+DIAG | r12    0x3
+DIAG | r13    0x7
+DIAG | r14    0xd98ba0
+DIAG | r15    0x0
+DIAG | rip    0x490681
+DIAG | rflags 0x286
+DIAG | cs     0x33
+DIAG | fs     0x0
+DIAG | gs     0x0
+
+Matching request and goroutine-dump excerpts (run11_recovery.log):
+access method=DELETE path=/v1/tickets/t399 status=200 duration_ms=12 request_id=a4aac553483c59e6f507c7b160df18ea
+access method=GET path=/v1/tickets/t399 status=404 duration_ms=0 request_id=4049dbb0c4098b004d4573f0886b0518
+access method=DELETE path=/v1/tickets/t399 status=404 duration_ms=0 request_id=d99477a1b944e5fba6389384c9ab6bab
+access method=DELETE path=/v1/tickets/t400 status=200 duration_ms=68768 request_id=2ad5fac0e0b090feb2c8802d03059c50
+access method=GET path=/v1/health status=200 duration_ms=11 request_id=b8f6ab36f4a0a6d88d3ff4942cc2552a
+SIGQUIT: quit
+PC=0x490681 m=0 sigcode=0
+
+goroutine 0 gp=0xd98ba0 m=0 mp=0xd99f40 [idle]:
+runtime.futex(0xd9a098, 0x80, 0x0, 0x0, 0x0, 0x0)
+	/usr/local/go/src/runtime/sys_linux_amd64.s:575 +0x21 fp=0x7ffcdadcca48 sp=0x7ffcdadcca40 pc=0x490681
+runtime.futexsleep(0xd99f40?, 0xdadccac0?, 0x45ea28?)
+	/usr/local/go/src/runtime/os_linux.go:73 +0x30 fp=0x7ffcdadcca98 sp=0x7ffcdadcca48 pc=0x44ad30
+runtime.notesleep(0xd9a098)
+	/usr/local/go/src/runtime/lock_futex.go:47 +0x87 fp=0x7ffcdadccad0 sp=0x7ffcdadcca98 pc=0x41f547
+runtime.mPark(...)
+	/usr/local/go/src/runtime/proc.go:1985
+runtime.stopm()
+	/usr/local/go/src/runtime/proc.go:3023 +0x8c fp=0x7ffcdadccb00 sp=0x7ffcdadccad0 pc=0x455a8c
+runtime.findRunnable()
+	/usr/local/go/src/runtime/proc.go:3811 +0xeb7 fp=0x7ffcdadcccd0 sp=0x7ffcdadccb00 pc=0x457617
+runtime.schedule()
+	/usr/local/go/src/runtime/proc.go:4179 +0xb1 fp=0x7ffcdadccd10 sp=0x7ffcdadcccd0 pc=0x458731
+runtime.park_m(0x2ea895abef00)
+	/usr/local/go/src/runtime/proc.go:4319 +0x279 fp=0x7ffcdadccd70 sp=0x7ffcdadccd10 pc=0x458bb9
+runtime.mcall()
+	/usr/local/go/src/runtime/asm_amd64.s:463 +0x53 fp=0x7ffcdadccd88 sp=0x7ffcdadccd70 pc=0x48cff3
+
+goroutine 1 gp=0x2ea895a0a1e0 m=nil [IO wait, 1 minutes]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:474 +0xca fp=0x2ea896dc1610 sp=0x2ea896dc15f0 pc=0x487e4a
+runtime.netpollblock(0x2ea896dc1660?, 0x4d7b97?, 0x0?)
+	/usr/local/go/src/runtime/netpoll.go:575 +0xf7 fp=0x2ea896dc1648 sp=0x2ea896dc1610 pc=0x449ff7
+internal/poll.runtime_pollWait(0x7f08d5555400, 0x72)
+	/usr/local/go/src/runtime/netpoll.go:351 +0x85 fp=0x2ea896dc1668 sp=0x2ea896dc1648 pc=0x487045
+internal/poll.(*pollDesc).wait(0x2ea895a2b880?, 0x100?, 0x0)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x2ea896dc16a0 sp=0x2ea896dc1668 pc=0x4d4427
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Accept(0x2ea895a2b880)
+	/usr/local/go/src/internal/poll/fd_unix.go:618 +0x27d fp=0x2ea896dc1748 sp=0x2ea896dc16a0 pc=0x4d589d
+net.(*netFD).accept(0x2ea895a2b880)
+	/usr/local/go/src/net/fd_unix.go:149 +0x29 fp=0x2ea896dc1800 sp=0x2ea896dc1748 pc=0x5da829
+net.(*TCPListener).accept(0x2ea895c56cc0)
+	/usr/local/go/src/net/tcpsock_posix.go:159 +0x1b fp=0x2ea896dc1850 sp=0x2ea896dc1800 pc=0x5e9ebb
+net.(*TCPListener).Accept(0x2ea895c56cc0)
+	/usr/local/go/src/net/tcpsock.go:387 +0x30 fp=0x2ea896dc1890 sp=0x2ea896dc1850 pc=0x5e9330
+net/http.(*Server).Serve(0x2ea895cc8b40, {0xd31f80, 0x2ea895c56cc0})
+	/usr/local/go/src/net/http/server.go:3574 +0x379 fp=0x2ea896dc19c0 sp=0x2ea896dc1890 pc=0x710ab9
+net/http.(*Server).ListenAndServe(0x2ea895cc8b40)
+	/usr/local/go/src/net/http/server.go:3485 +0x71 fp=0x2ea896dc19f0 sp=0x2ea896dc19c0 pc=0x710651
+github.com/howlcipher/howlframe/internal/vm.(*BCVM).run(0x2ea895cc8000, {0x2ea895c29008, 0x1f, 0x1f}, 0x2ea895c69ee0)
+	/tmp/b6-independent-5mex9l2v/internal/vm/vm.go:2961 +0x2185 fp=0x2ea896dc2e00 sp=0x2ea896dc19f0 pc=0x825325
+github.com/howlcipher/howlframe/internal/vm.runBytecodeEvidence(0x2ea895a2a280, {_, _, _}, {{0x186a0, 0x4000000, 0x3e8, 0xa00000, 0x100000, 0x1, ...}, ...}, ...)
+	/tmp/b6-independent-5mex9l2v/internal/vm/vm.go:2002 +0x9df fp=0x2ea896dc2fd8 sp=0x2ea896dc2e00 pc=0x82123f
+github.com/howlcipher/howlframe/internal/vm.RunBytecodeWithEvidence(...)
+	/tmp/b6-independent-5mex9l2v/internal/vm/vm.go:1932
+github.com/howlcipher/howlframe/internal/vm.RunBytecodeWithPolicy(0x20?, {0x0?, 0x7339dc?, 0x7ffcdadce555?}, {{0x186a0, 0x4000000, 0x3e8, 0xa00000, 0x100000, 0x1, ...}, ...}, ...)
+	/tmp/b6-independent-5mex9l2v/internal/vm/vm.go:1917 +0xf9 fp=0x2ea896dc3220 sp=0x2ea896dc2fd8 pc=0x820599
+main.runBytecodeArtifact(0x9?, {0x2ea895bbe000?, 0x484c5d?, 0x40505c?}, {0x0?, 0x40505c?, 0x2ea895ae35b0?}, {{0x186a0, 0x4000000, 0x3e8, ...}, ...}, ...)
+	/tmp/b6-independent-5mex9l2v/howlframe.go:1107 +0x39a fp=0x2ea896dc34b8 sp=0x2ea896dc3220 pc=0x8466da
+main.runArtifact()
+	/tmp/b6-independent-5mex9l2v/howlframe.go:1043 +0xdab fp=0x2ea896dc3830 sp=0x2ea896dc34b8 pc=0x8454cb
+main.runSubcommand()
+	/tmp/b6-independent-5mex9l2v/howlframe.go:642 +0xce fp=0x2ea896dc38e8 sp=0x2ea896dc3830 pc=0x84206e
+main.main()
+	/tmp/b6-independent-5mex9l2v/howlframe.go:45 +0x105 fp=0x2ea896dc3eb8 sp=0x2ea896dc38e8 pc=0x83dd85
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:302 +0x427 fp=0x2ea896dc3fe0 sp=0x2ea896dc3eb8 pc=0x451007
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1264 +0x1 fp=0x2ea896dc3fe8 sp=0x2ea896dc3fe0 pc=0x48eb41
+
+goroutine 2 gp=0x2ea895a0ad20 m=nil [force gc (idle), 1 minutes]:

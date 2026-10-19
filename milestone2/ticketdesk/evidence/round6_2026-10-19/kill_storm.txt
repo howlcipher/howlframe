@@ -1,0 +1,189 @@
+SCRIPT_SHA256 e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f
+ARTIFACTS /tmp/round6/artifacts
+CODE_SHA 1561b9a2c7e6d798b7acf142e65e363352c557d2
+CODE_PINNED 92c150d1736794c40597920c4b3b7df8e9e77d3b (HEAD 1561b9a2c7e6d798b7acf142e65e363352c557d2 only fills the pin line)
+BUILD PASS; API seed=1500; bytes=504724; default runner ceilings
+run=01 delay=0.4732s confirmed=28 survivors=1472 dangling=0 unindexed=0 storm[n=29 p99=20.1ms max=20.1ms] recovery[n=7420 p99=16.4ms max=149.9ms] PASS
+run=02 delay=0.7714s confirmed=49 survivors=1451 dangling=0 unindexed=0 storm[n=50 p99=30.8ms max=30.8ms] recovery[n=7315 p99=16.2ms max=237.4ms] PASS
+run=03 tmp files after kill: ['state.json.tmp-3133188458']
+run=03 delay=0.7627s confirmed=42 survivors=1458 dangling=0 unindexed=1 storm[n=43 p99=23.2ms max=23.2ms] recovery[n=7349 p99=15.9ms max=92.8ms] PASS
+run=04 cleared tmp after restore: ['state.json.tmp-3133188458->run04_pre_1792420321_state.json.tmp-3133188458']
+run=04 delay=0.1735s confirmed=9 survivors=1491 dangling=0 unindexed=1 storm[n=10 p99=23.7ms max=23.7ms] recovery[n=7515 p99=15.8ms max=159.9ms] PASS
+run=05 delay=0.4337s confirmed=28 survivors=1472 dangling=0 unindexed=1 storm[n=29 p99=19.3ms max=19.3ms] recovery[n=7419 p99=16.7ms max=199.0ms] PASS
+run=06 delay=0.2171s confirmed=13 survivors=1487 dangling=0 unindexed=0 storm[n=14 p99=18.7ms max=18.7ms] recovery[n=7496 p99=15.8ms max=222.4ms] PASS
+run=07 tmp files after kill: ['state.json.tmp-418785603']
+run=07 delay=0.0270s confirmed=1 survivors=1499 dangling=0 unindexed=1 storm[n=2 p99=14.5ms max=14.5ms] recovery[n=7555 p99=16.1ms max=403.9ms] PASS
+run=08 cleared tmp after restore: ['state.json.tmp-418785603->run08_pre_1792420396_state.json.tmp-418785603']
+run=08 tmp files after kill: ['state.json.tmp-3880836315']
+run=08 delay=0.1145s confirmed=6 survivors=1494 dangling=0 unindexed=1 storm[n=7 p99=18.2ms max=18.2ms] recovery[n=7530 p99=16.7ms max=313.7ms] PASS
+run=09 cleared tmp after restore: ['state.json.tmp-3880836315->run09_pre_1792420415_state.json.tmp-3880836315']
+run=09 delay=0.5820s confirmed=36 survivors=1464 dangling=0 unindexed=0 storm[n=37 p99=22.0ms max=22.0ms] recovery[n=7380 p99=15.9ms max=331.1ms] PASS
+run=10 delay=0.2388s confirmed=15 survivors=1485 dangling=0 unindexed=0 storm[n=16 p99=18.2ms max=18.2ms] recovery[n=7486 p99=17.9ms max=459.4ms] PASS
+run=11 tmp files after kill: ['state.json.tmp-486736558']
+DIAG run=11 failure state snapshot: state.json(371361B), state.json.tmp-486736558(494782B) -> run11_failure/
+DIAG reason=run=11 TimeoutError
+DIAG inflight method=DELETE path=/v1/tickets/t400 ticket=t400 elapsed=68.756s
+DIAG last_completed method=DELETE path=/v1/tickets/t399 status=404 elapsed=0.001s
+DIAG server pid=1311352 alive state=S utime=65.52s stime=11.94s threads=11
+DIAG wchan=futex_wait_queue
+DIAG status: Name:	howlframe | State:	S (sleeping) | Pid:	1311352 | PPid:	1309869 | Threads:	11 | voluntary_ctxt_switches:	7055 | nonvoluntary_ctxt_switches:	10
+DIAG task 1311352 state=S wchan=futex_wait_queue
+DIAG task 1311353 state=S wchan=hrtimer_nanosleep
+DIAG task 1311354 state=R wchan=0
+DIAG task 1311355 state=S wchan=futex_wait_queue
+DIAG task 1311356 state=S wchan=futex_wait_queue
+DIAG task 1311357 state=S wchan=futex_wait_queue
+DIAG task 1311358 state=S wchan=futex_wait_queue
+DIAG task 1311359 state=S wchan=futex_wait_queue
+DIAG task 1311360 state=S wchan=ep_poll
+DIAG task 1311361 state=S wchan=futex_wait_queue
+DIAG task 1311362 state=S wchan=futex_wait_queue
+DIAG health_probe status=200 elapsed=0.012s
+DIAG sigquit sent; server exited code=2; goroutine dump in run11_recovery.log
+DIAG box loadavg=0.48 0.82 1.23 cpus=8; mem_available=13706840 kB; io_pressure: some avg10=0.00 avg60=0.64 avg300=0.81 total=83337651
+DIAG saved state files: state.json(371026B), state.json.tmp-486736558(494782B) -> run11_failure/
+DIAG server_output_tail (4096 of 456702 bytes):
+DIAG | runtime.gcBgMarkStartWorkers.gowrap1()
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0x17 fp=0x2ea895a67fe0 sp=0x2ea895a67fc8 pc=0x47f077
+DIAG | runtime.goexit({})
+DIAG | 	/usr/local/go/src/runtime/asm_amd64.s:1264 +0x1 fp=0x2ea895a67fe8 sp=0x2ea895a67fe0 pc=0x48eb41
+DIAG | created by runtime.gcBgMarkStartWorkers in goroutine 1
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0xfc
+DIAG | 
+DIAG | goroutine 14 gp=0x2ea895abf0e0 m=nil [GC worker (idle)]:
+DIAG | runtime.gopark(0x992de627fcb?, 0x3?, 0x92?, 0x4a?, 0x0?)
+DIAG | 	/usr/local/go/src/runtime/proc.go:474 +0xca fp=0x2ea895a68740 sp=0x2ea895a68720 pc=0x487e4a
+DIAG | runtime.gcBgMarkWorker(0x2ea895aa20e0)
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1807 +0xeb fp=0x2ea895a687c8 sp=0x2ea895a68740 pc=0x4303ab
+DIAG | runtime.gcBgMarkStartWorkers.gowrap1()
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0x17 fp=0x2ea895a687e0 sp=0x2ea895a687c8 pc=0x47f077
+DIAG | runtime.goexit({})
+DIAG | 	/usr/local/go/src/runtime/asm_amd64.s:1264 +0x1 fp=0x2ea895a687e8 sp=0x2ea895a687e0 pc=0x48eb41
+DIAG | created by runtime.gcBgMarkStartWorkers in goroutine 1
+DIAG | 	/usr/local/go/src/runtime/mgc.go:1711 +0xfc
+DIAG | 
+DIAG | rax    0xca
+DIAG | rbx    0x0
+DIAG | rcx    0x490683
+DIAG | rdx    0x0
+DIAG | rdi    0xd9a098
+DIAG | rsi    0x80
+DIAG | rbp    0x7ffcdadcca88
+DIAG | rsp    0x7ffcdadcca40
+DIAG | r8     0x0
+DIAG | r9     0x0
+DIAG | r10    0x0
+DIAG | r11    0x286
+DIAG | r12    0x3
+DIAG | r13    0x7
+DIAG | r14    0xd98ba0
+DIAG | r15    0x0
+DIAG | rip    0x490681
+DIAG | rflags 0x286
+DIAG | cs     0x33
+DIAG | fs     0x0
+DIAG | gs     0x0
+run=11 latency[n=4106 p99=16.4ms max=20.5ms]
+run=11 FAIL TimeoutError: timed out
+run=12 cleared tmp after restore: ['state.json.tmp-486736558->run12_pre_1792420531_state.json.tmp-486736558']
+run=12 delay=0.2207s confirmed=13 survivors=1487 dangling=0 unindexed=0 storm[n=14 p99=20.3ms max=20.3ms] recovery[n=7496 p99=15.2ms max=122.0ms] PASS
+run=13 delay=0.2561s confirmed=16 survivors=1484 dangling=0 unindexed=0 storm[n=17 p99=19.3ms max=19.3ms] recovery[n=7481 p99=17.1ms max=211.4ms] PASS
+run=14 delay=0.0677s confirmed=4 survivors=1496 dangling=0 unindexed=1 storm[n=5 p99=16.7ms max=16.7ms] recovery[n=7540 p99=16.2ms max=195.7ms] PASS
+run=15 delay=0.5161s confirmed=34 survivors=1466 dangling=0 unindexed=0 storm[n=35 p99=17.7ms max=17.7ms] recovery[n=7390 p99=16.1ms max=173.1ms] PASS
+run=16 delay=0.1876s confirmed=11 survivors=1489 dangling=0 unindexed=1 storm[n=12 p99=20.5ms max=20.5ms] recovery[n=7505 p99=16.4ms max=276.6ms] PASS
+run=17 delay=0.0689s confirmed=4 survivors=1496 dangling=0 unindexed=0 storm[n=5 p99=17.7ms max=17.7ms] recovery[n=7541 p99=15.8ms max=91.8ms] PASS
+run=18 delay=0.3256s confirmed=20 survivors=1480 dangling=0 unindexed=0 storm[n=21 p99=18.6ms max=18.6ms] recovery[n=7461 p99=16.3ms max=201.6ms] PASS
+run=19 tmp files after kill: ['state.json.tmp-1310364254']
+run=19 delay=0.6769s confirmed=48 survivors=1452 dangling=0 unindexed=1 storm[n=49 p99=17.3ms max=17.3ms] recovery[n=7319 p99=14.8ms max=214.5ms] PASS
+run=20 cleared tmp after restore: ['state.json.tmp-1310364254->run20_pre_1792420680_state.json.tmp-1310364254']
+run=20 delay=0.0205s confirmed=1 survivors=1499 dangling=0 unindexed=0 storm[n=2 p99=14.7ms max=14.7ms] recovery[n=7556 p99=15.6ms max=200.0ms] PASS
+run=21 delay=0.4455s confirmed=28 survivors=1472 dangling=0 unindexed=1 storm[n=29 p99=19.5ms max=19.5ms] recovery[n=7419 p99=15.6ms max=198.9ms] PASS
+run=22 delay=0.5337s confirmed=33 survivors=1467 dangling=0 unindexed=0 storm[n=34 p99=19.6ms max=19.6ms] recovery[n=7395 p99=17.5ms max=33.6ms] PASS
+run=23 tmp files after kill: ['state.json.tmp-1809934559']
+run=23 delay=0.2719s confirmed=18 survivors=1482 dangling=0 unindexed=0 storm[n=19 p99=18.9ms max=18.9ms] recovery[n=7471 p99=16.6ms max=222.6ms] PASS
+run=24 cleared tmp after restore: ['state.json.tmp-1809934559->run24_pre_1792420755_state.json.tmp-1809934559']
+run=24 tmp files after kill: ['state.json.tmp-1575469777']
+run=24 delay=0.6528s confirmed=38 survivors=1462 dangling=0 unindexed=1 storm[n=39 p99=23.0ms max=23.0ms] recovery[n=7369 p99=17.4ms max=350.1ms] PASS
+run=25 cleared tmp after restore: ['state.json.tmp-1575469777->run25_pre_1792420775_state.json.tmp-1575469777']
+run=25 delay=0.4611s confirmed=26 survivors=1474 dangling=0 unindexed=1 storm[n=27 p99=20.3ms max=20.3ms] recovery[n=7429 p99=15.7ms max=102.8ms] PASS
+run=26 delay=0.7270s confirmed=49 survivors=1451 dangling=0 unindexed=1 storm[n=50 p99=19.1ms max=19.1ms] recovery[n=7314 p99=15.8ms max=193.7ms] PASS
+run=27 delay=0.2974s confirmed=17 survivors=1483 dangling=0 unindexed=1 storm[n=18 p99=27.9ms max=27.9ms] recovery[n=7475 p99=15.8ms max=480.4ms] PASS
+run=28 tmp files after kill: ['state.json.tmp-2123897742']
+run=28 delay=0.0351s confirmed=1 survivors=1499 dangling=0 unindexed=1 storm[n=2 p99=13.0ms max=13.0ms] recovery[n=7555 p99=16.7ms max=220.3ms] PASS
+run=29 cleared tmp after restore: ['state.json.tmp-2123897742->run29_pre_1792420850_state.json.tmp-2123897742']
+run=29 delay=0.4688s confirmed=26 survivors=1474 dangling=0 unindexed=1 storm[n=27 p99=21.4ms max=21.4ms] recovery[n=7429 p99=15.0ms max=99.2ms] PASS
+run=30 delay=0.0050s confirmed=0 survivors=1500 dangling=0 unindexed=0 storm[n=1 p99=0.9ms max=0.9ms] recovery[n=7561 p99=16.0ms max=108.3ms] PASS
+run=31 delay=0.5761s confirmed=38 survivors=1462 dangling=0 unindexed=0 storm[n=39 p99=20.3ms max=20.3ms] recovery[n=7370 p99=15.7ms max=155.1ms] PASS
+run=32 delay=0.6935s confirmed=42 survivors=1458 dangling=0 unindexed=0 storm[n=43 p99=21.2ms max=21.2ms] recovery[n=7350 p99=15.6ms max=238.6ms] PASS
+run=33 delay=0.2648s confirmed=16 survivors=1484 dangling=0 unindexed=1 storm[n=17 p99=20.6ms max=20.6ms] recovery[n=7480 p99=14.8ms max=126.5ms] PASS
+run=34 delay=0.4653s confirmed=28 survivors=1472 dangling=0 unindexed=0 storm[n=29 p99=21.1ms max=21.1ms] recovery[n=7420 p99=15.6ms max=83.7ms] PASS
+run=35 delay=0.2169s confirmed=14 survivors=1486 dangling=0 unindexed=0 storm[n=15 p99=17.0ms max=17.0ms] recovery[n=7491 p99=15.6ms max=243.9ms] PASS
+run=36 delay=0.2463s confirmed=16 survivors=1484 dangling=0 unindexed=0 storm[n=17 p99=18.2ms max=18.2ms] recovery[n=7481 p99=16.0ms max=144.3ms] PASS
+run=37 delay=0.2042s confirmed=13 survivors=1487 dangling=0 unindexed=0 storm[n=14 p99=23.9ms max=23.9ms] recovery[n=7496 p99=16.0ms max=21801.7ms] PASS
+run=38 delay=0.0906s confirmed=6 survivors=1494 dangling=0 unindexed=0 storm[n=7 p99=16.0ms max=16.0ms] recovery[n=7531 p99=60.3ms max=3829.5ms] PASS
+run=39 delay=0.5623s confirmed=35 survivors=1465 dangling=0 unindexed=0 storm[n=36 p99=20.1ms max=20.1ms] recovery[n=7385 p99=17.7ms max=192.7ms] PASS
+run=40 delay=0.3980s confirmed=23 survivors=1477 dangling=0 unindexed=1 storm[n=24 p99=40.3ms max=40.3ms] recovery[n=7445 p99=16.0ms max=195.3ms] PASS
+run=41 delay=0.3783s confirmed=23 survivors=1477 dangling=0 unindexed=0 storm[n=24 p99=20.4ms max=20.4ms] recovery[n=7446 p99=16.3ms max=203.2ms] PASS
+run=42 delay=0.1937s confirmed=12 survivors=1488 dangling=0 unindexed=1 storm[n=13 p99=18.6ms max=18.6ms] recovery[n=7500 p99=15.6ms max=141.6ms] PASS
+run=43 delay=0.1754s confirmed=9 survivors=1491 dangling=0 unindexed=1 storm[n=10 p99=32.3ms max=32.3ms] recovery[n=7515 p99=16.4ms max=169.2ms] PASS
+run=44 delay=0.0437s confirmed=2 survivors=1498 dangling=0 unindexed=1 storm[n=3 p99=17.0ms max=17.0ms] recovery[n=7550 p99=16.9ms max=206.3ms] PASS
+run=45 tmp files after kill: ['state.json.tmp-2821529036']
+run=45 delay=0.2823s confirmed=17 survivors=1483 dangling=0 unindexed=1 storm[n=18 p99=18.8ms max=18.8ms] recovery[n=7475 p99=16.6ms max=338.0ms] PASS
+run=46 cleared tmp after restore: ['state.json.tmp-2821529036->run46_pre_1792421430_state.json.tmp-2821529036']
+run=46 delay=0.7960s confirmed=48 survivors=1452 dangling=0 unindexed=1 storm[n=49 p99=20.5ms max=20.5ms] recovery[n=7319 p99=15.3ms max=161.3ms] PASS
+run=47 tmp files after kill: ['state.json.tmp-2519309936']
+run=47 delay=0.4750s confirmed=26 survivors=1474 dangling=0 unindexed=0 storm[n=27 p99=28.5ms max=28.5ms] recovery[n=7430 p99=15.7ms max=181.7ms] PASS
+run=48 cleared tmp after restore: ['state.json.tmp-2519309936->run48_pre_1792421467_state.json.tmp-2519309936']
+run=48 delay=0.1996s confirmed=12 survivors=1488 dangling=0 unindexed=0 storm[n=13 p99=19.6ms max=19.6ms] recovery[n=7501 p99=18.0ms max=108.7ms] PASS
+run=49 delay=0.4746s confirmed=22 survivors=1478 dangling=0 unindexed=1 storm[n=23 p99=22.2ms max=22.2ms] recovery[n=7450 p99=16.0ms max=132.0ms] PASS
+run=50 delay=0.5715s confirmed=36 survivors=1464 dangling=0 unindexed=1 storm[n=37 p99=19.3ms max=19.3ms] recovery[n=7379 p99=15.4ms max=179.0ms] PASS
+run=51 delay=0.7574s confirmed=48 survivors=1451 dangling=0 unindexed=0 storm[n=49 p99=19.7ms max=19.7ms] recovery[n=7315 p99=15.8ms max=225.7ms] PASS
+run=52 delay=0.3131s confirmed=19 survivors=1481 dangling=0 unindexed=0 storm[n=20 p99=20.1ms max=20.1ms] recovery[n=7466 p99=15.6ms max=191.0ms] PASS
+run=53 delay=0.5850s confirmed=37 survivors=1463 dangling=0 unindexed=0 storm[n=38 p99=19.2ms max=19.2ms] recovery[n=7375 p99=15.9ms max=100.2ms] PASS
+run=54 delay=0.2080s confirmed=12 survivors=1488 dangling=0 unindexed=0 storm[n=13 p99=20.6ms max=20.6ms] recovery[n=7501 p99=16.1ms max=96.6ms] PASS
+run=55 delay=0.2570s confirmed=16 survivors=1484 dangling=0 unindexed=0 storm[n=17 p99=18.7ms max=18.7ms] recovery[n=7481 p99=15.6ms max=129.4ms] PASS
+run=56 delay=0.4239s confirmed=26 survivors=1474 dangling=0 unindexed=0 storm[n=27 p99=18.2ms max=18.2ms] recovery[n=7430 p99=16.0ms max=155.6ms] PASS
+run=57 delay=0.5313s confirmed=29 survivors=1471 dangling=0 unindexed=1 storm[n=30 p99=23.6ms max=23.6ms] recovery[n=7414 p99=15.1ms max=136.0ms] PASS
+run=58 tmp files after kill: ['state.json.tmp-1656137658']
+run=58 delay=0.6461s confirmed=42 survivors=1458 dangling=0 unindexed=0 storm[n=43 p99=20.0ms max=20.0ms] recovery[n=7350 p99=15.7ms max=179.8ms] PASS
+run=59 cleared tmp after restore: ['state.json.tmp-1656137658->run59_pre_1792421671_state.json.tmp-1656137658']
+run=59 delay=0.4763s confirmed=32 survivors=1468 dangling=0 unindexed=1 storm[n=33 p99=18.7ms max=18.7ms] recovery[n=7399 p99=15.0ms max=140.9ms] PASS
+run=60 delay=0.7566s confirmed=47 survivors=1453 dangling=0 unindexed=1 storm[n=48 p99=45.5ms max=45.5ms] recovery[n=7324 p99=15.6ms max=107.3ms] PASS
+run=61 tmp files after kill: ['state.json.tmp-2269793024']
+run=61 delay=0.2196s confirmed=14 survivors=1486 dangling=0 unindexed=1 storm[n=15 p99=17.1ms max=17.1ms] recovery[n=7490 p99=15.8ms max=34616.3ms] PASS
+run=62 cleared tmp after restore: ['state.json.tmp-2269793024->run62_pre_1792421759_state.json.tmp-2269793024']
+run=62 delay=0.7091s confirmed=33 survivors=1467 dangling=0 unindexed=1 storm[n=34 p99=198.3ms max=198.3ms] recovery[n=7394 p99=15.8ms max=2541.7ms] PASS
+run=63 delay=0.7493s confirmed=45 survivors=1455 dangling=0 unindexed=1 storm[n=46 p99=20.1ms max=20.1ms] recovery[n=7334 p99=16.0ms max=31.3ms] PASS
+run=64 delay=0.2432s confirmed=14 survivors=1486 dangling=0 unindexed=1 storm[n=15 p99=19.9ms max=19.9ms] recovery[n=7490 p99=16.2ms max=68.1ms] PASS
+run=65 tmp files after kill: ['state.json.tmp-3060351355']
+run=65 delay=0.7584s confirmed=45 survivors=1455 dangling=0 unindexed=0 storm[n=46 p99=26.6ms max=26.6ms] recovery[n=7335 p99=15.3ms max=174.9ms] PASS
+run=66 cleared tmp after restore: ['state.json.tmp-3060351355->run66_pre_1792422034_state.json.tmp-3060351355']
+run=66 delay=0.3952s confirmed=23 survivors=1477 dangling=0 unindexed=1 storm[n=24 p99=22.2ms max=22.2ms] recovery[n=7445 p99=16.3ms max=237.7ms] PASS
+run=67 delay=0.0829s confirmed=4 survivors=1496 dangling=0 unindexed=0 storm[n=5 p99=23.0ms max=23.0ms] recovery[n=7541 p99=17.0ms max=156.4ms] PASS
+run=68 delay=0.5058s confirmed=29 survivors=1470 dangling=0 unindexed=0 storm[n=30 p99=21.8ms max=21.8ms] recovery[n=7410 p99=15.5ms max=20.3ms] PASS
+run=69 delay=0.2450s confirmed=15 survivors=1485 dangling=0 unindexed=0 storm[n=16 p99=19.5ms max=19.5ms] recovery[n=7486 p99=15.8ms max=109.0ms] PASS
+run=70 delay=0.5685s confirmed=34 survivors=1466 dangling=0 unindexed=0 storm[n=35 p99=22.7ms max=22.7ms] recovery[n=7390 p99=15.6ms max=31.1ms] PASS
+run=71 delay=0.6531s confirmed=30 survivors=1470 dangling=0 unindexed=1 storm[n=31 p99=120.9ms max=120.9ms] recovery[n=7409 p99=15.4ms max=332.3ms] PASS
+run=72 tmp files after kill: ['state.json.tmp-1887387809']
+run=72 delay=0.2659s confirmed=14 survivors=1486 dangling=0 unindexed=1 storm[n=15 p99=16.9ms max=16.9ms] recovery[n=7490 p99=17.0ms max=161.8ms] PASS
+run=73 cleared tmp after restore: ['state.json.tmp-1887387809->run73_pre_1792422165_state.json.tmp-1887387809']
+run=73 tmp files after kill: ['state.json.tmp-796141946']
+run=73 delay=0.2132s confirmed=12 survivors=1488 dangling=0 unindexed=1 storm[n=13 p99=19.2ms max=19.2ms] recovery[n=7500 p99=15.9ms max=208.4ms] PASS
+run=74 cleared tmp after restore: ['state.json.tmp-796141946->run74_pre_1792422184_state.json.tmp-796141946']
+run=74 delay=0.4899s confirmed=21 survivors=1479 dangling=0 unindexed=1 storm[n=22 p99=159.4ms max=159.4ms] recovery[n=7455 p99=15.5ms max=216.4ms] PASS
+run=75 tmp files after kill: ['state.json.tmp-330027728']
+run=75 delay=0.2061s confirmed=13 survivors=1487 dangling=0 unindexed=1 storm[n=14 p99=18.8ms max=18.8ms] recovery[n=7495 p99=15.4ms max=170.2ms] PASS
+opposite-window: unindexed t2 omitted; GET 200, DELETE 200, GET 404; all walks PASS
+dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly
+SUMMARY runs=75 failures=1 orphan_runs=37 survivor_GETs=110762 survivor_DELETEs=109292; crafted probes=2 PASS; SCRIPT_SHA256=e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f; CODE_SHA=1561b9a2c7e6d798b7acf142e65e363352c557d2; CODE_PINNED=92c150d1736794c40597920c4b3b7df8e9e77d3b
+Traceback (most recent call last):
+  File "/workspace/hf-r6run/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 615, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/hf-r6run/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 611, in main
+    require(failures == 0, 'kill storm failed')
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/hf-r6run/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 86, in require
+    raise AssertionError(detail)
+AssertionError: kill storm failed
+EXIT=1
