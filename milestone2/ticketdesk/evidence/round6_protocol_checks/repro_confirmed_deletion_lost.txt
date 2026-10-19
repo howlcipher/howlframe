@@ -1,0 +1,25 @@
+# new script (a9da3ee7...), python3 milestone2/ticketdesk/evidence/round6_protocol_checks/repro_confirmed_deletion_lost.py milestone2/ticketdesk/evidence/b6_kill_storm.py <artifacts>
+SCRIPT_SHA256 a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d
+ARTIFACTS <artifacts>
+CODE_SHA 03002326b818552bce7f9f81e37873b7797a83d1
+BUILD PASS; API seed=1500; bytes=504724; default runner ceilings
+DIAG run=01 failure state snapshot: state.json(497770B) -> run01_failure/
+run=01 FAIL AssertionError: confirmed deletion lost
+opposite-window: unindexed t2 omitted; GET 200, DELETE 200, GET 404; all walks PASS
+dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly
+SUMMARY runs=1 failures=1 orphan_runs=0 survivor_GETs=0 survivor_DELETEs=0; crafted probes=2 PASS; SCRIPT_SHA256=a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d; CODE_SHA=03002326b818552bce7f9f81e37873b7797a83d1; CODE_PINNED=unpinned
+main ended: AssertionError kill storm failed
+EXIT
+# artifacts: run01_failure/state.json (497770 B)
+
+# previous script (e67bbe95..., head 03002326), same driver: no run01_failure/ folder
+SCRIPT_SHA256 e67bbe950c7726815e3013d2687421eb9237a21d43a0f36369b45a59d28060b4
+ARTIFACTS <artifacts>
+CODE_SHA 03002326b818552bce7f9f81e37873b7797a83d1
+BUILD PASS; API seed=1500; bytes=504724; default runner ceilings
+run=01 FAIL AssertionError: confirmed deletion lost
+opposite-window: unindexed t2 omitted; GET 200, DELETE 200, GET 404; all walks PASS
+dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly
+SUMMARY runs=1 failures=1 orphan_runs=0 survivor_GETs=0 survivor_DELETEs=0; crafted probes=2 PASS; SCRIPT_SHA256=e67bbe950c7726815e3013d2687421eb9237a21d43a0f36369b45a59d28060b4; CODE_SHA=03002326b818552bce7f9f81e37873b7797a83d1
+main ended: AssertionError kill storm failed
+EXIT

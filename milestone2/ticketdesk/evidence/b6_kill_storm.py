@@ -14,9 +14,13 @@ the server stdout/stderr tail (access log + fault lines).
 Round 6 instrumentation (diagnostics only; pass criteria, seed, delays and the 10 s
 request timeout unchanged):
   * every server's stdout/stderr is kept as <artifacts>/runNN_<phase>.log;
-  * on any failure (timeout or otherwise), the state file and any *.tmp-* files are
-    copied to <artifacts>/runNN_failure/; on a timeout/hang the live server also gets
-    SIGQUIT (goroutine dump) before stop(), which falls back to SIGKILL if needed;
+  * on every failure (timeout, 'confirmed deletion lost', anything), the state file and
+    any *.tmp-* files are copied to <artifacts>/runNN_failure/; a still-live server also
+    gets SIGQUIT (goroutine dump) before stop(), which falls back to SIGKILL if needed;
+  * a server that fails to start is killed before the error propagates;
+  * --expect-head accepts only HEAD == pin, or one commit directly on the pin whose
+    --no-renames numstat is exactly `1 1 milestone2/MILESTONE2_DECISION.md` and which
+    only fills the Code-under-test line; SUMMARY carries CODE_PINNED;
   * before SIGQUIT, diag records /proc/PID/wchan, status and task/*/stat so a
     SIGSTOPped or fsync-stuck server still produces diagnostics;
   * each run prints p99 and max request latency (storm and recovery phases);
@@ -105,16 +109,22 @@ class Server:
                                    '--max-request-bytes', '1048576', '--access-log',
                                    str(root / 'out/ticketdesk.hfbc')], env=env,
                                   stdout=self.log, stderr=self.log)
-        for _ in range(200):
-            try:
-                if self.req('GET', '/v1/health')[0] == 200:
-                    return
-            except OSError:
-                pass
-            require(self.p.poll() is None, 'server exited during startup')
-            time.sleep(.025)
-        self.diag('startup timeout')
-        raise AssertionError('startup timeout')
+        try:
+            for _ in range(200):
+                try:
+                    if self.req('GET', '/v1/health')[0] == 200:
+                        return
+                except OSError:
+                    pass
+                require(self.p.poll() is None, 'server exited during startup')
+                time.sleep(.025)
+            self.diag('startup timeout')
+            raise AssertionError('startup timeout')
+        except BaseException:
+            # A server that fails to start must never outlive this object: the caller
+            # never receives it, so nobody else would stop it.
+            self.stop(kill=True)
+            raise
 
     def req(self, method, path, body=None, timeout=REQUEST_TIMEOUT):
         c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=timeout)
@@ -402,6 +412,43 @@ def self_test_sigstop(art):
             p.wait(5)
 
 
+DECISION_DOC = 'milestone2/MILESTONE2_DECISION.md'
+PIN_LINE_PREFIX = '  * **Code-under-test SHA:** `'
+
+
+def git(*args):
+    return subprocess.run(['git', *args], check=True, stdout=subprocess.PIPE, text=True).stdout
+
+
+def verify_head(expect, head):
+    """Return the pinned code-under-test commit, or exit. Accepted only:
+    (a) HEAD == pin; or
+    (b) HEAD is one commit directly on the pin (single parent == pin) whose whole diff,
+        with renames disabled, is `1 1 milestone2/MILESTONE2_DECISION.md`, replacing the
+        Code-under-test line with one that names the pin."""
+    pinned = subprocess.run(['git', 'rev-parse', '--verify', expect + '^{commit}'],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+    if not pinned:
+        raise SystemExit(f'code under test mismatch: {expect} is not a commit')
+    if pinned == head:
+        print(f'CODE_PINNED {pinned} (= HEAD)', flush=True)
+        return pinned
+    parents = git('rev-list', '--parents', '-n', '1', head).split()[1:]
+    if parents != [pinned]:
+        raise SystemExit(f'code under test mismatch: HEAD {head} is not a single commit directly on pin {pinned} (parents {parents})')
+    numstat = git('diff', '--no-renames', '--numstat', pinned, head).splitlines()
+    if numstat != [f'1\t1\t{DECISION_DOC}']:
+        raise SystemExit(f'code under test mismatch: pin commit must change exactly 1 line of {DECISION_DOC}; numstat {numstat}')
+    hunk = git('diff', '--no-renames', '-U0', pinned, head, '--', DECISION_DOC).splitlines()
+    removed = [l[1:] for l in hunk if l.startswith('-') and not l.startswith('---')]
+    added = [l[1:] for l in hunk if l.startswith('+') and not l.startswith('+++')]
+    if (len(removed) != 1 or len(added) != 1 or not removed[0].startswith(PIN_LINE_PREFIX)
+            or not added[0].startswith(PIN_LINE_PREFIX) or pinned not in added[0]):
+        raise SystemExit(f'code under test mismatch: the one changed line must be the Code-under-test line naming {pinned}')
+    print(f'CODE_PINNED {pinned} (HEAD {head} only fills the pin line)', flush=True)
+    return pinned
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=25)
@@ -412,7 +459,9 @@ def main():
     ap.add_argument('--expect-sha256', default='',
                     help='if set, require the script sha256 to equal this value')
     ap.add_argument('--expect-head', default='',
-                    help='pinned code-under-test commit: HEAD itself, or an ancestor differing only in *.md files')
+                    help='pinned code-under-test commit: HEAD itself, or the parent of a commit that only fills the pin line')
+    ap.add_argument('--check-head-only', action='store_true',
+                    help='verify --expect-head and exit (used by tests)')
     args = ap.parse_args()
     art = args.artifacts.resolve()
     art.mkdir(parents=True, exist_ok=True)
@@ -423,24 +472,10 @@ def main():
         raise SystemExit(f'script sha256 mismatch: got {sha}, expected {args.expect_sha256}')
     head = subprocess.run(['git', 'rev-parse', 'HEAD'], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
     print(f'CODE_SHA {head}', flush=True)
-    if args.expect_head:
-        # The pinned code-under-test commit must be HEAD, or an ancestor of HEAD whose only later
-        # changes are Markdown records (the pin commit itself): the built product is then identical.
-        pinned = subprocess.run(['git', 'rev-parse', '--verify', args.expect_head + '^{commit}'],
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
-        if not pinned:
-            raise SystemExit(f'code under test mismatch: {args.expect_head} is not a commit')
-        if pinned != head:
-            if subprocess.run(['git', 'merge-base', '--is-ancestor', pinned, head]).returncode != 0:
-                raise SystemExit(f'code under test mismatch: {pinned} is not an ancestor of HEAD {head}')
-            changed = subprocess.run(['git', 'diff', '--name-only', pinned, head], check=True,
-                                     stdout=subprocess.PIPE, text=True).stdout.split()
-            bad = [f for f in changed if not f.endswith('.md')]
-            if bad:
-                raise SystemExit(f'code under test mismatch: HEAD differs from pinned {pinned} outside Markdown: {bad}')
-            print(f'CODE_PINNED {pinned} (HEAD adds only Markdown: {changed})', flush=True)
-        else:
-            print(f'CODE_PINNED {pinned} (= HEAD)', flush=True)
+    pinned = verify_head(args.expect_head, head) if args.expect_head else 'unpinned'
+    if args.check_head_only:
+        print(f'CHECK_HEAD PASS pinned={pinned}', flush=True)
+        return
     (art / 'script.sha256').write_text(sha + '\n')
     if args.self_test_sigstop:
         self_test_sigstop(art)
@@ -517,19 +552,17 @@ def main():
             except Exception as e:
                 failures += 1
                 dump = art / f'run{run:02d}_failure'
+                # Snapshot state on every failure (including 'confirmed deletion lost', where the
+                # storm server is already stopped), independent of whether a server log is open.
+                try:
+                    saved = s.save_state(dump)
+                    print(f'DIAG run={run:02d} failure state snapshot: {", ".join(saved)} -> {dump.name}/', flush=True)
+                except OSError as se:
+                    print(f'DIAG run={run:02d} failure state snapshot error: {se}', flush=True)
                 if not s.log.closed:
-                    if isinstance(e, (TimeoutError, socket.timeout)):
-                        s.diag(f'run={run:02d} request timeout', dump)
-                    else:
-                        # Snapshot state on any failure, not only timeouts.
-                        try:
-                            saved = s.save_state(dump)
-                            print(f'DIAG run={run:02d} failure state snapshot: {", ".join(saved)} -> {dump.name}/', flush=True)
-                        except OSError as se:
-                            print(f'DIAG run={run:02d} failure state snapshot error: {se}', flush=True)
-                        # If the server is still alive, also capture /proc + SIGQUIT/SIGKILL.
-                        if s.p.poll() is None:
-                            s.diag(f'run={run:02d} {type(e).__name__}', dump)
+                    # A live server also gets /proc + SIGQUIT (+ SIGKILL fallback) diagnostics.
+                    if s.p.poll() is None:
+                        s.diag(f'run={run:02d} {type(e).__name__}', dump)
                     print(f'run={run:02d} latency[{s.latency()}]', flush=True)
                 print(f'run={run:02d} FAIL {type(e).__name__}: {e}', flush=True)
             finally:
@@ -568,7 +601,7 @@ def main():
             print('dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly', flush=True)
         finally:
             s.stop()
-        print(f'SUMMARY runs={args.runs} failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS; SCRIPT_SHA256={sha}; CODE_SHA={head}', flush=True)
+        print(f'SUMMARY runs={args.runs} failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS; SCRIPT_SHA256={sha}; CODE_SHA={head}; CODE_PINNED={pinned}', flush=True)
         require(failures == 0, 'kill storm failed')
 
 

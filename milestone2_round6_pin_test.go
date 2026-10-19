@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -59,5 +60,120 @@ func TestRound6StormScriptSigstopSelfTest(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Fatalf("self-test output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestRound6ExpectHeadPinRules exercises --expect-head in a scratch repository:
+// only HEAD == pin, or a single commit directly on the pin that changes exactly
+// the Code-under-test line of MILESTONE2_DECISION.md (numstat 1 1, renames off),
+// is accepted.
+func TestRound6ExpectHeadPinRules(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	script, err := filepath.Abs(round6StormScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := os.ReadFile(round6Decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const pinPrefix = "  * **Code-under-test SHA:** `"
+	const thresholdMark = "the single invocation prints `SUMMARY runs=75 failures=0 ...` and exits 0;"
+	if !strings.Contains(string(doc), "\n"+pinPrefix) || !strings.Contains(string(doc), thresholdMark) {
+		t.Fatalf("%s lacks the pin line or the threshold line this test edits", round6Decision)
+	}
+	repo := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"}, args...)...)
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(rel, body string) {
+		t.Helper()
+		path := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(pin string) (string, bool) {
+		t.Helper()
+		cmd := exec.Command("python3", script, "--check-head-only", "--expect-head", pin, "--artifacts", t.TempDir())
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		return string(out), err == nil && strings.Contains(string(out), "CHECK_HEAD PASS pinned="+pin)
+	}
+	run("init", "-q", "-b", "main")
+	write("milestone2/MILESTONE2_DECISION.md", string(doc))
+	write("product.go", "package product\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "code under test")
+	pin := run("rev-parse", "HEAD")
+	pinned := func(text string) string {
+		lines := strings.Split(text, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, pinPrefix) {
+				lines[i] = pinPrefix + pin + "`"
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	// (a) exact match.
+	if out, ok := check(pin); !ok {
+		t.Fatalf("exact match rejected:\n%s", out)
+	}
+
+	// (b) one docs-only commit that fills the pin line: accepted.
+	run("checkout", "-q", "-b", "pinline", pin)
+	write("milestone2/MILESTONE2_DECISION.md", pinned(string(doc)))
+	run("commit", "-q", "-am", "pin code under test")
+	if out, ok := check(pin); !ok {
+		t.Fatalf("pin-line commit rejected:\n%s", out)
+	}
+
+	// (c) rename of a .go file to .md: rejected.
+	run("checkout", "-q", "-b", "rename", pin)
+	run("mv", "product.go", "product.md")
+	run("commit", "-q", "-m", "rename go to md")
+	if out, ok := check(pin); ok {
+		t.Fatalf(".go -> .md rename accepted:\n%s", out)
+	}
+
+	// (d1) a later .md rewrite of the Round 6 threshold on top of the pin line: rejected.
+	run("checkout", "-q", "pinline")
+	run("checkout", "-q", "-b", "later", "pinline")
+	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(pinned(string(doc)), thresholdMark, "the invocation prints any SUMMARY;", 1))
+	run("commit", "-q", "-am", "relax threshold")
+	if out, ok := check(pin); ok {
+		t.Fatalf("later threshold rewrite accepted:\n%s", out)
+	}
+
+	// (d2) the threshold rewritten (1 line) directly on the pin instead of the pin line: rejected.
+	run("checkout", "-q", "-b", "threshold", pin)
+	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(string(doc), thresholdMark, "the invocation prints any SUMMARY;", 1))
+	run("commit", "-q", "-am", "relax threshold only")
+	if out, ok := check(pin); ok {
+		t.Fatalf("one-line threshold rewrite accepted:\n%s", out)
+	}
+
+	// (e) pin line naming a different commit: rejected.
+	run("checkout", "-q", "-b", "wrongsha", pin)
+	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(pinned(string(doc)), pin, strings.Repeat("0", 40), 1))
+	run("commit", "-q", "-am", "pin wrong sha")
+	if out, ok := check(pin); ok {
+		t.Fatalf("pin line naming another sha accepted:\n%s", out)
 	}
 }

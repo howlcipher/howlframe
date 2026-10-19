@@ -39,3 +39,30 @@ are unchanged.
 
 **Next.** Merge #191 → pin the code-under-test SHA (a doc-only commit) → a fresh independent session runs Round 6 exactly as
 registered.
+
+## Motoko's #193 blockers (review at `03002326`), fixed
+
+1. **`--expect-head` tightened.** It now accepts only two cases:
+   * HEAD == pin; or
+   * one commit directly on the pin (single parent == pin) with `git diff --no-renames --numstat` exactly
+     `1 1 milestone2/MILESTONE2_DECISION.md`, where the one changed line is the Code-under-test line and names the pin.
+
+   SUMMARY now carries `CODE_PINNED=<sha>`. `TestRound6ExpectHeadPinRules` builds a scratch repo and checks:
+   * accepted: an exact match, and a single pin-line commit;
+   * rejected: a `.go`→`.md` rename, a later `.md` rewrite of the threshold on top of the pin line, a one-line
+     threshold rewrite directly on the pin, and a pin line naming another sha.
+
+   Mutation-checked: the previous "Markdown-only descendant" logic accepts the rename, so the test fails on it.
+2. **Failure snapshots on every failure.** `save_state` now runs before, and independently of, the log-closed check.
+   * Reproduced through the real run loop. `evidence/round6_protocol_checks/repro_confirmed_deletion_lost.py`
+     wraps the post-kill `records()` call so a confirmed id appears to survive.
+   * New script: `run=01 FAIL AssertionError: confirmed deletion lost`, and `run01_failure/state.json` (497,770 B)
+     is written.
+   * Previous script, same driver: the same failure and no folder.
+   * Output: `repro_confirmed_deletion_lost.txt`.
+3. **Startup failures don't leak a server (the cheap extra).** `Server.__init__` kills the process on any startup
+   exception.
+   * Tested with a fake server whose health check returns non-JSON (`JSONDecodeError`).
+   * New script: no leftover process. Previous script: the process leaked.
+
+The script sha256 is re-pinned to `a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`. Round 6 is still not run.

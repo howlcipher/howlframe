@@ -6,10 +6,10 @@ Registered 2026-10-19, before any Round 6 run. Re-pinned the same day (round6-pr
 amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fixed. Changing any of them voids Round 6.
 
 * **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py`.
-  * **Script sha256:** `e67bbe950c7726815e3013d2687421eb9237a21d43a0f36369b45a59d28060b4`
+  * **Script sha256:** `a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`
   * CI enforces this pin (`TestRound6StormScriptPinned`). The script prints `SCRIPT_SHA256` at start and in its
     SUMMARY line, and writes `script.sha256` into the artifacts directory. The run must pass
-    `--expect-sha256 e67bbe950c7726815e3013d2687421eb9237a21d43a0f36369b45a59d28060b4`.
+    `--expect-sha256 a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`.
   * Unchanged from earlier rounds: seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default
     runner ceilings, and the per-request timeout `REQUEST_TIMEOUT = 10` s.
   * Diagnostics in this version (none of them change pass criteria):
@@ -17,16 +17,24 @@ amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fi
     * `/proc/PID/wchan`, `status` and `task/*/stat` recorded before SIGQUIT;
     * SIGQUIT goroutine dump, and `stop()` falls back to SIGKILL;
     * `state.json.tmp-*` cleared, timestamped aside, after every snapshot restore;
-    * a state snapshot on any failure;
+    * a `runNN_failure/` state snapshot on every failure, including 'confirmed deletion lost' after the storm server
+      has stopped;
+    * a server that fails to start is killed before the error propagates;
     * a SIGSTOP self-test (`--self-test-sigstop`, run in CI).
-* **Code under test:** pinned before the run, by a Markdown-only commit to this file that fills in the line below.
+* **Code under test:** pinned before the run, by one commit that changes only the line below.
   * It must be a commit on main that includes #191 (the fix for #190, merged as `5778134e`) and this frozen script.
     That means the main commit that merges this protocol PR, or a later one.
-  * The run must pass `--expect-head <that sha>`. The script aborts unless HEAD is that commit, or a descendant
-    whose only changes are `*.md` files (the pin commit itself), so the built product is identical.
+  * The run must pass `--expect-head <that sha>`. The script accepts only two cases:
+    * HEAD **is** the pinned commit; or
+    * HEAD is **one commit directly on the pin** (its single parent is the pin) whose
+      `git diff --no-renames --numstat` is exactly `1 1 milestone2/MILESTONE2_DECISION.md`. That one changed line
+      must be this Code-under-test line, and it must name the pinned SHA.
+
+    Anything else aborts the run, including renames, any other `.md` change and extra commits. SUMMARY carries
+    `CODE_PINNED=<sha>`. CI covers these rules in `TestRound6ExpectHeadPinRules`.
   * **Code-under-test SHA:** `TO BE PINNED BEFORE THE RUN (main including #191 and this script)`
 * **Command, exactly one invocation:**
-  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 e67bbe950c7726815e3013d2687421eb9237a21d43a0f36369b45a59d28060b4 --expect-head <pinned sha>`
+  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d --expect-head <pinned sha>`
   * Exactly `--runs 75`, on an otherwise idle box.
   * Then `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
 * **Threshold:** ACCEPTED only if all of these hold:
