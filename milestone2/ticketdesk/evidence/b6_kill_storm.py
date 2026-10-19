@@ -10,7 +10,19 @@ times out, or the delete worker does not finish, the script prints a DIAG block 
 the in-flight request (method, path, ticket id, elapsed), the server process status
 (alive/exit code, /proc state, CPU time, a short health probe), box load/memory, and
 the server stdout/stderr tail (access log + fault lines).
+
+Round 6 instrumentation (diagnostics only; pass criteria, seed, delays and the 10 s
+request timeout unchanged):
+  * every server's stdout/stderr is kept as <artifacts>/runNN_<phase>.log;
+  * on a timeout, the live server gets SIGQUIT (Go goroutine dump into its log) before
+    it is killed, and the state file plus any *.tmp-* files are copied to
+    <artifacts>/runNN_failure/;
+  * each run prints p99 and max request latency (storm and recovery phases).
+Usage: b6_kill_storm.py [--runs N] [--artifacts DIR]   (defaults: 25 runs, $TMPDIR/b6-storm-<time>)
 """
+import argparse
+import shutil
+import signal
 import http.client
 import json
 import os
@@ -25,6 +37,7 @@ import urllib.parse
 
 TOKEN = 'independent-review-bootstrap-token'
 TAIL_BYTES = 4096
+REQUEST_TIMEOUT = 10  # frozen for Round 6
 
 
 def box_status():
@@ -51,16 +64,25 @@ def require(ok, detail):
         raise AssertionError(detail)
 
 
+def pct(values, q):
+    if not values:
+        return 0.0
+    v = sorted(values)
+    return v[min(len(v) - 1, max(0, int(round(q * len(v) + 0.5)) - 1))]
+
+
 class Server:
-    def __init__(self, root, state):
+    def __init__(self, root, state, log_path):
         self.state = state
+        self.log_path = log_path
+        self.latencies = []
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             self.port = sock.getsockname()[1]
         grants = f'network,database,environment,filesystem:read={state.parent},filesystem:write={state.parent}'
         env = dict(os.environ, TICKETDESK_ADMIN_TOKEN=TOKEN,
                    TICKETDESK_DATA=str(state), TICKETDESK_PORT=str(self.port))
-        self.log = tempfile.TemporaryFile()
+        self.log = open(log_path, 'w+b')
         self.inflight = None  # (method, path, start monotonic) of the request in progress
         self.last_done = None  # (method, path, status, elapsed) of the last completed request
         self.p = subprocess.Popen([str(root / 'howlframe'), 'run', '--allow-caps', grants,
@@ -78,7 +100,7 @@ class Server:
         self.diag('startup timeout')
         raise AssertionError('startup timeout')
 
-    def req(self, method, path, body=None, timeout=10):
+    def req(self, method, path, body=None, timeout=REQUEST_TIMEOUT):
         c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=timeout)
         headers = {'Authorization': 'Bearer ' + TOKEN}
         data = None
@@ -91,13 +113,28 @@ class Server:
             c.request(method, path, data, headers)
             r = c.getresponse()
             result = r.status, json.loads(r.read())
-            self.last_done = (method, path, result[0], time.monotonic() - start)
+            elapsed = time.monotonic() - start
+            self.latencies.append(elapsed)
+            self.last_done = (method, path, result[0], elapsed)
             self.inflight = None
             return result
         finally:
             c.close()
 
-    def diag(self, reason):
+    def latency(self):
+        return f'n={len(self.latencies)} p99={pct(self.latencies, .99) * 1000:.1f}ms max={max(self.latencies, default=0) * 1000:.1f}ms'
+
+    def save_state(self, dest):
+        """Copy the state file and any *.tmp-* siblings (diagnostic only)."""
+        dest.mkdir(parents=True, exist_ok=True)
+        saved = []
+        for f in sorted(self.state.parent.iterdir()):
+            if f == self.state or '.tmp-' in f.name:
+                shutil.copy2(f, dest / f.name)
+                saved.append(f'{f.name}({f.stat().st_size}B)')
+        return saved
+
+    def diag(self, reason, dump_dir=None):
         """Print a diagnostic block. Never changes the verdict of a run."""
         lines = [f'DIAG reason={reason}']
         inflight = self.inflight
@@ -128,9 +165,21 @@ class Server:
             except Exception as e:  # diagnostic only
                 lines.append(f'DIAG health_probe error={type(e).__name__}: {e}')
             self.inflight = saved
+            # Goroutine dump: the Go runtime writes all stacks to stderr on SIGQUIT and exits.
+            try:
+                self.p.send_signal(signal.SIGQUIT)
+                self.p.wait(5)
+                lines.append(f'DIAG sigquit sent; server exited code={self.p.returncode}; goroutine dump in {self.log_path.name}')
+            except Exception as e:  # diagnostic only
+                lines.append(f'DIAG sigquit error={type(e).__name__}: {e}')
         else:
             lines.append(f'DIAG server pid={self.p.pid} exited code={rc}')
         lines.append('DIAG box ' + box_status())
+        if dump_dir is not None:
+            try:
+                lines.append('DIAG saved state files: ' + ', '.join(self.save_state(dump_dir)) + f' -> {dump_dir.name}/')
+            except OSError as e:
+                lines.append(f'DIAG state save error: {e}')
         try:
             self.log.flush()
             size = self.log.seek(0, os.SEEK_END)
@@ -196,6 +245,14 @@ def verify(s, state):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--runs', type=int, default=25)
+    ap.add_argument('--artifacts', type=Path,
+                    default=Path(tempfile.gettempdir()) / time.strftime('b6-storm-%Y%m%d-%H%M%S'))
+    args = ap.parse_args()
+    art = args.artifacts.resolve()
+    art.mkdir(parents=True, exist_ok=True)
+    print(f'ARTIFACTS {art}', flush=True)
     rng = random.Random(20261019)
     failures = 0
     with tempfile.TemporaryDirectory(prefix='b6-independent-') as tmp:
@@ -207,7 +264,7 @@ def main():
         subprocess.run([str(root / 'howlframe'), 'build', str(root / 'milestone2/ticketdesk/src/ticketdesk.howl'),
                         '-o', str(root / 'out/ticketdesk.hfbc')], check=True, stdout=subprocess.DEVNULL)
         state = root / 'out/state.json'
-        s = Server(root, state)
+        s = Server(root, state, art / 'seed.log')
         try:
             for i in range(1500):
                 t = s.expect('POST', '/v1/tickets', 201, {'title': f'independent {i}', 'body': 'x' * 100})
@@ -218,9 +275,9 @@ def main():
         snapshot = state.read_bytes()
         print(f'BUILD PASS; API seed=1500; bytes={len(snapshot)}; default runner ceilings', flush=True)
         total_deleted = total_gets = orphan_runs = 0
-        for run in range(1, 26):
+        for run in range(1, args.runs + 1):
             state.write_bytes(snapshot)
-            s = Server(root, state)
+            s = Server(root, state, art / f'run{run:02d}_storm.log')
             confirmed, errors = [], []
             def deleting():
                 try:
@@ -238,8 +295,12 @@ def main():
             s.p.kill()
             worker.join(15)
             if worker.is_alive():
-                s.diag('delete worker still running 15s after SIGKILL')
+                s.diag('delete worker still running 15s after SIGKILL', art / f'run{run:02d}_failure')
+            storm_lat = s.latency()
             s.stop()
+            tmps = sorted(f.name for f in state.parent.iterdir() if '.tmp-' in f.name)
+            if tmps:
+                print(f'run={run:02d} tmp files after kill: {tmps}', flush=True)
             try:
                 require(not worker.is_alive() and not errors, f'delete worker errors: {errors}')
                 durable = json.loads(state.read_text())
@@ -248,7 +309,7 @@ def main():
                 dangling = indexed(durable) - set(recs)
                 orphans = set(recs) - indexed(durable)
                 orphan_runs += bool(orphans)
-                s = Server(root, state)
+                s = Server(root, state, art / f'run{run:02d}_recovery.log')
                 recs = verify(s, durable)
                 total_gets += len(recs)
                 for tid in recs:
@@ -257,11 +318,13 @@ def main():
                     s.expect('DELETE', '/v1/tickets/' + tid, 404)
                 total_deleted += len(recs)
                 require(s.walk(1) == [] and s.walk(100) == [], 'not empty after cleanup')
-                print(f'run={run:02d} delay={delay:.4f}s confirmed={len(confirmed)} survivors={len(recs)} dangling={len(dangling)} unindexed={len(orphans)} PASS', flush=True)
+                print(f'run={run:02d} delay={delay:.4f}s confirmed={len(confirmed)} survivors={len(recs)} dangling={len(dangling)} unindexed={len(orphans)} storm[{storm_lat}] recovery[{s.latency()}] PASS', flush=True)
             except Exception as e:
                 failures += 1
                 if isinstance(e, (TimeoutError, socket.timeout)) and not s.log.closed:
-                    s.diag(f'run={run:02d} request timeout')
+                    s.diag(f'run={run:02d} request timeout', art / f'run{run:02d}_failure')
+                if not s.log.closed:
+                    print(f'run={run:02d} latency[{s.latency()}]', flush=True)
                 print(f'run={run:02d} FAIL {type(e).__name__}: {e}', flush=True)
             finally:
                 s.stop()
@@ -271,7 +334,7 @@ def main():
             if k.startswith('b:') and 2 in v['ids']:
                 v['ids'].remove(2)
         state.write_text(json.dumps(crafted))
-        s = Server(root, state)
+        s = Server(root, state, art / 'crafted_opposite.log')
         try:
             verify(s, crafted)
             s.expect('GET', '/v1/tickets/t2', 200)
@@ -285,7 +348,7 @@ def main():
         for n in (1, 2, 64, 65, 1500):
             del crafted[f't:{n:010d}']
         state.write_text(json.dumps(crafted))
-        s = Server(root, state)
+        s = Server(root, state, art / 'crafted_dangling.log')
         try:
             verify(s, crafted)
             for n in (1, 2, 64, 65, 1500):
@@ -299,7 +362,7 @@ def main():
             print('dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly', flush=True)
         finally:
             s.stop()
-        print(f'SUMMARY runs=25 failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS', flush=True)
+        print(f'SUMMARY runs={args.runs} failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS', flush=True)
         require(failures == 0, 'kill storm failed')
 
 

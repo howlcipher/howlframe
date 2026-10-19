@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for the Milestone 2 review findings B1-B4 (and the state-shape finding).
+"""Regression tests for the Milestone 2 review findings B1-B6 (and the state-shape finding).
 
 Unlike the frozen acceptance harness, these runs use the documented command with the DEFAULT runner
 ceilings (no raised --max-instructions / --max-memory-bytes). Usage: review_round1.py LAUNCHER
@@ -258,7 +258,62 @@ def b6_dangling_index_entry_does_not_break_listing():
         shutil.rmtree(s.dir, ignore_errors=True)
 
 
-TESTS = [b6_dangling_index_entry_does_not_break_listing, b5_listing_survives_mass_deletion, m11_truncated_upload_is_not_executed, m13_encoded_slash_is_not_an_alias, b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
+def b6_run24_unindexed_survivor_then_cleanup_deletes():
+    """Fixed form of the Round 4 kill-storm run 24 case: a crash between 'unindexed' and 'ticket removed'
+    leaves a readable ticket missing from its bucket; recovery must list, GET and then DELETE every
+    survivor (including the unindexed one) without a hang (short per-request timeout) or an error."""
+    s = Srv().wait()
+    data = s.data
+    try:
+        for i in range(130):  # spans buckets 0..2 (64 ids each)
+            st, _ = s.req("POST", "/v1/tickets", ADMIN, {"title": "t%d" % i, "body": "x" * 100})
+            check(st == 201, "create %d -> %s" % (i, st))
+    finally:
+        s.p.terminate()
+        s.p.wait(5)
+    with open(data) as f:
+        state = json.load(f)
+    # simulate a crash after bucket_remove and before store_delete, for ids on and off bucket edges
+    unindexed = {64, 65, 100}
+    for k, v in state.items():
+        if k.startswith("b:"):
+            v["ids"] = [n for n in v["ids"] if n not in unindexed]
+    with open(data, "w") as f:
+        json.dump(state, f)
+    expect_listed = ["t%d" % n for n in range(1, 131) if n not in unindexed]
+    s2 = Srv(data=data, port=s.port).wait()
+    try:
+        for limit in (1, 100):
+            seen, cursor = [], None
+            while True:
+                st, page = s2.req("GET", "/v1/tickets?limit=%d" % limit + ("&cursor=" + cursor if cursor else ""), ADMIN, timeout=5)
+                check(st == 200, "list limit=%d -> %s" % (limit, st))
+                seen += [t["id"] for t in page["items"]]
+                cursor = page["next_cursor"]
+                if not cursor:
+                    break
+            check(seen == expect_listed, "limit=%d walk with unindexed survivors: %d ids" % (limit, len(seen)))
+        for n in range(1, 131):
+            st, got = s2.req("GET", "/v1/tickets/t%d" % n, ADMIN, timeout=5)
+            check(st == 200 and got["id"] == "t%d" % n, "GET t%d -> %s" % (n, st))
+        for n in range(1, 131):
+            tid = "t%d" % n
+            st, _ = s2.req("DELETE", "/v1/tickets/" + tid, ADMIN, timeout=5)
+            check(st == 200, "cleanup DELETE %s -> %s" % (tid, st))
+            st, _ = s2.req("GET", "/v1/tickets/" + tid, ADMIN, timeout=5)
+            check(st == 404, "GET after DELETE %s -> %s" % (tid, st))
+            st, _ = s2.req("DELETE", "/v1/tickets/" + tid, ADMIN, timeout=5)
+            check(st == 404, "repeat DELETE %s -> %s" % (tid, st))
+        st, page = s2.req("GET", "/v1/tickets?limit=100", ADMIN, timeout=5)
+        check(st == 200 and page["items"] == [] and page["next_cursor"] is None, "not empty after cleanup: %r" % page)
+        st, t = s2.req("POST", "/v1/tickets", ADMIN, {"title": "after cleanup"}, timeout=5)
+        check(st == 201 and t["id"] == "t131", "create after cleanup: %s %r" % (st, t))
+    finally:
+        s2.stop()
+        shutil.rmtree(s.dir, ignore_errors=True)
+
+
+TESTS = [b6_dangling_index_entry_does_not_break_listing, b6_run24_unindexed_survivor_then_cleanup_deletes, b5_listing_survives_mass_deletion, m11_truncated_upload_is_not_executed, m13_encoded_slash_is_not_an_alias, b1_default_ceilings, b2_port_in_use, b3_stalled_body_does_not_freeze, b4_exact_paths, wrong_shape_state]
 failed = 0
 for t in TESTS:
     try:
