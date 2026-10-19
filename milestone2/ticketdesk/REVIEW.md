@@ -1,11 +1,34 @@
 # Milestone 2 independent final review: ticketdesk
 
-# ROUND 7: pre-registered, not yet run
+# ROUND 7, 2026-10-19: INFRA-VOID (not ACCEPTED)
+
+**Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role, not Rounds 4–6, launched the run; the Eng Mgr compiled the record.
+Exactly one pinned `--runs 225` invocation on the shared box after `IDLE_GATE PASS`: 225 PASS, **0 failures**, both
+crafted probes PASS, but 16 noise breaches clustered around two VM-fork events (consistent with, not proven to be,
+host-side pauses). Two gaps were freeze-type, with realtime ≫ monotonic (48.7 s and 74.1 s real). Two were stall-type,
+with equal clocks (2.8 s and 13.5 s). There were also two `virtual machine fork` and ten `virtio_balloon` kmsg records. The script printed `noise=INFRA-VOID`,
+`VERDICT INFRA-VOID (one isolation rerun allowed, same pins)` and exited 1. No `CLASSIFY` line (no failures).
+Clean reproduction: exit 0; acceptance 101/101, regression 10/10, DX 13/13. Freeze integrity passes. Script sha256
+`540c2433…3d38`, code pinned `e8fcea20`, HEAD `7e9ef32e`. No restart. B6 remains open; the milestone stop rule is
+not satisfied. Per the pre-registered rule, exactly one isolation rerun with the same pins is allowed, on the terms in
+`MILESTONE2_DECISION.md` ("Isolation rerun terms"):
+* a non-shared machine with no VM snapshot or balloon, and a quiet window;
+* a detached checkout of exactly `7e9ef32e`;
+* the identical command;
+* the exit status captured with `sh -c '…; echo EXIT=$?'`;
+* a fresh reviewer;
+* one attempt only.
+
+Venue: the shared box was allowed only with a declared quiet window. Whether other agents were idle can't be checked
+from the artifacts.
+Exact commands, breaches and gates: `milestone2/MILESTONE2_DECISION.md`, Round 7.
+Evidence: `evidence/round7_2026-10-19/`; journal: `docs/journals/2026-10-19_ticketdesk_b6_round7.md`.
+
+# ROUND 7 pre-registration (kept as history)
 
 Terms are in `milestone2/MILESTONE2_DECISION.md`, Round 7: exactly one `--runs 225` invocation, with heartbeat and
 noise sidecars, an in-flight schedstat watchdog, a 10 s total deadline per request, a 120 s idle gate, INFRA-VOID
-noise gates, and mechanical product/infra classification. The code under test is pinned only after the
-`--timing-log` PR merges. B6 remains open.
+noise gates, and mechanical product/infra classification.
 
 # ROUND 6 (superseded by the Round 7 pre-registration; kept as history), 2026-10-19
 

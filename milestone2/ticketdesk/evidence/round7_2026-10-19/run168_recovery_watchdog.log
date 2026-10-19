@@ -1,0 +1,29 @@
+WD sample=1 DELETE /v1/tickets/t176 inflight=2.777s
+WD window=2.938s status: State:	S (sleeping) | Threads:	11 | voluntary_ctxt_switches:	4877 | nonvoluntary_ctxt_switches:	6
+WD task 1666473 state=S wchan=futex_wait_queue oncpu+=15.7ms rqwait+=0.0ms slices+=89
+WD task 1666475 state=S wchan=hrtimer_nanosleep oncpu+=0.4ms rqwait+=0.8ms slices+=75
+WD task 1666476 state=S wchan=futex_wait_queue oncpu+=14.1ms rqwait+=0.4ms slices+=106
+WD task 1666477 state=S wchan=ep_poll oncpu+=10.0ms rqwait+=0.4ms slices+=67
+WD task 1666478 state=S wchan=futex_wait_queue oncpu+=32.6ms rqwait+=0.1ms slices+=148
+WD task 1666479 state=S wchan=futex_wait_queue oncpu+=0.0ms rqwait+=0.0ms slices+=0
+WD task 1666480 state=R wchan=0 oncpu+=2785.3ms rqwait+=0.9ms slices+=112
+WD task 1666481 state=R wchan=0 oncpu+=19.1ms rqwait+=0.0ms slices+=93
+WD task 1666482 state=S wchan=futex_wait_queue oncpu+=13.3ms rqwait+=0.0ms slices+=91
+WD task 1666483 state=S wchan=futex_wait_queue oncpu+=23.4ms rqwait+=0.0ms slices+=109
+WD task 1666484 state=S wchan=futex_wait_queue oncpu+=32.4ms rqwait+=0.0ms slices+=124
+WD disk vdb reads+=0 writes+=2430 inflight=0 io_ms+=40 weighted_ms+=1307
+WD sample=1 DELETE /v1/tickets/t997 inflight=7.907s
+WD window=8.268s status: State:	S (sleeping) | Threads:	12 | voluntary_ctxt_switches:	13496 | nonvoluntary_ctxt_switches:	130
+WD task 1666473 state=S wchan=futex_wait_queue oncpu+=39.1ms rqwait+=0.4ms slices+=296
+WD task 1666475 state=S wchan=0 oncpu+=45.2ms rqwait+=817.2ms slices+=89
+WD task 1666476 state=S wchan=futex_wait_queue oncpu+=103.3ms rqwait+=35.2ms slices+=391
+WD task 1666477 state=S wchan=futex_wait_queue oncpu+=45.8ms rqwait+=1.7ms slices+=286
+WD task 1666478 state=S wchan=futex_wait_queue oncpu+=47.9ms rqwait+=0.1ms slices+=360
+WD task 1666479 state=S wchan=futex_wait_queue oncpu+=0.0ms rqwait+=0.0ms slices+=0
+WD task 1666480 state=S wchan=futex_wait_queue oncpu+=50.2ms rqwait+=2.0ms slices+=392
+WD task 1666481 state=D wchan=folio_wait_bit_common oncpu+=144.1ms rqwait+=169.0ms slices+=421
+WD task 1666482 state=S wchan=futex_wait_queue oncpu+=0.0ms rqwait+=0.0ms slices+=0
+WD task 1666483 state=S wchan=ep_poll oncpu+=37.1ms rqwait+=3.7ms slices+=325
+WD task 1666484 state=S wchan=futex_wait_queue oncpu+=23.7ms rqwait+=0.1ms slices+=179
+WD task 1666517 state=S wchan=futex_wait_queue oncpu+=7258.0ms rqwait+=718.6ms slices+=354
+WD disk vdb reads+=0 writes+=4875 inflight=0 io_ms+=108 weighted_ms+=1350
