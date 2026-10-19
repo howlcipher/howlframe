@@ -1,0 +1,29 @@
+BUILD PASS; API seed=1500; bytes=504724; default runner ceilings
+run=01 delay=0.4732s confirmed=28 survivors=1472 dangling=0 unindexed=0 PASS
+run=02 delay=0.7714s confirmed=43 survivors=1457 dangling=0 unindexed=0 PASS
+run=03 delay=0.7627s confirmed=48 survivors=1452 dangling=0 unindexed=0 PASS
+run=04 delay=0.1735s confirmed=9 survivors=1491 dangling=0 unindexed=1 PASS
+run=05 delay=0.4337s confirmed=24 survivors=1476 dangling=0 unindexed=0 PASS
+run=06 delay=0.2171s confirmed=12 survivors=1488 dangling=0 unindexed=1 PASS
+run=07 delay=0.0270s confirmed=1 survivors=1499 dangling=0 unindexed=1 PASS
+run=08 delay=0.1145s confirmed=6 survivors=1494 dangling=0 unindexed=1 PASS
+run=09 delay=0.5820s confirmed=38 survivors=1462 dangling=0 unindexed=1 PASS
+run=10 delay=0.2388s confirmed=16 survivors=1484 dangling=0 unindexed=0 PASS
+run=11 delay=0.5160s confirmed=32 survivors=1468 dangling=0 unindexed=1 PASS
+run=12 delay=0.2207s confirmed=15 survivors=1485 dangling=0 unindexed=1 PASS
+run=13 delay=0.2561s confirmed=18 survivors=1482 dangling=0 unindexed=0 PASS
+run=14 delay=0.0677s confirmed=4 survivors=1496 dangling=0 unindexed=0 PASS
+run=15 delay=0.5161s confirmed=37 survivors=1463 dangling=0 unindexed=1 PASS
+run=16 delay=0.1876s confirmed=12 survivors=1488 dangling=0 unindexed=1 PASS
+run=17 delay=0.0689s confirmed=5 survivors=1495 dangling=0 unindexed=0 PASS
+run=18 delay=0.3256s confirmed=20 survivors=1480 dangling=0 unindexed=1 PASS
+run=19 delay=0.6769s confirmed=50 survivors=1450 dangling=0 unindexed=0 PASS
+run=20 delay=0.0205s confirmed=1 survivors=1499 dangling=0 unindexed=1 PASS
+run=21 delay=0.4455s confirmed=28 survivors=1472 dangling=0 unindexed=1 PASS
+run=22 delay=0.5337s confirmed=39 survivors=1461 dangling=0 unindexed=1 PASS
+run=23 delay=0.2719s confirmed=21 survivors=1479 dangling=0 unindexed=0 PASS
+run=24 delay=0.6528s confirmed=50 survivors=1450 dangling=0 unindexed=0 PASS
+run=25 delay=0.4611s confirmed=31 survivors=1469 dangling=0 unindexed=1 PASS
+opposite-window: unindexed t2 omitted; GET 200, DELETE 200, GET 404; all walks PASS
+dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly
+SUMMARY runs=25 failures=0 orphan_runs=14 survivor_GETs=36912 survivor_DELETEs=36912; crafted probes=2 PASS

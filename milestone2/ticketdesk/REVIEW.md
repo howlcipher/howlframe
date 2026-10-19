@@ -1,6 +1,32 @@
 # Milestone 2 independent final review: ticketdesk
 
-# ROUND 4 (current), 2026-10-19, commit `7092bcff`
+# ROUND 6: pre-registered, not yet run
+
+Threshold and frozen terms: `milestone2/MILESTONE2_DECISION.md`, Round 6 (0 failures in 75 or more runs of
+`b6_kill_storm.py --runs 75` as committed in `a2d8534`, 10 s request timeout unchanged; clean_repro full pass).
+
+# ROUND 5 (superseded; kept as history), 2026-10-19, commit `f7cc2a8`
+
+Reviewer: independent final reviewer (fresh Codex CLI session; no implementation role; not the Round 4 session)
+
+**Decision: NOT ACCEPTED (clean rerun, cause unknown)**, reclassified by the Eng Mgr after Motoko's review of #189:
+Round 4's run-24 timeout is undiagnosed, and a 4% per-run flake passes 25/25 about 36% of the time. Candidate cause: #190.
+The reviewer's original record follows unchanged; it said ACCEPTED. B6-only delta check. Freeze integrity passes. Reviewed HEAD's diagnostics-only
+diff: pass criteria, seed, counts, delays and existing timeouts unchanged. Official unchanged storm
+exited 0: 25/25 PASS, both crafted probes PASS, 36,912 survivor GETs and 36,912 survivor DELETEs;
+14 trials caught unindexed readable survivors. No timeouts, failures or DIAG blocks. Round 4's
+historical timeout remains unclassified; no cause is inferred from this passing run.
+
+Full clean reproduction: exit 0, 101/101 acceptance, 9/9 regression, 13/13 DX.
+Optional `go test -count=1 ./...`: exit 0; 76 packages ok, no failing package.
+No concurrent heavy validation during the storm. No product or probe changes.
+Non-blocking m12 and m15–m18 remain; no new product bug found. (Reviewer wrote: B6 is cleared. Superseded: B6 stays open pending Round 6.)
+Exact commands and gate table: `milestone2/MILESTONE2_DECISION.md`, Round 5.
+Evidence: `evidence/round5_2026-10-19/`; journal: `docs/journals/2026-10-19_ticketdesk_b6_round5.md`.
+
+---
+
+# ROUND 4 (superseded by Round 5; kept as history), 2026-10-19, commit `7092bcff`
 
 Reviewer: independent final reviewer (Codex CLI session; no implementation role).
 
@@ -31,7 +57,7 @@ Raw evidence: `evidence/round4_2026-10-19/`. Consumer finding: `docs/journals/20
 
 ---
 
-Rounds 1–3 below are superseded history; Round 4 is the current record.
+Rounds 1–4 below are superseded history; Round 5 is the current record.
 
 # ROUND 3 (superseded by Round 4; kept as history): delta check of commit `4900538a`
 
