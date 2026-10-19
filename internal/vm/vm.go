@@ -1817,15 +1817,40 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 }
 
 func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
+	return s.syncToFileTimed(records, nil)
+}
+
+// storePersistTiming records how long each phase of one persisted-store write
+// took. It is diagnostic only (runner flag --timing-log); filling it never
+// changes what is written or when.
+type storePersistTiming struct {
+	Bytes                                                int
+	Marshal, Write, Fsync, Close, Rename, DirSync, Total time.Duration
+}
+
+// storeTimingThreshold is the total persist duration at or above which a
+// store_timing line is written under --timing-log. A variable so tests can
+// force the line.
+var storeTimingThreshold = 100 * time.Millisecond
+
+func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timing *storePersistTiming) error {
 	if s.file == "" {
 		return nil
 	}
+	began := time.Now()
 	data, err := json.MarshalIndent(records, "", "  ")
+	if timing != nil {
+		timing.Marshal = time.Since(began)
+		timing.Bytes = len(data)
+	}
 	if err != nil {
 		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
 	}
-	if err := writeFileAtomic(s.file, data); err != nil {
+	if err := writeFileAtomicTimed(s.file, data, timing); err != nil {
 		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	if timing != nil {
+		timing.Total = time.Since(began)
 	}
 	return nil
 }
@@ -1833,6 +1858,19 @@ func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
 // writeFileAtomic replaces path with data through a synced temporary sibling
 // and a rename, so a crash leaves either the old or the new complete file.
 func writeFileAtomic(path string, data []byte) error {
+	return writeFileAtomicTimed(path, data, nil)
+}
+
+// writeFileAtomicTimed is writeFileAtomic that also records per-phase
+// durations into timing when it is non-nil. The I/O sequence is identical.
+func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) error {
+	mark := time.Now()
+	lap := func() time.Duration {
+		now := time.Now()
+		elapsed := now.Sub(mark)
+		mark = now
+		return elapsed
+	}
 	dir, base := filepath.Split(path)
 	if dir == "" {
 		dir = "." // CreateTemp("") would use system temp, possibly another device.
@@ -1847,14 +1885,23 @@ func writeFileAtomic(path string, data []byte) error {
 		os.Remove(name)
 		return err
 	}
+	if timing != nil {
+		timing.Write = lap()
+	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		os.Remove(name)
 		return err
 	}
+	if timing != nil {
+		timing.Fsync = lap()
+	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(name)
 		return err
+	}
+	if timing != nil {
+		timing.Close = lap()
 	}
 	if err := os.Chmod(name, 0o644); err != nil {
 		os.Remove(name)
@@ -1864,10 +1911,16 @@ func writeFileAtomic(path string, data []byte) error {
 		os.Remove(name)
 		return err
 	}
+	if timing != nil {
+		timing.Rename = lap()
+	}
 	// Make the rename itself durable.
 	if d, err := os.Open(filepath.Dir(path)); err == nil {
 		d.Sync()
 		d.Close()
+	}
+	if timing != nil {
+		timing.DirSync = lap()
 	}
 	return nil
 }
@@ -2153,10 +2206,32 @@ func (vm *BCVM) recoverStorePanic(op bytecode.Opcode) {
 }
 
 func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string]any, op bytecode.Opcode) {
-	if err := store.syncToFile(records); err != nil {
+	var timing *storePersistTiming
+	if vm.Limits.LogTiming && store.file != "" {
+		timing = &storePersistTiming{}
+	}
+	err := store.syncToFileTimed(records, timing)
+	if timing != nil && err == nil && timing.Total >= storeTimingThreshold && vm.ErrOut != nil {
+		kind := "put"
+		if op == bytecode.OpStoreDelete {
+			kind = "delete"
+		}
+		fmt.Fprintf(vm.ErrOut, "store_timing kind=%s bytes=%d marshal_ms=%s write_ms=%s fsync_ms=%s close_ms=%s rename_ms=%s dirsync_ms=%s total_ms=%s mono_ms=%s\n",
+			kind, timing.Bytes, durMS(timing.Marshal), durMS(timing.Write), durMS(timing.Fsync), durMS(timing.Close),
+			durMS(timing.Rename), durMS(timing.DirSync), durMS(timing.Total), durMS(time.Since(processStart)))
+	}
+	if err != nil {
 		panic(NewRuntimeError("STORE_PERSISTENCE_WRITE_FAILED", "main", vm.ip, op, "%v", err))
 	}
 	store.records = records
+}
+
+// processStart anchors the monotonic offsets (mono_ms) in --timing-log lines.
+var processStart = time.Now()
+
+// durMS formats a duration as milliseconds with microsecond precision.
+func durMS(d time.Duration) string {
+	return strconv.FormatFloat(float64(d.Microseconds())/1000, 'f', 3, 64)
 }
 
 func cloneStoreRecord(record map[string]any) map[string]any {
@@ -2859,6 +2934,18 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				// can be matched.
 				requestID := newRequestID()
 				started := time.Now()
+				locked := started
+				if vm.Limits.LogTiming {
+					// Diagnostic only: a separate line, so the frozen access-line
+					// format is untouched. Written after the handler returns.
+					defer func() {
+						ended := time.Now()
+						fmt.Fprintf(vm.ErrOut, "timing request_id=%s method=%s path=%s start_unix_ns=%d start_mono_ms=%s locked_mono_ms=%s end_mono_ms=%s wait_ms=%s handler_ms=%s total_ms=%s\n",
+							requestID, r.Method, r.URL.EscapedPath(), started.UnixNano(),
+							durMS(started.Sub(processStart)), durMS(locked.Sub(processStart)), durMS(ended.Sub(processStart)),
+							durMS(locked.Sub(started)), durMS(ended.Sub(locked)), durMS(ended.Sub(started)))
+					}()
+				}
 				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
 					// Read the body (bounded) before taking the lock, so a slow
 					// client cannot hold every other request hostage.
@@ -2879,6 +2966,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 					serial.Lock()
 					defer serial.Unlock()
+					locked = time.Now()
 				}
 				r = httpreq.WithRequestID(r, requestID)
 				w.Header().Set("X-Request-Id", requestID)
