@@ -4,6 +4,12 @@ Run from repository root: python3 milestone2/ticketdesk/evidence/b6_kill_storm.p
 Each trial restores the same API-seeded 1500-ticket snapshot, kills an active
 DELETE loop, and verifies recovery against the durable records/index, including
 all surviving records and all subsequent deletes. No runner ceilings overridden.
+
+Round 5 instrumentation (diagnostics only; pass criteria unchanged): when a request
+times out, or the delete worker does not finish, the script prints a DIAG block with
+the in-flight request (method, path, ticket id, elapsed), the server process status
+(alive/exit code, /proc state, CPU time, a short health probe), box load/memory, and
+the server stdout/stderr tail (access log + fault lines).
 """
 import http.client
 import json
@@ -18,6 +24,26 @@ import time
 import urllib.parse
 
 TOKEN = 'independent-review-bootstrap-token'
+TAIL_BYTES = 4096
+
+
+def box_status():
+    out = []
+    try:
+        out.append('loadavg=' + ' '.join(f'{x:.2f}' for x in os.getloadavg()) + f' cpus={os.cpu_count()}')
+    except OSError:
+        pass
+    try:
+        mem = dict(l.split(':', 1) for l in Path('/proc/meminfo').read_text().splitlines() if ':' in l)
+        out.append('mem_available=' + mem.get('MemAvailable', '?').strip())
+    except OSError:
+        pass
+    try:
+        psi = Path('/proc/pressure/io').read_text().splitlines()[0]
+        out.append('io_pressure: ' + psi)
+    except OSError:
+        pass
+    return '; '.join(out)
 
 
 def require(ok, detail):
@@ -35,6 +61,8 @@ class Server:
         env = dict(os.environ, TICKETDESK_ADMIN_TOKEN=TOKEN,
                    TICKETDESK_DATA=str(state), TICKETDESK_PORT=str(self.port))
         self.log = tempfile.TemporaryFile()
+        self.inflight = None  # (method, path, start monotonic) of the request in progress
+        self.last_done = None  # (method, path, status, elapsed) of the last completed request
         self.p = subprocess.Popen([str(root / 'howlframe'), 'run', '--allow-caps', grants,
                                    '--max-request-bytes', '1048576', '--access-log',
                                    str(root / 'out/ticketdesk.hfbc')], env=env,
@@ -47,23 +75,77 @@ class Server:
                 pass
             require(self.p.poll() is None, 'server exited during startup')
             time.sleep(.025)
+        self.diag('startup timeout')
         raise AssertionError('startup timeout')
 
-    def req(self, method, path, body=None):
-        c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+    def req(self, method, path, body=None, timeout=10):
+        c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=timeout)
         headers = {'Authorization': 'Bearer ' + TOKEN}
         data = None
         if body is not None:
             data = json.dumps(body)
             headers['Content-Type'] = 'application/json'
+        start = time.monotonic()
+        self.inflight = (method, path, start)
         try:
             c.request(method, path, data, headers)
             r = c.getresponse()
-            return r.status, json.loads(r.read())
+            result = r.status, json.loads(r.read())
+            self.last_done = (method, path, result[0], time.monotonic() - start)
+            self.inflight = None
+            return result
         finally:
             c.close()
 
+    def diag(self, reason):
+        """Print a diagnostic block. Never changes the verdict of a run."""
+        lines = [f'DIAG reason={reason}']
+        inflight = self.inflight
+        if inflight:
+            method, path, start = inflight
+            tid = path.rsplit('/', 1)[-1] if path.startswith('/v1/tickets/') else '-'
+            lines.append(f'DIAG inflight method={method} path={path} ticket={tid} elapsed={time.monotonic() - start:.3f}s')
+        else:
+            lines.append('DIAG inflight none')
+        if self.last_done:
+            m, pth, st, el = self.last_done
+            lines.append(f'DIAG last_completed method={m} path={pth} status={st} elapsed={el:.3f}s')
+        rc = self.p.poll()
+        if rc is None:
+            info = f'DIAG server pid={self.p.pid} alive'
+            try:
+                stat = Path(f'/proc/{self.p.pid}/stat').read_text().rsplit(')', 1)[1].split()
+                tick = os.sysconf('SC_CLK_TCK')
+                info += f' state={stat[0]} utime={int(stat[11]) / tick:.2f}s stime={int(stat[12]) / tick:.2f}s threads={stat[17]}'
+            except (OSError, IndexError, ValueError):
+                pass
+            lines.append(info)
+            saved = self.inflight
+            try:
+                t0 = time.monotonic()
+                st = self.req('GET', '/v1/health', timeout=3)[0]
+                lines.append(f'DIAG health_probe status={st} elapsed={time.monotonic() - t0:.3f}s')
+            except Exception as e:  # diagnostic only
+                lines.append(f'DIAG health_probe error={type(e).__name__}: {e}')
+            self.inflight = saved
+        else:
+            lines.append(f'DIAG server pid={self.p.pid} exited code={rc}')
+        lines.append('DIAG box ' + box_status())
+        try:
+            self.log.flush()
+            size = self.log.seek(0, os.SEEK_END)
+            self.log.seek(max(0, size - TAIL_BYTES))
+            tail = self.log.read().decode('utf-8', 'replace')
+            self.log.seek(0, os.SEEK_END)
+            lines.append(f'DIAG server_output_tail ({min(size, TAIL_BYTES)} of {size} bytes):')
+            lines.extend('DIAG | ' + l for l in tail.splitlines()[-40:])
+        except (OSError, ValueError) as e:
+            lines.append(f'DIAG server_output_tail unavailable: {e}')
+        print('\n'.join(lines), flush=True)
+
     def stop(self, kill=False):
+        if self.log.closed:
+            return
         if self.p.poll() is None:
             self.p.kill() if kill else self.p.terminate()
         self.p.wait(10)
@@ -155,6 +237,8 @@ def main():
             time.sleep(delay)
             s.p.kill()
             worker.join(15)
+            if worker.is_alive():
+                s.diag('delete worker still running 15s after SIGKILL')
             s.stop()
             try:
                 require(not worker.is_alive() and not errors, f'delete worker errors: {errors}')
@@ -176,7 +260,9 @@ def main():
                 print(f'run={run:02d} delay={delay:.4f}s confirmed={len(confirmed)} survivors={len(recs)} dangling={len(dangling)} unindexed={len(orphans)} PASS', flush=True)
             except Exception as e:
                 failures += 1
-                print(f'run={run:02d} FAIL {e}', flush=True)
+                if isinstance(e, (TimeoutError, socket.timeout)) and not s.log.closed:
+                    s.diag(f'run={run:02d} request timeout')
+                print(f'run={run:02d} FAIL {type(e).__name__}: {e}', flush=True)
             finally:
                 s.stop()
         # Deterministic opposite window: remove index id while record survives.
