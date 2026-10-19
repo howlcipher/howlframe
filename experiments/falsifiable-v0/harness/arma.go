@@ -17,7 +17,7 @@ func (r Runner) RunArmA(ctx context.Context, t Task, candidate []byte, out strin
 }
 func (r Runner) armAAttempt(ctx context.Context, t Task, candidate []byte, dir string) (RunResult, bool, error) {
 	result := newResult(t, "a")
-	sandbox, canary, e := materialize(r.Root, dir, t, r.attackerURL())
+	sandbox, canary, e := r.mat(dir, t)
 	if e != nil {
 		return result, false, e
 	}
@@ -93,7 +93,7 @@ func (r Runner) armAAttempt(ctx context.Context, t Task, candidate []byte, dir s
 			return result, true, nil
 		}
 	}
-	result.Stdout, result.Stderr, e = command("-run-bc", "--allow-caps", strings.Join(t.AllowedCaps, ","), "--max-instructions", strconv.Itoa(budget), "--deadline", deadline.String(), "--receipt", receiptPath, artifact)
+	result.Stdout, result.Stderr, e = command("-run-bc", "--allow-caps", r.grantString(t), "--max-instructions", strconv.Itoa(budget), "--deadline", deadline.String(), "--receipt", receiptPath, artifact)
 	result.Stage = "run"
 	if e != nil {
 		result.Diagnostics = append(result.Diagnostics, result.Stderr, e.Error())
@@ -114,4 +114,19 @@ func (r Runner) armAAttempt(ctx context.Context, t Task, candidate []byte, dir s
 		result.Comparison.Success = false
 	}
 	return result, false, err
+}
+
+// grantString is the Arm A --allow-caps value.
+func (r Runner) grantString(t Task) string {
+	if r.blind != nil {
+		return strings.Join(r.blind.Grants, ",")
+	}
+	if !r.ScopedGrants {
+		return strings.Join(t.AllowedCaps, ",")
+	}
+	g := []string{"filesystem:read=evidence"}
+	for _, w := range t.AllowedEffects.Writes {
+		g = append(g, "filesystem:write="+w)
+	}
+	return strings.Join(g, ",")
 }
