@@ -1,0 +1,41 @@
+BUILD PASS; API seed=1500; bytes=504724; default runner ceilings
+run=01 delay=0.4732s confirmed=32 survivors=1468 dangling=0 unindexed=1 PASS
+run=02 delay=0.7714s confirmed=51 survivors=1449 dangling=0 unindexed=1 PASS
+run=03 delay=0.7627s confirmed=50 survivors=1450 dangling=0 unindexed=1 PASS
+run=04 delay=0.1735s confirmed=10 survivors=1490 dangling=0 unindexed=0 PASS
+run=05 delay=0.4337s confirmed=29 survivors=1471 dangling=0 unindexed=0 PASS
+run=06 delay=0.2171s confirmed=14 survivors=1486 dangling=0 unindexed=1 PASS
+run=07 delay=0.0270s confirmed=2 survivors=1498 dangling=0 unindexed=0 PASS
+run=08 delay=0.1145s confirmed=7 survivors=1493 dangling=0 unindexed=0 PASS
+run=09 delay=0.5820s confirmed=37 survivors=1463 dangling=0 unindexed=0 PASS
+run=10 delay=0.2388s confirmed=15 survivors=1485 dangling=0 unindexed=0 PASS
+run=11 delay=0.5160s confirmed=34 survivors=1466 dangling=0 unindexed=1 PASS
+run=12 delay=0.2207s confirmed=13 survivors=1487 dangling=0 unindexed=1 PASS
+run=13 delay=0.2561s confirmed=17 survivors=1483 dangling=0 unindexed=0 PASS
+run=14 delay=0.0677s confirmed=4 survivors=1496 dangling=0 unindexed=0 PASS
+run=15 delay=0.5161s confirmed=35 survivors=1465 dangling=0 unindexed=1 PASS
+run=16 delay=0.1876s confirmed=12 survivors=1488 dangling=0 unindexed=1 PASS
+run=17 delay=0.0689s confirmed=5 survivors=1495 dangling=0 unindexed=0 PASS
+run=18 delay=0.3256s confirmed=22 survivors=1478 dangling=0 unindexed=0 PASS
+run=19 delay=0.6769s confirmed=45 survivors=1455 dangling=0 unindexed=0 PASS
+run=20 delay=0.0205s confirmed=1 survivors=1499 dangling=0 unindexed=0 PASS
+run=21 delay=0.4455s confirmed=30 survivors=1470 dangling=0 unindexed=1 PASS
+run=22 delay=0.5337s confirmed=36 survivors=1464 dangling=0 unindexed=0 PASS
+run=23 delay=0.2719s confirmed=17 survivors=1483 dangling=0 unindexed=1 PASS
+run=24 FAIL timed out
+run=25 delay=0.4611s confirmed=30 survivors=1469 dangling=0 unindexed=0 PASS
+opposite-window: unindexed t2 omitted; GET 200, DELETE 200, GET 404; all walks PASS
+dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly
+SUMMARY runs=25 failures=1 orphan_runs=11 survivor_GETs=36908 survivor_DELETEs=35451; crafted probes=2 PASS
+Traceback (most recent call last):
+  File "/workspace/hf-b6/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 221, in <module>
+    main()
+    ~~~~^^
+  File "/workspace/hf-b6/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 217, in main
+    require(failures == 0, 'kill storm failed')
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/hf-b6/milestone2/ticketdesk/evidence/b6_kill_storm.py", line 25, in require
+    raise AssertionError(detail)
+AssertionError: kill storm failed
+
+Command exit status: 1
