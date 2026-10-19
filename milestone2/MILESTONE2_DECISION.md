@@ -1,6 +1,82 @@
 # Milestone 2 decision
 
-# ROUND 4 (current), 2026-10-19, commit `7092bcff`
+# ROUND 6 (pre-registered, NOT YET RUN)
+
+Registered 2026-10-19, before any Round 6 run. These terms are fixed; changing any of them voids Round 6.
+
+* **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py` exactly as committed in `a2d8534`
+  (per-run server logs, SIGQUIT goroutine dump and state / `*.tmp-*` capture on timeout, per-run p99/max latency).
+  Seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default runner ceilings, and the
+  per-request timeout `REQUEST_TIMEOUT = 10` s all unchanged.
+* **Command:** `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75` (75 or more runs; one
+  invocation, the box otherwise idle), then `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
+* **Threshold:** ACCEPTED only if **0 failures in 75 or more runs** (any timeout, 500, worker hang or check
+  failure is a failure; no reruns, no discarding runs), both crafted probes PASS, clean_repro passes fully
+  and frozen paths are unchanged. Otherwise NOT ACCEPTED. With 0/75 required, a 4% per-run flake would
+  still pass only about 5% of the time (0.96^75 ≈ 0.047).
+* **Reviewer:** a fresh independent session that wrote neither the B6 fix nor Rounds 4–5.
+* **Code under test:** main at the time of the run. If #190 (store lock not released on panic, the candidate
+  run-24 cause) is fixed first, Round 6 tests the commit that contains that fix; the script stays frozen.
+* **Evidence:** full storm output, the artifacts directory listing, and any `runNN_failure/` contents plus
+  the matching goroutine dump under `evidence/round6_<date>/`.
+
+---
+
+# ROUND 5 (superseded by the Round 6 pre-registration; kept as history), 2026-10-19, commit `f7cc2a8`
+
+Reviewer: independent final reviewer (fresh Codex CLI session; no implementation role; not the Round 4 session)
+
+## Decision: NOT ACCEPTED (clean rerun, cause unknown)
+
+Reclassified 2026-10-19 by the Eng Mgr after Motoko's review of #189. The reviewer's raw result is unchanged
+(the reviewer originally recorded ACCEPTED): the unchanged storm exited 0 with 25/25 PASS, both crafted probes
+PASS, and clean reproduction passed. But Round 4's run-24 timeout was never diagnosed, and a clean 25-run rerun
+cannot rule it out: a 4% per-run flake passes 25/25 about 36% of the time (0.96^25 ≈ 0.36). B6 stays open
+until Round 6 meets its pre-registered threshold. Candidate root cause filed as #190: `store.mu` is not released
+when `store_put`/`store_delete` panics, so one panic would hang every later store request (matching run 24's
+DELETE timeout). New fixed regression test `b6_run24_unindexed_survivor_then_cleanup_deletes` (unindexed survivors,
+then cleanup DELETEs) is in `tests/regression/review_round1.py` (10/10 regression locally).
+
+| Gate | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 |
+|---|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) | INCOMPLETE (storm timeout) | NOT ACCEPTED (clean 25/25 rerun; run-24 cause unknown) |
+| C Authentication and authorization | PASS | PASS | PASS | PASS | PASS (full suite) |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS | PASS |
+
+| Check / exact command | Result |
+|---|---|
+| `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; exit 0; PASS |
+| `git show HEAD` | diagnostics-only instrumentation reviewed; assertions, seed 20261019, 25 runs, 1500 tickets, delays and existing timeouts unchanged; diagnostic health probe has a separate 3 s timeout |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py` | exit 0; 25/25 PASS; 0 failures; 14 runs with unindexed survivors; 36,912 survivor GETs and 36,912 survivor DELETEs |
+| Crafted opposite window (same storm command) | PASS; unindexed t2 omitted from walks, GET 200 / DELETE 200 / GET 404 |
+| Crafted dangling state (same storm command) | PASS; 5 ids across bucket boundaries skipped; walks 200; GET/DELETE 404; subsequent create/delete succeeds; stale entries persist |
+| `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 9/9, DX 13/13 |
+| `go test -count=1 ./...` | exit 0; 76 packages ok, no failing package |
+
+Evidence: `milestone2/ticketdesk/evidence/round5_2026-10-19/`. Storm output is complete;
+clean_repro.txt contains the suite output and exact counts. The storm built committed HEAD
+from a fresh archive and used default runner ceilings. No other heavy work was run concurrently.
+All recovery walks (limits 1 and 100, status=done limit 7), durable confirmed-deletion checks,
+survivor GETs, survivor DELETE/GET-404/repeat-DELETE-404 checks and final empty walks passed.
+The script itself remains unchanged by this review.
+
+## Timeout diagnosis
+
+No timeouts in Round 5; no DIAG blocks or failures. No targeted rerun was needed.
+Round 4's timeout remains historically unclassified; this passing run does not establish its cause.
+
+## Carryover
+
+Non-blocking m12 (port-probe race), m15 (no earlier-state migration), m16 (readable unindexed
+records after interrupted unconfirmed mutations), m17 (truncated-upload 400 error shape), and
+m18 (harmless dangling entries persist and DELETE returns 404) remain. No new product bug found.
+Superseded by the reclassification: B6 stays open pending Round 6; #190 is the candidate cause for run 24.
+
+---
+
+# ROUND 4 (superseded by Round 5; kept as history), 2026-10-19, commit `7092bcff`
 
 Reviewer: independent final reviewer (Codex CLI session; no implementation role).
 

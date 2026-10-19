@@ -20,3 +20,8 @@ Written at session close (Eng Mgr). Times America/Detroit (EDT).
    start milestone 3 before that.
 2. Owner decides whether to merge the Round 4 PR as the record now or fold it into the Round 5 PR.
 3. #178: when unparked, bring main in (no force-push), rerun CI, collect re-reviews, then merge-ready → squash-merge.
+
+## Update 2026-10-19 08:48 EDT
+#188 (Round 4) squash-merged as `d1079ff7`. #189 is retargeted to main. Round 5 is reclassified NOT ACCEPTED,
+the storm script is instrumented further, the run-24 regression test is added and Round 6 is pre-registered
+(0 failures in 75 or more runs). Round 6 hasn't been run. Candidate cause for the run-24 hang: #190.
