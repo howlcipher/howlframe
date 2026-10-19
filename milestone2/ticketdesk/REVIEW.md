@@ -1,10 +1,18 @@
 # Milestone 2 independent final review: ticketdesk
 
-# ROUND 6: pre-registered, not yet run
+# ROUND 6 (current), 2026-10-19
 
-Threshold and frozen terms: `milestone2/MILESTONE2_DECISION.md`, Round 6 (0 failures across the 75 runs of
-exactly one `b6_kill_storm.py --runs 75` invocation, script sha256 `e1115c07dd1d…` pinned and CI-enforced, 10 s request timeout unchanged,
-code-under-test SHA pinned before the run on a main that includes #191; no SUMMARY + exit 0, including harness or infra errors = NOT ACCEPTED, no restart; clean_repro full pass).
+**Decision: NOT ACCEPTED.** Independent final reviewer; no implementation role or participation in Rounds 4/5.
+Exactly one pinned 75-run invocation: 74 PASS, 1 timeout (run 11, DELETE t400), EXIT=1;
+37 orphan runs, 110762 survivor GETs, 109292 survivor DELETEs, both crafted probes PASS.
+Clean reproduction: exit 0; acceptance 101/101, regression 10/10, DX 13/13. Freeze integrity passes.
+63 DIAG lines, one reason (run=11 TimeoutError), one folder (run11_failure/).
+Provisional diagnosis: box stall; t400 eventually logged 200 after 68.768 s, health 200 in 12 ms,
+and no persistent request/store-lock waiter in the dump. Exact cause is unproven; transient server delay
+cannot be excluded. No restart. B6 remains open; the milestone stop rule is not satisfied.
+Non-blocking carryover m12, m15–m18 and issue #194 remain.
+Exact commands and gates: `milestone2/MILESTONE2_DECISION.md`, Round 6.
+Evidence: `evidence/round6_2026-10-19/`; journal: `docs/journals/2026-10-19_ticketdesk_b6_round6.md`.
 
 # ROUND 5 (superseded; kept as history), 2026-10-19, commit `f7cc2a8`
 

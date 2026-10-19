@@ -1,6 +1,48 @@
 # Milestone 2 decision
 
-# ROUND 6 (pre-registered, NOT YET RUN)
+# ROUND 6 (current), 2026-10-19
+
+Reviewer: independent final reviewer (fresh Codex CLI session; no implementation role; not the Round 4/5 sessions)
+
+## Decision: NOT ACCEPTED
+
+The single registered invocation completed 75 trials with 1 failure (74 PASS), both crafted probes PASS,
+and exit 1. Run 11 timed out deleting t400 during survivor cleanup. Full clean reproduction passed:
+101/101 acceptance, 10/10 regression, 13/13 DX. Frozen paths are unchanged. The zero-failure threshold
+was not met; B6 remains open and the milestone stop rule is not satisfied. No restart was performed.
+Carryover m12, m15–m18 and issue #194 remain non-blocking.
+
+| Gate | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 | Round 6 |
+|---|---|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) | INCOMPLETE (timeout) | NOT ACCEPTED (cause unknown) | NOT ACCEPTED (1/75 timeout) |
+| C Authentication and authorization | PASS | PASS | PASS | PASS | PASS | PASS (full suite) |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS | PASS | PASS |
+
+| Check / exact command | Result |
+|---|---|
+| `git rev-parse HEAD` | `1561b9a2c7e6d798b7acf142e65e363352c557d2` |
+| `git status --short` (before run) | empty |
+| `sha256sum milestone2/ticketdesk/evidence/b6_kill_storm.py` | `e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f` |
+| `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty before and after storm; exit 0 |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f --expect-head 92c150d1736794c40597920c4b3b7df8e9e77d3b --artifacts /tmp/round6/artifacts` | exactly once, detached with setsid/nohup; runs=75 failures=1 orphan_runs=37 survivor_GETs=110762 survivor_DELETEs=109292; crafted probes=2 PASS; EXIT=1 |
+| SCRIPT_SHA256 | `e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f` |
+| CODE_SHA | `1561b9a2c7e6d798b7acf142e65e363352c557d2` |
+| CODE_PINNED | `92c150d1736794c40597920c4b3b7df8e9e77d3b` |
+| `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 10/10, DX 13/13 |
+| `go test -count=1 ./...` (after evidence records) | exit 0; 76 packages ok, no failing package |
+| `grep -c '^DIAG' /tmp/round6/kill_storm.txt` | 63 lines; one reason: run=11 TimeoutError |
+| `find /tmp/round6/artifacts -maxdepth 1 -type d -name 'run*_failure'` | only run11_failure/ |
+
+Timeout diagnostics: DIAG fired for run 11. Provisional classification: box stall; the request eventually
+logged 200 after 68.768 s, health then answered in 12 ms, and the dump shows no remaining request or
+store-lock waiter. Exact cause remains unproven; a transient server delay cannot be excluded.
+See `ticketdesk/evidence/round6_2026-10-19/diagnosis.txt` for process states, load, file list and dump excerpts.
+Evidence: `ticketdesk/evidence/round6_2026-10-19/`; full artifacts retained in `/tmp/round6/artifacts`.
+No product code, script, or frozen files were edited.
+
+## Pre-registered terms (unchanged)
 
 Registered 2026-10-19, before any Round 6 run. Re-pinned the same day (round6-protocol PR) with Motoko's pre-Round-6
 amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fixed. Changing any of them voids Round 6.
