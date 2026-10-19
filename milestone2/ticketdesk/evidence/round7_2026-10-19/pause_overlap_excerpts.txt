@@ -1,4 +1,4 @@
-# Excerpts for requests overlapping the two VM-fork pauses (diagnostic only)
+# Excerpts for requests overlapping the two freeze-type heartbeat gaps (realtime >> monotonic), which cluster with two VM-fork kmsg events (consistent with, not proven to be, host-side pauses). Diagnostic only.
 ## run168 recovery: DELETE t997 (client tsv, header + rows)
 seq	method	path	mono_start	mono_end	real_start	status	elapsed_s
 5807	GET	/v1/tickets/t974	21522.903516	21522.904853	1792432283.192217	404	0.001337

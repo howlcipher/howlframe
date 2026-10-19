@@ -15,8 +15,8 @@ then the noise gates reported **16 breaches**, so the script printed `noise=INFR
 INFRA-VOID`). Under the pre-registered rule "0 failures with a noise breach → INFRA-VOID, not ACCEPTED", Round 7 is
 **not ACCEPTED**. No product failure occurred and no `CLASSIFY` line was printed. Full clean reproduction passed
 (101/101 acceptance, 10/10 regression, 13/13 DX) and frozen paths are unchanged. B6 remains open; the milestone stop
-rule is not satisfied. Per the rule, exactly **one isolation rerun** is allowed, on an isolated machine, with the same
-pins. No restart was performed.
+rule is not satisfied. Per the rule, exactly **one isolation rerun** is allowed with the same pins, on the terms in
+"Isolation rerun terms" below. No restart was performed.
 
 ```
 SUMMARY runs=225 failures=0 orphan_runs=94 survivor_GETs=332155 survivor_DELETEs=332155; crafted probes=2 PASS; noise=INFRA-VOID breaches=16; SCRIPT_SHA256=540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38; CODE_SHA=7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989; CODE_PINNED=e8fcea2024b42bbfafd6e4410568c76d32e9c37a
@@ -36,28 +36,83 @@ VERDICT INFRA-VOID (one isolation rerun allowed, same pins)
 | `git rev-parse HEAD` | `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989` (#200 squash-merge; fills only the pin line on `e8fcea20`) |
 | Pre-launch checks (Codex session) | exact HEAD, single expected parent, script SHA-256, `CHECK_HEAD PASS`, artifacts path absent |
 | `sha256sum milestone2/ticketdesk/evidence/b6_kill_storm.py` | `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38` (before and after) |
-| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c2433…3d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts /tmp/round7/artifacts` | exactly once, detached with setsid/nohup at 12:55:46 EDT (pid 1646137 launcher); `IDLE_GATE PASS`; 225 PASS, 0 failures; 16 NOISE breaches; `VERDICT INFRA-VOID`; EXIT=1 |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c2433…3d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts /tmp/round7/artifacts` | exactly once, detached with setsid/nohup at 12:55:46 EDT (pid 1646137 launcher); `IDLE_GATE PASS`; 225 PASS, 0 failures; 16 NOISE breaches; `VERDICT INFRA-VOID`; EXIT=1 (inferred; see next row) |
 | Exit status | 1. The detached launcher did not record the status; the run ended in an uncaught `AssertionError: noise gates breached: INFRA-VOID` (Python exit 1), with no other traceback |
 | `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 10/10, DX 13/13 |
 | Freeze integrity: `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; exit 0: PASS |
 | `find /tmp/round7/artifacts -maxdepth 1 -type d -name 'run*_failure'` | none (no failures) |
 
-### Noise breaches (all from two VM-fork pauses)
+### Noise breaches (clustered around two VM-fork events; cause not proven)
 
-* **Pause 1, about 13:51:23 EDT (run 168 recovery):** heartbeat gaps 2.796 s (mono 21510.429) and 7.581 s monotonic /
-  **48.749 s realtime** (mono 21523.064), then `random: crng reseeded due to virtual machine fork` and 10
-  `virtio_balloon virtio0: Out of puff! Can't get 1 pages` kmsg records.
-* **Pause 2, about 14:05 EDT (runs 208–209):** heartbeat gap 13.475 s (mono 22310.323, between the run 208 recovery
-  and run 209 storm servers, no request in flight) and 2.722 s monotonic / **74.086 s realtime** (mono 22333.687,
-  run 209 recovery), then a second `virtual machine fork` kmsg record.
-* Breach count: 4 heartbeat gaps over 2 s + 12 kmsg matches = 16. No steal breach (max 60 s steal 0.091%), PSI io
-  `full avg10` max 9.00 (gate 10), cgroup `nr_throttled` 0 → 0, no OOM events, sampler coverage 4454 samples over
-  4479 s, both sidecars alive.
-* **Requests overlapping the pauses still passed (diagnostic, not a criterion):** run 168 `DELETE /v1/tickets/t997`
-  took 8.300 s client monotonic (8278 ms handler, 0.002 ms lock wait, store write 186.6 ms of it, fsync 81 ms), about
-  49.5 s wall. Run 209 `DELETE /v1/tickets/t487` took 3.055 s monotonic (3051 ms server), about 74 s wall. Both were
-  under the 10 s total deadline because CLOCK_MONOTONIC barely advances while the VM is frozen. The stall sits inside
-  the heartbeat gap, outside the lock and the store write.
+The 16 breaches cluster around two VM-fork events. That is consistent with host-side VM pauses but does not prove
+them. Each heartbeat gap is typed by its clocks: **freeze-type** (realtime ≫ monotonic: the guest clock stopped) or
+**stall-type** (monotonic = realtime = boottime: the clocks kept running while both sidecars were starved, with
+steal around 0).
+
+* **Cluster 1, about 13:51 EDT (run 168 recovery):**
+  * 2.796 s gap at 13:51:10 (mono 21510.429): **stall-type** (mono = real = boot = 2.796 s), about 13 s before the
+    fork record.
+  * 7.581 s mono / **48.749 s real** / 7.603 s boot gap at 13:51:23–13:52:12 (mono 21523.064): **freeze-type**.
+  * Then `random: crng reseeded due to virtual machine fork` (mono 21531.1) and 10
+    `virtio_balloon virtio0: Out of puff! Can't get 1 pages` kmsg records.
+* **Cluster 2, about 14:05 EDT (runs 208–209):**
+  * 13.475 s gap at 14:05:11–14:05:25 (mono 22310.323, between the run 208 recovery and run 209 storm servers, no
+    request in flight): **stall-type** (mono = real = boot), about 23 s before the fork record.
+  * 2.722 s mono / **74.086 s real** gap at 14:05:35–14:06:49 (mono 22333.687, run 209 recovery): **freeze-type**.
+  * Then a second `virtual machine fork` kmsg record (mono 22336.6).
+* Breach count: 4 heartbeat gaps over 2 s (the script sizes a gap as max(mono, real, boot)) plus 12 kmsg matches,
+  16 in total. No steal breach (max 60 s steal 0.091%). PSI io `full avg10` peaked at 9.00 (gate 10). cgroup
+  `nr_throttled` went 0 → 0, there were no OOM events, sampler coverage was 4454 samples over 4479 s, and both sidecars
+  stayed alive.
+
+### Requests that overlapped the freezes (diagnostic, not a criterion)
+
+* **Which clock the deadline uses.** The pre-registered text says "total client elapsed time" without naming a
+  clock. The frozen, pinned script (sha256 `540c2433…3d38`) defines it as monotonic in `Server.expect`:
+  `start = time.monotonic()` (line 286) and `elapsed = time.monotonic() - start` (lines 295 and 308), checked against
+  the deadline (lines 299 and 309; `TOTAL_DEADLINE = 10.0`, line 79). The clock came from the pre-registered script.
+  It was not chosen after the run.
+* **Run 168, `DELETE /v1/tickets/t997`:**
+  * Client: 8.300 s monotonic, about 49.5 s wall (13:51:23.40 to the next request at 13:52:12.88).
+  * Monotonic advanced only partly during the freeze: 7.58 s of the 48.75 s real gap (16%).
+  * Server timing log:
+    * lock acquired after 0.002 ms (`locked_mono_ms=17337.492`) and held for the whole handler (`end_mono_ms=25615.697`,
+      handler 8278 ms);
+    * `store_timing` ran from about mono 25314.5 to 25501.1 (186.6 ms; fsync 81 ms).
+  * So the ~7.98 s stall came **after lock acquisition and before the store write, with the lock held**. It was not
+    lock contention and not the store write.
+* **Run 209, `DELETE /v1/tickets/t487`:**
+  * Client: 3.055 s monotonic, about 74.4 s wall (14:05:35.13 to the next request at 14:06:49.56).
+  * Monotonic advanced 2.72 s of the 74.09 s real gap (4%).
+  * Server: lock acquired after 0.002 ms and held through the handler (3051 ms). `store_timing` shows
+    `marshal_ms=2901.6` of a 2960 ms store write, so this stall fell **inside the store write's marshal phase, with
+    the lock held**.
+* **Counterfactual on wall time.** Both requests would have broken the 10 s deadline. The pinned `classify()` would have
+  marked both `infra`:
+  * t997: the freeze gap alone covers 7.53 s of 8.30 s (91%), or 7.79 s (94%) counting the adjacent 0.259 s gap, as
+    `classify()` sums them.
+  * t487: gaps cover 2.72 s of 3.06 s (89%).
+  * Both are over the 80% threshold. The verdict would then have been `NOT_ACCEPTED_INFRA`, with the **same** one
+    isolation rerun. Either way B6 stays open and the next step is unchanged.
+
+### Isolation rerun terms (the one rerun the rule allows)
+
+* **Venue:** a non-shared machine with no VM snapshot or fork, no active balloon driver, about 1.5 GB of free disk,
+  and a declared quiet window (no other builds, tests, storms or browser work).
+* **Checkout:** a detached checkout of exactly `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`, not main's tip. Once this
+  record merges, main is past the pin and `--expect-head` would reject it.
+* **Command:** identical, with a fresh artifacts directory:
+  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts <fresh dir>`
+* **Exit status captured explicitly:**
+  `setsid nohup sh -c 'python3 … ; echo "EXIT=$?"' > <dir>/kill_storm.txt 2>&1 < /dev/null &`
+* **Reviewer:** a fresh independent session with no implementation role.
+* **One attempt only:**
+  * An `IDLE_GATE FAIL` (exit 3) is not an attempt and may wait for a quiet box.
+  * Every other exit is the attempt.
+  * No further reruns.
+
+**Venue note for this run:** the shared box was allowed only with a declared quiet window. The Eng Mgr session only
+polled the output. No artifact shows that other agents on the box were idle, and that cannot be checked after the fact.
 
 Evidence: `ticketdesk/evidence/round7_2026-10-19/` (storm output, `script.sha256`, artifacts listing, heartbeat and
 kmsg logs, sidecar stderr, noise summary, clean_repro output, launcher record, watchdog logs and request/server
