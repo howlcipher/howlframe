@@ -35,7 +35,7 @@ amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fi
 
     Anything else aborts the run, including renames, any other `.md` change and extra commits. SUMMARY carries
     `CODE_PINNED=<sha>`. CI covers these rules in `TestRound6ExpectHeadPinRules`.
-  * **Code-under-test SHA:** `TO BE PINNED BEFORE THE RUN (main including #191 and this script)`
+  * **Code-under-test SHA:** `92c150d1736794c40597920c4b3b7df8e9e77d3b`
 * **Command, exactly one invocation:**
   `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f --expect-head <pinned sha>`
   * Exactly `--runs 75`, on an otherwise idle box.
