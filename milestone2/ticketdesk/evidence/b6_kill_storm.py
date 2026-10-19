@@ -14,13 +14,30 @@ the server stdout/stderr tail (access log + fault lines).
 Round 6 instrumentation (diagnostics only; pass criteria, seed, delays and the 10 s
 request timeout unchanged):
   * every server's stdout/stderr is kept as <artifacts>/runNN_<phase>.log;
-  * on a timeout, the live server gets SIGQUIT (Go goroutine dump into its log) before
-    it is killed, and the state file plus any *.tmp-* files are copied to
-    <artifacts>/runNN_failure/;
-  * each run prints p99 and max request latency (storm and recovery phases).
-Usage: b6_kill_storm.py [--runs N] [--artifacts DIR]   (defaults: 25 runs, $TMPDIR/b6-storm-<time>)
+  * on every failure (timeout, 'confirmed deletion lost', anything), the state file and
+    any *.tmp-* files are copied to <artifacts>/runNN_failure/; a still-live server also
+    gets SIGQUIT (goroutine dump) before stop(), which falls back to SIGKILL if needed;
+  * a server that fails to start is killed before the error propagates;
+  * --expect-head accepts only HEAD == pin, or one commit directly on the pin whose
+    --no-renames numstat is exactly `1 1 milestone2/MILESTONE2_DECISION.md` and which
+    only turns the placeholder Code-under-test line into exactly that line naming the pin
+    (exact match, no substring); the pin commit must be a squash or direct commit, not a
+    merge; SUMMARY carries CODE_PINNED;
+  * before SIGQUIT, diag records /proc/PID/wchan, status and task/*/stat so a
+    SIGSTOPped or fsync-stuck server still produces diagnostics;
+  * each run prints p99 and max request latency (storm and recovery phases);
+  * state.json.tmp-* leftovers from a previous kill are cleared (or timestamped aside)
+    after every snapshot restore;
+  * the script prints and enforces its own sha256 (SCRIPT_SHA256) and records it in
+    the evidence SUMMARY line.
+Usage: b6_kill_storm.py [--runs N] [--artifacts DIR] [--expect-sha256 HEX] [--expect-head SHA]
+                        [--self-test-sigstop]
+       (defaults: 25 runs, $TMPDIR/b6-storm-<time>)
 """
 import argparse
+import contextlib
+import hashlib
+import io
 import shutil
 import signal
 import http.client
@@ -38,6 +55,11 @@ import urllib.parse
 TOKEN = 'independent-review-bootstrap-token'
 TAIL_BYTES = 4096
 REQUEST_TIMEOUT = 10  # frozen for Round 6
+SCRIPT_PATH = Path(__file__).resolve()
+
+
+def script_sha256():
+    return hashlib.sha256(SCRIPT_PATH.read_bytes()).hexdigest()
 
 
 def box_status():
@@ -89,16 +111,22 @@ class Server:
                                    '--max-request-bytes', '1048576', '--access-log',
                                    str(root / 'out/ticketdesk.hfbc')], env=env,
                                   stdout=self.log, stderr=self.log)
-        for _ in range(200):
-            try:
-                if self.req('GET', '/v1/health')[0] == 200:
-                    return
-            except OSError:
-                pass
-            require(self.p.poll() is None, 'server exited during startup')
-            time.sleep(.025)
-        self.diag('startup timeout')
-        raise AssertionError('startup timeout')
+        try:
+            for _ in range(200):
+                try:
+                    if self.req('GET', '/v1/health')[0] == 200:
+                        return
+                except OSError:
+                    pass
+                require(self.p.poll() is None, 'server exited during startup')
+                time.sleep(.025)
+            self.diag('startup timeout')
+            raise AssertionError('startup timeout')
+        except BaseException:
+            # A server that fails to start must never outlive this object: the caller
+            # never receives it, so nobody else would stop it.
+            self.stop(kill=True)
+            raise
 
     def req(self, method, path, body=None, timeout=REQUEST_TIMEOUT):
         c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=timeout)
@@ -149,14 +177,43 @@ class Server:
             lines.append(f'DIAG last_completed method={m} path={pth} status={st} elapsed={el:.3f}s')
         rc = self.p.poll()
         if rc is None:
-            info = f'DIAG server pid={self.p.pid} alive'
+            pid = self.p.pid
+            info = f'DIAG server pid={pid} alive'
             try:
-                stat = Path(f'/proc/{self.p.pid}/stat').read_text().rsplit(')', 1)[1].split()
+                stat = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
                 tick = os.sysconf('SC_CLK_TCK')
                 info += f' state={stat[0]} utime={int(stat[11]) / tick:.2f}s stime={int(stat[12]) / tick:.2f}s threads={stat[17]}'
             except (OSError, IndexError, ValueError):
                 pass
             lines.append(info)
+            # Capture /proc before SIGQUIT: a SIGSTOPped or fsync-stuck process still has these.
+            try:
+                wchan = Path(f'/proc/{pid}/wchan').read_text().strip() or '?'
+                lines.append(f'DIAG wchan={wchan}')
+            except OSError as e:
+                lines.append(f'DIAG wchan unavailable: {e}')
+            try:
+                status = Path(f'/proc/{pid}/status').read_text()
+                keep = []
+                for line in status.splitlines():
+                    if line.startswith(('Name:', 'State:', 'Pid:', 'PPid:', 'Threads:', 'voluntary_ctxt_switches:', 'nonvoluntary_ctxt_switches:')):
+                        keep.append(line)
+                lines.append('DIAG status: ' + ' | '.join(keep))
+            except OSError as e:
+                lines.append(f'DIAG status unavailable: {e}')
+            try:
+                tasks = sorted(Path(f'/proc/{pid}/task').iterdir(), key=lambda x: int(x.name))
+                for task in tasks[:16]:
+                    try:
+                        tstat = task.joinpath('stat').read_text().rsplit(')', 1)[1].split()
+                        twchan = task.joinpath('wchan').read_text().strip() or '?'
+                        lines.append(f'DIAG task {task.name} state={tstat[0]} wchan={twchan}')
+                    except (OSError, IndexError, ValueError):
+                        pass
+                if len(tasks) > 16:
+                    lines.append(f'DIAG task ... ({len(tasks) - 16} more)')
+            except OSError as e:
+                lines.append(f'DIAG task/*/stat unavailable: {e}')
             saved = self.inflight
             try:
                 t0 = time.monotonic()
@@ -165,13 +222,28 @@ class Server:
             except Exception as e:  # diagnostic only
                 lines.append(f'DIAG health_probe error={type(e).__name__}: {e}')
             self.inflight = saved
-            # Goroutine dump: the Go runtime writes all stacks to stderr on SIGQUIT and exits.
+            # Goroutine dump: SIGQUIT; a SIGSTOPped process will not exit, so fall back to SIGKILL.
             try:
                 self.p.send_signal(signal.SIGQUIT)
-                self.p.wait(5)
-                lines.append(f'DIAG sigquit sent; server exited code={self.p.returncode}; goroutine dump in {self.log_path.name}')
+                try:
+                    self.p.wait(5)
+                    lines.append(f'DIAG sigquit sent; server exited code={self.p.returncode}; goroutine dump in {self.log_path.name}')
+                except subprocess.TimeoutExpired:
+                    lines.append('DIAG sigquit: no exit in 5s (likely stopped or stuck); falling back to SIGKILL')
+                    self.p.kill()
+                    try:
+                        self.p.wait(5)
+                        lines.append(f'DIAG sigkill fallback; server exited code={self.p.returncode}')
+                    except subprocess.TimeoutExpired:
+                        lines.append('DIAG sigkill fallback: still alive after 5s')
             except Exception as e:  # diagnostic only
                 lines.append(f'DIAG sigquit error={type(e).__name__}: {e}')
+                try:
+                    self.p.kill()
+                    self.p.wait(5)
+                    lines.append(f'DIAG sigkill after sigquit error; exited code={self.p.returncode}')
+                except Exception as e2:
+                    lines.append(f'DIAG sigkill after sigquit error also failed: {e2}')
         else:
             lines.append(f'DIAG server pid={self.p.pid} exited code={rc}')
         lines.append('DIAG box ' + box_status())
@@ -193,12 +265,31 @@ class Server:
         print('\n'.join(lines), flush=True)
 
     def stop(self, kill=False):
+        """Stop the server. Always falls back to SIGKILL if a polite signal does not exit."""
         if self.log.closed:
             return
         if self.p.poll() is None:
-            self.p.kill() if kill else self.p.terminate()
-        self.p.wait(10)
-        self.log.close()
+            if kill:
+                self.p.kill()
+            else:
+                self.p.terminate()
+            try:
+                self.p.wait(5)
+            except subprocess.TimeoutExpired:
+                try:
+                    self.p.kill()
+                    self.p.wait(5)
+                except Exception:
+                    pass
+        else:
+            try:
+                self.p.wait(1)
+            except Exception:
+                pass
+        try:
+            self.log.close()
+        except Exception:
+            pass
 
     def expect(self, method, path, status, body=None):
         got, result = self.req(method, path, body)
@@ -244,15 +335,157 @@ def verify(s, state):
     return recs
 
 
+def clear_tmp_files(state, art, run):
+    """After a snapshot restore, clear leftover state.json.tmp-* from a prior kill.
+    Files are timestamped aside into the artifacts dir when present, then removed."""
+    moved = []
+    for f in sorted(state.parent.iterdir()):
+        if '.tmp-' in f.name:
+            dest = art / f'run{run:02d}_pre_{int(time.time())}_{f.name}'
+            try:
+                shutil.move(str(f), str(dest))
+                moved.append(f'{f.name}->{dest.name}')
+            except OSError:
+                try:
+                    f.unlink()
+                    moved.append(f'{f.name}->deleted')
+                except OSError as e:
+                    moved.append(f'{f.name}->error:{e}')
+    return moved
+
+
+def self_test_sigstop(art):
+    """Prove that a SIGSTOPped server still yields /proc diagnostics and that
+    stop() falls back to SIGKILL after SIGQUIT times out. Stdlib only."""
+    art.mkdir(parents=True, exist_ok=True)
+    log = art / 'selftest_sigstop.log'
+    # A long sleep stands in for a stuck Go server: it has /proc and ignores SIGQUIT while stopped.
+    p = subprocess.Popen(['sleep', '120'], stdout=open(log, 'w+b'), stderr=subprocess.STDOUT)
+    try:
+        time.sleep(0.05)
+        os.kill(p.pid, signal.SIGSTOP)
+        s = Server.__new__(Server)
+        s.state = art / 'dummy_state.json'
+        s.state.write_text('{}')
+        (art / 'dummy_state.json.tmp-selftest').write_text('partial')
+        s.log_path = log
+        s.log = open(log, 'a+b')
+        s.latencies = []
+        s.inflight = ('DELETE', '/v1/tickets/t1', time.monotonic() - 10.5)
+        s.last_done = ('DELETE', '/v1/tickets/t0', 200, 0.01)
+        s.p = p
+        s.port = 1
+        dump = art / 'selftest_failure'
+        s.diag('self-test SIGSTOP', dump)
+        # The first pass checks the dump and the SIGKILL fallback; the second captures the printed /proc lines.
+        require(dump.exists(), 'failure dump dir missing')
+        require(any(dump.iterdir()), 'failure dump empty')
+        require(p.poll() is not None, 'server still alive after diag (SIGKILL fallback failed)')
+        # Re-run diag capture via a second stopped process and capture printed lines.
+        p2 = subprocess.Popen(['sleep', '120'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.05)
+        os.kill(p2.pid, signal.SIGSTOP)
+        buf = io.StringIO()
+        s2 = Server.__new__(Server)
+        s2.state = s.state
+        s2.log_path = art / 'selftest2.log'
+        s2.log = open(s2.log_path, 'w+b')
+        s2.latencies = []
+        s2.inflight = None
+        s2.last_done = None
+        s2.p = p2
+        s2.port = 1
+        with contextlib.redirect_stdout(buf):
+            s2.diag('self-test SIGSTOP capture', art / 'selftest2_failure')
+        text = buf.getvalue()
+        require('DIAG wchan=' in text, 'missing wchan')
+        require('DIAG status:' in text and 'State:' in text, 'missing status')
+        require('DIAG task ' in text, 'missing task/*/stat')
+        require('falling back to SIGKILL' in text or 'sigkill' in text.lower(), 'missing SIGKILL fallback')
+        require(p2.poll() is not None, 'second server still alive')
+        print('SELFTEST_SIGSTOP PASS', flush=True)
+    finally:
+        if p.poll() is None:
+            try:
+                os.kill(p.pid, signal.SIGCONT)
+            except OSError:
+                pass
+            p.kill()
+            p.wait(5)
+
+
+DECISION_DOC = 'milestone2/MILESTONE2_DECISION.md'
+PIN_LINE_PREFIX = '  * **Code-under-test SHA:** `'
+PIN_PLACEHOLDER = 'TO BE PINNED BEFORE THE RUN (main including #191 and this script)'
+
+
+def git(*args):
+    return subprocess.run(['git', *args], check=True, stdout=subprocess.PIPE, text=True).stdout
+
+
+def verify_head(expect, head):
+    """Return the pinned code-under-test commit, or exit. Accepted only:
+    (a) HEAD == pin; or
+    (b) HEAD is one commit directly on the pin (single parent == pin) whose whole diff,
+        with renames disabled, is `1 1 milestone2/MILESTONE2_DECISION.md`, replacing the
+        Code-under-test line with one that names the pin."""
+    pinned = subprocess.run(['git', 'rev-parse', '--verify', expect + '^{commit}'],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+    if not pinned:
+        raise SystemExit(f'code under test mismatch: {expect} is not a commit')
+    if pinned == head:
+        print(f'CODE_PINNED {pinned} (= HEAD)', flush=True)
+        return pinned
+    parents = git('rev-list', '--parents', '-n', '1', head).split()[1:]
+    if parents != [pinned]:
+        raise SystemExit(f'code under test mismatch: HEAD {head} is not a single commit directly on pin {pinned} (parents {parents})')
+    numstat = git('diff', '--no-renames', '--numstat', pinned, head).splitlines()
+    if numstat != [f'1\t1\t{DECISION_DOC}']:
+        raise SystemExit(f'code under test mismatch: pin commit must change exactly 1 line of {DECISION_DOC}; numstat {numstat}')
+    hunk = git('diff', '--no-renames', '-U0', pinned, head, '--', DECISION_DOC).splitlines()
+    removed = [l[1:] for l in hunk if l.startswith('-') and not l.startswith('---')]
+    added = [l[1:] for l in hunk if l.startswith('+') and not l.startswith('+++')]
+    # Exact lines only: the placeholder line becomes exactly the pin line (no substring match,
+    # no trailing text such as "(not <pin>)" or a relaxed threshold appended to the line).
+    if (len(removed) != 1 or len(added) != 1
+            or removed[0].rstrip() != PIN_LINE_PREFIX + PIN_PLACEHOLDER + '`'
+            or added[0].rstrip() != PIN_LINE_PREFIX + pinned + '`'):
+        raise SystemExit(f'code under test mismatch: the one changed line must replace the placeholder with exactly {PIN_LINE_PREFIX.strip()}{pinned}`')
+    print(f'CODE_PINNED {pinned} (HEAD {head} only fills the pin line)', flush=True)
+    return pinned
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=25)
     ap.add_argument('--artifacts', type=Path,
                     default=Path(tempfile.gettempdir()) / time.strftime('b6-storm-%Y%m%d-%H%M%S'))
+    ap.add_argument('--self-test-sigstop', action='store_true',
+                    help='run the SIGSTOP diagnostics self-test and exit')
+    ap.add_argument('--expect-sha256', default='',
+                    help='if set, require the script sha256 to equal this value')
+    ap.add_argument('--expect-head', default='',
+                    help='pinned code-under-test commit: HEAD itself, or the parent of a commit that only fills the pin line')
+    ap.add_argument('--check-head-only', action='store_true',
+                    help='verify --expect-head and exit (used by tests)')
     args = ap.parse_args()
     art = args.artifacts.resolve()
     art.mkdir(parents=True, exist_ok=True)
+    sha = script_sha256()
+    print(f'SCRIPT_SHA256 {sha}', flush=True)
     print(f'ARTIFACTS {art}', flush=True)
+    if args.expect_sha256 and args.expect_sha256 != sha:
+        raise SystemExit(f'script sha256 mismatch: got {sha}, expected {args.expect_sha256}')
+    head = subprocess.run(['git', 'rev-parse', 'HEAD'], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+    print(f'CODE_SHA {head}', flush=True)
+    pinned = verify_head(args.expect_head, head) if args.expect_head else 'unpinned'
+    if args.check_head_only:
+        print(f'CHECK_HEAD PASS pinned={pinned}', flush=True)
+        return
+    (art / 'script.sha256').write_text(sha + '\n')
+    if args.self_test_sigstop:
+        self_test_sigstop(art)
+        return
     rng = random.Random(20261019)
     failures = 0
     with tempfile.TemporaryDirectory(prefix='b6-independent-') as tmp:
@@ -277,6 +510,9 @@ def main():
         total_deleted = total_gets = orphan_runs = 0
         for run in range(1, args.runs + 1):
             state.write_bytes(snapshot)
+            moved = clear_tmp_files(state, art, run)
+            if moved:
+                print(f'run={run:02d} cleared tmp after restore: {moved}', flush=True)
             s = Server(root, state, art / f'run{run:02d}_storm.log')
             confirmed, errors = [], []
             def deleting():
@@ -321,9 +557,18 @@ def main():
                 print(f'run={run:02d} delay={delay:.4f}s confirmed={len(confirmed)} survivors={len(recs)} dangling={len(dangling)} unindexed={len(orphans)} storm[{storm_lat}] recovery[{s.latency()}] PASS', flush=True)
             except Exception as e:
                 failures += 1
-                if isinstance(e, (TimeoutError, socket.timeout)) and not s.log.closed:
-                    s.diag(f'run={run:02d} request timeout', art / f'run{run:02d}_failure')
+                dump = art / f'run{run:02d}_failure'
+                # Snapshot state on every failure (including 'confirmed deletion lost', where the
+                # storm server is already stopped), independent of whether a server log is open.
+                try:
+                    saved = s.save_state(dump)
+                    print(f'DIAG run={run:02d} failure state snapshot: {", ".join(saved)} -> {dump.name}/', flush=True)
+                except OSError as se:
+                    print(f'DIAG run={run:02d} failure state snapshot error: {se}', flush=True)
                 if not s.log.closed:
+                    # A live server also gets /proc + SIGQUIT (+ SIGKILL fallback) diagnostics.
+                    if s.p.poll() is None:
+                        s.diag(f'run={run:02d} {type(e).__name__}', dump)
                     print(f'run={run:02d} latency[{s.latency()}]', flush=True)
                 print(f'run={run:02d} FAIL {type(e).__name__}: {e}', flush=True)
             finally:
@@ -362,7 +607,7 @@ def main():
             print('dangling-state: 5 ids skipped; walks 200; GET/DELETE 404; create/delete succeeds; stale entries persist harmlessly', flush=True)
         finally:
             s.stop()
-        print(f'SUMMARY runs={args.runs} failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS', flush=True)
+        print(f'SUMMARY runs={args.runs} failures={failures} orphan_runs={orphan_runs} survivor_GETs={total_gets} survivor_DELETEs={total_deleted}; crafted probes=2 PASS; SCRIPT_SHA256={sha}; CODE_SHA={head}; CODE_PINNED={pinned}', flush=True)
         require(failures == 0, 'kill storm failed')
 
 
