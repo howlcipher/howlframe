@@ -13,45 +13,46 @@ import (
 )
 
 const (
-	round6StormScript = "milestone2/ticketdesk/evidence/b6_kill_storm.py"
-	round6Decision    = "milestone2/MILESTONE2_DECISION.md"
+	round7StormScript = "milestone2/ticketdesk/evidence/b6_kill_storm.py"
+	round7Decision    = "milestone2/MILESTONE2_DECISION.md"
 )
 
-var round6ScriptPin = regexp.MustCompile("\\*\\*Script sha256:\\*\\* `([0-9a-f]{64})`")
+var round7ScriptPin = regexp.MustCompile("\\*\\*Script sha256:\\*\\* `([0-9a-f]{64})`")
 
-// TestRound6StormScriptPinned enforces the Round 6 pre-registration: the
-// kill-storm script must hash to the sha256 pinned in MILESTONE2_DECISION.md.
-// Any edit to the script (or to the pin) without the other fails CI.
-func TestRound6StormScriptPinned(t *testing.T) {
-	doc, err := os.ReadFile(round6Decision)
+// TestRound7StormScriptPinned enforces the Round 7 pre-registration: the
+// kill-storm script must hash to the first (current-round) sha256 pinned in
+// MILESTONE2_DECISION.md. Any edit to the script (or to the pin) without the
+// other fails CI.
+func TestRound7StormScriptPinned(t *testing.T) {
+	doc, err := os.ReadFile(round7Decision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := round6ScriptPin.FindSubmatch(doc)
+	m := round7ScriptPin.FindSubmatch(doc)
 	if m == nil {
-		t.Fatalf("%s: no Round 6 '**Script sha256:** `<hex>`' pin found", round6Decision)
+		t.Fatalf("%s: no Round 7 '**Script sha256:** `<hex>`' pin found", round7Decision)
 	}
-	script, err := os.ReadFile(round6StormScript)
+	script, err := os.ReadFile(round7StormScript)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(script)
 	if got, want := hex.EncodeToString(sum[:]), string(m[1]); got != want {
-		t.Fatalf("%s sha256 = %s, but Round 6 pins %s; the script is frozen for Round 6", round6StormScript, got, want)
+		t.Fatalf("%s sha256 = %s, but Round 7 pins %s; the script is frozen for Round 7", round7StormScript, got, want)
 	}
 }
 
-// TestRound6StormScriptSigstopSelfTest runs the script's SIGSTOP self-test: a
+// TestRound7StormScriptSigstopSelfTest runs the script's SIGSTOP self-test: a
 // stopped process must still yield wchan/status/task diagnostics, and the
 // SIGQUIT step must fall back to SIGKILL.
-func TestRound6StormScriptSigstopSelfTest(t *testing.T) {
+func TestRound7StormScriptSigstopSelfTest(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("needs /proc")
 	}
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
 	}
-	cmd := exec.Command("python3", round6StormScript, "--self-test-sigstop", "--artifacts", t.TempDir())
+	cmd := exec.Command("python3", round7StormScript, "--self-test-sigstop", "--artifacts", t.TempDir())
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "SELFTEST_SIGSTOP PASS") {
 		t.Fatalf("self-test failed: %v\n%s", err, out)
@@ -63,37 +64,61 @@ func TestRound6StormScriptSigstopSelfTest(t *testing.T) {
 	}
 }
 
-// TestRound6ExpectHeadPinRules exercises --expect-head in a scratch repository:
+// TestRound7StormScriptNoiseSelfTest runs the script's Round 7 self-test: a real
+// heartbeat sidecar sees a SIGSTOP pause, the total deadline fails a late reply
+// and a socket timeout, the watchdog records schedstat deltas, and the
+// pre-registered gates and failure classification hold on synthetic data.
+func TestRound7StormScriptNoiseSelfTest(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("needs /proc")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+	cmd := exec.Command("python3", round7StormScript, "--self-test-noise", "--artifacts", t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "SELFTEST_NOISE PASS") {
+		t.Fatalf("noise self-test failed: %v\n%s", err, out)
+	}
+	for _, want := range []string{"heartbeat gap PASS", "total deadline PASS", "watchdog PASS", "classify+gates PASS"} {
+		if !strings.Contains(string(out), want) {
+			t.Fatalf("noise self-test output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestRound7ExpectHeadPinRules exercises --expect-head in a scratch repository:
 // only HEAD == pin, or a single commit directly on the pin that changes exactly
 // the Code-under-test line of MILESTONE2_DECISION.md (numstat 1 1, renames off),
 // is accepted.
-func TestRound6ExpectHeadPinRules(t *testing.T) {
+func TestRound7ExpectHeadPinRules(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
 	}
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
-	script, err := filepath.Abs(round6StormScript)
+	script, err := filepath.Abs(round7StormScript)
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := os.ReadFile(round6Decision)
+	doc, err := os.ReadFile(round7Decision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	const pinPrefix = "  * **Code-under-test SHA:** `"
-	const thresholdMark = "the single invocation prints `SUMMARY runs=75 failures=0 ...` and exits 0;"
+	const pinPrefix = "  * **Round 7 code-under-test SHA:** `"
+	const pinPlaceholder = "TO BE PINNED AFTER THE TIMING PR MERGES (main including the --timing-log PR and this script)"
+	const thresholdMark = "`SUMMARY runs=225 failures=0 ... noise=QUIET`"
 	if !strings.Contains(string(doc), "\n"+pinPrefix) || !strings.Contains(string(doc), thresholdMark) {
-		t.Fatalf("%s lacks the pin line or the threshold line this test edits", round6Decision)
+		t.Fatalf("%s lacks the pin line or the threshold line this test edits", round7Decision)
 	}
 	// The scratch repo always starts from the placeholder pin line, so this test keeps
-	// working after the real decision doc has been pinned for Round 6.
+	// working after the real decision doc has been pinned for Round 7.
 	{
 		lines := strings.Split(string(doc), "\n")
 		for i, l := range lines {
 			if strings.HasPrefix(l, pinPrefix) {
-				lines[i] = pinPrefix + "TO BE PINNED BEFORE THE RUN (main including #191 and this script)`"
+				lines[i] = pinPrefix + pinPlaceholder + "`"
 			}
 		}
 		doc = []byte(strings.Join(lines, "\n"))
@@ -163,7 +188,7 @@ func TestRound6ExpectHeadPinRules(t *testing.T) {
 		t.Fatalf(".go -> .md rename accepted:\n%s", out)
 	}
 
-	// (d1) a later .md rewrite of the Round 6 threshold on top of the pin line: rejected.
+	// (d1) a later .md rewrite of the Round 7 threshold on top of the pin line: rejected.
 	run("checkout", "-q", "pinline")
 	run("checkout", "-q", "-b", "later", "pinline")
 	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(pinned(string(doc)), thresholdMark, "the invocation prints any SUMMARY;", 1))
@@ -185,6 +210,7 @@ func TestRound6ExpectHeadPinRules(t *testing.T) {
 	for name, line := range map[string]string{
 		"other-sha-mentioning-pin": pinPrefix + strings.Repeat("0", 40) + " (not " + pin + ")`",
 		"pin-plus-trailing-text":   pinLine + " (threshold relaxed)",
+		"pin-plus-trailing-space":  pinLine + " ", // #194: byte-exact, no rstrip()
 	} {
 		run("checkout", "-q", "-b", "attack-"+name, pin)
 		lines := strings.Split(string(doc), "\n")
