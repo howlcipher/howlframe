@@ -76,7 +76,7 @@ Changing any of them voids Round 7.
       `git diff --no-renames --numstat` is exactly `1 1 milestone2/MILESTONE2_DECISION.md`. That one change must turn
       the placeholder line below into exactly `` * **Round 7 code-under-test SHA:** `<pinned sha>` `` (byte-exact).
   * CI covers these rules in `TestRound7ExpectHeadPinRules`.
-  * **Round 7 code-under-test SHA:** `TO BE PINNED AFTER THE TIMING PR MERGES (main including the --timing-log PR and this script)`
+  * **Round 7 code-under-test SHA:** `e8fcea2024b42bbfafd6e4410568c76d32e9c37a`
 * **Command, exactly one invocation** (detached with setsid/nohup):
   `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 <script sha above> --expect-head <pinned sha> --artifacts /tmp/round7/artifacts`
   * Exactly `--runs 225`, about 75–90 min plus the 120 s gate. At 0/225, the 95% upper bound on the per-run failure
