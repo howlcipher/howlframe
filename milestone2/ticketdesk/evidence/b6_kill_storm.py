@@ -412,7 +412,7 @@ def main():
     ap.add_argument('--expect-sha256', default='',
                     help='if set, require the script sha256 to equal this value')
     ap.add_argument('--expect-head', default='',
-                    help='if set, require git HEAD (the code under test) to equal this full commit sha')
+                    help='pinned code-under-test commit: HEAD itself, or an ancestor differing only in *.md files')
     args = ap.parse_args()
     art = args.artifacts.resolve()
     art.mkdir(parents=True, exist_ok=True)
@@ -423,8 +423,24 @@ def main():
         raise SystemExit(f'script sha256 mismatch: got {sha}, expected {args.expect_sha256}')
     head = subprocess.run(['git', 'rev-parse', 'HEAD'], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
     print(f'CODE_SHA {head}', flush=True)
-    if args.expect_head and args.expect_head != head:
-        raise SystemExit(f'code under test mismatch: HEAD is {head}, expected {args.expect_head}')
+    if args.expect_head:
+        # The pinned code-under-test commit must be HEAD, or an ancestor of HEAD whose only later
+        # changes are Markdown records (the pin commit itself): the built product is then identical.
+        pinned = subprocess.run(['git', 'rev-parse', '--verify', args.expect_head + '^{commit}'],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+        if not pinned:
+            raise SystemExit(f'code under test mismatch: {args.expect_head} is not a commit')
+        if pinned != head:
+            if subprocess.run(['git', 'merge-base', '--is-ancestor', pinned, head]).returncode != 0:
+                raise SystemExit(f'code under test mismatch: {pinned} is not an ancestor of HEAD {head}')
+            changed = subprocess.run(['git', 'diff', '--name-only', pinned, head], check=True,
+                                     stdout=subprocess.PIPE, text=True).stdout.split()
+            bad = [f for f in changed if not f.endswith('.md')]
+            if bad:
+                raise SystemExit(f'code under test mismatch: HEAD differs from pinned {pinned} outside Markdown: {bad}')
+            print(f'CODE_PINNED {pinned} (HEAD adds only Markdown: {changed})', flush=True)
+        else:
+            print(f'CODE_PINNED {pinned} (= HEAD)', flush=True)
     (art / 'script.sha256').write_text(sha + '\n')
     if args.self_test_sigstop:
         self_test_sigstop(art)

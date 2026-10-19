@@ -1,6 +1,6 @@
 # Round 6 protocol amendments (pre-run), 2026-10-19
 
-These are Motoko's pre-Round-6 amendments, made after #189 merged (`c60e38e0`). Round 6 has **not** been run.
+These are Motoko's pre-Round-6 amendments, made after #189 (`c60e38e0`) and #191 (`5778134e`) merged. Round 6 has **not** been run.
 
 **Storm script** (`milestone2/ticketdesk/evidence/b6_kill_storm.py`). Pass criteria, seed, delays and the 10 s timeout
 are unchanged.
@@ -13,7 +13,8 @@ are unchanged.
   still alive, the full /proc and SIGQUIT diag also runs.
 * The script prints `SCRIPT_SHA256`, writes `script.sha256` to the artifacts directory and puts the sha in its SUMMARY
   line. `--expect-sha256` aborts on a mismatch.
-* The script prints `CODE_SHA` (git HEAD). `--expect-head` aborts on a mismatch.
+* The script prints `CODE_SHA` (git HEAD). `--expect-head` aborts unless HEAD is the pinned commit, or a descendant
+  that changes only `*.md` files (so the pin can be committed without changing the product).
 * `--self-test-sigstop` exercises the diagnostics on a SIGSTOPped process.
 
 **Tests.**
