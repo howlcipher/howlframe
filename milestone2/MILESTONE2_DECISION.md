@@ -2,23 +2,48 @@
 
 # ROUND 6 (pre-registered, NOT YET RUN)
 
-Registered 2026-10-19, before any Round 6 run. These terms are fixed; changing any of them voids Round 6.
+Registered 2026-10-19, before any Round 6 run. Re-pinned the same day (round6-protocol PR) with Motoko's pre-Round-6
+amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fixed. Changing any of them voids Round 6.
 
-* **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py` exactly as committed in `a2d8534`
-  (per-run server logs, SIGQUIT goroutine dump and state / `*.tmp-*` capture on timeout, per-run p99/max latency).
-  Seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default runner ceilings, and the
-  per-request timeout `REQUEST_TIMEOUT = 10` s all unchanged.
-* **Command:** `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75` (75 or more runs; one
-  invocation, the box otherwise idle), then `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
-* **Threshold:** ACCEPTED only if **0 failures in 75 or more runs** (any timeout, 500, worker hang or check
-  failure is a failure; no reruns, no discarding runs), both crafted probes PASS, clean_repro passes fully
-  and frozen paths are unchanged. Otherwise NOT ACCEPTED. With 0/75 required, a 4% per-run flake would
-  still pass only about 5% of the time (0.96^75 ≈ 0.047).
-* **Reviewer:** a fresh independent session that wrote neither the B6 fix nor Rounds 4–5.
-* **Code under test:** main at the time of the run. If #190 (store lock not released on panic, the candidate
-  run-24 cause) is fixed first, Round 6 tests the commit that contains that fix; the script stays frozen.
-* **Evidence:** full storm output, the artifacts directory listing, and any `runNN_failure/` contents plus
-  the matching goroutine dump under `evidence/round6_<date>/`.
+* **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py`.
+  * **Script sha256:** `1cc83f35c5b12bbc4105086efee589776301e8503ecf3107f262f0e3b3d3d6b8`
+  * CI enforces this pin (`TestRound6StormScriptPinned`). The script prints `SCRIPT_SHA256` at start and in its
+    SUMMARY line, and writes `script.sha256` into the artifacts directory. The run must pass
+    `--expect-sha256 1cc83f35c5b12bbc4105086efee589776301e8503ecf3107f262f0e3b3d3d6b8`.
+  * Unchanged from earlier rounds: seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default
+    runner ceilings, and the per-request timeout `REQUEST_TIMEOUT = 10` s.
+  * Diagnostics in this version (none of them change pass criteria):
+    * per-run server logs and per-run p99/max latency;
+    * `/proc/PID/wchan`, `status` and `task/*/stat` recorded before SIGQUIT;
+    * SIGQUIT goroutine dump, and `stop()` falls back to SIGKILL;
+    * `state.json.tmp-*` cleared, timestamped aside, after every snapshot restore;
+    * a state snapshot on any failure;
+    * a SIGSTOP self-test (`--self-test-sigstop`, run in CI).
+* **Code under test:** pinned before the run, by a commit to this file that fills in the line below. It must be a
+  commit on main that includes #191 (the fix for #190). The run must pass `--expect-head <that sha>`, and the script
+  aborts on a mismatch.
+  * **Code-under-test SHA:** `TO BE PINNED BEFORE THE RUN (main including #191)`
+* **Command, exactly one invocation:**
+  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 1cc83f35c5b12bbc4105086efee589776301e8503ecf3107f262f0e3b3d3d6b8 --expect-head <pinned sha>`
+  * Exactly `--runs 75`, on an otherwise idle box.
+  * Then `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
+* **Threshold:** ACCEPTED only if all of these hold:
+  * the single invocation prints `SUMMARY runs=75 failures=0 ...` and exits 0;
+  * both crafted probes PASS;
+  * clean_repro passes fully;
+  * frozen paths are unchanged.
+
+  Otherwise NOT ACCEPTED. Any timeout, 500, worker hang or check failure is a failure.
+* **No restart:** an invocation that doesn't end with a SUMMARY line and exit 0 is **NOT ACCEPTED**. That
+  includes a harness crash, an infrastructure error (build, port, disk, OOM, box restart), a sha or head mismatch,
+  or an operator interrupt. There are no reruns, no restarts, and no discarding or replacing runs.
+* **Flake bound:** with 0/75 required, a 4% per-run flake would still pass only about 5% of the time (0.96^75 ≈ 0.047).
+* **Reviewer:** a fresh independent session that wrote neither the B6 fix, #191, nor Rounds 4–5.
+* **Evidence:** under `evidence/round6_<date>/`:
+  * the full storm output, including the `SCRIPT_SHA256` and `CODE_SHA` lines;
+  * `script.sha256`;
+  * the artifacts directory listing;
+  * any `runNN_failure/` contents, plus the matching goroutine dump and `/proc` diagnostics.
 
 ---
 
@@ -33,8 +58,8 @@ Reclassified 2026-10-19 by the Eng Mgr after Motoko's review of #189. The review
 PASS, and clean reproduction passed. But Round 4's run-24 timeout was never diagnosed, and a clean 25-run rerun
 cannot rule it out: a 4% per-run flake passes 25/25 about 36% of the time (0.96^25 ≈ 0.36). B6 stays open
 until Round 6 meets its pre-registered threshold. Candidate root cause filed as #190: `store.mu` is not released
-when `store_put`/`store_delete` panics, so one panic would hang every later store request (matching run 24's
-DELETE timeout). New fixed regression test `b6_run24_unindexed_survivor_then_cleanup_deletes` (unindexed survivors,
+when `store_put`/`store_delete` panics, so one panic would hang every later store request (a candidate
+explanation for run 24's DELETE timeout; not proven). New fixed regression test `b6_run24_unindexed_survivor_then_cleanup_deletes` (unindexed survivors,
 then cleanup DELETEs) is in `tests/regression/review_round1.py` (10/10 regression locally).
 
 | Gate | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 |
