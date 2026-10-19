@@ -93,6 +93,7 @@ an unsupported status `closed`; that probe error was corrected to the contract's
 1. Complete the B6 delta validation: investigate the run-24 survivor-deletion timeout and obtain a fully passing
    independent kill storm. The script currently reports only `timed out`, so the exact DELETE id and whether
    the cause was the server or execution environment are unknown. Do not infer a new product blocker without evidence.
+   Only lead: run 24 was itself the 11th run with an unindexed survivor (SUMMARY `orphan_runs=11`; 10 passing runs show `unindexed>=1`, and the counter is incremented before the recovery checks), so the hang followed cleanup DELETEs over a state containing an unindexed ticket.
 2. Non-blocking minors remain: m12 port-probe race; m15 no migration of earlier state; m16 unindexed ticket
    after an unconfirmed create or delete interrupted between writes; m17 truncated-upload 400 still lacks the
    uniform error shape (now has a request_id in its body).
