@@ -1,6 +1,119 @@
 # Milestone 2 decision
 
-# ROUND 6 (current), 2026-10-19
+# ROUND 7 (pre-registered, NOT YET RUN)
+
+Registered 2026-10-19, before any Round 7 run. It follows the Round 7 proposal in Motoko's
+[#197 review §3](https://github.com/howlcipher/howlframe/pull/197#pullrequestreview-5573915479). These terms are fixed.
+Changing any of them voids Round 7.
+
+## Pre-registered terms
+
+* **Why the protocol changed:** in Round 6, the client's 10 s socket timer fired late in runs 11 and 37. Run 61 had a
+  34.6 s client stall while the server's longest handler took 73 ms. `dmesg` shows a VM fork plus `virtio_balloon`
+  reclaim during run 62. Runs 38 and 62 took 262.7 s and 218.8 s of recovery wall time against an 18.1 s median. Box
+  pauses are therefore a live confound, and Round 7 must be able to separate them from product stalls.
+* **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py`.
+  * **Script sha256:** `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38`
+  * CI enforces this pin (`TestRound7StormScriptPinned`). The run must pass `--expect-sha256` with this value. The script
+    prints `SCRIPT_SHA256` at start and in SUMMARY, and writes `script.sha256` into the artifacts directory.
+  * Unchanged from Round 6: seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default runner
+    ceilings, the 10 s per-socket-operation timeout, the crafted probes, and every Round 6 diagnostic.
+  * The two #194 follow-ups are folded in. The SIGSTOP self-test polls `/proc/PID/stat` for state `T`, and the pin
+    line comparison is byte-exact (no `rstrip()`, so a trailing space is rejected).
+* **New instrumentation, diagnostic only:**
+  * **Heartbeat sidecar.** A separate process, pinned to the last CPU where possible, sleeps 50 ms in a loop. It logs
+    every gap over 250 ms with CLOCK_MONOTONIC, CLOCK_REALTIME and CLOCK_BOOTTIME deltas, plus an alive line every 10 s
+    (`heartbeat.log`).
+  * **Noise sampler sidecar**, once a second (`noise.jsonl`):
+    * the `/proc/stat` cpu line (steal, iowait)
+    * `/proc/pressure/{cpu,io,memory}`
+    * cgroup `cpu.stat`, `memory.pressure` and `memory.events`
+    * `/proc/diskstats` for the state file's device
+    * `pgmajfault`
+    * new `/dev/kmsg` records (`kmsg.log`)
+  * **Per-request client log** for every request (`runNN_<phase>_requests.tsv`): seq, method, path, monotonic start
+    and end, realtime start, status and elapsed.
+  * **In-flight watchdog.** Once a request has been in flight for 2 s, every 500 ms until it completes, it samples
+    `/proc/PID/task/*/{stat,wchan,schedstat,stack}`, `/proc/PID/status` and diskstats. It reports per-thread on-CPU
+    and run-queue-wait deltas against the last sample taken before the request started (`runNN_<phase>_watchdog.log`).
+    It never kills anything.
+  * **Server timing.** The server runs with `--timing-log` (per-request handler start, end and lock wait, plus a
+    store-write phase line for writes of 100 ms or more) and `GODEBUG=gctrace=1`. That output goes to the per-run
+    server log. This needs the `--timing-log` PR to be merged into the code under test.
+  * **On any failure:** the Round 6 diagnostics, plus schedstat and diskstats deltas since the request started, the
+    watchdog samples, a heartbeat excerpt (±5 s), and a copy of the full server log in `runNN_failure/`.
+* **Total-deadline rule (a criterion change):** a request whose total client elapsed time is over 10 s is a failure,
+  even if a reply arrives. A socket timeout is a deadline failure too. This closes the poll-rescan race that let runs
+  37 and 61 pass.
+* **Pre-run idle gate:** 120 s of sampling before the build. All of these must hold:
+  * steal under 1%;
+  * PSI cpu `some avg60` under 5;
+  * PSI io `full avg60` under 2;
+  * PSI memory `full avg60` = 0;
+  * no heartbeat gap over 250 ms;
+  * no `virtual machine fork` or `virtio_balloon` kmsg record;
+  * `/dev/kmsg` readable and both sidecars running.
+
+  If any check fails, the script prints `IDLE_GATE FAIL <reasons>` and exits 3 before building. **That invocation is
+  not an attempt.** It may be repeated once the box is quiet. Every other exit is an attempt.
+* **Noise gates (INFRA-VOID).** These are checked from the start of run 01 to the end of the last run. The invocation
+  always runs to completion. It is INFRA-VOID on any of:
+  * a heartbeat gap over 2 s;
+  * steal over 2% in any 60 s window;
+  * PSI io `full avg10` over 10;
+  * any increase in cgroup `nr_throttled`;
+  * any `virtual machine fork` or `virtio_balloon` kmsg record;
+  * no heartbeat record for 30 s, or a sidecar exiting;
+  * noise samples covering less than half the window.
+* **Venue:** a dedicated, otherwise idle machine that is not snapshotted or ballooned is preferred. On the shared box,
+  a declared quiet window is required: no other agent may run builds, tests, storms or browser work. The gates
+  decide whether the invocation counts. The artifacts need about 1.5 GB of disk.
+* **Code under test:** pinned before the run, by one commit that changes only the line below.
+  * It must be a commit on main that includes the `--timing-log` PR and this frozen script.
+  * The run must pass `--expect-head <that sha>`. The rules are the same as Round 6:
+    * HEAD **is** the pin; or
+    * HEAD is **one commit directly on the pin** (squash or direct, not a merge) whose
+      `git diff --no-renames --numstat` is exactly `1 1 milestone2/MILESTONE2_DECISION.md`. That one change must turn
+      the placeholder line below into exactly `` * **Round 7 code-under-test SHA:** `<pinned sha>` `` (byte-exact).
+  * CI covers these rules in `TestRound7ExpectHeadPinRules`.
+  * **Round 7 code-under-test SHA:** `TO BE PINNED AFTER THE TIMING PR MERGES (main including the --timing-log PR and this script)`
+* **Command, exactly one invocation** (detached with setsid/nohup):
+  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 <script sha above> --expect-head <pinned sha> --artifacts /tmp/round7/artifacts`
+  * Exactly `--runs 225`, about 75–90 min plus the 120 s gate. At 0/225, the 95% upper bound on the per-run failure
+    rate is under 1.4%, which excludes the 1/75 seen in Round 6.
+  * Then run `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
+* **Decision rule.** The script applies these rules mechanically: one `CLASSIFY` line per failure, then
+  `VERDICT <...>` after SUMMARY. The reviewer applies no other classification.
+  * **0 failures, no noise breach, both crafted probes PASS, clean_repro fully passes, frozen paths unchanged →
+    ACCEPTED.** The invocation prints `SUMMARY runs=225 failures=0 ... noise=QUIET`, then `VERDICT ACCEPTED`, and
+    exits 0.
+  * **A failure with no stalled-request window** (a check failure on a reply, such as a 500 or confirmed deletion
+    lost) → **NOT ACCEPTED (product).**
+  * **A failure where heartbeat gaps cover at least 80% of the request's elapsed time, or a fork/balloon kmsg record
+    or a steal breach overlaps the request → NOT ACCEPTED (infra).** Exactly one rerun is allowed, on an isolated
+    machine, with the same pins.
+  * **A failure where no heartbeat gap of 1 s or more overlaps the request and the noise gates hold → NOT ACCEPTED
+    (product).**
+  * **Anything else is ambiguous, and ambiguity counts as product → NOT ACCEPTED (product).** If any failure is
+    product, the verdict is product.
+  * **0 failures with a noise breach → INFRA-VOID, not ACCEPTED.** The same one-isolation-rerun rule applies.
+* **No restart:** apart from the idle-gate exit above, an invocation that doesn't end with SUMMARY, VERDICT and exit 0
+  is **NOT ACCEPTED**. That includes a harness crash, an infrastructure error, a sha or head mismatch, or an operator
+  interrupt. There are no other reruns, restarts or replaced runs.
+* **Reviewer:** a fresh independent session that wrote neither the B6 fix, #191, the timing PR, this script, nor
+  Rounds 4–6.
+* **Evidence:** under `evidence/round7_<date>/`:
+  * the full storm output;
+  * `script.sha256` and the artifacts listing;
+  * the `NOISE`, `CLASSIFY` and `VERDICT` lines;
+  * the heartbeat log;
+  * a noise summary (max steal over 60 s, max PSI, gaps, kmsg matches);
+  * for any failure, its `runNN_failure/` file list, watchdog excerpt, matching timing/access/gctrace lines and
+    goroutine dump.
+
+---
+
+# ROUND 6 (superseded by the Round 7 pre-registration; kept as history), 2026-10-19
 
 Reviewer: independent final reviewer (fresh Codex CLI session; no implementation role; not the Round 4/5 sessions)
 

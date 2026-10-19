@@ -1,6 +1,13 @@
 # Milestone 2 independent final review: ticketdesk
 
-# ROUND 6 (current), 2026-10-19
+# ROUND 7: pre-registered, not yet run
+
+Terms are in `milestone2/MILESTONE2_DECISION.md`, Round 7: exactly one `--runs 225` invocation, with heartbeat and
+noise sidecars, an in-flight schedstat watchdog, a 10 s total deadline per request, a 120 s idle gate, INFRA-VOID
+noise gates, and mechanical product/infra classification. The code under test is pinned only after the
+`--timing-log` PR merges. B6 remains open.
+
+# ROUND 6 (superseded by the Round 7 pre-registration; kept as history), 2026-10-19
 
 **Decision: NOT ACCEPTED.** Independent final reviewer; no implementation role or participation in Rounds 4/5.
 Exactly one pinned 75-run invocation: 74 PASS, 1 timeout (run 11, DELETE t400), EXIT=1;
