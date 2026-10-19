@@ -87,6 +87,17 @@ func TestRound6ExpectHeadPinRules(t *testing.T) {
 	if !strings.Contains(string(doc), "\n"+pinPrefix) || !strings.Contains(string(doc), thresholdMark) {
 		t.Fatalf("%s lacks the pin line or the threshold line this test edits", round6Decision)
 	}
+	// The scratch repo always starts from the placeholder pin line, so this test keeps
+	// working after the real decision doc has been pinned for Round 6.
+	{
+		lines := strings.Split(string(doc), "\n")
+		for i, l := range lines {
+			if strings.HasPrefix(l, pinPrefix) {
+				lines[i] = pinPrefix + "TO BE PINNED BEFORE THE RUN (main including #191 and this script)`"
+			}
+		}
+		doc = []byte(strings.Join(lines, "\n"))
+	}
 	repo := t.TempDir()
 	run := func(args ...string) string {
 		t.Helper()
