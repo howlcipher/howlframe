@@ -169,6 +169,56 @@ func TestRound6ExpectHeadPinRules(t *testing.T) {
 		t.Fatalf("one-line threshold rewrite accepted:\n%s", out)
 	}
 
+	// Substring attacks on the pin line (Motoko, #193 at c89bef2f): rejected.
+	pinLine := pinPrefix + pin + "`"
+	for name, line := range map[string]string{
+		"other-sha-mentioning-pin": pinPrefix + strings.Repeat("0", 40) + " (not " + pin + ")`",
+		"pin-plus-trailing-text":   pinLine + " (threshold relaxed)",
+	} {
+		run("checkout", "-q", "-b", "attack-"+name, pin)
+		lines := strings.Split(string(doc), "\n")
+		for i, l := range lines {
+			if strings.HasPrefix(l, pinPrefix) {
+				lines[i] = line
+			}
+		}
+		write("milestone2/MILESTONE2_DECISION.md", strings.Join(lines, "\n"))
+		run("commit", "-q", "-am", "attack "+name)
+		if out, ok := check(pin); ok {
+			t.Fatalf("pin line %q accepted:\n%s", line, out)
+		}
+	}
+
+	// Parent check: two commits whose net diff is only the pin line: rejected.
+	run("checkout", "-q", "-b", "twostep", pin)
+	write("product.go", "package product\n\nvar Changed = true\n")
+	run("commit", "-q", "-am", "change product")
+	write("product.go", "package product\n")
+	write("milestone2/MILESTONE2_DECISION.md", pinned(string(doc)))
+	run("commit", "-q", "-am", "revert product and pin")
+	if out, ok := check(pin); ok {
+		t.Fatalf("two-commit pin accepted:\n%s", out)
+	}
+
+	// The pin commit must not be a merge, even one whose net diff is the pin line: rejected.
+	run("checkout", "-q", "-b", "merged", pin)
+	run("merge", "-q", "--no-ff", "-m", "merge pin line", "pinline")
+	if out, ok := check(pin); ok {
+		t.Fatalf("merge pin commit accepted:\n%s", out)
+	}
+
+	// Placeholder check: re-pinning a line that was already filled in: rejected.
+	run("checkout", "-q", "-b", "prefilled", pin)
+	prefilled := strings.Replace(pinned(string(doc)), pin, strings.Repeat("1", 40), 1)
+	write("milestone2/MILESTONE2_DECISION.md", prefilled)
+	run("commit", "-q", "-am", "already pinned elsewhere")
+	pin2 := run("rev-parse", "HEAD")
+	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(prefilled, strings.Repeat("1", 40), pin2, 1))
+	run("commit", "-q", "-am", "re-pin")
+	if out, ok := check(pin2); ok {
+		t.Fatalf("re-pin of a non-placeholder line accepted:\n%s", out)
+	}
+
 	// (e) pin line naming a different commit: rejected.
 	run("checkout", "-q", "-b", "wrongsha", pin)
 	write("milestone2/MILESTONE2_DECISION.md", strings.Replace(pinned(string(doc)), pin, strings.Repeat("0", 40), 1))

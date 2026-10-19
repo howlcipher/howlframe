@@ -3,7 +3,7 @@
 # ROUND 6: pre-registered, not yet run
 
 Threshold and frozen terms: `milestone2/MILESTONE2_DECISION.md`, Round 6 (0 failures across the 75 runs of
-exactly one `b6_kill_storm.py --runs 75` invocation, script sha256 `a9da3ee75b9a…` pinned and CI-enforced, 10 s request timeout unchanged,
+exactly one `b6_kill_storm.py --runs 75` invocation, script sha256 `e1115c07dd1d…` pinned and CI-enforced, 10 s request timeout unchanged,
 code-under-test SHA pinned before the run on a main that includes #191; no SUMMARY + exit 0, including harness or infra errors = NOT ACCEPTED, no restart; clean_repro full pass).
 
 # ROUND 5 (superseded; kept as history), 2026-10-19, commit `f7cc2a8`

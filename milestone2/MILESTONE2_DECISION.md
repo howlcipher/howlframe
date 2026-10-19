@@ -6,10 +6,10 @@ Registered 2026-10-19, before any Round 6 run. Re-pinned the same day (round6-pr
 amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fixed. Changing any of them voids Round 6.
 
 * **Script frozen:** `milestone2/ticketdesk/evidence/b6_kill_storm.py`.
-  * **Script sha256:** `a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`
+  * **Script sha256:** `e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f`
   * CI enforces this pin (`TestRound6StormScriptPinned`). The script prints `SCRIPT_SHA256` at start and in its
     SUMMARY line, and writes `script.sha256` into the artifacts directory. The run must pass
-    `--expect-sha256 a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`.
+    `--expect-sha256 e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f`.
   * Unchanged from earlier rounds: seed 20261019, 1500 API-seeded tickets, kill delay U(0.005, 0.8) s, default
     runner ceilings, and the per-request timeout `REQUEST_TIMEOUT = 10` s.
   * Diagnostics in this version (none of them change pass criteria):
@@ -27,14 +27,17 @@ amendments; this re-pin supersedes the earlier `a2d8534` pin. These terms are fi
   * The run must pass `--expect-head <that sha>`. The script accepts only two cases:
     * HEAD **is** the pinned commit; or
     * HEAD is **one commit directly on the pin** (its single parent is the pin) whose
-      `git diff --no-renames --numstat` is exactly `1 1 milestone2/MILESTONE2_DECISION.md`. That one changed line
-      must be this Code-under-test line, and it must name the pinned SHA.
+      `git diff --no-renames --numstat` is exactly `1 1 milestone2/MILESTONE2_DECISION.md`. That one change must
+      turn the placeholder line below into exactly `` * **Code-under-test SHA:** `<pinned sha>` `` (an exact
+      line match, with nothing appended).
+    * The pin commit must be a **squash or direct commit on the pin, not a merge**. A merge commit has two parents and
+      is rejected.
 
     Anything else aborts the run, including renames, any other `.md` change and extra commits. SUMMARY carries
     `CODE_PINNED=<sha>`. CI covers these rules in `TestRound6ExpectHeadPinRules`.
   * **Code-under-test SHA:** `TO BE PINNED BEFORE THE RUN (main including #191 and this script)`
 * **Command, exactly one invocation:**
-  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d --expect-head <pinned sha>`
+  `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 75 --expect-sha256 e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f --expect-head <pinned sha>`
   * Exactly `--runs 75`, on an otherwise idle box.
   * Then `bash milestone2/scripts/clean_repro.sh` and the freeze-integrity diff.
 * **Threshold:** ACCEPTED only if all of these hold:

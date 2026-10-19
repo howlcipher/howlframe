@@ -66,3 +66,27 @@ registered.
    * New script: no leftover process. Previous script: the process leaked.
 
 The script sha256 is re-pinned to `a9da3ee75b9a1969b69cbf636cbd63a17256d1c26a56b0c3922a38a5433d3c9d`. Round 6 is still not run.
+
+## Motoko's last #193 blocker (review at `c89bef2f`), fixed
+
+`verify_head` matched the pin line by substring, so two attack lines were accepted:
+* `` `0000… (not <pin>)` ``
+* `` `<pin>` (threshold relaxed) ``
+
+It now requires exact lines:
+* the removed line is `PIN_LINE_PREFIX + placeholder + "`"`;
+* the added line is `added[0].rstrip() == PIN_LINE_PREFIX + pinned + "`"`.
+
+`TestRound6ExpectHeadPinRules` adds:
+* both attack lines;
+* two commits whose net diff is only the pin line (the parent check);
+* a `--no-ff` merge of the pin-line commit (pin commits must be a squash or direct commit, not a merge);
+* re-pinning a line that was already filled in (the placeholder check).
+
+Mutation-checked:
+* the `c89bef2` logic accepts the substring attack;
+* dropping the parent check accepts the two-commit case;
+* dropping the placeholder check accepts the re-pin.
+
+Each makes the test fail. The protocol text now says the pin commit must be a squash or direct commit, not a merge.
+Script sha256 is re-pinned to `e1115c07dd1d37d40b21dc5b4df22f6dd3951f8beadbb5c0dd269fa1be460e2f`. Round 6 is still not run.

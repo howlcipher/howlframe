@@ -20,7 +20,9 @@ request timeout unchanged):
   * a server that fails to start is killed before the error propagates;
   * --expect-head accepts only HEAD == pin, or one commit directly on the pin whose
     --no-renames numstat is exactly `1 1 milestone2/MILESTONE2_DECISION.md` and which
-    only fills the Code-under-test line; SUMMARY carries CODE_PINNED;
+    only turns the placeholder Code-under-test line into exactly that line naming the pin
+    (exact match, no substring); the pin commit must be a squash or direct commit, not a
+    merge; SUMMARY carries CODE_PINNED;
   * before SIGQUIT, diag records /proc/PID/wchan, status and task/*/stat so a
     SIGSTOPped or fsync-stuck server still produces diagnostics;
   * each run prints p99 and max request latency (storm and recovery phases);
@@ -414,6 +416,7 @@ def self_test_sigstop(art):
 
 DECISION_DOC = 'milestone2/MILESTONE2_DECISION.md'
 PIN_LINE_PREFIX = '  * **Code-under-test SHA:** `'
+PIN_PLACEHOLDER = 'TO BE PINNED BEFORE THE RUN (main including #191 and this script)'
 
 
 def git(*args):
@@ -442,9 +445,12 @@ def verify_head(expect, head):
     hunk = git('diff', '--no-renames', '-U0', pinned, head, '--', DECISION_DOC).splitlines()
     removed = [l[1:] for l in hunk if l.startswith('-') and not l.startswith('---')]
     added = [l[1:] for l in hunk if l.startswith('+') and not l.startswith('+++')]
-    if (len(removed) != 1 or len(added) != 1 or not removed[0].startswith(PIN_LINE_PREFIX)
-            or not added[0].startswith(PIN_LINE_PREFIX) or pinned not in added[0]):
-        raise SystemExit(f'code under test mismatch: the one changed line must be the Code-under-test line naming {pinned}')
+    # Exact lines only: the placeholder line becomes exactly the pin line (no substring match,
+    # no trailing text such as "(not <pin>)" or a relaxed threshold appended to the line).
+    if (len(removed) != 1 or len(added) != 1
+            or removed[0].rstrip() != PIN_LINE_PREFIX + PIN_PLACEHOLDER + '`'
+            or added[0].rstrip() != PIN_LINE_PREFIX + pinned + '`'):
+        raise SystemExit(f'code under test mismatch: the one changed line must replace the placeholder with exactly {PIN_LINE_PREFIX.strip()}{pinned}`')
     print(f'CODE_PINNED {pinned} (HEAD {head} only fills the pin line)', flush=True)
     return pinned
 
