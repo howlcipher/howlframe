@@ -87,7 +87,11 @@ type VMLimits struct {
 	// MaxRequestBodyBytes bounds a route's req.body read (parse_json); <=0 means the default.
 	MaxRequestBodyBytes int
 	// LogRequests (runner flag --access-log) writes one access line per HTTP request to stderr.
-	LogRequests        bool
+	LogRequests bool
+	// LogTiming (runner flag --timing-log) writes diagnostic-only timing lines
+	// to stderr: one "timing" line per HTTP request and one "store_timing" line
+	// per persisted-store write slower than 100 ms. It never changes behaviour.
+	LogTiming          bool
 	MaxExecOutputBytes int
 }
 
