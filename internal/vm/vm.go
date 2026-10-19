@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -2105,6 +2106,52 @@ func (vm *BCVM) requireStoreCapabilities(uri string, op bytecode.Opcode) {
 	}
 }
 
+// storeCriticalSectionHook, when non-nil, runs inside every store critical
+// section while the lock is held. It exists only so tests can inject a
+// failure mid-operation (#190); production code never sets it.
+var storeCriticalSectionHook atomic.Pointer[func(store *bcMemoryStore, op bytecode.Opcode)]
+
+// withStoreWrite runs fn holding store.mu exclusively and always releases the
+// lock, even when fn panics (#190: a panic between Lock and Unlock used to leak
+// the lock, so every later store request in the process hung). A structured
+// VMError (for example STORE_PERSISTENCE_WRITE_FAILED) propagates unchanged; any
+// other panic (a record-copy failure, a runtime error) becomes a
+// STORE_OPERATION_FAILED runtime error, which an HTTP handler answers with 500.
+func (vm *BCVM) withStoreWrite(store *bcMemoryStore, op bytecode.Opcode, fn func()) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	defer vm.recoverStorePanic(op)
+	if hook := storeCriticalSectionHook.Load(); hook != nil {
+		(*hook)(store, op)
+	}
+	fn()
+}
+
+// withStoreRead is withStoreWrite for shared (read) access.
+func (vm *BCVM) withStoreRead(store *bcMemoryStore, op bytecode.Opcode, fn func()) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	defer vm.recoverStorePanic(op)
+	if hook := storeCriticalSectionHook.Load(); hook != nil {
+		(*hook)(store, op)
+	}
+	fn()
+}
+
+// recoverStorePanic must be deferred directly by a store critical section. It
+// re-raises structured VM errors as-is and converts anything else into a store
+// runtime error. The lock is released by the caller's earlier defer.
+func (vm *BCVM) recoverStorePanic(op bytecode.Opcode) {
+	recovered := recover()
+	if recovered == nil {
+		return
+	}
+	if failure, ok := recovered.(*VMError); ok {
+		panic(failure)
+	}
+	panic(NewRuntimeError("STORE_OPERATION_FAILED", "main", vm.ip, op, "store operation failed: %v", recovered))
+}
+
 func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string]any, op bytecode.Opcode) {
 	if err := store.syncToFile(records); err != nil {
 		panic(NewRuntimeError("STORE_PERSISTENCE_WRITE_FAILED", "main", vm.ip, op, "%v", err))
@@ -2441,23 +2488,25 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if store.file != "" {
 				vm.requireCapability(capability.Filesystem, inst.Op)
 			}
-			store.mu.Lock()
-			records := cloneStoreRecords(store.records)
-			records[key] = cloneStoreRecord(record)
-			vm.persistStore(store, records, inst.Op)
-			store.mu.Unlock()
+			vm.withStoreWrite(store, inst.Op, func() {
+				records := cloneStoreRecords(store.records)
+				records[key] = cloneStoreRecord(record)
+				vm.persistStore(store, records, inst.Op)
+			})
 		case bytecode.OpStoreGet:
 			key := fmt.Sprint(vm.pop(inst.Op))
 			store := vm.storeHandle(env, inst.StringOperand, inst.Op)
 			if store.file != "" {
 				vm.requireCapability(capability.Filesystem, inst.Op)
 			}
-			store.mu.RLock()
-			record, ok := store.records[key]
-			if ok {
-				record = cloneStoreRecord(record)
-			}
-			store.mu.RUnlock()
+			var record map[string]any
+			var ok bool
+			vm.withStoreRead(store, inst.Op, func() {
+				record, ok = store.records[key]
+				if ok {
+					record = cloneStoreRecord(record)
+				}
+			})
 			if !ok {
 				// Missing records have one stable sentinel instead of an
 				// allocated empty dict that could be mistaken for stored data.
@@ -2470,12 +2519,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if store.file != "" {
 				vm.requireCapability(capability.Filesystem, inst.Op)
 			}
-			store.mu.RLock()
-			keys := make([]any, 0, len(store.records))
-			for key := range store.records {
-				keys = append(keys, key)
-			}
-			store.mu.RUnlock()
+			var keys []any
+			vm.withStoreRead(store, inst.Op, func() {
+				keys = make([]any, 0, len(store.records))
+				for key := range store.records {
+					keys = append(keys, key)
+				}
+			})
 			// Go randomizes map iteration order. Sorting keeps enumeration
 			// deterministic, which every caller listing records depends on.
 			sort.Slice(keys, func(i, j int) bool {
@@ -2488,11 +2538,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if store.file != "" {
 				vm.requireCapability(capability.Filesystem, inst.Op)
 			}
-			store.mu.Lock()
-			records := cloneStoreRecords(store.records)
-			delete(records, key)
-			vm.persistStore(store, records, inst.Op)
-			store.mu.Unlock()
+			vm.withStoreWrite(store, inst.Op, func() {
+				records := cloneStoreRecords(store.records)
+				delete(records, key)
+				vm.persistStore(store, records, inst.Op)
+			})
 		case bytecode.OpFetch:
 			method := vm.popCheckedString(inst, ip, "fetch expected string method")
 			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
