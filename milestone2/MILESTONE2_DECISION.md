@@ -1,6 +1,55 @@
 # Milestone 2 decision
 
-# ROUND 4 (current), 2026-10-19, commit `7092bcff`
+# ROUND 5 (current), 2026-10-19, commit `f7cc2a8`
+
+Reviewer: independent final reviewer (fresh Codex CLI session; no implementation role; not the Round 4 session)
+
+## Decision: ACCEPTED
+
+B6-only delta check. Frozen paths are unchanged. The official unchanged storm exited 0 with
+25/25 PASS and both crafted probes PASS. Full clean reproduction passed. No product code or
+probe criteria were changed in this review. B6 is cleared; the milestone stop rule is satisfied.
+
+| Gate | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 |
+|---|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) | INCOMPLETE (storm timeout) | PASS (B6 cleared) |
+| C Authentication and authorization | PASS | PASS | PASS | PASS | PASS (full suite) |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS | PASS |
+
+| Check / exact command | Result |
+|---|---|
+| `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; exit 0; PASS |
+| `git show HEAD` | diagnostics-only instrumentation reviewed; assertions, seed 20261019, 25 runs, 1500 tickets, delays and existing timeouts unchanged; diagnostic health probe has a separate 3 s timeout |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py` | exit 0; 25/25 PASS; 0 failures; 14 runs with unindexed survivors; 36,912 survivor GETs and 36,912 survivor DELETEs |
+| Crafted opposite window (same storm command) | PASS; unindexed t2 omitted from walks, GET 200 / DELETE 200 / GET 404 |
+| Crafted dangling state (same storm command) | PASS; 5 ids across bucket boundaries skipped; walks 200; GET/DELETE 404; subsequent create/delete succeeds; stale entries persist |
+| `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 9/9, DX 13/13 |
+| `go test -count=1 ./...` | exit 0; 76 packages ok, no failing package |
+
+Evidence: `milestone2/ticketdesk/evidence/round5_2026-10-19/`. Storm output is complete;
+clean_repro.txt contains the suite output and exact counts. The storm built committed HEAD
+from a fresh archive and used default runner ceilings. No other heavy work was run concurrently.
+All recovery walks (limits 1 and 100, status=done limit 7), durable confirmed-deletion checks,
+survivor GETs, survivor DELETE/GET-404/repeat-DELETE-404 checks and final empty walks passed.
+The script itself remains unchanged by this review.
+
+## Timeout diagnosis
+
+No timeouts in Round 5; no DIAG blocks or failures. No targeted rerun was needed.
+Round 4's timeout remains historically unclassified; this passing run does not establish its cause.
+
+## Carryover
+
+Non-blocking m12 (port-probe race), m15 (no earlier-state migration), m16 (readable unindexed
+records after interrupted unconfirmed mutations), m17 (truncated-upload 400 error shape), and
+m18 (harmless dangling entries persist and DELETE returns 404) remain. No new product bug found.
+No further B6 fix is required by this review.
+
+---
+
+# ROUND 4 (superseded by Round 5; kept as history), 2026-10-19, commit `7092bcff`
 
 Reviewer: independent final reviewer (Codex CLI session; no implementation role).
 
