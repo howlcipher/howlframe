@@ -1,0 +1,3 @@
+cd /workspace/hf-r7run && setsid nohup python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts /tmp/round7/artifacts > /tmp/round7/kill_storm.txt 2>&1 < /dev/null & echo $! > /tmp/round7/storm.pid
+2026-10-19T12:55:46-04:00
+1646137

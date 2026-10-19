@@ -1,0 +1,28 @@
+samples=4454 mono 18186.1..22665.4 (4479s)
+max steal over any 60s window: 0.091% (window mono 18312.2-18372.2)
+max PSI cpu some avg60: 2.89
+max PSI io full avg10: 9.00
+max PSI io full avg60: 3.47
+max PSI memory full avg60: 3.33
+cgroup nr_throttled first=0 last=0
+cgroup memory.events last={'low': 0, 'high': 0, 'max': 0, 'oom': 0, 'oom_kill': 0, 'oom_group_kill': 0}
+pgmajfault first=283395 last=283824
+heartbeat gaps >250ms:
+  HB gap mono_start=21510.429090 mono_end=21513.224704 mono_d=2.796 real_d=2.796 boot_d=2.796
+  HB gap mono_start=21523.063729 mono_end=21530.644768 mono_d=7.581 real_d=48.749 boot_d=7.603
+  HB gap mono_start=21530.644768 mono_end=21530.904191 mono_d=0.259 real_d=0.245 boot_d=0.238
+  HB gap mono_start=22310.322582 mono_end=22323.797142 mono_d=13.475 real_d=13.475 boot_d=13.475
+  HB gap mono_start=22333.687265 mono_end=22336.409473 mono_d=2.722 real_d=74.086 boot_d=2.723
+kmsg matches:
+  KMSG observed_mono=21531.101294 match=1 random: crng reseeded due to virtual machine fork
+  KMSG observed_mono=21539.744842 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21541.743312 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21542.747182 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21542.747460 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21543.743018 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21543.743028 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21543.743055 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21544.743059 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21545.746533 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=21545.746567 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=22336.621009 match=1 random: crng reseeded due to virtual machine fork

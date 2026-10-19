@@ -1,6 +1,72 @@
 # Milestone 2 decision
 
-# ROUND 7 (pre-registered, NOT YET RUN)
+# ROUND 7 (run 2026-10-19): INFRA-VOID
+
+Run by: a fresh Codex CLI session with no implementation role (not the Round 4–6 sessions), which checked the pins
+and launched the single invocation. The verdict is the script's own mechanical `VERDICT` line. The Eng Mgr session
+compiled this record from that output and ran clean_repro and the freeze check afterwards. It applied no
+classification of its own.
+
+## Decision: INFRA-VOID (not ACCEPTED)
+
+The single registered invocation completed all 225 trials with **0 failures** (225 PASS), both crafted probes PASS,
+then the noise gates reported **16 breaches**, so the script printed `noise=INFRA-VOID` and
+`VERDICT INFRA-VOID (one isolation rerun allowed, same pins)` and exited 1 (`AssertionError: noise gates breached:
+INFRA-VOID`). Under the pre-registered rule "0 failures with a noise breach → INFRA-VOID, not ACCEPTED", Round 7 is
+**not ACCEPTED**. No product failure occurred and no `CLASSIFY` line was printed. Full clean reproduction passed
+(101/101 acceptance, 10/10 regression, 13/13 DX) and frozen paths are unchanged. B6 remains open; the milestone stop
+rule is not satisfied. Per the rule, exactly **one isolation rerun** is allowed, on an isolated machine, with the same
+pins. No restart was performed.
+
+```
+SUMMARY runs=225 failures=0 orphan_runs=94 survivor_GETs=332155 survivor_DELETEs=332155; crafted probes=2 PASS; noise=INFRA-VOID breaches=16; SCRIPT_SHA256=540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38; CODE_SHA=7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989; CODE_PINNED=e8fcea2024b42bbfafd6e4410568c76d32e9c37a
+VERDICT INFRA-VOID (one isolation rerun allowed, same pins)
+```
+
+| Gate | Round 1 | Round 2 | Round 3 | Round 4 | Round 5 | Round 6 | Round 7 |
+|---|---|---|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) | INCOMPLETE (timeout) | NOT ACCEPTED (cause unknown) | NOT ACCEPTED (1/75 timeout) | INFRA-VOID (0/225 failures, 16 noise breaches) |
+| C Authentication and authorization | PASS | PASS | PASS | PASS | PASS | PASS (full suite) | PASS (full suite) |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS | PASS | PASS | PASS |
+
+| Check / exact command | Result |
+|---|---|
+| `git rev-parse HEAD` | `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989` (#200 squash-merge; fills only the pin line on `e8fcea20`) |
+| Pre-launch checks (Codex session) | exact HEAD, single expected parent, script SHA-256, `CHECK_HEAD PASS`, artifacts path absent |
+| `sha256sum milestone2/ticketdesk/evidence/b6_kill_storm.py` | `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38` (before and after) |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c2433…3d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts /tmp/round7/artifacts` | exactly once, detached with setsid/nohup at 12:55:46 EDT (pid 1646137 launcher); `IDLE_GATE PASS`; 225 PASS, 0 failures; 16 NOISE breaches; `VERDICT INFRA-VOID`; EXIT=1 |
+| Exit status | 1. The detached launcher did not record the status; the run ended in an uncaught `AssertionError: noise gates breached: INFRA-VOID` (Python exit 1), with no other traceback |
+| `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 10/10, DX 13/13 |
+| Freeze integrity: `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; exit 0: PASS |
+| `find /tmp/round7/artifacts -maxdepth 1 -type d -name 'run*_failure'` | none (no failures) |
+
+### Noise breaches (all from two VM-fork pauses)
+
+* **Pause 1, about 13:51:23 EDT (run 168 recovery):** heartbeat gaps 2.796 s (mono 21510.429) and 7.581 s monotonic /
+  **48.749 s realtime** (mono 21523.064), then `random: crng reseeded due to virtual machine fork` and 10
+  `virtio_balloon virtio0: Out of puff! Can't get 1 pages` kmsg records.
+* **Pause 2, about 14:05 EDT (runs 208–209):** heartbeat gap 13.475 s (mono 22310.323, between the run 208 recovery
+  and run 209 storm servers, no request in flight) and 2.722 s monotonic / **74.086 s realtime** (mono 22333.687,
+  run 209 recovery), then a second `virtual machine fork` kmsg record.
+* Breach count: 4 heartbeat gaps over 2 s + 12 kmsg matches = 16. No steal breach (max 60 s steal 0.091%), PSI io
+  `full avg10` max 9.00 (gate 10), cgroup `nr_throttled` 0 → 0, no OOM events, sampler coverage 4454 samples over
+  4479 s, both sidecars alive.
+* **Requests overlapping the pauses still passed (diagnostic, not a criterion):** run 168 `DELETE /v1/tickets/t997`
+  took 8.300 s client monotonic (8278 ms handler, 0.002 ms lock wait, store write 186.6 ms of it, fsync 81 ms), about
+  49.5 s wall. Run 209 `DELETE /v1/tickets/t487` took 3.055 s monotonic (3051 ms server), about 74 s wall. Both were
+  under the 10 s total deadline because CLOCK_MONOTONIC barely advances while the VM is frozen. The stall sits inside
+  the heartbeat gap, outside the lock and the store write.
+
+Evidence: `ticketdesk/evidence/round7_2026-10-19/` (storm output, `script.sha256`, artifacts listing, heartbeat and
+kmsg logs, sidecar stderr, noise summary, clean_repro output, launcher record, watchdog logs and request/server
+excerpts for the two pause-overlapping requests). The full 805 MB of artifacts stay in `/tmp/round7/artifacts`.
+No product code, script, or frozen files were edited.
+
+---
+
+# ROUND 7 pre-registration (terms of the run above; unchanged)
 
 Registered 2026-10-19, before any Round 7 run. It follows the Round 7 proposal in Motoko's
 [#197 review §3](https://github.com/howlcipher/howlframe/pull/197#pullrequestreview-5573915479). These terms are fixed.
