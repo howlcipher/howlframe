@@ -1,6 +1,60 @@
 # Milestone 2 decision
 
-# ROUND 3 (current), 2026-10-14, commit `4900538a`
+# ROUND 4 (current), 2026-10-19, commit `7092bcff`
+
+Reviewer: independent final reviewer (Codex CLI session; no implementation role).
+
+## Decision: NOT ACCEPTED
+
+B6's original permanent-listing failure was not reproduced: the independent storm found no 500 or inconsistent
+confirmed mutation, and both crafted crash windows behaved harmlessly. However, the required storm exited 1:
+24 of 25 runs completed all checks; run 24 timed out during survivor deletion after its recovery walks and
+all survivor GETs had passed. This is incomplete validation, not a demonstrated recurrence of B6. No product
+code was changed. Acceptance remains pending a fully passing storm and classification of this timeout.
+
+| Gate | Round 1 | Round 2 | Round 3 | Round 4 |
+|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL (B6) | INCOMPLETE (storm timeout; original B6 probes pass) |
+| C Authentication and authorization | PASS | PASS | PASS | PASS (suite; capability delta reviewed) |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS with caveats |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS |
+
+| Check / exact command | Result |
+|---|---|
+| `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; PASS |
+| `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py` | exit 1; 25 SIGKILL trials, 24 complete PASS, 1 timeout; no observed 500 or inconsistent durable state; 11 runs with unindexed survivors |
+| Storm recovery checks | full limit=1 and limit=100 cursor walks, status=done limit=7 walk, GET of every durable survivor; 36,908 survivor GETs passed across all 25 runs; 35,451 survivors fully DELETE/GET-404/repeat-DELETE-404 checked in the 24 completed runs |
+| Crafted opposite window | PASS; unindexed t2 omitted from all walks, GET 200, DELETE 200, subsequent GET 404 |
+| Crafted dangling state (5 ids, including bucket boundaries) | PASS; all walks 200 and exact; dangling GET/DELETE 404; later create/delete and repeat walks succeed; stale index entries persist |
+| `bash milestone2/scripts/clean_repro.sh` | exit 0; acceptance 101/101, regression 9/9, DX 13/13 |
+| `go test -count=1 ./...` | exit 0; 76 packages ok, no failing package |
+| `git show 7092bcff -- internal/vm/vm.go` | no capability weakening: only request-ID/timer setup moved earlier and request_id added to early 400 body; route attenuation and child AllowedCaps unchanged |
+
+Evidence: `milestone2/ticketdesk/evidence/round4_2026-10-19/` (raw storm output, clean-repro tail,
+Go output); independent stdlib script at `milestone2/ticketdesk/evidence/b6_kill_storm.py`.
+The script builds a fresh `git archive HEAD` as clean_repro does, seeds 1500 tickets through HTTP
+(504,724-byte state, 300 status changes), restores that snapshot per trial, runs the documented server command
+with default ceilings, and SIGKILLs an active DELETE loop after a seeded random 0.005–0.8-second delay.
+Confirmed DELETE responses were checked against durable state after restart. The script's initial setup used
+an unsupported status `closed`; that probe error was corrected to the contract's `done` before these 25 trials.
+
+## Carryover
+
+1. Complete the B6 delta validation: investigate the run-24 survivor-deletion timeout and obtain a fully passing
+   independent kill storm. The script currently reports only `timed out`, so the exact DELETE id and whether
+   the cause was the server or execution environment are unknown. Do not infer a new product blocker without evidence.
+   Only lead: run 24 was itself the 11th run with an unindexed survivor (SUMMARY `orphan_runs=11`; 10 passing runs show `unindexed>=1`, and the counter is incremented before the recovery checks), so the hang followed cleanup DELETEs over a state containing an unindexed ticket.
+2. Non-blocking minors remain: m12 port-probe race; m15 no migration of earlier state; m16 unindexed ticket
+   after an unconfirmed create or delete interrupted between writes; m17 truncated-upload 400 still lacks the
+   uniform error shape (now has a request_id in its body).
+3. New non-blocking m18: existing dangling ids are tolerated, not scrubbed; DELETE returns 404 and cannot remove
+   the stale index entry. This did not block any operation. R3.7's repair concern is satisfied for readable
+   unindexed records by DELETE; stale missing-record entries themselves still need offline cleanup if desired.
+
+---
+
+# ROUND 3 (superseded by Round 4; kept as history), 2026-10-14, commit `4900538a`
 
 ## Decision: NOT ACCEPTED
 

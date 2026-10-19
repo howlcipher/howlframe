@@ -1,0 +1,15 @@
+Built /tmp/tmp.pjU1nVIfhQ/out/ticketdesk.hfbc
+== acceptance
+PASS R16
+PASS R17
+
+101 tests, 101 passed, 0 failed
+== review-finding regressions (default runner ceilings)
+PASS wrong_shape_state
+
+9 tests, 0 failed
+== developer-experience checker
+
+13 checks, 13 passed, 0 failed
+
+Command exit status: 0

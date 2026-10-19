@@ -1,9 +1,39 @@
 # Milestone 2 independent final review: ticketdesk
 
-Reviewer: independent final reviewer. Three parts: **Round 3 (delta check of commit `4900538a`, 2026-10-14) is the
-current record**; Round 2 (commit `ec9182dd`) and Round 1 (commit `3b79b7a3`) follow as superseded history.
+# ROUND 4 (current), 2026-10-19, commit `7092bcff`
 
-# ROUND 3 (current): delta check of commit `4900538a`
+Reviewer: independent final reviewer (Codex CLI session; no implementation role).
+
+**Decision: NOT ACCEPTED — required storm validation incomplete.** B6-only delta check; no product fixes.
+Frozen-path diff is empty. Full clean-repro passes (101 acceptance, 9 regression, 13 DX); uncached Go tests
+pass (76 packages, exit 0). The VM delta only moves request-ID/timing setup and adds request_id to an early
+400 response; route capability attenuation and child AllowedCaps are unchanged.
+
+Own stdlib script: `python3 milestone2/ticketdesk/evidence/b6_kill_storm.py`. Fresh archived build,
+1500 API-created tickets, default runner ceilings, 25 randomized SIGKILLs of active DELETE loops, each
+restarted on its durable state. All 25 recovery checks passed full cursor walks at limits 1 and 100,
+a status=done walk (limit 7), and GET of every remaining record (36,908 total). Confirmed deletions remained
+deleted. Twenty-four runs also completed DELETE of every survivor plus GET/repeat DELETE 404 and empty
+walks (35,451 survivors). Run 24 timed out during survivor deletion; exact id and cause were not captured.
+The storm therefore exits 1. No 500 or inconsistent durable state was observed, but this is not a full PASS.
+
+Eleven storm runs caught readable unindexed survivors; those in the completed runs could be deleted normally.
+A deterministic opposite-window state also passes GET 200 / DELETE 200 / GET 404. A separate crafted state
+with five dangling ids (including bucket boundaries) passes all walks, later create/delete, and repeat
+walks. Dangling GET/DELETE return 404; the stale ids remain in the index but block nothing. This removes
+the original R3.4 Window B endpoint failure; it does not provide API scrubbing of stale index entries.
+
+Carryover: classify the run-24 timeout and obtain a fully passing independent storm before acceptance.
+Non-blocking m12, m15–m17 remain; m16 also describes interrupted DELETE after unindexing. Add m18: harmless
+stale dangling entries cannot be scrubbed by DELETE (404). No new product blocker is asserted from an
+unclassified timeout. Exact commands, gate table and counts: `milestone2/MILESTONE2_DECISION.md`, Round 4.
+Raw evidence: `evidence/round4_2026-10-19/`. Consumer finding: `docs/journals/2026-10-19_ticketdesk_b6_round4.md`.
+
+---
+
+Rounds 1–3 below are superseded history; Round 4 is the current record.
+
+# ROUND 3 (superseded by Round 4; kept as history): delta check of commit `4900538a`
 
 Frozen files unchanged (`git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` empty). Working tree clean before this edit.
 
