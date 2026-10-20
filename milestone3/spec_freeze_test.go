@@ -25,7 +25,7 @@ const (
 	pinSpec     = "3a3165bfcc4c41c2f8ef8cf977d0850a5386ada1960d5b7890250153ceb28a23"
 	pinSealed   = "2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b"
 	pinSection7 = "7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09"
-	pinOwnerAck = "5b8a7e7a04b0b887ba85ef2da946513f80674f8de9be03f242fad181611a7ce3"
+	pinOwnerAck = "bff71613e1b752d471e2ca6a561473251c4e16612a9e20e2be4ebc6b3fbea9cb"
 )
 
 func sha(b []byte) string {

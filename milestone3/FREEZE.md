@@ -70,7 +70,7 @@ These fields are **not set here**. Each is set at that project's requirements fr
 * Each such revision carries an **Owner ack**, recorded in an `OWNER_ACK_<date>.md` file.
 * A revision is **never made after any result of a gate that it affects is known**.
 * R1-R4 are part of the frozen content: they were made before this file merges and were seat-reviewed.
-  * R2 and R3 are **not** covered by an Owner ack (`OWNER_ACK_2026-10-20.md` §5).
+  * R2 and R3 are **not** covered by an Owner ack (`OWNER_ACK_2026-10-20.md` §5). The Owner-ack requirement above applies only after this freeze merges, so they don't conflict with it. EngMgr's determination (2026-10-20 16:40 ET): R2 and R3, like the seats' binding conditions in §3, only reword or tighten the spec. None of them relaxes a gate or touches an Owner-reserved decision (the waivers, the JS exception, manual runs, entry criteria, or the venue). Any later change that does must get its own Owner ack.
   * R1 touched the Owner-reserved venue rule (§5 rule 6). The Owner's 16:32 ET decision acked it as superseded
     (`OWNER_ACK_2026-10-20.md` §4).
   * R4 carries that decision.
@@ -96,7 +96,7 @@ change then, by design, but the sealed-file commitments in `SEALED.sha256` must 
 | `milestone3/M3_ACCEPTANCE_SPEC.md` (post-R4) | `3a3165bfcc4c41c2f8ef8cf977d0850a5386ada1960d5b7890250153ceb28a23` |
 | `milestone3/heldout/SEALED.sha256` | `2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b` |
 | Spec §7 text span (`## 7.` up to `## 8.`) | `7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09` |
-| `milestone3/OWNER_ACK_2026-10-20.md` | `5b8a7e7a04b0b887ba85ef2da946513f80674f8de9be03f242fad181611a7ce3` |
+| `milestone3/OWNER_ACK_2026-10-20.md` | `bff71613e1b752d471e2ca6a561473251c4e16612a9e20e2be4ebc6b3fbea9cb` |
 
 This file is not pinned, because it records these pins. Any change to a pinned file needs a dated revision in §4 and a new
 pin in the same commit. R4 filled the former PENDING venue-path slot in `OWNER_ACK_2026-10-20.md` and re-pinned it.
