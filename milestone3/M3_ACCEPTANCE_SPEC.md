@@ -1,20 +1,23 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** DRAFT for review (revision 3).
+**Status:** FROZEN at `e6fdd48a` (spec freeze, `milestone3/FREEZE.md`); later changes are the dated revisions listed there.
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
 * The spec freezes once the independent review accepts it **and** the Owner decision below is recorded in each project's
   `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
 * After the freeze, changes need a separately recorded, dated revision (directive §8, "Record decisions without retroactive
-  goalpost changes").
+  goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every post-freeze change is a dated revision row with the
+  spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made after any result of a
+  gate that the revision affects is known.
 **Base:** `main` at `d03c1176` (Milestone 2 accepted by the Owner, `milestone2/MILESTONE2_DECISION.md:3-12`).
 **Authority:** `HOWLFRAME_PRODUCT_DIRECTIVE.md` §6, Milestone 3 (lines 178-185), and nothing more. The directive sets **no
 extra numeric M3 gates, no required component, and no mandatory parallel execution** (line 185). This spec adds none. Every
 gate below is a pass/fail observable chosen for that project.
 **Author:** Product (requirements and acceptance only; Product builds none of it).
 **Owner decision on the acknowledgement items.** Recorded 2026-10-20 15:23 ET. Source: relayed by EngMgr (Rintaro Okabe).
-William Elias (Owner), verbatim: "Approve items 1, 2 and 4; drop my PC as the alternate venue".
+William Elias (Owner) selected the option "Approve, but my PC isn't a backup venue"; as recorded in chat: "Approve items 1,
+2 and 4; drop my PC as the alternate venue". Record: `milestone3/OWNER_ACK_2026-10-20.md`.
 1. **APPROVED: W3/W13 frontend exception (§1.3.1).** Browser-side JS is allowed only as unmodified HowlFrame compiler output.
    This is a narrow, recorded exception to DIR:148/DIR:171.
 2. **APPROVED: manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser
@@ -80,9 +83,9 @@ Owner-named venue:     only if the Owner names one by a dated revision before th
   Venue consent:       who=<owner of that machine>  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim>"  link=<URL>   # only with an Owner-named venue
   Venue window:        <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>                               # only with an Owner-named venue
 Owner ack:             who=William Elias (Owner)  date=2026-10-20 15:23 ET  source=relayed by EngMgr (Rintaro Okabe)
-                       quote="Approve items 1, 2 and 4; drop my PC as the alternate venue"
+                       option="Approve, but my PC isn't a backup venue"  chat record="Approve items 1, 2 and 4; drop my PC as the alternate venue"
                        items: 1 APPROVED (W3/W13 JS exception); 2 APPROVED (manual non-CI runs); 3 DECLINED (Owner's machine as alternate venue; removed); 4 APPROVED (runtime fixes as entry criteria)
-                       link=<written record link, added at freeze if one exists>
+                       link=milestone3/OWNER_ACK_2026-10-20.md
 ```
 
 ### 1.2 P-ECO gates: receipt and grant-audit verifier (the top-ranked candidate, §3)
@@ -628,9 +631,10 @@ These are based on what M2 actually did and learned.
         consent of its owner and a pre-registered availability window in ET (the `Owner-named venue` fields in §1.1.1). The
         venue must then pass `venue_evidence.txt`. Without the consent and window, the venue is not available and the gate
         stays BLOCKED-VENUE. A run outside a recorded window does not count.
-   * **No venue after a FAIL; registration before the first run.** *(Revision R1, 2026-10-20, after the spec freeze at
-     `e6fdd48a`; see `milestone3/FREEZE.md`.)*
-     * An Owner-named venue must be **registered before the gate's first run** on any venue.
+   * **No venue after a FAIL; registration before the first run on that venue.** *(Revision R1, 2026-10-20, after the spec
+     freeze at `e6fdd48a`, as amended by R3; see `milestone3/FREEZE.md`.)*
+     * An Owner-named venue must be **registered before the gate's first run on that venue**. A gate that has already run
+       elsewhere, with no FAIL recorded, may still have an Owner-named venue registered.
      * Once a gate has recorded a FAIL, no venue may be named or added for that gate. A FAIL is final for that pin (rule 2),
        and a new venue cannot be used to rerun it.
    * **Venue evidence before any run on an Owner-named venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
