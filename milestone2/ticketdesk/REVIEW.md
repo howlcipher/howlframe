@@ -1,9 +1,72 @@
 # Milestone 2 independent final review: ticketdesk
 
+Reviewer: independent final reviewer. Four parts: **Round 4 (final, commit `7092bcff`, 2026-10-14) is the current record**;
+Rounds 3, 2 and 1 follow as superseded history.
+
+# ROUND 4 (current, FINAL): delta check of commit `7092bcff`
+
+Frozen files unchanged (`git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` is empty). Working tree clean before this edit.
+
+## R4.1 FINAL DECISION: ACCEPTED
+
+All blockers found in rounds 1 to 3 (B1 to B6) are fixed and re-verified by independent probes under the documented command and default runner
+ceilings. No new blocker was found in this round. Remaining items are minor carryover (section R4.5).
+
+## R4.2 Final per-gate verdicts
+
+| Gate | Final | Evidence summary |
+|---|---|---|
+| A Practical HTTP API | PASS | 101/101 acceptance; routing, JSON, status codes, filters, pagination and CRUD hold at default ceilings; exact-path routing (B4) and listing under deletions (B5) verified; crash-safe listing (B6) verified |
+| C Authentication and authorization | PASS | constant-time digest compare, CSPRNG tokens, hash-only storage, lifecycle races, role and ownership matrix re-verified in every round |
+| D Validation and reliable errors | PASS (caveats minor) | every input class, limits, fault handling, truncated uploads; transport-level rejections from net/http remain outside the error shape |
+| G Standalone installation and execution | PASS | `clean_repro.sh` from `git archive HEAD` needs go, python3 (plus git/tar); exactly five grants; each grant removal gives 77; busy port gives a `ticketdesk:` line; documented command works; no generated server |
+| H Demonstrably improved developer experience | PASS | DX checker 13/13 (before/after in `dx/BASELINE.md`), access log, fault line and request id verified, guide accurate and now with a 413 example, timeouts and memory text documented |
+
+## R4.3 B6 re-verification (own kill storm)
+
+`t19.py`: a 1500-ticket, 640 KB state is restored for each of 30 iterations; two threads issue `DELETE` requests continuously;
+the server is SIGKILLed at a random time (0.3 to 1.5 s); it is restarted on the same file; the list is walked completely.
+
+| Outcome | Result over 30 iterations |
+|---|---|
+| list not 200 after restart | 0 (round 3: 3 of 25 broken) |
+| a delete that returned 200 reappeared | 0 |
+| a ticket nobody tried to delete missing from the list | 0 |
+| unindexed but readable ticket (kill between unindex and delete) | 12 occurrences; each answered `GET` 200 and could be deleted again (200) |
+
+Crafted state (`t20.py`): a bucket id with no ticket record gives list 200 with the 9 surviving tickets, and a status-filtered page 200.
+This confirms the two-layer fix (unindex before delete; listing skips ids without a record). The remaining benign state (unindexed,
+readable ticket) was judged acceptable in round 3 and is unchanged.
+
+## R4.4 Regression checks
+
+* `bash milestone2/scripts/clean_repro.sh`: 101 tests passed; regression 9 tests, 0 failed; DX 13 passed.
+* `go test -count=1 ./...`: no failing package, exit 0.
+* ADV01 to ADV100 harness rerun: 76 PASS; only the four previously documented invalid tests of mine fail (ADV34, ADV70 to ADV72).
+* `t17.py` (percent-encoding, HEAD/OPTIONS, truncated and stalled uploads): all pass.
+* Delta in this commit is three small edits (nil guard in listing, unindex-before-delete, request id in the truncated-upload 400); no change to
+  capability enforcement.
+
+## R4.5 Remaining minor carryover (non-blocking)
+
+* m12 port probe is a time-of-check race (a lost race reprints the raw runtime error).
+* m15 no migration for state files written by earlier builds (they list empty).
+* m16 unindexed but readable ticket after a crash in create or delete.
+* m17 (residual) the truncated-upload 400 body now carries `request_id` but is not the uniform error object and has no `X-Request-Id` header
+  (checked: `request_id` present, header absent); it is only seen by a client that already failed to finish its upload.
+* From round 1/2: m3 transport-level plain-text rejections undocumented; m7 `clean_repro.sh` needs git and tar; m8 state file mode 0644;
+  create latency grows with state size (57 ms per create at 3000 tickets) because each mutation rewrites the file.
+* The frozen acceptance suite still has blind spots that the new `tests/regression/` suite now covers (default ceilings, busy port, stalled body,
+  path aliasing, deletions, dangling index).
+
+---
+
+# ROUND 3 (superseded by Round 4; kept as history)
+
 Reviewer: independent final reviewer. Three parts: **Round 3 (delta check of commit `4900538a`, 2026-10-14) is the
 current record**; Round 2 (commit `ec9182dd`) and Round 1 (commit `3b79b7a3`) follow as superseded history.
 
-# ROUND 3 (current): delta check of commit `4900538a`
+# ROUND 3: delta check of commit `4900538a`
 
 Frozen files unchanged (`git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` empty). Working tree clean before this edit.
 

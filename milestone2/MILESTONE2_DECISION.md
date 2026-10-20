@@ -1,6 +1,63 @@
 # Milestone 2 decision
 
-# ROUND 3 (current), 2026-10-14, commit `4900538a`
+## Closure evidence index (2026-10-20)
+
+The Round 4 acceptance below remains the independent decision for D29 A, C, D, G, H.
+This closure records verification of implementation commit `7092bcff`; it does not reopen the milestone.
+
+* Frozen scope: [plan](PLAN.md), [requirements](ticketdesk/requirements/REQUIREMENTS.md),
+  [acceptance contract](ticketdesk/requirements/ACCEPTANCE.md), [acceptance runner](ticketdesk/tests/acceptance/run_acceptance.py).
+* Executable evidence: [regressions](ticketdesk/tests/regression/review_round1.py),
+  [DX checker](ticketdesk/dx/check_dx.py), [DX baseline](ticketdesk/dx/BASELINE.md),
+  [reproduction script](scripts/clean_repro.sh).
+* Records: [development journal](ticketdesk/DEVELOPMENT_JOURNAL.md#closure-verification-2026-10-20),
+  [independent review](ticketdesk/REVIEW.md), [handoff](ticketdesk/HANDOFF.md).
+
+Historical adversarial results below are preserved reviewer reports. Their temporary scripts are unavailable;
+closure does not claim a fresh rerun of those probes. Historical evaluator identities are incomplete;
+no cross-provider independence is claimed. Current verification is a closure check, not a new independent acceptance.
+Reproduction prerequisites and isolation limits are recorded in the journal.
+
+# ROUND 4 (FINAL), 2026-10-14, commit `7092bcff`
+
+## Decision: ACCEPTED
+
+Milestone 2 (D29 A, C, D, G, H) is accepted. Blockers B1 to B6 raised in rounds 1 to 3 are fixed and independently re-verified at the default
+runner ceilings and the documented command. No new blocker in round 4. The milestone loop stops here; Milestone 3 may start only on a new instruction.
+
+| Gate | Round 1 | Round 2 | Round 3 | Final (Round 4) |
+|---|---|---|---|---|
+| A Practical HTTP API | FAIL | FAIL | FAIL | PASS |
+| C Authentication and authorization | PASS | PASS | PASS | PASS |
+| D Validation and reliable errors | PASS with caveats | PASS with caveats | PASS with caveats | PASS |
+| G Standalone installation and execution | FAIL | PASS | PASS | PASS |
+| H Developer experience | PASS with caveat | PASS with caveat | PASS | PASS |
+
+| Check | Result |
+|---|---|
+| Freeze integrity (frozen requirements, acceptance suite, DX checker, plan) | unchanged since `10d9c2a8` |
+| `bash milestone2/scripts/clean_repro.sh` | 101/101 acceptance, 9/9 regression, 13/13 DX |
+| `go test -count=1 ./...` | no failures, exit 0 |
+| B6 kill storm (30 SIGKILLs during DELETE loops on a 640 KB state) | list always 200; no resurrected or lost tickets; 12 benign unindexed-readable tickets, all deletable |
+| Dangling index id crafted into state | list 200, filtered page 200 |
+| ADV01 to ADV100 reviewer harness | 76 pass; only the 4 documented invalid tests fail |
+| Percent-encoding, HEAD/OPTIONS, truncated and stalled uploads | pass |
+
+## Carryover (non-blocking, for a later milestone)
+
+1. m12: make a lost race in the port probe print a `ticketdesk:` line.
+2. m15: a migration (or startup rebuild) of the bucket index for state written by earlier builds.
+3. m16: optionally rebuild the index at startup to repair unindexed tickets after a crash.
+4. m17: make the truncated-upload 400 use the uniform error object and `X-Request-Id`.
+5. Documentation and tooling: note that `clean_repro.sh` needs git and tar; document plain-text transport-level rejections; consider state file mode 0600 and
+   an incremental store write (create latency grows with state size).
+6. Keep `tests/regression/review_round1.py` in the default test run alongside the frozen suite.
+
+---
+
+# ROUND 3 (superseded by Round 4; kept as history)
+
+# ROUND 3, 2026-10-14, commit `4900538a`
 
 ## Decision: NOT ACCEPTED
 

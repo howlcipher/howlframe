@@ -2,6 +2,8 @@
 
 > **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
 
+Milestone 2 (D29 A, C, D, G, H) is accepted. See the [closure evidence and carryover](milestone2/MILESTONE2_DECISION.md).
+
 ## What is HowlFrame?
 
 HowlFrame is an experimental AI-native language and capability-bounded execution runtime.

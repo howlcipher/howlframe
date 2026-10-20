@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Verification
+* Milestone 2 closure: recorded independent Round 4 acceptance, refreshed the handoff, and indexed verification evidence in `milestone2/MILESTONE2_DECISION.md`. No runtime or frozen-test changes.
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 
 ### Fixed
