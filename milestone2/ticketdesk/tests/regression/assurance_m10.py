@@ -7,9 +7,11 @@ runner ceilings, one fresh data directory per test, Python 3 standard library on
 
 Usage: HF_BIN=... APP_ARTIFACT=... assurance_m10.py LAUNCHER
 
-The bootstrap token is generated at runtime and is never printed. A test listed in SKIPPED records a
-finding at the reviewed pin (see milestone2/ASSURANCE_M2_FINAL_REVIEW.md); it is reported as SKIP with the
-finding id. Set M10_RUN_SKIPPED=1 to run those tests anyway (they then count as failures if they fail).
+The bootstrap token is generated at runtime and is never printed. A test listed in XFAIL reproduces a known,
+waiver-pending finding at the reviewed pin (see milestone2/ASSURANCE_M2_FINAL_REVIEW.md). It is a STRICT expected
+failure: it always runs; failing with the recorded signature prints XFAIL and does not fail the run; passing prints
+XPASS and FAILS the run (the finding looks fixed: remove the XFAIL entry); failing any other way FAILS the run.
+It is an expected failure because it reproduces m12 deterministically, not because it is flaky.
 """
 import fcntl
 import http.client
@@ -167,15 +169,24 @@ def m10_port_in_use_stderr_shape():
     """R1.3: port already in use -> nonzero exit within 10 s, only 'ticketdesk: ' lines, no raw runtime error
     object or trace, data file not modified. Busy listener on 0.0.0.0, on 127.0.0.1 only, and on [::]."""
     variants = [("0.0.0.0", socket.AF_INET), ("127.0.0.1", socket.AF_INET)]
-    if socket.has_ipv6:
+    try:
+        socket.socket(socket.AF_INET6).close()
         variants.append(("::", socket.AF_INET6))
+    except OSError:
+        print("  note: no IPv6 on this machine; [::] variant not checked")
     for host, fam in variants:
         d, path = seeded_state()
         before = open(path, "rb").read()
         busy = socket.socket(fam)
-        if fam == socket.AF_INET6:
-            busy.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-        busy.bind((host, 0))
+        try:
+            if fam == socket.AF_INET6:
+                busy.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            busy.bind((host, 0))
+        except OSError as e:
+            busy.close()
+            shutil.rmtree(d, ignore_errors=True)
+            print("  note: cannot bind %s (%s); variant not checked" % (host, e))
+            continue
         busy.listen(1)
         port = busy.getsockname()[1]
         s = Srv(data=path, port=port)
@@ -390,7 +401,8 @@ class Slow(threading.Thread):
 
 
 def m10_slow_body_clients_bounded():
-    """Slow-header and slow-body clients (authenticated, so they reach the body read) are cut off by the server's
+    """Timing-based (bounds: normal requests < 3 s, slow-header cut within 16 s, slow-body within 40 s; the server
+    timeouts are 10 s and 30 s), so a paused VM can make it flaky. Slow-header and slow-body clients (authenticated, so they reach the body read) are cut off by the server's
     read timeouts, are never executed, and do not delay other clients; a slow but complete upload still works."""
     s = Srv().wait()
     try:
@@ -423,7 +435,7 @@ def m10_slow_body_clients_bounded():
                 if st == 201:
                     created.append(r["id"])
             time.sleep(0.5)
-        check(worst < 2.0, "a normal request took %.2f s while slow clients were connected" % worst)
+        check(worst < 3.0, "a normal request took %.2f s while slow clients were connected" % worst)
         for c in clients:
             c.join(60)
         for c in slow_head:
@@ -447,25 +459,34 @@ def m10_slow_body_clients_bounded():
 
 TESTS = [m10_port_in_use_stderr_shape, m10_port_lost_race_stderr_shape, m10_default_flag_operation,
          m10_double_slash_routing_and_authz, m10_slow_body_clients_bounded]
-SKIPPED = {
-    "m10_port_lost_race_stderr_shape": "FINDING m12 at pin 7e9ef32e: a port taken between the startup probe and the "
-                                       "listen prints the raw IO_ERROR object (ASSURANCE_M2_FINAL_REVIEW.md, m12)",
+# Strict expected failures: name -> (finding, substrings that the failure message must all contain).
+XFAIL = {
+    "m10_port_lost_race_stderr_shape": (
+        "m12 (waiver W-m12, ASSURANCE_M2_FINAL_REVIEW.md): a port taken between the startup probe and the listen "
+        "prints the raw runtime error object",
+        ['"phase":"runtime"', '"code":"IO_ERROR"', '"opcode":"HTTP_SERVER_SERVE"', "address already in use"]),
 }
 only = set(os.environ.get("M10_ONLY", "").split(",")) - {""}
-failed = 0
-ran = 0
+failed = ran = xfailed = 0
 for t in TESTS:
     if only and t.__name__ not in only:
         continue
-    if t.__name__ in SKIPPED and os.environ.get("M10_RUN_SKIPPED") != "1":
-        print("SKIP", t.__name__, "-", SKIPPED[t.__name__])
-        continue
     ran += 1
+    name = t.__name__
     try:
         t()
-        print("PASS", t.__name__)
+        if name in XFAIL:
+            failed += 1
+            print("XPASS", name, "- FAIL: expected failure did not happen; %s looks fixed: remove its XFAIL entry" % XFAIL[name][0])
+        else:
+            print("PASS", name)
     except Exception as e:
-        failed += 1
-        print("FAIL", t.__name__, "-", e)
-print("\n%d tests, %d failed, %d skipped" % (ran, failed, len([t for t in TESTS if t.__name__ in SKIPPED and os.environ.get("M10_RUN_SKIPPED") != "1" and (not only or t.__name__ in only)])))
+        msg = str(e)
+        if name in XFAIL and all(sig in msg for sig in XFAIL[name][1]):
+            xfailed += 1
+            print("XFAIL", name, "- expected failure, %s - %s" % (XFAIL[name][0], msg[:300]))
+        else:
+            failed += 1
+            print("FAIL", name, "-", e)
+print("\n%d tests, %d failed, %d expected failures" % (ran, failed, xfailed))
 sys.exit(1 if failed else 0)

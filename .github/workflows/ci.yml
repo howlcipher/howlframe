@@ -43,6 +43,11 @@ jobs:
     - name: Build howlframe CLI
       run: go build -o howlframe howlframe.go
 
+    - name: Ticketdesk m10 assurance regressions (default runner ceilings)
+      run: |
+        ./howlframe build milestone2/ticketdesk/src/ticketdesk.howl -o "$RUNNER_TEMP/ticketdesk.hfbc"
+        HF_BIN="$PWD/howlframe" APP_ARTIFACT="$RUNNER_TEMP/ticketdesk.hfbc" python3 milestone2/ticketdesk/tests/regression/assurance_m10.py milestone2/ticketdesk/tests/acceptance/launcher.example.sh
+
     - name: Prove write-cost token wins
       run: python3 benchmarks/language_write_cost/recount_and_verify.py
 
