@@ -16,6 +16,26 @@
   execute it (see the go test command below), and `MILESTONE2_DECISION.md` was not edited. Nothing here accepts or rejects B6. The
   milestone decision still needs B6.
 
+## 0. Owner decisions (recorded 2026-10-20, 11:02 EDT, UTC-4)
+
+William Elias (Owner) decided the open items from this review in chat. The EM (Rintaro) had recommended granting all five waivers
+so that the B6 pin `7e9ef32e` stays unchanged, and keeping the m10 tests manual-only. William's replies:
+
+* "Manual-only is fine for the m10 tests in M2" (answering how the new regression tests should run).
+* "Do what you suggest and merge" (answering the waive-all-five vs fix recommendation, and the merge).
+
+Recorded decisions:
+
+1. **Waivers granted for M2:** W-m2 (gate C, R9: a bearer secret with one trailing space still authenticates), W-m3 (gates D R8.1 and
+   A R3.3: transport-level rejections are plain text), W-m17 (gates D and A: the truncated-upload 400 is not in the uniform error
+   shape), W-m12 (gate G, R1.3: a port-probe race can print the raw runtime error object) and W-m4 (gate G, R1.3: semantically
+   corrupt state starts, then answers 500). No product fix is made for these in M2, and the **B6 pin `7e9ef32e` is kept**.
+2. **m10 tests are manual-only for M2:** `assurance_m10.py` is manual-only until a workflow-scoped change adds the CI step
+   (section 5).
+
+With these waivers, gates A, C, D and G count as **PASS under Owner waivers** and H is an unconditional PASS. **Milestone 2 is still
+not accepted:** acceptance needs the B6 kill storm to pass on William's PC run. This record does not edit `MILESTONE2_DECISION.md`.
+
 ## 1. Pin and docs-only check
 
 * **Code reviewed:** `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`, B6-pinned. Its parent `e8fcea20` is the Round 7 code under test, and
@@ -52,9 +72,9 @@ variables with `jq`. No secret was printed or written to a file. Request ids in 
 
 ## 3. Per-gate verdicts
 
-**Gates A, C, D and G do not count as passed until William records the Owner waivers below.** Each one is "PASS conditional on
-Owner waivers". The Milestone 2 decision must not read as accepted on these gates until those waivers are recorded. H is the only
-unconditional PASS. All five exclude B6 (see the scope note).
+**Gates A, C, D and G pass only under the Owner waivers below.** Each one is "PASS conditional on Owner waivers". William
+granted all five on 2026-10-20 11:02 EDT (section 0), so A, C, D and G now count as **PASS under Owner waivers**. H is the only
+unconditional PASS. All five exclude B6 (see the scope note), and M2 is not accepted until B6 passes.
 
 Each waiver is mapped to its gate through the frozen requirement-to-gate map (`REQUIREMENTS.md`: "A: R3, R4, R5, R6, R13, R17.
 C: R9, R10, R11, R12. D: R7, R8, R14, R15, (R16). G: R1, R2."). The waivers themselves are in section 4.1.
@@ -207,7 +227,8 @@ is met. Items within the letter are documented-accepted (m7, m8, m9), and m1 and
 
 ### 4.1 Owner waivers requested (decidable from this record)
 
-William records each decision. Until he does, the mapped gates stay conditional (section 3).
+William records each decision. Until he does, the mapped gates stay conditional (section 3). **Decided 2026-10-20 11:02 EDT:
+all five granted as option (c), waive as is, for M2 (section 0).**
 
 **W-m2 → gate C (R9).**
 * *Broken text* (`REQUIREMENTS.md:195`): "`401 unauthorized` (+ `WWW-Authenticate`) for: … a secret with leading/trailing whitespace; …"
@@ -307,7 +328,8 @@ It takes about 33 s. `clean_repro.sh` is not changed by this PR.
     * The hash-pinned files are the storm script and the experiment specs (`*spec_freeze_test.go`).
     * No test or document restricts edits to `ci.yml`: `git grep ci.yml` outside markdown finds nothing.
   * I added the step below, but the push was refused: `refusing to allow an OAuth App to create or update workflow
-    .github/workflows/ci.yml without workflow scope`. So it is backed out, and **today `assurance_m10.py` is manual-only**.
+    .github/workflows/ci.yml without workflow scope`. So it is backed out. **Owner decision (section 0): `assurance_m10.py` is
+    manual-only for M2, manual-only until a workflow-scoped change adds the CI step.**
   * The step goes right after the existing "Build howlframe CLI" step. To add it, William's OK or a credential with `workflow` scope
     is needed:
 
@@ -367,7 +389,8 @@ M10_ONLY=m10_port_lost_race_stderr_shape python3 milestone2/ticketdesk/tests/reg
 ```
 
 Fix direction (not done here; product code is out of scope): bind once and serve on that listener, or map a listen failure to a
-prefixed line. Then remove the test's `XFAIL` entry (until then the strict xfail makes CI fail with XPASS).
+prefixed line. Then remove the test's `XFAIL` entry: until it is removed, a manual run of `assurance_m10.py` reports `XPASS`,
+counts it as a failure and exits 1 (CI would do the same once the step is added). m12 is waived for M2 (W-m12, section 0).
 
 ## 7. Not verified here
 
