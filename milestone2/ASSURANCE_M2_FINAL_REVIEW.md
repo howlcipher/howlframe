@@ -72,8 +72,8 @@ variables with `jq`. No secret was printed or written to a file. Request ids in 
 
 ## 3. Per-gate verdicts
 
-**Gates A, C, D and G pass only under the Owner waivers below.** Each one is "PASS conditional on Owner waivers". William
-granted all five on 2026-10-20 11:02 EDT (section 0), so A, C, D and G now count as **PASS under Owner waivers**. H is the only
+**Gates A, C, D and G pass only under the Owner waivers below.** William granted all five waivers on 2026-10-20 at 11:02 EDT
+(section 0), so A, C, D and G count as **PASS under Owner waivers**. H is the only
 unconditional PASS. All five exclude B6 (see the scope note), and M2 is not accepted until B6 passes.
 
 Each waiver is mapped to its gate through the frozen requirement-to-gate map (`REQUIREMENTS.md`: "A: R3, R4, R5, R6, R13, R17.
@@ -81,10 +81,10 @@ C: R9, R10, R11, R12. D: R7, R8, R14, R15, (R16). G: R1, R2."). The waivers them
 
 | Gate | QA verdict | Security verdict | Overall | Evidence refs |
 |---|---|---|---|---|
-| **A** Practical HTTP API | PASS except the R3.3 deviations m3 and m17 | PASS | **PASS conditional on Owner waivers W-m3, W-m17 (R3.3)**; B6 excluded | acceptance 101/101 (R3, R4, R5, R6, R13, R17); `m10_default_flag_operation`; `m10_double_slash_routing_and_authz`; curl CRUD probes in A-QA below; 2000-ticket listing; m3 and m17 repros in section 4 |
-| **C** Authn/authz | PASS | PASS except the R9 deviation m2; m8 is within the letter (recommendation only) | **PASS conditional on Owner waiver W-m2 (R9)** | acceptance auth section; `ticketdesk.howl:172-182` (`sha256_hex` + `secure_equal`); curl role and ownership matrix; secret scan of the state file and logs |
-| **D** Validation/errors | PASS except the R8.1 deviations m3 and m17 | PASS | **PASS conditional on Owner waivers W-m3, W-m17 (R8.1)** | acceptance validation/error section; curl 400/413/415/405/404/500 probes; fault probe; m3 and m17 repros in section 4 |
-| **G** Standalone install/run | PASS except the R1.3 deviations m12 and m4; m7 is within the letter | PASS | **PASS conditional on Owner waivers W-m12, W-m4 (R1.3)** | clean_repro from a fresh clone, exit 0; manual non-git install with an empty module cache; startup exit-code matrix; `m10_port_in_use_stderr_shape`; `m10_port_lost_race_stderr_shape` (strict expected failure); m4 repro |
+| **A** Practical HTTP API | PASS except the R3.3 deviations m3 and m17 | PASS | **PASS under Owner waivers W-m3, W-m17 (R3.3), granted 2026-10-20 11:02 EDT**; B6 excluded | acceptance 101/101 (R3, R4, R5, R6, R13, R17); `m10_default_flag_operation`; `m10_double_slash_routing_and_authz`; curl CRUD probes in A-QA below; 2000-ticket listing; m3 and m17 repros in section 4 |
+| **C** Authn/authz | PASS | PASS except the R9 deviation m2; m8 is within the letter (recommendation only) | **PASS under Owner waiver W-m2 (R9), granted 2026-10-20 11:02 EDT** | acceptance auth section; `ticketdesk.howl:172-182` (`sha256_hex` + `secure_equal`); curl role and ownership matrix; secret scan of the state file and logs |
+| **D** Validation/errors | PASS except the R8.1 deviations m3 and m17 | PASS | **PASS under Owner waivers W-m3, W-m17 (R8.1), granted 2026-10-20 11:02 EDT** | acceptance validation/error section; curl 400/413/415/405/404/500 probes; fault probe; m3 and m17 repros in section 4 |
+| **G** Standalone install/run | PASS except the R1.3 deviations m12 and m4; m7 is within the letter | PASS | **PASS under Owner waivers W-m12, W-m4 (R1.3), granted 2026-10-20 11:02 EDT** | clean_repro from a fresh clone, exit 0; manual non-git install with an empty module cache; startup exit-code matrix; `m10_port_in_use_stderr_shape`; `m10_port_lost_race_stderr_shape` (strict expected failure); m4 repro |
 | **H** Developer experience | PASS | PASS | **PASS** (unconditional) | DX 13/13; "before" outputs independently re-derived from `52c0c531`; `TestHTTPAPIGuideRule`; access and fault lines |
 
 ### Gate A: Practical HTTP API
@@ -206,29 +206,29 @@ Deviations m3 and m17 break R8.1, so gate D needs waivers W-m3 and W-m17 (sectio
 Every id was grepped in `milestone2/` (sources: `ticketdesk/REVIEW.md` Round 1 §5 minor list, R2.4, R3.5, `MILESTONE2_DECISION.md`
 carryover lines, `ticketdesk/README.md` known limitations).
 
-**Classification rule.** An item that does not meet the letter of the frozen `REQUIREMENTS.md` is **waiver-pending**: it blocks
-its gate's PASS until William records the waiver in 4.1. Five items fall here: m2 (R9), m3 and m17 (R8.1 and R3.3), and m12 and m4
-(R1.3). I recommend granting all five on impact. That is a recommendation for the Owner to decide, not a claim that the requirement
-is met. Items within the letter are documented-accepted (m7, m8, m9), and m1 and m13 are fixed.
+**Classification rule.** An item that does not meet the letter of the frozen `REQUIREMENTS.md` needs an Owner waiver (4.1) before
+its gate can pass. Five items fall here: m2 (R9), m3 and m17 (R8.1 and R3.3), and m12 and m4 (R1.3). I recommended granting all five
+on impact; that was not a claim that the requirement is met. **William granted all five on 2026-10-20 at 11:02 EDT (section 0)**,
+so each is now **waiver-granted**. Items within the letter are documented-accepted (m7, m8, m9), and m1 and m13 are fixed.
 
 | Id | Status at pin | Classification | One-line reasoning and evidence |
 |---|---|---|---|
 | **m1** listing claim and performance | **FIXED** (re-verified) | n/a | README:54-56 now describes the bucket index. Measured: 2004 tickets, `limit=100` in 3 ms, full walk 0.08 s; after 1500 deletions, `limit=1` in 2 ms. The "thousands" claim is gone. |
 | **m13** `%2F` alias | **FIXED** (re-verified) | n/a | `httpreq.go:382` `EscapedPath()`. 6 encoded variants → 404; `review_round1.py` `m13_encoded_slash_is_not_an_alias` PASS. |
-| **m2** trailing space after the bearer secret | present: `Authorization: Bearer <member secret> ` → 200 | **waiver-pending W-m2** (R9; gate C) | Go `net/http` strips trailing OWS (RFC 9110 §5.5) before the app sees the value, so the app cannot tell. No security impact, because the full secret is still needed. Documented at README:59. R9 lists trailing whitespace as 401, so this needs an Owner waiver. |
-| **m3** transport-level rejections | present: `/v1/tickets/%zz` → `400 text/plain "400 Bad Request"`; 2 MB header → `431 text/plain`; `OPTIONS *` → empty 200. None of the three carries `X-Request-Id` | **waiver-pending W-m3** (R8.1, R3.3; gates D and A) | `net/http` answers before any route or handler runs. Inputs are not valid HTTP or URL syntax and are rejected predictably. Recorded only in REVIEW.md (m3, ADV36/37/89); user docs do not mention it (non-blocking doc gap). |
-| **m4** shallow state validation | present: a hand-edited state with `b:00000000 {"ids":"x"}` **starts**, then `GET /v1/tickets` and `POST` → 500 (2 fault lines). `title: 7` is served as is, and `meta.next_ticket: -5` is accepted. Wrong-typed `meta` and a non-object ticket do exit 65 | **waiver-pending W-m4** (R1.3; gate G) | R1.3 requires exit 65 for state that is "not valid ticketdesk state (corrupt, …)". This state is corrupt and still starts, so R1.3 is **not** met for semantically corrupt state. I see no rigorous argument that it counts as valid. Only reachable by editing the file outside the API; the failure is a safe 500 with no leak. |
+| **m2** trailing space after the bearer secret | present: `Authorization: Bearer <member secret> ` → 200 | **waiver-granted W-m2** (granted 2026-10-20 11:02 EDT; R9; gate C) | Go `net/http` strips trailing OWS (RFC 9110 §5.5) before the app sees the value, so the app cannot tell. No security impact, because the full secret is still needed. Documented at README:59. R9 lists trailing whitespace as 401, so it needed an Owner waiver (granted, section 0). |
+| **m3** transport-level rejections | present: `/v1/tickets/%zz` → `400 text/plain "400 Bad Request"`; 2 MB header → `431 text/plain`; `OPTIONS *` → empty 200. None of the three carries `X-Request-Id` | **waiver-granted W-m3** (granted 2026-10-20 11:02 EDT; R8.1, R3.3; gates D and A) | `net/http` answers before any route or handler runs. Inputs are not valid HTTP or URL syntax and are rejected predictably. Recorded only in REVIEW.md (m3, ADV36/37/89); user docs do not mention it (non-blocking doc gap). |
+| **m4** shallow state validation | present: a hand-edited state with `b:00000000 {"ids":"x"}` **starts**, then `GET /v1/tickets` and `POST` → 500 (2 fault lines). `title: 7` is served as is, and `meta.next_ticket: -5` is accepted. Wrong-typed `meta` and a non-object ticket do exit 65 | **waiver-granted W-m4** (granted 2026-10-20 11:02 EDT; R1.3; gate G) | R1.3 requires exit 65 for state that is "not valid ticketdesk state (corrupt, …)". This state is corrupt and still starts, so R1.3 is **not** met for semantically corrupt state. I see no rigorous argument that it counts as valid. Only reachable by editing the file outside the API; the failure is a safe 500 with no leak. |
 | **m7** clean_repro from a non-git copy | present: `fatal: not a git repository`, exit 2 | documented-accepted | PLAN G requires "a clean checkout of the committed tree", and a fresh clone passes (exit 0). The README manual steps work from a non-git copy (101/101, 10/10, 13/13). Recorded in REVIEW.md m7. |
 | **m8** state file mode | present: state file `0644`, **forced** by `internal/vm/vm.go:1906` `os.Chmod(name, 0o644)` even under `umask 077`. The directory fsync after rename is present (`vm.go:1917-1921`) | documented-accepted (within the letter: REQUIREMENTS has no file-mode clause, and R12 holds) | The file holds ticket data and SHA-256 digests of 256-bit secrets, never a secret. Because 0644 is forced even under `umask 077`, tickets are world-readable to other local users unless the operator restricts the directory. **Recommendation:** write the state file with mode 0600 (drop the forced `os.Chmod(name, 0o644)` at `vm.go:1906`, or make it 0600). If that is not done, document in README "Known limitations" that the data directory should be mode 0700. Recorded in REVIEW.md m8. |
 | **m9** grant-coverage tests | present: the coverage gap is shown by mutation. The request-id zero fallback is fixed (`vm.go:4322-4329` panics instead) | documented-accepted (test gap) | Mutating `internal/vm/crypto.go:51` (drop `name != "network" &&`) leaves `go test ./...` at 76 ok / exit 0 and the acceptance suite unaffected. Yet a mutated server with only `network:fetch=…` then prints a raw `CAPABILITY_DENIED` object with rc 1 instead of 77. Behaviour at the pin is correct (rc 77). Recommend a test. |
-| **m12** port-probe race | present, **deterministically reproduced** (finding below) | **waiver-pending W-m12** (R1.3; gate G) | Reachable only if another process binds the port in the window between the startup probe (`vm.go:3532`) and `ListenAndServe` (`vm.go:3045-3051`). Exit is still nonzero, nothing listens, and the data file is not modified, but stderr shows the raw `{"phase":"runtime","code":"IO_ERROR",…}` object. Listed as non-blocking carryover in MILESTONE2_DECISION.md. |
-| **m17** truncated-upload 400 | present: a half-closed upload gets an immediate 400, and a stalled one gets a 400 after 30.0 s. Body `{"error":"request body was not received completely","request_id":"…"}`, no `X-Request-Id` header. Never executed: list empty | **waiver-pending W-m17** (R8.1, R3.3; gates D and A) | Only clients that break HTTP framing (Content-Length not delivered) see it. The safety property (not executed) holds. Recorded as non-blocking carryover in MILESTONE2_DECISION.md. |
+| **m12** port-probe race | present, **deterministically reproduced** (finding below) | **waiver-granted W-m12** (granted 2026-10-20 11:02 EDT; R1.3; gate G) | Reachable only if another process binds the port in the window between the startup probe (`vm.go:3532`) and `ListenAndServe` (`vm.go:3045-3051`). Exit is still nonzero, nothing listens, and the data file is not modified, but stderr shows the raw `{"phase":"runtime","code":"IO_ERROR",…}` object. Listed as non-blocking carryover in MILESTONE2_DECISION.md. |
+| **m17** truncated-upload 400 | present: a half-closed upload gets an immediate 400, and a stalled one gets a 400 after 30.0 s. Body `{"error":"request body was not received completely","request_id":"…"}`, no `X-Request-Id` header. Never executed: list empty | **waiver-granted W-m17** (granted 2026-10-20 11:02 EDT; R8.1, R3.3; gates D and A) | Only clients that break HTTP framing (Content-Length not delivered) see it. The safety property (not executed) holds. Recorded as non-blocking carryover in MILESTONE2_DECISION.md. |
 | **#194** | code folded in; **GitHub issue still OPEN** | not done administratively | `b6_kill_storm.py:594-601` polls `/proc/PID/stat` for state `T`; `verify_head` compares byte-exact (`:1108-1110`, no `rstrip`); `milestone2_round7_pin_test.go:213` has the `pin-plus-trailing-space` case. These were verified by reading only, because running those tests executes the storm script (out of scope). The issue can be closed once the Owner agrees. |
 
-### 4.1 Owner waivers requested (decidable from this record)
+### 4.1 Owner waivers (requested here; all five granted 2026-10-20 11:02 EDT)
 
-William records each decision. Until he does, the mapped gates stay conditional (section 3). **Decided 2026-10-20 11:02 EDT:
-all five granted as option (c), waive as is, for M2 (section 0).**
+**Decided 2026-10-20 11:02 EDT: William granted all five as option (c), waive as is, for M2 (section 0).** The fix options below
+are kept for reference only.
 
 **W-m2 → gate C (R9).**
 * *Broken text* (`REQUIREMENTS.md:195`): "`401 unauthorized` (+ `WWW-Authenticate`) for: … a secret with leading/trailing whitespace; …"
@@ -378,8 +378,9 @@ with `M10_ONLY`, and the file was reverted with `git checkout -- <file>`. After 
 
 **No confirmed product blocker for gates A, C, D, G and H at `7e9ef32e`.** B6 is out of scope and unassessed here.
 
-No product defect blocks these gates on impact. The gates are still **conditional**: A, C, D and G need the five Owner waivers in
-section 4.1 before they count as passed. Minimal repro of the finding **m12** (waiver-pending W-m12, R1.3):
+No product defect blocks these gates on impact. A, C, D and G pass under the five Owner waivers in section 4.1, which William
+granted on 2026-10-20 at 11:02 EDT (section 0). M2 is still not accepted until B6 passes. Minimal repro of the finding **m12**
+(waiver-granted W-m12, granted 2026-10-20 11:02 EDT, R1.3):
 
 ```
 # server stdout = a pre-filled 4 KiB pipe (fcntl F_SETPIPE_SZ 4096); start the documented server on free port P
@@ -389,8 +390,9 @@ M10_ONLY=m10_port_lost_race_stderr_shape python3 milestone2/ticketdesk/tests/reg
 ```
 
 Fix direction (not done here; product code is out of scope): bind once and serve on that listener, or map a listen failure to a
-prefixed line. Then remove the test's `XFAIL` entry: until it is removed, a manual run of `assurance_m10.py` reports `XPASS`,
-counts it as a failure and exits 1 (CI would do the same once the step is added). m12 is waived for M2 (W-m12, section 0).
+prefixed line. Then remove the test's `XFAIL` entry: after such a fix and until it is removed, a manual run of `assurance_m10.py`
+reports `XPASS`, counts it as a failure and exits 1 (CI would do the same once the step is added). A run today, with m12 unfixed,
+gives `XFAIL` and exits 0. m12 is waived for M2 (W-m12, section 0).
 
 ## 7. Not verified here
 
