@@ -121,11 +121,11 @@ value in §1.
 | `milestone3/M3_ACCEPTANCE_SPEC.md` (post-R7) | `8a20258e80b18384842bca6b65b27869dce143669610e2236e3735b5b2f8782c` |
 | `milestone3/heldout/SEALED.sha256` | `2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b` |
 | Spec §7 text span (`## 7.` up to `## 8.`) | `7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09` |
-| `milestone3/OWNER_ACK_2026-10-20.md` | `380370403e266310d43cc09abdbf67b27ac3617be2ff4a063a9cde8d9cbc082f` |
+| `milestone3/OWNER_ACK_2026-10-20.md` | `6f627056504367a40853047b4f673014617632178b798071a9eb0375d9f8b78f` |
 | `milestone3/FREEZE.md` (this file) | pinned in `spec_freeze_test.go` (`pinFreeze`) only. It is not listed here, because a file cannot record its own hash. |
 
 This file's own sha256 is pinned in `milestone3/spec_freeze_test.go`, so any edit to it needs a re-pin there. Any change to a
-pinned file needs a dated revision in §4 and a new pin in the same commit. R4 filled the former PENDING venue-path slot in `OWNER_ACK_2026-10-20.md` and re-pinned it.
+pinned file needs a dated revision in §4 and a new pin in the same commit. R4 filled the former PENDING venue-path slot in `OWNER_ACK_2026-10-20.md` and re-pinned it. EngMgr's §8 confirmation ticks for §5 and §6 (2026-10-20 17:01 ET) re-pinned it again. They are administrative and change no rule.
 
 The test also enforces §3.
 
