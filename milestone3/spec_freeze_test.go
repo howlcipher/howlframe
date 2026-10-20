@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Pinned sha256 values (post-R5). FREEZE.md §5 records every pin except
+// Pinned sha256 values (post-R6; the spec is unchanged since R5). FREEZE.md §5 records every pin except
 // pinFreeze, FREEZE.md's own hash, which only this file holds. No pinned file
 // contains its own pin.
 const (
@@ -26,8 +26,8 @@ const (
 	pinSpec     = "d5513fd729a519cacc58a436473dc6f2e6c61e148d6d835ff67bb6bf969e1cb7"
 	pinSealed   = "2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b"
 	pinSection7 = "7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09"
-	pinOwnerAck = "e87d8d096fda1f34e4ed35842bc00e8985a1930252f03a14d700c56626c6b0c3"
-	pinFreeze   = "a316ae1867d077885c2bb79019600da70c0cfabe3ef6579d3bf6024a1c4e186a"
+	pinOwnerAck = "e67fc149d78a87332bc930687f29b46ec76a70991c0f509c88bbee3391aad538"
+	pinFreeze   = "31c67eee56cde8fd9293f2f672246abeb644f23fc085794126b7ef3ade7bf493"
 )
 
 func sha(b []byte) string {
@@ -224,37 +224,52 @@ func history(t *testing.T) []commitInfo {
 	return cs
 }
 
-// fullHistory reports whether a full, non-shallow git history is available.
-func fullHistory() (bool, string) {
+// skipHistoryMsg is the Owner-decided skip for shallow clones (CI).
+const skipHistoryMsg = "history checks are manual-only per Owner decision 2026-10-20 16:48 ET; run on a full clone and save evidence (see milestone3/FREEZE.md R6)"
+
+// requireFullHistory skips on a shallow clone (R6) and fails if git history is unavailable.
+func requireFullHistory(t *testing.T) {
+	t.Helper()
 	out, err := exec.Command("git", "rev-parse", "--is-shallow-repository").Output()
 	if err != nil {
-		return false, "git history unavailable (" + err.Error() + ")"
+		t.Fatalf("git history unavailable (%v): the history checks cannot run; failing closed", err)
 	}
 	if strings.TrimSpace(string(out)) != "false" {
-		return false, "shallow clone (set actions/checkout fetch-depth: 0)"
+		t.Skip(skipHistoryMsg)
 	}
-	return true, ""
 }
 
-// (iii) FREEZE.md §3 condition 3, fail closed:
+// decisionReviewer returns the "Reviewer: <agent id>" of eco/DECISION.md, or "" if the
+// file does not exist. A DECISION.md without a Reviewer line fails.
+func decisionReviewer(t *testing.T) string {
+	t.Helper()
+	dec, err := os.ReadFile("eco/DECISION.md")
+	if os.IsNotExist(err) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := reviewerLine.FindSubmatch(dec)
+	if m == nil {
+		t.Fatal("milestone3/eco/DECISION.md exists but has no `Reviewer: <agent id>` line")
+	}
+	return string(m[1])
+}
+
+// Non-history: eco/DECISION.md, once present, names its reviewer. Runs at any clone depth.
+func TestM3DecisionNamesReviewer(t *testing.T) { decisionReviewer(t) }
+
+// (iii) History checks, FREEZE.md §3 condition 3 (MANUAL-ONLY per R6; evidence at
+// milestone3/eco/evidence/freeze_history_<head-sha>.txt):
 //   - every commit touching verifier source or the E-gate suite (eco/tests/) carries an Agent: trailer;
 //   - builders (Agent: trailers on verifier-source commits) never include the reviewer named in
 //     eco/DECISION.md, nor any author of the E-gate suite (Agent: trailers on eco/tests/ commits).
 //
-// It needs full history. If verifier source, the suite or eco/DECISION.md exists in the tree, a
-// shallow or missing history FAILS. Otherwise, with full history it still scans (catching
-// source that was added and later deleted); with no history it has nothing to check.
+// On a shallow clone it skips (R6); with no git history it fails. On a full clone it always
+// scans, so source added and later deleted is still caught. It holds no non-history check.
 func TestM3VerifierReviewerNotBuilder(t *testing.T) {
-	_, decErr := os.Stat("eco/DECISION.md")
-	_, suiteErr := os.Stat("eco/tests")
-	present := len(verifierSources(t)) > 0 || decErr == nil || suiteErr == nil
-	if ok, why := fullHistory(); !ok {
-		if present {
-			t.Fatalf("%s: the builder/reviewer/suite-author check needs full history; failing closed", why)
-		}
-		t.Logf("%s; no verifier source, suite or DECISION.md in the tree, nothing to check", why)
-		return
-	}
+	requireFullHistory(t)
 
 	builders := map[string][]string{}
 	authors := map[string][]string{}
@@ -281,19 +296,9 @@ func TestM3VerifierReviewerNotBuilder(t *testing.T) {
 			t.Errorf("`Agent: %s` is both a verifier builder (%v) and an E-gate suite author (%v)", a, hs, ah)
 		}
 	}
-
-	dec, err := os.ReadFile("eco/DECISION.md")
-	if os.IsNotExist(err) {
-		return
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := reviewerLine.FindSubmatch(dec)
-	if m == nil {
-		t.Fatal("milestone3/eco/DECISION.md exists but has no `Reviewer: <agent id>` line")
-	}
-	if hs, ok := builders[string(m[1])]; ok {
-		t.Errorf("the recorded reviewer `%s` is a verifier builder (`Agent:` trailer on %v)", m[1], hs)
+	if r := decisionReviewer(t); r != "" {
+		if hs, ok := builders[r]; ok {
+			t.Errorf("the recorded reviewer `%s` is a verifier builder (`Agent:` trailer on %v)", r, hs)
+		}
 	}
 }
