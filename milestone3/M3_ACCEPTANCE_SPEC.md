@@ -4,8 +4,8 @@
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
-* The spec freezes once the independent review accepts it **and** the Owner acknowledgements below are recorded, with date and
-  quote, in each project's `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
+* The spec freezes once the independent review accepts it **and** the Owner decision below is recorded in each project's
+  `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
 * After the freeze, changes need a separately recorded, dated revision (directive §8, "Record decisions without retroactive
   goalpost changes").
 **Base:** `main` at `d03c1176` (Milestone 2 accepted by the Owner, `milestone2/MILESTONE2_DECISION.md:3-12`).
@@ -13,16 +13,15 @@
 extra numeric M3 gates, no required component, and no mandatory parallel execution** (line 185). This spec adds none. Every
 gate below is a pass/fail observable chosen for that project.
 **Author:** Product (requirements and acceptance only; Product builds none of it).
-**Owner acknowledgement needed at spec acceptance** (nothing below is assumed granted):
-1. **W3/W13 frontend exception (§1.3.1).** Browser-side JS is allowed only as unmodified HowlFrame compiler output. This is a
-   narrow, recorded exception to DIR:148/DIR:171.
-2. **Manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser or m10 step
-   without `workflow` scope (M2R:330-334), and wiring that is the Owner's call (§6).
-3. **William's PC as the single pre-registered alternate venue** for BLOCKED-VENUE gates (§5 rule 6). This is the machine M2
-   pre-registered for the B6 PC run (M2D:163-183). Using it needs his consent and his availability. In M2 the run never
-   happened because he was away (M2D:10-12, M2D:184-185).
-4. **Runtime fixes made as entry criteria** (WE-1 m12, WE-4 m17, and WE-5 m2 if bearer auth is used). Each is a narrow
-   demonstrated-blocker fix under DIR:198. This item is listed so the Owner sees that M3 entry includes runtime changes.
+**Owner decision on the acknowledgement items.** Recorded 2026-10-20 15:23 ET. Source: relayed by EngMgr (Rintaro Okabe).
+William Elias (Owner), verbatim: "Approve items 1, 2 and 4; drop my PC as the alternate venue".
+1. **APPROVED: W3/W13 frontend exception (§1.3.1).** Browser-side JS is allowed only as unmodified HowlFrame compiler output.
+   This is a narrow, recorded exception to DIR:148/DIR:171.
+2. **APPROVED: manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser
+   or m10 step without `workflow` scope (M2R:330-334), and wiring that is the Owner's call (§6).
+3. **DECLINED and removed: an alternate venue on the Owner's own machine.** No alternate venue is pre-registered (§5 rule 6).
+4. **APPROVED: runtime fixes made as entry criteria** (WE-1 m12, WE-4 m17, and WE-5 m2 if bearer auth is used). Each is a
+   narrow demonstrated-blocker fix under DIR:198.
 
 Citation key: `DIR` = `HOWLFRAME_PRODUCT_DIRECTIVE.md`, `M1D` = `milestone1/MILESTONE1_DECISION.md`,
 `M2P` = `milestone2/PLAN.md`, `M2D` = `milestone2/MILESTONE2_DECISION.md`, `M2R` = `milestone2/ASSURANCE_M2_FINAL_REVIEW.md`.
@@ -76,10 +75,14 @@ Harness/corpus pins:   <path> sha256 <hex>   (one line each: suites, E4 corpus, 
 Seeds:                 <name>=<value>        (one line each)
 W8 bounded N:          <N, or "n/a: WE-3 met">                  # P-WEB only, set before the freeze
 Timing bounds:         <gate>: <absolute monotonic bound>   (one line each; OQ-9)
-Alternate venue:       William's PC (§5 rule 6)
-Venue consent:         who=William Elias  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim consent to use his PC>"  link=<chat/PR URL>
-Venue window:          <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>   (one line per pre-registered window)
-Owner ack:             who=<name>  date=<YYYY-MM-DD HH:MM TZ>  items=<list from the Status block>  quote="<verbatim>"  link=<chat/PR URL>
+Alternate venue:       none pre-registered (§5 rule 6)
+Owner-named venue:     only if the Owner names one by a dated revision before the gate's run (§5 rule 6); otherwise "none"
+  Venue consent:       who=<owner of that machine>  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim>"  link=<URL>   # only with an Owner-named venue
+  Venue window:        <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>                               # only with an Owner-named venue
+Owner ack:             who=William Elias (Owner)  date=2026-10-20 15:23 ET  source=relayed by EngMgr (Rintaro Okabe)
+                       quote="Approve items 1, 2 and 4; drop my PC as the alternate venue"
+                       items: 1 APPROVED (W3/W13 JS exception); 2 APPROVED (manual non-CI runs); 3 DECLINED (Owner's machine as alternate venue; removed); 4 APPROVED (runtime fixes as entry criteria)
+                       link=<written record link, added at freeze if one exists>
 ```
 
 ### 1.2 P-ECO gates: receipt and grant-audit verifier (the top-ranked candidate, §3)
@@ -616,17 +619,16 @@ These are based on what M2 actually did and learned.
      planned PC run never happened (M2D:10-12, M2D:184-185), and an Owner waiver became the only way out (M2D:14-19).
    * **When it applies:**
      * a gate's second INFRA outcome; or
-     * its pre-registered venue cannot be obtained.
+     * the venue the gate needs (an isolated venue, or an Owner-named one) cannot be obtained.
    * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
-   * **The pre-registered alternate venue is William's PC.** It is the machine M2 pre-registered for the B6 PC run
-     (M2D:163-183), and it is named in `FREEZE.md` (§1.1.1). No other machine is pre-registered.
-   * **Consent and window are required.** `FREEZE.md` must record:
-     * William's **explicit consent** to use his PC as the venue (who, date, verbatim quote, link);
-     * at least one **pre-registered availability window** (dates and times in ET).
-
-     Without both, the alternate venue is **not available** and the gate stays BLOCKED-VENUE. A run outside a recorded window
-     does not count.
-   * **Venue evidence before any run on the alternate venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
+   * **No alternate venue is pre-registered.** The Owner declined the earlier proposal on 2026-10-20 at 15:23 ET ("Approve items 1, 2 and 4; drop my PC as the alternate venue",
+     relayed by EngMgr). A BLOCKED-VENUE gate resolves **only** in one of two ways:
+     1. **an Owner decision recorded as `WAIVED, NOT PASSED`** (below); or
+     2. **the Owner names a new venue by a dated revision before that gate's run.** That revision records the machine, the
+        consent of its owner and a pre-registered availability window in ET (the `Owner-named venue` fields in §1.1.1). The
+        venue must then pass `venue_evidence.txt`. Without the consent and window, the venue is not available and the gate
+        stays BLOCKED-VENUE. A run outside a recorded window does not count.
+   * **Venue evidence before any run on an Owner-named venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
      before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
      BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
      noise gates (M2D:360-379):
@@ -646,9 +648,10 @@ These are based on what M2 actually did and learned.
      * **Idle baseline:** a 120 s pre-run window on the same idle-gate terms as M2D:360-367. That means steal under 1%,
        PSI cpu `some avg60` under 5, PSI io `full avg60` under 2, PSI memory `full avg60` = 0, no heartbeat gap over 250 ms,
        and no `virtual machine fork` or `virtio_balloon` kmsg record.
-   * **How the alternate is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA rerun.
-   * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE and the decision passes to the Owner as a recorded
-     revision or waiver. An Owner waiver is therefore the last path, not the only one.
+   * **How an Owner-named venue is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA
+     rerun.
+   * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE until the Owner decides again, either by naming
+     another venue or by a `WAIVED, NOT PASSED` record.
    * **An Owner decision on a BLOCKED-VENUE gate is recorded as `WAIVED, NOT PASSED`.**
      * It never counts as PASS in any acceptance tally. `DECISION.md` lists it separately from PASS.
      * Its record carries who, the date and time (ET), a verbatim quote and a link.
