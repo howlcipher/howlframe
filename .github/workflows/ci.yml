@@ -43,6 +43,11 @@ jobs:
     - name: Build howlframe CLI
       run: go build -o howlframe howlframe.go
 
+    - name: Vendored howl.* schemas match their pinned HowlDream commit
+      run: |
+        python3 scripts/check_vendored_schemas.py contracts/howl/SOURCE.md \
+          $(for f in contracts/howl/*.schema.json; do echo "schemas/$(basename "$f")=$f"; done)
+
     - name: Prove write-cost token wins
       run: python3 benchmarks/language_write_cost/recount_and_verify.py
 

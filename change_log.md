@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Interop
+* `howlframe interop --json` prints the `howl.interop/v1` descriptor that other Howl components and `howl doctor` check (contract: `docs/INTEROP.md` in howlcipher/howl): every subcommand with its flags, the legacy single-dash flags, the HFBC format, and the exit codes. `TestInteropDescriptorMatchesFlagSets` reads the flag sets out of `howlframe.go`, so a flag added without updating the descriptor fails the build.
+* The vendored `contracts/howl/` schemas are re-synced to HowlDream `dc6019a` (`howl.exploration/v1` had gained optional fields since `bd10b18`), and CI now fails when a vendored copy differs from the commit `SOURCE.md` pins or that commit is not on HowlDream's default branch (`scripts/check_vendored_schemas.py`).
+
 ### Verification
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 

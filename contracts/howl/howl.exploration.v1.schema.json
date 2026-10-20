@@ -1,8 +1,179 @@
 {
   "$defs": {
+    "CandidateHandoff": {
+      "additionalProperties": false,
+      "description": "Speculative candidate for cross-component evaluation: howl.candidate/v1.",
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "authority": {
+          "$ref": "#/$defs/ExplorationAuthority"
+        },
+        "candidate_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "claims": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "condition": {
+          "default": "dream",
+          "title": "Condition",
+          "type": "string"
+        },
+        "contradictions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contradictions",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "objective": {
+          "maxLength": 10000,
+          "minLength": 1,
+          "title": "Objective",
+          "type": "string"
+        },
+        "parent_request_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Parent Request Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "schema_version": {
+          "const": "howl.candidate/v1",
+          "default": "howl.candidate/v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_run_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Source Run Id",
+          "type": "string"
+        },
+        "status": {
+          "default": "GENERATED",
+          "enum": [
+            "GENERATED",
+            "CHALLENGED",
+            "LOCALLY_VERIFIED",
+            "FRAME_REVIEWED",
+            "UNRESOLVED",
+            "REJECTED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 50000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "trust": {
+          "const": "UNVERIFIED",
+          "default": "UNVERIFIED",
+          "title": "Trust",
+          "type": "string"
+        },
+        "unresolved_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Issues",
+          "type": "array"
+        },
+        "verified_constraints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Verified Constraints",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "source_run_id",
+        "parent_request_id",
+        "objective",
+        "text"
+      ],
+      "title": "CandidateHandoff",
+      "type": "object"
+    },
+    "EvidenceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "independent_of_implementation": {
+          "default": false,
+          "title": "Independent Of Implementation",
+          "type": "boolean"
+        },
+        "produced_by": {
+          "default": "unknown",
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Produced By",
+          "type": "string"
+        },
+        "represents_observed_reality": {
+          "default": false,
+          "title": "Represents Observed Reality",
+          "type": "boolean"
+        },
+        "source_ref": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "source_type": {
+          "default": "UNCLASSIFIED",
+          "enum": [
+            "UNCLASSIFIED",
+            "EXTERNAL_GROUND_TRUTH",
+            "EXTERNAL_OBSERVATION",
+            "HISTORICAL_DATASET",
+            "DERIVED_FROM_EXTERNAL_DATA",
+            "MODEL_INVARIANT",
+            "SYNTHETIC_FIXTURE",
+            "OPERATOR_EXPECTATION",
+            "SIMULATION_EXPECTATION",
+            "MODEL_SELF_CONSISTENCY"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        }
+      },
+      "title": "EvidenceProvenance",
+      "type": "object"
+    },
     "EvidenceRef": {
       "additionalProperties": false,
-      "description": "Evidence supplied to or extracted during exploration.",
+      "description": "Supplied evidence with explicit validation-source provenance.",
       "properties": {
         "facts": {
           "additionalProperties": {
@@ -15,6 +186,9 @@
           "pattern": "^[a-zA-Z0-9_./-]{1,100}$",
           "title": "Id",
           "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/EvidenceProvenance"
         },
         "text": {
           "default": "",
@@ -53,10 +227,27 @@
       "additionalProperties": false,
       "description": "Finite bounded resource budget for speculative exploration.",
       "properties": {
+        "allow_local_inference": {
+          "default": false,
+          "title": "Allow Local Inference",
+          "type": "boolean"
+        },
+        "forbid_local_inference": {
+          "default": false,
+          "title": "Forbid Local Inference",
+          "type": "boolean"
+        },
         "local_only": {
           "default": true,
           "title": "Local Only",
           "type": "boolean"
+        },
+        "max_calls": {
+          "default": 500,
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Max Calls",
+          "type": "integer"
         },
         "max_candidates": {
           "default": 6,
@@ -210,12 +401,25 @@
       "title": "Context Refs",
       "type": "array"
     },
+    "diversity_memory": {
+      "default": false,
+      "title": "Diversity Memory",
+      "type": "boolean"
+    },
     "evidence_refs": {
       "items": {
         "$ref": "#/$defs/EvidenceRef"
       },
       "maxItems": 100,
       "title": "Evidence Refs",
+      "type": "array"
+    },
+    "explored_families": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Explored Families",
       "type": "array"
     },
     "objective": {
@@ -246,6 +450,41 @@
     "provenance": {
       "$ref": "#/$defs/Provenance"
     },
+    "provider": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider"
+    },
+    "purpose": {
+      "default": "discovery",
+      "enum": [
+        "discovery",
+        "development",
+        "verification"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "ranking_criteria": {
+      "items": {
+        "enum": [
+          "novelty",
+          "objective_fit"
+        ],
+        "type": "string"
+      },
+      "maxItems": 2,
+      "title": "Ranking Criteria",
+      "type": "array"
+    },
     "request_id": {
       "pattern": "^[a-zA-Z0-9_-]{1,100}$",
       "title": "Request Id",
@@ -272,6 +511,13 @@
       "default": "howl.exploration/v1",
       "title": "Schema Version",
       "type": "string"
+    },
+    "source_candidates": {
+      "items": {
+        "$ref": "#/$defs/CandidateHandoff"
+      },
+      "title": "Source Candidates",
+      "type": "array"
     }
   },
   "required": [
