@@ -515,14 +515,163 @@ These are based on what M2 actually did and learned.
   harness is the Owner's call, so both stay manual-only.
 * Any fixed number of endpoints, users or pass rates beyond the per-gate 100% rules above (DIR:185).
 
-## 7. Held-out checks (PLACEHOLDER: authored by Assurance)
+## 7. Held-out checks (Assurance; public part, check contents sealed)
 
-> **TODO, authored by Lain (Assurance, non-builder).** Builders of P-ECO or P-WEB must not see, author or influence this
-> section or its fixtures before their project's final review. This is the held-out discipline used for the frozen benchmark
-> sets. Product leaves it empty on purpose.
+**Author:** Assurance (Lain seat, `bot-assurance-0001`), a non-builder, 2026-10-20. Written against this spec at rev 2
+(`f90d0093`). Product's text in §§1-6 and §8 is unchanged. Anything in it that is untestable or ambiguous is listed in §7.5
+instead of being edited.
 
-* P-ECO held-out checks: _TODO (Assurance)_
-* P-WEB held-out checks: _TODO (Assurance)_
+The full checks are **sealed**: ids, the requirement each maps to, exact inputs, pass conditions, category and mutation plan.
+They are not in this repository, and no commit carries them. This section publishes only the protocol, a coverage map at the
+level of behaviour, the hash commitments and the M2-carryover entry criteria. Builders must not see the sealed contents before
+their project is scored.
+
+### 7.1 Held-out protocol
+
+1. **Sealed set v0 (now).** Assurance wrote `verifier.md` (P-ECO), `webapp.md` (P-WEB) and a `MANIFEST` of their sha256. They
+   are kept outside the repository, in the Assurance agent store (`m3-heldout/`), with a working copy on the shared box. Their
+   hashes are committed in §7.3 and in `milestone3/heldout/SEALED.sha256`.
+2. **Sealed amendment v1 (per project).** The P-WEB domain and both frozen contracts do not exist yet: E1's policy format and
+   FAIL codes, and W1's routes, roles, fields, session mechanism, messages, loader and policy. Some checks therefore refer to
+   "the frozen code/route/field". Assurance writes a sealed v1 amendment that binds them to concrete values.
+   * It is written after that project's requirements freeze and **before its first implementation commit**. Its hashes are
+     committed in a dated revision of §7.3.
+   * It may add checks or make inputs more concrete. It may never remove a check or weaken a pass condition. The v0→v1 diff is
+     shown at the reveal.
+   * Whether a conditional check applies (CSRF vs bearer, CSP, a robustness clause) is decided in v1 from the frozen
+     requirements, never at scoring time.
+3. **No builder access.** No builder of either project reads, writes or influences the sealed files. If the set leaks before
+   scoring, it is void: Assurance writes a fresh set, records the incident and commits the new hashes before scoring.
+4. **Scoring at a pin.** The §1.1 reviewer, a non-builder, scores at a stated pinned SHA and records the §5 rule 9 pins.
+   * The reveal commit adds the sealed files under `milestone3/<eco|web>/heldout/`, together with a freeze test in the style of
+     `experiments/token-efficiency-heldout-v3/spec_freeze_test.go`.
+   * That test asserts that each file's sha256 equals the value committed here (or in the dated v1 revision).
+   * The reviewer also runs `sha256sum -c` against `MANIFEST`. **Any hash mismatch voids the score.**
+   * Evidence goes to `milestone3/evidence/E9/` (P-ECO) and `milestone3/evidence/W11/` (P-WEB), in the §1.1 layout with a
+     `RESULT` file.
+5. **Outcomes and reruns follow §5.** §5.2 sets the outcome classes, the single rerun allowed only after a documented INFRA,
+   and BLOCKED-VENUE. A FAIL is never rerun to a PASS. Timing-bound checks use the §5.3 monotonic clock, the §5.4 heartbeat
+   sidecar and the §5.7 quiet window. Browser checks run on the WE-2 harness, and the Chrome and harness versions are recorded.
+6. **Mutation proof.** Every negative check must be shown to fail under a recorded mutation of the code under test. The sealed
+   mutation plan names one or more mutations per check.
+   * The proof records the file, the change and the failing excerpt, then reverts the change.
+   * Before recording the decision, the reviewer shows that `git status --porcelain` is empty.
+   * A negative check with no biting mutation does not count as passed.
+7. **Recording.** `milestone3/<eco|web>/DECISION.md` lists every sealed check id with PASS/FAIL and its evidence. QA and
+   Security are kept in separate sections, as in M2R §3.
+8. **No secrets.** The sealed files use placeholders only. Test secrets are generated at runtime and never printed or written.
+
+### 7.2 Coverage map (behaviour categories only, with counts of sealed checks)
+
+**P-ECO, the receipt and grant-audit verifier** (ids `M3-E-H01` to `M3-E-H25`): 25 checks, 15 QA and 10 Security. None of them
+depends on P-WEB (§1.2).
+
+| Category | QA | Security | Gates |
+|---|---|---|---|
+| Genuine M1 receipts verify (granted, denied, large) | 3 | 0 | E3 |
+| Real-record workflow from the README alone | 1 | 0 | E8 |
+| Deviation detection: hash, missing grant, truncation, limits, malformed or unknown schema | 5 | 0 | E4 |
+| Grant-scope bypass attempts (coarse vs scoped, path and port tricks, normalisation) | 0 | 3 | E4 |
+| Detection of a decision the policy denies | 0 | 1 | E4 |
+| Policy-file grammar | 0 | 1 | E4 |
+| Output contract and determinism | 2 | 0 | E1 |
+| Output injection safety | 0 | 1 | E1 |
+| Input and startup errors (frozen exit, stderr shape) | 1 | 0 | E1, E6 |
+| Hostile or oversized input (bounded, no hang) | 0 | 1 | E4 |
+| Capability discipline and path traversal | 0 | 2 | E6 |
+| Honest-claims scan, wider than the E5 command | 0 | 1 | E5 |
+| Clean install (fresh clone; non-git copy) | 2 | 0 | E7 |
+| DX: documented commands work verbatim | 1 | 0 | E1 |
+| **Total** | **15** | **10** | |
+
+**P-WEB, the full-stack web application** (ids `M3-W-H01` to `M3-W-H28`): 28 checks, 14 QA and 14 Security. Three Security
+checks depend on the frozen W1 design (§7.1 step 2): one each for CSRF/same-origin/CORS, CSP and slow-client robustness.
+
+| Category | QA | Security | Gates |
+|---|---|---|---|
+| Functional happy paths in the WE-2 browser (UI and API agree; repeatability) | 3 | 0 | W2, W3 |
+| Error shapes (envelope, UI messages, transport-level and truncated-upload scope) | 3 | 0 | W6 |
+| Input validation boundaries | 1 | 0 | W2, W6 |
+| Durability and corrupt-state handling | 2 | 0 | W2, W10 |
+| Startup contract, including the lost-race case | 1 | 0 | W10 |
+| Clean install (fresh clone; non-git copy) | 1 | 0 | W9 |
+| DX: documented commands and logs | 1 | 0 | W12 |
+| Framework packaging | 1 | 0 | W7 |
+| Capability evidence via a WE-3 receipt checked by the accepted P-ECO tool | 1 | 0 | W8 |
+| Frontend output safety: XSS escaping, source audit, content type of echoed errors | 0 | 3 | W4, W6 |
+| Served-asset provenance (only compiler-output JS; no inline script in any served HTML) | 0 | 1 | W13, W4 |
+| Server-side authn/authz, including direct-API and header edge cases | 0 | 2 | W5 |
+| Bypass via path aliasing (double slashes, dot segments, `%2F` variants) | 0 | 1 | W5, W6 |
+| Secrets in served assets, logs, state and browser storage; static-file traversal | 0 | 2 | W5 |
+| CSRF / same-origin / CORS (conditional) | 0 | 1 | W5 |
+| CSP (conditional; only if W1 requires it) | 0 | 1 | W4 |
+| Robustness against slow clients (conditional on a W1 clause) | 0 | 1 | W2 |
+| Capability discipline (minimum grants) | 0 | 1 | W8 |
+| Integration negative: altered P-WEB receipts must FAIL in the accepted P-ECO tool | 0 | 1 | W8 |
+| **Total** | **14** | **14** | |
+
+### 7.3 Hash commitments (sealed-v0, against rev 2 `f90d0093`)
+
+| File | sha256 |
+|---|---|
+| `verifier.md` | `c0d989952b2b200805e07845b1d8e8f1197c077fc07757ca1c264893ca1502ea` |
+| `webapp.md` | `2c289dbba6d6e0208c77c55aa84bd9894748858baf458fea47c906bcea78b2cc` |
+| `MANIFEST` | `a45bbb88b1bb18ef8a0ad8c25806cb5c318c22fc46f2dcb4ffc050b0127d6857` |
+
+The same values are in `milestone3/heldout/SEALED.sha256`. An earlier draft, written against `c85cf2fa`, was never committed or
+pushed and is superseded.
+
+### 7.4 Entry criteria for the M2-waived items (Assurance recommendation)
+
+This table is Assurance's recommendation. Where it differs from Product's §4 table, the difference is listed for decision in
+§7.5 (OQ-1), and §4 is left as written.
+* "ENTRY" means fixed, or resolved in the frozen requirements, before the W1 freeze (the §1.3.2 timing).
+* "EXIT" means a gate checked at that project's final review.
+* P-ECO is not an HTTP server, so m2, m3, m12 and m17 do not apply to it.
+
+| Id | Requirement (M2) | P-ECO | P-WEB | One-line reason | Verifying check |
+|---|---|---|---|---|---|
+| **m2** | bearer trailing OWS (R9) | n/a | **ENTRY at the requirements level if P-WEB uses bearer auth; otherwise n/a.** This matches W5 in effect. | The frozen W1 auth rule must state the RFC 9110 exclusion (or require a runtime fix) before the build, because a silent deviation cannot be scored later. | `M3-W-H22` |
+| **m3** | transport-level error shape (R8.1/R3.3) | n/a | **EXIT**. §4 says NOT. | W6 scopes the envelope to requests that reach routing. The frontend must encode user input so the UI never triggers m3, and must show a defined message if it happens anyway. No runtime fix is a precondition. | `M3-W-H04` (with `M3-W-H03`) |
+| **m17** | truncated-upload 400 shape (R8.1/R3.3) | n/a | **ENTRY**. §4 says NOT. | A real but slow browser upload that runs past the runtime's 30 s ReadTimeout gets the off-envelope 400 (a stalled upload was answered at 30.0 s, M2R §4). So the premise "browsers do not see it" does not hold. The runtime fix, or the frozen "drop the connection" choice, must exist before the UI error mapping is built. | `M3-W-H05` |
+| **m4** | semantic state validation (R1.3) | n/a (malformed inputs are covered by E4: `M3-E-H07`, `M3-E-H24`) | **ENTRY if P-WEB extends ticketdesk; otherwise EXIT**. §4 says NOT. | Extending ticketdesk builds directly on its shallow loader. A new app must meet the frozen corrupt-state rule at review. | `M3-W-H08` |
+| **m12** | port-probe race raw error (R1.3) | n/a | **ENTRY**. This agrees with §4 and WE-1. | It is a runtime defect that every HowlFrame server inherits, and W10 names the lost-race case. It is verified when `assurance_m10.py` reports XPASS, the XFAIL entry is removed, and the suite reruns clean (WE-1). | WE-1; `M3-W-H09` |
+
+### 7.5 Open questions for Product
+
+* **OQ-1 (§4 vs §7.4).** Assurance recommends m17 as ENTRY for P-WEB; §4 says NOT. If adopted, it would become a WE-4 under
+  §1.3.2. Assurance also recommends m3 as EXIT with W6 scoping, and m4 as ENTRY when extending ticketdesk. Which table governs?
+* **OQ-2 (E3, denied runs).** What verdict does a receipt with a `denied` decision get when the policy equals the run's grants?
+  A denial is within policy, but the spec does not say so.
+* **OQ-3 (E4, limits).** For "limits that differ from the policy": is any difference a FAIL, or only a looser limit (for example
+  a higher `max_instructions`)?
+* **OQ-4 (E4, grant semantics).** E4 needs a frozen subsumption rule for scoped grants: path-aware filesystem roots (trailing
+  slash, `..`, prefix-sibling paths), `network` vs `network:fetch=host[:port]`, `inherit:filesystem`, and duplicate or unsorted
+  `grant[]`. Without one, "broader grant" cannot be decided.
+* **OQ-5 (E5 command scope).** `rg -n -i 'tamper|attest|authentic|signed|proof' milestone3/eco/` also scans
+  `milestone3/eco/tests` and `requirements`. The E4 corpus of altered receipts may legitimately be named "tampered…". Do such
+  hits count as "only the disclaimer lines", or should the scan be limited to README, docs and source?
+* **OQ-6 (W13 loader check).** `rg -c '<script'` counts matching lines, not elements, and is case-sensitive. A `<SCRIPT>` tag or
+  two tags on one line passes, and a `<script` inside a comment fails. Should the check parse the HTML instead, or add `-i`
+  plus a one-element-per-line rule?
+* **OQ-7 (WE-2/W9 dependencies).** The WE-2 harness needs a Chrome driver: CDP over node, or a library. Is a vendored or
+  npm-installed driver allowed under W9's clean environment (`GOPROXY=off`, no network)? Should W9 run the browser suites at
+  all, or only the API suite?
+* **OQ-8 (WE-3 vs W8 resizing).** If WE-3 falls back to "a bounded workload (a single-process run that returns)", does W8 still
+  run the server on HFBC with `howlframe run`? Which workload does the frozen requirement name? M3-W-H14 uses a different
+  reviewer-chosen workload of the same kind.
+* **OQ-W1 (W4).** Is `set_html` allowed at all, or should W4 prefer `set_text`? URL contexts (`href`, `src`) are not covered by
+  `html_escape`. Does W1 freeze a scheme allow-list?
+* **OQ-W2 (W5).** The session mechanism (a cookie, or a bearer token held in JS) is unspecified. It decides whether CSRF and
+  SameSite apply, and how XSS would expose tokens. Please freeze it in W1.
+* **OQ-W3 (W4).** No part of the spec requires a CSP. Is one intended? If not, the conditional CSP check stays inactive.
+* **OQ-W4 (W2).** P-WEB has no robustness or slow-client clause (M2 had R17, and the B3 lesson). Is one intended? If not, the
+  conditional robustness check stays inactive.
+* **OQ-W5 (W6).** "The UI shows a defined message for each one" needs a frozen code-to-message table in W1.
+* **OQ-9 (§5.3).** "At least 50× the measured worst case" depends on a measurement that can only exist after implementation.
+  Which measurement, and when is the bound frozen?
+* **OQ-10 (sealing venue).** The shared box is readable by every agent, including future builders, so the box copy of the
+  sealed set is weaker than the agent-store copy. Should the box copy be removed once the hashes are committed?
 
 ## 8. Evidence gaps (stated, not guessed)
 

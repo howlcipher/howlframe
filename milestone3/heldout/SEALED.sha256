@@ -1,0 +1,5 @@
+# M3 held-out checks, sealed-v0 (Assurance, bot-assurance-0001, 2026-10-20), written against spec rev 2 f90d0093.
+# Hash commitments only. The sealed files are held outside the repo and revealed at scoring (spec §7.1).
+c0d989952b2b200805e07845b1d8e8f1197c077fc07757ca1c264893ca1502ea  verifier.md
+2c289dbba6d6e0208c77c55aa84bd9894748858baf458fea47c906bcea78b2cc  webapp.md
+a45bbb88b1bb18ef8a0ad8c25806cb5c318c22fc46f2dcb4ffc050b0127d6857  MANIFEST
