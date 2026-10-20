@@ -1,17 +1,18 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** FROZEN when #206 merges to `main`: `e6fdd48a` + the pre-merge revisions R1–R7 (`milestone3/FREEZE.md` §1 and §4;
+**Status:** FROZEN when #206 merges to `main`: `e6fdd48a` + the pre-merge revisions R1–R8 (`milestone3/FREEZE.md` §1 and §4;
 R1 is superseded by R4). Each revision is listed in `milestone3/OWNER_ACK_2026-10-20.md` §7 with its ack status. From that
 merge on, the revision rule below applies.
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
-* The spec freezes once the independent review accepts it **and** the Owner decision below is recorded in each project's
-  `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
+* The spec is **FROZEN when #206 merges to `main`**, after the independent review accepts it (*R8*).
+  * Separately, each project's requirements `FREEZE.md` (§1.1.1) must carry the Owner decision below.
+  * A requirements freeze without that record is not valid.
 * From the #206 merge on, changes need a separately recorded, dated revision (directive §8, "Record decisions without
   retroactive goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every change after that merge is a dated
   revision row with the spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made
-  after any result of a gate that the revision affects is known. R1–R7 are pre-merge content, not post-freeze revisions.
+  after any result of a gate that the revision affects is known. R1–R8 are pre-merge content, not post-freeze revisions.
   * **Owner-reserved decisions** *(R5; from EngMgr's determination, 2026-10-20 16:37 ET, recorded in `milestone3/FREEZE.md` §4)*. A revision that relaxes a gate, or
     that touches any of the following, needs its own Owner ack:
     * waivers, including any `WAIVED, NOT PASSED` record;
@@ -431,7 +432,8 @@ browser side only:
   * the server is HFBC under `howlframe run` in every case. Under the WE-3 fallback, the workload is the same frozen W8
     workload truncated to the pre-registered N in `FREEZE.md` (OQ-8);
   * any receipt used by W8, or by a held-out W8 check, with `effects_truncated: true` counts as FAIL, never as PASS.
-* **What "accepted P-ECO tool" means** *(R7; Owner decision 2026-10-20 16:51 ET, `milestone3/OWNER_ACK_2026-10-20.md` §6)*:
+* **What "accepted P-ECO tool" means** *(R7; R5's W8/§2 part Owner-acked 2026-10-20 17:06 ET, card t888s3651,
+  `milestone3/OWNER_ACK_2026-10-20.md` §6)*:
   every E-gate is either PASSED or Owner-waived.
   * An Owner-waived gate is one recorded `WAIVED, NOT PASSED` with a dated Owner decision. It counts toward the accepted
     P-ECO that W8 relies on, with **no second Owner decision**.
@@ -517,7 +519,7 @@ browser side only:
 
 **Decision: P-ECO (the receipt and grant-audit verifier) first, and accepted on its own gates. Then P-WEB, which consumes the
 accepted verifier in its integration gate W8.** "Accepted" here means every E-gate is PASSED or Owner-waived
-(`WAIVED, NOT PASSED` with a dated Owner decision). A gate that is neither blocks W8 (W8, R7, Owner decision 16:51 ET).
+(`WAIVED, NOT PASSED` with a dated Owner decision). A gate that is neither blocks W8 (W8, R7, Owner decision 17:06 ET).
 
 **Why (evidence):**
 1. **Authority verification was manual in both milestones.**
@@ -647,12 +649,12 @@ These are based on what M2 actually did and learned.
        `virtual machine fork`/`virtio_balloon` kmsg record or a steal breach overlaps it; or
      * a run with 0 failures has a noise breach (INFRA-VOID). The noise breach is M2's noise gates (M2D:371-379), which
        include a heartbeat gap over 2 s and any `virtual machine fork` or `virtio_balloon` kmsg record.
-     The first such run uses rule 2's single rerun. A second makes the gate BLOCKED-VENUE.
-   * **Consequence** *(R5; Owner-acked 2026-10-20 16:51 ET)*:
-     * A gate whose venue fails isolation, or is BLOCKED-VENUE for any reason, **cannot be PASSED**. An INFRA or INFRA-VOID
-       run never counts as a PASS.
-     * While that gate is open, its project (P-ECO or P-WEB), and so M3, **cannot be ACCEPTED**.
-     * Its **only outcome** is an Owner decision recorded as `WAIVED, NOT PASSED` (below).
+   * **Consequence, per run and per gate** *(R5 as amended by R8; not covered by any Owner ack)*:
+     * **A run that fails isolation never counts as a PASS.** Rule 2's single rerun still applies, so one such run does not
+       make the gate unpassable.
+     * **Only a gate in BLOCKED-VENUE cannot be PASSED.** A gate is BLOCKED-VENUE after its second INFRA outcome, or when the
+       venue it needs cannot be obtained. While it is open, its project (P-ECO or P-WEB), and so M3, **cannot be ACCEPTED**.
+       Its **only outcome** is an Owner decision recorded as `WAIVED, NOT PASSED` (below).
    * **No alternate venue, and no venue can be added.** *(Revision R4, 2026-10-20; Owner decision 16:32 ET,
      `milestone3/OWNER_ACK_2026-10-20.md`.)*
      * The Owner declined his own PC as an alternate venue on 2026-10-20 at 15:23 ET.

@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Pinned sha256 values (post-R7). FREEZE.md §5 records every pin except
+// Pinned sha256 values (post-R8). FREEZE.md §5 records every pin except
 // pinFreeze, FREEZE.md's own hash, which only this file holds. No pinned file
 // contains its own pin.
 const (
@@ -23,11 +23,11 @@ const (
 	ownerAckPath = "OWNER_ACK_2026-10-20.md"
 	freezePath   = "FREEZE.md"
 
-	pinSpec     = "8a20258e80b18384842bca6b65b27869dce143669610e2236e3735b5b2f8782c"
+	pinSpec     = "f244127f8ef809620960199d9569b494f2ec5c3e7b88324c12081497946f38f0"
 	pinSealed   = "2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b"
 	pinSection7 = "7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09"
-	pinOwnerAck = "6f627056504367a40853047b4f673014617632178b798071a9eb0375d9f8b78f"
-	pinFreeze   = "9459c36b4ea7be63e0520d234d4ae8e36f7269de590be833d92fcd631f055e11"
+	pinOwnerAck = "8e543849eb86eac4f20be92eee56e331770d57f83d07808caf4e24c92e6d9821"
+	pinFreeze   = "207a484fdabd7417e2022f5e61f1742889d43585961092cc58d71948ed1a6f2c"
 )
 
 func sha(b []byte) string {
@@ -188,6 +188,60 @@ func TestM3NoVerifierBeforeFreezeConditions(t *testing.T) {
 	}
 }
 
+// History-check evidence (R6, as amended by R8): the Auditor saves the manual history run as
+// eco/evidence/freeze_history_<parent-sha>.txt (FREEZE.md §5).
+var evidenceRef = regexp.MustCompile(`freeze_history_[0-9a-fA-F]{7,40}\.txt`)
+
+func evidenceFiles(t *testing.T) []string {
+	t.Helper()
+	m, err := filepath.Glob("eco/evidence/freeze_history_*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func suiteFiles(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && isSuitePath(filepath.ToSlash(p)) {
+			out = append(out, filepath.ToSlash(p))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk milestone3: %v", err)
+	}
+	return out
+}
+
+// Non-history (runs in CI at any clone depth; R8): once verifier source or an eco/tests suite
+// file exists, at least one freeze_history_*.txt evidence file must exist. Once eco/DECISION.md
+// exists, it must cite at least one freeze_history_*.txt that exists under eco/evidence/.
+func TestM3HistoryEvidencePresent(t *testing.T) {
+	ev := evidenceFiles(t)
+	if src, suite := verifierSources(t), suiteFiles(t); (len(src) > 0 || len(suite) > 0) && len(ev) == 0 {
+		t.Errorf("verifier source %v or E-gate suite files %v exist, but there is no milestone3/eco/evidence/freeze_history_*.txt (FREEZE.md §5, R6/R8)", src, suite)
+	}
+	dec, err := os.ReadFile("eco/DECISION.md")
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range evidenceRef.FindAllString(string(dec), -1) {
+		if _, err := os.Stat("eco/evidence/" + ref); err == nil {
+			return
+		}
+	}
+	t.Errorf("milestone3/eco/DECISION.md cites no existing milestone3/eco/evidence/freeze_history_*.txt (FREEZE.md §5, R8)")
+}
+
 var reviewerLine = regexp.MustCompile("(?m)^\\s*(?:[-*]\\s*)?\\**Reviewer\\**\\s*:\\**\\s*`?([A-Za-z0-9._@-]+)`?")
 
 type commitInfo struct {
@@ -264,7 +318,7 @@ func decisionReviewer(t *testing.T) string {
 func TestM3DecisionNamesReviewer(t *testing.T) { decisionReviewer(t) }
 
 // (iii) History checks, FREEZE.md §3 condition 3 (MANUAL-ONLY per R6; evidence at
-// milestone3/eco/evidence/freeze_history_<head-sha>.txt):
+// milestone3/eco/evidence/freeze_history_<parent-sha>.txt, run by the Auditor; R8):
 //   - every commit touching verifier source or the E-gate suite (eco/tests/) carries an Agent: trailer;
 //   - builders (Agent: trailers on verifier-source commits) never include the reviewer named in
 //     eco/DECISION.md, nor any author of the E-gate suite (Agent: trailers on eco/tests/ commits).
