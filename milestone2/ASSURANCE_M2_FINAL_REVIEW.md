@@ -4,9 +4,10 @@
   code, the runtime/VM changes, the B6 fix or the storm script, and I took no part in any earlier review round. Commits go through the
   shared `howlcipher` account, so git authorship cannot show this. The assignment and this statement are the record; PR #203 and
   Motoko's review `5585112963` hold the conversation.
-* **Files this PR touches:** it adds `milestone2/ASSURANCE_M2_FINAL_REVIEW.md` (this record) and
-  `milestone2/ticketdesk/tests/regression/assurance_m10.py`, and adds one CI step to `.github/workflows/ci.yml` (blocker 4 of
-  Motoko's review; section 5). Nothing else changes.
+* **Files this PR touches:** it adds only `milestone2/ASSURANCE_M2_FINAL_REVIEW.md` (this record) and
+  `milestone2/ticketdesk/tests/regression/assurance_m10.py`. Commit `0504a55` also added a CI step to `.github/workflows/ci.yml`, but
+  GitHub rejected the push because the token lacks `workflow` scope, so `f8b95a7` backs it out. The PR's net diff to `ci.yml` is
+  empty (section 5).
 * **Date:** 2026-10-20, about 08:09–08:40 EDT (UTC-4), revised about 08:45–09:10 EDT after Motoko's review. Venue: the shared box (Linux, Go 1.27.2, Python 3 stdlib).
 * **Scope:** verify only. No product code (ticketdesk app, compiler, VM, runtime) is changed by this PR. Criteria: `HOWLFRAME_PRODUCT_DIRECTIVE.md` section 6 (Milestone 2,
   D29 A, C, D, G, H) and `milestone2/PLAN.md` section 2, with the frozen `ticketdesk/requirements/REQUIREMENTS.md` as the contract.
@@ -299,12 +300,28 @@ It takes about 33 s. `clean_repro.sh` is not changed by this PR.
     `"opcode":"HTTP_SERVER_SERVE"` and `address already in use`;
   * `XPASS`, which **fails the run**, if the test passes (m12 looks fixed: remove the entry);
   * `FAIL` if it fails any other way.
-* **CI.** `.github/workflows/ci.yml` is not frozen. The frozen paths are `milestone2/PLAN.md`, `ticketdesk/requirements`,
-  `ticketdesk/tests/acceptance` and `ticketdesk/dx` (freeze diff vs `10d9c2a8`). The hash-pinned files are the storm script and the
-  experiment specs (`*spec_freeze_test.go`), and no test or document restricts edits to `ci.yml` (`git grep ci.yml` outside markdown
-  finds nothing). One step, "Ticketdesk m10 assurance regressions (default runner ceilings)", was added right after the existing
-  "Build howlframe CLI" step. It builds `ticketdesk.hfbc` with that CLI into `$RUNNER_TEMP` and runs this file through the frozen
-  launcher, in the style of the other `python3` CI steps. CI uses `go-version: '1.21'`, while the box runs used Go 1.27.2.
+* **CI: not wired yet; needs someone with `workflow` scope.**
+  * `.github/workflows/ci.yml` is **not frozen**:
+    * The frozen paths are `milestone2/PLAN.md`, `ticketdesk/requirements`, `ticketdesk/tests/acceptance` and `ticketdesk/dx`
+      (freeze diff vs `10d9c2a8`).
+    * The hash-pinned files are the storm script and the experiment specs (`*spec_freeze_test.go`).
+    * No test or document restricts edits to `ci.yml`: `git grep ci.yml` outside markdown finds nothing.
+  * I added the step below, but the push was refused: `refusing to allow an OAuth App to create or update workflow
+    .github/workflows/ci.yml without workflow scope`. So it is backed out, and **today `assurance_m10.py` is manual-only**.
+  * The step goes right after the existing "Build howlframe CLI" step. To add it, William's OK or a credential with `workflow` scope
+    is needed:
+
+    ```yaml
+        - name: Ticketdesk m10 assurance regressions (default runner ceilings)
+          run: |
+            ./howlframe build milestone2/ticketdesk/src/ticketdesk.howl -o "$RUNNER_TEMP/ticketdesk.hfbc"
+            HF_BIN="$PWD/howlframe" APP_ARTIFACT="$RUNNER_TEMP/ticketdesk.hfbc" python3 milestone2/ticketdesk/tests/regression/assurance_m10.py milestone2/ticketdesk/tests/acceptance/launcher.example.sh
+    ```
+
+  * I ran that exact step locally against a copy of the branch, extracted from the YAML and run with `bash -euo pipefail`:
+    `5 tests, 0 failed, 1 expected failures`, exit 0.
+  * Manual command until then: `go build -o howlframe howlframe.go && ./howlframe build milestone2/ticketdesk/src/ticketdesk.howl -o /tmp/ticketdesk.hfbc && HF_BIN=$PWD/howlframe APP_ARTIFACT=/tmp/ticketdesk.hfbc python3 milestone2/ticketdesk/tests/regression/assurance_m10.py milestone2/ticketdesk/tests/acceptance/launcher.example.sh`.
+  * CI uses `go-version: '1.21'`, while the box runs used Go 1.27.2.
 * **Timing.** `m10_slow_body_clients_bounded` is timing-based: normal requests under 3 s, slow-header cut within 16 s, slow-body
   within 40 s, against server timeouts of 10 s and 30 s. It can flake on a paused VM. The normal-request bound was raised from 2 s
   to 3 s for CI headroom. Measured worst case: 0.01–0.04 s. Mutation M4b still fails it.
