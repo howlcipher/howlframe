@@ -10,7 +10,7 @@
 | Spec path | `milestone3/M3_ACCEPTANCE_SPEC.md` |
 | Spec sha256 at the freeze SHA | `630b6ae4dde33e98a893ef209275866b78a154efddb77cd6209fef13fee679b4` |
 | Held-out seal reference | `milestone3/heldout/SEALED.sha256`, sha256 at the freeze SHA: `2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b` (sealed-v1; spec §7.3) |
-| §7 text sha256 at the freeze SHA | `9d630db86e67bd1cdf7a8dfbc00ebd839ba21e22551dae403c12038ccc4bd798` (bytes from the `## 7.` heading up to the `## 8.` heading) |
+| §7 text sha256 at the freeze SHA | `7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09` after R2; was `9d630db86e67bd1cdf7a8dfbc00ebd839ba21e22551dae403c12038ccc4bd798` at e6fdd48a and R1 (bytes from the `## 7.` heading up to the `## 8.` heading) |
 | Owner acknowledgement | [`OWNER_ACK_2026-10-20.md`](OWNER_ACK_2026-10-20.md): items 1, 2 and 4 APPROVED, item 3 DECLINED (2026-10-20 15:23 ET, relayed by EngMgr) |
 
 Verify with:
@@ -52,6 +52,7 @@ These fields are **not set here**. Each is set at that project's requirements fr
 | Rev | Date | Change | Spec sha256 after |
 |---|---|---|---|
 | R1 | 2026-10-20 | §5 rule 6: an Owner-named venue must be registered before the gate's first run, and no venue may be named or added for a gate after it records a FAIL (Motoko's nit). §7 untouched. | `267076e955516afa2a92c7c01167d7d092867abf1f32d6603d29d088f47bc6a5` |
+| R2 | 2026-10-20 | §7.1 step 3 wording (Assurance, Lain; Motoko's nit): the reviewer "runs `sha256sum -c` itself" instead of "verifies in person". No change of meaning, no check, count or commitment change. `SEALED.sha256` unchanged (`2bdb7087…`). §7 text sha256 becomes `7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09`. | `b44ae42a84092839ca4fb7b4228e7c160b92c80ed592bdcb77d3e1d036b8be70` |
 
 The §7 text hash and `SEALED.sha256` are unchanged by R1. Lain's §7 wording nit is expected on top. The §7 text hash will
-change then, by design, but the sealed-file commitments in `SEALED.sha256` must not.
+change then, by design, but the sealed-file commitments in `SEALED.sha256` must not. R2 is that nit: the §7 text hash changed as expected and `SEALED.sha256` did not.

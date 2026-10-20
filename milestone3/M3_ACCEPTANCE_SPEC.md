@@ -761,8 +761,8 @@ their project is scored.
 5. **Reveal and scoring at a pin.** The §1.1 reviewer, a non-builder, scores at a stated pinned SHA and records the §5 rule 9
    pins.
    * Assurance hands over the sealed files only at the start of scoring.
-   * Before any check runs, the reviewer verifies in person that each file's sha256 matches §7.3 (`sha256sum -c` against
-     `MANIFEST` and against `SEALED.sha256`), and records the output in the evidence. Any mismatch triggers step 4.
+   * Before any check runs, the reviewer runs `sha256sum -c` itself, against `MANIFEST` and against `SEALED.sha256`, to
+     confirm each file's sha256 matches §7.3, and records the output in the evidence. Any mismatch triggers step 4.
    * The reveal commit adds the files under `milestone3/<eco|web>/heldout/`, together with a freeze test in the style of
      `experiments/token-efficiency-heldout-v3/spec_freeze_test.go` that asserts the committed hashes.
    * Evidence goes to `milestone3/evidence/E9/` (P-ECO) and `milestone3/evidence/W11/` (P-WEB), in the §1.1 layout with a
