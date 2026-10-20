@@ -696,38 +696,80 @@ their project is scored.
 
 ### 7.1 Held-out protocol
 
-1. **Sealed set v0 (now).** Assurance wrote `verifier.md` (P-ECO), `webapp.md` (P-WEB) and a `MANIFEST` of their sha256. They
-   are kept outside the repository, in the Assurance agent store (`m3-heldout/`), with a working copy on the shared box. Their
+**Custody and access (binding; custody revision 2026-10-20, on top of `e36cc520`).**
+* **Who may read the sealed set:** Assurance only (the Lain seat, `bot-assurance-0001`, and Assurance sessions it runs), until
+  the reveal in step 5.
+* **Who may not:**
+  * every builder of P-ECO or P-WEB, including Motoko as Dev Lead;
+  * any executor, subagent or cloud agent working on M3 code, suites, corpora or fixtures;
+  * the Auditor and Dev Lead while they author M3 suites.
+  Product and the EM need no access before the reveal and get none.
+* **Where it lives:** only in the Assurance-only agent store (`m3-heldout/`). There is no other copy.
+* **Never placed:**
+  * on the shared box filesystem (`/workspace`, `/tmp`, `/home/box`, any worktree);
+  * in Git (any branch, commit, stash or PR);
+  * in chat, issue or review comments;
+  * in any prompt or task text given to a builder.
+  Assurance edits the files in the store, and any scratch file stays in the store and is deleted after use.
+* **Reveal:** only at scoring, at the pinned SHA, with the hashes verified in front of the reviewer (step 5).
+* **Stated limit:** the store mount ignores `chmod`; its files show mode 0666. Access control is the store's agent-level
+  authorization, not file modes.
+
+1. **Sealed set v1 (current).** The set is `verifier.md` (P-ECO), `webapp.md` (P-WEB) and a `MANIFEST` of their sha256. Their
    hashes are committed in §7.3 and in `milestone3/heldout/SEALED.sha256`.
-2. **Sealed amendment v1 (per project).** The P-WEB domain and both frozen contracts do not exist yet: E1's policy format and
+   * **Per-file nonce:** each sealed file begins with `nonce: <64 hex chars>`, a separate 256-bit value read from
+     `/dev/urandom`. Because of it, nobody can confirm a guessed check, or a guessed whole file, by hashing candidates against
+     the published commitment. Short or formulaic checks therefore can't be brute-forced from their hash.
+2. **Ids and counts are fixed at v1.**
+   * P-ECO: `M3-E-H01` to `M3-E-H25`, 15 QA and 10 Security.
+   * P-WEB: `M3-W-H01` to `M3-W-H28`, 14 QA and 14 Security.
+   * The categories and requirement mapping in §7.2 are fixed too.
+   * Every replacement (step 4) and every binding amendment (step 3) keeps the same ids, counts, categories and mapping.
+3. **Binding amendment (per project).** The P-WEB domain and both frozen contracts do not exist yet: E1's policy format and
    FAIL codes, and W1's routes, roles, fields, session mechanism, messages, loader and policy. Some checks therefore refer to
-   "the frozen code/route/field". Assurance writes a sealed v1 amendment that binds them to concrete values.
-   * It is written after that project's requirements freeze and **before its first implementation commit**. Its hashes are
-     committed in a dated revision of §7.3.
-   * It may add checks or make inputs more concrete. It may never remove a check or weaken a pass condition. The v0→v1 diff is
-     shown at the reveal.
-   * Whether a conditional check applies (CSRF vs bearer, CSP, a robustness clause) is decided in v1 from the frozen
-     requirements, never at scoring time.
-3. **No builder access.** No builder of either project reads, writes or influences the sealed files. If the set leaks before
-   scoring, it is void: Assurance writes a fresh set, records the incident and commits the new hashes before scoring.
-4. **Scoring at a pin.** The §1.1 reviewer, a non-builder, scores at a stated pinned SHA and records the §5 rule 9 pins.
-   * The reveal commit adds the sealed files under `milestone3/<eco|web>/heldout/`, together with a freeze test in the style of
-     `experiments/token-efficiency-heldout-v3/spec_freeze_test.go`.
-   * That test asserts that each file's sha256 equals the value committed here (or in the dated v1 revision).
-   * The reviewer also runs `sha256sum -c` against `MANIFEST`. **Any hash mismatch voids the score.**
+   "the frozen code/route/field".
+   * Assurance writes `sealed-v1-<eco|web>-bind` after that project's requirements freeze and **before its first
+     implementation commit**. It binds those references to concrete values, with a fresh nonce, and its hashes are committed
+     in a dated revision of §7.3.
+   * It may make inputs more concrete and settle whether a conditional check applies (CSRF vs bearer, CSP, a robustness
+     clause), decided from the frozen requirements and never at scoring time.
+   * It may not add, remove or renumber checks, and it may never weaken a pass condition. The v1-to-bind diff is shown at the
+     reveal.
+4. **Leak or hash-mismatch procedure.**
+   * **Triggers:**
+     * any evidence that sealed content reached a party or place outside the custody rules above;
+     * any sha256 mismatch between a sealed file and its commitment, at any time, including at the reveal.
+   * **Scope:**
+     * a leak whose scope is known voids, and gets regenerated, only the affected checks;
+     * a leak of unknown scope, or any hash mismatch, voids the whole set.
+   * **Replacement:**
+     * Assurance issues a replacement with new concrete inputs, payloads and fixture names, keeping the ids and counts
+       (step 2).
+     * Every file gets a fresh nonce, so every commitment changes.
+     * The new commitments land in a docs-only commit to §7.3 and `SEALED.sha256`, which records the date, the reason and
+       the voided version.
+   * **Rescoring:** if the trigger comes at or after scoring, the score is void. The reviewer rescores with the replacement at
+     the same pinned code SHA. A replacement never reopens or re-pins the code.
+5. **Reveal and scoring at a pin.** The §1.1 reviewer, a non-builder, scores at a stated pinned SHA and records the §5 rule 9
+   pins.
+   * Assurance hands over the sealed files only at the start of scoring.
+   * Before any check runs, the reviewer verifies in person that each file's sha256 matches §7.3 (`sha256sum -c` against
+     `MANIFEST` and against `SEALED.sha256`), and records the output in the evidence. Any mismatch triggers step 4.
+   * The reveal commit adds the files under `milestone3/<eco|web>/heldout/`, together with a freeze test in the style of
+     `experiments/token-efficiency-heldout-v3/spec_freeze_test.go` that asserts the committed hashes.
    * Evidence goes to `milestone3/evidence/E9/` (P-ECO) and `milestone3/evidence/W11/` (P-WEB), in the §1.1 layout with a
      `RESULT` file.
-5. **Outcomes and reruns follow §5.** §5.2 sets the outcome classes, the single rerun allowed only after a documented INFRA,
+6. **Outcomes and reruns follow §5.** §5.2 sets the outcome classes, the single rerun allowed only after a documented INFRA,
    and BLOCKED-VENUE. A FAIL is never rerun to a PASS. Timing-bound checks use the §5.3 monotonic clock, the §5.4 heartbeat
    sidecar and the §5.7 quiet window. Browser checks run on the WE-2 harness, and the Chrome and harness versions are recorded.
-6. **Mutation proof.** Every negative check must be shown to fail under a recorded mutation of the code under test. The sealed
+7. **Mutation proof.** Every negative check must be shown to fail under a recorded mutation of the code under test. The sealed
    mutation plan names one or more mutations per check.
    * The proof records the file, the change and the failing excerpt, then reverts the change.
    * Before recording the decision, the reviewer shows that `git status --porcelain` is empty.
    * A negative check with no biting mutation does not count as passed.
-7. **Recording.** `milestone3/<eco|web>/DECISION.md` lists every sealed check id with PASS/FAIL and its evidence. QA and
+8. **Recording.** `milestone3/<eco|web>/DECISION.md` lists every sealed check id with PASS/FAIL and its evidence. QA and
    Security are kept in separate sections, as in M2R §3.
-8. **No secrets.** The sealed files use placeholders only. Test secrets are generated at runtime and never printed or written.
+9. **No secrets.** The sealed files use placeholders only. Test secrets are generated at runtime and never printed or written.
 
 ### 7.2 Coverage map (behaviour categories only, with counts of sealed checks)
 
@@ -753,7 +795,7 @@ depends on P-WEB (§1.2).
 | **Total** | **15** | **10** | |
 
 **P-WEB, the full-stack web application** (ids `M3-W-H01` to `M3-W-H28`): 28 checks, 14 QA and 14 Security. Three Security
-checks depend on the frozen W1 design (§7.1 step 2): one each for CSRF/same-origin/CORS, CSP and slow-client robustness.
+checks depend on the frozen W1 design (§7.1 step 3): one each for CSRF/same-origin/CORS, CSP and slow-client robustness.
 
 | Category | QA | Security | Gates |
 |---|---|---|---|
@@ -778,16 +820,22 @@ checks depend on the frozen W1 design (§7.1 step 2): one each for CSRF/same-ori
 | Integration negative: altered P-WEB receipts must FAIL in the accepted P-ECO tool | 0 | 1 | W8 |
 | **Total** | **14** | **14** | |
 
-### 7.3 Hash commitments (sealed-v0, against rev 2 `f90d0093`)
+### 7.3 Hash commitments (sealed-v1, current)
 
 | File | sha256 |
 |---|---|
-| `verifier.md` | `c0d989952b2b200805e07845b1d8e8f1197c077fc07757ca1c264893ca1502ea` |
-| `webapp.md` | `2c289dbba6d6e0208c77c55aa84bd9894748858baf458fea47c906bcea78b2cc` |
-| `MANIFEST` | `a45bbb88b1bb18ef8a0ad8c25806cb5c318c22fc46f2dcb4ffc050b0127d6857` |
+| `verifier.md` | `567772fbe7b93c99a6c3f1088c51c569c22ed13c6d49426061ca4480d2786062` |
+| `webapp.md` | `4ed2243640b479187fd954e6060ff06ed4feff4fb7be6bb5606aec7899c3d532` |
+| `MANIFEST` | `754f422511a3e6aec3e045a5b81b79180d52de8c19c17886669f87425a26d96f` |
 
-The same values are in `milestone3/heldout/SEALED.sha256`. An earlier draft, written against `c85cf2fa`, was never committed or
-pushed and is superseded.
+The same values are in `milestone3/heldout/SEALED.sha256`.
+
+**History**
+
+| Version | Date | Status | Reason |
+|---|---|---|---|
+| sealed-v0 (`verifier.md` `c0d98995…`, `webapp.md` `2c289dbb…`, `MANIFEST` `a45bbb88…`; committed in `baeb0d03`) | 2026-10-20 | **VOID** | Potentially exposed, so the whole set is void (§7.1 step 4, unknown scope). A working copy had been kept on the shared box under `/workspace`, which every agent can read, future builders included (#205 review, Lain's blocker 3). That copy was shredded on 2026-10-20. The box, `/tmp`, `/home/box`, the worktrees and their git objects, stash and reflog were searched, and no other copy was found. v0 had no nonces. |
+| sealed-v1 | 2026-10-20 | **Current** | Replaces v0 with new concrete inputs, payloads and fixture names, and a per-file nonce. Ids and counts are unchanged and now fixed (§7.1 step 2). Held only in the Assurance-only agent store. |
 
 ### 7.4 Entry criteria for the M2-waived items (Assurance recommendation)
 
@@ -840,6 +888,8 @@ This table is Assurance's recommendation. Where it differs from Product's §4 ta
   Which measurement, and when is the bound frozen?
 * **OQ-10 (sealing venue).** The shared box is readable by every agent, including future builders, so the box copy of the
   sealed set is weaker than the agent-store copy. Should the box copy be removed once the hashes are committed?
+  **Resolved by Assurance (2026-10-20):** yes, and stricter. The box copy was destroyed, sealed-v0 was voided and replaced by
+  sealed-v1, and the custody rules in §7.1 now forbid any copy outside the Assurance-only store.
 
 ## 8. Evidence gaps (stated, not guessed)
 
