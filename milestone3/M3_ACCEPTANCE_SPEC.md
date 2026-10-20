@@ -77,6 +77,8 @@ Seeds:                 <name>=<value>        (one line each)
 W8 bounded N:          <N, or "n/a: WE-3 met">                  # P-WEB only, set before the freeze
 Timing bounds:         <gate>: <absolute monotonic bound>   (one line each; OQ-9)
 Alternate venue:       William's PC (§5 rule 6)
+Venue consent:         who=William Elias  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim consent to use his PC>"  link=<chat/PR URL>
+Venue window:          <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>   (one line per pre-registered window)
 Owner ack:             who=<name>  date=<YYYY-MM-DD HH:MM TZ>  items=<list from the Status block>  quote="<verbatim>"  link=<chat/PR URL>
 ```
 
@@ -618,23 +620,39 @@ These are based on what M2 actually did and learned.
    * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
    * **The pre-registered alternate venue is William's PC.** It is the machine M2 pre-registered for the B6 PC run
      (M2D:163-183), and it is named in `FREEZE.md` (§1.1.1). No other machine is pre-registered.
+   * **Consent and window are required.** `FREEZE.md` must record:
+     * William's **explicit consent** to use his PC as the venue (who, date, verbatim quote, link);
+     * at least one **pre-registered availability window** (dates and times in ET).
+
+     Without both, the alternate venue is **not available** and the gate stays BLOCKED-VENUE. A run outside a recorded window
+     does not count.
    * **Venue evidence before any run on the alternate venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
      before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
      BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
      noise gates (M2D:360-379):
+     * **OS: Linux.** `uname -a` and `/etc/os-release` are recorded verbatim, and the kernel and OS must match `FREEZE.md`.
      * **Virtualisation:** `systemd-detect-virt` prints `none` or names the hypervisor. No driver is bound under
        `/sys/bus/virtio/drivers/virtio_balloon/`. No dynamic memory or balloon is active.
      * **Sleep:** sleep and suspend are disabled (for example `sleep.target` and `suspend.target` masked).
      * **No competing load:** a process listing shows no other workloads (builds, tests, browsers, other agents).
      * **Pins match `FREEZE.md`:** CPU model and count, OS and kernel, Go, Chrome, driver and harness versions and sha256s.
      * **Instruments readable:** `/dev/kmsg` is readable and the heartbeat and noise sidecars run.
-     * **Disk:** enough free disk for the gate's artifacts.
+     * **Disk:** **at least 2 GiB free** on the filesystem holding the gate's artifacts (`df -B1 <artifacts dir>`). M2 sized B6
+       artifacts at "about 1.5 GB" (M2D:291, M2D:382); the isolation rerun kept 806 MB (M2D:190).
+     * **Memory:** **at least 4 GiB `MemAvailable`** (`/proc/meminfo`). This is a **Product default; no M2 measurement on
+       record.** No M2 record gives a peak memory use for any gate. The `mem_available=` values in the Round 6 evidence are
+       free memory on the box, not a peak (`milestone2/ticketdesk/evidence/round6_2026-10-19/kill_storm.txt:43`). If a gate's
+       peak is later measured and recorded, the minimum becomes 2× that peak by a dated revision before the gate's first run.
      * **Idle baseline:** a 120 s pre-run window on the same idle-gate terms as M2D:360-367. That means steal under 1%,
        PSI cpu `some avg60` under 5, PSI io `full avg60` under 2, PSI memory `full avg60` = 0, no heartbeat gap over 250 ms,
        and no `virtual machine fork` or `virtio_balloon` kmsg record.
    * **How the alternate is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA rerun.
    * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE and the decision passes to the Owner as a recorded
      revision or waiver. An Owner waiver is therefore the last path, not the only one.
+   * **An Owner decision on a BLOCKED-VENUE gate is recorded as `WAIVED, NOT PASSED`.**
+     * It never counts as PASS in any acceptance tally. `DECISION.md` lists it separately from PASS.
+     * Its record carries who, the date and time (ET), a verbatim quote and a link.
+     * This follows M2's W-B6-venue record: "B6 has no ACCEPTED verdict … it was not passed" (M2D:23-24).
 
 7. **On the shared box, a declared quiet window is required** for any timing-sensitive run: no other agent's builds, tests,
    storms or browser work (M2D:380-382). M2 had no artifact showing the box was idle (M2D:125-126), so M3 records one: a
