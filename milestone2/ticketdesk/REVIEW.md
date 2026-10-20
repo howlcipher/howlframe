@@ -1,5 +1,50 @@
 # Milestone 2 independent final review: ticketdesk
 
+# ROUND 7 ISOLATION RERUN, 2026-10-20: INFRA-VOID (not ACCEPTED)
+
+**Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role
+launched the run; the Eng Mgr compiled the record.
+
+* **Run:** exactly one pinned `--runs 225` invocation from a detached checkout of `7e9ef32e`, launched 01:07:09 EDT
+  after `IDLE_GATE PASS`. 225 PASS, **0 failures**, both crafted probes PASS.
+* **Breaches:** 16, all in one cluster during run 169's recovery:
+  * a 7.0 s stall-type gap (equal clocks);
+  * one freeze-type gap of 0.49 s monotonic against **19,610.7 s real** (about 01:59 to 07:26 EDT);
+  * one `virtual machine fork` record and 13 `virtio_balloon` "Out of puff" records.
+  * This is consistent with, not proven to be, a host-side snapshot or suspend.
+* **Verdict:** the script printed `noise=INFRA-VOID` and `VERDICT INFRA-VOID (one isolation rerun allowed, same pins)`,
+  and `EXIT=1` was captured. No `CLASSIFY` line (no failures).
+* **The overlapping request:** run 169 `GET t622`, 7.76 s monotonic (2.24 s margin to the 10 s deadline, mostly the
+  stall-type gap with all clocks running), server handler 0.25 ms. It passed.
+* **Checks:** clean reproduction exit 0 (acceptance 101/101, regression 10/10, DX 13/13). Freeze integrity passes.
+  Script sha256 `540c2433…3d38`, code pinned `e8fcea20`, HEAD `7e9ef32e`. No restart.
+
+**The isolation condition was NOT met.** On 2026-10-19 at 4:36 PM EDT, after the cloud VM launch failed for lack of
+usage and after declining to spend money, William (Owner) answered in the Grok Bot chat: "Retry the rerun on this box in
+a quiet window tonight". That waived the non-shared-machine term. The run used the same shared, ballooned, fork-prone
+box as Round 7, so it cannot separate product from infrastructure any better than Round 7. The declared quiet window
+ended at 06:00 EDT, but the run resumed at 07:26:40 and ended at 07:44:44 EDT. Whether this waived-venue invocation
+counts as the one pre-registered isolation rerun is William's decision. B6 remains open and **Milestone 2 is not
+accepted**.
+
+**Next step (Owner decision, 2026-10-20):** William's decision, not a recommendation of this review. At 7:57 AM EDT
+he wrote: "Can we note this in the repo and I'll run this and get findings on my pc."
+
+* He will run the B6 kill storm himself, once, on his own PC. Why: this box's logs show VM-fork and balloon records
+  and freeze-type gaps; Round 7 and this rerun passed 450/450 runs, but both were voided by box freezes.
+* The command is identical and pinned: detached `7e9ef32e`, script sha `540c2433`, `--expect-head e8fcea20`, EXIT
+  captured. An `IDLE_GATE` exit 3 is not an attempt. One attempt only.
+* The run must pass the same 120 s idle gate and the same noise gates as this record.
+* Venue evidence is recorded before launch: bare metal vs VM/WSL2, any balloon or dynamic memory,
+  sleep disabled, other workloads stopped, and `/dev/kmsg` readable. Whether the run counts as isolated is decided by
+  that evidence.
+* This is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result will be
+  recorded and reviewed separately, under the same decision rule, by a fresh reviewer.
+* M2 stays not accepted until then.
+
+Exact commands, breaches and gates: `milestone2/MILESTONE2_DECISION.md`, Round 7 isolation rerun.
+Evidence: `evidence/round7_isolation_2026-10-20/`; journal: `docs/journals/2026-10-20_ticketdesk_b6_round7_isolation.md`.
+
 # ROUND 7, 2026-10-19: INFRA-VOID (not ACCEPTED)
 
 **Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role, not Rounds 4–6, launched the run; the Eng Mgr compiled the record.

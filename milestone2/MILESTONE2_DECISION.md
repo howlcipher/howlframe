@@ -1,5 +1,130 @@
 # Milestone 2 decision
 
+# ROUND 7 ISOLATION RERUN (run 2026-10-20): INFRA-VOID; M2 not accepted
+
+Run by: a fresh Codex CLI session with no implementation role (not the Round 4–7 sessions), which checked the pins and
+launched the single invocation (`evidence/round7_isolation_2026-10-20/codex_launch_prompt.md`). The verdict is the
+script's own mechanical `VERDICT` line. The Eng Mgr session compiled this record from that output and ran clean_repro
+and the freeze check after the run ended. It applied no classification of its own.
+
+## Decision: INFRA-VOID (not ACCEPTED)
+
+The single invocation completed all 225 trials with **0 failures** (225 PASS) and both crafted probes PASS. The noise
+gates then reported **16 breaches**, so the script printed `noise=INFRA-VOID` and
+`VERDICT INFRA-VOID (one isolation rerun allowed, same pins)`, and exited 1 (`AssertionError: noise gates breached:
+INFRA-VOID`). The exit status was captured this time: `EXIT=1` is the last line of `kill_storm.txt`. No product
+failure occurred and no `CLASSIFY` line was printed. Full clean reproduction passed (101/101 acceptance, 10/10
+regression, 13/13 DX) and frozen paths are unchanged.
+
+* **The isolation condition was NOT met.** This ran on the same shared, ballooned, fork-prone box as Round 7 (see
+  "Venue" below). It therefore cannot separate product from infrastructure causes any better than Round 7 could.
+* **Whether this counts as the one isolation rerun is William's decision.** The script's `VERDICT` text is fixed and
+  generic. The rerun terms say "One attempt only … Every other exit is the attempt. No further reruns.", but the venue
+  term was waived. Whether this waived-venue invocation used up the pre-registered rerun is therefore for William
+  (Owner) to decide; this record does not state it as fact.
+* **Milestone 2 is not accepted.** B6 remains open and the milestone stop rule is not satisfied.
+* No restart was performed. No product code, script, or frozen files were edited.
+
+```
+SUMMARY runs=225 failures=0 orphan_runs=106 survivor_GETs=331903 survivor_DELETEs=331903; crafted probes=2 PASS; noise=INFRA-VOID breaches=16; SCRIPT_SHA256=540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38; CODE_SHA=7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989; CODE_PINNED=e8fcea2024b42bbfafd6e4410568c76d32e9c37a
+VERDICT INFRA-VOID (one isolation rerun allowed, same pins)
+EXIT=1
+```
+
+| Check / exact command | Result |
+|---|---|
+| Run checkout | `/workspace/hf-r7iso`, detached at `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`, single parent `e8fcea2024b42bbfafd6e4410568c76d32e9c37a`, clean tree before and after |
+| Pre-launch checks (Codex session) | exact HEAD, single expected parent, clean tree, script SHA-256, `CHECK_HEAD PASS`, artifacts path absent, no storm running |
+| `sha256sum milestone2/ticketdesk/evidence/b6_kill_storm.py` | `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38` (before and after) |
+| `cd /workspace/hf-r7iso && setsid nohup sh -c 'python3 milestone2/ticketdesk/evidence/b6_kill_storm.py --runs 225 --expect-sha256 540c2433…3d38 --expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a --artifacts /tmp/round7iso/artifacts ; echo "EXIT=$?"' > /tmp/round7iso/kill_storm.txt 2>&1 < /dev/null &` | exactly once, at 01:07:09 EDT (launcher pid 1696433); `IDLE_GATE PASS`; `BUILD PASS`; 225 PASS, 0 failures; 16 NOISE breaches; `VERDICT INFRA-VOID`; output ended 07:44:44 EDT (`kill_storm.txt` mtime) |
+| Exit status | `EXIT=1`, captured by the launcher shell. The run ended in `AssertionError: noise gates breached: INFRA-VOID` (script line 1348), with no other traceback |
+| `bash milestone2/scripts/clean_repro.sh` (after the run) | exit 0; acceptance 101/101, regression 10/10, DX 13/13 |
+| Freeze integrity: `git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md` | empty; exit 0: PASS (in the run checkout and on this branch's base `e41b6830`) |
+| `find /tmp/round7iso/artifacts -maxdepth 1 -type d -name 'run*_failure'` | none (no failures) |
+
+### Venue (William's waiver; isolation condition NOT met)
+
+The isolation rerun terms ask for "a non-shared machine with no VM snapshot or fork, no active balloon driver".
+
+* **Source of the waiver.** On 2026-10-19 the cloud agent VM launch failed for lack of usage (4:32–4:35 PM EDT), and
+  William declined to spend money on extra compute. At 4:36 PM EDT he answered in the Grok Bot chat with Rintaro:
+  "Retry the rerun on this box in a quiet window tonight". That knowingly waived the non-shared-machine term.
+* **Terms kept.** Every other term was kept: the pins, the identical command, a fresh artifacts directory, the explicit
+  exit capture, an independent non-Claude launcher, and one attempt only. The waiver changed no gate.
+* **The isolation condition was not met.** The waiver note and the pre-launch venue evidence were written before launch
+  (`venue_waiver.md`, `venue_evidence.txt`). They show the same shared virtio guest as Round 7, with the
+  `virtio_balloon` driver bound (built in, so `lsmod` shows nothing), 8 CPUs, 16 GB RAM, kernel `6.12.94+`, and six
+  `virtual machine fork` dmesg records between about 00:08 and 01:04 EDT that night. The `dmesg -T` wall times are
+  approximate after VM pauses.
+* **Quiet window.** The declared quiet window ran from launch until the run ended or 06:00 EDT at the latest. The run
+  was frozen from about 01:59:49 EDT, resumed at about 07:26:40 EDT and ended at 07:44:44 EDT, so its last
+  ~18 minutes fell **outside** the declared window. The operating session only waited on the output. No artifact shows
+  that other agents on the box were idle.
+
+### Noise breaches (one freeze-type gap; cause not proven)
+
+The 16 breaches all fall in one cluster at about 01:59 EDT, during run 169's recovery phase (runs 1–168 had no breach):
+
+* **6.978 s mono / 6.997 s real / 7.001 s boot gap** at 01:59:42.5–01:59:49.5 EDT (mono 29025.881): **stall-type**
+  (the clocks agree).
+* **0.487 s mono / 19610.689 s real / 0.464 s boot gap** starting 01:59:49.5 EDT (mono 29032.860): **freeze-type**. The
+  guest clock stopped from about 01:59:49 to 07:26:40 EDT, roughly 5 h 27 min.
+* Then `random: crng reseeded due to virtual machine fork` (mono 29033.57) and 13
+  `virtio_balloon virtio0: Out of puff! Can't get 1 pages` kmsg records (mono 29038.2–29046.2).
+* Breach count: 2 heartbeat gaps over 2 s (the script sizes a gap as max(mono, real, boot)) plus 14 kmsg matches,
+  16 in total. No steal breach (max 60 s steal 0.098%). PSI io `full avg10` peaked at 4.21 (gate 10). cgroup
+  `nr_throttled` went 0 → 0, there were no OOM events, and sampler coverage was 4238 samples over 4244 s monotonic.
+  Both sidecars stayed alive with empty stderr.
+
+A gap of that kind, with realtime jumping about 5.4 h while monotonic moved 0.49 s, followed by a VM-fork record and
+balloon reclaim, is consistent with the box being snapshotted or suspended and later resumed. It does not prove it.
+
+### The request that overlapped the gaps (diagnostic, not a criterion)
+
+* **Run 169 recovery, `GET /v1/tickets/t622`** (expected 404 after its confirmed DELETE; got 404):
+  * Client: 7.764 s monotonic (tsv seq 4850; the run line reports `max=7754.2ms`). On wall time it ran from
+    01:59:42.53 EDT until the next request at 07:26:40.53 EDT, about 19,618 s.
+  * **Margin to the 10 s deadline: 2.24 s.** Most of the 7.764 s (6.98 s) fell inside the stall-type gap, where all
+    clocks kept running. Only 0.49 s fell inside the freeze-type gap.
+  * Server timing log: lock wait 0.002 ms, handler 0.251 ms. The server answered at once; the stall was outside the
+    handler.
+  * Watchdog (`run169_recovery_watchdog.log`): one sample, at 7.655 s in flight, over a 7.924 s window. Server
+    process state `S`; 11 of 12 threads sleeping (mostly `futex_wait_queue`), one runnable.
+  * The deadline is monotonic by the pinned script (`Server.expect`, lines 286/295/308), as recorded for Round 7. Heartbeat
+    gaps cover 96% of the request's monotonic elapsed time (7.46 of 7.76 s), and nearly all of it on wall time.
+  * Counterfactual on wall time: it would have been a deadline failure, and the pinned `classify()` would have marked it
+    `infra` (gap cover over 80% plus an overlapping fork record). The verdict would then have been `NOT_ACCEPTED_INFRA`.
+    B6 stays open either way.
+
+### Next step (Owner decision, 2026-10-20)
+
+This is William's decision, recorded as given. It is not a recommendation of this record. At 7:57 AM EDT on 2026-10-20
+he wrote in the Grok Bot chat: "Can we note this in the repo and I'll run this and get findings on my pc."
+
+* **What William will do:** run the B6 kill storm himself, once, on his own PC.
+* **Why:** this box is a shared VM whose logs show VM-fork and balloon records and freeze-type gaps. Round 7 and this
+  rerun passed 450/450 runs between them, with 0 failures, but both were voided by box freezes.
+* **The command is identical and pinned:**
+  * a detached checkout of `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`;
+  * script sha256 `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38`;
+  * `--runs 225` and `--expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a`;
+  * a fresh artifacts directory, with the exit status captured (`sh -c '…; echo "EXIT=$?"'`).
+  * An `IDLE_GATE FAIL` (exit 3) is not an attempt. One attempt only.
+* **Gates:** the run must pass the same 120 s idle gate and the same noise gates as this record.
+* **Venue evidence before launch:** it is recorded before launch: bare metal vs VM/WSL2, any balloon or dynamic memory,
+  sleep disabled, other workloads stopped, and `/dev/kmsg` readable. Whether the run counts as isolated is decided by
+  that evidence.
+* **Status:** this is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result
+  will be recorded and reviewed separately, under the same Round 7 decision rule, by a fresh independent reviewer.
+* **Milestone 2 stays not accepted until then.**
+
+Evidence: `ticketdesk/evidence/round7_isolation_2026-10-20/` (storm output with the `EXIT=1` line, launcher record,
+Codex launch prompt, venue evidence and waiver, `script.sha256`, artifacts listing, heartbeat and kmsg logs, sidecar
+stderr, noise summary, the run 169 watchdog log, freeze-overlap excerpts, clean_repro output, freeze-integrity output
+and pin-test output, original plus a labelled re-run). The full 806 MB of artifacts stay in `/tmp/round7iso/artifacts`.
+
+---
+
 # ROUND 7 (run 2026-10-19): INFRA-VOID
 
 Run by: a fresh Codex CLI session with no implementation role (not the Round 4–6 sessions), which checked the pins

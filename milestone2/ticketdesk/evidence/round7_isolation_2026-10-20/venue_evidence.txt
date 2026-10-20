@@ -1,0 +1,127 @@
+# Venue evidence, recorded before launch: 2026-10-20T01:05:31-04:00
+## systemd-detect-virt
+--: line 1: systemd-detect-virt: command not found
+## /sys/class/dmi/id/product_name
+cat: /sys/class/dmi/id/product_name: No such file or directory
+## /sys/class/dmi/id/sys_vendor
+cat: /sys/class/dmi/id/sys_vendor: No such file or directory
+## lsmod | grep -i balloon
+(rc=1)
+## balloon driver in sysfs
+/sys/bus/virtio/drivers/virtio_balloon
+bind
+uevent
+unbind
+virtio0
+## nproc
+8
+## free -m
+               total        used        free      shared  buff/cache   available
+Mem:           16002       10470         693          43        5212        5531
+Swap:              0           0           0
+## uname -r
+6.12.94+
+## uptime
+ 01:05:31 up  7:09,  0 users,  load average: 0.50, 0.36, 0.30
+## df -h /tmp
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vdb        125G   20G  106G  16% /
+## dmesg grep -i 'fork|balloon|vmgenid|snapshot'
+[Mon Oct 19 18:04:01 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 18:04:03 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:03 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:04 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:04 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:05 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:05 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:05 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:06 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:06 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:06 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:04:08 2026] fill_balloon: 5 callbacks suppressed
+[Mon Oct 19 18:04:08 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:22 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 18:10:23 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:23 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:23 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:23 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:24 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:24 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:24 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:24 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:25 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:25 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:28 2026] fill_balloon: 9 callbacks suppressed
+[Mon Oct 19 18:10:28 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:10:28 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 18:21:23 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 18:29:07 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 19:11:44 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 20:59:48 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 20:59:51 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:52 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:52 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:53 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:54 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:55 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 21:00:08 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 21:08:16 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 21:13:28 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 23:54:46 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 23:54:55 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:58 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:58 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:00 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:01 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:01 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:02 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Tue Oct 20 00:08:12 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:23:20 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:30:18 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:51:49 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:57:55 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 01:04:05 2026] random: crng reseeded due to virtual machine fork
+## dmesg tail -40
+[Mon Oct 19 20:34:44 2026] R13: 0000000000000001 R14: 00007f7b0bb036e0 R15: 0000562e3db72b38
+[Mon Oct 19 20:34:44 2026] FS:  00007f7b0bb03740 GS:  0000000000000000
+[Mon Oct 19 20:59:48 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 20:59:51 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:52 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:52 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:53 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:54 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 20:59:55 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 21:00:08 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 21:08:16 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 21:13:28 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 23:54:46 2026] random: crng reseeded due to virtual machine fork
+[Mon Oct 19 23:54:55 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:58 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:58 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:54:59 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:00 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:01 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:01 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Mon Oct 19 23:55:02 2026] virtio_balloon virtio0: Out of puff! Can't get 1 pages
+[Tue Oct 20 00:08:12 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:23:20 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:30:02 2026] udevadm: systemd-udevd: potentially unexpected fatal signal 6.
+[Tue Oct 20 00:30:02 2026] CPU: 7 UID: 0 PID: 1163 Comm: systemd-udevd Not tainted 6.12.94+ #1
+[Tue Oct 20 00:30:02 2026] RIP: 0033:0x7f956fedeef3
+[Tue Oct 20 00:30:02 2026] Code: 64 89 01 48 83 c8 ff c3 66 2e 0f 1f 84 00 00 00 00 00 0f 1f 44 00 00 80 3d f1 26 0d 00 00 41 89 ca 74 14 b8 e8 00 00 00 0f 05 <48> 3d 00 f0 ff ff 77 5d c3 0f 1f 40 00 48 83 ec 28 89 54 24 18 48
+[Tue Oct 20 00:30:02 2026] RSP: 002b:00007fffdf48c218 EFLAGS: 00000202 ORIG_RAX: 00000000000000e8
+[Tue Oct 20 00:30:02 2026] RAX: fffffffffffffffc RBX: 0000558a98345000 RCX: 00007f956fedeef3
+[Tue Oct 20 00:30:02 2026] RDX: 000000000000008e RSI: 0000558a983939e0 RDI: 0000000000000009
+[Tue Oct 20 00:30:02 2026] RBP: 0000558a98345190 R08: 0000000000000004 R09: 00007f9570078080
+[Tue Oct 20 00:30:02 2026] R10: 00000000ffffffff R11: 0000000000000202 R12: ffffffffffffffff
+[Tue Oct 20 00:30:02 2026] R13: 0000000000000009 R14: 000000000000005a R15: 000000000000008e
+[Tue Oct 20 00:30:02 2026] FS:  00007f956fce68c0 GS:  0000000000000000
+[Tue Oct 20 00:30:18 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:51:49 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 00:57:55 2026] random: crng reseeded due to virtual machine fork
+[Tue Oct 20 01:04:05 2026] random: crng reseeded due to virtual machine fork

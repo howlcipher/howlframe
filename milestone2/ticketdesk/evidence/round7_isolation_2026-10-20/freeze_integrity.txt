@@ -1,0 +1,12 @@
+# Freeze integrity (registered command), run 2026-10-20 ~07:46 EDT
+## in /workspace/hf-r7isorec (HEAD e41b68304179581a16b78606a4ca3e52cb319004)
+$ git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md
+(empty) exit=0
+## in /workspace/hf-r7iso (HEAD 7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989)
+$ git diff 10d9c2a8 HEAD --name-status -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md
+(empty) exit=0
+## run checkout state
+$ git -C /workspace/hf-r7iso status --porcelain
+(empty)
+$ sha256sum milestone2/ticketdesk/evidence/b6_kill_storm.py (run checkout, after the run)
+540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38  milestone2/ticketdesk/evidence/b6_kill_storm.py
