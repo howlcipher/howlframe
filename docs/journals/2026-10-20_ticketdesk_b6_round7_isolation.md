@@ -71,3 +71,5 @@ the repo and I'll run this and get findings on my pc."
 * **Status:** this is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result
   will be recorded and reviewed separately, under the same decision rule, by a fresh reviewer. M2 stays not accepted
   until then.
+* **Superseded 2026-10-20 11:24 EDT:** William answered "Waive the B6 venue requirement and accept M2". The PC run
+  will not be done; see `docs/journals/2026-10-20_m2_acceptance.md`.
