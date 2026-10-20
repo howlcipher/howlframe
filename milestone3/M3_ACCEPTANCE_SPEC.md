@@ -23,6 +23,8 @@ William Elias (Owner) selected the option "Approve, but my PC isn't a backup ven
 2. **APPROVED: manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser
    or m10 step without `workflow` scope (M2R:330-334), and wiring that is the Owner's call (§6).
 3. **DECLINED and removed: an alternate venue on the Owner's own machine.** No alternate venue is pre-registered (§5 rule 6).
+   On 2026-10-20 at 16:32 ET the Owner also dropped the Owner-named-venue path (R4, `milestone3/OWNER_ACK_2026-10-20.md`):
+   no venue can be added later.
 4. **APPROVED: runtime fixes made as entry criteria** (WE-1 m12, WE-4 m17, and WE-5 m2 if bearer auth is used). Each is a
    narrow demonstrated-blocker fix under DIR:198.
 
@@ -78,10 +80,7 @@ Harness/corpus pins:   <path> sha256 <hex>   (one line each: suites, E4 corpus, 
 Seeds:                 <name>=<value>        (one line each)
 W8 bounded N:          <N, or "n/a: WE-3 met">                  # P-WEB only, set before the freeze
 Timing bounds:         <gate>: <absolute monotonic bound>   (one line each; OQ-9)
-Alternate venue:       none pre-registered (§5 rule 6)
-Owner-named venue:     only if the Owner names one by a dated revision before the gate's run (§5 rule 6); otherwise "none"
-  Venue consent:       who=<owner of that machine>  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim>"  link=<URL>   # only with an Owner-named venue
-  Venue window:        <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>                               # only with an Owner-named venue
+Alternate venue:       none; no venue can be added (§5 rule 6, R4)
 Owner ack:             who=William Elias (Owner)  date=2026-10-20 15:23 ET  source=relayed by EngMgr (Rintaro Okabe)
                        option="Approve, but my PC isn't a backup venue"  chat record="Approve items 1, 2 and 4; drop my PC as the alternate venue"
                        items: 1 APPROVED (W3/W13 JS exception); 2 APPROVED (manual non-CI runs); 3 DECLINED (Owner's machine as alternate venue; removed); 4 APPROVED (runtime fixes as entry criteria)
@@ -622,45 +621,16 @@ These are based on what M2 actually did and learned.
      planned PC run never happened (M2D:10-12, M2D:184-185), and an Owner waiver became the only way out (M2D:14-19).
    * **When it applies:**
      * a gate's second INFRA outcome; or
-     * the venue the gate needs (an isolated venue, or an Owner-named one) cannot be obtained.
+     * the venue the gate needs cannot be obtained.
    * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
-   * **No alternate venue is pre-registered.** The Owner declined the earlier proposal on 2026-10-20 at 15:23 ET ("Approve items 1, 2 and 4; drop my PC as the alternate venue",
-     relayed by EngMgr). A BLOCKED-VENUE gate resolves **only** in one of two ways:
-     1. **an Owner decision recorded as `WAIVED, NOT PASSED`** (below); or
-     2. **the Owner names a new venue by a dated revision before that gate's run.** That revision records the machine, the
-        consent of its owner and a pre-registered availability window in ET (the `Owner-named venue` fields in §1.1.1). The
-        venue must then pass `venue_evidence.txt`. Without the consent and window, the venue is not available and the gate
-        stays BLOCKED-VENUE. A run outside a recorded window does not count.
-   * **No venue after a FAIL; registration before the first run on that venue.** *(Revision R1, 2026-10-20, after the spec
-     freeze at `e6fdd48a`, as amended by R3; see `milestone3/FREEZE.md`.)*
-     * An Owner-named venue must be **registered before the gate's first run on that venue**. A gate that has already run
-       elsewhere, with no FAIL recorded, may still have an Owner-named venue registered.
-     * Once a gate has recorded a FAIL, no venue may be named or added for that gate. A FAIL is final for that pin (rule 2),
-       and a new venue cannot be used to rerun it.
-   * **Venue evidence before any run on an Owner-named venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
-     before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
-     BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
-     noise gates (M2D:360-379):
-     * **OS: Linux.** `uname -a` and `/etc/os-release` are recorded verbatim, and the kernel and OS must match `FREEZE.md`.
-     * **Virtualisation:** `systemd-detect-virt` prints `none` or names the hypervisor. No driver is bound under
-       `/sys/bus/virtio/drivers/virtio_balloon/`. No dynamic memory or balloon is active.
-     * **Sleep:** sleep and suspend are disabled (for example `sleep.target` and `suspend.target` masked).
-     * **No competing load:** a process listing shows no other workloads (builds, tests, browsers, other agents).
-     * **Pins match `FREEZE.md`:** CPU model and count, OS and kernel, Go, Chrome, driver and harness versions and sha256s.
-     * **Instruments readable:** `/dev/kmsg` is readable and the heartbeat and noise sidecars run.
-     * **Disk:** **at least 2 GiB free** on the filesystem holding the gate's artifacts (`df -B1 <artifacts dir>`). M2 sized B6
-       artifacts at "about 1.5 GB" (M2D:291, M2D:382); the isolation rerun kept 806 MB (M2D:190).
-     * **Memory:** **at least 4 GiB `MemAvailable`** (`/proc/meminfo`). This is a **Product default; no M2 measurement on
-       record.** No M2 record gives a peak memory use for any gate. The `mem_available=` values in the Round 6 evidence are
-       free memory on the box, not a peak (`milestone2/ticketdesk/evidence/round6_2026-10-19/kill_storm.txt:43`). If a gate's
-       peak is later measured and recorded, the minimum becomes 2× that peak by a dated revision before the gate's first run.
-     * **Idle baseline:** a 120 s pre-run window on the same idle-gate terms as M2D:360-367. That means steal under 1%,
-       PSI cpu `some avg60` under 5, PSI io `full avg60` under 2, PSI memory `full avg60` = 0, no heartbeat gap over 250 ms,
-       and no `virtual machine fork` or `virtio_balloon` kmsg record.
-   * **How an Owner-named venue is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA
-     rerun.
-   * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE until the Owner decides again, either by naming
-     another venue or by a `WAIVED, NOT PASSED` record.
+   * **No alternate venue, and no venue can be added.** *(Revision R4, 2026-10-20; Owner decision 16:32 ET,
+     `milestone3/OWNER_ACK_2026-10-20.md`.)*
+     * The Owner declined his own PC as an alternate venue on 2026-10-20 at 15:23 ET.
+     * At 16:32 ET he dropped the path for him to name a new venue later ("Drop the Owner-named venue path; blocked checks
+       can only be waived, never passed", relayed by EngMgr).
+     * No venue may be named or added for any gate.
+   * **A BLOCKED-VENUE gate has exactly one outcome:** an Owner decision recorded as `WAIVED, NOT PASSED`. It is never
+     PASS, and it is not resolved by moving the gate to another venue.
    * **An Owner decision on a BLOCKED-VENUE gate is recorded as `WAIVED, NOT PASSED`.**
      * It never counts as PASS in any acceptance tally. `DECISION.md` lists it separately from PASS.
      * Its record carries who, the date and time (ET), a verbatim quote and a link.

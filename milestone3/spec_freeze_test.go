@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Pinned sha256 values, recorded in milestone3/FREEZE.md §5 (post-R3 values).
+// Pinned sha256 values, recorded in milestone3/FREEZE.md §5 (post-R4 values).
 // None of the pinned files contains its own pin.
 const (
 	specPath     = "M3_ACCEPTANCE_SPEC.md"
@@ -22,10 +22,10 @@ const (
 	ownerAckPath = "OWNER_ACK_2026-10-20.md"
 	freezePath   = "FREEZE.md"
 
-	pinSpec     = "b15a2028d8a3db45d6d7b1983bdf1060d26abd86e4e5f90772f6f388e7fcca60"
+	pinSpec     = "3a3165bfcc4c41c2f8ef8cf977d0850a5386ada1960d5b7890250153ceb28a23"
 	pinSealed   = "2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b"
 	pinSection7 = "7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09"
-	pinOwnerAck = "afaacfd9d25796266142ca075344bcee7aac4fddd329bb2bc4f07373de970ace"
+	pinOwnerAck = "5b8a7e7a04b0b887ba85ef2da946513f80674f8de9be03f242fad181611a7ce3"
 )
 
 func sha(b []byte) string {
