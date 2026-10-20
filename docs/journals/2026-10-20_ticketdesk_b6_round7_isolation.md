@@ -1,6 +1,6 @@
 # Ticketdesk B6 Round 7 isolation rerun, 2026-10-20
 
-This was the isolation rerun the Round 7 rule allowed after the 2026-10-19 INFRA-VOID (#201), run at a waived venue.
+This run followed the 2026-10-19 INFRA-VOID (#201). It was launched as the isolation rerun, at a waived venue; whether it counts is William's decision.
 
 ## Venue
 
@@ -59,11 +59,15 @@ the one pre-registered isolation rerun is William's decision. No product, script
 This is William's decision, not a recommendation. At 7:57 AM EDT he wrote in the Grok Bot chat: "Can we note this in
 the repo and I'll run this and get findings on my pc."
 
-* **What:** he will run the B6 kill storm himself, once, on his own non-shared PC as the independent venue.
-* **Why:** the box is a shared VM that the host freezes, forks and balloons. Round 7 and this rerun passed 450/450 runs,
-  but both were voided by box freezes.
+* **What:** he will run the B6 kill storm himself, once, on his own PC.
+* **Why:** the box is a shared VM whose logs show VM-fork and balloon records and freeze-type gaps. Round 7 and this
+  rerun passed 450/450 runs, but both were voided by box freezes.
 * **Command:** the identical pinned one: detached `7e9ef32e`, script sha `540c2433`, `--expect-head e8fcea20`, EXIT
   captured. An `IDLE_GATE` exit 3 is not an attempt. One attempt only.
+* **Gates:** the run must pass the same 120 s idle gate and the same noise gates as this record.
+* **Venue evidence before launch:** it is recorded before launch: bare metal vs VM/WSL2, any balloon or dynamic memory,
+  sleep disabled, other workloads stopped, and `/dev/kmsg` readable. Whether the run counts as isolated is decided by
+  that evidence.
 * **Status:** this is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result
   will be recorded and reviewed separately, under the same decision rule, by a fresh reviewer. M2 stays not accepted
   until then.

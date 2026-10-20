@@ -101,15 +101,19 @@ balloon reclaim, is consistent with the box being snapshotted or suspended and l
 This is William's decision, recorded as given. It is not a recommendation of this record. At 7:57 AM EDT on 2026-10-20
 he wrote in the Grok Bot chat: "Can we note this in the repo and I'll run this and get findings on my pc."
 
-* **What William will do:** run the B6 kill storm himself, once, on his own non-shared PC as the independent venue.
-* **Why:** this box is a shared VM that the host freezes, forks and balloons. Round 7 and this isolation rerun passed
-  450/450 runs between them, with 0 failures, but both were voided by box freezes.
+* **What William will do:** run the B6 kill storm himself, once, on his own PC.
+* **Why:** this box is a shared VM whose logs show VM-fork and balloon records and freeze-type gaps. Round 7 and this
+  rerun passed 450/450 runs between them, with 0 failures, but both were voided by box freezes.
 * **The command is identical and pinned:**
   * a detached checkout of `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`;
   * script sha256 `540c243325c7b9d5439f0c592e04354ec9937ce98ec8beab760874671bd83d38`;
   * `--runs 225` and `--expect-head e8fcea2024b42bbfafd6e4410568c76d32e9c37a`;
   * a fresh artifacts directory, with the exit status captured (`sh -c '…; echo "EXIT=$?"'`).
   * An `IDLE_GATE FAIL` (exit 3) is not an attempt. One attempt only.
+* **Gates:** the run must pass the same 120 s idle gate and the same noise gates as this record.
+* **Venue evidence before launch:** it is recorded before launch: bare metal vs VM/WSL2, any balloon or dynamic memory,
+  sleep disabled, other workloads stopped, and `/dev/kmsg` readable. Whether the run counts as isolated is decided by
+  that evidence.
 * **Status:** this is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result
   will be recorded and reviewed separately, under the same Round 7 decision rule, by a fresh independent reviewer.
 * **Milestone 2 stays not accepted until then.**
@@ -117,7 +121,7 @@ he wrote in the Grok Bot chat: "Can we note this in the repo and I'll run this a
 Evidence: `ticketdesk/evidence/round7_isolation_2026-10-20/` (storm output with the `EXIT=1` line, launcher record,
 Codex launch prompt, venue evidence and waiver, `script.sha256`, artifacts listing, heartbeat and kmsg logs, sidecar
 stderr, noise summary, the run 169 watchdog log, freeze-overlap excerpts, clean_repro output, freeze-integrity output
-and pin-test output). The full 806 MB of artifacts stay in `/tmp/round7iso/artifacts`.
+and pin-test output, original plus a labelled re-run). The full 806 MB of artifacts stay in `/tmp/round7iso/artifacts`.
 
 ---
 

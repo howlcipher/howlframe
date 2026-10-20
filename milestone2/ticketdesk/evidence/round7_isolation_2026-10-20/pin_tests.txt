@@ -1,6 +1,6 @@
 --- PASS: TestRound7StormScriptPinned (0.00s)
---- PASS: TestRound7StormScriptSigstopSelfTest (10.19s)
+--- PASS: TestRound7StormScriptSigstopSelfTest (10.17s)
 --- PASS: TestRound7StormScriptNoiseSelfTest (4.45s)
---- PASS: TestRound7ExpectHeadPinRules (0.93s)
+--- PASS: TestRound7ExpectHeadPinRules (0.86s)
 PASS
-ok  	github.com/howlcipher/howlframe	15.578s
+ok  	github.com/howlcipher/howlframe	15.482s

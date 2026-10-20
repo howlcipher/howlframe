@@ -30,9 +30,14 @@ accepted**.
 **Next step (Owner decision, 2026-10-20):** William's decision, not a recommendation of this review. At 7:57 AM EDT
 he wrote: "Can we note this in the repo and I'll run this and get findings on my pc."
 
-* He will run the B6 kill storm himself, once, on his own non-shared PC.
+* He will run the B6 kill storm himself, once, on his own PC. Why: this box's logs show VM-fork and balloon records
+  and freeze-type gaps; Round 7 and this rerun passed 450/450 runs, but both were voided by box freezes.
 * The command is identical and pinned: detached `7e9ef32e`, script sha `540c2433`, `--expect-head e8fcea20`, EXIT
   captured. An `IDLE_GATE` exit 3 is not an attempt. One attempt only.
+* The run must pass the same 120 s idle gate and the same noise gates as this record.
+* Venue evidence is recorded before launch: bare metal vs VM/WSL2, any balloon or dynamic memory,
+  sleep disabled, other workloads stopped, and `/dev/kmsg` readable. Whether the run counts as isolated is decided by
+  that evidence.
 * This is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result will be
   recorded and reviewed separately, under the same decision rule, by a fresh reviewer.
 * M2 stays not accepted until then.
