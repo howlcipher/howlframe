@@ -1,16 +1,17 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** FROZEN at `e6fdd48a` + R1–R5 (spec freeze, `milestone3/FREEZE.md` §1; R1 superseded by R4). Later changes are the
-dated revisions listed there.
+**Status:** FROZEN when #206 merges to `main`: `e6fdd48a` + the pre-merge revisions R1–R7 (`milestone3/FREEZE.md` §1 and §4;
+R1 is superseded by R4). Each revision is listed in `milestone3/OWNER_ACK_2026-10-20.md` §7 with its ack status. From that
+merge on, the revision rule below applies.
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
 * The spec freezes once the independent review accepts it **and** the Owner decision below is recorded in each project's
   `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
-* After the freeze, changes need a separately recorded, dated revision (directive §8, "Record decisions without retroactive
-  goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every post-freeze change is a dated revision row with the
-  spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made after any result of a
-  gate that the revision affects is known.
+* From the #206 merge on, changes need a separately recorded, dated revision (directive §8, "Record decisions without
+  retroactive goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every change after that merge is a dated
+  revision row with the spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made
+  after any result of a gate that the revision affects is known. R1–R7 are pre-merge content, not post-freeze revisions.
   * **Owner-reserved decisions** *(R5; from EngMgr's determination, 2026-10-20 16:37 ET, recorded in `milestone3/FREEZE.md` §4)*. A revision that relaxes a gate, or
     that touches any of the following, needs its own Owner ack:
     * waivers, including any `WAIVED, NOT PASSED` record;
@@ -430,12 +431,12 @@ browser side only:
   * the server is HFBC under `howlframe run` in every case. Under the WE-3 fallback, the workload is the same frozen W8
     workload truncated to the pre-registered N in `FREEZE.md` (OQ-8);
   * any receipt used by W8, or by a held-out W8 check, with `effects_truncated: true` counts as FAIL, never as PASS.
-* **Fail-closed dependency** *(R5, a strictly tightening clarification)*: the "accepted P-ECO tool" means a P-ECO that
-  passed every E-gate.
-  * A P-ECO that is `WAIVED, NOT PASSED`, in whole or in any gate, does **not** count as accepted for W8, and W8 cannot
-    PASS against it.
-  * The only exception is a separate, dated Owner decision that says it does count, recorded in an
-    `OWNER_ACK_<date>.md` file.
+* **What "accepted P-ECO tool" means** *(R7; Owner decision 2026-10-20 16:51 ET, `milestone3/OWNER_ACK_2026-10-20.md` §6)*:
+  every E-gate is either PASSED or Owner-waived.
+  * An Owner-waived gate is one recorded `WAIVED, NOT PASSED` with a dated Owner decision. It counts toward the accepted
+    P-ECO that W8 relies on, with **no second Owner decision**.
+  * An E-gate that is neither PASSED nor Owner-waived (FAIL, INFRA, BLOCKED-VENUE without a waiver, or not yet run)
+    **blocks W8**.
 * **Command:**
   * the grant matrix script (frozen at requirements freeze);
   * then the P-ECO tool on the WE-3 receipt plus `milestone3/web/requirements/policy.*`.
@@ -515,8 +516,8 @@ browser side only:
 ## 2. Order: P-ECO first, then P-WEB
 
 **Decision: P-ECO (the receipt and grant-audit verifier) first, and accepted on its own gates. Then P-WEB, which consumes the
-accepted verifier in its integration gate W8.** "Accepted" here means every E-gate PASSED. A P-ECO with any waived gate does
-not satisfy W8 without a separate, dated Owner decision (W8, R5).
+accepted verifier in its integration gate W8.** "Accepted" here means every E-gate is PASSED or Owner-waived
+(`WAIVED, NOT PASSED` with a dated Owner decision). A gate that is neither blocks W8 (W8, R7, Owner decision 16:51 ET).
 
 **Why (evidence):**
 1. **Authority verification was manual in both milestones.**
@@ -640,8 +641,16 @@ These are based on what M2 actually did and learned.
    * **What is recorded:** BLOCKED-VENUE, with the evidence for its cause: either the two INFRA runs' heartbeat, kmsg and noise
      excerpts (rule 2), or a record that the venue could not be obtained or could not hold rule 7's quiet window. The
      project's acceptance stays **pending**, never PASS.
-   * **Consequence** *(R5, a strictly tightening clarification)*:
-     * A gate whose venue fails isolation, or is BLOCKED-VENUE for any reason, **cannot be PASSED**.
+   * **"Fails isolation"** *(R7)* means **exactly** rule 2's INFRA test, carried over from M2 Round 7 (M2D:404-406, M2D:411).
+     There is no other trigger. A run on the venue fails isolation when either:
+     * a failure is INFRA under rule 2: heartbeat gaps cover at least 80% of its monotonic elapsed time, or a recorded
+       `virtual machine fork`/`virtio_balloon` kmsg record or a steal breach overlaps it; or
+     * a run with 0 failures has a noise breach (INFRA-VOID). The noise breach is M2's noise gates (M2D:371-379), which
+       include a heartbeat gap over 2 s and any `virtual machine fork` or `virtio_balloon` kmsg record.
+     The first such run uses rule 2's single rerun. A second makes the gate BLOCKED-VENUE.
+   * **Consequence** *(R5; Owner-acked 2026-10-20 16:51 ET)*:
+     * A gate whose venue fails isolation, or is BLOCKED-VENUE for any reason, **cannot be PASSED**. An INFRA or INFRA-VOID
+       run never counts as a PASS.
      * While that gate is open, its project (P-ECO or P-WEB), and so M3, **cannot be ACCEPTED**.
      * Its **only outcome** is an Owner decision recorded as `WAIVED, NOT PASSED` (below).
    * **No alternate venue, and no venue can be added.** *(Revision R4, 2026-10-20; Owner decision 16:32 ET,

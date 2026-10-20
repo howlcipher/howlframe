@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// Pinned sha256 values (post-R6; the spec is unchanged since R5). FREEZE.md §5 records every pin except
+// Pinned sha256 values (post-R7). FREEZE.md §5 records every pin except
 // pinFreeze, FREEZE.md's own hash, which only this file holds. No pinned file
 // contains its own pin.
 const (
@@ -23,11 +23,11 @@ const (
 	ownerAckPath = "OWNER_ACK_2026-10-20.md"
 	freezePath   = "FREEZE.md"
 
-	pinSpec     = "d5513fd729a519cacc58a436473dc6f2e6c61e148d6d835ff67bb6bf969e1cb7"
+	pinSpec     = "8a20258e80b18384842bca6b65b27869dce143669610e2236e3735b5b2f8782c"
 	pinSealed   = "2bdb70870f55cbe029ecaab1889955ec878931671ab834aa5ce0518a0d3acf3b"
 	pinSection7 = "7dbeb891f72c35c8416ea59e67ce4d1fb26877c93ca870a2f5e1f7aabdb3bd09"
-	pinOwnerAck = "e67fc149d78a87332bc930687f29b46ec76a70991c0f509c88bbee3391aad538"
-	pinFreeze   = "31c67eee56cde8fd9293f2f672246abeb644f23fc085794126b7ef3ade7bf493"
+	pinOwnerAck = "380370403e266310d43cc09abdbf67b27ac3617be2ff4a063a9cde8d9cbc082f"
+	pinFreeze   = "bbdb9c6dc038c5494276014aba0738bb953e1e993a19153f5fac887794ef2a3f"
 )
 
 func sha(b []byte) string {
@@ -91,10 +91,13 @@ var sourceAllowlist = map[string]string{
 	"spec_freeze_test.go": "",
 }
 
+// isVerifierSource matches case-insensitively (R7): .GO, .Howl and ECO/SRC/ all count. HFIR
+// .json is source under eco/src/, verifier/ and non-allowlisted eco/ paths (all their files are).
 func isVerifierSource(p string) bool {
 	if _, ok := sourceAllowlist[p]; ok {
 		return false
 	}
+	p = strings.ToLower(p)
 	if strings.HasPrefix(p, "eco/src/") || strings.HasPrefix(p, "verifier/") {
 		return true
 	}
@@ -115,7 +118,7 @@ func isVerifierSource(p string) bool {
 }
 
 // isSuitePath: files of the Auditor's E-gate suite and fixtures (FREEZE.md §3 condition 3).
-func isSuitePath(p string) bool { return strings.HasPrefix(p, "eco/tests/") }
+func isSuitePath(p string) bool { return strings.HasPrefix(strings.ToLower(p), "eco/tests/") }
 
 func verifierSources(t *testing.T) []string {
 	t.Helper()
