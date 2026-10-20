@@ -1,5 +1,28 @@
 # Milestone 2 independent final review: ticketdesk
 
+# ROUND 7 ISOLATION RERUN, 2026-10-20: INFRA-VOID (not ACCEPTED); the only rerun is spent
+
+**Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role
+launched the run; the Eng Mgr compiled the record.
+Exactly one pinned `--runs 225` invocation from a detached checkout of `7e9ef32e`, launched 01:07:09 EDT on the shared
+box after `IDLE_GATE PASS`: 225 PASS, **0 failures**, both crafted probes PASS. Then 16 noise breaches, all in one
+cluster during run 169's recovery: a 7.0 s stall-type gap (equal clocks), then a freeze-type gap of 0.49 s monotonic
+against **19,610.7 s real** (about 01:59 to 07:26 EDT), one `virtual machine fork` record and 13 `virtio_balloon` "Out
+of puff" records. That is consistent with, not proven to be, a host-side snapshot or suspend. The script printed
+`noise=INFRA-VOID` and `VERDICT INFRA-VOID (one isolation rerun allowed, same pins)`, and `EXIT=1` was captured. No
+`CLASSIFY` line (no failures). One request overlapped the freeze (run 169 `GET t622`, 7.76 s monotonic, server
+handler 0.25 ms) and passed.
+Clean reproduction: exit 0; acceptance 101/101, regression 10/10, DX 13/13. Freeze integrity passes. Script sha256
+`540c2433…3d38`, code pinned `e8fcea20`, HEAD `7e9ef32e`. No restart.
+
+Venue: William (Owner) knowingly waived the non-shared-machine term and chose this shared box in an overnight quiet
+window; all other rerun terms were kept (`evidence/round7_isolation_2026-10-20/venue_waiver.md`).
+
+**This was the one pre-registered isolation rerun, and this second INFRA-VOID spends it.** No further rerun is
+registered. B6 remains open, **Milestone 2 is not accepted**, and the next step is William's decision.
+Exact commands, breaches and gates: `milestone2/MILESTONE2_DECISION.md`, Round 7 isolation rerun.
+Evidence: `evidence/round7_isolation_2026-10-20/`; journal: `docs/journals/2026-10-20_ticketdesk_b6_round7_isolation.md`.
+
 # ROUND 7, 2026-10-19: INFRA-VOID (not ACCEPTED)
 
 **Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role, not Rounds 4–6, launched the run; the Eng Mgr compiled the record.

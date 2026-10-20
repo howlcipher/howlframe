@@ -1,0 +1,15 @@
+# bash milestone2/scripts/clean_repro.sh, run 2026-10-20 ~07:46 EDT after the storm ended, on branch base e41b68304179581a16b78606a4ca3e52cb319004 (origin/main; code identical to 7e9ef32e outside docs/evidence)
+Built /tmp/tmp.U1u87R5owg/out/ticketdesk.hfbc
+== acceptance
+PASS R16
+PASS R17
+
+101 tests, 101 passed, 0 failed
+== review-finding regressions (default runner ceilings)
+PASS wrong_shape_state
+
+10 tests, 0 failed
+== developer-experience checker
+
+13 checks, 13 passed, 0 failed
+EXIT=0
