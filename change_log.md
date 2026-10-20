@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Verification
+* Fresh all-milestone rebuild authorized 2026-10-20; froze independent Milestone 3 EvidenceDesk and real HowlBoard projector requirements before implementation. Prior acceptance records remain historical evidence.
 * Milestone 2 closure: recorded independent Round 4 acceptance, refreshed the handoff, and indexed verification evidence in `milestone2/MILESTONE2_DECISION.md`. No runtime or frozen-test changes.
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 

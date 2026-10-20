@@ -2,7 +2,7 @@
 
 > **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
 
-Milestone 2 (D29 A, C, D, G, H) is accepted. See the [closure evidence and carryover](milestone2/MILESTONE2_DECISION.md).
+The historical Milestone 2 (D29 A, C, D, G, H) acceptance is recorded. A fresh requirements-first rebuild of all three milestones is in progress. See the [closure evidence and carryover](milestone2/MILESTONE2_DECISION.md).
 
 ## What is HowlFrame?
 
