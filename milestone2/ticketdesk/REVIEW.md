@@ -1,5 +1,10 @@
 # Milestone 2 independent final review: ticketdesk
 
+**Owner update, 2026-10-20 11:24 EDT:** William answered "Waive the B6 venue requirement and accept M2". Milestone 2 is
+ACCEPTED by the Owner under a B6 venue waiver (450/450 runs passed at pin `7e9ef32e`; isolation was never demonstrated),
+and the PC run below is superseded. See `milestone2/MILESTONE2_DECISION.md` and
+`docs/journals/2026-10-20_m2_acceptance.md`.
+
 # ROUND 7 ISOLATION RERUN, 2026-10-20: INFRA-VOID (not ACCEPTED)
 
 **Decision: INFRA-VOID** (the script's mechanical verdict). A fresh Codex CLI session with no implementation role
@@ -41,6 +46,7 @@ he wrote: "Can we note this in the repo and I'll run this and get findings on my
 * This is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result will be
   recorded and reviewed separately, under the same decision rule, by a fresh reviewer.
 * M2 stays not accepted until then.
+* **Superseded 2026-10-20 11:24 EDT** by the Owner's B6 venue waiver and M2 acceptance (top of this file).
 
 Exact commands, breaches and gates: `milestone2/MILESTONE2_DECISION.md`, Round 7 isolation rerun.
 Evidence: `evidence/round7_isolation_2026-10-20/`; journal: `docs/journals/2026-10-20_ticketdesk_b6_round7_isolation.md`.

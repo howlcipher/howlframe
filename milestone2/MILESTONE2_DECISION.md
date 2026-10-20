@@ -1,5 +1,42 @@
 # Milestone 2 decision
 
+# MILESTONE 2 ACCEPTED BY THE OWNER (2026-10-20, 11:24 EDT), with a B6 venue waiver
+
+## Decision: ACCEPTED (Owner decision; B6 isolation never demonstrated)
+
+This is William's (Owner) decision, recorded as given. It is not a mechanical verdict of the B6 script, and it does
+not change the INFRA-VOID verdicts recorded below.
+
+* **Context.** William could not run the B6 kill storm on his PC because he is not at home, and asked in the Grok Bot
+  chat with Rintaro: "Can we skip this or work around?". At 11:24 AM EDT on 2026-10-20 he answered: "Waive the B6 venue
+  requirement and accept M2".
+* **Waiver W-B6-venue.** The B6 kill-storm isolation/venue requirement (an isolated, non-shared venue with no VM
+  snapshot or fork and no active balloon driver, or the Owner-authorized PC run below) is waived for Milestone 2.
+* **Evidence the waiver accepts B6 on.** Both runs used the identical pinned invocation (code `7e9ef32e`, script sha256
+  `540c2433…3d38`, `--runs 225`, `--expect-head e8fcea20`) on the shared box:
+  * Round 7 (record #201, `e41b6830`): 225/225 PASS, 0 failures, both crafted probes PASS; INFRA-VOID on 16 noise
+    breaches clustered around two VM-fork events (stall- and freeze-type heartbeat gaps, VM-fork and balloon kmsg).
+  * Round 7 isolation rerun (record #202, `883f26de`): 225/225 PASS, 0 failures, both crafted probes PASS; INFRA-VOID
+    on 16 noise breaches around one freeze-type gap (a VM-fork record and balloon kmsg).
+  * 450/450 runs passed in total. Neither run printed a `CLASSIFY` line, so no B6 behavioural failure was observed.
+    Both were INFRA-VOID only because of host noise breaches. Three requests overlapped the host gaps (Round 7 t997
+    and t487, rerun t622); all three passed under the pinned monotonic 10 s deadline. The records note that on wall time
+    all three would have exceeded 10 s and been classified `infra` by the pinned `classify()`.
+* **What the waiver means.** It accepts B6 on that evidence **without an isolated-venue run**. B6 isolation was **never
+  demonstrated**: both runs were on the shared, ballooned, fork-prone box, and the cause of the gaps is not proven.
+* **The PC run is superseded.** The Owner-authorized PC run in "Next step (Owner decision, 2026-10-20)" below will not
+  be done for M2.
+* **Other gates.** Lain's final independent assurance review (#203, `dd8f2728`,
+  `milestone2/ASSURANCE_M2_FINAL_REVIEW.md`) passes gates A, C, D and G under Owner waivers W-m2, W-m3, W-m4, W-m12 and
+  W-m17 (granted 2026-10-20 11:02 EDT), passes H unconditionally, and records the m10 regression tests
+  (`assurance_m10.py`) as manual-only until a workflow-scoped change adds the CI step. That review excluded B6, which
+  this waiver now covers.
+* **Result: Milestone 2 (ticketdesk, D29 A, C, D, G, H) is ACCEPTED by the Owner** under waivers W-m2, W-m3, W-m4,
+  W-m12, W-m17 and W-B6-venue. Per the directive's stop rule, the M2 loop stops here and M3 planning follows.
+* No product code, script, pin or frozen files are changed by this record.
+
+---
+
 # ROUND 7 ISOLATION RERUN (run 2026-10-20): INFRA-VOID; M2 not accepted
 
 Run by: a fresh Codex CLI session with no implementation role (not the Round 4–7 sessions), which checked the pins and
@@ -117,6 +154,8 @@ he wrote in the Grok Bot chat: "Can we note this in the repo and I'll run this a
 * **Status:** this is a new Owner-authorized venue run, separate from the pre-registered isolation rerun. Its result
   will be recorded and reviewed separately, under the same Round 7 decision rule, by a fresh independent reviewer.
 * **Milestone 2 stays not accepted until then.**
+* **Superseded 2026-10-20 11:24 EDT:** William waived the B6 venue requirement and accepted M2 (see the top of this
+  file). This PC run will not be done for M2.
 
 Evidence: `ticketdesk/evidence/round7_isolation_2026-10-20/` (storm output with the `EXIT=1` line, launcher record,
 Codex launch prompt, venue evidence and waiver, `script.sha256`, artifacts listing, heartbeat and kmsg logs, sidecar
