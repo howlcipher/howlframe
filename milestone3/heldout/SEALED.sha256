@@ -1,0 +1,5 @@
+# M3 held-out checks, sealed-v1 (Assurance, bot-assurance-0001, 2026-10-20). Replaces sealed-v0, voided as potentially exposed (spec §7.3).
+# Hash commitments only. Each sealed file starts with a per-file random nonce. The files are held only in the Assurance-only agent store and revealed at scoring (spec §7.1).
+567772fbe7b93c99a6c3f1088c51c569c22ed13c6d49426061ca4480d2786062  verifier.md
+4ed2243640b479187fd954e6060ff06ed4feff4fb7be6bb5606aec7899c3d532  webapp.md
+754f422511a3e6aec3e045a5b81b79180d52de8c19c17886669f87425a26d96f  MANIFEST
