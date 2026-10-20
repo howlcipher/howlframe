@@ -1,6 +1,7 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** FROZEN at `e6fdd48a` (spec freeze, `milestone3/FREEZE.md`); later changes are the dated revisions listed there.
+**Status:** FROZEN at `e6fdd48a` + R1–R5 (spec freeze, `milestone3/FREEZE.md` §1; R1 superseded by R4). Later changes are the
+dated revisions listed there.
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
@@ -10,6 +11,13 @@
   goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every post-freeze change is a dated revision row with the
   spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made after any result of a
   gate that the revision affects is known.
+  * **Owner-reserved decisions** *(R5; from EngMgr's determination, 2026-10-20 16:37 ET, recorded in `milestone3/FREEZE.md` §4)*. A revision that relaxes a gate, or
+    that touches any of the following, needs its own Owner ack:
+    * waivers, including any `WAIVED, NOT PASSED` record;
+    * the W3/W13 JS exception;
+    * manual, non-CI runs;
+    * the entry criteria;
+    * the venue (§5 rule 6).
 **Base:** `main` at `d03c1176` (Milestone 2 accepted by the Owner, `milestone2/MILESTONE2_DECISION.md:3-12`).
 **Authority:** `HOWLFRAME_PRODUCT_DIRECTIVE.md` §6, Milestone 3 (lines 178-185), and nothing more. The directive sets **no
 extra numeric M3 gates, no required component, and no mandatory parallel execution** (line 185). This spec adds none. Every
@@ -422,6 +430,12 @@ browser side only:
   * the server is HFBC under `howlframe run` in every case. Under the WE-3 fallback, the workload is the same frozen W8
     workload truncated to the pre-registered N in `FREEZE.md` (OQ-8);
   * any receipt used by W8, or by a held-out W8 check, with `effects_truncated: true` counts as FAIL, never as PASS.
+* **Fail-closed dependency** *(R5, a strictly tightening clarification)*: the "accepted P-ECO tool" means a P-ECO that
+  passed every E-gate.
+  * A P-ECO that is `WAIVED, NOT PASSED`, in whole or in any gate, does **not** count as accepted for W8, and W8 cannot
+    PASS against it.
+  * The only exception is a separate, dated Owner decision that says it does count, recorded in an
+    `OWNER_ACK_<date>.md` file.
 * **Command:**
   * the grant matrix script (frozen at requirements freeze);
   * then the P-ECO tool on the WE-3 receipt plus `milestone3/web/requirements/policy.*`.
@@ -501,7 +515,8 @@ browser side only:
 ## 2. Order: P-ECO first, then P-WEB
 
 **Decision: P-ECO (the receipt and grant-audit verifier) first, and accepted on its own gates. Then P-WEB, which consumes the
-accepted verifier in its integration gate W8.**
+accepted verifier in its integration gate W8.** "Accepted" here means every E-gate PASSED. A P-ECO with any waived gate does
+not satisfy W8 without a separate, dated Owner decision (W8, R5).
 
 **Why (evidence):**
 1. **Authority verification was manual in both milestones.**
@@ -622,7 +637,13 @@ These are based on what M2 actually did and learned.
    * **When it applies:**
      * a gate's second INFRA outcome; or
      * the venue the gate needs cannot be obtained.
-   * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
+   * **What is recorded:** BLOCKED-VENUE, with the evidence for its cause: either the two INFRA runs' heartbeat, kmsg and noise
+     excerpts (rule 2), or a record that the venue could not be obtained or could not hold rule 7's quiet window. The
+     project's acceptance stays **pending**, never PASS.
+   * **Consequence** *(R5, a strictly tightening clarification)*:
+     * A gate whose venue fails isolation, or is BLOCKED-VENUE for any reason, **cannot be PASSED**.
+     * While that gate is open, its project (P-ECO or P-WEB), and so M3, **cannot be ACCEPTED**.
+     * Its **only outcome** is an Owner decision recorded as `WAIVED, NOT PASSED` (below).
    * **No alternate venue, and no venue can be added.** *(Revision R4, 2026-10-20; Owner decision 16:32 ET,
      `milestone3/OWNER_ACK_2026-10-20.md`.)*
      * The Owner declined his own PC as an alternate venue on 2026-10-20 at 15:23 ET.
