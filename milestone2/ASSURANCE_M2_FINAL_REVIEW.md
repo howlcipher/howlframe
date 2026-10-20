@@ -36,10 +36,6 @@ Recorded decisions:
 With these waivers, gates A, C, D and G count as **PASS under Owner waivers** and H is an unconditional PASS. **Milestone 2 is still
 not accepted:** acceptance needs the B6 kill storm to pass on William's PC run. This record does not edit `MILESTONE2_DECISION.md`.
 
-**Superseded 2026-10-20 11:24 EDT (added after this review, not a reviewer finding):** William answered "Waive the B6 venue
-requirement and accept M2", so the PC run will not be done and M2 is ACCEPTED by the Owner. See
-`milestone2/MILESTONE2_DECISION.md`.
-
 ## 1. Pin and docs-only check
 
 * **Code reviewed:** `7e9ef32eb2eb6c71f7e0fe0280ed3240e1842989`, B6-pinned. Its parent `e8fcea20` is the Round 7 code under test, and
