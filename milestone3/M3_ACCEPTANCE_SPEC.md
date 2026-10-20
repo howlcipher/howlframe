@@ -628,6 +628,11 @@ These are based on what M2 actually did and learned.
         consent of its owner and a pre-registered availability window in ET (the `Owner-named venue` fields in §1.1.1). The
         venue must then pass `venue_evidence.txt`. Without the consent and window, the venue is not available and the gate
         stays BLOCKED-VENUE. A run outside a recorded window does not count.
+   * **No venue after a FAIL; registration before the first run.** *(Revision R1, 2026-10-20, after the spec freeze at
+     `e6fdd48a`; see `milestone3/FREEZE.md`.)*
+     * An Owner-named venue must be **registered before the gate's first run** on any venue.
+     * Once a gate has recorded a FAIL, no venue may be named or added for that gate. A FAIL is final for that pin (rule 2),
+       and a new venue cannot be used to rerun it.
    * **Venue evidence before any run on an Owner-named venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
      before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
      BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
