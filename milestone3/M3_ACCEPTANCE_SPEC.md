@@ -1,15 +1,28 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** DRAFT for review (revision 2, addressing Motoko's review of `c85cf2fa`,
-[#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)). It freezes once
-Assurance's held-out section (§7) lands and the independent review accepts it. After the freeze, changes need a separately
-recorded, dated revision (directive §8, "Record decisions without retroactive goalpost changes").
+**Status:** DRAFT for review (revision 3).
+* It addresses Motoko's reviews of `c85cf2fa`
+  ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
+  ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
+* The spec freezes once the independent review accepts it **and** the Owner acknowledgements below are recorded, with date and
+  quote, in each project's `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
+* After the freeze, changes need a separately recorded, dated revision (directive §8, "Record decisions without retroactive
+  goalpost changes").
 **Base:** `main` at `d03c1176` (Milestone 2 accepted by the Owner, `milestone2/MILESTONE2_DECISION.md:3-12`).
 **Authority:** `HOWLFRAME_PRODUCT_DIRECTIVE.md` §6, Milestone 3 (lines 178-185), and nothing more. The directive sets **no
 extra numeric M3 gates, no required component, and no mandatory parallel execution** (line 185). This spec adds none. Every
 gate below is a pass/fail observable chosen for that project.
 **Author:** Product (requirements and acceptance only; Product builds none of it).
-**Owner acknowledgement needed at spec acceptance:** the W3 frontend exception in §1.3.1.
+**Owner acknowledgement needed at spec acceptance** (nothing below is assumed granted):
+1. **W3/W13 frontend exception (§1.3.1).** Browser-side JS is allowed only as unmodified HowlFrame compiler output. This is a
+   narrow, recorded exception to DIR:148/DIR:171.
+2. **Manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser or m10 step
+   without `workflow` scope (M2R:330-334), and wiring that is the Owner's call (§6).
+3. **William's PC as the single pre-registered alternate venue** for BLOCKED-VENUE gates (§5 rule 6). This is the machine M2
+   pre-registered for the B6 PC run (M2D:163-183). Using it needs his consent and his availability. In M2 the run never
+   happened because he was away (M2D:10-12, M2D:184-185).
+4. **Runtime fixes made as entry criteria** (WE-1 m12, WE-4 m17, and WE-5 m2 if bearer auth is used). Each is a narrow
+   demonstrated-blocker fix under DIR:198. This item is listed so the Owner sees that M3 entry includes runtime changes.
 
 Citation key: `DIR` = `HOWLFRAME_PRODUCT_DIRECTIVE.md`, `M1D` = `milestone1/MILESTONE1_DECISION.md`,
 `M2P` = `milestone2/PLAN.md`, `M2D` = `milestone2/MILESTONE2_DECISION.md`, `M2R` = `milestone2/ASSURANCE_M2_FINAL_REVIEW.md`.
@@ -51,6 +64,21 @@ Rules that apply to both, carried forward from M1/M2 practice:
   follow-up commit that changes only that line. This mirrors the M2 pin-line pattern (M2D:383-391). `<freeze-sha>` below
   means that value.
 * **Decision file.** The reviewer records a per-gate outcome table in `milestone3/<eco|web>/DECISION.md`.
+
+#### 1.1.1 `FREEZE.md` template (one per project; the freeze is not valid without every field)
+
+```text
+Freeze SHA:            <sha of the freeze commit>            # set by a follow-up commit changing only this line
+Code pin:              <howlframe commit sha>
+Compiler:              ./howlframe built from the code pin; `howlframe version` = <output>; sha256 = <hex>
+Toolchain pins:        Go <ver>; OS/kernel <uname -sr>; CPU <model, count>; Chrome <ver> (P-WEB); driver <tool ver, sha256> (P-WEB)
+Harness/corpus pins:   <path> sha256 <hex>   (one line each: suites, E4 corpus, E5_ALLOWLIST, loader.html, scripts)
+Seeds:                 <name>=<value>        (one line each)
+W8 bounded N:          <N, or "n/a: WE-3 met">                  # P-WEB only, set before the freeze
+Timing bounds:         <gate>: <absolute monotonic bound>   (one line each; OQ-9)
+Alternate venue:       William's PC (§5 rule 6)
+Owner ack:             who=<name>  date=<YYYY-MM-DD HH:MM TZ>  items=<list from the Status block>  quote="<verbatim>"  link=<chat/PR URL>
+```
 
 ### 1.2 P-ECO gates: receipt and grant-audit verifier (the top-ranked candidate, §3)
 
@@ -107,12 +135,23 @@ whether the run stayed within that policy. **P-ECO is accepted on its own gates 
 * **Suite author:** **Auditor** (corpus), not the builder.
 
 **E5: Honest claims.**
-* **PASS when:** the README states that receipts have **no signature or attestation** (`docs/cli.md:66`), so the tool checks
-  consistency against a policy and does not prove authenticity. No tamper-proof or attestation claim appears.
-* **Command:** `rg -n -i 'tamper|attest|authentic|signed|proof' milestone3/eco/` returns only the disclaimer lines. The
-  reviewer records each hit.
+* **PASS when:**
+  * the README states that receipts have **no signature or attestation** (`docs/cli.md:66`), so the tool checks consistency
+    against a policy and does not prove authenticity;
+  * no tamper-proof or attestation claim appears anywhere in `milestone3/eco/`, apart from fixture files on a pinned allowlist.
+* **Allowlist (OQ-5):**
+  * `milestone3/eco/tests/fixtures/E5_ALLOWLIST` lists fixture paths, one per line. Every entry must sit under
+    `milestone3/eco/tests/fixtures/`, and the file's sha256 is recorded in `FREEZE.md`.
+  * Only allowlisted files are skipped. A file named `*tampered*` (or any other hit) outside the allowlist still fails the
+    gate, unless the hit is one of the README disclaimer lines.
+* **Command:**
+  * `rg -n -i 'tamper|attest|authentic|signed|proof' milestone3/eco/ $(sed 's/^/--glob=!/' milestone3/eco/tests/fixtures/E5_ALLOWLIST)`
+    returns only the disclaimer lines;
+  * plus `sha256sum milestone3/eco/tests/fixtures/E5_ALLOWLIST`, which must match `FREEZE.md`.
+  * The reviewer records every hit, and confirms that a control file `milestone3/eco/tampered_probe.txt` created outside the
+    allowlist is reported (then deletes it).
 * **Evidence:** `milestone3/evidence/E5/`
-* **Suite author:** the reviewer.
+* **Suite author:** Auditor (allowlist); the reviewer runs the scan.
 
 **E6: Capability discipline.**
 * **PASS when:**
@@ -217,6 +256,11 @@ browser side only:
   * It prints the Chrome and harness versions and the harness sha256.
 * **Evidence:** `milestone3/web/evidence/entry_browser_harness/`
 * **Author:** Dev Lead or Auditor (non-builder).
+* **Driver allowed (OQ-7):** a pinned headless-Chrome driver (CDP over Node, or a driver library) may be part of the harness.
+  * Its tool name, version and sha256 are recorded in the frozen requirements.
+  * It is vendored, or provisioned from a hash-verified local copy, so it needs no network at run time.
+  * It is **test tooling only**: it is not an app runtime dependency and must never be served or loaded by the app.
+  * Chrome itself is host-provided like Go, with its version recorded (§5 rule 8).
 * **Runs manually on the box, not in CI.** CI has no browser step, and adding one needs `workflow` scope (§6, M2R:330-334).
 * **Does not count as browser evidence:** the existing Node `vm` tests with stubbed browser globals (`internal/backend/javascript/browser_fetch_test.go`).
 
@@ -229,12 +273,51 @@ browser side only:
     on record of a shutdown receipt (§8).
 * **If this can't be met:**
   * either a narrow, demonstrated-blocker runtime fix with a regression test (DIR:198) makes it work;
-  * or the W1 freeze resizes W8 to a bounded workload (a single-process run that returns), recorded by revision before any W8
-    run.
+  * or W8 falls back to a bounded run (OQ-8). The server is still HFBC under `howlframe run`, and it runs the **same frozen
+    W8 workload, truncated to a pre-registered request count N**. N is chosen so the receipt stays under the 10,000-effect
+    cap with margin (at most half the cap at the measured effects per request). N is recorded in `FREEZE.md` before the
+    W1 freeze, and is never chosen after the fact.
 * **Command:**
   * Contract, frozen at requirements freeze: start the server with `--receipt`, drive the W8 workload, stop it cleanly, then
     `jq '.effects | length, .effects_truncated'` on the receipt.
 * **Evidence:** `milestone3/web/evidence/entry_receipt/`
+* **Run by:** Auditor.
+
+**WE-4: m17 fixed or resolved (§4, aligned with §7.4).**
+* **PASS when:**
+  * A slow, real-browser-style upload that runs past the runtime's 30 s read timeout gets either the uniform error envelope
+    with an `X-Request-Id` header, or a dropped connection with no response. Which of the two is chosen is frozen in the W1
+    requirements.
+  * Today it gets the off-envelope 400: a stalled upload is answered at 30.0 s (M2R:225, M2R:270-273).
+  * The upload is never executed.
+* **Command:**
+  * Contract, frozen at requirements freeze: a stdlib Python client sends a declared Content-Length, delivers part of the
+    body, then stalls past 30 s;
+  * it asserts the frozen response (or a dropped connection) and that state is unchanged.
+  * It runs against ticketdesk at the fix pin, and against the P-WEB server once it exists.
+* **Evidence:** `milestone3/web/evidence/entry_m17/` (command, output, pins, `RESULT`)
+* **Run by:** Auditor (a non-builder of the fix). The run is manual, not CI.
+
+**WE-5: m2 fixed, if P-WEB uses bearer auth (§4).**
+* **PASS when:**
+  * if bearer auth is used, `Authorization: Bearer <secret> ` (one trailing space) gives 401 with `WWW-Authenticate`, as
+    M2 R9 requires (M2R:234-236);
+  * this is shown by a **verified runtime fix before entry** (fix option (a), M2R:239-240), not only by a requirements
+    exclusion;
+  * if P-WEB uses no bearer auth, this criterion is n/a and the reason is recorded.
+* **Command:**
+  * Contract, frozen at requirements freeze: a raw-socket probe (so the client does not normalise the header) with trailing
+    space, trailing tab, and the control case without them, asserting 401, 401 and 200.
+* **Evidence:** `milestone3/web/evidence/entry_m2/`
+* **Run by:** Auditor (a non-builder of the fix). The run is manual.
+
+**WE-6: m4 resolved, if P-WEB extends ticketdesk (§4).**
+* **PASS when:** if P-WEB extends ticketdesk, the hand-edited corrupt states from M2R:220 (for example bucket `{"ids":"x"}`,
+  `title: 7`, `meta.next_ticket: -5`) each exit 65 at startup with a prefixed stderr line, before the W1 freeze. If P-WEB
+  is a new app, m4 is an exit check instead (W14).
+* **Command:** contract, frozen at requirements freeze: a corrupt-state startup matrix script asserting exit 65 and the stderr
+  shape for each state.
+* **Evidence:** `milestone3/web/evidence/entry_m4/`
 * **Run by:** Auditor.
 
 #### 1.3.3 P-WEB gates
@@ -251,6 +334,9 @@ browser side only:
 * **PASS when:** the independent black-box API suite passes at 100% against `howlframe run <server>.hfbc`, started with the
   README command and **default runner ceilings**. The ceilings rule exists because the M2 suite once masked B1 with raised
   limits (M2D:756-758).
+* **Slow-client robustness clause (OQ-W4):** W1 includes an M2 R17-equivalent clause. Slow-header and slow-body clients must
+  not delay other requests past the frozen bound, and a cut-off upload is never executed. This is the B3 lesson (M2D:760-761)
+  and is shaped like `m10_slow_body_clients_bounded` (M2R:357).
 * **Command:**
   * Contract, frozen at requirements freeze: `python3 milestone3/web/tests/acceptance/run_acceptance.py <launcher>`, printing
     `N tests, N passed, 0 failed`.
@@ -273,11 +359,17 @@ browser side only:
 * **PASS when:**
   * an XSS probe set renders as inert text in every user-editable field, and no script runs in the WE-2 browser. The set
     includes `<script>…`, `<img src=x onerror=…>` and attribute-break payloads;
-  * a source check confirms that no untrusted value reaches `set_html` without `html_escape`. The basis for this gate is
-    `docs/howlboard_xss_set_html_issue.md`.
+  * **`set_text` is required for any value derived from user or server data.** `set_html` is allowed only with compile-time
+    literal markup (OQ-W1). The basis for this gate is `docs/howlboard_xss_set_html_issue.md`;
+  * every URL context (`href`, `src`) built from data passes a scheme allow-list frozen in W1 (relative, `http:`, `https:`
+    only), so `javascript:` and `data:` are rejected;
+  * every served HTML response carries the CSP frozen in W1, at least
+    `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'`, and the browser suite shows no CSP
+    violations in the normal workflows (OQ-W3).
 * **Command:**
-  * Contract, frozen at requirements freeze: the XSS suite runs on the WE-2 harness, plus `rg -n 'set_html' milestone3/web/src`
-    with each hit justified in the evidence.
+  * Contract, frozen at requirements freeze: the XSS and URL-scheme suites run on the WE-2 harness;
+  * `rg -n 'set_html' milestone3/web/src`, with every hit shown to have a literal argument;
+  * a header check of the CSP on every HTML route.
 * **Evidence:** `milestone3/evidence/W4/`
 * **Suite author:** **Auditor** (XSS set).
 
@@ -286,7 +378,13 @@ browser side only:
   * every role and ownership rule in the frozen requirements is checked by direct API calls that bypass the UI (401/403 as
     specified);
   * no secret appears in server logs or stored state (the same scan as M2R:134-135);
-  * if bearer auth is used, the frozen auth requirement explicitly excludes RFC 9110 trailing OWS (m2, §4).
+  * if bearer auth is used, trailing whitespace after the secret gives 401, with m2 fixed and verified at entry (WE-5, §4).
+    No requirements exclusion of RFC 9110 trailing OWS is allowed;
+  * W1 freezes **one** session mechanism, a cookie or a bearer token held in JS (OQ-W2). Whichever is chosen:
+    * a CSRF/same-origin check is active: state-changing requests from a foreign origin are rejected, and no permissive CORS is
+      allowed;
+    * a session cookie is `HttpOnly` and `SameSite=Strict`;
+    * no token is stored in `localStorage` or `sessionStorage`.
 * **Command:** the W2 suite's auth section, plus the secret scan script. Both are frozen at requirements freeze and
   sha256-pinned.
 * **Evidence:** `milestone3/evidence/W5/`
@@ -294,7 +392,8 @@ browser side only:
 
 **W6: Reliable errors.**
 * **PASS when:** every non-2xx response from a request that reaches routing uses the frozen error envelope, and the UI shows a
-  defined message for each one. The scope of this rule is set in the frozen requirements, using the m3/m17 lessons in §4.
+  defined message for each one, taken from a **code-to-message table frozen in W1** (OQ-W5). The scope of this rule is set in
+  the frozen requirements, using the m3/m17 lessons in §4.
 * **Command:** the W2 validation section, plus a W3 error-display case.
 * **Evidence:** `milestone3/evidence/W6/`
 * **Suite author:** Dev Lead or Auditor.
@@ -312,7 +411,10 @@ browser side only:
 * **PASS when:**
   * the server runs with the minimum grants listed in the requirements, and each dropped grant gives the frozen denial exit;
   * the WE-3 receipt from the reviewer's W8 workload run is checked by the **accepted P-ECO tool** against the P-WEB grant
-    policy, with `PASS` recorded.
+    policy, with `PASS` recorded;
+  * the server is HFBC under `howlframe run` in every case. Under the WE-3 fallback, the workload is the same frozen W8
+    workload truncated to the pre-registered N in `FREEZE.md` (OQ-8);
+  * any receipt used by W8, or by a held-out W8 check, with `effects_truncated: true` counts as FAIL, never as PASS.
 * **Command:**
   * the grant matrix script (frozen at requirements freeze);
   * then the P-ECO tool on the WE-3 receipt plus `milestone3/web/requirements/policy.*`.
@@ -320,8 +422,12 @@ browser side only:
 * **Suite author:** Auditor.
 
 **W9: Clean environment.**
-* **PASS when:** the same as E7 (fresh clone and non-git copy), for `milestone3/web/scripts/clean_repro.sh`.
-* **Command:** the E7 command, with the web script.
+* **PASS when:** the same as E7 (fresh clone and non-git copy), for `milestone3/web/scripts/clean_repro.sh`. The script runs
+  the API suite **and** the WE-2 browser suites.
+* **Pinned driver (OQ-7):** the pinned headless-Chrome driver from WE-2 is allowed in this clean environment. It is test
+  tooling only, with its tool, version and sha256 recorded, and it is never an app runtime dependency. It must come from a
+  vendored or hash-verified local copy, because `GOPROXY=off` and no network fetch is allowed during W9.
+* **Command:** the E7 command, with the web script. The output records the driver and Chrome versions and the driver sha256.
 * **Evidence:** `milestone3/evidence/W9/`
 * **Suite author:** the reviewer.
 
@@ -339,7 +445,7 @@ browser side only:
 * **Suite author:** Assurance (Lain).
 
 **W12: Independent review.**
-* **PASS when:** a §1.1 reviewer records PASS on W1-W11 and W13 in `milestone3/web/DECISION.md`, with known limitations
+* **PASS when:** a §1.1 reviewer records PASS on W1-W11, W13 and W14, plus WE-1 to WE-6, in `milestone3/web/DECISION.md`, with known limitations
   documented (DIR:153).
 * **Command:** n/a (the decision record).
 * **Evidence:** `milestone3/web/DECISION.md`
@@ -349,14 +455,38 @@ browser side only:
 * **PASS when:**
   * in the clean repro, `build/app.js` regenerates from source **byte-identically** across two independent builds, and the
     `app.js` the server serves has the same sha256;
+  * the compiler for both builds is `./howlframe` built from the recorded code pin, and its `howlframe version` output and
+    binary sha256 match `FREEZE.md` (§1.1.1);
   * no other `.js` file is in the app tree;
-  * the HTML loader matches its pinned sha256 and has exactly one `<script>` element, which has a `src`, no inline body and no
-    `on*` attributes.
+  * the HTML loader matches its pinned sha256, **and a pinned HTML parser** shows all of the following (OQ-6, superseding
+    the earlier `rg` count):
+    * exactly **one** `script` element (tag names matched case-insensitively), with `src="app.js"` and no inline content;
+    * no other executable element: no other `script`, no `iframe`, `object`, `embed`, `base`, or `<meta http-equiv="refresh">`;
+    * no `on*` event-handler attribute on any element;
+    * no attribute value with a `javascript:` (or `data:`/`vbscript:`) URL, after trimming and case-folding.
 * **Command:**
   * `howlframe -o build <frontend>.howl` twice into separate empty directories, then `sha256sum` both and the served file;
+  * `sha256sum ./howlframe` and `./howlframe version`, compared with `FREEZE.md`;
   * `git ls-files milestone3/web | rg '\.js$'` lists only `milestone3/web/tests/browser/` files;
-  * `sha256sum <loader>.html`, plus an `rg -c '<script'` count of 1.
+  * `sha256sum <loader>.html` must match the pin;
+  * `python3 milestone3/web/tests/loader_check.py <loader>.html` exits 0. The script uses the Python stdlib `html.parser`, and
+    the Python version plus the script's sha256 are recorded in the pins. Its exact assertions are the list above, frozen at
+    requirements freeze.
 * **Evidence:** `milestone3/evidence/W13/`
+* **Suite author:** Auditor.
+
+**W14: M2-carryover exit checks (§4, aligned with §7.4).**
+* **PASS when:**
+  * **m3 (always):** requests rejected at the transport level are documented in the guide and README. The frontend encodes
+    all user input, so the normal UI workflows never produce them. If one happens anyway (malformed `%zz` path, oversize
+    header, `OPTIONS *`, M2R:219), the UI shows the defined message from the W6 table. This is verified at P-WEB
+    acceptance, not before entry.
+  * **m4 (only if P-WEB is a new app, not a ticketdesk extension):** the frozen corrupt-state rule holds at review, meaning
+    semantically corrupt state exits 65 at startup. For a ticketdesk extension, m4 is WE-6 instead.
+* **Command:**
+  * Contract, frozen at requirements freeze: raw-socket transport probes plus a WE-2 UI case for m3;
+  * the WE-6 corrupt-state matrix for m4.
+* **Evidence:** `milestone3/evidence/W14/`
 * **Suite author:** Auditor.
 
 ---
@@ -411,18 +541,21 @@ Ranked by strength of M1/M2 evidence. The owner component follows DIR:92-100.
 
 ---
 
-## 4. M2-waived items: are they M3 entry criteria?
+## 4. M2-waived items: entry and exit criteria (aligned with §7.4, Lain's OQ-1)
 
-All five were waived **for M2 only** (M2R:29-32, M2D:61-62). They do not carry over automatically, so if a project inherits
-one it needs a fix, a requirements revision, or a new waiver.
+All five were waived **for M2 only** (M2R:29-32, M2D:61-62). They do not carry over automatically. This table **adopts
+Assurance's §7.4 classification** (Product's answer to OQ-1, §9), with one stricter change: for m2, entry requires a
+verified fix, not only a requirements exclusion. P-ECO is not an HTTP server, so none of the five apply to it.
+* "ENTRY" means fixed and recorded before the W1 freeze (§1.3.2).
+* "EXIT" means checked at P-WEB's final review.
 
-| Id | What it is (from M2R §4) | M3 entry criterion? | Reason |
-|---|---|---|---|
-| **m2** | A bearer secret with one trailing space still authenticates. Go `net/http` strips trailing OWS (RFC 9110 §5.5) before the app sees it. No security impact (M2R:218, M2R:233-243). | **NOT** | It blocks neither project. If P-WEB uses bearer auth, W5 requires its frozen auth requirement to exclude RFC 9110 trailing OWS (fix option (b), M2R:241). |
-| **m3** | Transport-level rejections (malformed `%zz`, a 431 for an oversize header, `OPTIONS *`) are plain text or empty and have no `X-Request-Id`. `net/http` answers before routing (M2R:219, M2R:245-264). | **NOT** | Only syntactically invalid HTTP is affected, and P-ECO is not a server. P-WEB's W6 scopes the uniform envelope to requests that reach routing (option (b), M2R:263). The guide and README must document it. |
-| **m4** | Semantically corrupt state passes the shallow startup check, starts, then answers 500. This is app code (`ticketdesk.howl:49-58`) (M2R:220, M2R:297-308). | **NOT** | It is a ticketdesk application defect, not a runtime one. If P-WEB extends ticketdesk, deep validation on load becomes a P-WEB requirement and is not a precondition for starting. |
-| **m12** | A port-probe race: if the port is taken between the probe (`vm.go:3532`) and `ListenAndServe` (`vm.go:3045-3051`), the raw `{"phase":"runtime","code":"IO_ERROR",…}` object reaches stderr. Deterministically reproduced (M2R:224, M2R:282-295). | **ENTRY CRITERION for P-WEB (WE-1)**, not for P-ECO | It is a HowlFrame runtime defect that any HowlFrame HTTP server inherits, including W10. The fix direction is to bind once and use `server.Serve(ln)` (M2R:292). The run is manual, not CI, and is recorded with its command at `milestone3/web/evidence/entry_m12/` by a non-builder (WE-1). |
-| **m17** | When the declared Content-Length is not delivered, the server returns a 400 that is not in the uniform shape and has no `X-Request-Id` header, at `vm.go:2957-2963`. The upload is never executed (M2R:225, M2R:266-280). | **NOT** | Only clients that break HTTP framing see it, and browsers driving P-WEB do not. Fixing it needs an agreed error code (M2R:277-278). Record the choice (fix (a) or drop the connection (b)) in P-WEB's frozen requirements. |
+| Id | What it is (from M2R §4) | P-WEB classification | Reason | Criterion / gate |
+|---|---|---|---|---|
+| **m2** | A bearer secret with one trailing space still authenticates. Go `net/http` strips trailing OWS (RFC 9110 §5.5) before the app sees it (M2R:218, M2R:233-243). | **ENTRY if P-WEB uses bearer auth** (a fix verified before entry); otherwise n/a | A silent auth deviation cannot be scored later (§7.4). The stricter reading needs the M2 R9 behaviour to actually hold, not a requirements exclusion. | WE-5; W5 |
+| **m3** | Transport-level rejections (malformed `%zz`, a 431 for an oversize header, `OPTIONS *`) are plain text or empty and have no `X-Request-Id`. `net/http` answers before routing (M2R:219, M2R:245-264). | **EXIT** | W6 scopes the envelope to routed requests. The UI must never trigger m3 in normal use and must show a defined message if it happens anyway. No runtime fix is a precondition (§7.4). | W14 (and W6) |
+| **m4** | Semantically corrupt state passes the shallow startup check, starts, then answers 500. This is app code (`ticketdesk.howl:49-58`) (M2R:220, M2R:297-308). | **ENTRY if P-WEB extends ticketdesk; otherwise EXIT** | Extending ticketdesk builds directly on its shallow loader. A new app must meet the frozen corrupt-state rule at review (§7.4). | WE-6, or W14 |
+| **m12** | A port-probe race: if the port is taken between the probe (`vm.go:3532`) and `ListenAndServe` (`vm.go:3045-3051`), the raw `{"phase":"runtime","code":"IO_ERROR",…}` object reaches stderr. Deterministically reproduced (M2R:224, M2R:282-295). | **ENTRY** | It is a runtime defect that every HowlFrame server inherits (W10). It is verified by XPASS, then removal of the XFAIL entry, then a clean rerun, recorded manually at `milestone3/web/evidence/entry_m12/`. | WE-1; W10 |
+| **m17** | When the declared Content-Length is not delivered, the server returns a 400 that is not in the uniform shape and has no `X-Request-Id` header, at `vm.go:2957-2963`. The upload is never executed (M2R:225, M2R:266-280). | **ENTRY** | A real but slow browser upload past the 30 s read timeout gets the off-envelope 400 (a stalled upload was answered at 30.0 s, M2R:225), so a real frontend can trigger it. The fix, or the frozen drop-connection choice, must exist before the UI error mapping is built (§7.4). | WE-4; W6 |
 
 Not in the list but relevant: **m9** (documented-accepted, a grant-coverage test gap, M2R:223). P-ECO's E4 corpus includes
 the grant-scope case it describes, if the receipt carries it (§8).
@@ -440,10 +573,13 @@ These are based on what M2 actually did and learned.
 2. **Outcome classes for every gate run.** INFRA is a class of its own, separate from PASS and FAIL.
    * **PASS:** 0 failures and no noise breach.
    * **FAIL (product):** any failure that does not meet the INFRA test below. **Ambiguity counts as FAIL** (M2D:409).
-   * **INFRA:** applies when either:
-     * a failure whose request or step is overlapped by a recorded heartbeat gap of at least 1 s, or by a
-       `virtual machine fork`/`virtio_balloon` kmsg record, or by a steal breach (the M2 classification, M2D:404-408); or
-     * 0 failures with a noise breach (INFRA-VOID, M2D:411).
+   * **INFRA:** exactly M2's Round 7 rule (M2D:404-406, M2D:411). It applies only when one of these holds:
+     * for a failure: heartbeat gaps **cover at least 80% of the failing request's (or step's) monotonic elapsed time**; or a
+       recorded `virtual machine fork`/`virtio_balloon` kmsg record or a steal breach **overlaps** that request or step;
+     * for a run with 0 failures and a noise breach: INFRA-VOID (M2D:411).
+   * **Weaker overlap counts as product.** A failure overlapped by a heartbeat gap of any size that
+     covers **less than 80%** of its monotonic elapsed time, with no overlapping fork, balloon or steal record, is ambiguous.
+     It counts as **FAIL (product)** (M2D:407-410).
      * The infra cause must be documented in the gate's evidence (the heartbeat, kmsg and noise excerpts).
    * **Rerun budget: at most 1 rerun per gate, with the same pins, used only after a documented INFRA outcome.** A rerun can
      never turn a FAIL into a PASS. A FAIL is final for that pin (the M2 "no restart" rule, M2D:412-414). The rerun only
@@ -457,7 +593,9 @@ These are based on what M2 actually did and learned.
    * The M2 lesson: three B6 requests passed under the pinned monotonic 10 s deadline but would have failed on wall time
      across box freezes (M2D:42-45, M2D:157-160).
    * Timing bounds are at least 50× the measured worst case, following m10's 3 s bound against a measured 0.01-0.04 s
-     (M2R:347-349).
+     (M2R:347-349). Each bound is an absolute monotonic value frozen at requirements freeze and recorded in `FREEZE.md`.
+     The measurement is the **worst monotonic elapsed time in the reviewer's scoring run of that gate, at the scoring pin**.
+     If it is above bound ÷ 50, the gate is FAIL. The bound is never raised after its first run (OQ-9, §9).
 
 4. **Heartbeat sidecar required** for every timing-sensitive run, including the W2/W3 suites, as in Round 7 (M2D:336-338):
    * a 50 ms loop that logs gaps over 250 ms with monotonic, realtime and boottime deltas;
@@ -478,10 +616,22 @@ These are based on what M2 actually did and learned.
      * a gate's second INFRA outcome; or
      * its pre-registered venue cannot be obtained.
    * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
-   * **The pre-registered alternate venue,** named in the frozen requirements for any gate that can hit this:
-     * William's PC, under the venue-evidence terms in M2D:178-180: bare metal vs VM/WSL2, balloon, sleep disabled, other
-       workloads stopped, `/dev/kmsg` readable; or
-     * another declared idle, non-ballooned machine.
+   * **The pre-registered alternate venue is William's PC.** It is the machine M2 pre-registered for the B6 PC run
+     (M2D:163-183), and it is named in `FREEZE.md` (§1.1.1). No other machine is pre-registered.
+   * **Venue evidence before any run on the alternate venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
+     before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
+     BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
+     noise gates (M2D:360-379):
+     * **Virtualisation:** `systemd-detect-virt` prints `none` or names the hypervisor. No driver is bound under
+       `/sys/bus/virtio/drivers/virtio_balloon/`. No dynamic memory or balloon is active.
+     * **Sleep:** sleep and suspend are disabled (for example `sleep.target` and `suspend.target` masked).
+     * **No competing load:** a process listing shows no other workloads (builds, tests, browsers, other agents).
+     * **Pins match `FREEZE.md`:** CPU model and count, OS and kernel, Go, Chrome, driver and harness versions and sha256s.
+     * **Instruments readable:** `/dev/kmsg` is readable and the heartbeat and noise sidecars run.
+     * **Disk:** enough free disk for the gate's artifacts.
+     * **Idle baseline:** a 120 s pre-run window on the same idle-gate terms as M2D:360-367. That means steal under 1%,
+       PSI cpu `some avg60` under 5, PSI io `full avg60` under 2, PSI memory `full avg60` = 0, no heartbeat gap over 250 ms,
+       and no `virtual machine fork` or `virtio_balloon` kmsg record.
    * **How the alternate is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA rerun.
    * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE and the decision passes to the Owner as a recorded
      revision or waiver. An Owner waiver is therefore the last path, not the only one.
@@ -696,6 +846,31 @@ This table is Assurance's recommendation. Where it differs from Product's §4 ta
 * **Users of the verifier outside the team:** no evidence on record. It is a hypothesis (§1.2.1).
 * **Whether m9's mutation shows up in a receipt:** not established. E4 includes the case only if the frozen contract shows the
   receipt carries it.
+
+## 9. Product response to §7.5 (outside §7; §7 is unchanged)
+
+Product owns requirements and acceptance, so it answers here. The stricter reading is taken unless cited evidence says it
+does not apply. Each answer is applied in the section named.
+
+| OQ | Product decision | Status / owner | Applied in |
+|---|---|---|---|
+| **OQ-1** | **§7.4 governs.** §4 now matches it: m17 ENTRY, m4 ENTRY if P-WEB extends ticketdesk (otherwise EXIT), m3 EXIT, m12 ENTRY. Stricter for m2: ENTRY if bearer auth is used, with a runtime fix **verified before entry**, not a requirements exclusion. Motoko's re-review agrees that m17 is ENTRY. | **Resolved here.** Motoko's re-review backs m17 ENTRY. | §4; WE-4, WE-5, WE-6; W5; W14 |
+| **OQ-2** | A receipt whose `denied` decision falls under a policy equal to the run's grants is **PASS**: a denial is enforcement working, and is within policy. The output must still list every denial with its capability and target summary. An *allowed* decision on a capability the policy denies stays FAIL (E4). | Product direction; **resolved at requirements freeze** in E1, before sealed v1. Owner: E1 author (Auditor). | E1 contract; E3 |
+| **OQ-3** | **Any difference from the policy is FAIL**, tighter or looser, because the tool reports conformance, not risk. The frozen FAIL codes must tell `limits_looser` apart from `limits_tighter`, so a reader can judge severity. | Product direction; **resolved at requirements freeze** in E1, before sealed v1. Owner: E1 author (Auditor). | E1; E4 |
+| **OQ-4** | The subsumption rules are frozen in E1, from these principles (the strict readings):<ul><li>filesystem roots are compared on lexically cleaned, absolute paths by **whole path components**, so `/a/b` does not cover `/a/bc`. A trailing slash is normalised away. Any `..` left after cleaning, or a relative root, is malformed (FAIL);</li><li>coarse `network` is broader than every `network:fetch=host[:port]`. A host without a port is broader than host:port;</li><li>`inherit:filesystem` counts as the broadest filesystem grant (coarse; M2D:778-779);</li><li>`docs/cli.md:45` says receipts carry **sorted unique** grants, so a receipt with duplicate or unsorted `grant[]` is malformed (FAIL). Duplicates in a policy are a policy error with its own exit code.</li></ul>The exact grammar and the tie cases are left to the E1 author. | Product principles; **resolved at requirements freeze** in E1 (exact grammar), before sealed v1. Owner: E1 author (Auditor). | E1; E4 |
+| **OQ-5** | A pinned fixture allowlist, `milestone3/eco/tests/fixtures/E5_ALLOWLIST`, with its sha256 in `FREEZE.md`. Every other path under `milestone3/eco/` is scanned. A `tampered` name outside the allowlist still FAILs, and the reviewer proves it with a control file. | Product decision; the allowlist contents are **resolved at requirements freeze**, before sealed v1. Owner: Auditor. | E5 |
+| **OQ-6** | **Superseded:** W13 parses the loader with a pinned parser (Python stdlib `html.parser`, version and script sha256 pinned). It checks for exactly one `script` element with `src="app.js"` and no inline content, no other executable elements, no `on*` attributes, no `javascript:`/`data:`/`vbscript:` URLs, and the pinned hash. The earlier `rg` count is withdrawn. | **Resolved here** (superseded: parser check). The parser script is frozen at requirements freeze. Owner: Auditor. | W13 |
+| **OQ-7** | A pinned headless-Chrome driver is allowed as WE-2 test tooling (tool, version and sha256 recorded; vendored or from a hash-verified local copy; no network). It is not an app runtime dependency. **W9 runs both the API and the browser suites.** | **Resolved here.** The driver is allowed, and W9 runs the browser suites. | WE-2; W9 |
+| **OQ-8** | The server is **always HFBC under `howlframe run`**. If WE-3 falls back, W8 runs the same frozen W8 workload truncated to a pre-registered request count N (receipt at most half the 10k cap), recorded in `FREEZE.md` before the freeze. Any W8 or held-out W8 receipt with `effects_truncated: true` is FAIL. Assurance may pick the M3-W-H14 workload, but the same no-truncation rule applies to it. | Product decision; the value of N is **resolved at requirements freeze** in `FREEZE.md`, before sealed v1. Owner: W1 author (Dev Lead or Auditor). | WE-3; W8 |
+| **OQ-W1** | `set_text` is required for any data-derived value. `set_html` is allowed only with compile-time literal markup. W1 freezes a URL-scheme allow-list for `href`/`src`: relative, `http:` and `https:` only. | Product direction; **resolved at requirements freeze** in W1, before sealed v1. Owner: W1 author (Dev Lead or Auditor). | W4 |
+| **OQ-W2** | W1 must freeze one session mechanism. Whichever it is, a CSRF/same-origin check is **active**, there is no permissive CORS, a cookie session uses `HttpOnly` and `SameSite=Strict`, and no token goes in `localStorage` or `sessionStorage`. The choice of mechanism is left to the W1 author. | Product direction; the mechanism is **resolved at requirements freeze** in W1, before sealed v1. Owner: W1 author (Dev Lead or Auditor). | W5 |
+| **OQ-W3** | **A CSP is required**, at least `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'`, so Assurance's conditional CSP check is **active**. This is feasible because the loader has only `<script src>` (W13). | Product direction; the exact CSP is **resolved at requirements freeze** in W1, before sealed v1. Owner: W1 author. | W4 |
+| **OQ-W4** | **Yes**, a slow-client robustness clause equivalent to M2 R17 (the B3 lesson, M2D:760-761; M2R:357), so the conditional robustness check is **active**. | Product direction; the bound values are **resolved at requirements freeze** in W1, before sealed v1. Owner: W1 author. | W2 |
+| **OQ-W5** | **Yes**, W1 freezes a code-to-message table. | Product direction; the table is **resolved at requirements freeze** in W1, before sealed v1. Owner: W1 author. | W6 |
+| **OQ-9** | The bound is an **absolute monotonic value**, frozen at requirements freeze by the suite author and recorded in `FREEZE.md`. It is not derived from the implementation. The measurement is the worst monotonic elapsed time in the **reviewer's scoring run** of that gate at the scoring pin. If it is above bound ÷ 50, the gate is FAIL. A bound is never raised after its first run; any change needs a dated revision before that run. | **Resolved here.** Bound frozen at requirements freeze; measured at the reviewer's scoring run. | §5 rule 3 (read with this answer) |
+| **OQ-10** | **Not Product's to decide.** Where the sealed set is stored is Assurance's operating practice, and the files sit outside this repo. Product's recommendation, the stricter reading: remove the shared-box copy once the hashes are committed, keep only the agent-store copy, and record the removal in the Assurance journal. Assurance decides. | **Open, Assurance's.** It is Lain's blocker #3; Product does not edit it. | none (recommendation to Assurance) |
+
+**Unanswered, with reason:** OQ-10 only. Where the sealed copy is stored is Assurance's operating practice, and it is Lain's blocker #3 in the `baeb0d03` re-review; Product leaves §7 untouched. Every other OQ is either resolved here or marked **resolved at requirements freeze**, with its owner, before sealed v1.
 
 ## Sources
 
