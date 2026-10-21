@@ -143,9 +143,17 @@ func (g Grants) openScope(path string, write, createRoot bool) (*Scope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFilesystemDenied, err)
 	}
-	rel, err := filepath.Rel(root, filepath.Clean(target))
+	cleanTarget := filepath.Clean(target)
+	rel, err := filepath.Rel(root, cleanTarget)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFilesystemDenied, err)
+	}
+	// A grant may name a single file rather than a directory. Then the only
+	// target it covers is that file, and the root handle is opened on the file's
+	// directory with the base name as the relative name: nothing else in the
+	// directory is reachable, and the file cannot be redirected out of it.
+	if cleanTarget == root && grantsSingleFile(root, createRoot) {
+		root, rel = filepath.Dir(root), filepath.Base(root)
 	}
 	handle, err := os.OpenRoot(root)
 	if err != nil && createRoot && errors.Is(err, fs.ErrNotExist) {
@@ -191,4 +199,15 @@ func (g Grants) ScopedMkdirAll(path string, perm os.FileMode) error {
 	}
 	defer sc.Close()
 	return sc.MkdirAll(perm)
+}
+
+// grantsSingleFile reports whether a grant root that equals its target names a
+// file: it exists and is not a directory, or it does not exist and the operation
+// is not a directory creation.
+func grantsSingleFile(root string, creatingDirectory bool) bool {
+	info, err := os.Stat(root)
+	if err == nil {
+		return !info.IsDir()
+	}
+	return errors.Is(err, fs.ErrNotExist) && !creatingDirectory
 }

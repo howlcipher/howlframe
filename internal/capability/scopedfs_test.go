@@ -1,6 +1,7 @@
 package capability
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,3 +53,50 @@ func TestScopedMkdirCreatesMissingGrantedRoot(t *testing.T) {
 		t.Fatalf("directory not created: %v", err)
 	}
 }
+
+// A grant may name one file instead of a directory (the projector's launcher
+// grants read access to its input file). The grant must keep working for exactly
+// that file, and must still refuse to follow it out of its directory.
+func TestFileRootGrantReadsAndWritesExactlyThatFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "in.jsonl")
+	if err := os.WriteFile(file, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read, _ := ParseGrant("filesystem:read=" + file)
+	got, err := Grants{read}.ScopedReadFile(file)
+	if err != nil || string(got) != "data" {
+		t.Fatalf("file-root read: %q %v", got, err)
+	}
+	// A sibling is not covered by a grant naming one file.
+	if _, err := (Grants{read}).ScopedReadFile(filepath.Join(dir, "other")); err == nil || !errorsIsDenied(err) {
+		t.Fatalf("a sibling of a granted file must be denied, got %v", err)
+	}
+	// Writing a granted file that does not exist yet creates it, as before.
+	newFile := filepath.Join(dir, "new.json")
+	write, _ := ParseGrant("filesystem:write=" + newFile)
+	if err := (Grants{write}).ScopedWriteFile(newFile, []byte("x"), 0o644); err != nil {
+		t.Fatalf("file-root write of a missing file: %v", err)
+	}
+	if b, _ := os.ReadFile(newFile); string(b) != "x" {
+		t.Fatalf("file not written: %q", b)
+	}
+}
+
+func TestFileRootGrantDoesNotFollowSymlinkOutOfItsDirectory(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	secret := filepath.Join(outside, "secret")
+	if err := os.WriteFile(secret, []byte("OUTSIDE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "in.jsonl")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Fatal(err)
+	}
+	g, _ := ParseGrant("filesystem:read=" + link)
+	if b, err := (Grants{g}).ScopedReadFile(link); err == nil {
+		t.Fatalf("a granted file that is a symlink leaving its directory must fail closed, read %q", b)
+	}
+}
+
+func errorsIsDenied(err error) bool { return errors.Is(err, ErrFilesystemDenied) }

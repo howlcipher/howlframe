@@ -200,3 +200,59 @@ func TestAbsoluteInRootSymlinkFailsClosed(t *testing.T) {
 		t.Fatalf("absolute in-root symlink must fail closed with CAPABILITY_DENIED: %q %+v", out.String(), ev.RuntimeFailure)
 	}
 }
+
+// The same guarantee for a grant that names one file: while the granted file
+// flips between a regular file and a symlink to a file outside its directory, a
+// read must never return the outside content.
+func TestFileRootGrantNeverEscapesWhileSymlinkChanges(t *testing.T) {
+	f := newRaceFixture(t)
+	granted := filepath.Join(f.root, "grantedfile")
+	if err := os.WriteFile(granted, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tmp := filepath.Join(f.root, "g.tmp")
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = os.Remove(tmp)
+			if i%2 == 0 {
+				if os.Symlink(filepath.Join(f.outside, "f"), tmp) == nil {
+					_ = os.Rename(tmp, granted)
+				}
+			} else if os.WriteFile(tmp, []byte("inside"), 0o644) == nil {
+				_ = os.Rename(tmp, granted)
+			}
+		}
+	}()
+	defer func() { close(stop); wg.Wait() }()
+	grant, err := capability.ParseGrant("filesystem:read=" + granted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := parser.NewParser(lexer.NewLexer(fmt.Sprintf(`(cli_app (let (n 0 hits 0)
+	  (do (while (< n %d)
+	    (do (try_let (b (read_file %q))
+	          (catch e (set hits hits))
+	          (if (= (bytes_to_string b) %q) (set hits (+ hits 1)) (set hits hits)))
+	        (set n (+ n 1))))
+	  (print hits))))`, raceIterations, granted, raceMarker)), "r.howl").ParseExpression()
+	policy := DefaultExecutionPolicy()
+	policy.Limits.MaxInstructions = 200_000_000
+	policy.Limits.MaxMemoryBytes = 1 << 30
+	var out, stderr bytes.Buffer
+	ev := RunBytecodeWithEvidence(bytecode.CompileToBytecode(node), nil, policy, []capability.Capability{grant}, strings.NewReader(""), &out, &stderr, 0)
+	if ev.RuntimeFailure != nil {
+		t.Fatalf("program failed: %+v", ev.RuntimeFailure)
+	}
+	if got := strings.TrimSpace(out.String()); got != "0" {
+		t.Fatalf("a file grant returned content from outside its directory %s times", got)
+	}
+}
