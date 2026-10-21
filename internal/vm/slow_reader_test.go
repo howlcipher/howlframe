@@ -69,14 +69,17 @@ func healthWithin(port int, limit time.Duration) (int, time.Duration, error) {
 	return resp.StatusCode, time.Since(start), nil
 }
 
+// stalledPipelined requests of 2 MiB each are far more than any default loopback
+// socket buffer holds, so the server is certain to block writing to the client
+// that never reads, whatever the host's buffer sizes; default buffers also keep
+// the later drain fast.
+const stalledPipelined = 40
+
 func stalledClient(t *testing.T, port, pipelined int) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if tcp, ok := conn.(*net.TCPConn); ok {
-		tcp.SetReadBuffer(4096)
 	}
 	req := "GET /big HTTP/1.1\r\nHost: x\r\n\r\n"
 	if _, err := conn.Write([]byte(strings.Repeat(req, pipelined))); err != nil {
@@ -99,7 +102,7 @@ func TestSerializedServerSurvivesNonReadingClient(t *testing.T) {
 		t.Fatalf("baseline health failed: %d %v", code, err)
 	}
 
-	stalled := stalledClient(t, port, 12)
+	stalled := stalledClient(t, port, stalledPipelined)
 	defer stalled.Close()
 	time.Sleep(500 * time.Millisecond) // let the server start writing to the stalled client
 
@@ -111,17 +114,14 @@ func TestSerializedServerSurvivesNonReadingClient(t *testing.T) {
 	// Stay stalled past the write timeout. The server must then give up on this
 	// client and close the connection, having sent only part of what was asked:
 	// draining afterwards must reach end-of-file, not hang, and not deliver all
-	// twelve 2 MiB responses.
+	// all of the 2 MiB responses.
 	time.Sleep(responseWriteTimeout + 1500*time.Millisecond)
-	if tcp, ok := stalled.(*net.TCPConn); ok {
-		tcp.SetReadBuffer(1 << 20) // widen the tiny window so draining is not artificially slow
-	}
 	stalled.SetReadDeadline(time.Now().Add(15 * time.Second))
 	received, err := io.Copy(io.Discard, stalled)
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
 		t.Fatalf("stalled connection was not released after the write timeout (received %d bytes): %v", received, err)
 	}
-	if full := int64(12 * 8 * (1 << 18)); received >= full {
+	if full := int64(stalledPipelined * 8 * (1 << 18)); received >= full {
 		t.Fatalf("server delivered every response (%d bytes) to a client that never read them in time", received)
 	}
 
