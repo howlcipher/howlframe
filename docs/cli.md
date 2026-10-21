@@ -117,3 +117,13 @@ the same canonical filesystem containment check used by actual I/O, without
 creating a probe file. Coarse capability-family queries retain their previous
 behavior. This grants no new authority and allows multi-output CLIs to detect
 all permission denials before writing either destination.
+
+## `howlframe interop`
+Usage: `howlframe interop --json`
+
+Prints the `howl.interop/v1` descriptor other Howl components read to check
+that the commands and flags they use still exist (see `docs/INTEROP.md` in the
+`howl` repository). It lists each subcommand with its flags, the legacy
+single-dash flags under the empty path, the HFBC format, and the exit codes:
+0 ok (under `run`, the program's own exit status passes through), 1 error, and
+2 for an invalid resource flag.

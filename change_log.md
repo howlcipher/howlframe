@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+### Interop
+* `howlframe interop --json` prints the `howl.interop/v1` descriptor that other Howl components and `howl doctor` check (contract: `docs/INTEROP.md` in howlcipher/howl): every subcommand with its flags, the legacy single-dash flags, the HFBC format, and the exit codes. `TestInteropDescriptorMatchesFlagSets` reads the flag sets out of `howlframe.go`, so a flag added without updating the descriptor fails the build.
+* The vendored `contracts/howl/` schemas are re-synced to HowlDream `dc6019a` (`howl.exploration/v1` had gained optional fields since `bd10b18`), and CI now fails when a vendored copy differs from the commit `SOURCE.md` pins or that commit is not on HowlDream's default branch (`scripts/check_vendored_schemas.py`).
+
 ### Verification
+* Publication reconciliation retains remote deferred store-lock release/timing diagnostics and interop/schema synchronization; the descriptor includes listener-host flags. Historical assurance and the separate remote M3 draft remain attributable to their original scopes.
 * Publish reconciliation preserves concurrent remote store-lock hardening, timing diagnostics, Owner assurance/waiver history and the separate Milestone 3 draft. Combined Ticketdesk frozen/adversarial/historical tests and repository CI-equivalent checks are rerun before publication.
 * All three fresh product milestones accepted at implementation `b028e813`, 2026-10-21: committed clean reproduction, independent final reviews, exact large-ledger arithmetic, real Chromium and actual adapted HowlBoard consumption. Closure records preserve historical failures and bounded carryover.
 * Fresh requirements-first CLI/backend replacements and Milestone 3 EvidenceDesk: retained original contracts, independent adversarial findings, separate reviewer runs and committed-tree reproduction scripts. Source candidates are preserved under milestone1/rebuild and milestone2/rebuild.

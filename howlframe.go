@@ -42,7 +42,7 @@ func init() {
 func main() {
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help") {
+		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help" || cmd == "interop") {
 			runSubcommand()
 			return
 		}
@@ -641,6 +641,8 @@ func runSubcommand() {
 		}
 	case "version":
 		fmt.Printf("HowlFrame %s\nHFBC format: %s\n", Version, HFBCFormatVersion)
+	case "interop":
+		printInterop(os.Args[2:])
 	case "inspect":
 		inspectArtifact()
 	case "check":
@@ -667,6 +669,7 @@ Commands:
   build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
   run       Execute a bytecode artifact or source script (--target=bytecode|interpreter).
   version   Print version information.
+  interop   Print the howl.interop/v1 descriptor other Howl components check (--json).
   help      Print this help message.
 
 Capabilities are denied by default and must be granted by the runner with --allow-caps.
@@ -1380,4 +1383,79 @@ func compileViaModelAdapter(graph *hfir.Graph) (*bytecode.BCProgram, []hfir.Diag
 		return nil, diags
 	}
 	return hfir.CompileCandidate(candidate)
+}
+
+// interopCommand is one entry of the howl.interop/v1 descriptor. See
+// https://github.com/howlcipher/howl/blob/main/docs/INTEROP.md.
+type interopCommand struct {
+	Path  []string `json:"path"`
+	Flags []string `json:"flags"`
+	JSON  bool     `json:"json"`
+	Emits []string `json:"emits,omitempty"`
+}
+
+type interopDescriptor struct {
+	Schema      string            `json:"schema"`
+	Component   string            `json:"component"`
+	Version     string            `json:"version"`
+	HFBCFormat  string            `json:"hfbc_format"`
+	Commands    []interopCommand  `json:"commands"`
+	ExitCodes   map[string]string `json:"exit_codes"`
+	Env         []string          `json:"env"`
+	Consumes    []any             `json:"consumes"`
+	Description string            `json:"description"`
+}
+
+// The flag lists mirror the flag sets in howlframe.go;
+// TestInteropDescriptorMatchesFlagSets keeps them in step.
+var interopCommands = []interopCommand{
+	{Path: []string{}, Flags: []string{
+		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
+		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
+		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-request-bytes", "-access-log",
+		"-timing-log", "-listen-host", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
+	}, Emits: []string{"howlframe.receipt/v0"}},
+	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
+	{Path: []string{"check"}, Flags: []string{"--profile"}},
+	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target"}},
+	{Path: []string{"run"}, Flags: []string{
+		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-call-depth", "--max-memory-bytes",
+		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
+		"--deadline",
+	}, Emits: []string{"howlframe.receipt/v0"}},
+	{Path: []string{"version"}, Flags: []string{}},
+	{Path: []string{"help"}, Flags: []string{}},
+	{Path: []string{"interop"}, Flags: []string{"--json"}, JSON: true, Emits: []string{"howl.interop/v1"}},
+}
+
+func interopDescription() interopDescriptor {
+	return interopDescriptor{
+		Schema:     "howl.interop/v1",
+		Component:  "howlframe",
+		Version:    Version,
+		HFBCFormat: HFBCFormatVersion,
+		Commands:   interopCommands,
+		ExitCodes: map[string]string{
+			"0": "ok; under run, the program's own exit status passes through",
+			"1": "error: a diagnostic (JSON on stdout for compile errors) or a runtime trap",
+			"2": "invalid resource flag (zero, negative, or non-numeric limit)",
+		},
+		Env:         []string{},
+		Consumes:    []any{},
+		Description: "HowlFrame language toolchain and capability-bounded VM; runs no other Howl component.",
+	}
+}
+
+// printInterop answers `howlframe interop --json`. The descriptor is the
+// same with or without --json; the flag exists so every component answers
+// the same command line.
+func printInterop(args []string) {
+	for _, a := range args {
+		if a != "--json" && a != "-json" {
+			fmt.Fprintf(os.Stderr, "Usage: howlframe interop --json\nunknown argument %q\n", a)
+			os.Exit(1)
+		}
+	}
+	out, _ := json.MarshalIndent(interopDescription(), "", "  ")
+	fmt.Println(string(out))
 }
