@@ -1,5 +1,32 @@
 # Milestone 2 decision
 
+## Fresh rebuild acceptance, 2026-10-21
+
+The requirements-first replacement is accepted for D29 A, C, D, G, H at
+implementation commit `b028e813`. The canonical source matches the new reviewed
+candidate; earlier Round 1–4 records below remain historical evidence, not a
+substitute for this fresh acceptance.
+
+* [Final independent review](rebuild/ticketdesk/REVIEW.md): independent source
+  review, frozen 101/101, DX 13/13, retained adversarial 11/11 and actual migration.
+* [Committed clean reproduction](../docs/journals/evidence/fresh_milestones/m2_clean.txt)
+  and [script](rebuild/scripts/clean_repro.sh): fresh archive, empty inherited
+  environment, HOME/temp/Go caches, all checks exit 0 using installed host tools.
+* [Implementation journal](rebuild/ticketdesk/DEVELOPMENT_JOURNAL.md),
+  [user guide and migration](ticketdesk/README.md),
+  [cross-milestone verification](../docs/journals/2026-10-21_fresh_milestones.md).
+
+Atomic ticket buckets and a complete atomic token collection replace the former
+split indexes. Legacy indexes are recovered through explicit offline conversion;
+old state is never silently treated as empty. Historical carryover m15/m16/m17 is
+therefore superseded by the new design and framing repair. Remaining non-blocking
+limits: the probe/close/bind port race, linear token-hash scans, whole-file writes,
+finite startup/request budgets, transport-level net/http errors and documented
+file permissions. Scope is functional standalone serving, not throughput or OS
+sandboxing. Stop the milestone; no carryover implementation is required.
+
+---
+
 ## Closure evidence index (2026-10-20)
 
 The Round 4 acceptance below remains the independent decision for D29 A, C, D, G, H.

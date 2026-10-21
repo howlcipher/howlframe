@@ -2,8 +2,8 @@
 
 > **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
 
-Fresh requirements-first implementations of all three milestones are under final
-verification. See [the rebuild evidence ledger](docs/journals/2026-10-21_fresh_milestones.md).
+Fresh requirements-first implementations of all three milestones are independently
+accepted and reproducible from committed archives. See [the rebuild evidence ledger](docs/journals/2026-10-21_fresh_milestones.md).
 Historical acceptance is retained separately in [Milestone 2's decision](milestone2/MILESTONE2_DECISION.md).
 
 ## What is HowlFrame?

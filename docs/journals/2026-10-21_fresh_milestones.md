@@ -91,6 +91,32 @@ checkout's committed source and sanitized fixture. Its package/browser path is
 explicitly retained as a host-tool prerequisite while the owner HOME/environment
 are replaced. Paths and hashes are printed by the executable evidence scripts.
 
-Status: independent application checks pass. Final committed-tree reproduction,
-evidence-link review and closure commit remain to be recorded below. No push,
+## Final committed verification and closure, 2026-10-21
+
+Implementation `b028e813ac020320c938592193009692973cf079` was locally committed after
+core and application checks passed. All three reproduction scripts then ran from
+its committed Git archive; actual process exit codes were zero. Their retained
+outputs are [M1](evidence/fresh_milestones/m1_clean.txt),
+[M2](evidence/fresh_milestones/m2_clean.txt) and
+[M3](evidence/fresh_milestones/m3_clean.txt). M1 includes all 96 frozen cases and
+supplementals, M2 includes 101/13/11, M3 includes all mandatory API/projector,
+Chromium, restart, encoded-ID, over-ceiling requests, real sibling and denial tests.
+The root agent ran the clean archives; independent reviewers inspected those
+outputs and source hashes after their own separate rebuild/test/source review.
+
+The complete uncached core test run passed; [raw output](evidence/fresh_milestones/go_tests.txt).
+Build, vet, gofmt, whitespace and scoped Python flake8 checks passed. CI
+[write-cost](evidence/fresh_milestones/write_cost.txt),
+[v2 references](evidence/fresh_milestones/benchmark_v2.txt),
+[real-app parity](evidence/fresh_milestones/real_apps.txt) and
+[harness tests](evidence/fresh_milestones/benchmark_unit.txt) all passed. Generated
+benchmark reports were restored to their initial tracked contents; no unrelated
+metric refresh is included. Two historical arity wording tests were updated to
+reflect the additional valid JavaScript headers operand, retaining all actual
+failure/no-artifact assertions.
+
+Frozen original M1/M2 requirements/acceptance and Milestone 3's original freeze
+were verified unchanged. Promoted canonical application sources match the accepted
+candidate snapshot bytes. Final metadata/links/whitespace are checked before the
+closure commit. All three independent decisions are ACCEPTED; stop here. No push,
 pull request, merge, new milestone or recursive optimization phase is authorized.

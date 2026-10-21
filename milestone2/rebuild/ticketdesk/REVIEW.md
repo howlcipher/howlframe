@@ -112,3 +112,31 @@ for simple atomic correctness; the milestone has no separate throughput gate.
 Run the final committed-tree reproduction after promotion/commit and append its
 actual result to the milestone decision/journal. A failed final reproduction
 invalidates closure regardless of this candidate acceptance.
+
+## Final committed-tree gate G acceptance, 2026-10-20
+
+**Final decision: ACCEPTED against all selected gates A, C, D, G, H.** The pending
+clean-reproduction prerequisite above is now satisfied for implementation commit
+`b028e813ac020320c938592193009692973cf079`.
+
+The implementation agent ran `bash milestone2/rebuild/scripts/clean_repro.sh` and
+observed process exit 0. The independent reviewer inspected its completed retained
+[clean reproduction log](../../../docs/journals/evidence/fresh_milestones/m2_clean.txt),
+confirmed it is byte-for-byte identical to the completed execution output, and
+re-read the committed script: it archives HEAD into a temporary tree and runs
+`env -i` with a fresh HOME, temporary directory, Go build cache and module cache.
+The log explicitly identifies commit `b028e813ac020320c938592193009692973cf079`, Go
+1.26.0 and Python 3.14.4, followed by **101/101 acceptance tests, 13/13 required DX
+checks and 11/11 supplemental candidate probes passing**.
+
+This final clean execution was run by the implementation agent and inspected by
+the independent reviewer; the earlier separate rebuild and test executions in
+this review were run directly by the reviewer. This accurately distinguishes the
+roles rather than claiming an additional independent clean run.
+
+Canonical `milestone2/ticketdesk/src/ticketdesk.howl` and the accepted candidate
+both retain SHA-256
+`1ebe656ac136f28971c9f3a15765e64cc612c25d61685a1fb43e70e3c8a16567`.
+The result uses ordinary host Linux tools and module-download access, with no
+claim of OS sandboxing. The known bounded limits above remain recorded; none
+blocks the selected milestone gates.

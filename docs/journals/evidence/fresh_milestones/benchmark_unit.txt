@@ -1,0 +1,64 @@
+.Result written to /tmp/tmpiupe7az0/results/ref_task_07_native_store_howlframe.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_02_cli_file_processing_howlframe.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_05_list_dict_transform_node.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_05_list_dict_transform_go.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_05_list_dict_transform_python.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_04_multi_module_cli_howlframe.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_08_capability_restricted_howlframe.json
+Listening on 8080
+Result written to /tmp/tmpiupe7az0/results/ref_task_03_http_json_endpoint_howlframe.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_01_typed_function_node.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_01_typed_function_go.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_01_typed_function_python.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_01_typed_function_howlframe.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_06_error_handling_node.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_06_error_handling_go.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_06_error_handling_python.json
+Result written to /tmp/tmpiupe7az0/results/ref_task_06_error_handling_howlframe.json
+.Attempt 1 failed: F
+======================================================================
+FAIL: test_a (test_app.T.test_a)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/tmpnzfokwhh/test_app.py", line 4, in test_a
+    def test_a(self): self.assertEqual(add(2,3), 5)
+                      ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: -1 != 5
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=1)
+
+Result written to /tmp/tmpo64a1n0_/results/t2.json
+.Result written to /tmp/tmpbv2roixr/results/t5.json
+.Result written to /tmp/tmprkyjz8g8/results/t1.json
+.Attempt 1 failed: E
+======================================================================
+ERROR: test_app (unittest.loader._FailedTest.test_app)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_app
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib/python3.14/unittest/loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "/tmp/tmpypl0c7tv/test_app.py", line 1
+    syntax error
+           ^^^^^
+SyntaxError: invalid syntax
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)
+
+Result written to /tmp/tmp2at333by/results/t3.json
+..Skipping verification: task_08_capability_restricted is explicitly unsupported for python
+.
+----------------------------------------------------------------------
+Ran 8 tests in 13.383s
+
+OK

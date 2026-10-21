@@ -1,10 +1,12 @@
 # Independent review of fresh Milestone 1 candidates
 
+Current decision: **ACCEPTED**, 2026-10-21; see final decision below.
+
 Date: 2026-10-20. Reviewer: milestone3_requirements, distinct from the three
 candidate implementers and root repair implementer, in the same Codex session.
 This is role separation, not proof of independent providers or human authorship.
 
-Decision at this review point: **PENDING**, with a reproducible ledgerlens exact
+Initial decision at first review: **PENDING**, with a reproducible ledgerlens exact
 aggregate blocker still open. Historical acceptance is preserved, not reused as
 fresh proof. No frozen requirements/tests were changed by this reviewer.
 
@@ -130,3 +132,62 @@ plus one maximum positive row, count92235, exact expense92233999999999077.66,
 income999999999999.99, net-92232999999999077.67. Exit0, empty stderr,89.192 seconds.
 Both aggregate cases pass; that arithmetic blocker is closed. Only final committed
 clean reproduction/relevant core gates remain before a final D24 acceptance decision.
+
+## Final independent acceptance decision, 2026-10-21
+
+**ACCEPTED: all three fresh standalone applications against original frozen
+requirements and D24 A-J.** This supersedes the initial pending decision above;
+all original failures remain retained as evidence, including bugs discovered
+only after supplied acceptance tests passed.
+
+Accepted implementation commit: `b028e813ac020320c938592193009692973cf079`.
+Canonical and reviewed snapshot source SHA-256 values match byte-for-byte:
+
+| Application | Canonical and reviewed source SHA-256 |
+|---|---|
+| ledgerlens | cd23ff2e36040ff9c2374d350af97f78226ef188fc67773bac60dd0816cd9e6c |
+| healthwatch | 8ec36c1e0df6be0d7c5ab8b795f5b62821c2afa445a05266536ce4ab74b3208e |
+| taskflow | a16d5277448a3026ca30c1e09a0e6297642ca209cf4a757eb9edf53a08621067 |
+
+Reviewer independently rebuilt the final working-tree compiler and all three
+reviewed standalone artifacts, reran all35+29+32 frozen tests, and confirmed the
+three held-out repairs and large positive/mixed-negative arithmetic cases above.
+All pass. The independently authored frozen requirements/tests remain intact.
+Root selected the fresh implementations and promoted byte-identical sources.
+Ledgerlens/taskflow have demonstrated correctness improvements; healthwatch is
+selected as the owner-requested clean rebuild with coherent maintenance structure,
+without a demonstrated runtime-speed or functional-superiority claim.
+
+Root then ran the committed archive reproduction script; its actual tool process
+exit0 was confirmed, and reviewer inspected its complete retained output:
+[../../docs/journals/evidence/fresh_milestones/m1_clean.txt](../../docs/journals/evidence/fresh_milestones/m1_clean.txt).
+The output pins the accepted commit, Go1.26.0/Python3.14.4, three fresh builds,
+all96 frozen tests, fresh boundary regressions and six healthwatch supplemental
+checks. The script uses env-i, fresh HOME/TMPDIR/Go caches and installed host tools;
+module download access is an explicit prerequisite. This is environment isolation,
+not an OS sandbox. Reviewer did not execute this last archive command personally:
+root executed it, while reviewer independently inspected procedure/output and
+separately built/tested the same source hashes.
+
+Relevant final core uncached tests, build, vet, formatting and whitespace checks
+passed as root-confirmed tool results. Package output and four CI proof logs are
+retained in the same evidence directory; reviewer inspected them. Source/core
+changes are finished; only evidence/handoff closure remains after the accepted
+implementation commit.
+
+D24 final assessment: A original frozen contracts preserved; B complete HowlFrame
+sources and freshly built standalone artifacts verified; C original independent
+functional tests plus retained held-outs pass; D committed isolated build/run
+passes; E autonomous AI implementation/repair journals retained, no human-written
+fix observed; F original user guides/workflows preserved at promoted canonical
+paths; G regression/failure history and finite-resource limits retained; H scoped
+grant denials and limits exercised with no host-isolation claim; I committed
+implementation/snapshots, journals, hashes and handoff evidence preserved; J this
+role-separated independent review accepts each of the three applications.
+
+Known limits remain documented. The92234-row stress test needs a higher cumulative
+VM allocation accounting ceiling than the default4GiB suite budget; its failure
+under4GiB is allowed finite-resource termination, while high-budget exact arithmetic
+is proven. No cross-provider identity, comparative performance target, or broad
+OS sandbox assurance is inferred. Stop Milestone1; do not turn accepted carryover
+into an autonomous improvement loop.

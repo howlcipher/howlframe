@@ -1,16 +1,18 @@
 # Milestone 2 handoff
 
-* Status: ACCEPTED and closed for D29 A, C, D, G, H, per the independent Round 4
-  [decision](../MILESTONE2_DECISION.md) and [review](REVIEW.md) of `7092bcff`.
-* Plan, requirements, frozen acceptance suite and DX checker remain unchanged since `10d9c2a8`.
-* Closure evidence: [development journal](DEVELOPMENT_JOURNAL.md#closure-verification-2026-10-20).
-  Reproduce the committed tree with `bash milestone2/scripts/clean_repro.sh` from the repository root.
-* Non-blocking carryover remains in the decision: port-probe race (m12), old-state index migration (m15),
-  crash-created unindexed tickets (m16), truncated-upload error shape (m17; request id already added),
-  transport rejection documentation, state file permissions and incremental writes.
-  Keep the existing review regressions in the default reproduction run.
-* Current limitations include serialized single-process serving and bucket-index listing cost proportional
-  to page size plus empty buckets crossed. Earlier journal entries about host-specific exec failures are
-  historical; current full-suite results are recorded separately in the closure journal.
-* Stop condition: acceptance is recorded. Stop after the local closure commit. Do not implement carryover
-  or start Milestone 3 without a new instruction. No push, pull request or merge is part of closure.
+Fresh implementation ACCEPTED for D29 A, C, D, G, H at `b028e813`, 2026-10-21.
+The canonical source matches the independently reviewed replacement snapshot.
+
+* Current acceptance: [milestone decision](../MILESTONE2_DECISION.md) and
+  [fresh independent review](../rebuild/ticketdesk/REVIEW.md).
+* Original requirements, frozen acceptance tests and DX checker remain unchanged.
+* [User guide](README.md) documents state format 2 and non-overwriting offline
+  migration. Ticket and token persistence are atomic at their collection boundary.
+* [Committed clean reproduction](../rebuild/scripts/clean_repro.sh) verifies
+  101 acceptance tests, 13 DX checks and 11 retained adversarial probes.
+  The canonical reproduction also retains the nine historical regressions;
+  its B6 legacy crash fixture is recovered through explicit migration.
+* Carryover: port-probe race, linear token authentication, whole-state writes,
+  finite budgets and transport/runtime limitations recorded in the review.
+* Stop: all three requested milestones are accepted. Do not implement carryover,
+  push, merge or begin another milestone without a new instruction.

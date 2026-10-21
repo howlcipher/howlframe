@@ -1,0 +1,116 @@
+ok  	github.com/howlcipher/howlframe	166.216s
+ok  	github.com/howlcipher/howlframe/apps/action_executor	2.325s
+ok  	github.com/howlcipher/howlframe/apps/auth_api	1.138s
+ok  	github.com/howlcipher/howlframe/apps/candidate_evaluator	1.546s
+ok  	github.com/howlcipher/howlframe/apps/contains_cli	1.893s
+ok  	github.com/howlcipher/howlframe/apps/counter_api	1.216s
+ok  	github.com/howlcipher/howlframe/apps/cut_cli	1.418s
+ok  	github.com/howlcipher/howlframe/apps/echo_api	0.544s
+ok  	github.com/howlcipher/howlframe/apps/ends_cli	1.769s
+ok  	github.com/howlcipher/howlframe/apps/env_cli	2.367s
+ok  	github.com/howlcipher/howlframe/apps/fetch_cli	1.776s
+ok  	github.com/howlcipher/howlframe/apps/file_transform	2.673s
+ok  	github.com/howlcipher/howlframe/apps/grep_cli	2.821s
+ok  	github.com/howlcipher/howlframe/apps/has_line_cli	1.950s
+ok  	github.com/howlcipher/howlframe/apps/head_cli	1.284s
+ok  	github.com/howlcipher/howlframe/apps/icontains_cli	1.971s
+ok  	github.com/howlcipher/howlframe/apps/join_cli	1.408s
+ok  	github.com/howlcipher/howlframe/apps/json_get	2.709s
+ok  	github.com/howlcipher/howlframe/apps/kv_cli	3.252s
+ok  	github.com/howlcipher/howlframe/apps/log_analyzer	5.564s
+ok  	github.com/howlcipher/howlframe/apps/lower_cli	2.241s
+ok  	github.com/howlcipher/howlframe/apps/mkdir_cli	1.522s
+ok  	github.com/howlcipher/howlframe/apps/notes_cli	2.878s
+ok  	github.com/howlcipher/howlframe/apps/now_cli	1.594s
+ok  	github.com/howlcipher/howlframe/apps/release_authority	3.226s
+ok  	github.com/howlcipher/howlframe/apps/rest_tasks	1.214s
+ok  	github.com/howlcipher/howlframe/apps/sleep_cli	1.495s
+ok  	github.com/howlcipher/howlframe/apps/stamp_api	1.393s
+ok  	github.com/howlcipher/howlframe/apps/starts_cli	1.799s
+ok  	github.com/howlcipher/howlframe/apps/status_api	3.333s
+ok  	github.com/howlcipher/howlframe/apps/task_api	6.216s
+ok  	github.com/howlcipher/howlframe/apps/template_cli	1.992s
+ok  	github.com/howlcipher/howlframe/apps/todo_cli	5.037s
+ok  	github.com/howlcipher/howlframe/apps/trim_cli	1.760s
+ok  	github.com/howlcipher/howlframe/apps/uniq_cli	1.312s
+ok  	github.com/howlcipher/howlframe/apps/upper_cli	1.828s
+ok  	github.com/howlcipher/howlframe/apps/wc_cli	1.876s
+ok  	github.com/howlcipher/howlframe/apps/webhook_relay	1.238s
+?   	github.com/howlcipher/howlframe/benchmarks/language_write_cost/task_a_hello_json/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/language_write_cost/task_b_cli_file_sum/go	[no test files]
+ok  	github.com/howlcipher/howlframe/benchmarks/language_write_cost/task_c_function_test/go	0.013s
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/auth_api/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/contains_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/counter_api/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/cut_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/echo_api/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/ends_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/env_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/fetch_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/file_transform/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/grep_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/has_line_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/head_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/icontains_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/join_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/json_get/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/kv_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/log_analyzer/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/lower_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/mkdir_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/notes_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/now_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/sleep_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/stamp_api/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/starts_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/status_api/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/template_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/trim_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/uniq_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/upper_cli/go	[no test files]
+?   	github.com/howlcipher/howlframe/benchmarks/real_apps/wc_cli/go	[no test files]
+ok  	github.com/howlcipher/howlframe/benchmarks/v2/reference/task_01_typed_function/go	0.026s
+ok  	github.com/howlcipher/howlframe/benchmarks/v2/reference/task_05_list_dict_transform/go	0.010s
+ok  	github.com/howlcipher/howlframe/benchmarks/v2/reference/task_06_error_handling/go	0.024s
+ok  	github.com/howlcipher/howlframe/cmd/codegen	0.015s
+ok  	github.com/howlcipher/howlframe/contracts/howl	0.147s
+ok  	github.com/howlcipher/howlframe/examples	16.542s
+ok  	github.com/howlcipher/howlframe/examples/capability_lab	1.621s
+ok  	github.com/howlcipher/howlframe/examples/language_tour	1.621s
+ok  	github.com/howlcipher/howlframe/examples/release_gate	1.510s
+ok  	github.com/howlcipher/howlframe/examples/repo_analyst	1.918s
+ok  	github.com/howlcipher/howlframe/experiments/falsifiable-v0/cmd/hfexp	0.702s
+ok  	github.com/howlcipher/howlframe/experiments/falsifiable-v0/harness	5.245s
+?   	github.com/howlcipher/howlframe/experiments/internal/pathparity	[no test files]
+ok  	github.com/howlcipher/howlframe/experiments/live-v1-blind	0.018s
+ok  	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v0	0.011s
+?   	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v0/cmd/heldoutverify	[no test files]
+ok  	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v1	0.018s
+?   	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v1/cmd/heldoutv1verify	[no test files]
+ok  	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v2	0.026s
+?   	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v2/cmd/heldoutv2verify	[no test files]
+ok  	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v3	0.022s
+?   	github.com/howlcipher/howlframe/experiments/token-efficiency-heldout-v3/cmd/heldoutv3verify	[no test files]
+ok  	github.com/howlcipher/howlframe/experiments/token-efficiency-v0	0.120s
+?   	github.com/howlcipher/howlframe/experiments/token-efficiency-v0/cmd/tokverify	[no test files]
+ok  	github.com/howlcipher/howlframe/internal/ast	0.011s
+ok  	github.com/howlcipher/howlframe/internal/backend/gogen	36.664s
+ok  	github.com/howlcipher/howlframe/internal/backend/javascript	24.397s
+ok  	github.com/howlcipher/howlframe/internal/backend/wasm	0.011s
+ok  	github.com/howlcipher/howlframe/internal/bytecode	0.034s
+ok  	github.com/howlcipher/howlframe/internal/capability	0.051s
+ok  	github.com/howlcipher/howlframe/internal/checker	0.222s
+ok  	github.com/howlcipher/howlframe/internal/construct	0.009s
+ok  	github.com/howlcipher/howlframe/internal/hfir	2.182s
+ok  	github.com/howlcipher/howlframe/internal/htmlescape	0.011s
+ok  	github.com/howlcipher/howlframe/internal/httpreq	0.010s
+ok  	github.com/howlcipher/howlframe/internal/ir	0.025s
+ok  	github.com/howlcipher/howlframe/internal/lexer	0.009s
+ok  	github.com/howlcipher/howlframe/internal/masking	0.012s
+?   	github.com/howlcipher/howlframe/internal/nettest	[no test files]
+ok  	github.com/howlcipher/howlframe/internal/optimization	0.018s
+ok  	github.com/howlcipher/howlframe/internal/parser	0.007s
+?   	github.com/howlcipher/howlframe/internal/testutil	[no test files]
+ok  	github.com/howlcipher/howlframe/internal/vm	38.576s
+ok  	github.com/howlcipher/howlframe/observer	0.015s
+ok  	github.com/howlcipher/howlframe/tools/difftest	62.356s

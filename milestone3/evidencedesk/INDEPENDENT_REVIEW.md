@@ -1,10 +1,12 @@
 # Milestone 3 independent final review
 
+Current decision: **ACCEPTED**, 2026-10-21; see final decision below.
+
 Reviewer: milestone3_requirements, original independent selector/evaluator,
 2026-10-20. Role-separated from app implementer and root repairs, same Codex
 session. No cross-provider independence or production deployment is claimed.
 
-Decision at this point: **PENDING final packaging/reproduction**, with MAX
+Initial decision at first review: **PENDING final packaging/reproduction**, with MAX
 zero-padding behavior awaiting repair. Original acceptance failures remain in
 this record rather than being replaced by later green output.
 
@@ -89,3 +91,45 @@ No outstanding application semantic defect was found in the bounded review.
 Final acceptance remains pending committed clean-environment reproduction and
 relevant core regression/CI completion; the six frozen tests plus independent
 full browser/consumer workflow already pass on the reviewed working tree.
+
+## Final independent acceptance decision, 2026-10-21
+
+**ACCEPTED: D30 A (full-stack web app), B (useful ecosystem component
+replacement), J (evidence-driven selection/order), against R1-R6 and the explicit
+R5 compatibility addendum.** This decision supersedes the pending status above;
+initial findings, failed probes and their repair history remain preserved.
+
+Accepted implementation commit: `b028e813ac020320c938592193009692973cf079`.
+The final source change catches the runner's request-body ceiling before ledger
+parsing. Root discovered that payloads over300000 bytes originally escaped as
+500 despite the application's262144-byte ceiling. Reviewer independently rebuilt
+final artifacts and reran API/restart verification:262145,300001 and400000 bytes
+all return413 payload_too_large and preserve existing imported tasks. All six
+frozen tests also pass again. Exact execution transcript:
+[evidence/reviewer/final_request_ceiling.txt](evidence/reviewer/final_request_ceiling.txt).
+
+Reviewer inspected committed-archive clean reproduction output:
+[../../docs/journals/evidence/fresh_milestones/m3_clean.txt](../../docs/journals/evidence/fresh_milestones/m3_clean.txt).
+Root tool process confirmed actual exit0, not merely partial green output.
+It builds both native artifacts and compiled frontend from the accepted commit,
+runs all six frozen tests, genuine Chromium148 browser interactions, restart,
+loopback listener, grant/resource denial checks, and the real adapted sibling
+consumer for both3-record and72-record fixtures. It prints framework/sibling
+commits plus source/adapter/fixture hashes. Fresh HOME/TMPDIR/Go caches and removed
+inherited environment are documented by scripts/clean_repro.sh; installed Python
+Playwright and browser paths are explicitly retained host-tool prerequisites.
+This is reproducible host-tool execution, not OS security isolation.
+
+Relevant final uncached core Go package results and four CI proof logs were
+provided with root-confirmed successful tool exits under
+[../../docs/journals/evidence/fresh_milestones/](../../docs/journals/evidence/fresh_milestones/).
+Root also confirmed build, vet, formatting and whitespace gates. Only evidence
+and closure documentation remain after this reviewed implementation commit.
+
+Known limits are accepted as documented: local single user, bounded whole-ledger
+state, subset validation, two-file projection publication can be partial on an
+OS write failure, and actual Board requires the transparent temporary route-grant
+adapter. No unmodified sibling compatibility, permanent sibling installation,
+first language adoption, production execution or cross-provider proof is claimed.
+The useful alternative projector and actual consumer contract are proven.
+Stop this milestone; no speculative follow-on work is part of this acceptance.

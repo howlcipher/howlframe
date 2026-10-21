@@ -1,5 +1,32 @@
 # Milestone 1 decision
 
+## Fresh rebuild acceptance, 2026-10-21
+
+The three original frozen contracts were implemented again from requirements;
+canonical sources now match the independently reviewed rebuild candidates.
+Implementation commit: `b028e813`. All three fresh applications are accepted
+against D24 A–J. The earlier decisions below are preserved historical records.
+
+Evidence index:
+
+* [Fresh independent review](rebuild/INDEPENDENT_REVIEW.md), including the
+  reviewer-discovered regressions and their independently verified repairs.
+* [Committed clean reproduction](../docs/journals/evidence/fresh_milestones/m1_clean.txt):
+  35/35 Ledgerlens, 29/29 Healthwatch, 32/32 Taskflow, additional boundary probes
+  and six Healthwatch supplemental cases, all exit 0.
+* [Reproduction script](rebuild/scripts/clean_repro.sh) and
+  [cross-milestone journal](../docs/journals/2026-10-21_fresh_milestones.md).
+* Candidate journals/source snapshots in `rebuild/01-ledgerlens/`,
+  `rebuild/02-healthwatch/`, `rebuild/03-taskflow/`; original requirements and
+  frozen acceptance suites remain unchanged.
+
+No claim of cross-provider proof, universal resource independence or comparative
+runtime superiority follows. Finite budgets, single-process tooling and documented
+application limits remain. Stop this milestone; no further autonomous fixes are
+required after the recorded acceptance.
+
+---
+
 Date: 2026-10-13. Independent final reviewer (no part in the implementation). Reviewed HEAD 2a95d364.
 
 ## FINAL OVERALL DECISION (re-review at HEAD a4539b7f, 2026-10-13): ACCEPTED

@@ -1,0 +1,36 @@
+Token method: tiktoken(cl100k_base)
+app              howl     py     go   node
+log_analyzer      279    308    331    310
+kv_cli            236    270    268    263
+status_api        171    271    279    221
+notes_cli         331    412    462    395
+auth_api          199    330    337    296
+grep_cli          156    188    259    225
+wc_cli            157    198    197    191
+json_get          146    185    189    161
+counter_api       223    233    320    235
+fetch_cli         100    185    199    214
+template_cli      156    206    190    203
+stamp_api         128    239    264    213
+mkdir_cli          51     90    114     92
+contains_cli      121    158    148    156
+file_transform    231    266    293    238
+env_cli            81    105    103    104
+starts_cli        120    157    147    155
+ends_cli          120    157    148    155
+head_cli          139    168    192    177
+cut_cli           156    173    209    180
+has_line_cli      123    162    164    161
+join_cli           98    139    127    132
+uniq_cli          127    153    182    162
+echo_api          109    284    219    223
+now_cli            15     41     24     18
+sleep_cli          58     94    126    103
+lower_cli          53     79     83     75
+upper_cli          53     79     83     75
+trim_cli           53     79     83     75
+icontains_cli     130    163    154    162
+TOTAL            4120   5572   5894   5370
+
+PASSED: densified real apps beat Python/Go/Node on tokens with parity + app tests.
+Wrote /run/media/system/tallgeese/dev/howlframe/benchmarks/real_apps/proof_latest.json
