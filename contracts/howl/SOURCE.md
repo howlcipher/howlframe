@@ -6,9 +6,9 @@ authoritative shape of the `howl.*` ecosystem envelopes this repo consumes
 and produces (`howl.candidate/v1` in, `howl.assessment/v1` out).
 
 **Source repository:** https://github.com/howlcipher/howldream
-**Pinned commit:** `bd10b18b7182e5216b494d728d015dbbba9b32d0`
+**Pinned commit:** `dc6019a485bec25e1f27767e3802fec42883dd84`
 **Source path:** `schemas/*.schema.json`
-**Vendored:** 2026-09-12
+**Vendored:** 2026-10-20
 
 ## Why vendored, not fetched at build/runtime
 

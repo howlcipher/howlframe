@@ -105,3 +105,13 @@ howlframe -o build frontend.howl
 For a `web_app` root, this writes `build/app.js` and, when present,
 `build/app.test.js`. This remains a compatibility backend workflow, not an
 HFBC build or a browser runtime provided by `howlframe run`.
+
+## `howlframe interop`
+Usage: `howlframe interop --json`
+
+Prints the `howl.interop/v1` descriptor other Howl components read to check
+that the commands and flags they use still exist (see `docs/INTEROP.md` in the
+`howl` repository). It lists each subcommand with its flags, the legacy
+single-dash flags under the empty path, the HFBC format, and the exit codes:
+0 ok (under `run`, the program's own exit status passes through), 1 error, and
+2 for an invalid resource flag.
