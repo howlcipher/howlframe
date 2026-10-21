@@ -93,3 +93,14 @@ Toolchain: go1.26.0 local, Python 3.14.4. Audit inputs: /run/media/system/tallge
      500 ms): output EOF was treated as cancellation. Reproduced; fixed by an explicit exit report on the status pipe.
   4. LOW (pre-existing) `GOOS=windows go build ./...` fails in internal/testutil (syscall.Flock). Unchanged from baseline,
      not in scope; the CLI itself builds for Windows.
+
+## Review round 2, hosted CI, and one more repair
+- Codex hit its usage limit before a socket-enabled rerun; round 2 was run on Antigravity (`agy`) against `3832d83e`: ACCEPT. Its
+  report misnames some code (`openPinnedFile`, `O_NOFOLLOW`, test names that do not exist), so I ran its two probe scripts
+  against my own build of the final commit rather than trusting the prose: all pass.
+- Closed a gap: ran the full EvidenceDesk workflow (real Chromium, both Board fixtures) on the final tree: pass.
+- PR #209 opened. First hosted run (`7823c901`): `build` FAILED, other three jobs passed. Cause: my own new slow-reader test, in
+  its drain step (tiny client receive buffer made draining crawl on the 4-core runner); the server behavior it tests was fine.
+  Reproduced the conditions by pinning the full suite to 4 cores, redesigned the test (default buffers, 80 MB pipelined, so
+  blocking is certain and draining fast), 76/76 packages pass pinned to 4 cores. Second hosted run (`e472a928`): all four jobs pass.
+  Lesson recorded: a green run on a 12-core host did not prove a test was load-independent.
