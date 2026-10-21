@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -32,7 +33,7 @@ func TestStoreTimingLineIsDiagnosticOnly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(dir, tc.name+".json")
 			errOut := &bytes.Buffer{}
-			machine := &BCVM{Limits: VMLimits{LogTiming: tc.timing}, ErrOut: errOut}
+			machine := &BCVM{Limits: VMLimits{LogTiming: tc.timing}, ErrOut: errOut, AllowedCaps: []capability.Capability{capability.Filesystem}}
 			store := &bcMemoryStore{file: path}
 			machine.persistStore(store, records, tc.op)
 			got, err := os.ReadFile(path)
@@ -61,7 +62,7 @@ func TestStoreTimingBelowThresholdIsSilent(t *testing.T) {
 	storeTimingThreshold = 1 << 62
 	t.Cleanup(func() { storeTimingThreshold = saved })
 	errOut := &bytes.Buffer{}
-	machine := &BCVM{Limits: VMLimits{LogTiming: true}, ErrOut: errOut}
+	machine := &BCVM{Limits: VMLimits{LogTiming: true}, ErrOut: errOut, AllowedCaps: []capability.Capability{capability.Filesystem}}
 	machine.persistStore(&bcMemoryStore{file: filepath.Join(t.TempDir(), "s.json")}, map[string]map[string]any{}, bytecode.OpStorePut)
 	if errOut.Len() != 0 {
 		t.Fatalf("fast write must not log: %q", errOut)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
@@ -20,6 +21,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
+	"io/fs"
 	"math"
 	"net"
 	"net/http"
@@ -879,8 +881,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		path := fmt.Sprint(interp.eval(node.Children[1], env))
 		path = interp.requireFilesystem(path, false, node)
-		b, err := os.ReadFile(path)
+		b, err := capability.Grants(interp.AllowedCaps).ScopedReadFile(path)
 		if err != nil {
+			interp.failScopedFilesystem(err, node)
 			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
 		}
 		return b
@@ -901,7 +904,8 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 				InterpErr(fmt.Sprintf("TYPE_ERROR: write_file expected string data, got %T", v), node)
 			}
 			writePath = interp.requireFilesystem(writePath, true, node)
-			if err := os.WriteFile(writePath, data, 0644); err != nil {
+			if err := capability.Grants(interp.AllowedCaps).ScopedWriteFile(writePath, data, 0644); err != nil {
+				interp.failScopedFilesystem(err, node)
 				InterpErr(fmt.Sprintf("IO_ERROR: write_file failed: %v", err), node)
 			}
 			return nil
@@ -914,7 +918,8 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			dirPath := fmt.Sprint(interp.eval(node.Children[1], env))
 			dirPath = interp.requireFilesystem(dirPath, true, node)
-			if err := os.MkdirAll(dirPath, 0755); err != nil {
+			if err := capability.Grants(interp.AllowedCaps).ScopedMkdirAll(dirPath, 0755); err != nil {
+				interp.failScopedFilesystem(err, node)
 				InterpErr(fmt.Sprintf("IO_ERROR: mkdir failed: %v", err), node)
 			}
 			return nil
@@ -1791,7 +1796,7 @@ func newBCStoreRegistry() *bcStoreRegistry {
 	return &bcStoreRegistry{stores: make(map[string]*bcMemoryStore)}
 }
 
-func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
+func (registry *bcStoreRegistry) open(uri string, grants capability.Grants) (*bcMemoryStore, error) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 
@@ -1800,7 +1805,7 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 		store = &bcMemoryStore{records: make(map[string]map[string]any)}
 		if strings.HasPrefix(uri, "file://") {
 			store.file = strings.TrimPrefix(uri, "file://")
-			data, err := os.ReadFile(store.file)
+			data, err := grants.ScopedReadFile(store.file)
 			if err != nil && !os.IsNotExist(err) {
 				return nil, fmt.Errorf("read persisted store %q: %w", store.file, err)
 			}
@@ -1819,8 +1824,10 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 	return store, nil
 }
 
+// syncToFile persists records with unrestricted file access. It exists for
+// tests and tools; the VM persists through syncToFileScoped.
 func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
-	return s.syncToFileTimed(records, nil)
+	return s.syncToFileScoped(records, nil, capability.Grants{capability.Filesystem})
 }
 
 // storePersistTiming records how long each phase of one persisted-store write
@@ -1836,7 +1843,10 @@ type storePersistTiming struct {
 // force the line.
 var storeTimingThreshold = 100 * time.Millisecond
 
-func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timing *storePersistTiming) error {
+// syncToFileScoped writes the store file through a scope opened on the granted
+// root, so a path component replaced while the program runs cannot redirect the
+// write outside that root.
+func (s *bcMemoryStore) syncToFileScoped(records map[string]map[string]any, timing *storePersistTiming, grants capability.Grants) error {
 	if s.file == "" {
 		return nil
 	}
@@ -1849,7 +1859,12 @@ func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timin
 	if err != nil {
 		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
 	}
-	if err := writeFileAtomicTimed(s.file, data, timing); err != nil {
+	scope, err := grants.OpenScope(s.file, true)
+	if err != nil {
+		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	defer scope.Close()
+	if err := writeAtomicScoped(scope, data, timing); err != nil {
 		return fmt.Errorf("write persisted store %q: %w", s.file, err)
 	}
 	if timing != nil {
@@ -1859,14 +1874,22 @@ func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timin
 }
 
 // writeFileAtomic replaces path with data through a synced temporary sibling
-// and a rename, so a crash leaves either the old or the new complete file.
+// and a rename, so a crash leaves either the old or the new complete file. It
+// uses unrestricted file access; the VM uses writeAtomicScoped.
 func writeFileAtomic(path string, data []byte) error {
-	return writeFileAtomicTimed(path, data, nil)
+	scope, err := capability.Grants{capability.Filesystem}.OpenScope(path, true)
+	if err != nil {
+		return err
+	}
+	defer scope.Close()
+	return writeAtomicScoped(scope, data, nil)
 }
 
-// writeFileAtomicTimed is writeFileAtomic that also records per-phase
-// durations into timing when it is non-nil. The I/O sequence is identical.
-func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) error {
+// writeAtomicScoped replaces the scope's target with data through a synced
+// temporary sibling in the same directory and a rename, recording per-phase
+// durations into timing when it is non-nil. Every step goes through the scope's
+// filesystem, so for a scoped grant none of them can leave the granted root.
+func writeAtomicScoped(scope *capability.Scope, data []byte, timing *storePersistTiming) error {
 	mark := time.Now()
 	lap := func() time.Duration {
 		now := time.Now()
@@ -1874,18 +1897,30 @@ func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) 
 		mark = now
 		return elapsed
 	}
-	dir, base := filepath.Split(path)
-	if dir == "" {
-		dir = "." // CreateTemp("") would use system temp, possibly another device.
+	base := filepath.Base(scope.Name)
+	var (
+		tmp  *os.File
+		name string
+		err  error
+	)
+	for attempt := 0; attempt < 100; attempt++ {
+		var suffix [8]byte
+		if _, rerr := rand.Read(suffix[:]); rerr != nil {
+			return rerr
+		}
+		name = scope.Sibling(base + ".tmp-" + hex.EncodeToString(suffix[:]))
+		tmp, err = scope.FS.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil || !errors.Is(err, fs.ErrExist) {
+			break
+		}
 	}
-	tmp, err := os.CreateTemp(dir, base+".tmp-*")
 	if err != nil {
-		return err
+		return scope.Classify(err)
 	}
-	name := tmp.Name()
+	remove := func() { scope.FS.Remove(name) }
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
@@ -1893,32 +1928,33 @@ func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) 
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
 		timing.Fsync = lap()
 	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		remove()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
 		timing.Close = lap()
 	}
-	if err := os.Chmod(name, 0o644); err != nil {
-		os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return err
+	if err := scope.FS.Rename(name, scope.Name); err != nil {
+		remove()
+		return scope.Classify(err)
 	}
 	if timing != nil {
 		timing.Rename = lap()
 	}
 	// Make the rename itself durable.
-	if d, err := os.Open(filepath.Dir(path)); err == nil {
+	if d, err := scope.FS.OpenFile(scope.Dir(), os.O_RDONLY, 0); err == nil {
 		d.Sync()
 		d.Close()
 	}
@@ -2213,7 +2249,7 @@ func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string
 	if vm.Limits.LogTiming && store.file != "" {
 		timing = &storePersistTiming{}
 	}
-	err := store.syncToFileTimed(records, timing)
+	err := store.syncToFileScoped(records, timing, capability.Grants(vm.AllowedCaps))
 	if timing != nil && err == nil && timing.Total >= storeTimingThreshold && vm.ErrOut != nil {
 		kind := "put"
 		if op == bytecode.OpStoreDelete {
@@ -2224,6 +2260,7 @@ func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string
 			durMS(timing.Rename), durMS(timing.DirSync), durMS(timing.Total), durMS(time.Since(processStart)))
 	}
 	if err != nil {
+		vm.failScopedFilesystem(err, op)
 		panic(NewRuntimeError("STORE_PERSISTENCE_WRITE_FAILED", "main", vm.ip, op, "%v", err))
 	}
 	store.records = records
@@ -2539,7 +2576,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if strings.HasPrefix(uri, "file://") {
 				uri = "file://" + vm.requireFilesystem(strings.TrimPrefix(uri, "file://"), false, inst.Op)
 			}
-			store, err := vm.stores.open(uri)
+			store, err := vm.stores.open(uri, capability.Grants(vm.AllowedCaps))
 			if err != nil {
 				code := "STORE_PERSISTENCE_READ_FAILED"
 				if strings.Contains(err.Error(), "decode persisted store") {
@@ -2701,8 +2738,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
 			path = vm.requireFilesystem(path, false, inst.Op)
-			b, err := os.ReadFile(path)
+			b, err := capability.Grants(vm.AllowedCaps).ScopedReadFile(path)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
 			}
 			vm.chargeBytes(len(b), ip, inst.Op)
@@ -2722,15 +2760,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			default:
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "write_file expected string or byte list data, got %T", dataAny))
 			}
-			err := os.WriteFile(path, data, 0644)
+			err := capability.Grants(vm.AllowedCaps).ScopedWriteFile(path, data, 0644)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "write_file failed: %v", err))
 			}
 		case bytecode.OpMkdir:
 			path := vm.popCheckedString(inst, ip, "mkdir expected string")
 			path = vm.requireFilesystem(path, true, inst.Op)
-			err := os.MkdirAll(path, 0755)
+			err := capability.Grants(vm.AllowedCaps).ScopedMkdirAll(path, 0755)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "mkdir failed: %v", err))
 			}
 		case bytecode.OpExec:
@@ -2810,7 +2850,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			} else {
 				bodyAny, ok := env.get(bodyVar)
 				if !ok {
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined var: "+bodyVar))
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined var: %s", bodyVar))
 				}
 				if s, ok := bodyAny.(string); ok {
 					data = []byte(s)
@@ -4479,6 +4519,22 @@ func (interp *Interpreter) requireFilesystem(path string, write bool, node *ast.
 		InterpErr("capability denied: filesystem", node)
 	}
 	return filesystemIOPath(path, grants)
+}
+
+// failScopedFilesystem converts the scoped-I/O refusal (the target left the
+// granted root while the operation ran, or no grant covers it) into the same
+// CAPABILITY_DENIED the up-front check reports. Other errors return unchanged.
+func (vm *BCVM) failScopedFilesystem(err error, op bytecode.Opcode) {
+	if errors.Is(err, capability.ErrFilesystemDenied) {
+		vm.recordEffect(capability.Filesystem, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", capability.Filesystem))
+	}
+}
+
+func (interp *Interpreter) failScopedFilesystem(err error, node *ast.Node) {
+	if errors.Is(err, capability.ErrFilesystemDenied) {
+		InterpErr("capability denied: filesystem", node)
+	}
 }
 
 // Use exactly the normalized path checked by scoped grants, so symlink/.. OS
