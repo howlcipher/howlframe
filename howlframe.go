@@ -928,12 +928,30 @@ func buildSource() {
 	}
 }
 
+// startupInstructionLimit resolves the startup ceiling for HTTP server programs:
+// an explicit --max-startup-instructions wins; otherwise the default applies
+// only when --max-instructions was not given, so an explicit limit keeps
+// governing everything as before. The VM applies it to server programs only.
+func startupInstructionLimit(fs *flag.FlagSet, explicit int) int {
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	switch {
+	case given["max-startup-instructions"]:
+		return explicit
+	case given["max-instructions"]:
+		return 0
+	default:
+		return vm.DefaultStartupInstructions
+	}
+}
+
 func runArtifact() {
 	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
 	receiptPath := runFlags.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	target := runFlags.String("target", "bytecode", "execution target: bytecode (or bc), interpreter (or run)")
 	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
+	maxStartupInst := runFlags.Int("max-startup-instructions", 0, "finite instruction limit for the startup code of an HTTP server program, such as validating persisted state (default 10000000 for servers unless --max-instructions is given; request handlers always use --max-instructions)")
 
 	maxCallDepth := runFlags.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting (default 1000)")
 	maxMemory := runFlags.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
@@ -983,6 +1001,10 @@ func runArtifact() {
 		fmt.Fprintln(os.Stderr, "-max-call-depth must be greater than zero")
 		os.Exit(1)
 	}
+	if *maxStartupInst < 0 {
+		fmt.Fprintln(os.Stderr, "-max-startup-instructions must not be negative")
+		os.Exit(1)
+	}
 
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	switch targetVal {
@@ -1016,6 +1038,7 @@ func runArtifact() {
 			os.Exit(2) // usage error: an invalid resource flag value
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		executionPolicy.Limits.MaxStartupInstructions = startupInstructionLimit(runFlags, *maxStartupInst)
 		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
 			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
 			os.Exit(2)
@@ -1419,7 +1442,7 @@ var interopCommands = []interopCommand{
 	{Path: []string{"check"}, Flags: []string{"--profile"}},
 	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target"}},
 	{Path: []string{"run"}, Flags: []string{
-		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-call-depth", "--max-memory-bytes",
+		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
 		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
 		"--deadline",
 	}, Emits: []string{"howlframe.receipt/v0"}},

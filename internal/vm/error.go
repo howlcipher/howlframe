@@ -93,7 +93,18 @@ type VMLimits struct {
 	// LogTiming writes diagnostic-only request/store timing; it never changes authority.
 	LogTiming          bool
 	MaxExecOutputBytes int
+	// MaxStartupInstructions is the instruction ceiling for the startup code of a
+	// program that defines an HTTP server: everything that runs before the server
+	// begins serving, such as validating persisted state, whose cost grows with the
+	// stored data. Request handlers always use MaxInstructions, each with a fresh
+	// budget. Zero means startup uses MaxInstructions like any other program; when
+	// both are set the larger applies to startup.
+	MaxStartupInstructions int
 }
+
+// DefaultStartupInstructions is the startup ceiling the "run" command applies to
+// HTTP server programs when --max-instructions was not given explicitly.
+const DefaultStartupInstructions = 10_000_000
 
 // ExecutionPolicy is authority supplied by the trusted bytecode runner. It
 // may constrain an application, but application code cannot inspect or widen

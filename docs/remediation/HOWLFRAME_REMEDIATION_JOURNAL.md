@@ -43,3 +43,18 @@ Toolchain: go1.26.0 local, Python 3.14.4. Audit inputs: /run/media/system/tallge
 - Other Unix: process group kill only. Other OSes: direct child only. Both documented as NOT covering session-escapers.
 - Green: TestExec* x10 stable, no leftover processes; -race clean; TaskFlow frozen 32/32; the audit's tf_probe (which FAILED
   exec_deadline_kills_descendants) now 7/7.
+
+## HF-03 TicketDesk restart cliff
+- Cause (confirmed): startup code of an HTTP server shares ONE 100,000-instruction budget for the whole run (handlers each
+  get a fresh one). TicketDesk's startup validates every stored record (~330 instructions/ticket), so ~300 tickets exhaust it.
+  Making validation cheaper cannot reach 1,000 tickets inside 100,000 instructions (<100/ticket) and weakening validation is
+  excluded, so the narrow fix is a separate startup budget.
+- Red first: `milestone2/ticketdesk/tests/regression/restart_default_budget.py` (documented command, default ceilings, 1,000
+  tickets + 100 tokens, restart, data/token/authz verification, invalid-state rejection without damage, SIGKILL storm).
+  Baseline: restart fails with LIMIT_EXCEEDED (log evidence/hf03_baseline_red.log).
+- Fix: `VMLimits.MaxStartupInstructions`, `BCVM.startup`, `instructionLimit()`; `run --max-startup-instructions`
+  (default 10,000,000 only for HTTP-server programs and only when --max-instructions is not given explicitly). Non-server
+  programs and request handlers are unaffected (unit-tested). Interop descriptor updated.
+- Result: restart with 1,000 tickets/100 tokens 0.3 s; default-budget restart verified at 6,000 tickets / 2.2 MB
+  (evidence/hf03_sweep.log). 30,000 is an extrapolation and labelled as such in the README.
+- Side finding kept in the follow-up register (not fixed): the failure surfaced as a raw runtime JSON object on stderr (HF-12).

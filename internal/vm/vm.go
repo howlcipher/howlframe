@@ -1629,6 +1629,9 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
+	// startup marks the root VM of an HTTP server program (see instructionLimit).
+	startup bool
+
 	receipt         *receiptRecorder
 	receiptDecision *effectDecision
 
@@ -2046,6 +2049,7 @@ func runBytecodeEvidence(prog *bytecode.BCProgram, cliArgs []string, policy Exec
 		ErrOut:      errOut,
 		trace:       &boundedTrace{limit: traceLimit},
 		mapLedger:   newMapStateLedger(),
+		startup:     programServesHTTP(prog),
 	}
 	if vm.In == nil {
 		vm.In = os.Stdin
@@ -2453,7 +2457,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		// MaxInstructions is the maximum number of instructions allowed. Check
 		// before incrementing so an exact budget succeeds and even MaxInt cannot
 		// overflow into effectively unlimited execution.
-		if vm.Limits.MaxInstructions <= 0 || vm.executed >= vm.Limits.MaxInstructions {
+		if limit := vm.instructionLimit(); limit <= 0 || vm.executed >= limit {
 			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
 		}
 		vm.executed++
@@ -3942,7 +3946,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, startup: vm.startup, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
@@ -4325,6 +4329,27 @@ func (vm *BCVM) chargeBytes(n, ip int, op bytecode.Opcode) {
 	// Source bytes plus the converted any-slice representation (eight bytes/slot).
 	vm.chargeAlloc(n, ip, op)
 	vm.chargeSlots(n, 8, ip, op)
+}
+
+// instructionLimit is the instruction ceiling in force for this VM. Startup code
+// of an HTTP server program may have its own, larger ceiling
+// (VMLimits.MaxStartupInstructions); request handlers never do.
+func (vm *BCVM) instructionLimit() int {
+	limit := vm.Limits.MaxInstructions
+	if vm.startup && vm.Limits.MaxStartupInstructions > limit && limit > 0 {
+		limit = vm.Limits.MaxStartupInstructions
+	}
+	return limit
+}
+
+// programServesHTTP reports whether the program's main code defines an HTTP server.
+func programServesHTTP(prog *bytecode.BCProgram) bool {
+	for _, inst := range prog.Main {
+		if inst.Op == bytecode.OpHttpServerStart {
+			return true
+		}
+	}
+	return false
 }
 
 func (vm *BCVM) checkDeadline(ip int, op bytecode.Opcode) {

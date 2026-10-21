@@ -1,0 +1,5 @@
+  restart with 1000 tickets and 100 tokens took 0.3s
+PASS restart_with_1000_tickets_100_tokens_default_ceilings (15s)
+PASS invalid_state_rejected_without_damage (0s)
+PASS sigkill_keeps_acknowledged_writes_at_default_ceilings (6s)
+3 tests, 0 failed
