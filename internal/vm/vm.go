@@ -2989,7 +2989,18 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				}
 				r = httpreq.WithRequestID(r, requestID)
 				w.Header().Set("X-Request-Id", requestID)
-				recorder := &httpResponseRecorder{ResponseWriter: w}
+				// With (serialize_requests) the handler runs under a process-wide lock.
+				// Its response is collected in memory and written to the client only
+				// after the lock is released, so a client that stops reading cannot
+				// hold the lock and stall every other request (audit HF-04). Without
+				// the lock, writes go straight to the client under a write deadline.
+				serial, isSerial := capturedEnv.vars["__http_serial"].(*sync.Mutex)
+				var buffered *bufferedResponse
+				recorder := &httpResponseRecorder{ResponseWriter: w, deadline: true}
+				if isSerial {
+					buffered = newBufferedResponse(w.Header())
+					recorder = &httpResponseRecorder{ResponseWriter: buffered}
+				}
 				if vm.Limits.LogRequests {
 					defer func() {
 						status := recorder.status
@@ -3000,7 +3011,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							r.Method, r.URL.EscapedPath(), status, time.Since(started).Milliseconds(), requestID)
 					}()
 				}
-				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
+				if isSerial {
 					// Read the body (bounded) before taking the lock, so a slow
 					// client cannot hold every other request hostage.
 					if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodDelete || r.Method == http.MethodOptions {
@@ -3027,6 +3038,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 					serial.Lock()
 					locked = time.Now()
+					// Deferred first so it runs after the unlock below.
+					defer buffered.flushTo(w)
 					defer serial.Unlock()
 				}
 				reqEnv := NewBcEnv(capturedEnv)
@@ -4283,6 +4296,9 @@ type httpResponseRecorder struct {
 	http.ResponseWriter
 	wrote  bool
 	status int
+	// deadline sets a write deadline before each write to the client. It is off
+	// when the sink is an in-memory buffer, which flushes with its own deadline.
+	deadline bool
 }
 
 func (w *httpResponseRecorder) WriteHeader(status int) {
@@ -4290,12 +4306,20 @@ func (w *httpResponseRecorder) WriteHeader(status int) {
 		w.status = status
 	}
 	w.wrote = true
+	w.armWriteDeadline()
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *httpResponseRecorder) Write(b []byte) (int, error) {
 	w.wrote = true
+	w.armWriteDeadline()
 	return w.ResponseWriter.Write(b)
+}
+
+func (w *httpResponseRecorder) armWriteDeadline() {
+	if w.deadline {
+		setResponseWriteDeadline(w.ResponseWriter)
+	}
 }
 
 // Shared across child VMs; charges are cumulative and never reclaimed.

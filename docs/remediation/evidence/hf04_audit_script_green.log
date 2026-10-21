@@ -1,0 +1,1 @@
+[{"baseline_health_status": 200, "latency_s": 0.001}, {"slow_clients": 1, "health_status": 200, "health_latency_s": 0.0}, {"after_close_health_status": 200, "latency_s": 0.001}]

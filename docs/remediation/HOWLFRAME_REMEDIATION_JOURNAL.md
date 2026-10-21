@@ -58,3 +58,21 @@ Toolchain: go1.26.0 local, Python 3.14.4. Audit inputs: /run/media/system/tallge
 - Result: restart with 1,000 tickets/100 tokens 0.3 s; default-budget restart verified at 6,000 tickets / 2.2 MB
   (evidence/hf03_sweep.log). 30,000 is an extrapolation and labelled as such in the README.
 - Side finding kept in the follow-up register (not fixed): the failure surfaced as a raw runtime JSON object on stderr (HF-12).
+
+## HF-04 slow-reader stall
+- Cause (confirmed in code and by test): with `(serialize_requests)` the handler lock was held until the response was
+  written to the client, and the server had no write timeout.
+- Red first: `internal/vm/slow_reader_test.go` (in-process server on a free loopback port; client pipelines twelve 2 MiB
+  responses and never reads; `/health` must answer within 1.5 s; stalled connection must be released after the write
+  timeout without delivering everything; a normal 2 MiB response is still intact). Baseline: health blocked.
+- Fix: in serialized mode the handler writes to an in-memory `bufferedResponse`; it is flushed to the client AFTER the lock is
+  released, under a per-flush write deadline (`responseWriteTimeout`, 30 s). Without the lock, writes get the same deadline.
+  Helpers live in `internal/vm/http_response.go` (see below).
+- Test-authoring mistakes caught on the way: (1) my first drain step ran before the deadline expired so the server correctly
+  delivered everything; the test now outlasts the timeout and asserts the response was cut short. (2) a 4 KB client receive
+  window made draining take minutes; widened before the drain.
+- `TestEffectGateSourceConformance` flagged `http.NewResponseController` reachable from the `res` opcodes. Not new
+  authority, but the scanner cannot tell; the helper moved to another file (the test documents that other files are out of
+  scope). The conformance test itself was NOT changed.
+- Green: slow-reader test 3x; the audit's own td_slowreader.py now shows health 200 in 0.0 s with a stalled client (it timed
+  out at 60 s in the audit); vm/capability pass under -race; M2 frozen 101/101, DX 13/13, reassessment 11/11, review_round1 10/10.
