@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +22,7 @@ const netscopeSecret = "netscope-admin-secret-7f3a"
 
 // serveNetscope starts src on path (bytecode or hfir) and returns a getter
 // for the server's routes plus the server's combined log.
-func serveNetscope(t *testing.T, binary, path, src, grant string, port int) (func(string) (int, string), *bytes.Buffer) {
+func serveNetscope(t *testing.T, binary, path, src, grant string, port int) (func(string) (int, string), *syncBuffer) {
 	t.Helper()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "srv.howl")
@@ -42,7 +41,7 @@ func serveNetscope(t *testing.T, binary, path, src, grant string, port int) (fun
 		t.Fatalf("compile: %v %s", err, out)
 	}
 	cmd := exec.Command(binary, "-allow-caps", grant, "-run-bc", artifact)
-	log := &bytes.Buffer{}
+	log := &syncBuffer{}
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

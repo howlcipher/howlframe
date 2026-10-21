@@ -15,10 +15,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Go
+    # go.mod declares the minimum supported toolchain (1.25: os.Root for race-free
+    # scoped filesystem access). This job, the required "build" check, runs on it.
+    - name: Set up Go (minimum supported version)
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version: '1.25'
 
     - name: Check format
       run: if [ -n "$(gofmt -l .)" ]; then echo "The following files are not formatted:"; gofmt -l .; exit 1; fi
@@ -64,3 +66,57 @@ jobs:
     - name: Verify SEO Metadata & Artifacts
       run: python3 scripts/test_seo.py
 
+  # Accepted-application suites (Milestones 1 and 2 plus their retained regressions)
+  # run on every pull request and on main, so a change can no longer pass CI while
+  # breaking an accepted application. Milestone 3's browser and sibling-HowlBoard
+  # checks are NOT run here: they need Playwright with Chromium and a HowlBoard
+  # checkout. They stay a documented manual step (milestone3/evidencedesk/README.md).
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Milestone 1 and 2 acceptance and regression suites
+      run: scripts/ci_acceptance.sh
+
+  # Race detector over the whole module. Separate from "build" so its result is
+  # visible on its own (issue #192: the earlier failures were test-harness races).
+  race:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Test with the race detector
+      run: go test -race -count=1 ./...
+
+  # Forward check on the newest stable toolchain.
+  latest-go:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+
+    - name: Build, vet and test
+      run: |
+        go build ./...
+        go vet ./...
+        go test -count=1 ./...
