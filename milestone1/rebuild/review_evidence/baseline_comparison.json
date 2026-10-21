@@ -1,0 +1,36 @@
+{
+  "baseline": {
+    "large_budget": {
+      "code": 65,
+      "stdout": "",
+      "stderr": "ledgerlens: rules: line 2: invalid budget amount\n"
+    },
+    "nested_environment_dry_run": {
+      "code": 77,
+      "stdout": "",
+      "stderr": "taskflow: capability denied: environment\n"
+    },
+    "empty_state_status": {
+      "code": 65,
+      "stdout": "",
+      "stderr": "healthwatch: state: invalid JSON\n"
+    }
+  },
+  "independent": {
+    "large_budget": {
+      "code": 0,
+      "stdout": "{\"budgets\":[{\"category\":\"Uncategorized\",\"limit\":\"1234567890123.45\",\"month\":\"2026-01\",\"spent\":\"1.00\",\"status\":\"OK\"}],\"categories\":[{\"category\":\"Uncategorized\",\"count\":1,\"expenses\":\"1.00\",\"income\":\"0.00\",\"month\":\"2026-01\"}],\"months\":[{\"count\":1,\"expenses\":\"1.00\",\"income\":\"0.00\",\"month\":\"2026-01\",\"net\":\"-1.00\"}],\"skipped\":0,\"total\":{\"count\":1,\"expenses\":\"1.00\",\"income\":\"0.00\",\"net\":\"-1.00\"},\"transactions\":1}\n",
+      "stderr": ""
+    },
+    "nested_environment_dry_run": {
+      "code": 0,
+      "stdout": "==> default\n| would run: /program '${env:REVIEW_SECRET}'\n<== default dry-run\nSUMMARY dry-run tasks=1\n",
+      "stderr": ""
+    },
+    "empty_state_status": {
+      "code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+}

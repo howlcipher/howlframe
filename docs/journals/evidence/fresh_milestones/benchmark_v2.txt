@@ -1,0 +1,10 @@
+task                                     pass  tokens
+task_01_typed_function                   True      54
+task_02_cli_file_processing              True      91
+task_03_http_json_endpoint               True      53
+task_04_multi_module_cli                 True      53
+task_06_error_handling                   True     116
+task_07_native_store                     True     169
+task_08_capability_restricted            True      46
+
+PASSED: all densified HowlFrame v2 references verify.

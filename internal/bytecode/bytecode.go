@@ -499,6 +499,9 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 			}
 			insts = append(insts, BCInstruction{OpString: "STORE_KEYS", Op: OpStoreKeys, StringOperand: handleNode.Value})
 		case "fetch":
+			if len(node.Children) == 5 {
+				ast.ReportError("UNSUPPORTED_ON_TARGET: fetch headers are supported only on --target=js", node.Line, node.Column)
+			}
 			// (fetch url method [body]). Arity (#139) is enforced by the
 			// construct.arities table above and before desugaring (#141).
 			insts = append(insts, c.compileNode(node.Children[1])...)

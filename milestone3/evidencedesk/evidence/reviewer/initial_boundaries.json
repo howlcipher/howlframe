@@ -1,0 +1,9 @@
+{
+  "zero_padded_positive_MAX": {
+    "exit": 2,
+    "stdout": "",
+    "stderr": "MAX must be integer 1..1000\n",
+    "files": [],
+    "expected_exit": 0
+  }
+}

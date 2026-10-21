@@ -7,9 +7,18 @@
 * The vendored `contracts/howl/` schemas are re-synced to HowlDream `dc6019a` (`howl.exploration/v1` had gained optional fields since `bd10b18`), and CI now fails when a vendored copy differs from the commit `SOURCE.md` pins or that commit is not on HowlDream's default branch (`scripts/check_vendored_schemas.py`).
 
 ### Verification
+* Publication reconciliation retains remote deferred store-lock release/timing diagnostics and interop/schema synchronization; the descriptor includes listener-host flags. Historical assurance and the separate remote M3 draft remain attributable to their original scopes.
+* Publish reconciliation preserves concurrent remote store-lock hardening, timing diagnostics, Owner assurance/waiver history and the separate Milestone 3 draft. Combined Ticketdesk frozen/adversarial/historical tests and repository CI-equivalent checks are rerun before publication.
+* All three fresh product milestones accepted at implementation `b028e813`, 2026-10-21: committed clean reproduction, independent final reviews, exact large-ledger arithmetic, real Chromium and actual adapted HowlBoard consumption. Closure records preserve historical failures and bounded carryover.
+* Fresh requirements-first CLI/backend replacements and Milestone 3 EvidenceDesk: retained original contracts, independent adversarial findings, separate reviewer runs and committed-tree reproduction scripts. Source candidates are preserved under milestone1/rebuild and milestone2/rebuild.
+* Fresh all-milestone rebuild authorized 2026-10-20; froze independent Milestone 3 EvidenceDesk and real HowlBoard projector requirements before implementation. Prior acceptance records remain historical evidence.
+* Milestone 2 closure: recorded independent Round 4 acceptance, refreshed the handoff, and indexed verification evidence in `milestone2/MILESTONE2_DECISION.md`. No runtime or frozen-test changes.
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 
 ### Fixed
+* Fresh Ledgerlens exact aggregate arithmetic across the complete allowed amount/row-count range; uncapped decimal budgets. Fresh Taskflow segmented expansion and side-effect-free multi-output permission preflight; fresh Healthwatch distinguishes absent and invalid empty state.
+* Fresh Ticketdesk atomically publishes ticket buckets and complete token state, validates persisted state before startup mutation, and provides non-overwriting offline legacy migration.
+* HTTP serial-body framing failures preserve route/auth ordering and correlated errors; ignored GET/DELETE bodies do not stall handlers. Added runner IP binding, observational scoped filesystem grant queries, and JavaScript fetch headers/component encoding required by the full-stack application.
 * EXT-006: gob artifact decoding resolves stable opcode names before structural verification, matching JSON decoding. Release-era CONVERT instructions no longer become CALL after enum additions; unknown names and malformed jumps/calls remain rejected.
 * EXT-007: bare relative file stores create atomic-write temporary siblings in the current directory rather than system temp, preventing cross-device rename failure.
 * EXT-008: positive exec fixtures bind canonical installed executable paths in both source and exact grants. Frozen ABI source assets and explicit symlink-denial tests stay intact; the conformance runner uses isolated fixture copies.

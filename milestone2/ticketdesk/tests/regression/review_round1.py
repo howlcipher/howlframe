@@ -240,10 +240,29 @@ def b6_dangling_index_entry_does_not_break_listing():
         s.p.wait(5)
     with open(data) as f:
         state = json.load(f)
-    # simulate a crash between 'ticket removed' and 'index entry removed'
-    del state["t:0000000002"]
-    with open(data, "w") as f:
-        json.dump(state, f)
+    # Preserve the original B6 legacy crash fixture. Version 2 has no separate
+    # ticket index; use its explicit offline migration to recover that old state.
+    if state.get("header", {}).get("version") == 2:
+        legacy = {"meta": {"next_ticket": 4, "next_token": 1},
+                  "b:00000000": {"ids": [1, 2, 3]}}
+        for group in (value for key, value in state.items()
+                      if key.startswith("bucket:")):
+            for ticket_id, record in group["records"].items():
+                legacy["t:%010d" % int(ticket_id[1:])] = record
+        del legacy["t:0000000002"]
+        legacy_path = data + ".legacy"
+        with open(legacy_path, "w") as stream:
+            json.dump(legacy, stream)
+        destination = data + ".migrated"
+        migration = os.path.join(os.path.dirname(__file__), "../../migrate_state.py")
+        subprocess.run([sys.executable, migration, legacy_path, destination],
+                       check=True, capture_output=True)
+        os.replace(destination, data)
+    else:
+        # Simulate the historical crash between ticket and index deletion.
+        del state["t:0000000002"]
+        with open(data, "w") as f:
+            json.dump(state, f)
     s2 = Srv(data=data, port=s.port).wait()
     try:
         st, page = s2.req("GET", "/v1/tickets", ADMIN)
@@ -273,14 +292,37 @@ def b6_run24_unindexed_survivor_then_cleanup_deletes():
         s.p.wait(5)
     with open(data) as f:
         state = json.load(f)
-    # simulate a crash after bucket_remove and before store_delete, for ids on and off bucket edges
+    # Preserve the original interrupted legacy-delete fixture. The replacement
+    # atomically stores records/order; its offline migration must recover every
+    # canonical legacy survivor even if the old index omitted its id.
+    version_two = state.get("header", {}).get("version") == 2
+    if version_two:
+        legacy = {"meta": {"next_ticket": 131, "next_token": 1}}
+        for key, group in state.items():
+            if key.startswith("bucket:"):
+                ids = []
+                for ticket_id, record in group["records"].items():
+                    number = int(ticket_id[1:])
+                    ids.append(number)
+                    legacy["t:%010d" % number] = record
+                bucket = int(key.split(":", 1)[1])
+                legacy["b:%08d" % bucket] = {"ids": sorted(ids)}
+        state = legacy
+    # Simulate a crash after bucket_remove and before store_delete.
     unindexed = {64, 65, 100}
     for k, v in state.items():
         if k.startswith("b:"):
             v["ids"] = [n for n in v["ids"] if n not in unindexed]
     with open(data, "w") as f:
         json.dump(state, f)
-    expect_listed = ["t%d" % n for n in range(1, 131) if n not in unindexed]
+    if version_two:
+        legacy_path = data + ".legacy"
+        os.replace(data, legacy_path)
+        migration = os.path.join(os.path.dirname(__file__), "../../migrate_state.py")
+        subprocess.run([sys.executable, migration, legacy_path, data],
+                       check=True, capture_output=True)
+    expect_listed = ["t%d" % n for n in range(1, 131)
+                     if version_two or n not in unindexed]
     s2 = Srv(data=data, port=s.port).wait()
     try:
         for limit in (1, 100):

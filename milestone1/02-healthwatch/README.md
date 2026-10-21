@@ -75,3 +75,9 @@ run continues and exits 77 at the end. The tool never needs `process` or `databa
 * A check that has not finished when the runner `--deadline` expires stops the whole run;
   the state file is only written at the end, so it stays unchanged.
 * The runtime exposes no request timeout; only the runner deadline bounds a slow server.
+
+## Fresh rebuild (2026-10-20)
+
+This source was independently rewritten from the original frozen requirements.
+See the [fresh review](../rebuild/INDEPENDENT_REVIEW.md) and the implementation
+journal under `../rebuild/02-healthwatch/`. Historical reviews remain preserved.

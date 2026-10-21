@@ -1,0 +1,12 @@
+{
+  "zero_padded_positive_MAX": {
+    "exit": 0,
+    "stdout": "entries=3 tasks=2\n",
+    "stderr": "",
+    "files": [
+      "howlboard_missions.json",
+      "howlboard_timeline.json"
+    ],
+    "expected_exit": 0
+  }
+}

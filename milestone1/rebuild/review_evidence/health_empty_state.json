@@ -1,0 +1,14 @@
+{
+  "status": {
+    "code": 0,
+    "stdout": "",
+    "stderr": "",
+    "state": ""
+  },
+  "run": {
+    "code": 77,
+    "stdout": "DENIED\ta\t-\t1\tcapability_denied\nSUMMARY\tpass=0\tfail=0\terror=0\tdenied=1\n",
+    "stderr": "healthwatch: capability denied: network (a)\n",
+    "state": "{\"checks\":{},\"version\":1}"
+  }
+}

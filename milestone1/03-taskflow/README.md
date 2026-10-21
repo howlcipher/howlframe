@@ -84,3 +84,9 @@ child being visible to `try_let/catch`. See `docs/reference/process_authority.md
 * The command count in a report counts started commands: a denied command is not counted.
 * `-D` values are inserted literally (they are not scanned for `${...}`).
 * The source contains no non-ASCII string literals (the lexer double-encodes them).
+
+## Fresh rebuild (2026-10-20)
+
+This source was independently rewritten from the original frozen requirements.
+See the [fresh review](../rebuild/INDEPENDENT_REVIEW.md) and the implementation
+journal under `../rebuild/03-taskflow/`. Historical reviews remain preserved.

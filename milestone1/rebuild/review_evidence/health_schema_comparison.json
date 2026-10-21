@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "healthwatch: state: entry x is missing last_http_status\n"
+  },
+  "independent": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "healthwatch: state: missing HTTP status\n"
+  }
+}

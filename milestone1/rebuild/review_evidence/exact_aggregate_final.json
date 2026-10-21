@@ -1,0 +1,38 @@
+{
+  "positive": {
+    "code": 0,
+    "stderr": "",
+    "expected": {
+      "income": "92233999999999077.66",
+      "expenses": "0.00",
+      "net": "92233999999999077.66",
+      "count": 92234
+    },
+    "actual": {
+      "count": 92234,
+      "expenses": "0.00",
+      "income": "92233999999999077.66",
+      "net": "92233999999999077.66"
+    },
+    "seconds": 72.921,
+    "passed": true
+  },
+  "mixed_negative": {
+    "code": 0,
+    "stderr": "",
+    "expected": {
+      "income": "999999999999.99",
+      "expenses": "92233999999999077.66",
+      "net": "-92232999999999077.67",
+      "count": 92235
+    },
+    "actual": {
+      "count": 92235,
+      "expenses": "92233999999999077.66",
+      "income": "999999999999.99",
+      "net": "-92232999999999077.67"
+    },
+    "seconds": 89.192,
+    "passed": true
+  }
+}

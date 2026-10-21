@@ -1,0 +1,51 @@
+PASS T-R1-version-help [R1] version string; help usage text; needs no grants
+PASS T-R1-usage-errors [R1,R15] usage errors: exit 2, no stdout, no I/O, nothing executed
+PASS T-R1-default-task-and-stdin [R1,R5] default task used when none given; -f - reads stdin; -f file works with read grant
+PASS T-R2-parse-errors [R2,R5,R14] every grammar violation: exit 65 with '-:LINE:' prefix, nothing on stdout
+PASS T-R2-cycles [R2,R5] dependency cycles are load errors naming the cycle, even if unreferenced
+PASS T-R2-filename-in-diagnostic [R2,R13] diagnostic names the -f argument exactly; missing file => 66
+PASS T-R2-valid-formats [R2,R5] CRLF, tabs, comments, blank lines, zero-run tasks, desc; list golden
+PASS T-R5-plan-order [R5] post-order, declaration-order deps, no repeats, multiple/duplicate targets
+PASS T-R5-scale-chain [R5,R15] 300 chained tasks planned correctly; 1000 tasks fine, 1001 => exit 70
+PASS T-R3-variables-dry [R3,R8] set, -D override, -D-only, recursion, $$, quoting contexts (dry-run shows expanded argv)
+PASS T-R3-variable-errors [R3] undefined variable / cycles found by run (exit 65, FILE:LINE), not by plan/list
+PASS T-R8-dry-run-semantics [R8,R12,R11] dry-run: nothing executed, no process/env grants needed, ${env:} stays verbatim, relative program rejected
+PASS T-R4-argv-fidelity [R4,R3,R11] child argv equals the expanded words exactly (quotes, blanks, empty args, UTF-8, no re-splitting)
+PASS T-R4-no-shell [R4,R15] shell metacharacters in arguments have no effect
+PASS T-R4-program-checks [R4,R6,R7] relative program => 65 before anything runs; missing absolute program => FAILED (error)
+PASS T-R6-basic-run-golden [R6,R5] golden output of a successful pipeline, exit 0
+PASS T-R6-output-shapes [R6] output without trailing newline, empty lines, interleaved stderr, no output, exit codes
+PASS T-R7-fail-fast [R7,R6] fail-fast: first failure aborts, later tasks skipped (aborted), later commands of a failed task not run
+PASS T-R7-keep-going [R7,R6] --keep-going: independent branches run; dependents skipped naming the first non-ok dependency
+PASS T-R6-exit-and-unknown-failure-kinds [R6,R7] exit status 0 only when every task ok; summary counts
+PASS T-R9-report [R9,R7] report JSON for ok and failed runs, written even on failure; plan order
+PASS T-R10-history [R10] history append, formats, --last, trimming to 50, corrupt/missing handling
+PASS T-R11-process-denied [R11,R6,R7] no exec grant: FAILED (denied), one stderr line per denied task, exit 77, nothing executed
+PASS T-R11-exec-allow-list [R11,R7] per-program / per-argv grants honored; denial does not stop independent tasks with --keep-going; 77 outranks 1
+PASS T-R11-env-isolation [R11,R4] children get only process:env= variables; nothing else is inherited
+PASS T-R12-env-expansion-and-denial [R12,R3,R15] ${env:} needs 'environment'; denial before anything runs; no secret leakage
+PASS T-R13-fs-denied [R13,R9,R10] Flowfile/report/history access is governed; denials leave no side effects
+PASS T-R13-minimal-grants [R13,R11] works with exactly: read dir + write dir + exec grant (no network/database/coarse process)
+PASS T-R14-exec-output-limit [R14,R7] runner exec-output limit => FAILED (output limit exceeded), run continues per policy, oversize output not printed
+PASS T-R14-deadline [R14] runner deadline stops a run with a running child promptly
+PASS T-R14-instruction-limit [R14] tiny instruction ceiling stops the program non-zero without success output
+PASS T-R15-determinism-and-hygiene [R15,R6] identical stdout across runs; stderr silent on success; no secret in report/history/stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+
+32 tests, 32 passed, 0 failed

@@ -24,6 +24,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 	"github.com/howlcipher/howlframe/internal/vm"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,6 +69,7 @@ func main() {
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := flag.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	timingLog := flag.Bool("timing-log", false, "diagnostic: write per-request timing and slow store-write timing lines to stderr")
 	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
@@ -163,6 +165,11 @@ func main() {
 			os.Exit(1)
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.LogTiming = *timingLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
@@ -934,6 +941,7 @@ func runArtifact() {
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := runFlags.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	timingLog := runFlags.Bool("timing-log", false, "diagnostic: write per-request timing and slow store-write timing lines to stderr")
 	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
@@ -1008,6 +1016,11 @@ func runArtifact() {
 			os.Exit(2) // usage error: an invalid resource flag value
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.LogTiming = *timingLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
@@ -1400,14 +1413,14 @@ var interopCommands = []interopCommand{
 		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
 		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
 		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-request-bytes", "-access-log",
-		"-timing-log", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
+		"-timing-log", "-listen-host", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
 	{Path: []string{"check"}, Flags: []string{"--profile"}},
 	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-call-depth", "--max-memory-bytes",
-		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log",
+		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
 		"--deadline",
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"version"}, Flags: []string{}},

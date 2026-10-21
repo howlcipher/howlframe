@@ -54,7 +54,7 @@ func TestArityMessages(t *testing.T) {
 	cases := map[string]string{
 		`(cli_app (read_file))`:                     "ARITY_ERROR: read_file expects 1 arg, got 0",
 		`(cli_app (print (str_trim)))`:              "ARITY_ERROR: str_trim expects 1 arg, got 0",
-		`(cli_app (fetch "u"))`:                     "ARITY_ERROR: fetch expects 2 to 3 args, got 1",
+		`(cli_app (fetch "u"))`:                     "ARITY_ERROR: fetch expects 2 to 4 args, got 1",
 		`(cli_app (defun f (x)))`:                   "ARITY_ERROR: defun expects at least 3 args, got 2",
 		`(cli_app (write_file "a" "b" "c"))`:        "ARITY_ERROR: write_file expects 2 args, got 3",
 		`(cli_app (print (% 1)))`:                   "ARITY_ERROR: % expects 2 args, got 1",

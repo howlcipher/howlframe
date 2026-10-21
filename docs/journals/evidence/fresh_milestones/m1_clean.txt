@@ -1,0 +1,163 @@
+Framework archive commit: b028e813ac020320c938592193009692973cf079
+go version go1.26.0 linux/amd64
+Python 3.14.4
+Built /tmp/tmp.iJqXoV6BzR/artifacts/ledgerlens.hfbc
+PASS L-R1-version [R1] version prints fixed string, needs no grants
+PASS L-R1-help [R1] help/--help/-h print usage to stdout, exit 0
+PASS L-R1-usage-errors [R1,R18] usage errors exit 2, nothing on stdout, no output file
+PASS L-R1-option-order [R1] options may precede or follow INPUT
+PASS L-R2-basic-golden [R2,R6,R7,R8,R9,R11,R17] golden summary text for basic fixture, exit 1 (budget over)
+PASS L-R2-header-variants [R2] header case/order/extra columns/BOM/CRLF/no trailing newline/blank lines
+PASS L-R2-quoting-and-trim [R2,R3,R12] quoted fields, doubled quotes, trimming, extra columns, signs, 12 digits
+PASS L-R2-utf8 [R2] UTF-8 descriptions pass through byte-exact
+PASS L-R2-structure-errors [R2,R4] malformed headers/rows abort with exit 65 and physical line numbers
+PASS L-R3-invalid-values [R3,R4] each invalid date/amount aborts with exit 65 naming the line
+PASS L-R3-valid-values [R3,R12] boundary-valid dates/amounts accepted and canonicalized
+PASS L-R3-exact-cents [R3,R7] sums are exact (no float drift), large values exact
+PASS L-R4-strict-no-side-effects [R4,R14] strict failure: empty stdout, no --out file, diagnostic names line
+PASS L-R4-lenient [R4] --lenient skips invalid rows, counts them, header errors stay fatal
+PASS L-R5-check-rules-ok [R5] check-rules OK line
+PASS L-R5-check-rules-errors [R5] rules errors name the physical line, exit 65
+PASS L-R6-priority-and-regex [R6,R12] first matching rule wins, unanchored, case-sensitive, (?i)
+PASS L-R6-no-rules [R6,R7,R8] summary without --rules: everything Uncategorized, no budgets section
+PASS L-R8-category-order [R8] category rows: month, expenses desc, name asc
+PASS L-R9-budget-semantics [R9] equal is OK, refunds do not reduce spend, Uncategorized budget, zero-spend rows
+PASS L-R10-month-filter [R10] --month filters; no match gives empty report; bad month is usage error
+PASS L-R11-json-golden [R11] JSON document shape and values for basic fixture
+PASS L-R7-negative-net-format [R7] negative net formatting, income-only month, no '-0.00'
+PASS L-R12-categorize-golden [R12,R6] categorize golden output
+PASS L-R12-quoting-rules [R12] category/description quoting only when needed
+PASS L-R13-stdin [R13,R16] INPUT '-' reads stdin; no grants needed without --rules
+PASS L-R14-out-file [R14,R9] --out writes the stdout bytes, keeps exit code, stdout empty
+PASS L-R15-max-rows [R15] --max-rows limit exit 70, empty stdout, no file
+PASS L-R15-runtime-limits [R15] tiny instruction/memory ceilings stop the run promptly with no partial report
+PASS L-R16-read-denied [R16,R18] no grants: reading input/rules file is a clean denial (77)
+PASS L-R16-scope [R16] read grant is scoped to its root; paths outside are denied; missing inside is 66
+PASS L-R16-write-denied [R16,R14] read-only grant: --out is denied (77), nothing created; write-only grant cannot read
+PASS L-R16-minimal-grants [R16] works with ONLY the narrow filesystem grants (no network/process/env/db)
+PASS L-R17-scale-oracle [R17,R7,R8,R9,R6] 5,000 generated rows match an independent Python oracle; output deterministic
+PASS L-R18-no-stderr-on-success [R18] successful runs write nothing to stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+PASS R16
+PASS R17
+PASS R18
+
+35 tests, 35 passed, 0 failed
+Built /tmp/tmp.iJqXoV6BzR/artifacts/healthwatch.hfbc
+PASS H-R1-version-help [R1] version string; help usage text
+PASS H-R1-usage-errors [R1,R14] usage errors: exit 2, no stdout, no I/O, no network, no state
+PASS H-R2-validate-ok [R2,R12] validate accepts good configs; needs only file read; stdin works with no grants
+PASS H-R2-validate-errors [R2,R14] every config rule yields exit 65 with 'config: <path>:' and nothing else on stdout
+PASS H-R2-run-validates-before-io [R2,R7] run reports config errors before any request or state change
+PASS H-R2-defaults-merge [R2,R3,R4] defaults are inherited and overridden per check
+PASS H-R3-basic-golden [R3,R4,R7,R8,R14] golden text report for the basic config with fresh state; exit 1
+PASS H-R8-json-format [R8,R3] JSON report shape
+PASS H-R3-no-state-no-events [R3,R7,R13] without --state: no events, no state files, only network grant needed (config on stdin)
+PASS H-R4-expectations [R4,R3] status lists, body_contains, json_assert semantics and reasons
+PASS H-R4-methods-and-bodies [R4,R3] method and body observed by the server are exactly the configured ones
+PASS H-R5-retries [R5,R3] retry counts, attempts, stop at first PASS, request counts at the server
+PASS H-R5-retry-delay [R5] retry_delay_ms pauses between attempts
+PASS H-R6-resilience-and-size-limit [R6,R11] refused / oversized / bad checks never stop the run; fetch-size limit => response_too_large
+PASS H-R7-state-lifecycle [R7,R8] new/down/recovered/removed events, since & consecutive_failures bookkeeping across runs
+PASS H-R7-all-fail-first-run [R7] state is written even when every check fails; ERROR results recorded with null http status
+PASS H-R7-state-corrupt [R7,R2] invalid state files => exit 65 before any request, file left untouched
+PASS H-R7-preflight-denied [R7,R12] state not readable/writable => exit 77 with ZERO requests sent
+PASS H-R7-denied-keeps-state [R7,R12] DENIED checks leave existing state untouched, add nothing, emit no events
+PASS H-R9-status [R9] status command: sorting, formats, --fail-if-down, missing/corrupt
+PASS H-R10-env-interpolation [R10,R14] ${ENV:} expands in url/body, secrets never leak to stdout/stderr/state
+PASS H-R11-check-limit [R11] more than 500 checks => exit 70, no requests
+PASS H-R11-deadline [R11,R7] runner deadline stops a slow run promptly, state untouched
+PASS H-R11-instruction-limit [R11] tiny instruction ceiling stops the program with non-zero exit
+PASS H-R12-network-denied [R12,R3,R14] no fetch grant: every check DENIED, full report, exit 77, zero requests, no retries
+PASS H-R12-mixed-and-redirect [R12,R3,R6] per-host grants; DENIED outranks FAIL in the exit code; redirect hop to ungranted port is DENIED
+PASS H-R12-fs-denied [R12,R14] config read denied/out-of-scope => 77 and zero requests; missing config => 66
+PASS H-R12-minimal-grants [R12,R13] success with exactly: read dir + write dir + fetch grant (no process/database/network-serving)
+PASS H-R14-hygiene [R14] diagnostics prefixed; no URLs/hosts/bodies in any output; clean runs are silent on stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+
+29 tests, 29 passed, 0 failed
+Built /tmp/tmp.iJqXoV6BzR/artifacts/taskflow.hfbc
+PASS T-R1-version-help [R1] version string; help usage text; needs no grants
+PASS T-R1-usage-errors [R1,R15] usage errors: exit 2, no stdout, no I/O, nothing executed
+PASS T-R1-default-task-and-stdin [R1,R5] default task used when none given; -f - reads stdin; -f file works with read grant
+PASS T-R2-parse-errors [R2,R5,R14] every grammar violation: exit 65 with '-:LINE:' prefix, nothing on stdout
+PASS T-R2-cycles [R2,R5] dependency cycles are load errors naming the cycle, even if unreferenced
+PASS T-R2-filename-in-diagnostic [R2,R13] diagnostic names the -f argument exactly; missing file => 66
+PASS T-R2-valid-formats [R2,R5] CRLF, tabs, comments, blank lines, zero-run tasks, desc; list golden
+PASS T-R5-plan-order [R5] post-order, declaration-order deps, no repeats, multiple/duplicate targets
+PASS T-R5-scale-chain [R5,R15] 300 chained tasks planned correctly; 1000 tasks fine, 1001 => exit 70
+PASS T-R3-variables-dry [R3,R8] set, -D override, -D-only, recursion, $$, quoting contexts (dry-run shows expanded argv)
+PASS T-R3-variable-errors [R3] undefined variable / cycles found by run (exit 65, FILE:LINE), not by plan/list
+PASS T-R8-dry-run-semantics [R8,R12,R11] dry-run: nothing executed, no process/env grants needed, ${env:} stays verbatim, relative program rejected
+PASS T-R4-argv-fidelity [R4,R3,R11] child argv equals the expanded words exactly (quotes, blanks, empty args, UTF-8, no re-splitting)
+PASS T-R4-no-shell [R4,R15] shell metacharacters in arguments have no effect
+PASS T-R4-program-checks [R4,R6,R7] relative program => 65 before anything runs; missing absolute program => FAILED (error)
+PASS T-R6-basic-run-golden [R6,R5] golden output of a successful pipeline, exit 0
+PASS T-R6-output-shapes [R6] output without trailing newline, empty lines, interleaved stderr, no output, exit codes
+PASS T-R7-fail-fast [R7,R6] fail-fast: first failure aborts, later tasks skipped (aborted), later commands of a failed task not run
+PASS T-R7-keep-going [R7,R6] --keep-going: independent branches run; dependents skipped naming the first non-ok dependency
+PASS T-R6-exit-and-unknown-failure-kinds [R6,R7] exit status 0 only when every task ok; summary counts
+PASS T-R9-report [R9,R7] report JSON for ok and failed runs, written even on failure; plan order
+PASS T-R10-history [R10] history append, formats, --last, trimming to 50, corrupt/missing handling
+PASS T-R11-process-denied [R11,R6,R7] no exec grant: FAILED (denied), one stderr line per denied task, exit 77, nothing executed
+PASS T-R11-exec-allow-list [R11,R7] per-program / per-argv grants honored; denial does not stop independent tasks with --keep-going; 77 outranks 1
+PASS T-R11-env-isolation [R11,R4] children get only process:env= variables; nothing else is inherited
+PASS T-R12-env-expansion-and-denial [R12,R3,R15] ${env:} needs 'environment'; denial before anything runs; no secret leakage
+PASS T-R13-fs-denied [R13,R9,R10] Flowfile/report/history access is governed; denials leave no side effects
+PASS T-R13-minimal-grants [R13,R11] works with exactly: read dir + write dir + exec grant (no network/database/coarse process)
+PASS T-R14-exec-output-limit [R14,R7] runner exec-output limit => FAILED (output limit exceeded), run continues per policy, oversize output not printed
+PASS T-R14-deadline [R14] runner deadline stops a run with a running child promptly
+PASS T-R14-instruction-limit [R14] tiny instruction ceiling stops the program non-zero without success output
+PASS T-R15-determinism-and-hygiene [R15,R6] identical stdout across runs; stderr silent on success; no secret in report/history/stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+
+32 tests, 32 passed, 0 failed
+PASS: uncapped budgets, nested dry-run environment, config precedence, state denial
+PASS: 6 supplemental input and state boundaries

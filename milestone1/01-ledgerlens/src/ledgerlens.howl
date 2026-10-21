@@ -1,480 +1,344 @@
-; ledgerlens 1.0.0 - offline bank-export analysis (Milestone 1, application 1).
-; Spec: milestone1/01-ledgerlens/requirements/REQUIREMENTS.md (frozen 2026-10-13).
-; All money is integer cents. Output is assembled in memory and written only after
-; every check passed, so a failure never leaves partial stdout or a partial file.
+; Fresh requirements-first ledgerlens candidate. No external runtime helpers.
 (cli_app
-
-  ; ---------------------------------------------------------------- diagnostics
-  (defun die ((code int) (msg string)) void
-    (do
-      (stderr (str "ledgerlens: " msg "\n"))
-      (exit code)))
-
-  (defun usage_text () string
-    (return "usage: ledgerlens <command> [options]\n\ncommands:\n  summary    [--rules FILE] [--month YYYY-MM] [--format text|json] [--out FILE] [--lenient] [--max-rows N] INPUT\n  categorize --rules FILE [--out FILE] [--lenient] [--max-rows N] INPUT\n  check-rules FILE\n  version\n\nINPUT is a CSV path, or - for standard input."))
-
-  (defun is_denied ((e string)) bool
-    (return (regex_match "CAPABILITY_DENIED" e)))
-
-  ; ---------------------------------------------------------------- strings
-  (defun trim_sp ((s string)) string
-    (let (t s)
+  (defun fatal ((code int) (message string)) void
+    (do (stderr (str "ledgerlens: " message "\n")) (exit code)))
+  (defun usage () string
+    (return "usage: ledgerlens <summary|categorize|check-rules|version> [options] INPUT"))
+  (defun spaces ((text string)) string
+    (let (result text)
       (do
-        (while (starts_with t " ") (set t (str_slice t 1)))
-        (while (ends_with t " ") (set t (str_slice t 0 -1)))
-        (return t))))
-
-  ; Byte length of s. Characters are runes, so only descriptions that could
-  ; exceed 1000 bytes (more than 250 characters) are measured exactly.
-  (defun byte_len ((s string)) int
-    (let (cs (str_split s "") n (list_len cs) total 0 t2 (bytes_to_string (list 194 128)) t3 (bytes_to_string (list 224 160 128)) t4 (bytes_to_string (list 240 144 128 128)))
-      (do
-        (if (<= n 250) (return n))
-        (for c cs
-          (if (< c t2) (set total (+ total 1))
-              (if (< c t3) (set total (+ total 2))
-                  (if (< c t4) (set total (+ total 3)) (set total (+ total 4))))))
-        (return total))))
-
-  ; "12345" with 2 decimals -> "123.45"; negative -> "-123.45"
-  (defun fmt_money ((c int)) string
-    (let (a c)
-      (do
-        (if (< c 0) (set a (- 0 c)))
-        (let (s (pad_left (to_string a) 3 "0"))
-          (let (m (str (str_slice s 0 -2) "." (str_slice s -2)))
-            (if (< c 0) (return (str "-" m)) (return m)))))))
-
-  ; ---------------------------------------------------------------- CSV fields
-  (defun fail_row ((msg string)) dict
-    (return (dict ("ok" 0) ("e" msg))))
-
-  ; Splits one CSV line (RFC 4180 subset, section 3.1) into trimmed/unquoted fields.
-  (defun split_fields ((line string)) dict
+        (while (starts_with result " ") (set result (str_slice result 1)))
+        (while (ends_with result " ") (set result (str_slice result 0 -1)))
+        (return result))))
+  (defun input_file ((path string)) string
     (do
-      (if (not (str_contains line "\""))
-        (do
-          (let (parts (str_split line ",") out (list))
-            (do
-              (for p parts (append out (call trim_sp p)))
-              (return (dict ("ok" 1) ("f" out)))))))
-      (let (cs (str_split line "") n (list_len cs) i 0 out (list) cur "" err "")
-        (do
-          (while (and (= err "") (<= i n))
-            (do
-              ; start of a field at position i
-              (if (and (< i n) (= (list_get cs i) "\""))
-                (do
-                  (set i (+ i 1))
-                  (set cur "")
-                  (let (closed 0)
-                    (do
-                      (while (and (= closed 0) (< i n))
-                        (do
-                          (if (= (list_get cs i) "\"")
-                            (if (and (< (+ i 1) n) (= (list_get cs (+ i 1)) "\""))
-                              (do (set cur (str cur "\"")) (set i (+ i 2)))
-                              (do (set closed 1) (set i (+ i 1))))
-                            (do (set cur (str cur (list_get cs i))) (set i (+ i 1))))))
-                      (if (= closed 0)
-                        (set err "unterminated quote")
-                        (if (and (< i n) (!= (list_get cs i) ","))
-                          (set err "unexpected character after closing quote")
-                          (do (append out cur) (set i (+ i 1))))))))
-                (do
-                  (set cur "")
-                  (while (and (< i n) (!= (list_get cs i) ",") (= err ""))
-                    (do
-                      (if (= (list_get cs i) "\"")
-                        (set err "quote inside unquoted field")
-                        (set cur (str cur (list_get cs i))))
-                      (set i (+ i 1))))
-                  (if (= err "") (do (append out (call trim_sp cur)) (set i (+ i 1))))))))
-          (if (!= err "") (return (call fail_row err)))
-          (return (dict ("ok" 1) ("f" out)))))))
-
-  ; ---------------------------------------------------------------- value validation
-  (defun valid_date ((s string)) bool
-    (do
-      (if (not (regex_match "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" s)) (return false))
-      (let (y (to_int (str_slice s 0 4)) m (to_int (str_slice s 5 7)) d (to_int (str_slice s 8 10)))
-        (do
-          (if (or (< y 1900) (> y 2999) (< m 1) (> m 12) (< d 1)) (return false))
-          (let (dim 31)
-            (do
-              (if (or (= m 4) (= m 6) (= m 9) (= m 11)) (set dim 30))
-              (if (= m 2)
-                (if (or (and (= (% y 4) 0) (!= (% y 100) 0)) (= (% y 400) 0)) (set dim 29) (set dim 28)))
-              (return (<= d dim))))))))
-
-  ; "[+-]?digits[.dd]" -> signed cents, or "" message via dict
-  (defun parse_amount ((s string)) dict
-    (do
-      (if (not (regex_match "^[+-]?[0-9]{1,12}(\\.[0-9]{1,2})?$" s)) (return (call fail_row "invalid amount")))
-      (let (neg (starts_with s "-") body s)
-        (do
-          (if (or (starts_with s "-") (starts_with s "+")) (set body (str_slice s 1)))
-          (let (parts (str_split body ".") ip (list_get parts 0) fp "00")
-            (do
-              (if (= (list_len parts) 2) (set fp (pad_right (list_get parts 1) 2 "0")))
-              (let (cents (+ (* (to_int ip) 100) (to_int fp)))
-                (do
-                  (if neg (set cents (- 0 cents)))
-                  (return (dict ("ok" 1) ("c" cents)))))))))))
-
-  ; Validates one split data row against the header column indices.
-  (defun parse_row ((f list) (nf int) (di int) (ei int) (ai int)) dict
-    (do
-      (if (!= (list_len f) nf) (return (call fail_row "wrong number of fields")))
-      (let (d (list_get f di) desc (list_get f ei))
-        (do
-          (if (not (call valid_date d)) (return (call fail_row "invalid date")))
-          (if (> (call byte_len desc) 1000) (return (call fail_row "description too long")))
-          (let (a (call parse_amount (list_get f ai)))
-            (do
-              (if (= (map_get a "ok") 0) (return (call fail_row (map_get a "e"))))
-              (return (dict ("ok" 1) ("date" d) ("desc" desc) ("c" (map_get a "c"))))))))))
-
-  ; ---------------------------------------------------------------- IO
-  (defun read_path ((p string)) string
-    (do
-      (try_let (b (read_file p))
-        (catch e
+      (try_let (data (read_file path))
+        (catch error
           (do
-            (if (regex_match "LIMIT_EXCEEDED" e) (call die 70 "resource limit reached while reading"))
-            (if (call is_denied e)
-              (call die 77 (str "capability denied: filesystem (read " p ")"))
-              (call die 66 (str "cannot read " p)))
-            (return "")))
-        (return (bytes_to_string b)))
+            (if (regex_match "CAPABILITY_DENIED" error) (call fatal 77 "capability denied: filesystem"))
+            (if (regex_match "LIMIT_EXCEEDED" error) (call fatal 70 "resource limit reached"))
+            (call fatal 66 (str "cannot read " path))))
+        (return (bytes_to_string data)))
       (return "")))
-
-  (defun strip_bom ((s string)) string
-    (let (bom (bytes_to_string (list 239 187 191)))
-      (if (starts_with s bom) (return (str_slice s 1)) (return s))))
-
-  ; ---------------------------------------------------------------- rules (section 3.2)
-  ; records the lowest-line rules problem; parse_rules reports it after the whole file was seen
-  (defun rules_err ((E dict) (n int) (msg string)) void
-    (if (< n (map_get E "line"))
-      (do (map_set E "line" n) (map_set E "msg" msg))))
-
-  (defun parse_rules ((content string)) dict
-    (let (ls (str_split content "\n") names (list) pats (list) bnames (list) bvals (list) blines (list) section "" n 0 seen (dict) known (dict) E (dict ("line" 2000000000) ("msg" "")))
-      (do
-        (for raw ls
+  (defun output ((path string) (text string)) void
+    (if (= path "") (print text)
+      (try_let (saved (do (write_file path (str text "\n")) 1))
+        (catch error
           (do
-            (set n (+ n 1))
-            (let (line raw)
+            (if (regex_match "CAPABILITY_DENIED" error) (call fatal 77 "capability denied: filesystem"))
+            (if (regex_match "LIMIT_EXCEEDED" error) (call fatal 70 "resource limit reached"))
+            (call fatal 73 (str "cannot write " path))))
+        (set saved saved))))
+  (defun money ((cents int)) string
+    (let (negative (< cents 0) absolute cents)
+      (do
+        (if negative (set absolute (- 0 cents)))
+        (let (digits (pad_left (to_string absolute) 3 "0"))
+          (return (str (if negative "-" "") (str_slice digits 0 -2) "." (str_slice digits -2)))))))
+  (defun decimal_cents ((text string)) string
+    (let (parts (str_split text ".") fraction "00")
+      (do
+        (if (= (list_len parts) 2) (set fraction (pad_right (list_get parts 1) 2 "0")))
+        (let (result (str (list_get parts 0) fraction))
+          (do
+            (while (and (> (str_len result) 1) (starts_with result "0")) (set result (str_slice result 1)))
+            (return result))))))
+  (defun budget_text ((digits string)) string
+    (let (padded (pad_left digits 3 "0"))
+      (return (str (str_slice padded 0 -2) "." (str_slice padded -2)))))
+  (defun date_valid ((text string)) bool
+    (do
+      (if (not (regex_match "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" text)) (return false))
+      (let (year (to_int (str_slice text 0 4)) month (to_int (str_slice text 5 7)) day (to_int (str_slice text 8 10)) maximum 31)
+        (do
+          (if (or (< year 1900) (> year 2999) (< month 1) (> month 12) (< day 1)) (return false))
+          (if (list_contains (list 4 6 9 11) month) (set maximum 30))
+          (if (= month 2)
+            (set maximum (if (or (= (% year 400) 0) (and (= (% year 4) 0) (!= (% year 100) 0))) 29 28)))
+          (return (<= day maximum))))))
+  (defun byte_count ((text string)) int
+    (let (size 0 two (bytes_to_string (list 194 128)) three (bytes_to_string (list 224 160 128)) four (bytes_to_string (list 240 144 128 128)))
+      (do
+        (for ch (str_split text "")
+          (set size (+ size (if (< ch two) 1 (if (< ch three) 2 (if (< ch four) 3 4))))))
+        (return size))))
+  ; CSV state machine: unquoted, quoted, after quote. No newline-spanning fields.
+  (defun csv_fields ((text string)) dict
+    (do
+      (if (not (str_contains text "\""))
+        (let (fields (list))
+          (do
+            (for field (str_split text ",") (append fields (call spaces field)))
+            (return (dict ("fields" fields) ("error" ""))))))
+    (let (chars (str_split text "") fields (list) current "" mode 0 index 0 count (str_len text) error "")
+      (do
+        (while (and (< index count) (= error ""))
+          (let (ch (list_get chars index))
+            (do
+              (if (= mode 1)
+                (if (= ch "\"")
+                  (if (and (< (+ index 1) count) (= (list_get chars (+ index 1)) "\""))
+                    (do (set current (str current "\"")) (set index (+ index 1)))
+                    (set mode 2))
+                  (set current (str current ch)))
+                (if (= ch ",")
+                  (do (append fields (if (= mode 2) current (call spaces current))) (set current "") (set mode 0))
+                  (if (= mode 2) (set error "unexpected character after closing quote")
+                    (if (= ch "\"")
+                      (if (= current "") (set mode 1) (set error "quote inside unquoted field"))
+                      (set current (str current ch))))))
+              (set index (+ index 1)))))
+        (if (= mode 1) (set error "unterminated quote"))
+        (append fields (if (= mode 2) current (call spaces current)))
+        (return (dict ("fields" fields) ("error" error)))))))
+  (defun csv_quote ((text string)) string
+    (if (or (str_contains text ",") (str_contains text "\"") (!= text (call spaces text)))
+      (return (str "\"" (str_join (str_split text "\"") "\"\"") "\""))
+      (return text)))
+  (defun record_error ((errors dict) (line int) (message string)) void
+    (if (< line (map_get errors "line"))
+      (do (map_set errors "line" line) (map_set errors "message" message))))
+  (defun rules ((path string)) dict
+    (let (budgetmap (dict) rulelist (list) result (dict ("rules" (list)) ("budgets" (dict))) section "" known (dict) pending (dict) errors (dict ("line" 2000000000) ("message" "")) line 0)
+      (do
+        (if (= path "") (return result))
+        (for raw (str_split (call input_file path) "\n")
+          (do
+            (set line (+ line 1))
+            (let (text raw)
               (do
-                (if (ends_with line "\r") (set line (str_slice line 0 -1)))
-                (let (t (call trim_sp line))
-                  (if (or (= t "") (starts_with t "#"))
-                    (set n n)
-                    (if (= t "[categories]")
-                      (set section "c")
-                      (if (= t "[budgets]")
-                        (set section "b")
-                        (do
-                          (if (= section "") (call rules_err E n "entry outside a section"))
-                          (if (not (str_contains t "=")) (call rules_err E n "expected NAME = VALUE"))
-                          (let (kv (str_split t "="))
-                            (let (name (call trim_sp (list_get kv 0)) val (call trim_sp (str_join (list_slice kv 1) "=")))
-                              (if (= section "c")
-                                (do
-                                  (if (not (regex_match "^[A-Za-z][A-Za-z0-9 _-]{0,39}$" name)) (call rules_err E n "invalid category name"))
-                                  (if (= name "Uncategorized") (call rules_err E n "reserved category name"))
-                                  (if (= val "") (call rules_err E n "empty regular expression"))
-                                  (try_let (ok (regex_match val ""))
-                                    (catch e (call rules_err E n "invalid regular expression"))
-                                    (set n n))
-                                  (append names name)
-                                  (append pats val)
-                                  (map_set known name 1))
-                                (do
-                                  (if (not (regex_match "^[0-9]{1,12}(\\.[0-9]{1,2})?$" val)) (call rules_err E n "invalid budget amount"))
-                                  (let (bc (call parse_amount val))
-                                    (if (<= (nz (map_get bc "c") 0) 0) (call rules_err E n "budget must be greater than zero")))
-                                  (if (map_has seen name) (call rules_err E n "duplicate budget"))
-                                  (map_set seen name 1)
-                                  (append bnames name)
-                                  (append bvals (nz (map_get (call parse_amount val) "c") 0))
-                                  (append blines n))))))))))))))
-        ; budget names must name a category (or Uncategorized); report the lowest offending line
-        (let (j 0)
-          (while (< j (list_len bnames))
-            (do
-              (if (and (!= (list_get bnames j) "Uncategorized") (not (map_has known (list_get bnames j))))
-                (call rules_err E (list_get blines j) "budget for unknown category"))
-              (set j (+ j 1)))))
-        (if (< (map_get E "line") 2000000000) (call die 65 (str "rules: line " (map_get E "line") ": " (map_get E "msg"))))
-        (return (dict ("names" names) ("pats" pats) ("bnames" bnames) ("bvals" bvals))))))
-
-  ; ---------------------------------------------------------------- arguments (section 2)
-  (defun usage_fail ((msg string)) void
-    (call die 2 (str msg " (try: ledgerlens help)")))
-
-  (defun parse_args ((args list)) dict
-    (let (cmd (list_get args 0) n (list_len args) cfg (dict) pos (list) i 1)
-      (do
-        (map_set cfg "cmd" cmd)
-        (map_set cfg "format" "text")
-        (map_set cfg "maxrows" 100000)
-        (map_set cfg "lenient" 0)
-        (map_set cfg "month" "")
-        (map_set cfg "rules" "")
-        (map_set cfg "out" "")
-        (if (or (= cmd "help") (= cmd "--help") (= cmd "-h"))
-          (do
-            (if (> n 1) (call usage_fail "help takes no operands"))
-            (print (call usage_text))
-            (exit 0)))
-        (if (not (or (= cmd "summary") (= cmd "categorize") (= cmd "check-rules") (= cmd "version")))
-          (call usage_fail (str "unknown command: " cmd)))
-        (while (< i n)
-          (let (a (list_get args i))
-            (do
-              (if (and (starts_with a "-") (!= a "-"))
-                (do
-                  (if (= a "--lenient")
+                (if (ends_with text "\r") (set text (str_slice text 0 -1)))
+                (set text (call spaces text))
+                (if (and (!= text "") (not (starts_with text "#")))
+                  (if (list_contains (list "[categories]" "[budgets]") text) (set section text)
                     (do
-                      (if (= cmd "check-rules") (call usage_fail "unknown option --lenient"))
-                      (if (= cmd "version") (call usage_fail "unknown option --lenient"))
-                      (if (= (map_get cfg "lenient") 1) (call usage_fail "duplicate option --lenient"))
-                      (map_set cfg "lenient" 1))
-                    (do
-                      (if (not (or (= a "--rules") (= a "--out") (= a "--max-rows") (= a "--month") (= a "--format")))
-                        (call usage_fail (str "unknown option " a)))
-                      (if (or (= cmd "check-rules") (= cmd "version")) (call usage_fail (str "unknown option " a)))
-                      (if (and (= cmd "categorize") (or (= a "--month") (= a "--format")))
-                        (call usage_fail (str "option " a " is not valid for categorize")))
-                      (if (>= (+ i 1) n) (call usage_fail (str "missing value for " a)))
-                      (let (key (str_slice a 2))
-                        (do
-                          (if (= key "max-rows") (set key "maxrows"))
-                          (if (map_has cfg (str "seen_" key)) (call usage_fail (str "duplicate option " a)))
-                          (map_set cfg (str "seen_" key) 1)
-                          (map_set cfg key (list_get args (+ i 1)))))
-                      (set i (+ i 1)))))
-                (append pos a))
-              (set i (+ i 1)))))
-        ; operand counts
-        (if (= cmd "version") (if (> (list_len pos) 0) (call usage_fail "version takes no operands")))
-        (if (= cmd "check-rules") (if (!= (list_len pos) 1) (call usage_fail "check-rules takes exactly one FILE")))
-        (if (or (= cmd "summary") (= cmd "categorize"))
-          (if (!= (list_len pos) 1) (call usage_fail (str cmd " takes exactly one INPUT"))))
-        (if (and (= cmd "categorize") (= (map_get cfg "rules") "")) (call usage_fail "categorize requires --rules"))
-        (if (and (map_has cfg "seen_rules") (= (map_get cfg "rules") "")) (call usage_fail "empty --rules value"))
-        (if (and (map_has cfg "seen_out") (= (map_get cfg "out") "")) (call usage_fail "empty --out value"))
-        ; value validation
-        (if (and (!= (map_get cfg "format") "text") (!= (map_get cfg "format") "json")) (call usage_fail "--format must be text or json"))
-        (if (map_has cfg "seen_month")
-          (let (mv (map_get cfg "month"))
-            (do
-              (if (not (regex_match "^[0-9]{4}-[0-9]{2}$" mv)) (call usage_fail "--month must be YYYY-MM"))
-              (let (yy (to_int (str_slice mv 0 4)) mm (to_int (str_slice mv 5 7)))
-                (if (or (< yy 1900) (> yy 2999) (< mm 1) (> mm 12)) (call usage_fail "--month out of range"))))))
-        (if (map_has cfg "seen_maxrows")
-          (let (rv (map_get cfg "maxrows"))
-            (do
-              (if (not (regex_match "^[0-9]{1,8}$" rv)) (call usage_fail "--max-rows must be a positive integer"))
-              (let (rn (to_int rv))
-                (do
-                  (if (or (< rn 1) (> rn 10000000)) (call usage_fail "--max-rows out of range"))
-                  (map_set cfg "maxrows" rn))))))
-        (if (> (list_len pos) 0) (map_set cfg "input" (list_get pos 0)))
-        (return cfg))))
-
-  ; ---------------------------------------------------------------- output
-  (defun emit ((cfg dict) (body string) (code int)) int
-    (do
-      (if (!= (map_get cfg "out") "")
-        (do
-          (try_let (w (do (write_file (map_get cfg "out") (str body "\n")) 1))
-            (catch e
-              (if (call is_denied e)
-                (call die 77 (str "capability denied: filesystem (write " (map_get cfg "out") ")"))
-                (call die 73 (str "cannot write " (map_get cfg "out")))))
-            (set w w))
-          (if (> (map_get cfg "skipped") 0)
-            (stderr (str "ledgerlens: skipped " (map_get cfg "skipped") " invalid row(s)\n"))))
-        (do
-          (print body)
-          (if (> (map_get cfg "skipped") 0)
-            (stderr (str "ledgerlens: skipped " (map_get cfg "skipped") " invalid row(s)\n")))))
-      (exit code)
-      (return 0)))
-
-  (defun csv_cell ((s string)) string
-    (if (or (str_contains s ",") (str_contains s "\"") (starts_with s " ") (ends_with s " "))
-      (return (str "\"" (str_replace s "\"" "\"\"") "\""))
-      (return s)))
-
-  ; ---------------------------------------------------------------- aggregation
-  (defun find_cat ((pats list) (names list) (nrules int) (desc string)) string
-    (let (k 0 cat "Uncategorized")
+                      (if (= section "") (call record_error errors line "entry outside a section"))
+                      (if (not (str_contains text "=")) (call record_error errors line "expected NAME = VALUE"))
+                      (let (parts (str_split text "="))
+                        (let (name (call spaces (list_get parts 0)) value (call spaces (str_join (list_slice parts 1) "=")))
+                          (if (= section "[categories]")
+                            (do
+                              (if (or (= name "Uncategorized") (not (regex_match "^[A-Za-z][A-Za-z0-9 _-]{0,39}$" name))) (call record_error errors line "invalid category name"))
+                              (if (= value "") (call record_error errors line "empty regular expression"))
+                              (try_let (valid (regex_match value ""))
+                                (catch error (call record_error errors line "invalid regular expression"))
+                                (set valid valid))
+                              (map_set known name true)
+                              (append rulelist (dict ("name" name) ("pattern" value))))
+                            (do
+                              (if (not (regex_match "^[0-9]+(\\.[0-9]{1,2})?$" value)) (call record_error errors line "invalid budget amount"))
+                              (let (cents (call decimal_cents value))
+                                (do
+                                  (if (= cents "0") (call record_error errors line "budget must be greater than zero"))
+                                  (if (map_has pending name) (call record_error errors line "duplicate budget") (map_set pending name line))
+                                  (map_set budgetmap name cents))))))))))))))
+        (for name (map_keys pending)
+          (if (and (!= name "Uncategorized") (not (map_has known name))) (call record_error errors (map_get pending name) "budget for unknown category")))
+        (if (< (map_get errors "line") 2000000000) (call fatal 65 (str "rules: line " (map_get errors "line") ": " (map_get errors "message"))))
+        (map_set result "rules" rulelist)
+        (map_set result "budgets" budgetmap)
+        (return result))))
+  (defun cli ((arguments list)) dict
+    (let (n (list_len arguments) config (dict ("rules" "") ("month" "") ("format" "text") ("out" "") ("lenient" false) ("max-rows" 100000)) seen (dict) operands (list) index 1)
       (do
-        (while (< k nrules)
-          (if (regex_match (list_get pats k) desc)
-            (do (set cat (list_get names k)) (set k nrules))
-            (set k (+ k 1))))
-        (return cat))))
-
-  (defun bump ((d dict) (k string) (v int)) void
-    (map_set d k (+ (nz (map_get d k) 0) v)))
-
-  (defun tally ((inc_m dict) (exp_m dict) (cnt_m dict) (inc_c dict) (exp_c dict) (cnt_c dict) (m string) (ck string) (c int)) void
-    (do
-      (call bump cnt_m m 1)
-      (call bump cnt_c ck 1)
-      (if (> c 0)
-        (do (call bump inc_m m c) (call bump inc_c ck c))
-        (do (call bump exp_m m (- 0 c)) (call bump exp_c ck (- 0 c))))))
-
-  ; Finds the header (first non-empty line) and counts the data rows after it.
-  (defun scan_header ((ls list)) dict
-    (let (ln 0 hdr 0 total 0 nf 0 di 0 ei 0 ai 0)
-      (do
-        (for raw ls
+        (if (= n 0) (call fatal 2 "missing command"))
+        (let (command (list_get arguments 0))
           (do
-            (set ln (+ ln 1))
+            (map_set config "command" command)
+            (if (not (list_contains (list "summary" "categorize" "check-rules" "version" "help" "--help" "-h") command)) (call fatal 2 "unknown command"))
+            (while (< index n)
+              (let (arg (list_get arguments index))
+                (do
+                  (if (and (starts_with arg "-") (!= arg "-"))
+                    (do
+                      (if (not (list_contains (list "summary" "categorize") command)) (call fatal 2 "unexpected option"))
+                      (if (not (list_contains (list "--rules" "--month" "--format" "--out" "--lenient" "--max-rows") arg)) (call fatal 2 "unknown option"))
+                      (if (and (= command "categorize") (list_contains (list "--month" "--format") arg)) (call fatal 2 "option invalid for categorize"))
+                      (if (map_has seen arg) (call fatal 2 "duplicate option"))
+                      (map_set seen arg true)
+                      (if (= arg "--lenient") (map_set config "lenient" true)
+                        (do
+                          (set index (+ index 1))
+                          (if (>= index n) (call fatal 2 "missing option value"))
+                          (map_set config (str_slice arg 2) (list_get arguments index)))))
+                    (append operands arg))
+                  (set index (+ index 1)))))
+            (if (list_contains (list "summary" "categorize" "check-rules") command)
+              (if (!= (list_len operands) 1) (call fatal 2 "expected one input"))
+              (if (!= (list_len operands) 0) (call fatal 2 "unexpected operand")))
+            (if (and (= command "categorize") (= (map_get config "rules") "")) (call fatal 2 "categorize requires --rules"))
+            (if (not (list_contains (list "text" "json") (map_get config "format"))) (call fatal 2 "invalid format"))
+            (let (month (map_get config "month") maximum (to_string (map_get config "max-rows")))
+              (do
+                (if (!= month "")
+                  (if (not (and (regex_match "^[0-9]{4}-[0-9]{2}$" month) (call date_valid (str month "-01")))) (call fatal 2 "invalid month")))
+                (while (and (> (str_len maximum) 1) (starts_with maximum "0")) (set maximum (str_slice maximum 1)))
+                (if (or (not (regex_match "^[0-9]+$" maximum)) (> (str_len maximum) 8) (< (to_int maximum) 1) (> (to_int maximum) 10000000)) (call fatal 2 "invalid --max-rows"))
+                (map_set config "max-rows" (to_int maximum))))
+            (map_set config "operands" operands)
+            (return config))))))
+  (defun transaction_error ((fields list) (columns int) (di int) (ei int) (ai int)) string
+    (do
+      (if (!= (list_len fields) columns) (return "wrong number of fields"))
+      (if (not (call date_valid (list_get fields di))) (return "invalid date"))
+      (if (> (call byte_count (list_get fields ei)) 1000) (return "description too long"))
+      (if (not (regex_match "^[+-]?[0-9]{1,12}(\\.[0-9]{1,2})?$" (list_get fields ai))) (return "invalid amount"))
+      (return "")))
+  (defun transactions ((config dict) (rulebook dict)) dict
+    (let (path (list_get (map_get config "operands") 0) rows (list) skipped 0 physical 0 data_count 0 header false columns 0 di 0 ei 0 ai 0 text "")
+      (do
+        (set text (if (= path "-") (read_stdin) (call input_file path)))
+        (if (starts_with text (bytes_to_string (list 239 187 191))) (set text (str_slice text 1)))
+        (for raw (str_split text "\n")
+          (do
+            (set physical (+ physical 1))
             (let (line raw)
               (do
                 (if (ends_with line "\r") (set line (str_slice line 0 -1)))
                 (if (!= line "")
-                  (if (= hdr 0)
-                    (do
-                      (set hdr 1)
-                      (let (h (call split_fields line))
+                  (let (parsed (call csv_fields line))
+                    (let (fields (map_get parsed "fields") error (map_get parsed "error"))
+                      (if (not header)
                         (do
-                          (if (= (map_get h "ok") 0) (call die 65 (str "line " ln ": " (map_get h "e"))))
-                          (let (cols (map_list x (map_get h "f") (to_lower x)) j 0 cd 0 ce 0 ca 0)
+                          (if (!= error "") (call fatal 65 (str "line 1: " error)))
+                          (set columns (list_len fields))
+                          (let (index 0 dates 0 descriptions 0 amounts 0)
                             (do
-                              (set nf (list_len cols))
-                              (for cname cols
+                              (for field fields
                                 (do
-                                  (if (= cname "date") (do (set cd (+ cd 1)) (set di j)))
-                                  (if (= cname "description") (do (set ce (+ ce 1)) (set ei j)))
-                                  (if (= cname "amount") (do (set ca (+ ca 1)) (set ai j)))
-                                  (set j (+ j 1))))
-                              (if (!= cd 1) (call die 65 (str "line " ln ": header needs exactly one date column")))
-                              (if (!= ce 1) (call die 65 (str "line " ln ": header needs exactly one description column")))
-                              (if (!= ca 1) (call die 65 (str "line " ln ": header needs exactly one amount column"))))))))
-                    (set total (+ total 1))))))))
-        (if (= hdr 0) (call die 65 "empty input"))
-        (return (dict ("nf" nf) ("di" di) ("ei" ei) ("ai" ai) ("total" total))))))
-
-  ; ---------------------------------------------------------------- reports
-  (defun money_row ((i int) (e int)) string
-    (return (str (call fmt_money i) "\t" (call fmt_money e) "\t" (call fmt_money (- i e)))))
-
-  (defun build_summary ((fmt string) (months list) (bnames list) (bvals list) (inc_m dict) (exp_m dict) (cnt_m dict) (inc_c dict) (exp_c dict) (cnt_c dict) (skipped int)) dict
-    (let (tin 0 tex 0 tcnt 0 over 0 mlines (list) clines (list) blines (list) sortkeys (dict))
-      (do
-        (for m months
-          (let (i (nz (map_get inc_m m) 0) e (nz (map_get exp_m m) 0) cn (map_get cnt_m m))
-            (do
-              (set tin (+ tin i))
-              (set tex (+ tex e))
-              (set tcnt (+ tcnt cn))
-              (if (= fmt "json")
-                (append mlines (str "{\"month\":\"" m "\",\"income\":\"" (call fmt_money i) "\",\"expenses\":\"" (call fmt_money e) "\",\"net\":\"" (call fmt_money (- i e)) "\",\"count\":" cn "}"))
-                (append mlines (str m "\t" (call money_row i e) "\t" cn))))))
-        ; category rows: month asc, expenses desc, name asc (fixed-width sort key)
-        (for ck (map_keys cnt_c)
-          (let (e (nz (map_get exp_c ck) 0) parts (str_split ck "|"))
-            (map_set sortkeys (str (list_get parts 0) "|" (pad_left (to_string (- 1000000000000000000 e)) 19 "0") "|" (list_get parts 1)) ck)))
-        (for sk (sort (map_keys sortkeys))
-          (let (ck (map_get sortkeys sk))
-            (let (parts (str_split ck "|") i (nz (map_get inc_c ck) 0) e (nz (map_get exp_c ck) 0))
-              (if (= fmt "json")
-                (append clines (str "{\"month\":\"" (list_get parts 0) "\",\"category\":\"" (list_get parts 1) "\",\"income\":\"" (call fmt_money i) "\",\"expenses\":\"" (call fmt_money e) "\",\"count\":" (map_get cnt_c ck) "}"))
-                (append clines (str (list_get parts 0) "\t" (list_get parts 1) "\t" (call fmt_money i) "\t" (call fmt_money e) "\t" (map_get cnt_c ck)))))))
-        ; budget rows: month asc, category name asc
-        (let (bsorted (sort (map_list x bnames (str x))))
-          (for m months
-            (for b bsorted
-              (let (limit (list_get bvals (index_of bnames b)) spent (nz (map_get exp_c (str m "|" b)) 0) status "OK")
-                (do
-                  (if (> spent limit) (do (set status "OVER") (set over 1)))
-                  (if (= fmt "json")
-                    (append blines (str "{\"month\":\"" m "\",\"category\":\"" b "\",\"limit\":\"" (call fmt_money limit) "\",\"spent\":\"" (call fmt_money spent) "\",\"status\":\"" status "\"}"))
-                    (append blines (str m "\t" b "\t" (call fmt_money limit) "\t" (call fmt_money spent) "\t" status))))))))
-        (if (= fmt "json")
-          (return (dict ("over" over) ("txt" (str "{\"transactions\":" tcnt ",\"skipped\":" skipped
-                                                 ",\"months\":[" (str_join mlines ",") "]"
-                                                 ",\"total\":{\"income\":\"" (call fmt_money tin) "\",\"expenses\":\"" (call fmt_money tex) "\",\"net\":\"" (call fmt_money (- tin tex)) "\",\"count\":" tcnt "}"
-                                                 ",\"categories\":[" (str_join clines ",") "]"
-                                                 ",\"budgets\":[" (str_join blines ",") "]}"))))
-          (do
-            (append mlines (str "TOTAL\t" (call money_row tin tex) "\t" tcnt))
-            (let (txt (str "# monthly\nmonth\tincome\texpenses\tnet\ttransactions\n" (str_join mlines "\n") "\n\n# categories\nmonth\tcategory\tincome\texpenses\ttransactions"))
-              (do
-                (if (> (list_len clines) 0) (set txt (str txt "\n" (str_join clines "\n"))))
-                (if (> (list_len bnames) 0)
-                  (do
-                    (set txt (str txt "\n\n# budgets\nmonth\tcategory\tlimit\tspent\tstatus"))
-                    (if (> (list_len blines) 0) (set txt (str txt "\n" (str_join blines "\n"))))))
-                (return (dict ("over" over) ("txt" txt))))))))))
-
-  ; ---------------------------------------------------------------- main
-  (defun run_report ((cfg dict) (rules dict)) int
-    (let (names (map_get rules "names") pats (map_get rules "pats")
-          bnames (map_get rules "bnames") bvals (map_get rules "bvals")
-          nrules (list_len (map_get rules "names"))
-          text (if (= (map_get cfg "input") "-") (call strip_bom (read_stdin)) (call strip_bom (call read_path (map_get cfg "input"))))
-          lenient (map_get cfg "lenient") maxrows (map_get cfg "maxrows")
-          month_filter (map_get cfg "month") fmt (map_get cfg "format") cmd (map_get cfg "cmd"))
-      (let (ls (str_split text "\n") hd (call scan_header (str_split text "\n")) ln 0 seen_hdr 0 skipped 0
-            inc_m (dict) exp_m (dict) cnt_m (dict) inc_c (dict) exp_c (dict) cnt_c (dict)
-            outlines (list "date,description,amount,category"))
-        (do
-          (map_set cfg "skipped" 0)
-          (if (> (map_get hd "total") maxrows) (call die 70 (str "row limit exceeded (max " maxrows ")")))
-          (for raw ls
-            (do
-              (set ln (+ ln 1))
-              (let (line raw)
-                (do
-                  (if (ends_with line "\r") (set line (str_slice line 0 -1)))
-                  (if (!= line "")
-                    (if (= seen_hdr 0)
-                      (set seen_hdr 1)
-                      (let (res (call split_fields line))
+                                  (let (name (to_lower (call spaces field)))
+                                    (do
+                                      (if (= name "date") (do (set dates (+ dates 1)) (set di index)))
+                                      (if (= name "description") (do (set descriptions (+ descriptions 1)) (set ei index)))
+                                      (if (= name "amount") (do (set amounts (+ amounts 1)) (set ai index)))))
+                                  (set index (+ index 1))))
+                              (if (or (!= dates 1) (!= descriptions 1) (!= amounts 1)) (call fatal 65 "line 1: invalid header"))))
+                          (set header true))
                         (do
-                          (if (= (map_get res "ok") 1)
-                            (set res (call parse_row (map_get res "f") (map_get hd "nf") (map_get hd "di") (map_get hd "ei") (map_get hd "ai"))))
-                          (if (= (map_get res "ok") 0)
-                            (if (= lenient 1)
-                              (set skipped (+ skipped 1))
-                              (call die 65 (str "line " ln ": " (map_get res "e"))))
-                            (let (desc (map_get res "desc") date (map_get res "date") c (map_get res "c"))
-                              (let (cat (call find_cat pats names nrules desc) m (str_slice date 0 7))
-                                (if (= cmd "categorize")
-                                  (append outlines (str date "," (call csv_cell desc) "," (call fmt_money c) "," (call csv_cell cat)))
-                                  (if (or (= month_filter "") (= m month_filter))
-                                    (call tally inc_m exp_m cnt_m inc_c exp_c cnt_c m (str m "|" cat) c))))))))))))))
-          (map_set cfg "skipped" skipped)
-          (if (= cmd "categorize")
-            (call emit cfg (str_join outlines "\n") 0)
-            (let (rep (call build_summary fmt (sort (map_keys cnt_m)) bnames bvals inc_m exp_m cnt_m inc_c exp_c cnt_c skipped))
-              (call emit cfg (map_get rep "txt") (map_get rep "over"))))
-          (return 0)))))
-
-  (let (args (cli_args))
-    (do
-      (if (= (list_len args) 0) (call usage_fail "no command"))
-      (let (cfg (call parse_args args))
-        (let (cmd (map_get cfg "cmd"))
+                          (set data_count (+ data_count 1))
+                          (if (> data_count (map_get config "max-rows")) (call fatal 70 (str "row limit exceeded (max " (map_get config "max-rows") ")")))
+                          (if (= error "") (set error (call transaction_error fields columns di ei ai)))
+                          (if (!= error "")
+                            (if (map_get config "lenient") (set skipped (+ skipped 1)) (call fatal 65 (str "line " physical ": " error)))
+                            (let (amount (list_get fields ai) category "Uncategorized" description (list_get fields ei) negative false)
+                              (do
+                                (set negative (starts_with amount "-"))
+                                (if (or negative (starts_with amount "+")) (set amount (str_slice amount 1)))
+                                (for rule (map_get rulebook "rules")
+                                  (if (and (= category "Uncategorized") (regex_match (map_get rule "pattern") description)) (set category (map_get rule "name"))))
+                                (let (cents (to_int (call decimal_cents amount)))
+                                  (append rows (dict ("date" (list_get fields di)) ("description" description) ("category" category) ("cents" (if negative (- 0 cents) cents)))))))))))))))))
+        (if (not header) (call fatal 65 "empty input"))
+        (return (dict ("rows" rows) ("skipped" skipped))))))
+  ; Totals use base-1,000,000 limbs. Even the maximum supported row count
+  ; and amount keep the high limb below 10^15, safely inside the VM integer
+  ; range, while the combined exact cents may exceed int64. No float sums.
+  (defun zero_total () dict
+    (return (dict ("income" (dict ("hi" 0) ("lo" 0)))
+                  ("expenses" (dict ("hi" 0) ("lo" 0))) ("count" 0))))
+  (defun add_cents ((pair dict) (cents int)) void
+    (let (low (+ (map_get pair "lo") (% cents 1000000)))
+      (do
+        (map_set pair "hi" (+ (+ (map_get pair "hi") (to_int (/ cents 1000000))) (to_int (/ low 1000000))))
+        (map_set pair "lo" (% low 1000000)))))
+  (defun pair_digits ((pair dict)) string
+    (return (if (= (map_get pair "hi") 0) (to_string (map_get pair "lo"))
+      (str (map_get pair "hi") (pad_left (to_string (map_get pair "lo")) 6 "0")))))
+  (defun pair_greater ((left dict) (right dict)) bool
+    (return (or (> (map_get left "hi") (map_get right "hi"))
+      (and (= (map_get left "hi") (map_get right "hi")) (> (map_get left "lo") (map_get right "lo"))))))
+  (defun large_money ((pair dict)) string
+    (return (call budget_text (call pair_digits pair))))
+  (defun net_money ((income dict) (expenses dict)) string
+    (let (negative (call pair_greater expenses income))
+      (let (larger (if negative expenses income) smaller (if negative income expenses))
+        (let (hi (- (map_get larger "hi") (map_get smaller "hi")) lo (- (map_get larger "lo") (map_get smaller "lo")))
           (do
-            (if (= cmd "version") (do (print "ledgerlens 1.0.0") (exit 0)))
-            (if (= cmd "check-rules")
-              (let (rr (call parse_rules (call read_path (map_get cfg "input"))))
-                (do
-                  (print (str "OK: " (list_len (map_get rr "names")) " rule(s), " (list_len (map_get rr "bnames")) " budget(s)"))
-                  (exit 0))))
-            (let (rules (dict ("names" (list)) ("pats" (list)) ("bnames" (list)) ("bvals" (list))))
+            (if (< lo 0) (do (set lo (+ lo 1000000)) (set hi (- hi 1))))
+            (return (str (if negative "-" "") (call large_money (dict ("hi" hi) ("lo" lo))))))))))
+  (defun accumulate ((table dict) (key string) (cents int)) void
+    (do
+      (if (not (map_has table key)) (map_set table key (call zero_total)))
+      (let (row (map_get table key))
+        (do
+          (map_set row "count" (+ (map_get row "count") 1))
+          (if (< cents 0) (call add_cents (map_get row "expenses") (- 0 cents))
+            (call add_cents (map_get row "income") cents))))))
+  (defun metric ((row dict)) dict
+    (return (dict ("income" (call large_money (map_get row "income")))
+      ("expenses" (call large_money (map_get row "expenses")))
+      ("net" (call net_money (map_get row "income") (map_get row "expenses"))) ("count" (map_get row "count")))))
+  (defun summary ((config dict) (rulebook dict) (rows list) (skipped int)) dict
+    (let (months (dict) categories (dict) total (dict) mjson (list) cjson (list) bjson (list) mtext (list "# monthly" "month\tincome\texpenses\tnet\ttransactions") ctext (list "# categories" "month\tcategory\tincome\texpenses\ttransactions") btext (list "# budgets" "month\tcategory\tlimit\tspent\tstatus") exitcode 0)
+      (do
+        (map_set total "all" (call zero_total))
+        (for row rows
+          (let (month (str_slice (map_get row "date") 0 7) cents (map_get row "cents"))
+            (if (or (= (map_get config "month") "") (= month (map_get config "month")))
               (do
-                (if (!= (map_get cfg "rules") "")
-                  (set rules (call parse_rules (call read_path (map_get cfg "rules")))))
-                (call run_report cfg rules)))))))))
+                (call accumulate months month cents)
+                (call accumulate categories (str month "|" (map_get row "category")) cents)
+                (call accumulate total "all" cents)))))
+        (for month (sort (map_keys months))
+          (let (metric (call metric (map_get months month)))
+            (do
+              (map_set metric "month" month)
+              (append mjson metric)
+              (append mtext (str month "\t" (map_get metric "income") "\t" (map_get metric "expenses") "\t" (map_get metric "net") "\t" (map_get metric "count")))
+              ; Insertion selection avoids numeric encodings with a hidden maximum.
+              (let (remaining (dict))
+                (do
+                  (for key (map_keys categories)
+                    (if (starts_with key (str month "|")) (map_set remaining key true)))
+                  (while (> (list_len (map_keys remaining)) 0)
+                    (let (best "" best_expense (dict ("hi" -1) ("lo" 0)))
+                      (do
+                        (for key (sort (map_keys remaining))
+                          (let (expense (map_get (map_get categories key) "expenses"))
+                            (if (call pair_greater expense best_expense) (do (set best key) (set best_expense expense)))))
+                        (let (value (call metric (map_get categories best)) name (str_slice best 8))
+                          (do
+                            (map_delete value "net") (map_set value "month" month) (map_set value "category" name)
+                            (append cjson value)
+                            (append ctext (str month "\t" name "\t" (map_get value "income") "\t" (map_get value "expenses") "\t" (map_get value "count")))))
+                        (map_delete remaining best))))))
+              (for name (sort (map_keys (map_get rulebook "budgets")))
+                (let (limit (map_get (map_get rulebook "budgets") name) spent (dict ("hi" 0) ("lo" 0)) status "OK" key (str month "|" name))
+                  (do
+                    (if (map_has categories key) (set spent (map_get (map_get categories key) "expenses")))
+                    (let (digits (call pair_digits spent))
+                      (if (or (> (str_len digits) (str_len limit)) (and (= (str_len digits) (str_len limit)) (> digits limit))) (do (set status "OVER") (set exitcode 1))))
+                    (append bjson (dict ("month" month) ("category" name) ("limit" (call budget_text limit)) ("spent" (call large_money spent)) ("status" status)))
+                    (append btext (str month "\t" name "\t" (call budget_text limit) "\t" (call large_money spent) "\t" status))))))))
+        (let (totals (call metric (map_get total "all")) result "")
+          (do
+            (append mtext (str "TOTAL\t" (map_get totals "income") "\t" (map_get totals "expenses") "\t" (map_get totals "net") "\t" (map_get totals "count")))
+            (if (= (map_get config "format") "json")
+              (set result (encode_json (dict ("transactions" (map_get totals "count")) ("skipped" skipped) ("months" mjson) ("total" totals) ("categories" cjson) ("budgets" bjson))))
+              (do
+                (set result (str (str_join mtext "\n") "\n\n" (str_join ctext "\n")))
+                (if (> (list_len (map_keys (map_get rulebook "budgets"))) 0) (set result (str result "\n\n" (str_join btext "\n"))))))
+            (return (dict ("text" result) ("exit" exitcode))))))))
+  (let (config (call cli (cli_args)))
+    (let (command (map_get config "command"))
+      (do
+        (if (list_contains (list "help" "--help" "-h") command) (do (print (call usage)) (exit 0)))
+        (if (= command "version") (do (print "ledgerlens 1.0.0") (exit 0)))
+        (if (= command "check-rules")
+          (let (book (call rules (list_get (map_get config "operands") 0)))
+            (do (print (str "OK: " (list_len (map_get book "rules")) " rule(s), " (list_len (map_keys (map_get book "budgets"))) " budget(s)")) (exit 0))))
+        (let (book (call rules (map_get config "rules")))
+          (let (data (call transactions config book))
+            (let (rows (map_get data "rows") skipped (map_get data "skipped") result "" status 0)
+              (do
+                (if (= command "categorize")
+                  (let (lines (list "date,description,amount,category"))
+                    (do
+                      (for row rows (append lines (str (map_get row "date") "," (call csv_quote (map_get row "description")) "," (call money (map_get row "cents")) "," (call csv_quote (map_get row "category")))))
+                      (set result (str_join lines "\n"))))
+                  (let (report (call summary config book rows skipped))
+                    (do (set result (map_get report "text")) (set status (map_get report "exit")))))
+                (call output (map_get config "out") result)
+                (if (> skipped 0) (stderr (str "ledgerlens: skipped " skipped " invalid row(s)\n")))
+                (exit status))))))))
+)

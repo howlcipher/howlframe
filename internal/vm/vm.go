@@ -920,6 +920,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			return nil
 		}
 	case "fetch":
+		if len(node.Children) == 5 {
+			InterpErr("UNSUPPORTED_ON_TARGET: fetch headers are supported only by the JavaScript target", node)
+		}
 		// requireCapability already ran for network. The request is sent only
 		// after that grant, so a denial cannot open a connection.
 		if len(node.Children) != 3 && len(node.Children) != 4 {
@@ -2797,7 +2800,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				limitedReader := io.LimitReader(req.Body, int64(maxBodyBytes)+1)
 				readData, err := io.ReadAll(limitedReader)
 				if err != nil {
-					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", err))
+					panicRequestBodyError(ip, inst, err)
 				}
 				if len(readData) > maxBodyBytes {
 					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBodyBytes))
@@ -2946,28 +2949,6 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							durMS(locked.Sub(started)), durMS(ended.Sub(locked)), durMS(ended.Sub(started)))
 					}()
 				}
-				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
-					// Read the body (bounded) before taking the lock, so a slow
-					// client cannot hold every other request hostage.
-					if r.Body != nil {
-						limit := vm.Limits.MaxRequestBodyBytes
-						if limit <= 0 {
-							limit = DefaultLimits.MaxRequestBodyBytes
-						}
-						buffered, readErr := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
-						if readErr != nil {
-							// A truncated or stalled upload is never executed.
-							w.Header().Set("Content-Type", "application/json")
-							w.WriteHeader(http.StatusBadRequest)
-							_, _ = io.WriteString(w, `{"error":"request body was not received completely","request_id":"`+requestID+`"}`+"\n")
-							return
-						}
-						r.Body = io.NopCloser(bytes.NewReader(buffered))
-					}
-					serial.Lock()
-					defer serial.Unlock()
-					locked = time.Now()
-				}
 				r = httpreq.WithRequestID(r, requestID)
 				w.Header().Set("X-Request-Id", requestID)
 				recorder := &httpResponseRecorder{ResponseWriter: w}
@@ -2980,6 +2961,35 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						fmt.Fprintf(vm.ErrOut, "access method=%s path=%s status=%d duration_ms=%d request_id=%s\n",
 							r.Method, r.URL.EscapedPath(), status, time.Since(started).Milliseconds(), requestID)
 					}()
+				}
+				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
+					// Read the body (bounded) before taking the lock, so a slow
+					// client cannot hold every other request hostage.
+					if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodDelete || r.Method == http.MethodOptions {
+						// These methods have no application body. Do not wait for
+						// ignored bytes or let net/http drain them before responding.
+						if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+							r.Close = true
+							recorder.Header().Set("Connection", "close")
+						}
+						r.Body = http.NoBody
+					} else if r.Body != nil {
+						limit := vm.Limits.MaxRequestBodyBytes
+						if limit <= 0 {
+							limit = DefaultLimits.MaxRequestBodyBytes
+						}
+						buffered, readErr := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+						if readErr != nil {
+							// Keep route/method/auth checks ahead of body validation.
+							// Never expose partial bytes as a complete JSON document.
+							r.Body = incompleteRequestBody{}
+						} else {
+							r.Body = io.NopCloser(bytes.NewReader(buffered))
+						}
+					}
+					serial.Lock()
+					locked = time.Now()
+					defer serial.Unlock()
 				}
 				reqEnv := NewBcEnv(capturedEnv)
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
@@ -3005,6 +3015,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 								Code:    "HANDLER_PANIC",
 								Message: fmt.Sprint(recovered),
 							}
+						}
+						if failure.Code == "INVALID_REQUEST_BODY" && !recorder.wrote {
+							recorder.Header().Set("Content-Type", "application/json")
+							recorder.WriteHeader(http.StatusBadRequest)
+							_ = json.NewEncoder(recorder).Encode(map[string]any{"error": map[string]string{
+								"code": "invalid_json", "message": "Request body was not received completely.", "request_id": requestID,
+							}})
+							return
 						}
 						// Details (code, opcode, message) stay in the server log
 						// and the receipt; the client only learns that the
@@ -3040,7 +3058,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			// Timeouts keep a stalled client from holding a connection (and, with
 			// (serialize_requests), the handler lock) forever.
 			server := &http.Server{
-				Addr:              ":" + port,
+				Addr:              net.JoinHostPort(vm.Limits.HTTPListenHost, port),
 				Handler:           dispatch,
 				ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout:       30 * time.Second,
@@ -3500,7 +3518,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if req.Body != nil {
 				readData, readErr := io.ReadAll(io.LimitReader(req.Body, int64(maxBody)+1))
 				if readErr != nil {
-					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", readErr))
+					panicRequestBodyError(ip, inst, readErr)
 				}
 				if len(readData) > maxBody {
 					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBody))
@@ -3529,7 +3547,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if convErr != nil || n < 1 || n > 65535 {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "port_available: port must be an integer 1..65535"))
 			}
-			ln, listenErr := net.Listen("tcp", ":"+strconv.Itoa(n))
+			ln, listenErr := net.Listen("tcp", net.JoinHostPort(vm.Limits.HTTPListenHost, strconv.Itoa(n)))
 			if listenErr == nil {
 				ln.Close()
 			}
@@ -4205,6 +4223,24 @@ func normalizeForJSON(v any) any {
 // httpResponseRecorder tracks whether a route handler committed a response.
 // The VM needs this to tell a handler that answered from one that panicked
 // before writing anything, so only the latter is converted into a 500.
+// A serial handler sees a framing error only if it reads its request body.
+// The reader discards partial bytes, so valid-looking truncated JSON cannot mutate
+// an application that validates the body before writing state.
+var errIncompleteRequestBody = errors.New("request body was not received completely")
+
+type incompleteRequestBody struct{}
+
+func (incompleteRequestBody) Read([]byte) (int, error) { return 0, errIncompleteRequestBody }
+func (incompleteRequestBody) Close() error             { return nil }
+
+func panicRequestBodyError(ip int, inst bytecode.BCInstruction, err error) {
+	code := "IO_ERROR"
+	if errors.Is(err, errIncompleteRequestBody) {
+		code = "INVALID_REQUEST_BODY"
+	}
+	panic(NewRuntimeError(code, "main", ip, inst.Op, "failed to read request body: %v", err))
+}
+
 type httpResponseRecorder struct {
 	http.ResponseWriter
 	wrote  bool

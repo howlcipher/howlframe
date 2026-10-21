@@ -1177,6 +1177,9 @@ func goReadFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string
 // still binds (bytes, error). Every other use gets one []byte. A missing
 // body is a nil reader, the same request the previous closure sent.
 func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+	if node != nil && len(node.Children) == 5 {
+		ast.ReportError("UNSUPPORTED_ON_TARGET: fetch headers are supported only on --target=js", node.Line, node.Column)
+	}
 	gogenNeedsFetch = true
 	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
 		return ""

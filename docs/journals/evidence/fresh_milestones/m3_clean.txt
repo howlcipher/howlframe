@@ -1,0 +1,38 @@
+Framework archive commit: b028e813ac020320c938592193009692973cf079
+Sibling commit: cd2f2fdb7126cca922604483724beb008621a60a
+Built /tmp/tmp.wUzCm7IAQ1/howlframe/milestone3/evidencedesk/build/backend.hfbc
+Built /tmp/tmp.wUzCm7IAQ1/howlframe/milestone3/evidencedesk/build/projector.hfbc
+Built /tmp/tmp.wUzCm7IAQ1/howlframe/milestone3/evidencedesk/static/app.js
+Implementation verification compiler: /tmp/tmp.wUzCm7IAQ1/howlframe/milestone3/evidencedesk/build/howlframe
+test_import_detail_and_order (acceptance.API.test_import_detail_and_order) ... ok
+test_invalid_import_preserves_state (acceptance.API.test_invalid_import_preserves_state) ... ok
+test_limits_media_and_routing (acceptance.API.test_limits_media_and_routing) ... ok
+test_notes_and_reimport (acceptance.API.test_notes_and_reimport) ... ok
+test_exact_limit_and_validate_before_write (acceptance.Projector.test_exact_limit_and_validate_before_write) ... ok
+test_native_outputs_deterministic (acceptance.Projector.test_native_outputs_deterministic) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.761s
+
+OK
+PASS live loopback listener: LISTEN 0      4096       127.0.0.1:46869      0.0.0.0:*    users:(("howlframe",pid=2715634,fd=5))
+PASS exact restart persistence, encoded ID, Unicode notes, physical line diagnostics
+PASS real Chromium 148.0.7778.96 import/header/filter/ordered claims/notes/reload/errors/XSS/keyboard
+Board commit: cd2f2fdb7126cca922604483724beb008621a60a
+Board sanitized fixture SHA256: 439ca83f19b564cdea4510de5b7a7324ed0a0f1c489263a85ba4b5695e8e7316
+Board original source SHA256: 4d5233b5d0ac1cc2fc5f340721309b9010d07046fafffe602de4ba36fd1b89d9
+Board adapter insertion SHA256: 7c4a4e00ceafafb71d4c36568449a8d9a962949d23f83b078ba33507c98b105a
+Board adapted source SHA256: 9d8d2da0f26fa39061ab0f9a3961209415a1472b3ffafd8b644e8700a15e6257
+PASS actual Board consumer review.jsonl records= 3 tasks= 2
+PASS actual Board consumer ledger_sample.jsonl records= 72 tasks= 16
+PASS denied network
+PASS denied environment
+PASS denied database
+PASS denied filesystem:read
+PASS denied filesystem:write
+SERVER DIAGNOSTICS: Listening on 42813
+fault request_id=b05c384d57fe562acce29f78c15cf3b5 method=GET path=/ error={"phase":"runtime","code":"CAPABILITY_DENIED","function":"main","instruction":11,"opcode":"READ_FILE","message":"capability denied: filesystem"}
+
+PASS denied static filesystem read without persisted corruption
+PASS too-small finite instruction limit; process and remote-fetch grants absent throughout
+PASS all implementation workflows
