@@ -1,25 +1,40 @@
 # Milestone 3 acceptance spec: full-stack web app and a genuine Howl ecosystem component
 
-**Status:** DRAFT for review (revision 3).
+**Status:** FROZEN when #206 merges to `main`: `e6fdd48a` + the pre-merge revisions R1–R8 (`milestone3/FREEZE.md` §1 and §4;
+R1 is superseded by R4). Each revision is listed in `milestone3/OWNER_ACK_2026-10-20.md` §7 with its ack status. From that
+merge on, the revision rule below applies.
 * It addresses Motoko's reviews of `c85cf2fa`
   ([#205 review 5587744378](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587744378)) and `baeb0d03`
   ([#205 review 5587896730](https://github.com/howlcipher/howlframe/pull/205#pullrequestreview-5587896730)).
-* The spec freezes once the independent review accepts it **and** the Owner decision below is recorded in each project's
-  `FREEZE.md` (§1.1.1). A freeze without that record is not valid.
-* After the freeze, changes need a separately recorded, dated revision (directive §8, "Record decisions without retroactive
-  goalpost changes").
+* The spec is **FROZEN when #206 merges to `main`**, after the independent review accepts it (*R8*).
+  * Separately, each project's requirements `FREEZE.md` (§1.1.1) must carry the Owner decision below.
+  * A requirements freeze without that record is not valid.
+* From the #206 merge on, changes need a separately recorded, dated revision (directive §8, "Record decisions without
+  retroactive goalpost changes"). **Revision rule** (`milestone3/FREEZE.md` §4): every change after that merge is a dated
+  revision row with the spec sha256 after, carries an Owner ack recorded in an `OWNER_ACK_<date>.md` file, and is never made
+  after any result of a gate that the revision affects is known. R1–R8 are pre-merge content, not post-freeze revisions.
+  * **Owner-reserved decisions** *(R5; from EngMgr's determination, 2026-10-20 16:37 ET, recorded in `milestone3/FREEZE.md` §4)*. A revision that relaxes a gate, or
+    that touches any of the following, needs its own Owner ack:
+    * waivers, including any `WAIVED, NOT PASSED` record;
+    * the W3/W13 JS exception;
+    * manual, non-CI runs;
+    * the entry criteria;
+    * the venue (§5 rule 6).
 **Base:** `main` at `d03c1176` (Milestone 2 accepted by the Owner, `milestone2/MILESTONE2_DECISION.md:3-12`).
 **Authority:** `HOWLFRAME_PRODUCT_DIRECTIVE.md` §6, Milestone 3 (lines 178-185), and nothing more. The directive sets **no
 extra numeric M3 gates, no required component, and no mandatory parallel execution** (line 185). This spec adds none. Every
 gate below is a pass/fail observable chosen for that project.
 **Author:** Product (requirements and acceptance only; Product builds none of it).
 **Owner decision on the acknowledgement items.** Recorded 2026-10-20 15:23 ET. Source: relayed by EngMgr (Rintaro Okabe).
-William Elias (Owner), verbatim: "Approve items 1, 2 and 4; drop my PC as the alternate venue".
+William Elias (Owner) selected the option "Approve, but my PC isn't a backup venue"; as recorded in chat: "Approve items 1,
+2 and 4; drop my PC as the alternate venue". Record: `milestone3/OWNER_ACK_2026-10-20.md`.
 1. **APPROVED: W3/W13 frontend exception (§1.3.1).** Browser-side JS is allowed only as unmodified HowlFrame compiler output.
    This is a narrow, recorded exception to DIR:148/DIR:171.
 2. **APPROVED: manual-only, non-CI runs** of WE-1, WE-4, WE-5 and the WE-2 browser suites (W3, W4, W9). CI cannot gain a browser
    or m10 step without `workflow` scope (M2R:330-334), and wiring that is the Owner's call (§6).
 3. **DECLINED and removed: an alternate venue on the Owner's own machine.** No alternate venue is pre-registered (§5 rule 6).
+   On 2026-10-20 at 16:32 ET the Owner also dropped the Owner-named-venue path (R4, `milestone3/OWNER_ACK_2026-10-20.md`):
+   no venue can be added later.
 4. **APPROVED: runtime fixes made as entry criteria** (WE-1 m12, WE-4 m17, and WE-5 m2 if bearer auth is used). Each is a
    narrow demonstrated-blocker fix under DIR:198.
 
@@ -75,14 +90,11 @@ Harness/corpus pins:   <path> sha256 <hex>   (one line each: suites, E4 corpus, 
 Seeds:                 <name>=<value>        (one line each)
 W8 bounded N:          <N, or "n/a: WE-3 met">                  # P-WEB only, set before the freeze
 Timing bounds:         <gate>: <absolute monotonic bound>   (one line each; OQ-9)
-Alternate venue:       none pre-registered (§5 rule 6)
-Owner-named venue:     only if the Owner names one by a dated revision before the gate's run (§5 rule 6); otherwise "none"
-  Venue consent:       who=<owner of that machine>  date=<YYYY-MM-DD HH:MM ET>  quote="<verbatim>"  link=<URL>   # only with an Owner-named venue
-  Venue window:        <YYYY-MM-DD HH:MM ET> to <YYYY-MM-DD HH:MM ET>                               # only with an Owner-named venue
+Alternate venue:       none; no venue can be added (§5 rule 6, R4)
 Owner ack:             who=William Elias (Owner)  date=2026-10-20 15:23 ET  source=relayed by EngMgr (Rintaro Okabe)
-                       quote="Approve items 1, 2 and 4; drop my PC as the alternate venue"
+                       option="Approve, but my PC isn't a backup venue"  chat record="Approve items 1, 2 and 4; drop my PC as the alternate venue"
                        items: 1 APPROVED (W3/W13 JS exception); 2 APPROVED (manual non-CI runs); 3 DECLINED (Owner's machine as alternate venue; removed); 4 APPROVED (runtime fixes as entry criteria)
-                       link=<written record link, added at freeze if one exists>
+                       link=milestone3/OWNER_ACK_2026-10-20.md
 ```
 
 ### 1.2 P-ECO gates: receipt and grant-audit verifier (the top-ranked candidate, §3)
@@ -420,6 +432,13 @@ browser side only:
   * the server is HFBC under `howlframe run` in every case. Under the WE-3 fallback, the workload is the same frozen W8
     workload truncated to the pre-registered N in `FREEZE.md` (OQ-8);
   * any receipt used by W8, or by a held-out W8 check, with `effects_truncated: true` counts as FAIL, never as PASS.
+* **What "accepted P-ECO tool" means** *(R7; R5's W8/§2 part Owner-acked 2026-10-20 17:06 ET, card t888s3651,
+  `milestone3/OWNER_ACK_2026-10-20.md` §6)*:
+  every E-gate is either PASSED or Owner-waived.
+  * An Owner-waived gate is one recorded `WAIVED, NOT PASSED` with a dated Owner decision. It counts toward the accepted
+    P-ECO that W8 relies on, with **no second Owner decision**.
+  * An E-gate that is neither PASSED nor Owner-waived (FAIL, INFRA, BLOCKED-VENUE without a waiver, or not yet run)
+    **blocks W8**.
 * **Command:**
   * the grant matrix script (frozen at requirements freeze);
   * then the P-ECO tool on the WE-3 receipt plus `milestone3/web/requirements/policy.*`.
@@ -499,7 +518,8 @@ browser side only:
 ## 2. Order: P-ECO first, then P-WEB
 
 **Decision: P-ECO (the receipt and grant-audit verifier) first, and accepted on its own gates. Then P-WEB, which consumes the
-accepted verifier in its integration gate W8.**
+accepted verifier in its integration gate W8.** "Accepted" here means every E-gate is PASSED or Owner-waived
+(`WAIVED, NOT PASSED` with a dated Owner decision). A gate that is neither blocks W8 (W8, R7, Owner decision 17:06 ET).
 
 **Why (evidence):**
 1. **Authority verification was manual in both milestones.**
@@ -619,39 +639,30 @@ These are based on what M2 actually did and learned.
      planned PC run never happened (M2D:10-12, M2D:184-185), and an Owner waiver became the only way out (M2D:14-19).
    * **When it applies:**
      * a gate's second INFRA outcome; or
-     * the venue the gate needs (an isolated venue, or an Owner-named one) cannot be obtained.
-   * **What is recorded:** BLOCKED-VENUE, with the venue evidence. The project's acceptance stays **pending**, never PASS.
-   * **No alternate venue is pre-registered.** The Owner declined the earlier proposal on 2026-10-20 at 15:23 ET ("Approve items 1, 2 and 4; drop my PC as the alternate venue",
-     relayed by EngMgr). A BLOCKED-VENUE gate resolves **only** in one of two ways:
-     1. **an Owner decision recorded as `WAIVED, NOT PASSED`** (below); or
-     2. **the Owner names a new venue by a dated revision before that gate's run.** That revision records the machine, the
-        consent of its owner and a pre-registered availability window in ET (the `Owner-named venue` fields in §1.1.1). The
-        venue must then pass `venue_evidence.txt`. Without the consent and window, the venue is not available and the gate
-        stays BLOCKED-VENUE. A run outside a recorded window does not count.
-   * **Venue evidence before any run on an Owner-named venue.** `milestone3/evidence/<gate>/venue_evidence.txt` is written
-     before launch and must show every item below. **If any item fails, the venue counts as not obtained, the gate is
-     BLOCKED-VENUE before the run, and the run does not happen.** The items follow M2D:178-180 and the Round 7 idle and
-     noise gates (M2D:360-379):
-     * **OS: Linux.** `uname -a` and `/etc/os-release` are recorded verbatim, and the kernel and OS must match `FREEZE.md`.
-     * **Virtualisation:** `systemd-detect-virt` prints `none` or names the hypervisor. No driver is bound under
-       `/sys/bus/virtio/drivers/virtio_balloon/`. No dynamic memory or balloon is active.
-     * **Sleep:** sleep and suspend are disabled (for example `sleep.target` and `suspend.target` masked).
-     * **No competing load:** a process listing shows no other workloads (builds, tests, browsers, other agents).
-     * **Pins match `FREEZE.md`:** CPU model and count, OS and kernel, Go, Chrome, driver and harness versions and sha256s.
-     * **Instruments readable:** `/dev/kmsg` is readable and the heartbeat and noise sidecars run.
-     * **Disk:** **at least 2 GiB free** on the filesystem holding the gate's artifacts (`df -B1 <artifacts dir>`). M2 sized B6
-       artifacts at "about 1.5 GB" (M2D:291, M2D:382); the isolation rerun kept 806 MB (M2D:190).
-     * **Memory:** **at least 4 GiB `MemAvailable`** (`/proc/meminfo`). This is a **Product default; no M2 measurement on
-       record.** No M2 record gives a peak memory use for any gate. The `mem_available=` values in the Round 6 evidence are
-       free memory on the box, not a peak (`milestone2/ticketdesk/evidence/round6_2026-10-19/kill_storm.txt:43`). If a gate's
-       peak is later measured and recorded, the minimum becomes 2× that peak by a dated revision before the gate's first run.
-     * **Idle baseline:** a 120 s pre-run window on the same idle-gate terms as M2D:360-367. That means steal under 1%,
-       PSI cpu `some avg60` under 5, PSI io `full avg60` under 2, PSI memory `full avg60` = 0, no heartbeat gap over 250 ms,
-       and no `virtual machine fork` or `virtio_balloon` kmsg record.
-   * **How an Owner-named venue is tried:** one attempt, under the same pins and the same outcome rules, including one INFRA
-     rerun.
-   * **If it is also unavailable or INFRA:** the gate stays BLOCKED-VENUE until the Owner decides again, either by naming
-     another venue or by a `WAIVED, NOT PASSED` record.
+     * the venue the gate needs cannot be obtained.
+   * **What is recorded:** BLOCKED-VENUE, with the evidence for its cause: either the two INFRA runs' heartbeat, kmsg and noise
+     excerpts (rule 2), or a record that the venue could not be obtained or could not hold rule 7's quiet window. The
+     project's acceptance stays **pending**, never PASS.
+   * **"Fails isolation"** *(R7)* means **exactly** rule 2's INFRA test, carried over from M2 Round 7 (M2D:404-406, M2D:411).
+     There is no other trigger. A run on the venue fails isolation when either:
+     * a failure is INFRA under rule 2: heartbeat gaps cover at least 80% of its monotonic elapsed time, or a recorded
+       `virtual machine fork`/`virtio_balloon` kmsg record or a steal breach overlaps it; or
+     * a run with 0 failures has a noise breach (INFRA-VOID). The noise breach is M2's noise gates (M2D:371-379), which
+       include a heartbeat gap over 2 s and any `virtual machine fork` or `virtio_balloon` kmsg record.
+   * **Consequence, per run and per gate** *(R5 as amended by R8; not covered by any Owner ack)*:
+     * **A run that fails isolation never counts as a PASS.** Rule 2's single rerun still applies, so one such run does not
+       make the gate unpassable.
+     * **Only a gate in BLOCKED-VENUE cannot be PASSED.** A gate is BLOCKED-VENUE after its second INFRA outcome, or when the
+       venue it needs cannot be obtained. While it is open, its project (P-ECO or P-WEB), and so M3, **cannot be ACCEPTED**.
+       Its **only outcome** is an Owner decision recorded as `WAIVED, NOT PASSED` (below).
+   * **No alternate venue, and no venue can be added.** *(Revision R4, 2026-10-20; Owner decision 16:32 ET,
+     `milestone3/OWNER_ACK_2026-10-20.md`.)*
+     * The Owner declined his own PC as an alternate venue on 2026-10-20 at 15:23 ET.
+     * At 16:32 ET he dropped the path for him to name a new venue later ("Drop the Owner-named venue path; blocked checks
+       can only be waived, never passed", relayed by EngMgr).
+     * No venue may be named or added for any gate.
+   * **A BLOCKED-VENUE gate has exactly one outcome:** an Owner decision recorded as `WAIVED, NOT PASSED`. It is never
+     PASS, and it is not resolved by moving the gate to another venue.
    * **An Owner decision on a BLOCKED-VENUE gate is recorded as `WAIVED, NOT PASSED`.**
      * It never counts as PASS in any acceptance tally. `DECISION.md` lists it separately from PASS.
      * Its record carries who, the date and time (ET), a verbatim quote and a link.
@@ -756,8 +767,8 @@ their project is scored.
 5. **Reveal and scoring at a pin.** The §1.1 reviewer, a non-builder, scores at a stated pinned SHA and records the §5 rule 9
    pins.
    * Assurance hands over the sealed files only at the start of scoring.
-   * Before any check runs, the reviewer verifies in person that each file's sha256 matches §7.3 (`sha256sum -c` against
-     `MANIFEST` and against `SEALED.sha256`), and records the output in the evidence. Any mismatch triggers step 4.
+   * Before any check runs, the reviewer runs `sha256sum -c` itself, against `MANIFEST` and against `SEALED.sha256`, to
+     confirm each file's sha256 matches §7.3, and records the output in the evidence. Any mismatch triggers step 4.
    * The reveal commit adds the files under `milestone3/<eco|web>/heldout/`, together with a freeze test in the style of
      `experiments/token-efficiency-heldout-v3/spec_freeze_test.go` that asserts the committed hashes.
    * Evidence goes to `milestone3/evidence/E9/` (P-ECO) and `milestone3/evidence/W11/` (P-WEB), in the §1.1 layout with a
