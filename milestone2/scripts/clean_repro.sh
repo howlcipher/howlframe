@@ -2,7 +2,8 @@
 # Clean-environment reproduction for Milestone 2 (gate G).
 # Builds HowlFrame and the ticketdesk server from the COMMITTED tree only (git archive HEAD into a fresh
 # temp dir), then runs the frozen acceptance suite (101 tests) and the developer-experience checker.
-# Needs only: git, go, python3 (standard library). Nothing else from the Howl ecosystem.
+# Needs Bash, Git, tar, ordinary host utilities, Go and Python 3 (stdlib).
+# Nothing else from the Howl ecosystem; module-download access may be needed.
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d)"

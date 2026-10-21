@@ -1,0 +1,18 @@
+2026-10-20 actual sibling HowlBoard compatibility probe, before adapter
+Sibling commit cd2f2fdb7126cca922604483724beb008621a60a
+Compiler: current HowlFrame source (fresh reassessment worktree)
+Commands:
+  howlframe build ../howlboard/backend/server.howl -o /tmp/ed-board.hfbc
+  scripts/project.sh tests/fixtures/review.jsonl /tmp/ed-board-out
+  (cd /tmp/ed-board-out && howlframe run --listen-host 127.0.0.1 --allow-caps network,database,filesystem:read=/tmp/ed-board-out,filesystem:write=/tmp/ed-board-out --max-instructions 10000000 /tmp/ed-board.hfbc)
+  GET /api/missions
+  POST /api/missions/get {"id":"REVIEW-1"}
+Both actual consumer requests returned HTTP500 {"error":"internal server error",...}.
+Server stderr:
+fault request_id=40d659ee095459ef607c1a3d8f4438b5 method=GET path=/api/missions error={"phase":"runtime","code":"CAPABILITY_DENIED","function":"main","instruction":1,"opcode":"STORE_OPEN","message":"capability denied: database"}
+fault request_id=4856f2b3d1f7969bff9e4c5ffe3029a0 method=POST path=/api/missions/get error={"phase":"runtime","code":"CAPABILITY_DENIED","function":"main","instruction":17,"opcode":"STORE_OPEN","message":"capability denied: database"}
+Root cause: sibling source has no explicit child-route grants. Current runtime
+attenuates handlers by default. Parent --allow-caps does not authorize children.
+No weakening of attenuation or sibling repository edit was performed. Integration
+uses the independently approved temporary-copy source adapter documented in the
+requirements addendum. This is not unmodified-source runtime compatibility.

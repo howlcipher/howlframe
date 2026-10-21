@@ -29,7 +29,8 @@ Executes a compiled HowlFrame bytecode artifact.
 * `--max-fetch-bytes` : Positive fetch response body ceiling (default `10485760`, 10 MiB).
 * `--max-exec-output-bytes` : Positive combined stdout/stderr ceiling for exec (default `10485760`, 10 MiB).
 * `--max-request-bytes` : Positive ceiling in bytes for an HTTP route's request body (default `1048576`, 1 MiB). Reading a larger body with `(req_body req)` or `parse_json` over `req.body` raises a catchable `LIMIT_EXCEEDED`, so an application can answer `413`. Zero, negative and non-numeric values exit with status 2.
-* HTTP servers started by `run` always apply these connection timeouts: 10 s to read request headers, 30 s to read the whole request (a stalled upload is dropped and its handler never runs), 120 s idle. A handler may run longer than that; only reading the request is bounded.
+* HTTP servers started by `run` always apply these connection timeouts: 10 s to read request headers, 30 s to read the whole request (serial handlers receive a read error if they consume a truncated/stalled upload; partial bytes are never supplied as complete JSON), 120 s idle. A handler may run longer than that; only reading the request is bounded.
+* `--listen-host` : HTTP listen IP literal, such as `127.0.0.1` or `::1`. The default empty value binds all interfaces. Hostnames and host:port strings are rejected with exit 2. This runner-owned restriction also applies to `port_available`.
 * `--access-log` : Write one line per HTTP request to stderr: `access method=GET path=/v1/x status=200 duration_ms=3 request_id=<id>`. The path is the request path as sent (percent-encoded, no query string). Off by default. A handler fault always writes a `fault request_id=<id> method=<M> path=<P> error=<text>` line, with or without this flag. See `docs/guides/http_api.md`.
 * `--deadline` : Optional positive duration such as `5s` or `100ms`; absent means no wall-clock deadline. Explicit `0s`, negative durations, and invalid durations are rejected. Cancels bytecode fetch, exec, sleep, and model requests and checks between instructions.
 
@@ -92,15 +93,26 @@ These flags are not part of the primary v0.1 onboarding path but remain fully su
 
 ## JavaScript `web_app` generation
 
-`howlframe build` deliberately produces only standalone HFBC artifacts. A
-`web_app` therefore cannot be built with that subcommand: bytecode rejects
-the JavaScript-only root before writing an artifact. The supported v0.1
-generation route is the compatibility source interface:
+`howlframe build` defaults to standalone HFBC. Select JavaScript explicitly:
 
 ```bash
-howlframe -o build frontend.howl
+howlframe build frontend.howl --target js -o build/app.js
 ```
 
-For a `web_app` root, this writes `build/app.js` and, when present,
-`build/app.test.js`. This remains a compatibility backend workflow, not an
-HFBC build or a browser runtime provided by `howlframe run`.
+The compatibility interface `howlframe -o build frontend.howl` also writes
+`build/app.js` and any generated native tests. JavaScript output is not HFBC and
+is not executed by `howlframe run`.
+
+The JavaScript target accepts `(fetch url method body headers)` where `headers`
+is a dictionary, in addition to the existing two/three-argument forms. Destination
+grants and redirect checks still apply. The optional headers operand is rejected
+explicitly on unsupported bytecode, interpreter and generated-Go targets; it is
+never silently dropped. `(url_encode text)` is a JavaScript-target expression
+using component encoding; it is useful for query values and does not make browser
+path normalization disappear. Unsupported targets fail closed.
+
+`(granted "filesystem:write=/path")` and the corresponding `read=` form query
+the same canonical filesystem containment check used by actual I/O, without
+creating a probe file. Coarse capability-family queries retain their previous
+behavior. This grants no new authority and allows multi-output CLIs to detect
+all permission denials before writing either destination.

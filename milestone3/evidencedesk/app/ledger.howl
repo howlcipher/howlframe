@@ -1,0 +1,85 @@
+(module
+  (export
+    (defun kind
+      ((v any))
+      string
+      (let
+        (s (encode_json v))
+        (do
+          (if (starts_with s "\"") (return "s"))
+          (if (starts_with s "{") (return "o"))
+          (return "other")))))
+  (export
+    (defun failure
+      ((code string) (msg string) (line int))
+      any
+      (return (dict ("error" (dict ("code" code) ("message" msg) ("line" line)))))))
+  (export
+    (defun parse
+      ((raw string) (maximum int))
+      any
+      (let
+        (events (list) seen (dict) n 0)
+        (do
+          (if
+            (> (list_len raw) 262144)
+            (return (call failure "payload_too_large" "Ledger exceeds 262144 bytes" 0)))
+          (if
+            (not (utf8_valid raw))
+            (return (call failure "invalid_ledger" "Ledger must be UTF-8" 0)))
+          (for line
+            (str_split raw "\n")
+            (do
+              (set n (+ n 1))
+              (if
+                (!= (str_trim line) "")
+                (do
+                  (if
+                    (>= (list_len events) maximum)
+                    (return
+                      (call failure "payload_too_large" "Nonblank entry limit exceeded" n)))
+                  (try_let
+                    (e (parse_json Any line))
+                    (catch err (return (call failure "invalid_ledger" "Malformed JSON" n)))
+                    (do
+                      (if
+                        (!= (call kind e) "o")
+                        (return (call failure "invalid_ledger" "Expected an object" n)))
+                      (if
+                        (!= (map_get e "schema") "ai.evidence_entry/v1")
+                        (return (call failure "invalid_ledger" "Wrong schema" n)))
+                      (for field
+                        (list "entry_id" "task_id" "agent_id" "action")
+                        (let
+                          (v (map_get e field))
+                          (do
+                            (if
+                              (!= (call kind v) "s")
+                              (return
+                                (call failure "invalid_ledger"
+                                  (str field " must be a string")
+                                  n)))
+                            (if
+                              (= v "")
+                              (return
+                                (call failure "invalid_ledger"
+                                  (str field " must not be empty")
+                                  n)))
+                            (if
+                              (and (!= field "action") (> (str_len v) 120))
+                              (return
+                                (call failure "invalid_ledger"
+                                  (str field " exceeds 120 characters")
+                                  n))))))
+                      (let
+                        (id (map_get e "entry_id"))
+                        (do
+                          (if
+                            (map_has seen id)
+                            (return (call failure "invalid_ledger" "Duplicate entry_id" n)))
+                          (map_set seen id true)))
+                      (append events e)))))))
+          (if
+            (= (list_len events) 0)
+            (return (call failure "invalid_ledger" "Ledger has no records" 0)))
+          (return (dict ("events" events))))))))

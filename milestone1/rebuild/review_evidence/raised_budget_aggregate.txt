@@ -1,0 +1,4 @@
+Memory accounting budget 1TiB; host OS/tool execution, not reserved host memory.
+exit=1
+stdout=
+stderr={"phase":"runtime","code":"RUNTIME_ERROR","function":"main","instruction":0,"message":"integer overflow"}

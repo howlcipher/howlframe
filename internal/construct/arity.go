@@ -34,7 +34,7 @@ var arities = map[string]Arity{
 	"count_by": {3, 3}, "db_connect": {3, 3}, "dec": {1, 1}, "defun": {3, Variadic},
 	"dict": {0, Variadic}, "do": {0, Variadic}, "encode_json": {1, 1}, "ends_with": {2, 2},
 	"env": {1, 1}, "ephemeral_circuit": {2, Variadic}, "exec": {1, Variadic}, "exit": {1, 1},
-	"fetch": {2, 3}, "filter": {3, 3}, "for": {3, 3}, "html_escape": {1, 1},
+	"fetch": {2, 4}, "filter": {3, 3}, "for": {3, 3}, "html_escape": {1, 1},
 	"http_body": {1, 1}, "http_request": {2, 3}, "http_res": {1, 1}, "http_server": {1, Variadic},
 	"http_status": {1, 1}, "if": {2, Variadic}, "inc": {1, 1}, "index_of": {2, 2}, "is_nil": {1, 1},
 	"lazy_synthesize": {3, 3}, "let": {2, 2}, "lines": {1, 1}, "list": {0, Variadic},

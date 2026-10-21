@@ -24,6 +24,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 	"github.com/howlcipher/howlframe/internal/vm"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,6 +69,7 @@ func main() {
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := flag.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
 	maskPlan := flag.Bool("mask-plan", false, "print the deterministic constrained-decoding mask plan and exit")
@@ -162,6 +164,11 @@ func main() {
 			os.Exit(1)
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
@@ -929,6 +936,7 @@ func runArtifact() {
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := runFlags.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
 	runFlags.Usage = func() {
@@ -1002,6 +1010,11 @@ func runArtifact() {
 			os.Exit(2) // usage error: an invalid resource flag value
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 

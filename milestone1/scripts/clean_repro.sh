@@ -2,7 +2,7 @@
 # Clean-environment reproduction for a Milestone 1 app (D24-D).
 # Usage: milestone1/scripts/clean_repro.sh <NN-slug> [acceptance args...]
 # Builds HowlFrame and the app from the COMMITTED tree only (git archive HEAD into a
-# fresh temp dir), then runs the frozen acceptance suite. Needs: git, go, python3.
+# fresh temp dir), then runs the frozen acceptance suite. Needs Bash, Git, tar, ordinary host utilities, Go and Python 3.
 set -euo pipefail
 app_dir="${1:?usage: clean_repro.sh <NN-slug>}"; shift
 tool="${app_dir#*-}"

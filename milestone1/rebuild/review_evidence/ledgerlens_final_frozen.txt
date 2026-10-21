@@ -1,0 +1,57 @@
+PASS L-R1-version [R1] version prints fixed string, needs no grants
+PASS L-R1-help [R1] help/--help/-h print usage to stdout, exit 0
+PASS L-R1-usage-errors [R1,R18] usage errors exit 2, nothing on stdout, no output file
+PASS L-R1-option-order [R1] options may precede or follow INPUT
+PASS L-R2-basic-golden [R2,R6,R7,R8,R9,R11,R17] golden summary text for basic fixture, exit 1 (budget over)
+PASS L-R2-header-variants [R2] header case/order/extra columns/BOM/CRLF/no trailing newline/blank lines
+PASS L-R2-quoting-and-trim [R2,R3,R12] quoted fields, doubled quotes, trimming, extra columns, signs, 12 digits
+PASS L-R2-utf8 [R2] UTF-8 descriptions pass through byte-exact
+PASS L-R2-structure-errors [R2,R4] malformed headers/rows abort with exit 65 and physical line numbers
+PASS L-R3-invalid-values [R3,R4] each invalid date/amount aborts with exit 65 naming the line
+PASS L-R3-valid-values [R3,R12] boundary-valid dates/amounts accepted and canonicalized
+PASS L-R3-exact-cents [R3,R7] sums are exact (no float drift), large values exact
+PASS L-R4-strict-no-side-effects [R4,R14] strict failure: empty stdout, no --out file, diagnostic names line
+PASS L-R4-lenient [R4] --lenient skips invalid rows, counts them, header errors stay fatal
+PASS L-R5-check-rules-ok [R5] check-rules OK line
+PASS L-R5-check-rules-errors [R5] rules errors name the physical line, exit 65
+PASS L-R6-priority-and-regex [R6,R12] first matching rule wins, unanchored, case-sensitive, (?i)
+PASS L-R6-no-rules [R6,R7,R8] summary without --rules: everything Uncategorized, no budgets section
+PASS L-R8-category-order [R8] category rows: month, expenses desc, name asc
+PASS L-R9-budget-semantics [R9] equal is OK, refunds do not reduce spend, Uncategorized budget, zero-spend rows
+PASS L-R10-month-filter [R10] --month filters; no match gives empty report; bad month is usage error
+PASS L-R11-json-golden [R11] JSON document shape and values for basic fixture
+PASS L-R7-negative-net-format [R7] negative net formatting, income-only month, no '-0.00'
+PASS L-R12-categorize-golden [R12,R6] categorize golden output
+PASS L-R12-quoting-rules [R12] category/description quoting only when needed
+PASS L-R13-stdin [R13,R16] INPUT '-' reads stdin; no grants needed without --rules
+PASS L-R14-out-file [R14,R9] --out writes the stdout bytes, keeps exit code, stdout empty
+PASS L-R15-max-rows [R15] --max-rows limit exit 70, empty stdout, no file
+PASS L-R15-runtime-limits [R15] tiny instruction/memory ceilings stop the run promptly with no partial report
+PASS L-R16-read-denied [R16,R18] no grants: reading input/rules file is a clean denial (77)
+PASS L-R16-scope [R16] read grant is scoped to its root; paths outside are denied; missing inside is 66
+PASS L-R16-write-denied [R16,R14] read-only grant: --out is denied (77), nothing created; write-only grant cannot read
+PASS L-R16-minimal-grants [R16] works with ONLY the narrow filesystem grants (no network/process/env/db)
+PASS L-R17-scale-oracle [R17,R7,R8,R9,R6] 5,000 generated rows match an independent Python oracle; output deterministic
+PASS L-R18-no-stderr-on-success [R18] successful runs write nothing to stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+PASS R16
+PASS R17
+PASS R18
+
+35 tests, 35 passed, 0 failed

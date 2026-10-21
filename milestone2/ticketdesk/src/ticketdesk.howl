@@ -1,547 +1,457 @@
-; ticketdesk 1.0.0 - issue-tracker HTTP API (Milestone 2 demonstration backend).
-; Spec: milestone2/ticketdesk/requirements/REQUIREMENTS.md (frozen 2026-10-13).
-; Runs on the standalone VM with exactly:
-;   network,database,environment,filesystem:read=<DIR>,filesystem:write=<DIR>
-; State lives in one file-backed native store at TICKETDESK_DATA. Handlers run one at a
-; time ((serialize_requests)) so every read-modify-write is atomic.
-(http_server (call preflight)
+; Fresh requirements-first Ticketdesk candidate, 2026-10-20.
+; Each bucket contains its records and order together: one atomic store write
+; publishes a create, patch or delete. There is no separately persisted live index.
+(http_server (call initialize)
   (serialize_requests)
   (grants "database" "inherit:filesystem")
 
-  ; ---------------------------------------------------------------- startup
-  (defun die ((code int) (msg string)) int
-    (do
-      (stderr (str "ticketdesk: " msg "\n"))
-      (exit code)
-      (return 0)))
+  (defun abort_start ((status int) (message string)) int
+    (do (stderr (str "ticketdesk: " message "\n")) (exit status) (return 0)))
 
-  (defun is_denied ((e string)) bool
-    (return (regex_match "CAPABILITY_DENIED" e)))
-
-  (defun denied_name ((e string)) string
-    (do
-      (if (str_contains e "environment") (return "environment"))
-      (if (str_contains e "database") (return "database"))
-      (if (str_contains e "network") (return "network"))
-      (return "filesystem")))
-
-  (defun envv ((name string)) string
-    (do
-      (try_let (v (env name))
-        (catch e (call die 77 "capability denied: environment"))
-        (return v))
-      (return "")))
-
-  ; True when s has more than max code points. The byte length bounds the code
-  ; point count from above and costs nothing, so only a string that could exceed
-  ; the limit is counted exactly (str_len splits the string).
-  (defun cp_over ((s string) (lim int)) bool
-    (do
-      (if (<= (list_len s) lim) (return false))
-      (return (> (str_len s) lim))))
-
-  (defun nilv () any
-    (return (map_get (dict) "none")))
-
-  (defun open_state ((uri string)) any
-    (do (store_open kv uri) (return kv)))
-
-  (defun prove_write ((st any)) int
-    (let (meta (store_get st "meta"))
+  (defun kind ((value any)) string
+    (let (text (encode_json value))
       (do
-        (if (and (not (is_nil meta)) (or (!= (call jc (map_get meta "next_ticket")) "i") (!= (call jc (map_get meta "next_token")) "i")))
-          (call die 65 "data file is not valid ticketdesk state"))
-        (if (is_nil meta)
-          (store_put st "meta" (dict ("next_ticket" 1) ("next_token" 1)))
-          (store_put st "meta" meta))
-        (return 1))))
+        (if (regex_match "^\"" text) (return "string"))
+        (if (regex_match "^\\{" text) (return "object"))
+        (if (regex_match "^\\[" text) (return "array"))
+        (if (regex_match "^-?[0-9]+$" text) (return "integer"))
+        (return "other"))))
 
-  ; Validates the environment, the data path and every grant, in the order of the spec
-  ; (environment 2, data 66/65, grants 77), prepares the in-memory configuration and
-  ; returns the TCP port. Nothing is listening before this returns.
-  (defun preflight () int
-    (let (tok (call envv "TICKETDESK_ADMIN_TOKEN") data (call envv "TICKETDESK_DATA") port_raw (call envv "TICKETDESK_PORT")
-          dbg (call envv "TICKETDESK_ALLOW_DEBUG_FAULT") port 8080 dir "")
+  (defun initialize () int
+    (let (secret "" path "" raw_port "" debug "" port 8080 parent "" state_text "")
       (do
-        (if (not (regex_match "^[\\x21-\\x7e]{16,256}$" tok)) (call die 2 "TICKETDESK_ADMIN_TOKEN must be 16 to 256 printable ASCII characters without spaces"))
-        (if (= data "") (call die 2 "TICKETDESK_DATA is required"))
-        (if (not (starts_with data "/")) (call die 2 "TICKETDESK_DATA must be an absolute path"))
-        (if (!= port_raw "")
+        (try_let (settings (list (env "TICKETDESK_ADMIN_TOKEN") (env "TICKETDESK_DATA")
+                                (env "TICKETDESK_PORT") (env "TICKETDESK_ALLOW_DEBUG_FAULT")))
+          (catch e (call abort_start 77 "capability denied: environment"))
+          (do (set secret (list_get settings 0)) (set path (list_get settings 1))
+              (set raw_port (list_get settings 2)) (set debug (list_get settings 3))))
+        (if (not (regex_match "^[\\x21-\\x7e]{16,256}$" secret))
+          (call abort_start 2 "TICKETDESK_ADMIN_TOKEN must contain 16..256 non-space ASCII characters"))
+        (if (or (= path "") (not (starts_with path "/")))
+          (call abort_start 2 "TICKETDESK_DATA must be an absolute path"))
+        (if (!= raw_port "")
           (do
-            (if (not (regex_match "^[0-9]{1,5}$" port_raw)) (call die 2 "TICKETDESK_PORT must be an integer 1..65535"))
-            (set port (to_int port_raw))
-            (if (or (< port 1) (> port 65535)) (call die 2 "TICKETDESK_PORT must be an integer 1..65535"))))
-        (let (parts (str_split data "/"))
-          (set dir (str_join (list_slice parts 0 -1) "/")))
-        (if (= dir "") (set dir "/"))
-        ; the directory must exist (66); the data path must not be unreadable or a directory (65)
-        (try_let (d (read_file dir))
+            (if (not (regex_match "^[0-9]{1,5}$" raw_port)) (call abort_start 2 "invalid port"))
+            (set port (to_int raw_port))
+            (if (or (< port 1) (> port 65535)) (call abort_start 2 "invalid port"))))
+        (set parent (str_join (list_slice (str_split path "/") 0 -1) "/"))
+        (if (= parent "") (set parent "/"))
+        (try_let (directory (read_file parent))
           (catch e
             (do
-              (if (call is_denied e) (call die 77 "capability denied: filesystem"))
-              (if (str_contains e "no such file") (call die 66 "data directory does not exist"))))
-          (set d d))
-        (try_let (f (read_file data))
+              (if (str_contains e "CAPABILITY_DENIED") (call abort_start 77 "capability denied: filesystem"))
+              (if (str_contains e "no such file") (call abort_start 66 "data directory does not exist"))))
+          (set directory directory))
+        (try_let (bytes (read_file path))
           (catch e
             (do
-              (if (call is_denied e) (call die 77 "capability denied: filesystem"))
-              (if (not (str_contains e "no such file")) (call die 65 "data path is not readable as ticketdesk state"))))
-          (set f f))
-        (let (uri (str "file://" data) ok 0)
-          (do
-            (try_let (st (call open_state uri))
-              (catch e
-                (if (call is_denied e)
-                  (call die 77 (str "capability denied: " (call denied_name e)))
-                  (call die 65 "data file is not valid ticketdesk state")))
-              ; prove the state can be written (also creates an absent file)
-              (try_let (w (call prove_write st))
+              (if (str_contains e "CAPABILITY_DENIED") (call abort_start 77 "capability denied: filesystem"))
+              (if (not (str_contains e "no such file")) (call abort_start 65 "data file cannot be read"))))
+          (set state_text (bytes_to_string bytes)))
+        ; JSON syntax is inspectable with the read grant even when database is
+        ; absent; preserve the specified data-error-before-grant precedence.
+        (if (!= state_text "")
+          (try_let (document (parse_json Any state_text))
+            (catch e (call abort_start 65 "invalid state JSON"))
+            (do
+              (if (!= (call kind document) "object") (call abort_start 65 "invalid state object"))
+              (if (not (call validate_document document)) (call abort_start 65 "invalid state records")))))
+        ; Validate before any mutation or grant/port rejection. A new format is
+        ; explicit: old state is never silently reinterpreted as empty state.
+        (try_let (opened (call open_disk path))
+          (catch e
+            (if (str_contains e "CAPABILITY_DENIED")
+              (call abort_start 77 "capability denied: database or filesystem")
+              (call abort_start 65 "invalid state file")))
+          (let (header (store_get opened "header"))
+            (do
+              (if (is_nil header)
+                (if (> (list_len (store_keys opened)) 0) (call abort_start 65 "state format requires migration"))
+                (do
+                  (if (!= (call kind header) "object") (call abort_start 65 "invalid state header"))
+                  (if (!= (map_get header "version") 2) (call abort_start 65 "unsupported state version"))
+                  (if (!= (call kind (map_get header "next")) "integer") (call abort_start 65 "invalid ticket counter"))
+                  (if (< (map_get header "next") 1) (call abort_start 65 "invalid ticket counter"))))
+              (if (not (granted "network")) (call abort_start 77 "capability denied: network"))
+              (if (not (port_available port)) (call abort_start 1 "port is already in use"))
+              (try_let (written (call prepare_disk opened header))
                 (catch e
-                  (if (call is_denied e)
-                    (call die 77 (str "capability denied: " (call denied_name e)))
-                    (call die 73 "cannot write the data file")))
-                (set ok w)))))
-        (if (not (granted "network")) (call die 77 "capability denied: network"))
-        (if (not (port_available port)) (call die 1 (str "port " port " is already in use")))
-        (store_open cfg "memory://ticketdesk-config")
-        (store_put cfg "c" (dict ("data" data) ("boot" (sha256_hex tok)) ("debug" (if (= dbg "1") 1 0))))
+                  (if (str_contains e "CAPABILITY_DENIED")
+                    (call abort_start 77 "capability denied: filesystem")
+                    (call abort_start 73 "cannot write state")))
+                (set written written)))))
+        (store_open settings "memory://ticketdesk-v2")
+        (store_put settings "config" (dict ("path" path) ("bootstrap" (sha256_hex secret)) ("debug" debug)))
         (return port))))
 
-  ; ---------------------------------------------------------------- shared helpers
-  (defun db () any
-    (let (c (call cfgrec))
+  (defun open_disk ((path string)) any
+    (do (store_open disk (str "file://" path)) (return disk)))
+
+  ; Reject structurally corrupt state before writing. Entity checks also prove
+  ; that counters cannot reuse a live id and list/GET membership cannot disagree.
+  (defun valid_ticket ((record any) (id string)) bool
+    (do
+      (if (!= (call kind record) "object") (return false))
+      (if (or (!= (map_get record "id") id) (!= (list_len (map_keys record)) 8)) (return false))
+      (for name (list "title" "body" "owner")
+        (if (!= (call kind (map_get record name)) "string") (return false)))
+      (if (or (= (list_len (map_get record "title")) 0) (= (list_len (map_get record "owner")) 0)) (return false))
+      (if (> (str_len (map_get record "title")) 120) (return false))
+      (if (> (str_len (map_get record "body")) 4000) (return false))
+      (if (not (list_contains (list "low" "normal" "high") (map_get record "priority"))) (return false))
+      (if (not (list_contains (list "open" "in_progress" "done") (map_get record "status"))) (return false))
+      (for name (list "created_at" "updated_at")
+        (if (!= (call kind (map_get record name)) "integer") (return false)))
+      (return (and (> (map_get record "created_at") 0) (>= (map_get record "updated_at") (map_get record "created_at"))))))
+
+  (defun valid_bucket ((group any) (key string) (next int)) bool
+    (do
+      (if (not (regex_match "^bucket:[0-9]{12,15}$" key)) (return false))
+      (if (or (!= (call kind (map_get group "order")) "array")
+              (!= (call kind (map_get group "records")) "object")) (return false))
+      (let (order (map_get group "order") records (map_get group "records") previous 0 expected (to_int (str_slice key 7)))
+        (do
+          (if (or (!= (list_len order) (list_len (map_keys records))) (!= key (call bucket_name (* expected 64)))) (return false))
+          (for id order
+            (do
+              (if (!= (call kind id) "string") (return false))
+              (let (number (call sequence id))
+                (do
+                  (if (or (<= number previous) (!= expected (to_int (/ number 64))) (>= number next)) (return false))
+                  (if (not (call valid_ticket (map_get records id) id)) (return false))
+                  (set previous number)))))
+          (return true)))))
+
+  (defun valid_tokens ((group any)) bool
+    (do
+      (if (or (!= (call kind (map_get group "order")) "array")
+              (!= (call kind (map_get group "records")) "object")) (return false))
+      (let (order (map_get group "order") records (map_get group "records") seen (dict) digests (dict))
+        (do
+          (if (!= (list_len order) (list_len (map_keys records))) (return false))
+          (for id order
+            (do
+              (if (!= (call kind id) "string") (return false))
+              (if (or (not (regex_match "^tok_[0-9a-f]{16}$" id)) (map_has seen id)) (return false))
+              (let (record (map_get records id))
+                (do
+                  (if (!= (call kind record) "object") (return false))
+                  (if (!= (map_get record "id") id) (return false))
+                  (if (!= (call kind (map_get record "name")) "string") (return false))
+                  (if (or (= (list_len (map_get record "name")) 0) (> (str_len (map_get record "name")) 64)) (return false))
+                  (if (not (list_contains (list "admin" "member" "viewer") (map_get record "role"))) (return false))
+                  (if (not (regex_match "^(true|false)$" (encode_json (map_get record "revoked")))) (return false))
+                  (if (!= (call kind (map_get record "created_at")) "integer") (return false))
+                  (if (< (map_get record "created_at") 1) (return false))
+                  (let (digest (map_get record "digest"))
+                    (do
+                      (if (!= (call kind digest) "string") (return false))
+                      (if (or (not (regex_match "^[0-9a-f]{64}$" digest)) (map_has digests digest)) (return false))
+                      (map_set digests digest 1)))
+                  (map_set seen id 1)))))
+          (return true)))))
+
+  (defun validate_document ((document dict)) bool
+    (let (header (map_get document "header"))
       (do
-        (store_open kv (str "file://" (map_get c "data")))
-        (return kv))))
-
-  (defun cfgrec () any
-    (do
-      (store_open cfg "memory://ticketdesk-config")
-      (return (store_get cfg "c"))))
-
-  ; o object, a array, s string, i integer, n other number, b bool, z null
-  (defun jc ((v any)) string
-    (let (e (encode_json v))
-      (do
-        ; anchored regexes: constant instruction cost whatever the value's size
-        (if (regex_match "^\\{" e) (return "o"))
-        (if (regex_match "^\\[" e) (return "a"))
-        (if (regex_match "^\"" e) (return "s"))
-        (if (regex_match "^(true|false)$" e) (return "b"))
-        (if (regex_match "^null$" e) (return "z"))
-        (if (regex_match "^-?[0-9]+$" e) (return "i"))
-        (return "n"))))
-
-  (defun send_err ((req any) (status int) (code string) (msg string)) int
-    (do
-      (res_json status (dict ("error" (dict ("code" code) ("message" msg) ("request_id" (req_id req))))))
-      (return 0)))
-
-  (defun send_fields ((req any) (fields list)) int
-    (do
-      (res_json 400 (dict ("error" (dict ("code" "validation_failed") ("message" "Request validation failed.") ("request_id" (req_id req)) ("fields" fields)))))
-      (return 0)))
-
-  (defun field ((name string) (code string) (msg string)) dict
-    (return (dict ("field" name) ("code" code) ("message" msg))))
-
-  (defun unauthorized ((req any)) int
-    (do
-      (res_header "WWW-Authenticate" "Bearer realm=\"ticketdesk\"")
-      (return (call send_err req 401 "unauthorized" "Invalid or missing credentials."))))
-
-  (defun allow_for ((route string)) string
-    (do
-      (if (= route "health") (return "GET"))
-      (if (= route "me") (return "GET"))
-      (if (= route "tickets") (return "GET, POST"))
-      (if (= route "ticket") (return "DELETE, GET, PATCH"))
-      (if (= route "tokens") (return "GET, POST"))
-      (return "DELETE")))
-
-  ; ---------------------------------------------------------------- authentication
-  ; {"ok":1,"id","name","role"} or {"ok":0}
-  (defun authenticate ((req any)) dict
-    (let (h (req_header req "Authorization") c (call cfgrec))
-      (do
-        (if (< (str_len h) 8) (return (dict ("ok" 0))))
-        (if (!= (to_lower (str_slice h 0 7)) "bearer ") (return (dict ("ok" 0))))
-        (let (secret (str_slice h 7))
+        (if (is_nil header) (return (= (list_len (map_keys document)) 0)))
+        (if (!= (call kind header) "object") (return false))
+        (if (or (!= (map_get header "version") 2) (!= (call kind (map_get header "next")) "integer")) (return false))
+        (if (< (map_get header "next") 1) (return false))
+        (for key (map_keys document)
           (do
-            (if (not (regex_match "^[\\x21-\\x7e]+$" secret)) (return (dict ("ok" 0))))
-            (let (hh (sha256_hex secret))
-              (do
-                (if (secure_equal hh (map_get c "boot"))
-                  (return (dict ("ok" 1) ("id" "bootstrap") ("name" "bootstrap") ("role" "admin"))))
-                (let (s (call db) link (store_get s (str "h:" hh)))
+            (if (starts_with key "bucket:")
+              (if (not (call valid_bucket (map_get document key) key (map_get header "next"))) (return false)))
+            (if (= key "tokens")
+              (if (not (call valid_tokens (map_get document key))) (return false)))
+            (if (and (!= key "header") (!= key "tokens") (not (starts_with key "bucket:"))) (return false))))
+        (return true))))
+
+  (defun prepare_disk ((disk any) (header any)) int
+    (do
+      (store_put disk "header" (if (is_nil header) (dict ("version" 2) ("next" 1)) header))
+      (return 0)))
+
+  (defun configuration () dict
+    (do (store_open settings "memory://ticketdesk-v2") (return (store_get settings "config"))))
+
+  (defun storage () any
+    (return (call open_disk (map_get (call configuration) "path"))))
+
+  (defun fail_response ((req any) (status int) (code string) (message string)) int
+    (do (res_json status (dict ("error" (dict ("code" code) ("message" message) ("request_id" (req_id req)))))) (return 0)))
+
+  (defun invalid_fields ((req any) (fields list)) int
+    (do
+      (res_json 400 (dict ("error" (dict ("code" "validation_failed") ("message" "Request validation failed.")
+        ("request_id" (req_id req)) ("fields" fields)))))
+      (return 0)))
+
+  (defun violation ((name string) (code string)) dict
+    (return (dict ("field" name) ("code" code) ("message" (str name ": " code)))))
+
+  (defun unauthenticated ((req any)) int
+    (do (res_header "WWW-Authenticate" "Bearer realm=\"ticketdesk\"")
+      (return (call fail_response req 401 "unauthorized" "Invalid or missing credentials."))))
+
+  (defun identity ((req any)) dict
+    (let (header (req_header req "Authorization"))
+      (do
+        (if (not (regex_match "^(?i:bearer) [!-~]+$" header)) (return (dict)))
+        (let (digest (sha256_hex (str_slice header 7)) cfg (call configuration))
+          (do
+            (if (secure_equal digest (map_get cfg "bootstrap"))
+              (return (dict ("id" "bootstrap") ("name" "bootstrap") ("role" "admin"))))
+            (let (disk (call storage))
+              (let (group (call token_group disk))
+                (let (records (map_get group "records"))
                   (do
-                    (if (is_nil link) (return (dict ("ok" 0))))
-                    (let (rec (store_get s (str "k:" (map_get link "id"))))
-                      (do
-                        (if (is_nil rec) (return (dict ("ok" 0))))
-                        (if (not (secure_equal (map_get rec "hash") hh)) (return (dict ("ok" 0))))
-                        (if (= (map_get rec "revoked") 1) (return (dict ("ok" 0))))
-                        (return (dict ("ok" 1) ("id" (map_get rec "id")) ("name" (map_get rec "name")) ("role" (map_get rec "role")))))))))))))))
+                    (for id (map_get group "order")
+                      (let (record (map_get records id))
+                        (if (and (not (map_get record "revoked")) (secure_equal digest (map_get record "digest")))
+                          (return (dict ("id" id) ("name" (map_get record "name")) ("role" (map_get record "role")))))))
+                    (return (dict)))))))))))
 
-  ; ---------------------------------------------------------------- request bodies
-  (defun media_ok ((req any)) bool
-    (let (ct (req_header req "Content-Type"))
+  ; Validation is shared by create/update/token requests. Values remain literal;
+  ; every bad field is collected and each field has one first violation.
+  (defun validate ((req any) (mode string)) dict
+    (let (parts (str_split (req_header req "Content-Type") ";"))
+      (let (media (to_lower (ltrim (rtrim (list_get parts 0)))))
       (do
-        (if (= ct "") (return false))
-        (return (= (to_lower (str_trim (list_get (str_split ct ";") 0))) "application/json")))))
-
-  ; {"kind":"ok","doc":obj} | {"kind":"err","status","code","msg"} | {"kind":"fields","fields":list} | {"kind":"fault","text"}
-  (defun read_object ((req any)) dict
-    (let (raw "")
-      (do
-        (if (not (call media_ok req))
-          (return (dict ("kind" "err") ("status" 415) ("code" "unsupported_media_type") ("msg" "Content-Type must be application/json."))))
-        (try_let (b (req_body req))
+        (if (!= media "application/json")
+          (do (call fail_response req 415 "unsupported_media_type" "Expected application/json.") (return (dict))))
+        (try_let (raw (req_body req))
           (catch e
             (do
-              (if (regex_match "LIMIT_EXCEEDED" e)
-                (return (dict ("kind" "err") ("status" 413) ("code" "payload_too_large") ("msg" "Request body is too large."))))
-              (return (dict ("kind" "fault") ("text" e)))))
-          (set raw b))
-        (if (not (utf8_valid raw))
-          (return (dict ("kind" "err") ("status" 400) ("code" "invalid_json") ("msg" "Request body is not valid JSON."))))
-        (let (src raw)
-          (try_let (doc (parse_json Any src))
-            (catch e (return (dict ("kind" "err") ("status" 400) ("code" "invalid_json") ("msg" "Request body is not valid JSON."))))
-            (do
-              (if (!= (call jc doc) "o")
-                (return (dict ("kind" "fields") ("fields" (list (call field "$" "invalid_type" "Request body must be a JSON object."))))))
-              (return (dict ("kind" "ok") ("doc" doc))))))
-        (return (dict ("kind" "fault") ("text" "unreachable"))))))
-
-  ; ---------------------------------------------------------------- field validation (R7)
-  ; {"fields": list, "vals": dict}
-  (defun check_ticket ((doc any) (create int)) dict
-    (let (fields (list) vals (dict) keys (sort (map_keys doc)) n (list_len (map_keys doc)))
-      (do
-        (for k keys
-          (if (not (list_contains (list "title" "body" "priority" "status") k))
-            (append fields (call field k "unknown_field" (str k " is not a known field")))
-            (if (and (= k "status") (= create 1))
-              (append fields (call field k "unknown_field" "status cannot be set when creating a ticket"))
-              (let (v (map_get doc k) t (call jc (map_get doc k)))
-                (if (= k "title")
-                  (if (!= t "s")
-                    (append fields (call field k "invalid_type" "title must be a string"))
-                    (if (= (list_len v) 0)
-                      (append fields (call field k "too_short" "title must be at least 1 character"))
-                      (if (call cp_over v 120)
-                        (append fields (call field k "too_long" "title must be at most 120 characters"))
-                        (map_set vals k v))))
-                  (if (= k "body")
-                    (if (!= t "s")
-                      (append fields (call field k "invalid_type" "body must be a string"))
-                      (if (call cp_over v 4000)
-                        (append fields (call field k "too_long" "body must be at most 4000 characters"))
-                        (map_set vals k v)))
-                    (if (!= t "s")
-                      (append fields (call field k "invalid_type" (str k " must be a string")))
-                      (if (not (list_contains (if (= k "priority") (list "low" "normal" "high") (list "open" "in_progress" "done")) v))
-                        (append fields (call field k "invalid_value" (str k " has an unsupported value")))
-                        (map_set vals k v)))))))))
-        (if (and (= create 1) (not (map_has doc "title")))
-          (append fields (call field "title" "required" "title is required")))
-        (if (and (= create 0) (= n 0))
-          (append fields (call field "$" "required" "at least one field is required")))
-        (return (dict ("fields" fields) ("vals" vals))))))
-
-  (defun check_token ((doc any)) dict
-    (let (fields (list) vals (dict))
-      (do
-        (for k (sort (map_keys doc))
-          (if (not (list_contains (list "name" "role") k))
-            (append fields (call field k "unknown_field" (str k " is not a known field")))
-            (let (v (map_get doc k))
-              (if (!= (call jc v) "s")
-                (append fields (call field k "invalid_type" (str k " must be a string")))
-                (if (= k "name")
-                  (if (= (list_len v) 0)
-                    (append fields (call field k "too_short" "name must be at least 1 character"))
-                    (if (call cp_over v 64)
-                      (append fields (call field k "too_long" "name must be at most 64 characters"))
-                      (map_set vals k v)))
-                  (if (not (list_contains (list "admin" "member" "viewer") v))
-                    (append fields (call field k "invalid_value" "role must be admin, member or viewer"))
-                    (map_set vals k v)))))))
-        (if (not (map_has doc "name")) (append fields (call field "name" "required" "name is required")))
-        (if (not (map_has doc "role")) (append fields (call field "role" "required" "role is required")))
-        (return (dict ("fields" fields) ("vals" vals))))))
-
-  ; ---------------------------------------------------------------- tickets
-  (defun ticket_key ((id string)) string
-    (do
-      (if (not (regex_match "^t[1-9][0-9]{0,8}$" id)) (return ""))
-      (return (str "t:" (pad_left (str_slice id 1) 10 "0")))))
-
-  (defun ticket_out ((r any)) dict
-    (return (dict ("id" (map_get r "id")) ("title" (map_get r "title")) ("body" (map_get r "body")) ("priority" (map_get r "priority"))
-                  ("status" (map_get r "status")) ("owner" (map_get r "owner")) ("created_at" (map_get r "created_at")) ("updated_at" (map_get r "updated_at")))))
-
-  ; Live ticket ids are indexed in buckets of 64 consecutive ids ("b:<n>" -> {"ids": [...]}),
-  ; so a listing page costs O(page + empty buckets), however many tickets were deleted.
-  (defun bucket_no ((seq int)) int
-    (return (to_int (/ seq 64))))
-
-  (defun bucket_key ((b int)) string
-    (return (str "b:" (pad_left (to_string b) 8 "0"))))
-
-  (defun bucket_add ((s any) (seq int)) int
-    (let (key (call bucket_key (call bucket_no seq)) rec (store_get s (call bucket_key (call bucket_no seq))))
-      (let (ids (list))
-        (do
-          (if (not (is_nil rec)) (set ids (map_get rec "ids")))
-          (append ids seq)
-          (store_put s key (dict ("ids" ids)))
-          (return 0)))))
-
-  (defun bucket_remove ((s any) (seq int)) int
-    (let (key (call bucket_key (call bucket_no seq)) rec (store_get s (call bucket_key (call bucket_no seq))))
-      (do
-        (if (is_nil rec) (return 0))
-        (let (ids (map_get rec "ids") kept (list))
+              (if (str_contains e "LIMIT_EXCEEDED")
+                (call fail_response req 413 "payload_too_large" "Request body exceeds the configured limit.")
+                (call fail_response req 400 "invalid_json" "Request body is not valid JSON."))
+              (return (dict))))
           (do
-            (for x ids (if (!= x seq) (append kept x)))
-            (store_put s key (dict ("ids" kept)))
-            (return 0))))))
-
-  (defun body_or_fail ((req any)) dict
-    (let (r (call read_object req))
-      (do
-        (if (= (map_get r "kind") "err")
-          (do (call send_err req (map_get r "status") (map_get r "code") (map_get r "msg")) (return (dict ("sent" 1)))))
-        (if (= (map_get r "kind") "fields")
-          (do (call send_fields req (map_get r "fields")) (return (dict ("sent" 1)))))
-        (if (= (map_get r "kind") "fault")
-          (return (dict ("sent" 1) ("fault" (map_get r "text")))))
-        (return (dict ("sent" 0) ("doc" (map_get r "doc")))))))
-
-  (defun tickets_create ((req any) (who dict)) int
-    (let (b (call body_or_fail req))
-      (do
-        (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
-        (if (= (map_get b "sent") 1) (return 0))
-        (let (v (call check_ticket (map_get b "doc") 1))
-          (do
-            (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
-            (let (s (call db) meta (store_get s "meta") vals (map_get v "vals") now (time_now))
-              (let (seq (map_get meta "next_ticket") id (str "t" (map_get meta "next_ticket")))
-                (do
-                  (store_put s "meta" (dict ("next_ticket" (+ seq 1)) ("next_token" (map_get meta "next_token"))))
-                  (let (rec (dict ("id" id) ("title" (map_get vals "title")) ("body" (nz (map_get vals "body") ""))
-                                  ("priority" (nz (map_get vals "priority") "normal")) ("status" "open") ("owner" (map_get who "id"))
-                                  ("created_at" now) ("updated_at" now)))
-                    (do
-                      (store_put s (call ticket_key id) rec)
-                      (call bucket_add s seq)
-                      (res_header "Location" (str "/v1/tickets/" id))
-                      (res_json 201 (call ticket_out rec))
-                      (return 0)))))))))))
-
-  (defun tickets_list ((req any)) int
-    (let (fields (list) limit 20 status "" cursor 0 lraw (req_query req "limit") sraw (req_query req "status") craw (req_query req "cursor"))
-      (do
-        (if (!= lraw "")
-          (if (or (not (regex_match "^[0-9]{1,9}$" lraw)) (< (to_int lraw) 1) (> (to_int lraw) 100))
-            (append fields (call field "limit" "invalid_value" "limit must be an integer 1..100"))
-            (set limit (to_int lraw))))
-        (if (!= sraw "")
-          (if (not (list_contains (list "open" "in_progress" "done") sraw))
-            (append fields (call field "status" "invalid_value" "status must be open, in_progress or done"))
-            (set status sraw)))
-        (if (!= craw "")
-          (if (not (regex_match "^[A-Za-z0-9_-]{1,64}$" craw))
-            (append fields (call field "cursor" "invalid_value" "cursor is not valid"))
-            (if (regex_match "^[0-9]{1,9}$" craw) (set cursor (to_int craw)))))
-        (if (> (list_len fields) 0) (return (call send_fields req fields)))
-        (let (s (call db) items (list) more 0 last 0 b (call bucket_no (+ cursor 1)) topb 0)
-          (do
-            (set topb (call bucket_no (- (map_get (store_get s "meta") "next_ticket") 1)))
-            (while (and (<= b topb) (= more 0))
-              (let (brec (store_get s (call bucket_key b)))
-                (do
-                  (if (not (is_nil brec))
-                    (for id (map_get brec "ids")
-                      (if (and (> id cursor) (= more 0))
-                        (let (rec (store_get s (str "t:" (pad_left (to_string id) 10 "0"))))
-                          (if (and (not (is_nil rec)) (or (= status "") (= (map_get rec "status") status)))
-                            (if (>= (list_len items) limit)
-                              (set more 1)
-                              (do (append items (call ticket_out rec)) (set last id))))))))
-                  (set b (+ b 1)))))
-            (res_json 200 (dict ("items" items) ("next_cursor" (if (= more 1) (to_string last) (call nilv)))))
-            (return 0))))))
-
-  (defun tickets_get ((req any) (id string)) int
-    (let (key (call ticket_key id))
-      (do
-        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
-        (let (s (call db) rec (store_get s key))
-          (do
-            (if (is_nil rec) (return (call send_err req 404 "not_found" "Ticket not found.")))
-            (res_json 200 (call ticket_out rec))
-            (return 0))))))
-
-  (defun tickets_patch ((req any) (who dict) (id string)) int
-    (let (key (call ticket_key id))
-      (do
-        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
-        (let (s (call db) rec (store_get s key))
-          (do
-            (if (is_nil rec) (return (call send_err req 404 "not_found" "Ticket not found.")))
-            (if (and (!= (map_get who "role") "admin") (!= (map_get rec "owner") (map_get who "id")))
-              (return (call send_err req 403 "forbidden" "You may only change your own tickets.")))
-            (let (b (call body_or_fail req))
+            (if (not (utf8_valid raw))
+              (do (call fail_response req 400 "invalid_json" "Request body is not valid JSON.") (return (dict))))
+            (try_let (document (parse_json Any raw))
+              (catch e
+                (do (call fail_response req 400 "invalid_json" "Request body is not valid JSON.") (return (dict))))
               (do
-                (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
-                (if (= (map_get b "sent") 1) (return 0))
-                (let (v (call check_ticket (map_get b "doc") 0))
+                (if (!= (call kind document) "object")
+                  (do (call invalid_fields req (list (call violation "$" "invalid_type"))) (return (dict))))
+                (let (errors (list) allowed (list "title" "body" "priority") mandatory (list))
                   (do
-                    (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
-                    (let (vals (map_get v "vals") now (time_now) out (dict))
-                      (do
-                        (for k (list "id" "title" "body" "priority" "status" "owner" "created_at")
-                          (map_set out k (map_get rec k)))
-                        (for k (map_keys vals) (map_set out k (map_get vals k)))
-                        (map_set out "updated_at" (if (> now (map_get rec "updated_at")) now (map_get rec "updated_at")))
-                        (store_put s key out)
-                        (res_json 200 (call ticket_out out))
-                        (return 0))))))))))))
+                    (if (= mode "create") (set mandatory (list "title")))
+                    (if (= mode "patch") (set allowed (list "title" "body" "priority" "status")))
+                    (if (= mode "token") (do (set allowed (list "name" "role")) (set mandatory (list "name" "role"))))
+                    (for name mandatory
+                      (if (not (map_has document name)) (append errors (call violation name "required"))))
+                    (if (and (= mode "patch") (= (list_len (map_keys document)) 0))
+                      (append errors (call violation "$" "required")))
+                    (for name (map_keys document)
+                      (let (value (map_get document name) code "")
+                        (do
+                          (if (not (list_contains allowed name))
+                            (set code "unknown_field")
+                            (if (!= (call kind value) "string")
+                              (set code "invalid_type")
+                              (if (list_contains (list "title" "body" "name") name)
+                                (let (maximum (if (= name "title") 120 (if (= name "name") 64 4000)))
+                                  (do
+                                    (if (and (!= name "body") (= (list_len value) 0)) (set code "too_short"))
+                                    (if (and (> (list_len value) maximum) (> (str_len value) maximum)) (set code "too_long"))))
+                                (if (not (list_contains
+                                      (if (= name "role") (list "admin" "member" "viewer")
+                                        (if (= name "priority") (list "low" "normal" "high") (list "open" "in_progress" "done"))) value))
+                                  (set code "invalid_value")))))
+                          (if (!= code "") (append errors (call violation name code))))))
+                    (if (> (list_len errors) 0)
+                      (do (call invalid_fields req errors) (return (dict))))
+                    (return (dict ("document" document)))))))))
+        (return (dict))))))
 
-  (defun tickets_delete ((req any) (id string)) int
-    (let (key (call ticket_key id))
+  (defun bucket_name ((number int)) string
+    (return (str "bucket:" (pad_left (to_string (to_int (/ number 64))) 12 "0"))))
+
+  (defun sequence ((id string)) int
+    (do
+      (if (not (regex_match "^t[1-9][0-9]{0,14}$" id)) (return 0))
+      (return (to_int (str_slice id 1)))))
+
+  (defun bucket ((disk any) (number int)) dict
+    (let (value (store_get disk (call bucket_name number)))
+      (return (if (is_nil value) (dict ("order" (list)) ("records" (dict))) value))))
+
+  (defun read_ticket ((disk any) (id string)) any
+    (do
+      (if (= (call sequence id) 0) (return (map_get (dict) "absent")))
+      (return (map_get (map_get (call bucket disk (call sequence id)) "records") id))))
+
+  (defun ticket_request ((req any) (who dict) (id string)) int
+    (let (disk (call storage) method (req_method req) record (call read_ticket disk id))
       (do
-        (if (= key "") (return (call send_err req 404 "not_found" "Ticket not found.")))
-        (let (s (call db))
+        (if (is_nil record) (return (call fail_response req 404 "not_found" "Ticket not found.")))
+        (if (= method "GET") (do (res_json 200 record) (return 0)))
+        (if (and (= method "PATCH") (!= (map_get who "role") "admin") (!= (map_get record "owner") (map_get who "id")))
+          (return (call fail_response req 403 "forbidden" "You may change only your own tickets.")))
+        (let (group (call bucket disk (call sequence id)))
+          (let (records (map_get group "records"))
           (do
-            (if (is_nil (store_get s key)) (return (call send_err req 404 "not_found" "Ticket not found.")))
-            ; unindex first: a crash between the two steps leaves an unindexed ticket
-            ; (still readable), never an index entry without a ticket
-            (call bucket_remove s (to_int (str_slice id 1)))
-            (store_delete s key)
-            (res_json 200 (dict ("id" id) ("deleted" true)))
+            (if (= method "DELETE")
+              (do
+                (let (remaining (list))
+                  (do
+                    (for item (map_get group "order") (if (!= item id) (append remaining item)))
+                    (map_set group "order" remaining)))
+                (map_delete records id)
+                (store_put disk (call bucket_name (call sequence id)) group)
+                (res_json 200 (dict ("id" id) ("deleted" true))) (return 0)))
+            (let (checked (call validate req "patch"))
+              (do
+                (if (not (map_has checked "document")) (return 0))
+                (let (document (map_get checked "document"))
+                  (for field (map_keys document) (map_set record field (map_get document field))))
+                (map_set record "updated_at" (max (list (time_now) (map_get record "updated_at"))))
+                (map_set records id record)
+                (store_put disk (call bucket_name (call sequence id)) group)
+                (res_json 200 record)
+                (return 0)))))))))
+
+  (defun create_ticket ((req any) (who dict)) int
+    (let (checked (call validate req "create"))
+      (do
+        (if (not (map_has checked "document")) (return 0))
+        (let (disk (call storage) document (map_get checked "document"))
+          (let (header (store_get disk "header"))
+            (let (number (map_get header "next") now (time_now))
+              (let (id (str "t" number) group (call bucket disk number))
+                (let (order (map_get group "order") records (map_get group "records"))
+                (let (record (dict ("id" id) ("title" (map_get document "title")) ("body" (nz (map_get document "body") ""))
+                       ("priority" (nz (map_get document "priority") "normal")) ("status" "open")
+                       ("owner" (map_get who "id")) ("created_at" now) ("updated_at" now)))
+                  (do
+                    ; Reserve first. A crash can burn an unused id but cannot
+                    ; publish a record without publishing its list membership.
+                    (map_set header "next" (+ number 1)) (store_put disk "header" header)
+                    (append order id)
+                    (map_set group "order" order)
+                    (map_set records id record)
+                    (store_put disk (call bucket_name number) group)
+                    (res_header "Location" (str "/v1/tickets/" id))
+                    (res_json 201 record) (return 0)))))))))))
+
+  (defun list_tickets ((req any)) int
+    (let (limit_raw (req_query req "limit") filter (req_query req "status") cursor (req_query req "cursor")
+          limit 20 after 0 errors (list))
+      (do
+        (if (!= limit_raw "")
+          (if (not (regex_match "^0*[1-9][0-9]{0,2}$" limit_raw))
+            (append errors (call violation "limit" "invalid_value"))
+            (if (> (to_int limit_raw) 100) (append errors (call violation "limit" "invalid_value")) (set limit (to_int limit_raw)))))
+        (if (and (!= filter "") (not (list_contains (list "open" "in_progress" "done") filter)))
+          (append errors (call violation "status" "invalid_value")))
+        (if (!= cursor "")
+          (if (not (regex_match "^[A-Za-z0-9_-]{1,64}$" cursor))
+            (append errors (call violation "cursor" "invalid_value"))
+            (if (regex_match "^[0-9]{1,15}$" cursor) (set after (to_int cursor)))))
+        (if (> (list_len errors) 0) (return (call invalid_fields req errors)))
+        (let (disk (call storage) items (list) last 0 has_more false)
+          (do
+            (for key (store_keys disk)
+              (if (and (starts_with key "bucket:") (>= key (call bucket_name after)) (not has_more))
+                (let (group (store_get disk key))
+                  (for id (map_get group "order")
+                    (if (and (> (call sequence id) after) (not has_more))
+                      (let (record (map_get (map_get group "records") id))
+                        (if (or (= filter "") (= filter (map_get record "status")))
+                          (if (= (list_len items) limit) (set has_more true)
+                            (do (append items record) (set last (call sequence id)))))))))))
+            (res_json 200 (dict ("items" items) ("next_cursor" (if has_more (to_string last) (map_get (dict) "nil")))))
             (return 0))))))
 
-  ; ---------------------------------------------------------------- tokens
-  (defun token_out ((r any)) dict
-    (return (dict ("id" (map_get r "id")) ("name" (map_get r "name")) ("role" (map_get r "role")) ("created_at" (map_get r "created_at"))
-                  ("revoked" (= (map_get r "revoked") 1)))))
+  (defun public_token ((record dict)) dict
+    (return (dict ("id" (map_get record "id")) ("name" (map_get record "name")) ("role" (map_get record "role"))
+      ("created_at" (map_get record "created_at")) ("revoked" (map_get record "revoked")))))
 
-  (defun tokens_create ((req any)) int
-    (let (b (call body_or_fail req))
-      (do
-        (if (map_has b "fault") (return (call fault req (map_get b "fault"))))
-        (if (= (map_get b "sent") 1) (return 0))
-        (let (v (call check_token (map_get b "doc")))
+  ; Tokens, their creation order, and revocation live in one atomic record.
+  ; A crash cannot strand a token between canonical and hash-index writes.
+  (defun token_group ((disk any)) dict
+    (let (group (store_get disk "tokens"))
+      (return (if (is_nil group) (dict ("order" (list)) ("records" (dict))) group))))
+
+  (defun token_request ((req any) (id string)) int
+    (let (disk (call storage) method (req_method req))
+      (let (group (call token_group disk))
+        (let (records (map_get group "records") order (map_get group "order"))
           (do
-            (if (> (list_len (map_get v "fields")) 0) (return (call send_fields req (map_get v "fields"))))
-            (let (s (call db) meta (store_get s "meta") vals (map_get v "vals") now (time_now)
-                  id (str "tok_" (rand_hex 8)) secret (str "td_" (rand_hex 32)))
-              (let (seq (map_get meta "next_token") hh (sha256_hex secret))
+            (if (= method "DELETE")
+              (do
+                (if (= id "bootstrap") (return (call fail_response req 409 "conflict" "The bootstrap token cannot be revoked.")))
+                (let (record (map_get records id))
+                  (do
+                    (if (is_nil record) (return (call fail_response req 404 "not_found" "Token not found.")))
+                    (map_set record "revoked" true)
+                    (map_set records id record)
+                    (store_put disk "tokens" group)
+                    (res_json 200 (call public_token record)) (return 0)))))
+            (if (= method "POST")
+              (let (checked (call validate req "token"))
                 (do
-                  (store_put s "meta" (dict ("next_ticket" (map_get meta "next_ticket")) ("next_token" (+ seq 1))))
-                  (let (rec (dict ("id" id) ("name" (map_get vals "name")) ("role" (map_get vals "role")) ("created_at" now) ("revoked" 0) ("hash" hh) ("seq" seq)))
-                    (do
-                      (store_put s (str "k:" id) rec)
-                      (store_put s (str "h:" hh) (dict ("id" id)))
-                      (store_put s (str "q:" (pad_left (to_string seq) 10 "0")) (dict ("id" id)))
-                      (let (out (call token_out rec))
-                        (do
-                          (map_set out "token" secret)
-                          (res_header "Location" (str "/v1/tokens/" id))
-                          (res_header "Cache-Control" "no-store")
-                          (res_json 201 out)
-                          (return 0)))))))))))))
-
-  (defun tokens_list ((req any)) int
-    (let (s (call db) items (list) seq 1 top (- (map_get (store_get s "meta") "next_token") 1))
-      (do
-        (while (<= seq top)
-          (let (q (store_get s (str "q:" (pad_left (to_string seq) 10 "0"))))
-            (do
-              (if (not (is_nil q)) (append items (call token_out (store_get s (str "k:" (map_get q "id"))))))
-              (set seq (+ seq 1)))))
-        (res_json 200 (dict ("items" items)))
-        (return 0))))
-
-  (defun tokens_revoke ((req any) (id string)) int
-    (do
-      (if (= id "bootstrap") (return (call send_err req 409 "conflict" "The bootstrap token cannot be revoked.")))
-      (if (not (regex_match "^tok_[0-9a-f]{16}$" id)) (return (call send_err req 404 "not_found" "Token not found.")))
-      (let (s (call db) rec (store_get s (str "k:" id)))
-        (do
-          (if (is_nil rec) (return (call send_err req 404 "not_found" "Token not found.")))
-          (let (out (dict))
-            (do
-              (for k (map_keys rec) (map_set out k (map_get rec k)))
-              (map_set out "revoked" 1)
-              (store_put s (str "k:" id) out)
-              (res_json 200 (call token_out out))
-              (return 0)))))))
-
-  ; ---------------------------------------------------------------- faults
-  (defun fault ((req any) (text any)) int
-    (do
-      (stderr (str "fault request_id=" (req_id req) " method=" (req_method req) " path=" (req_url_path req) " error=" (str_replace (to_string text) "\n" " ") "\n"))
-      (return (call send_err req 500 "internal_error" "An internal error occurred."))))
-
-  ; ---------------------------------------------------------------- dispatch
-  (defun process ((req any) (route string)) int
-    (let (m (req_method req) c (call cfgrec))
-      (do
-        ; deliberate fault (testing aid): evaluated first, on known paths only
-        (if (and (= (map_get c "debug") 1) (!= route "notfound") (= (req_header req "X-Debug-Fault") "1"))
-          (return (call fault req (to_int "deliberate-fault"))))
-        (if (= route "notfound") (return (call send_err req 404 "not_found" "No such route.")))
-        (let (allow (call allow_for route))
-          (do
-          (if (not (list_contains (str_split allow ", ") m))
-            (do
-              (res_header "Allow" allow)
-              (return (call send_err req 405 "method_not_allowed" "Method not allowed."))))
-          (if (= route "health") (do (res_json 200 (dict ("status" "ok"))) (return 0)))
-          (let (who (call authenticate req))
-            (do
-              (if (= (map_get who "ok") 0) (return (call unauthorized req)))
-              (let (role (map_get who "role"))
-                (do
-                  (if (= route "me")
-                    (do (res_json 200 (dict ("id" (map_get who "id")) ("name" (map_get who "name")) ("role" role))) (return 0)))
-                  (if (= route "tickets")
-                    (do
-                      (if (= m "GET") (return (call tickets_list req)))
-                      (if (= role "viewer") (return (call send_err req 403 "forbidden" "Your role may not create tickets.")))
-                      (return (call tickets_create req who))))
-                  (if (= route "ticket")
-                    (let (id (req_path req "id"))
+                  (if (not (map_has checked "document")) (return 0))
+                  (let (document (map_get checked "document") secret (str "td_" (rand_hex 32)) new_id (str "tok_" (rand_hex 8)))
+                    (let (record (dict ("id" new_id) ("name" (map_get document "name")) ("role" (map_get document "role"))
+                           ("created_at" (time_now)) ("revoked" false) ("digest" (sha256_hex secret))))
                       (do
-                        (if (= m "GET") (return (call tickets_get req id)))
-                        (if (= m "PATCH")
+                        (if (map_has records new_id) (return (call fail_response req 500 "internal_error" "An internal error occurred.")))
+                        (map_set records new_id record)
+                        (append order new_id)
+                        (map_set group "order" order)
+                        (store_put disk "tokens" group)
+                        (let (response (call public_token record))
                           (do
-                            (if (= role "viewer") (return (call send_err req 403 "forbidden" "Your role may not change tickets.")))
-                            (return (call tickets_patch req who id))))
-                        (if (!= role "admin") (return (call send_err req 403 "forbidden" "Only administrators may delete tickets.")))
-                        (return (call tickets_delete req id)))))
-                  (if (!= role "admin") (return (call send_err req 403 "forbidden" "Only administrators may manage tokens.")))
-                  (if (= route "tokens")
-                    (do
-                      (if (= m "GET") (return (call tokens_list req)))
-                      (return (call tokens_create req))))
-                  (return (call tokens_revoke req (req_path req "id"))))))))))))
+                            (map_set response "token" secret)
+                            (res_header "Location" (str "/v1/tokens/" new_id)) (res_header "Cache-Control" "no-store")
+                            (res_json 201 response) (return 0)))))))))
+            (let (items (list))
+              (do
+                (for token_id order (append items (call public_token (map_get records token_id))))
+                (res_json 200 (dict ("items" items))) (return 0))))))))
 
-  (defun serve ((req any) (route string)) void
-    (try_let (r (call process req route))
-      (catch e (call fault req e))
-      (set r r)))
+  (defun dispatch_request ((req any) (resource string) (allowed string)) int
+    (let (method (req_method req))
+      (do
+        (if (= resource "missing") (return (call fail_response req 404 "not_found" "Route not found.")))
+        (if (= (map_get (call configuration) "debug") "1")
+          (if (= (req_header req "X-Debug-Fault") "1") (return (call report_fault req (to_int "deliberate-fault")))))
+        (if (not (list_contains (str_split allowed ", ") method))
+          (do (res_header "Allow" allowed) (return (call fail_response req 405 "method_not_allowed" "Method not allowed."))))
+        (if (= resource "health") (do (res_json 200 (dict ("status" "ok"))) (return 0)))
+        (let (who (call identity req))
+          (do
+            (if (= (list_len (map_keys who)) 0) (return (call unauthenticated req)))
+            (if (= resource "me") (do (res_json 200 who) (return 0)))
+            (let (role (map_get who "role"))
+              (do
+                (if (or (starts_with resource "token") (and (= resource "ticket") (= method "DELETE")))
+                  (if (!= role "admin") (return (call fail_response req 403 "forbidden" "Administrator role required."))))
+                (if (and (= role "viewer") (list_contains (list "POST" "PATCH") method))
+                  (return (call fail_response req 403 "forbidden" "This role cannot modify tickets.")))
+                (if (= resource "tickets")
+                  (return (if (= method "GET") (call list_tickets req) (call create_ticket req who))))
+                (if (= resource "ticket") (return (call ticket_request req who (req_path req "id"))))
+                (return (call token_request req (if (= resource "token") (req_path req "id") ""))))))))))
 
-  (route "/v1/health" (lambda (req) (call serve req "health")))
-  (route "/v1/me" (lambda (req) (call serve req "me")))
-  (route "/v1/tickets" (lambda (req) (call serve req "tickets")))
-  (route "/v1/tickets/{id}" (lambda (req) (call serve req "ticket")))
-  (route "/v1/tokens" (lambda (req) (call serve req "tokens")))
-  (route "/v1/tokens/{id}" (lambda (req) (call serve req "token")))
-  (route "*" (lambda (req) (call serve req "notfound"))))
+  (defun report_fault ((req any) (error any)) int
+    (do
+      (stderr (str "fault request_id=" (req_id req) " method=" (req_method req) " path=" (req_url_path req)
+        " error=" (str_replace (to_string error) "\n" " ") "\n"))
+      (return (call fail_response req 500 "internal_error" "An internal error occurred."))))
+
+  (defun handle ((req any) (resource string) (allowed string)) void
+    (try_let (result (call dispatch_request req resource allowed))
+      (catch e (call report_fault req e)) (set result result)))
+
+  (route "/v1/health" (lambda (req) (call handle req "health" "GET")))
+  (route "/v1/me" (lambda (req) (call handle req "me" "GET")))
+  (route "/v1/tickets" (lambda (req) (call handle req "tickets" "GET, POST")))
+  (route "/v1/tickets/{id}" (lambda (req) (call handle req "ticket" "DELETE, GET, PATCH")))
+  (route "/v1/tokens" (lambda (req) (call handle req "tokens" "GET, POST")))
+  (route "/v1/tokens/{id}" (lambda (req) (call handle req "token" "DELETE")))
+  (route "*" (lambda (req) (call handle req "missing" ""))))

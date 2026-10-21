@@ -1,0 +1,200 @@
+(http_server
+  (call start)
+  (use "ledger.howl" as ledger)
+  (serialize_requests)
+  (grants "database" "inherit:filesystem")
+  (defun start
+    ()
+    int
+    (let
+      (port
+        (env "EVIDENCEDESK_PORT")
+        path
+        (env "EVIDENCEDESK_DATA")
+        static
+        (env "EVIDENCEDESK_STATIC"))
+      (do
+        (if (= port "") (set port "8093"))
+        (if
+          (or (= path "") (= static ""))
+          (do (stderr "Data and static paths required") (exit 2)))
+        (store_open cfg "memory://ed-config")
+        (store_put cfg "config" (dict ("path" path) ("static" static) ("port" port)))
+        (store_open state (str "file://" path))
+        (let
+          (old (store_get state "ledger"))
+          (do
+            (if (is_nil old) (set old (dict ("ids" (list)) ("tasks" (dict)))))
+            (store_put state "ledger" old)))
+        (return (to_int port)))))
+  (defun config
+    ()
+    any
+    (do (store_open cfg "memory://ed-config") (return (store_get cfg "config"))))
+  (defun db
+    ()
+    any
+    (do (store_open state (str "file://" (map_get (call config) "path"))) (return state)))
+  (defun err
+    ((status int) (code string) (message string))
+    void
+    (res_json status (dict ("error" (dict ("code" code) ("message" message))))))
+  (defun import_body ((req any)) dict
+    (do
+      (try_let (raw (req_body req))
+        (catch read_error
+          (do
+            (if (str_contains read_error "LIMIT_EXCEEDED")
+              (call err 413 "payload_too_large" "Ledger exceeds the byte limit")
+              (call err 400 "invalid_ledger" "Incomplete request body"))
+            (return (dict))))
+        (return (dict ("raw" raw))))
+      (return (dict))))
+  (defun import_ledger
+    ((req any))
+    void
+    (do
+      (if
+        (!= (req_method req) "POST")
+        (do (call err 405 "method_not_allowed" "Use POST") (return 0)))
+      (if
+        (!=
+          (str_trim (list_get (str_split (req_header req "Content-Type") ";") 0))
+          "application/x-ndjson")
+        (do (call err 415 "unsupported_media_type" "Use application/x-ndjson") (return 0)))
+      (let (body (call import_body req))
+        (do
+          (if (not (map_has body "raw")) (return 0))
+          (let
+            (parsed (call ledger/parse (map_get body "raw") 1000))
+            (do
+          (if
+            (map_has parsed "error")
+            (do
+              (res_json
+                (if (= (map_get (map_get parsed "error") "code") "payload_too_large") 413 400)
+                parsed)
+              (return 0)))
+          (call replace_ledger parsed)))))))
+  (defun replace_ledger
+    ((parsed any))
+    void
+    (let
+      (st (call db) ids (list) tasks (dict) events (map_get parsed "events"))
+      (let
+        (old (map_get (store_get st "ledger") "tasks"))
+        (do
+          (for e events
+            (let
+              (id (map_get e "task_id"))
+              (do
+                (if
+                  (not (map_has tasks id))
+                  (do
+                    (append ids id)
+                    (let
+                      (note "" prev (map_get old id))
+                      (do
+                        (if (not (is_nil prev)) (set note (map_get prev "note")))
+                        (map_set tasks id (dict ("id" id) ("events" (list)) ("note" note)))))))
+                (let
+                  (task (map_get tasks id) evs (map_get (map_get tasks id) "events"))
+                  (do (append evs e) (map_set task "events" evs) (map_set tasks id task))))))
+          (store_put st "ledger" (dict ("ids" ids) ("tasks" tasks)))
+          (res_json 200 (dict ("entries" (list_len events)) ("tasks" (list_len ids))))))))
+  (defun list_tasks
+    ((req any))
+    void
+    (do
+      (if
+        (!= (req_method req) "GET")
+        (do (call err 405 "method_not_allowed" "Use GET") (return 0)))
+      (let
+        (st (call db) state (store_get st "ledger") items (list))
+        (do
+          (for id
+            (map_get state "ids")
+            (let
+              (task (map_get (map_get state "tasks") id))
+              (append items
+                (dict
+                  ("id" id)
+                  ("events" (list_len (map_get task "events")))
+                  ("note" (map_get task "note"))))))
+          (res_json 200 (dict ("items" items)))))))
+  (defun note_valid
+    ((body any))
+    bool
+    (do
+      (if (!= (call ledger/kind body) "o") (return false))
+      (if (!= (list_len (map_keys body)) 1) (return false))
+      (if (!= (call ledger/kind (map_get body "note")) "s") (return false))
+      (return (<= (str_len (map_get body "note")) 2000))))
+  (defun task_detail
+    ((req any) (edit bool) (id string))
+    void
+    (do
+      (if
+        (!= (req_method req) (if edit "PATCH" "GET"))
+        (do (call err 405 "method_not_allowed" "Wrong method") (return 0)))
+      (let
+        (st (call db))
+        (let
+          (state (store_get st "ledger"))
+          (let
+            (tasks (map_get state "tasks"))
+            (let
+              (task (map_get tasks id))
+              (do
+                (if (is_nil task) (do (call err 404 "not_found" "Unknown task") (return 0)))
+                (if edit
+                  (try_let
+                    (body (parse_json Any (req_body req)))
+                    (catch e
+                      (do (call err 400 "validation_failed" "Malformed JSON") (return 0)))
+                    (do
+                      (if
+                        (not (call note_valid body))
+                        (do
+                          (call err 400 "validation_failed" "Only note string up to 2000 characters accepted")
+                          (return 0)))
+                      (map_set task "note" (map_get body "note"))
+                      (map_set tasks id task)
+                      (map_set state "tasks" tasks)
+                      (store_put st "ledger" state))))
+                (res_json 200 task))))))))
+  (route "/api/task"
+    (lambda
+      (req)
+      (if
+        (= (req_method req) "GET")
+        (call task_detail req false (req_query req "id"))
+        (if
+          (= (req_method req) "PATCH")
+          (call task_detail req true (req_query req "id"))
+          (call err 405 "method_not_allowed" "Use GET or PATCH")))))
+  (route "/api/health"
+    (lambda
+      (req)
+      (if
+        (= (req_method req) "GET")
+        (res_json 200 (dict ("status" "ok")))
+        (call err 405 "method_not_allowed" "Use GET"))))
+  (route "/api/import" (lambda (req) (call import_ledger req)))
+  (route "/api/tasks" (lambda (req) (call list_tasks req)))
+  (route "/api/tasks/{id}" (lambda (req) (call task_detail req false (req_path req "id"))))
+  (route "/api/tasks/{id}/note" (lambda (req) (call task_detail req true (req_path req "id"))))
+  (route "/"
+    (lambda
+      (req)
+      (res 200 "text/html; charset=utf-8"
+        (str_replace
+          (bytes_to_string (read_file (str (map_get (call config) "static") "/index.html")))
+          "__PORT__"
+          (map_get (call config) "port")))))
+  (route "/app.js"
+    (lambda
+      (req)
+      (res 200 "text/javascript; charset=utf-8"
+        (bytes_to_string (read_file (str (map_get (call config) "static") "/app.js"))))))
+  (route "*" (lambda (req) (call err 404 "not_found" "Unknown route"))))

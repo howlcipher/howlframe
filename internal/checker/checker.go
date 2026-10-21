@@ -293,6 +293,11 @@ func checkJSStatement(node *ast.Node, depth int) {
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
 		checkJSStatement(node.Children[3], depth+1)
+	} else if head == "url_encode" {
+		if len(node.Children) != 2 {
+			ast.ReportError("url_encode expects (url_encode string)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
 	} else if head == "dom_value" {
 		if len(node.Children) != 2 {
 			ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
@@ -304,13 +309,13 @@ func checkJSStatement(node *ast.Node, depth int) {
 		}
 		checkJSStatement(node.Children[2], depth+1)
 	} else if head == "fetch" {
-		if len(node.Children) != 3 && len(node.Children) != 4 {
-			ast.ReportError("fetch expects (fetch url method [body])", node.Line, node.Column)
+		if len(node.Children) < 3 || len(node.Children) > 5 {
+			ast.ReportError("fetch expects (fetch url method [body [headers]])", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
 		checkJSStatement(node.Children[2], depth+1)
-		if len(node.Children) == 4 {
-			checkJSStatement(node.Children[3], depth+1)
+		for _, child := range node.Children[3:] {
+			checkJSStatement(child, depth+1)
 		}
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {

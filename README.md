@@ -2,7 +2,9 @@
 
 > **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
 
-The historical Milestone 2 (D29 A, C, D, G, H) acceptance is recorded. A fresh requirements-first rebuild of all three milestones is in progress. See the [closure evidence and carryover](milestone2/MILESTONE2_DECISION.md).
+Fresh requirements-first implementations of all three milestones are under final
+verification. See [the rebuild evidence ledger](docs/journals/2026-10-21_fresh_milestones.md).
+Historical acceptance is retained separately in [Milestone 2's decision](milestone2/MILESTONE2_DECISION.md).
 
 ## What is HowlFrame?
 

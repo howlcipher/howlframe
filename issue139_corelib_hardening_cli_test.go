@@ -27,7 +27,7 @@ func TestIssue139FetchArityFailsClosed(t *testing.T) {
 		if strings.Contains(string(out), "panic") || strings.Contains(string(out), "goroutine") {
 			t.Fatalf("%s: compiler panicked: %s", profile, out)
 		}
-		if !strings.Contains(string(out), "ARITY_ERROR: fetch expects 2 to 3 args, got 1") {
+		if !strings.Contains(string(out), "ARITY_ERROR: fetch expects 2 to 4 args, got 1") {
 			t.Fatalf("%s: missing diagnostic: %s", profile, out)
 		}
 		if _, err := os.Stat(art); err == nil {
