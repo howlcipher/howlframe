@@ -210,6 +210,9 @@ func TestFileRootGrantNeverEscapesWhileSymlinkChanges(t *testing.T) {
 	if err := os.WriteFile(granted, []byte("inside"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(f.root, "sibling"), []byte(raceMarker), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -223,12 +226,19 @@ func TestFileRootGrantNeverEscapesWhileSymlinkChanges(t *testing.T) {
 			default:
 			}
 			_ = os.Remove(tmp)
-			if i%2 == 0 {
+			switch i % 3 {
+			case 0: // absolute link to a file outside the directory
 				if os.Symlink(filepath.Join(f.outside, "f"), tmp) == nil {
 					_ = os.Rename(tmp, granted)
 				}
-			} else if os.WriteFile(tmp, []byte("inside"), 0o644) == nil {
-				_ = os.Rename(tmp, granted)
+			case 1: // relative link to an ungranted sibling in the same directory
+				if os.Symlink("sibling", tmp) == nil {
+					_ = os.Rename(tmp, granted)
+				}
+			default:
+				if os.WriteFile(tmp, []byte("inside"), 0o644) == nil {
+					_ = os.Rename(tmp, granted)
+				}
 			}
 		}
 	}()
@@ -253,6 +263,6 @@ func TestFileRootGrantNeverEscapesWhileSymlinkChanges(t *testing.T) {
 		t.Fatalf("program failed: %+v", ev.RuntimeFailure)
 	}
 	if got := strings.TrimSpace(out.String()); got != "0" {
-		t.Fatalf("a file grant returned content from outside its directory %s times", got)
+		t.Fatalf("a file grant returned content from outside the granted file %s times", got)
 	}
 }

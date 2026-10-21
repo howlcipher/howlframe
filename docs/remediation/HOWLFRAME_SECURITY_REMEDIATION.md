@@ -22,13 +22,19 @@ replace (temporary file, sync, chmod, rename, directory sync), so every step sta
 
 ### Grants naming a single file
 A grant may name one file (the EvidenceDesk projector's launcher does). The root handle is then opened on the file's
-directory and only the file's base name is reachable. Nothing else in the directory is accessible through that grant.
+directory, which would let the OS follow a symlink at the file's name to a *sibling*. So single-file scopes are
+"pinned": the granted name is inspected first and a symlink there is refused; the file then opened must be the same file
+that was inspected (`os.SameFile`); a missing file is created exclusively, so a link planted at the name cannot be
+followed; and truncation happens only after that check, so a swapped-in link cannot cost another file its contents.
+(This was found by the independent review of this remediation: the first version reached siblings through a relative
+symlink. It is covered by `TestFileRootGrantRefusesRelativeSymlinkToSibling` and by the file-grant race test, which
+flips the granted name through an outside link, a sibling link and a regular file.)
 
 ### Behavior changes (all fail closed)
 | Case | Before | Now |
 |---|---|---|
 | Symlink inside the root with an **absolute** target that points back inside the root | followed | **denied** (`CAPABILITY_DENIED`); relative in-root links still work |
-| A granted **file** that is itself a symlink to a file outside its directory | followed | **denied** |
+| A granted **file** whose name is a symlink (to anywhere, including a sibling) | followed | **denied** |
 | Granted root does not exist: read | ordinary I/O error (not found) | unchanged (ordinary I/O error) |
 | `mkdir` under a granted root that does not exist | created the root | unchanged |
 | Coarse `filesystem` alias | unrestricted | unchanged (unrestricted by design) |
@@ -73,6 +79,9 @@ Specifically:
 * Deadline, output-limit failure, or the runner dying (control pipe closed): the tree is killed at once.
 * The sweep repeats until nothing remains, because killing a parent re-parents its children to the supervisor.
 * Exit status, signal death, captured output, exec output limits, environment grants and start-failure reporting are unchanged.
+* A program that closes its own stdout and stderr and keeps running is waited for and reports its real exit status
+  (the supervisor reports program exit over a status pipe; output end-of-file is never taken for program exit, which
+  the first version got wrong; `TestExecProgramThatClosesItsOutputEarlyKeepsRunning`).
 
 ### Other platforms
 | Platform | Containment |
@@ -81,6 +90,12 @@ Specifically:
 | Windows and other non-Unix | Direct child only. **Descendants are not contained.** |
 
 ### Residual limits
+* **A program written to defeat containment can.** The supervisor is the program's parent, and a same-user program
+  can find and kill it. If it does, descendants that already detached into their own session are no longer re-parented
+  to the supervisor and can survive (reproduced by the independent review). Containment therefore protects against
+  runaway, forgotten or accidentally detached descendants (issue #181's case), **not** against hostile code that targets
+  the supervisor. The process-group fallback still removes non-detached descendants in that case. Not implemented: making
+  the runner itself a second-level subreaper, which would need a registry of its other children to avoid killing them.
 * A process the runner's user cannot signal (for example one that changed privilege) is not covered.
 * The supervisor is the same binary as the runner, so `exec` needs `os.Executable()` to be readable; if it cannot be
   located, exec fails with `exec containment unavailable` rather than running uncontained.

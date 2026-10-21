@@ -22,6 +22,7 @@ var ErrFilesystemDenied = errors.New("filesystem: path is outside every granted 
 type FileSystem interface {
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 	MkdirAll(name string, perm os.FileMode) error
+	Lstat(name string) (os.FileInfo, error)
 	Rename(oldname, newname string) error
 	Remove(name string) error
 }
@@ -32,6 +33,10 @@ type Scope struct {
 	FS     FileSystem
 	Name   string
 	closer func() error
+	// pinned marks a grant that names a single file. Its root is the file's
+	// directory, so the OS would follow a symlink placed at the file's name to
+	// a sibling; pinned scopes therefore refuse symlinks (see openTarget).
+	pinned bool
 }
 
 // Close releases the root handle held by a scoped target.
@@ -44,7 +49,7 @@ func (s *Scope) Close() error {
 
 // ReadFile reads the whole target.
 func (s *Scope) ReadFile() ([]byte, error) {
-	f, err := s.FS.OpenFile(s.Name, os.O_RDONLY, 0)
+	f, err := s.openTarget(os.O_RDONLY, 0)
 	if err != nil {
 		return nil, s.classify(err)
 	}
@@ -54,7 +59,7 @@ func (s *Scope) ReadFile() ([]byte, error) {
 
 // WriteFile creates or truncates the target, like os.WriteFile.
 func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
-	f, err := s.FS.OpenFile(s.Name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := s.openTarget(os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return s.classify(err)
 	}
@@ -63,6 +68,54 @@ func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
 		return err
 	}
 	return f.Close()
+}
+
+// openTarget opens the scope's target. For a directory grant that is a plain
+// open through the root. For a single-file grant it refuses a symlink at the
+// granted name and confirms that the file actually opened is the one inspected,
+// so a link swapped in between cannot redirect the open to a sibling. Truncation
+// is deferred until that check passes, so a swapped link cannot cost another
+// file its contents. A granted file that is itself a symlink is refused even if
+// it points inside the directory: failing closed is intentional.
+func (s *Scope) openTarget(flag int, perm os.FileMode) (*os.File, error) {
+	if !s.pinned {
+		return s.FS.OpenFile(s.Name, flag, perm)
+	}
+	denied := func(why string) error { return fmt.Errorf("%w: %s", ErrFilesystemDenied, why) }
+	info, err := s.FS.Lstat(s.Name)
+	switch {
+	case err == nil:
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, denied("a granted file may not be a symlink")
+		}
+		truncate := flag&os.O_TRUNC != 0
+		f, err := s.FS.OpenFile(s.Name, flag&^os.O_TRUNC, perm)
+		if err != nil {
+			return nil, err
+		}
+		opened, err := f.Stat()
+		if err != nil || !os.SameFile(info, opened) {
+			f.Close()
+			return nil, denied("the granted file changed while it was being opened")
+		}
+		if truncate {
+			if err := f.Truncate(0); err != nil {
+				f.Close()
+				return nil, err
+			}
+		}
+		return f, nil
+	case errors.Is(err, fs.ErrNotExist) && flag&os.O_CREATE != 0:
+		// Create it exclusively: a link planted at the name makes this fail
+		// instead of being followed.
+		f, err := s.FS.OpenFile(s.Name, flag|os.O_EXCL, perm)
+		if errors.Is(err, fs.ErrExist) {
+			return nil, denied("the granted file appeared while it was being created")
+		}
+		return f, err
+	default:
+		return nil, err
+	}
 }
 
 // MkdirAll creates the target directory and any missing parents, like
@@ -107,6 +160,7 @@ func (osFS) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) 
 	return os.OpenFile(name, flag, perm)
 }
 func (osFS) MkdirAll(name string, perm os.FileMode) error { return os.MkdirAll(name, perm) }
+func (osFS) Lstat(name string) (os.FileInfo, error)       { return os.Lstat(name) }
 func (osFS) Rename(oldname, newname string) error         { return os.Rename(oldname, newname) }
 func (osFS) Remove(name string) error                     { return os.Remove(name) }
 
@@ -152,8 +206,10 @@ func (g Grants) openScope(path string, write, createRoot bool) (*Scope, error) {
 	// target it covers is that file, and the root handle is opened on the file's
 	// directory with the base name as the relative name: nothing else in the
 	// directory is reachable, and the file cannot be redirected out of it.
+	pinned := false
 	if cleanTarget == root && grantsSingleFile(root, createRoot) {
 		root, rel = filepath.Dir(root), filepath.Base(root)
+		pinned = true
 	}
 	handle, err := os.OpenRoot(root)
 	if err != nil && createRoot && errors.Is(err, fs.ErrNotExist) {
@@ -168,7 +224,7 @@ func (g Grants) openScope(path string, write, createRoot bool) (*Scope, error) {
 		// perform no operation.
 		return nil, err
 	}
-	return &Scope{FS: handle, Name: rel, closer: handle.Close}, nil
+	return &Scope{FS: handle, Name: rel, closer: handle.Close, pinned: pinned}, nil
 }
 
 // ScopedReadFile reads path within the granted scope.

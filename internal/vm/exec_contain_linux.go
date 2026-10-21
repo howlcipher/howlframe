@@ -3,6 +3,7 @@
 package vm
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -51,8 +52,11 @@ func init() {
 // or signalled exit, or another error when the program could not be started.
 //
 // Ordinary behavior is unchanged: the call returns once the program has exited
-// and every process still holding its output has closed it. Then, or at once on
-// cancellation or output-limit failure, everything left in the tree is killed.
+// and every process still holding its output has closed it. Only then, or at
+// once on cancellation or output-limit failure, is everything left in the tree
+// killed. The end of the output is never taken for the end of the program: a
+// program may close its own stdout and keep running, so the supervisor reports
+// the program's exit explicitly over the status pipe.
 func runContained(ctx context.Context, program string, args []string, env []string, out io.Writer) error {
 	self, err := os.Executable()
 	if err != nil {
@@ -100,20 +104,35 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 		_, err := io.Copy(out, outR)
 		copyDone <- err
 	}()
+	// The first line on the status pipe says how the program ended; end-of-file
+	// without one means the supervisor is gone.
+	statusLine := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(statusR).ReadString('\n')
+		statusLine <- strings.TrimSpace(line)
+	}()
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 
-	// Wait for the program's output to end (all holders closed), a failure to
-	// store it (output limit), or cancellation; then ask the supervisor to
-	// sweep the tree. A closed control pipe is the request.
-	copyFinished := false
-	select {
-	case <-copyDone:
-		copyFinished = true
-	case <-ctx.Done():
+	// Finish normally only when the program has exited AND its output has ended;
+	// anything else (cancellation, failure to store output) stops it at once.
+	var report string
+	copyEnded, exited, stopNow := false, false, false
+	for !(copyEnded && exited) && !stopNow {
+		select {
+		case err := <-copyDone:
+			copyEnded = true
+			copyDone = nil
+			stopNow = err != nil // the output limit refused more data
+		case report = <-statusLine:
+			exited = true
+			statusLine = nil
+		case <-ctx.Done():
+			stopNow = true
+		}
 	}
-	ctrlW.Close()
-	if !copyFinished {
+	ctrlW.Close() // asks the supervisor to sweep the tree
+	if stopNow {
 		outR.Close() // release any writer blocked on a full pipe
 	}
 
@@ -128,18 +147,18 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 	// Safety net for a supervisor that was itself killed.
 	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	outR.Close()
-	if !copyFinished {
+	if copyDone != nil {
 		<-copyDone
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) && exitErr.ExitCode() == supervisorStartFailure {
-		if reason, _ := io.ReadAll(statusR); len(reason) > 0 {
-			return errors.New(strings.TrimSpace(string(reason)))
-		}
+	if reason, ok := strings.CutPrefix(report, startFailurePrefix); ok {
+		return errors.New(reason)
 	}
 	return runErr
 }
+
+// startFailurePrefix begins the status line of a program that could not be started.
+const startFailurePrefix = "start-failed "
 
 // runSupervisor is the body of the supervisor process.
 func runSupervisor(program string, args []string) int {
@@ -154,16 +173,15 @@ func runSupervisor(program string, args []string) int {
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
 	child.Env = os.Environ()
 	if err := child.Start(); err != nil {
-		status.WriteString(err.Error())
+		status.WriteString(startFailurePrefix + strings.ReplaceAll(err.Error(), "\n", " ") + "\n")
+		status.Close()
 		return supervisorStartFailure
 	}
-	status.Close()
 	// Drop the supervisor's own copies of the output pipe so that its end-of-file
 	// is decided only by the program and its descendants.
 	os.Stdout.Close()
 	os.Stderr.Close()
 
-	// The runner closing its end (cancellation, or the runner dying) means stop.
 	ctrlClosed := make(chan struct{})
 	go func() {
 		io.Copy(io.Discard, ctrl)
@@ -174,20 +192,21 @@ func runSupervisor(program string, args []string) int {
 
 	var waitErr error
 	select {
+	case waitErr = <-waited:
 	case <-ctrlClosed:
-		// The runner can close the pipe just after a normal exit, before Wait has
-		// returned here. A short grace lets a program that already exited report
-		// its real status; one still running was cancelled: stop everything now.
+		// The runner stopped us before the program finished (deadline, output
+		// limit, or the runner dying). Unless it has just exited, stop everything.
 		select {
 		case waitErr = <-waited:
-		case <-time.After(100 * time.Millisecond):
+		default:
 			killDescendants()
 			return 137
 		}
-	case waitErr = <-waited:
 	}
-	// The program exited. Wait until the runner has seen its output end, then
-	// remove anything it left behind.
+	// Tell the runner the program has exited, then wait for its go-ahead (it also
+	// needs the program's output to have ended) before removing what is left.
+	status.WriteString("exited\n")
+	status.Close()
 	<-ctrlClosed
 	killDescendants()
 

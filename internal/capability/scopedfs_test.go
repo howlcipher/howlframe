@@ -100,3 +100,46 @@ func TestFileRootGrantDoesNotFollowSymlinkOutOfItsDirectory(t *testing.T) {
 }
 
 func errorsIsDenied(err error) bool { return errors.Is(err, ErrFilesystemDenied) }
+
+// Review finding: a grant naming one file must not reach a sibling through a
+// relative symlink placed at the granted name. The root handle is the file's
+// directory, so the OS alone would follow that link; the scope must refuse it.
+func TestFileRootGrantRefusesRelativeSymlinkToSibling(t *testing.T) {
+	dir := t.TempDir()
+	sibling := filepath.Join(dir, "sibling")
+	if err := os.WriteFile(sibling, []byte("UNGRANTED"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	granted := filepath.Join(dir, "granted")
+	if err := os.Symlink("sibling", granted); err != nil {
+		t.Fatal(err)
+	}
+	read, _ := ParseGrant("filesystem:read=" + granted)
+	if b, err := (Grants{read}).ScopedReadFile(granted); err == nil {
+		t.Fatalf("read of an ungranted sibling through a file grant: %q", b)
+	}
+	write, _ := ParseGrant("filesystem:write=" + granted)
+	if err := (Grants{write}).ScopedWriteFile(granted, []byte("CORRUPTED"), 0o644); err == nil {
+		t.Fatal("write through a symlink at a file grant must be refused")
+	}
+	if b, _ := os.ReadFile(sibling); string(b) != "UNGRANTED" {
+		t.Fatalf("sibling was modified through a file grant: %q", b)
+	}
+}
+
+// A write through a file grant must not truncate anything before the target has
+// been verified, or a swapped-in link would lose the other file's data.
+func TestFileRootGrantWriteDoesNotTruncateBeforeVerifying(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f")
+	if err := os.WriteFile(file, []byte("long original content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g, _ := ParseGrant("filesystem:write=" + file)
+	if err := (Grants{g}).ScopedWriteFile(file, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(file); string(b) != "new" {
+		t.Fatalf("overwrite of the granted file itself must still truncate and replace: %q", b)
+	}
+}

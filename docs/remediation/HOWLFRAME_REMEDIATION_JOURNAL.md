@@ -76,3 +76,20 @@ Toolchain: go1.26.0 local, Python 3.14.4. Audit inputs: /run/media/system/tallge
   scope). The conformance test itself was NOT changed.
 - Green: slow-reader test 3x; the audit's own td_slowreader.py now shows health 200 in 0.0 s with a stalled client (it timed
   out at 60 s in the audit); vm/capability pass under -race; M2 frozen 101/101, DX 13/13, reassessment 11/11, review_round1 10/10.
+
+## Review round 1 (Codex, independent provider) and repairs
+- Fixes up to this point were committed; full runs were green (Go 1.25.0 minimum: 76 packages; race: 76 packages, 0 races) after
+  one self-found regression: go-target scratch modules declared `go 1.21` (fixed; found by the first full race run, not
+  by the suites I had been running).
+- Self-found regression, earlier: single-file grants broke the projector (found by re-running the HowlBoard consumer check).
+- Reviewer verdict: REJECT, three reproduced defects (the reviewer's sandbox forbade sockets, so gates 3-5 and 7-M2 were not executed):
+  1. HIGH single-file grant reached a sibling through a relative symlink. I reproduced it, wrote red tests, and fixed it
+     with pinned opens (Lstat, SameFile check, exclusive create, deferred truncate). Race test extended; verified it fails
+     without the fix (114 leaks) and passes with it.
+  2. HIGH a program can kill its own supervisor and leave detached descendants. Reproduced in concept; NOT fixed. A sound
+     mitigation needs the runner to be a second-level subreaper plus a registry of its children; judged out of proportion,
+     so the guarantee was narrowed in the docs instead (protects against runaway descendants, not hostile code).
+  3. MEDIUM a program that closes its own output and keeps running was killed (exit 137 after ~200 ms instead of 7 after
+     500 ms): output EOF was treated as cancellation. Reproduced; fixed by an explicit exit report on the status pipe.
+  4. LOW (pre-existing) `GOOS=windows go build ./...` fails in internal/testutil (syscall.Flock). Unchanged from baseline,
+     not in scope; the CLI itself builds for Windows.
