@@ -1,0 +1,13 @@
+--- FAIL: TestExecKillsBackgroundAndSessionEscapedDescendantsOnNormalExit (6.10s)
+    exec_containment_linux_test.go:114: background descendant survived the end of exec: pids [3855266]
+    exec_containment_linux_test.go:114: session-escaped descendant survived the end of exec: pids [3855267]
+--- FAIL: TestExecDeadlineKillsEveryDescendant (10.74s)
+    exec_containment_linux_test.go:132: foreground descendant survived the deadline: pids [3855314]
+    exec_containment_linux_test.go:132: background descendant survived the deadline: pids [3855312]
+    exec_containment_linux_test.go:132: session-escaped descendant survived the deadline: pids [3855313]
+--- FAIL: TestExecOutputLimitKillsEveryDescendant (6.06s)
+    exec_containment_linux_test.go:152: background descendant survived the output-limit stop: pids [3855679]
+    exec_containment_linux_test.go:152: session-escaped descendant survived the output-limit stop: pids [3855680]
+FAIL
+FAIL	github.com/howlcipher/howlframe/internal/vm	22.905s
+FAIL

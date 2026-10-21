@@ -866,10 +866,10 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if denied != nil {
 			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
 		}
-		child := exec.Command(cmd, args...)
 		// Children never inherit the host environment; only process:env= names pass.
-		child.Env = capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv)
-		out, err := child.CombinedOutput()
+		var combined bytes.Buffer
+		err := runContained(context.Background(), cmd, args, capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv), &combined)
+		out := combined.Bytes()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
 		}
@@ -2787,16 +2787,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
 			}
 			cmdCtx, cancel := context.WithCancel(vm.ctx)
-			cmd := exec.CommandContext(cmdCtx, cmdStr, args...)
-			// Children never inherit the host environment; only process:env= names pass.
-			cmd.Env = capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv)
 			output := &limitedOutput{max: max, cancel: cancel}
-			cmd.Stdout, cmd.Stderr = output, output
-			// Bound inherited pipe waits when the runner has a deadline.
-			if vm.ctx.Done() != nil {
-				cmd.WaitDelay = 100 * time.Millisecond
-			}
-			err := cmd.Run()
+			// Children never inherit the host environment; only process:env= names pass.
+			// runContained also ends every descendant when the call ends (HF-02).
+			err := runContained(cmdCtx, cmdStr, args, capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv), output)
 			cancel()
 			vm.checkDeadline(ip, inst.Op)
 			if output.exceeded {
