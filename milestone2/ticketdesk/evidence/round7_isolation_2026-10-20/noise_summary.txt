@@ -1,0 +1,28 @@
+samples=4238 mono 25873.2..30117.4 (4244s mono; real 23854s)
+max steal over any 60s mono window: 0.098% (window mono 27594.4-27653.4)
+max PSI cpu some avg60: 2.06
+max PSI io full avg10: 4.21
+max PSI io full avg60: 2.72
+max PSI memory full avg60: 1.54
+cgroup nr_throttled first=0 last=0
+cgroup memory.events last={'low': 0, 'high': 0, 'max': 0, 'oom': 0, 'oom_kill': 0, 'oom_group_kill': 0}
+pgmajfault first=284844 last=285928
+largest sampler interval: mono 7.659s, real 19617.880s
+heartbeat gaps >250ms:
+  HB gap mono_start=29025.881138 mono_end=29032.859547 mono_d=6.978 real_d=6.997 boot_d=7.001
+  HB gap mono_start=29032.859547 mono_end=29033.346287 mono_d=0.487 real_d=19610.689 boot_d=0.464
+kmsg matches:
+  KMSG observed_mono=29033.570358 match=1 random: crng reseeded due to virtual machine fork
+  KMSG observed_mono=29038.169272 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29038.169319 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29039.168660 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29040.169513 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29041.171962 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29042.170360 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29042.170396 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29042.170440 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29043.169878 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29043.169894 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29043.169898 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29044.170640 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+  KMSG observed_mono=29046.171523 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages

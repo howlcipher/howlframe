@@ -1,0 +1,9 @@
+# Re-run of the Round 7 pin tests: go test -count=1 -v -run 'TestRound7' .
+# Run 2026-10-20 08:08 EDT on the working tree of branch round7-isolation-record-2026-10-20 = commit 9d599a79649421f2bd06daa86e4408bd3801402e plus the docs-only edits of the commit that adds this file (no code, script or pin-line change).
+# The original run is pin_tests.txt (recorded with commit c440c422).
+--- PASS: TestRound7StormScriptPinned (0.00s)
+--- PASS: TestRound7StormScriptSigstopSelfTest (10.19s)
+--- PASS: TestRound7StormScriptNoiseSelfTest (4.45s)
+--- PASS: TestRound7ExpectHeadPinRules (0.91s)
+PASS
+ok  	github.com/howlcipher/howlframe	15.557s

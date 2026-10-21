@@ -88,8 +88,10 @@ type VMLimits struct {
 	MaxRequestBodyBytes int
 	// LogRequests (runner flag --access-log) writes one access line per HTTP request to stderr.
 	// HTTPListenHost is a runner-owned IP literal; empty preserves all-interface binding.
-	HTTPListenHost     string
-	LogRequests        bool
+	HTTPListenHost string
+	LogRequests    bool
+	// LogTiming writes diagnostic-only request/store timing; it never changes authority.
+	LogTiming          bool
 	MaxExecOutputBytes int
 }
 

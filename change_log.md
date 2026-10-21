@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Verification
+* Publish reconciliation preserves concurrent remote store-lock hardening, timing diagnostics, Owner assurance/waiver history and the separate Milestone 3 draft. Combined Ticketdesk frozen/adversarial/historical tests and repository CI-equivalent checks are rerun before publication.
 * All three fresh product milestones accepted at implementation `b028e813`, 2026-10-21: committed clean reproduction, independent final reviews, exact large-ledger arithmetic, real Chromium and actual adapted HowlBoard consumption. Closure records preserve historical failures and bounded carryover.
 * Fresh requirements-first CLI/backend replacements and Milestone 3 EvidenceDesk: retained original contracts, independent adversarial findings, separate reviewer runs and committed-tree reproduction scripts. Source candidates are preserved under milestone1/rebuild and milestone2/rebuild.
 * Fresh all-milestone rebuild authorized 2026-10-20; froze independent Milestone 3 EvidenceDesk and real HowlBoard projector requirements before implementation. Prior acceptance records remain historical evidence.

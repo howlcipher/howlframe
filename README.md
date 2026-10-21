@@ -5,6 +5,7 @@
 Fresh requirements-first implementations of all three milestones are independently
 accepted and reproducible from committed archives. See [the rebuild evidence ledger](docs/journals/2026-10-21_fresh_milestones.md).
 Historical acceptance is retained separately in [Milestone 2's decision](milestone2/MILESTONE2_DECISION.md).
+The separate remote [Milestone 3 draft](milestone3/M3_ACCEPTANCE_SPEC.md) is preserved as another project track; EvidenceDesk does not claim to implement that receipt-verifier specification.
 
 ## What is HowlFrame?
 

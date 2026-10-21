@@ -1,0 +1,68 @@
+# Excerpts for the one request that overlapped the heartbeat gaps (run 169 recovery, GET t622), plus the kmsg records and heartbeat lines around the freeze. Diagnostic only.
+# Wall times (EDT): heartbeat 'HB start' real=1792472829.825490 at mono=25873.177758; wall = real + (mono - 25873.177758).
+## run169 recovery client tsv (header + seq 4845-4855)
+seq	method	path	mono_start	mono_end	real_start	status	elapsed_s
+4845	DELETE	/v1/tickets/t620	29025.860873	29025.861418	1792475982.508604	404	0.000545
+4846	DELETE	/v1/tickets/t621	29025.861434	29025.870926	1792475982.509164	200	0.009493
+4847	GET	/v1/tickets/t621	29025.870945	29025.871500	1792475982.518676	404	0.000554
+4848	DELETE	/v1/tickets/t621	29025.871513	29025.872531	1792475982.519244	404	0.001018
+4849	DELETE	/v1/tickets/t622	29025.872551	29025.882653	1792475982.520281	200	0.010102
+4850	GET	/v1/tickets/t622	29025.882670	29033.646890	1792475982.530401	404	7.764220
+4851	DELETE	/v1/tickets/t622	29033.659325	29033.721271	1792495600.527783	404	0.061946
+4852	DELETE	/v1/tickets/t623	29033.722005	29033.981729	1792495600.590463	200	0.259723
+4853	GET	/v1/tickets/t623	29033.981847	29033.988458	1792495600.850305	404	0.006611
+4854	DELETE	/v1/tickets/t623	29033.988497	29033.991099	1792495600.856955	404	0.002602
+4855	DELETE	/v1/tickets/t624	29033.991141	29034.056830	1792495600.859599	200	0.065689
+## run169 recovery server log (access + timing lines for t622, t623)
+4616:access method=GET path=/v1/tickets/t622 status=200 duration_ms=0 request_id=8bdea947ce30e22bdab051b43e81d254
+4617:timing request_id=8bdea947ce30e22bdab051b43e81d254 method=GET path=/v1/tickets/t622 start_unix_ns=1792475973453082940 start_mono_ms=1717.958 locked_mono_ms=1717.962 end_mono_ms=1718.428 wait_ms=0.003 handler_ms=0.466 total_ms=0.470
+4619:access method=GET path=/v1/tickets/t623 status=200 duration_ms=0 request_id=bce3656a4abfb9d1777a6a4d4a878f5e
+4620:timing request_id=bce3656a4abfb9d1777a6a4d4a878f5e method=GET path=/v1/tickets/t623 start_unix_ns=1792475973453937980 start_mono_ms=1718.813 locked_mono_ms=1718.818 end_mono_ms=1719.148 wait_ms=0.004 handler_ms=0.330 total_ms=0.334
+11366:access method=DELETE path=/v1/tickets/t622 status=200 duration_ms=9 request_id=2c1faca1f5683b5a6dd06dd07523b2b4
+11367:timing request_id=2c1faca1f5683b5a6dd06dd07523b2b4 method=DELETE path=/v1/tickets/t622 start_unix_ns=1792475982520460450 start_mono_ms=10785.336 locked_mono_ms=10785.338 end_mono_ms=10795.078 wait_ms=0.002 handler_ms=9.739 total_ms=9.741
+11368:access method=GET path=/v1/tickets/t622 status=404 duration_ms=0 request_id=a71c99d6f9ec1ba588d2a32d9ad89ac4
+11369:timing request_id=a71c99d6f9ec1ba588d2a32d9ad89ac4 method=GET path=/v1/tickets/t622 start_unix_ns=1792475982530547986 start_mono_ms=10795.423 locked_mono_ms=10795.426 end_mono_ms=10795.677 wait_ms=0.002 handler_ms=0.251 total_ms=0.253
+11370:access method=DELETE path=/v1/tickets/t622 status=404 duration_ms=32 request_id=e5a3e693978382a4df8fa127bcaf35e0
+11371:timing request_id=e5a3e693978382a4df8fa127bcaf35e0 method=DELETE path=/v1/tickets/t622 start_unix_ns=1792495600552273293 start_mono_ms=18596.421 locked_mono_ms=18596.571 end_mono_ms=18630.163 wait_ms=0.149 handler_ms=33.592 total_ms=33.742
+11376:access method=DELETE path=/v1/tickets/t623 status=200 duration_ms=252 request_id=4fb193ee6e0b12d359542d836f2d4914
+11377:timing request_id=4fb193ee6e0b12d359542d836f2d4914 method=DELETE path=/v1/tickets/t623 start_unix_ns=1792495600596417556 start_mono_ms=18640.565 locked_mono_ms=18640.626 end_mono_ms=18893.175 wait_ms=0.060 handler_ms=252.548 total_ms=252.609
+11378:access method=GET path=/v1/tickets/t623 status=404 duration_ms=2 request_id=94528edd96cdf1f46932b1c378b12e4a
+11379:timing request_id=94528edd96cdf1f46932b1c378b12e4a method=GET path=/v1/tickets/t623 start_unix_ns=1792495600853154657 start_mono_ms=18897.302 locked_mono_ms=18897.312 end_mono_ms=18899.467 wait_ms=0.009 handler_ms=2.154 total_ms=2.164
+11380:access method=DELETE path=/v1/tickets/t623 status=404 duration_ms=0 request_id=33f252888be42551fc9f9192ed158031
+11381:timing request_id=33f252888be42551fc9f9192ed158031 method=DELETE path=/v1/tickets/t623 start_unix_ns=1792495600858048122 start_mono_ms=18902.196 locked_mono_ms=18902.237 end_mono_ms=18903.211 wait_ms=0.041 handler_ms=0.973 total_ms=1.015
+## heartbeat.log lines 312-321
+HB alive mono=28993.434545
+HB alive mono=29003.462200
+HB alive mono=29013.493578
+HB alive mono=29023.522051
+HB gap mono_start=29025.881138 mono_end=29032.859547 mono_d=6.978 real_d=6.997 boot_d=7.001
+HB gap mono_start=29032.859547 mono_end=29033.346287 mono_d=0.487 real_d=19610.689 boot_d=0.464
+HB alive mono=29033.560942
+HB alive mono=29043.578760
+HB alive mono=29053.585242
+HB alive mono=29063.587321
+## kill_storm.txt lines for runs 168-170
+264:run=168 cleared tmp after restore: ['state.json.tmp-156943202->run168_pre_1792475954_state.json.tmp-156943202']
+265:run=168 delay=0.5528s confirmed=37 survivors=1463 dangling=0 unindexed=1 storm[n=38 p99=18.0ms max=18.0ms] recovery[n=7374 p99=14.7ms max=18.5ms] PASS
+266:run=169 delay=0.2508s confirmed=15 survivors=1485 dangling=0 unindexed=1 storm[n=16 p99=20.3ms max=20.3ms] recovery[n=7485 p99=31.5ms max=7754.2ms] PASS
+267:run=170 delay=0.5546s confirmed=32 survivors=1468 dangling=0 unindexed=0 storm[n=33 p99=21.2ms max=21.2ms] recovery[n=7400 p99=16.3ms max=98.7ms] PASS
+## artifact mtimes (EDT) for runs 168-170
+-rw------- 1 box box  497448 2026-10-20T01:58:56 run168_pre_1792475954_state.json.tmp-156943202
+-rw-r--r-- 1 box box 2913441 2026-10-20T01:59:31 run168_recovery.log
+-rw-r--r-- 1 box box  643959 2026-10-20T01:59:31 run168_recovery_requests.tsv
+-rw-r--r-- 1 box box       0 2026-10-20T01:59:14 run168_recovery_watchdog.log
+-rw-r--r-- 1 box box   23576 2026-10-20T01:59:14 run168_storm.log
+-rw-r--r-- 1 box box    3588 2026-10-20T01:59:14 run168_storm_requests.tsv
+-rw-r--r-- 1 box box       0 2026-10-20T01:59:14 run168_storm_watchdog.log
+-rw-r--r-- 1 box box 2950416 2026-10-20T07:26:54 run169_recovery.log
+-rw-r--r-- 1 box box  653527 2026-10-20T07:26:54 run169_recovery_requests.tsv
+-rw-r--r-- 1 box box    1268 2026-10-20T07:26:40 run169_recovery_watchdog.log
+-rw-r--r-- 1 box box   10707 2026-10-20T01:59:31 run169_storm.log
+-rw-r--r-- 1 box box    1762 2026-10-20T01:59:31 run169_storm_requests.tsv
+-rw-r--r-- 1 box box       0 2026-10-20T01:59:31 run169_storm_watchdog.log
+-rw-r--r-- 1 box box 2917203 2026-10-20T07:27:13 run170_recovery.log
+-rw-r--r-- 1 box box  646305 2026-10-20T07:27:13 run170_recovery_requests.tsv
+-rw-r--r-- 1 box box       0 2026-10-20T07:26:55 run170_recovery_watchdog.log
+-rw-r--r-- 1 box box   21785 2026-10-20T07:26:55 run170_storm.log
+-rw-r--r-- 1 box box    3271 2026-10-20T07:26:55 run170_storm_requests.tsv
+-rw-r--r-- 1 box box       0 2026-10-20T07:26:54 run170_storm_watchdog.log

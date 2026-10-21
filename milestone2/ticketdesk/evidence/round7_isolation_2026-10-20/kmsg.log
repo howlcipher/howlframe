@@ -1,0 +1,15 @@
+KMSG start mono=25873.180576
+KMSG observed_mono=29033.570358 match=1 random: crng reseeded due to virtual machine fork
+KMSG observed_mono=29038.169272 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29038.169319 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29039.168660 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29040.169513 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29041.171962 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29042.170360 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29042.170396 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29042.170440 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29043.169878 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29043.169894 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29043.169898 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29044.170640 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
+KMSG observed_mono=29046.171523 match=1 virtio_balloon virtio0: Out of puff! Can't get 1 pages
