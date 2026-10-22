@@ -1,0 +1,4 @@
+# HowlBoard TestLedgerImportTruth assertions replayed
+incumbent PASS []
+projector FAIL ['check0: original summary not retained', 'check1: original summary not retained', 'check2: original summary not retained', 'missing exit code fabricated (exit_code=0)', 'explicit exit codes not preserved (0,0)', 'non-verification: fabricated verification', 'ledger provenance/time not retained', 'observed implementation start lost']
+new importer (135cdf7) PASS []

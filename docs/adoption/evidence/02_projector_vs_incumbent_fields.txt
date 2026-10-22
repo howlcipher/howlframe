@@ -1,0 +1,12 @@
+# field-level diff on the 72-record sanitized fixture
+mission key order equal: True
+fields only in incumbent missions: {'task_class': 16, 'override_reason': 16, 'recommended_executor': 16, 'is_override': 16, 'risk_level': 16, 'ledger_recorded_at': 16, 'project': 16, 'evidence_total': 4}
+fields only in projector missions: {}
+shared fields that differ (missions affected): {'authority': 16, 'outcome': 12, 'description': 16, 'evidence': 4, 'state': 1}
+timeline order (mission_id,action) equal: True
+incumbent timeline keys: ['action', 'actor', 'detail', 'ledger_recorded_at', 'mission_id', 'recording_mode']
+projector timeline keys: ['action', 'actor', 'agent_id', 'artifact', 'command', 'detail', 'entry_id', 'findings_summary', 'human_decision', 'metadata', 'mission_id', 'result', 'schema', 'task_id', 'timestamp', 'verification_summary']
+projector timeline timestamp values: {0}
+verification checks incumbent/projector: 0 0
+authority decisions incumbent: ['ALLOW', 'DENY', 'REQUIRE_APPROVAL'] projector: ['REQUIRE_APPROVAL']
+states differ: {'mission:TASK-113': ('CLOSED', 'CREATED')}

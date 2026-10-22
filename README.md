@@ -26,6 +26,12 @@ Positive exec tests select installed canonical executable paths and matching arg
 grants, so symlinked system coreutils do not invalidate successful-execution
 fixtures. Runtime symlink rejection and explicit denial tests remain unchanged;
 missing fixture executables fail rather than silently skipping acceptance.
+The CLI `version`/`--version` output and interop `hfbc_format` field identify
+the artifact envelope this compiler **writes**, derived from the bytecode writer.
+They do not enumerate all legacy envelopes the reader accepts or identify the
+BCProgram instruction-set version. Check actual artifact compatibility as well
+as these fields before choosing a consumer artifact.
+
 
 ## Why does it exist?
 
