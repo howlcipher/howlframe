@@ -22,6 +22,7 @@ func TestValuePositionVoidRejectedBeforeEffects(t *testing.T) {
 		// The effect is an earlier statement: rejection must still come first.
 		"if without else": `(cli_app (do (write_file "fx.txt" "x") (let (r (if false 1)) (print r))))`,
 		"try_let body":    `(cli_app (let (x (try_let (r "v") (catch e "err") (write_file "fx.txt" "x"))) (print x)))`,
+		"nested try_let":  `(cli_app (let (x (if true (try_let (r "v") (catch e "err") (write_file "fx.txt" "x")) "o")) (print x)))`,
 	}
 	for name, program := range invalid {
 		t.Run(name, func(t *testing.T) {

@@ -1038,12 +1038,12 @@ func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) as
 		// Their opcodes push nothing. They keep an unknown type so a statement-only
 		// helper that ends in one still infers, but they are never a value.
 		reason = fmt.Sprintf("%s is a %s, which produces no value", use, head)
-	case head == "try_let" && a.branchYieldsNoValue(node):
-		reason = fmt.Sprintf("%s is a try_let whose catch or success body produces no value", use)
 	case head == "if" && len(node.Children) == 3:
 		reason = fmt.Sprintf("%s is an if without an else branch, which produces no value when its condition is false", use)
 	case head == "match" && !hasDefaultArm(node):
 		reason = fmt.Sprintf("%s is a match without a default arm, which produces no value when no arm matches", use)
+	case a.yieldsNoValue(node):
+		reason = fmt.Sprintf("%s is a (%s ...) form with a path that produces no value", use, head)
 	}
 	if reason == "" {
 		return got
@@ -1058,28 +1058,43 @@ func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) as
 	return ast.Layout(ast.Unknown)
 }
 
-// branchYieldsNoValue reports a try_let whose catch or success body, when it
-// is the try_let's value, would leave nothing on the stack. A body that ends
-// the program or the function (exit, return) never falls through, so it is
-// allowed.
-func (a *Analysis) branchYieldsNoValue(node *ast.Node) bool {
-	if len(node.Children) < 4 {
+// yieldsNoValue reports a form that, used as a value, can leave nothing on
+// the stack: void itself, a store write, or a do/let whose last form, an if or
+// try_let with a branch, or a match with an arm, that yields nothing. Types
+// join void with a value into Any, which hides those paths, so the structure
+// is followed instead. A path that exits or returns never falls through and
+// is allowed.
+func (a *Analysis) yieldsNoValue(node *ast.Node) bool {
+	if node.Type != "List" || len(node.Children) == 0 || diverges(node) {
 		return false
 	}
-	var bodies []*ast.Node
-	if catch := node.Children[2]; catch.Type == "List" && len(catch.Children) >= 3 {
-		bodies = append(bodies, catch.Children[2])
+	if got, ok := a.Types[node]; ok && got.Kind == ast.Void {
+		return true
 	}
-	bodies = append(bodies, node.Children[3])
-	for _, body := range bodies {
-		if body.Type != "List" || len(body.Children) == 0 || diverges(body) {
-			continue
+	last := node.Children[len(node.Children)-1]
+	switch node.Children[0].Value {
+	case "store_put", "store_delete":
+		return true
+	case "do", "let":
+		return len(node.Children) > 1 && a.yieldsNoValue(last)
+	case "if":
+		return len(node.Children) == 3 || len(node.Children) == 4 && (a.yieldsNoValue(node.Children[2]) || a.yieldsNoValue(node.Children[3]))
+	case "try_let":
+		if len(node.Children) < 4 {
+			return false
 		}
-		if got, ok := a.Types[body]; ok && got.Kind == ast.Void {
+		if catch := node.Children[2]; catch.Type == "List" && len(catch.Children) >= 3 && a.yieldsNoValue(catch.Children[2]) {
 			return true
 		}
-		if body.Children[0].Value == "try_let" && a.branchYieldsNoValue(body) {
+		return a.yieldsNoValue(node.Children[3])
+	case "match":
+		if !hasDefaultArm(node) {
 			return true
+		}
+		for _, arm := range node.Children[2:] {
+			if arm.Type == "List" && len(arm.Children) >= 2 && a.yieldsNoValue(arm.Children[1]) {
+				return true
+			}
 		}
 	}
 	return false

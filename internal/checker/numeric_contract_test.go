@@ -125,6 +125,11 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		// value whose success or catch body yields nothing.
 		"try_let success body": `(let (x (try_let (r "v") (catch e "err") (write_file "out.txt" "x"))) (print x))`,
 		"try_let catch body":   `(let (x (try_let (r (to_int "zz")) (catch e (write_file "out.txt" "x")) "ok")) (print x))`,
+		// Found by the confirmation review: the same try_let nested in a do tail,
+		// an if branch, or another try_let's do body.
+		"nested in do":      `(let (x (do (print "a") (try_let (r "v") (catch e "err") (write_file "out.txt" "x")))) (print x))`,
+		"nested in if":      `(let (x (if true (try_let (r "v") (catch e "err") (write_file "out.txt" "x")) "other")) (print x))`,
+		"nested in try_let": `(let (x (try_let (r1 "a") (catch e1 "b") (do (print "hi") (try_let (r2 "c") (catch e2 "d") (write_file "out.txt" "x"))))) (print x))`,
 	}
 	for name, src := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -155,6 +160,8 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		`(defun log_event (id) (do (store_open s "memory://hf05") (store_put s "k" id))) (call log_event "a")`,
 		`(for i (list 1 2) (print i))`,
 		`(let (x (try_let (r "v") (catch e "err") r)) (print x))`,
+		`(let (x (do (print "a") (try_let (r "v") (catch e "err") r))) (print x))`,
+		`(let (x (if true (do (print "a") 1) 2)) (print x))`,
 		// A catch that exits never falls through, so the try_let still yields a value.
 		`(let (raw (try_let (r (read_file "f")) (catch e (do (stderr "cannot read") (exit 3))) (bytes_to_string r))) (print raw))`,
 		// Mixed bodies are fine where no value is needed.
