@@ -202,6 +202,8 @@ applicable, using task-clustered one-sided 95% intervals Bonferroni-adjusted acr
 
 7.8 **Owner options** (must be chosen before freeze; otherwise the defaults apply): A or B for the H2 metric
 (default: strict win rate); C for the H4 gate (default: all three baselines). The choice is recorded in `parameters.json`.
+**Recorded 2026-10-22 by the Owner:** H2 uses **option A**; H4 keeps the **default** (all three baselines gate). Providers are
+Claude Code and Codex, with exact model IDs fixed at freeze.
 
 7.9 **No exclusions after the fact.** Every run is reported: failures, budget exhaustion, infrastructure reruns,
 interventions and tampering attempts. A task cannot be removed after the draw, except under §3.2 step 5's baseline-reference
@@ -255,7 +257,8 @@ such cases as inconclusive rather than forcing a verdict. Adding repetitions doe
 1. **Fairness re-review** of this Revision 2 by a provider different from its author, limited to the R2 findings. Every
    remaining blocking finding is resolved in a recorded revision.
 2. **Owner decisions:** providers and model IDs, options A/B/C (§7.8; defaults otherwise), the spend cap for the dry run
-   and pilot, and approval of this protocol.
+   and pilot, and approval of this protocol. *Recorded 2026-10-22: options and providers. Still open: model IDs, the spend
+   cap and protocol approval.*
 3. The candidate pool, frozen tests, sealed held-out hashes, references, documentation audit and container digests are
    committed. Then `parameters.json` is completed (including the beacon timestamp) and its hash recorded as the freeze.
 4. HowlFrame is pinned to a merged commit. No HowlFrame change may land between freeze and the end of the pilot.

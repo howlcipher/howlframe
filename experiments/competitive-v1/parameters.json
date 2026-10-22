@@ -84,7 +84,7 @@
   "fairness_review": {
     "r1": "FAIRNESS_REVIEW_R1.md (Antigravity/Gemini): NEEDS REVISION, 12 findings, all dispositioned in protocol section 12",
     "r2": "FAIRNESS_REVIEW_R2.md: NEEDS REVISION (5 new problems); dispositioned in protocol section 12",
-    "r3": null
+    "r3": "FAIRNESS_REVIEW_R3.md (Antigravity/Gemini, 2026-10-22): READY FOR OWNER DECISION, no blocking problem; 3 non-blocking suggestions applied"
   },
   "revision": 2,
   "completion_command": "task-complete",
@@ -105,5 +105,11 @@
     "seed": "sha256(beacon outputValue || manifest_sha256)"
   },
   "documentation_audit": null,
-  "owner_options_selected": null
+  "owner_options_selected": {
+    "recorded": "2026-10-22",
+    "h2": "A",
+    "h4": "default (python, go and javascript all gate); option C not taken",
+    "providers": "Claude Code (anthropic) and Codex (openai); exact model IDs fixed at freeze",
+    "spend_cap": "none approved; no dry run or pilot may run"
+  }
 }
