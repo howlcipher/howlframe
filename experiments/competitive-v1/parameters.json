@@ -55,7 +55,6 @@
     "max_authority_centred_tasks": 1
   },
   "scoring": {
-    "h2_primary": "(wins + 0.5*ties) / pairs, failed visible acceptance scores held-out fraction 0 on either side",
     "h2_reported": [
       "W/T/L",
       "wins/pairs",
@@ -64,13 +63,18 @@
     "h3_primary": "RMST over 45 minutes, unverified censored at 45",
     "h4_gate_baselines": [
       "python",
+      "go",
       "javascript"
     ],
-    "h4_reported_only": [
-      "go"
-    ],
     "h6": "pooled meets target and no provider contradicts with interval excluding target",
-    "interval": "task-clustered 95%"
+    "interval": "task-clustered 95%",
+    "h2_default": "strict win rate wins/pairs (mutual failures earn no credit)",
+    "h2_owner_options": {
+      "A": "(wins + 0.5*shared non-zero successes)/pairs",
+      "B": "wins/(wins+losses)"
+    },
+    "h4_owner_option_C": "gate on python and javascript only; go reported",
+    "decision_outcomes": "met / not met / inconclusive; task-clustered one-sided 95% intervals, Bonferroni alpha/3"
   },
   "infrastructure_reruns": 1,
   "heldout_seal_sha256": null,
@@ -78,18 +82,20 @@
   "owner_spend_cap": null,
   "fairness_review": {
     "r1": "FAIRNESS_REVIEW_R1.md (Antigravity/Gemini): NEEDS REVISION, 12 findings, all dispositioned in protocol section 12",
-    "r2": null
+    "r2": "FAIRNESS_REVIEW_R2.md: NEEDS REVISION (5 new problems); dispositioned in protocol section 12",
+    "r3": null
   },
-  "revision": 1,
+  "revision": 2,
   "completion_command": "task-complete",
   "full_study": {
     "independent_tasks_planning_range": [
-      60,
-      90
+      45,
+      80
     ],
     "max_authority_centred_share": 0.15,
     "min_maintenance_share": 0.15,
-    "analysis": "mixed-effects logistic, random intercept per task (or GEE clustered by task)"
+    "analysis": "mixed-effects logistic, random intercept per task (or GEE clustered by task)",
+    "pool": ">= 1.5x full-study task count, authored after the pilot"
   },
   "draw": {
     "manifest_sha256": null,
@@ -97,5 +103,6 @@
     "beacon_pulse_not_before_utc": null,
     "seed": "sha256(beacon outputValue || manifest_sha256)"
   },
-  "documentation_audit": null
+  "documentation_audit": null,
+  "owner_options_selected": null
 }

@@ -1,10 +1,12 @@
 # competitive-v1: preregistered protocol, HowlFrame vs Python, Go and JavaScript
 
-**Status: DRAFT, Revision 1. Not frozen. No trial has run, and no result exists.**
+**Status: DRAFT, Revision 2. Not frozen. No trial has run, and no result exists.**
 Authored 2026-10-21 by Claude Opus 5.5, the agent that also implemented HowlFrame changes in the same mission. That
 conflict is why §11 requires a different-provider fairness review and an Owner budget decision before anything runs.
-Revision 1 resolves the 12 findings of the first fairness review (Antigravity / Gemini, `FAIRNESS_REVIEW_R1.md`).
-The disposition of each finding is in §12.
+Revision 1 resolved the 12 findings of the first fairness review (Antigravity / Gemini, `FAIRNESS_REVIEW_R1.md`), and
+Revision 2 resolves the 5 new problems found in its re-review (`FAIRNESS_REVIEW_R2.md`). Dispositions are in §12.
+**Interpretation rule:** wherever this protocol could read a D16 target more loosely than its plain wording, the
+**default is the plain wording**, and the looser reading is listed as an explicit Owner option (§7.8).
 
 ## 1. Research question and hypotheses
 
@@ -15,9 +17,9 @@ and each is computed **per baseline language and per provider**.
 | ID | Hypothesis (directive D16 target) | Primary measure | Refuted if |
 |---|---|---|---|
 | H1 | Autonomous completion ≥ 80% in HowlFrame | Share of HowlFrame runs whose final code passes every frozen acceptance test with no human input | < 80% |
-| H2 | Matched correctness wins ≥ 60% against **each** baseline | §7.2 paired score per baseline | < 60% against any one baseline |
+| H2 | Matched correctness wins ≥ 60% against **each** baseline | §7.2 win rate per baseline | §7.7 outcome *not met* against any one baseline |
 | H3 | ≥ 20% faster verified development | §7.3 restricted mean time-to-verified, HowlFrame / baseline | Ratio > 0.8 against any baseline |
-| H4 | Runtime within 2× on agreed comparable workloads | §7.4 per-workload execution-time ratio | Median ratio > 2.0 against Python or JavaScript (Go reported separately; §7.4) |
+| H4 | Runtime within 2× on agreed comparable workloads | §7.4 per-workload execution-time ratio | Median ratio > 2.0 against any gated baseline (default: Python, Go and JavaScript; §7.4) |
 | H5 | Maintenance success ≥ 80% | Share of HowlFrame change requests completed with no held-out regressions; compared with each baseline (§7.5) | HowlFrame success < 80% |
 | H6 | Results reproduce across ≥ 2 independent providers | §7.6 consistency rule | §7.6 fails |
 
@@ -51,7 +53,10 @@ No study to date has measured model success, defects, maintenance, time-to-verif
 ### 3.2 Selection procedure (preregistered; must not be tuned after seeing outcomes)
 
 1. **Candidate pool, authored de novo.** A task author **from a provider not implementing HowlFrame changes, and not
-   used as a trial agent for that task**, writes ≥ 6 new candidates per domain. Each is a language-neutral contract:
+   used as a trial agent for that task**, writes new candidates. The **pilot pool** has ≥ 6 candidates for each of D1–D4.
+   The **full-study pool** is authored after the pilot and frozen before its draw. It holds at least 1.5× the
+   full-study task count from §9 (for example, ≥ 135 candidates for 90 tasks), with every domain represented in proportion.
+   Pilot tasks are not reused in the full study. Each is a language-neutral contract:
    CLI arguments, stdin/stdout/exit codes, files, or HTTP routes, with examples. Candidates are drawn from common
    real-world task categories. **No task card from any HowlFrame-repository corpus** (`live-v1-blind`, the
    token-efficiency sets, `falsifiable-v0`, `benchmarks/`) may be used or adapted. The author attests to this, and the
@@ -160,20 +165,23 @@ No study to date has measured model success, defects, maintenance, time-to-verif
 
 7.2 **Matched correctness (H2):** pair each HowlFrame run with the baseline run of the same task, provider and repetition
 index. A side that fails its visible acceptance tests is scored at a held-out fraction of 0 for this comparison; the
-rule is symmetric. A **win** means a strictly higher (adjusted) held-out fraction; a **tie** means equal fractions,
-including both at 1.0 and both at 0. The primary paired score, per baseline, is **(wins + ½ ties) / pairs**. H2 holds
-against a baseline if that score is ≥ 0.60. Always reported as well: W/T/L counts, the strict rate wins / pairs, and the
-decisive rate wins / (wins + losses), each with a task-clustered 95% interval (§9).
+rule is symmetric. A **win** means a strictly higher (adjusted) held-out fraction. A **shared success** means equal,
+non-zero fractions. A **mutual failure** means both at 0. Anything else is a loss.
+* **Default H2 metric (the plain reading of D16, "matched correctness wins"):** strict win rate = wins / pairs.
+* **Owner option A:** shared-credit rate = (wins + ½ shared successes) / pairs. Mutual failures earn **no** credit.
+  This avoids penalizing HowlFrame when both arms are perfect.
+* **Owner option B:** decisive rate = wins / (wins + losses).
+All three are always reported, with W / shared / mutual-failure / L counts and task-clustered intervals (§9). Only the
+metric selected before freeze decides H2 (§7.7).
 
 7.3 **Speed (H3):** restricted mean time-to-verified (RMST) over the 45-minute window, per arm, with unverified runs
 censored at 45 minutes. The ratio is HowlFrame RMST / baseline RMST. Secondary: median time-to-verified over
 *concordant verified pairs* (both arms verified), and the same on active time.
 
 7.4 **Runtime (H4):** per workload, the HowlFrame execution time divided by each baseline's, using both the reference and
-the agent-produced implementations. The H4 gate applies to **Python and JavaScript**. **Go is reported but is not a gate.**
-This is the protocol's interpretation of D16's "agreed comparable workloads" (an interpreted VM compared with interpreted and
-JIT runtimes), and it needs the Owner's confirmation (decision I). If the Owner instead wants Go included in the
-gate, that is fixed before freeze.
+the agent-produced implementations. **Default gate: Python, Go and JavaScript** (the plain reading of D16). **Owner
+option C:** gate on Python and JavaScript only, and report Go as a characterization. This treats an interpreted VM
+measured against compiled Go as outside "agreed comparable workloads". It applies only if ratified before freeze.
 
 7.5 **Maintenance (H5):** successful changes / change requests attempted, per arm. H5's threshold applies to HowlFrame.
 The matched maintenance score against each baseline (computed as in §7.2) is reported as a secondary comparative result.
@@ -182,7 +190,18 @@ The matched maintenance score against each baseline (computed as in §7.2) is re
 **pooled** estimate meets its target **and** no provider's estimate falls on the opposite side of the target with its
 interval excluding the target. Results are reported per provider as well; no conjunctive pass across all hypotheses is required.
 
-7.7 **No exclusions after the fact.** Every run is reported: failures, budget exhaustion, infrastructure reruns,
+7.7 **Decision outcomes (H1–H5).** Each hypothesis gets one of three preregistered outcomes, per baseline where
+applicable, using task-clustered one-sided 95% intervals Bonferroni-adjusted across the three baselines (α = 0.05/3 each):
+* **Met:** the point estimate meets the target, **and** the interval excludes the no-advantage value (for H2: lower
+  bound > 0.50; for H1 and H5: lower bound > 0.70; for H3: upper bound of the RMST ratio < 1.0; for H4: upper bound of
+  the median ratio < 3.0).
+* **Not met:** the interval lies entirely on the wrong side of the target (for H2: upper bound < 0.60).
+* **Inconclusive:** anything else. It is reported as such, never rounded to met or not met.
+
+7.8 **Owner options** (must be chosen before freeze; otherwise the defaults apply): A or B for the H2 metric
+(default: strict win rate); C for the H4 gate (default: all three baselines). The choice is recorded in `parameters.json`.
+
+7.9 **No exclusions after the fact.** Every run is reported: failures, budget exhaustion, infrastructure reruns,
 interventions and tampering attempts. A task cannot be removed after the draw, except under §3.2 step 5's baseline-reference
 rule. If a task proves defective (an acceptance test contradicts its spec), it is fixed for **all** arms and rerun for
 **all** arms, and both results are published.
@@ -205,11 +224,21 @@ Runs on the same task are correlated, so tasks, not runs, are the independent un
 logistic model (random intercepts per task, provider as a fixed effect), or with generalized estimating equations
 clustered by task. The intervals in §7 use the same clustering.
 
-Sizing: an i.i.d. test of 0.60 vs 0.50 (one-sided α = 0.05, power 0.8) needs about 153 pairs. With m = 6 runs per task
-(3 repetitions × 2 providers) and intra-task correlation ρ, the design effect is 1 + (m − 1)ρ. At ρ = 0.5 that is 3.5, so
-153 × 3.5 / 6 ≈ **90 tasks**. At ρ = 0.3, about 64 tasks. The required number of independent tasks is re-derived from the
-pilot's ρ estimate and preregistered as a revision before the full study. The planning range is **60–90 tasks**, with at
-least 15% of them D4. Adding repetitions does not substitute for adding tasks.
+Sizing targets a 0.8 probability of a **Met** outcome (§7.7) against **all three baselines jointly**, so 0.928 power per
+baseline, at one-sided α = 0.05/3, when HowlFrame's true win rate is p₁. i.i.d. pairs needed: p₁ = 0.65 → 138;
+p₁ = 0.70 → 75; p₁ = 0.75 → 46. With m = 6 runs per task (3 repetitions × 2 providers) and intra-task correlation ρ, the
+design effect is 1 + (m − 1)ρ, giving independent tasks of:
+
+| True win rate p₁ | ρ = 0.3 | ρ = 0.5 |
+|---|---|---|
+| 0.65 | 57 | 80 |
+| 0.70 | 31 | 44 |
+| 0.75 | 19 | 27 |
+
+The planning range is **45–80 tasks** (p₁ between 0.65 and 0.70), with at least 15% of them D4. The final count is
+re-derived from the pilot's ρ estimate and preregistered as a revision before the full study. A true win rate of exactly
+0.60 cannot be reliably distinguished from just below it at any feasible size; the three-outcome rule (§7.7) reports
+such cases as inconclusive rather than forcing a verdict. Adding repetitions does not substitute for adding tasks.
 
 ## 10. Reporting
 
@@ -221,10 +250,10 @@ least 15% of them D4. Adding repetitions does not substitute for adding tasks.
 
 ## 11. Before any trial (gates)
 
-1. **Fairness re-review** of this Revision 1 by a provider different from its author. Every remaining blocking finding is
-   resolved in a recorded revision.
-2. **Owner decisions:** providers and model IDs, the H4 interpretation (§7.4), the spend cap for the dry run and pilot, and
-   approval of this protocol.
+1. **Fairness re-review** of this Revision 2 by a provider different from its author, limited to the R2 findings. Every
+   remaining blocking finding is resolved in a recorded revision.
+2. **Owner decisions:** providers and model IDs, options A/B/C (§7.8; defaults otherwise), the spend cap for the dry run
+   and pilot, and approval of this protocol.
 3. The candidate pool, frozen tests, sealed held-out hashes, references, documentation audit and container digests are
    committed. Then `parameters.json` is completed (including the beacon timestamp) and its hash recorded as the freeze.
 4. HowlFrame is pinned to a merged commit. No HowlFrame change may land between freeze and the end of the pilot.
@@ -247,3 +276,14 @@ None of these gates has been passed as of this draft.
 | 10 | Agents could edit acceptance tests (blocking) | Accepted; read-only mount, isolated scoring, tampering reported (§3.3, §4) |
 | 11 | No completion handshake; API latency (important) | Accepted; `task-complete`, co-scheduled arms, logged provider wait and active time (§5, §6) |
 | 12 | Maintenance only for HowlFrame; conjunctive H6 (important) | Accepted; maintenance for all arms with a matched comparison, and H6 as a consistency rule (§7.5, §7.6) |
+
+### Fairness re-review R2 (Antigravity / Gemini): R1 findings 5, 7 and 8 partially resolved; 5 new problems
+
+| # | Problem (R2) | Disposition in Revision 2 |
+|---|---|---|
+| R2-1 | Pool of ≥ 6 per domain cannot supply 60–90 tasks | Separate pilot and full-study pools; the full-study pool is ≥ 1.5× the task count, authored after the pilot (§3.2.1) |
+| R2-2 | Sizing tested superiority over 0.5 with a point-estimate refutation rule (≈ 50% false refutation at 0.60), ignoring three baselines | Three-outcome decision rule with Bonferroni α/3 (§7.7); sizing for 0.8 joint power at stated true effects, with the table in §9 |
+| R2-3 | Mutual failures (0/0) earned half credit | Mutual failures earn no credit in any metric (§7.2) |
+| R2-4 | (W + ½T)/N diverged from D16's "matched correctness wins" wording | Default is the strict win rate; shared credit is Owner option A, decisive rate option B (§7.2, §7.8) |
+| R2-5 | Go was exempted from the runtime gate without ratification | Default gate is all three baselines; the Go exemption is Owner option C (§7.4, §7.8) |
+
