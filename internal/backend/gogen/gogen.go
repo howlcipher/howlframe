@@ -603,6 +603,11 @@ func howlFrameCodeLoadingEnv(name string) bool {
 			return true
 		}
 	}
+	for _, s := range howlFrameCodeLoadingEnvSuffixes {
+		if strings.HasSuffix(u, s) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -684,8 +689,9 @@ func fetchImports(extra []string) string {
 	return out
 }
 
-// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames and
-// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames,
+// CodeLoadingEnvPrefixes and CodeLoadingEnvSuffixes, the refusal tables
+// shared by every target.
 func codeLoadingEnvGoSource() string {
 	var b strings.Builder
 	b.WriteString("var howlFrameCodeLoadingEnvNames = []string{\n")
@@ -695,6 +701,10 @@ func codeLoadingEnvGoSource() string {
 	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvPrefixes = []string{\n")
 	for _, p := range capability.CodeLoadingEnvPrefixes {
 		fmt.Fprintf(&b, "\t%q,\n", p)
+	}
+	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvSuffixes = []string{\n")
+	for _, s := range capability.CodeLoadingEnvSuffixes {
+		fmt.Fprintf(&b, "\t%q,\n", s)
 	}
 	b.WriteString("}\n\n")
 	return b.String()
