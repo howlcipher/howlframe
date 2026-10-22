@@ -54,6 +54,13 @@ func TestAdapterRejectsValueLessOperandBeforeExecution(t *testing.T) {
 		"print value": append([]transportNode{program("p"),
 			testNode("p", "print", "", "", []transportEdge{{Role: "value", NodeID: "w"}}),
 		}, write("w")...),
+		"if without else as a value": append([]transportNode{
+			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "w"}, {Role: "body", NodeID: "l"}}),
+			testNode("l", "let", "r", "", []transportEdge{{Role: "value", NodeID: "i"}, {Role: "body", NodeID: "p"}}),
+			testNode("i", "if", "", "", []transportEdge{{Role: "condition", NodeID: "f"}, {Role: "then", NodeID: "s"}}),
+			testNode("f", "const", "false", "BOOL", nil), str("s", "x"),
+			testNode("p", "print", "", "", []transportEdge{{Role: "value", NodeID: "s3"}}), str("s3", "b"),
+		}, write("w")...),
 		"sequence ending in an effect": append([]transportNode{program("p"),
 			testNode("p", "print", "", "", []transportEdge{{Role: "value", NodeID: "q"}}),
 			testNode("q", "sequence", "", "", []transportEdge{{Role: "body", NodeID: "w"}}),

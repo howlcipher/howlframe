@@ -105,13 +105,29 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		"try_let binding": `(try_let (r (write_file "out.txt" "x")) (catch e (print "c")) (print "b"))`,
 		"dict value":      `(print (encode_json (dict ("k" (write_file "out.txt" "x")))))`,
 		"return value":    `(defun f () (return (write_file "out.txt" "x"))) (print (call f))`,
+		// Found by the independent review of the first HF-05 fix: builtin
+		// arguments, loop iterables, match subjects, partial if/match values
+		// and store writes used as values.
+		"builtin argument":      `(print (to_string (write_file "out.txt" "x")))`,
+		"encode_json argument":  `(print (encode_json (write_file "out.txt" "x")))`,
+		"read_file path":        `(print (read_file (write_file "out.txt" "x")))`,
+		"write_file data":       `(write_file "outer.txt" (write_file "out.txt" "x"))`,
+		"mkdir path":            `(mkdir (write_file "out.txt" "x"))`,
+		"sleep duration":        `(sleep (write_file "out.txt" "x"))`,
+		"stderr value":          `(stderr (write_file "out.txt" "x"))`,
+		"void call argument":    `(defun f () void (write_file "out.txt" "x")) (print (read_file (call f)))`,
+		"for iterable":          `(for i (write_file "out.txt" "x") (print i))`,
+		"match subject":         `(match (write_file "out.txt" "x") (default (print "d")))`,
+		"if without else":       `(let (r (if false 1)) (print r))`,
+		"match without default": `(print (match 2 (1 42)))`,
+		"store_put value":       `(do (store_open s "memory://hf05") (print (store_put s "k" 1)))`,
 	}
 	for name, src := range invalid {
 		t.Run(name, func(t *testing.T) {
 			analysis := analyzeExpr(t, src)
 			found := false
 			for _, d := range analysis.Diagnostics {
-				if strings.Contains(d.Reason, "void expression") {
+				if strings.Contains(d.Reason, "produces no value") {
 					found = true
 				}
 			}
@@ -127,6 +143,13 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		`(try_let (r (read_file "out.txt")) (catch e (print "c")) (print (bytes_to_string r)))`,
 		`(try_let (r (do (write_file "out.txt" "x") 1)) (catch e (print "c")) (print r))`,
 		`(print (encode_json (dict ("k" 1) ("v" (to_string 2)))))`,
+		`(if true (print "x"))`,
+		`(let (r (if true 1 2)) (print r))`,
+		`(print (match 2 (1 "a") (default "b")))`,
+		`(do (store_open s "memory://hf05") (store_put s "k" 1) (print (store_get s "k")))`,
+		// HowlBoard's log_event shape: a helper whose last form is a store write.
+		`(defun log_event (id) (do (store_open s "memory://hf05") (store_put s "k" id))) (call log_event "a")`,
+		`(for i (list 1 2) (print i))`,
 	} {
 		if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
 			t.Fatalf("statement-position void rejected in %s: %v", valid, d)

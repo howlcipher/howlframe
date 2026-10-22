@@ -979,8 +979,9 @@ func statementRole(kind, role string) bool {
 }
 
 // validateValueRoles rejects a value-less node wired into a value role. A let
-// or sequence yields its last body's value, so it is followed; if, try and
-// call stay with the run-time contract.
+// or sequence yields its last body's value, so it is followed; an if without
+// an else yields nothing when its condition is false. try and call stay with
+// the run-time contract.
 func validateValueRoles(transport candidateTransport) *Diagnostic {
 	byID := make(map[NodeID]transportNode, len(transport.Nodes))
 	for _, node := range transport.Nodes {
@@ -994,6 +995,8 @@ func validateValueRoles(transport candidateTransport) *Diagnostic {
 			return len(node.Inputs) == 2 && noValue(node.Inputs[1].NodeID)
 		case "sequence":
 			return len(node.Inputs) == 0 || noValue(node.Inputs[len(node.Inputs)-1].NodeID)
+		case "if":
+			return len(node.Inputs) < 3
 		}
 		return valueLessKinds[node.Kind]
 	}

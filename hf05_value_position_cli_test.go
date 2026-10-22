@@ -15,9 +15,12 @@ import (
 func TestValuePositionVoidRejectedBeforeEffects(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
 	invalid := map[string]string{
-		"try_let binding": `(cli_app (try_let (r (write_file "fx.txt" "x")) (catch e (print "caught")) (print "bound")))`,
-		"dict value":      `(cli_app (print (encode_json (dict ("k" (write_file "fx.txt" "x"))))))`,
-		"return value":    `(cli_app (do (defun f () (return (write_file "fx.txt" "x"))) (print (call f))))`,
+		"try_let binding":  `(cli_app (try_let (r (write_file "fx.txt" "x")) (catch e (print "caught")) (print "bound")))`,
+		"dict value":       `(cli_app (print (encode_json (dict ("k" (write_file "fx.txt" "x"))))))`,
+		"return value":     `(cli_app (do (defun f () (return (write_file "fx.txt" "x"))) (print (call f))))`,
+		"builtin argument": `(cli_app (print (read_file (write_file "fx.txt" "x"))))`,
+		// The effect is an earlier statement: rejection must still come first.
+		"if without else": `(cli_app (do (write_file "fx.txt" "x") (let (r (if false 1)) (print r))))`,
 	}
 	for name, program := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -35,7 +38,7 @@ func TestValuePositionVoidRejectedBeforeEffects(t *testing.T) {
 				cmd := exec.Command(binary, args...)
 				cmd.Dir = dir
 				out, err := cmd.CombinedOutput()
-				if err == nil || !strings.Contains(string(out), "is a void expression and produces no value") {
+				if err == nil || !strings.Contains(string(out), "produces no value") {
 					t.Errorf("%v accepted or wrong diagnostic: %v %s", args[0], err, out)
 				}
 			}

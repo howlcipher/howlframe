@@ -65,6 +65,8 @@ type Analysis struct {
 	jsTarget bool
 	// sugarReported dedupes operand-type diagnostics per % or // form.
 	sugarReported map[*ast.Node]bool
+	// valueReported dedupes value-position diagnostics per node.
+	valueReported map[*ast.Node]bool
 }
 
 type typeEnv map[string]ast.TypeInfo
@@ -405,6 +407,7 @@ func (a *Analysis) infer(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 	case "List":
 		result = a.inferList(node, env)
+		a.requireValueArguments(node)
 	default:
 		result = ast.Layout(ast.Unknown)
 	}
@@ -544,7 +547,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Void)
 	case "match":
-		a.inferChild(node, 1, env)
+		a.inferValue(node, 1, env, "match subject")
 		result := ast.Layout(ast.Unknown)
 		for _, caseNode := range node.Children[2:] {
 			if caseNode.Type != "List" || len(caseNode.Children) < 2 {
@@ -1024,11 +1027,89 @@ func (a *Analysis) inferValue(node *ast.Node, index int, env typeEnv, use string
 // requireValue reports a void expression used where a value is required and
 // returns Unknown for it so the error does not cascade.
 func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) ast.TypeInfo {
-	if got.Kind == ast.Void && node.Type == "List" {
-		a.add(node, fmt.Sprintf("%s is a void expression and produces no value", use))
-		return ast.Layout(ast.Unknown)
+	if node.Type != "List" || len(node.Children) == 0 {
+		return got
 	}
-	return got
+	reason := ""
+	switch head := node.Children[0].Value; {
+	case got.Kind == ast.Void:
+		reason = fmt.Sprintf("%s is a void expression and produces no value", use)
+	case head == "store_put" || head == "store_delete":
+		// Their opcodes push nothing. They keep an unknown type so a statement-only
+		// helper that ends in one still infers, but they are never a value.
+		reason = fmt.Sprintf("%s is a %s, which produces no value", use, head)
+	case head == "if" && len(node.Children) == 3:
+		reason = fmt.Sprintf("%s is an if without an else branch, which produces no value when its condition is false", use)
+	case head == "match" && !hasDefaultArm(node):
+		reason = fmt.Sprintf("%s is a match without a default arm, which produces no value when no arm matches", use)
+	}
+	if reason == "" {
+		return got
+	}
+	if a.valueReported == nil {
+		a.valueReported = map[*ast.Node]bool{}
+	}
+	if !a.valueReported[node] {
+		a.valueReported[node] = true
+		a.add(node, reason)
+	}
+	return ast.Layout(ast.Unknown)
+}
+
+func hasDefaultArm(node *ast.Node) bool {
+	for _, arm := range node.Children[2:] {
+		if arm.Type == "List" && len(arm.Children) > 0 && arm.Children[0].Type == "SYMBOL" && arm.Children[0].Value == "default" {
+			return true
+		}
+	}
+	return false
+}
+
+// valueArgumentForms consume every argument as a value: a void argument would
+// leave the operand stack short after the argument's own effect has run (HF-05).
+// Forms with bodies, branches, lambdas or bindings are deliberately absent; their
+// value positions are checked where they are inferred.
+var valueArgumentForms = map[string]bool{
+	"attr_escape": true, "blank": true, "bytes_to_string": true, "dec": true, "encode_json": true, "ends_with": true,
+	"env": true, "exec": true, "exit": true, "fetch": true, "html_escape": true, "http_body": true, "http_request": true,
+	"http_res": true, "http_status": true, "inc": true, "index_of": true, "is_nil": true, "lines": true,
+	"list_contains": true, "list_get": true, "list_len": true, "list_slice": true, "map_delete": true, "map_get": true,
+	"map_has": true, "map_keys": true, "map_set": true, "max": true, "min": true, "mkdir": true, "not": true, "nz": true,
+	"rand_hex": true, "read_file": true, "read_text": true, "regex_match": true, "res": true, "res_header": true,
+	"res_json": true, "reverse": true, "secure_equal": true, "sha256_hex": true, "sleep": true, "sort": true,
+	"starts_with": true, "stderr": true, "store_delete": true, "store_get": true, "store_put": true, "str": true,
+	"str_contains": true, "str_join": true, "str_len": true, "str_replace": true, "str_slice": true, "str_split": true,
+	"str_trim": true, "sum": true, "to_float": true, "to_int": true, "to_lower": true, "to_string": true,
+	"to_upper": true, "utf8_valid": true, "ver_ge": true, "ver_gt": true, "write_file": true,
+}
+
+// requireValueArguments applies requireValue to the arguments of a value
+// argument form and to a for loop's iterable, after they have been inferred.
+func (a *Analysis) requireValueArguments(node *ast.Node) {
+	if len(node.Children) == 0 || node.Children[0].Type != "SYMBOL" {
+		return
+	}
+	head := node.Children[0].Value
+	check := func(index int, use string) {
+		if index < len(node.Children) {
+			if got, ok := a.Types[node.Children[index]]; ok {
+				a.requireValue(node.Children[index], got, use)
+			}
+		}
+	}
+	if head == "for" {
+		check(2, "for iterable")
+		return
+	}
+	if !valueArgumentForms[head] {
+		return
+	}
+	if _, user := a.Functions[head]; user {
+		return
+	}
+	for index := 1; index < len(node.Children); index++ {
+		check(index, fmt.Sprintf("%s argument %d", head, index))
+	}
 }
 
 func (a *Analysis) inferChild(node *ast.Node, index int, env typeEnv) ast.TypeInfo {
