@@ -113,12 +113,32 @@ var CodeLoadingEnvNames = []string{
 	"GCONV_PATH", "LOCPATH", "NLSPATH", "HOSTALIASES", "RESOLV_HOST_CONF",
 	// TLS trust stores
 	"SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
+	// helper programs a child may launch: pagers, editors, browsers, shells, askpass
+	"PAGER", "EDITOR", "VISUAL", "LESSOPEN", "LESSCLOSE", "BROWSER", "SHELL", "SSH_ASKPASS", "SUDO_ASKPASS",
+	// temporary directories, resolver options, terminal and manual databases
+	"TMPDIR", "TMP", "TEMP", "RES_OPTIONS", "LOCALDOMAIN", "TERMINFO", "TERMINFO_DIRS", "MANPATH",
+	// Go toolchain module, cache and build settings (exact names: a bare GO
+	// prefix would refuse application names such as GOAL_ID)
+	"GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB", "GONOSUMCHECK", "GOSUMDB", "GOINSECURE", "GOAUTH",
+	"GOCACHE", "GOMODCACHE", "GOBIN", "GOEXPERIMENT", "GOWORK", "GOVCS",
 }
 
 // CodeLoadingEnvPrefixes refuses whole families: the dynamic loader (LD_*,
 // DYLD_*), git hooks/config/exec path (GIT_*), exported bash functions
-// (BASH_FUNC_*) and Lua module paths and init (LUA_*).
-var CodeLoadingEnvPrefixes = []string{"LD_", "DYLD_", "GIT_", "BASH_FUNC_", "LUA_"}
+// (BASH_FUNC_*), Lua module paths and init (LUA_*), and the configuration,
+// module and plugin settings of OpenSSL, glibc, the allocator and the
+// language runtimes and package managers an exec child may start (#182).
+var CodeLoadingEnvPrefixes = []string{
+	"LD_", "DYLD_", "GIT_", "BASH_FUNC_", "LUA_",
+	"OPENSSL_", "GLIBC_", "MALLOC_", "SSL_", "CURL_",
+	"PYTHON", "PIP_", "NODE_", "NPM_CONFIG_", "YARN_", "PERL", "RUBY", "GEM_", "BUNDLE_", "PHP", "ERL_",
+	"JAVA_", "JDK_", "CARGO_",
+}
+
+// CodeLoadingEnvSuffixes refuses names by ending: *_PROXY (HTTP_PROXY,
+// https_proxy, ALL_PROXY, NO_PROXY, ...) redirects or exempts a child's
+// network traffic.
+var CodeLoadingEnvSuffixes = []string{"_PROXY"}
 
 // DynamicLoaderEnv reports variables in the shared code-loading refusal
 // list. Passing one to an exec child would let it load arbitrary code into
@@ -132,6 +152,11 @@ func DynamicLoaderEnv(name string) bool {
 	}
 	for _, p := range CodeLoadingEnvPrefixes {
 		if strings.HasPrefix(u, p) {
+			return true
+		}
+	}
+	for _, s := range CodeLoadingEnvSuffixes {
+		if strings.HasSuffix(u, s) {
 			return true
 		}
 	}

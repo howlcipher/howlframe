@@ -69,7 +69,10 @@ Design, all in existing structures (no new opcode, form, capability or lowering,
 Reviews found a new variant of one root cause in each round. The final rule addresses that root cause structurally,
 and round 4 confirmed it independently. Merged 2026-10-22 as `6912b0bb`.
 
-## 2. HF-11 / #182: `process:env` forwarding policy (proposal only; nothing implemented)
+## 2. HF-11 / #182: `process:env` forwarding policy (step 1 implemented 2026-10-22; step 2 open)
+
+**Update 2026-10-22:** the Owner approved step 1 (decision H). It is implemented as the class *execution-steering* below,
+with the prefix, suffix and name tables listed in `change_log.md`. Step 2 (an allowlist) is not implemented.
 
 ### Current behavior (verified on `bfc4ff8f`)
 Exec children start with an **empty** environment. Each `process:env=NAME` grant forwards one host variable, unless the
