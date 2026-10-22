@@ -16,6 +16,8 @@
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 
 ### Fixed
+* Derive advertised HFBC envelope format from the actual artifact writer; CLI version and interop no longer report format 1 while emitting format 2. A public CLI regression compiles a real artifact and checks all three advertised surfaces.
+
 * Fresh Ledgerlens exact aggregate arithmetic across the complete allowed amount/row-count range; uncapped decimal budgets. Fresh Taskflow segmented expansion and side-effect-free multi-output permission preflight; fresh Healthwatch distinguishes absent and invalid empty state.
 * Fresh Ticketdesk atomically publishes ticket buckets and complete token state, validates persisted state before startup mutation, and provides non-overwriting offline legacy migration.
 * HTTP serial-body framing failures preserve route/auth ordering and correlated errors; ignored GET/DELETE bodies do not stall handlers. Added runner IP binding, observational scoped filesystem grant queries, and JavaScript fetch headers/component encoding required by the full-stack application.
