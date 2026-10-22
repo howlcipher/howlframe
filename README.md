@@ -150,7 +150,7 @@ See:
 
 ## Requirements
 
-- Go 1.21 or newer.
+- Go 1.25 or newer (`go.mod` requires it; with the default `GOTOOLCHAIN=auto`, an older Go downloads 1.25 for you).
 - Python 3.10 or newer if you use the optional orchestrator.
 - Ollama or another OpenAI-compatible local model endpoint if you use LLM-backed orchestration.
 

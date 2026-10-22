@@ -26,7 +26,9 @@ mv howlframe /usr/local/bin/
 Download `howlframe_0.1.0_windows_amd64.zip`, extract it, and place `howlframe.exe` in a directory included in your system `%PATH%`.
 
 ## Build from source
-If you have Go 1.21 or newer installed, you can build from source:
+If you have Go 1.25 or newer installed, you can build from source. `go.mod` requires 1.25 for the race-free filesystem layer
+(`os.Root.MkdirAll`, `Rename` and `Chmod`). With an older Go and the default `GOTOOLCHAIN=auto`, `go build` downloads 1.25;
+with `GOTOOLCHAIN=local` it fails.
 
 ```bash
 git clone https://github.com/howlcipher/howlframe.git
