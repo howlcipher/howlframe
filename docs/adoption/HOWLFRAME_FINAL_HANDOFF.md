@@ -3,8 +3,10 @@
 Dates: 2026-10-21 to 2026-10-22. Implementing agent: Claude Opus 5.5 (Anthropic). Reviewers: Codex (OpenAI) and
 Antigravity (Google, Gemini).
 **Update 2026-10-22:** at the Owner's request, HowlFrame #211 and HowlBoard #20 are **merged**. HowlFrame #212 is **merged**
-after Antigravity's round-4 review accepted its final code (`7de10d4a`). No branch protection was changed. No issue was closed. No model
-comparison trial was run.
+after Antigravity's round-4 review accepted its final code (`7de10d4a`). Later that day the Owner accepted the remaining
+recommendations: branch protection is applied (B), #181 is closed with #216 and #217 opened (E), the Milestone 3 correction and R5
+supersession are recorded (C, D), Go 1.25 is documented (A), `process:env` step 1 is implemented in its own PR (H), and the pilot
+options are recorded (I). No model comparison trial was run, and none may run without a spend cap.
 
 ## Pull requests
 
@@ -55,9 +57,8 @@ Unrelated open PRs, not touched: #178, #206, #210.
 
 ## Outstanding Owner decisions
 
-A (Go 1.25), B (required checks; needs admin), C (M3 wording), D (R5 adapter), E (#181 and a new hostile-process issue),
-F (HowlBoard behavior changes), G (HF-05), H (`process:env` policy), I (pilot providers, H2/H4 options, budget).
-All are open; recommendations are in `HOWLFRAME_OWNER_DECISIONS.md`.
+A–G are decided. H step 2 (an env allowlist that breaks TaskFlow's frozen test) and I's spend cap are open.
+Details are in `HOWLFRAME_OWNER_DECISIONS.md`.
 
 ## Post-merge check (2026-10-22)
 
@@ -67,5 +68,5 @@ upstream commit `9dbd8175` is in `main` history.
 
 ## Recommended next action
 
-Decision I (providers, options and spend cap) is the only thing between the protocol and its pilot. Decisions A–E and H
-remain open.
+Build the four pilot tasks, frozen tests and containers for competitive-v1 (no paid runs), then set a spend cap for the
+4-run dry run. Smaller: make `verify_workflows.py` apply the R5 adapter only when the consumer declares no root grants.

@@ -1,6 +1,10 @@
 > **Correction notice (2026-10-21):** this decision's statements about HowlBoard compatibility were checked against the
 > current upstream HowlBoard after an independent audit. See [EVIDENCE_STATEMENT_2026-10-21.md](EVIDENCE_STATEMENT_2026-10-21.md).
-> The decision text below is unchanged; the statement lists the differences and the Owner decisions still pending.
+>
+> **Correction (2026-10-22, Owner decisions C and D):** see [CORRECTION_2026-10-22.md](CORRECTION_2026-10-22.md). In short:
+> EvidenceDesk's ledger *validation module* is adopted by HowlBoard's production import; its *projector* is not, and
+> does not replace HowlBoard's importer. The R5 adapter addendum is superseded as a current requirement.
+> The decision text below is unchanged.
 
 # Milestone 3 decision
 

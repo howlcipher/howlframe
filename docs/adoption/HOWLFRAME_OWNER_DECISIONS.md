@@ -7,19 +7,19 @@ separately. When the Owner decides, record the decision, date and wording in the
 
 | # | Decision | Recommendation | Status |
 |---|---|---|---|
-| A | Minimum Go toolchain | Keep Go 1.25 | **Open** |
-| B | Required GitHub checks | Require `build`, `acceptance`, `race` on HowlFrame `main`; protect HowlBoard `main` | **Open** (needs admin action) |
-| C | Milestone 3 verdict wording | D30 A demonstrated; D30 B compatibility demonstrated, adoption pending; D30 J demonstrated | **Open** |
-| D | R5 adapter addendum | Supersede; retire as a current requirement, keep the historical record | **Open** |
-| E | Process-security limitations and #181 | Record the three-level distinction; #181's own criteria are met; track the hostile case separately | **Open** |
+| A | Minimum Go toolchain | Keep Go 1.25 | **Approved** 2026-10-22 |
+| B | Required GitHub checks | Require `build`, `acceptance`, `race` on HowlFrame `main`; protect HowlBoard `main` | **Approved and applied** 2026-10-22 |
+| C | Milestone 3 verdict wording | D30 A demonstrated; D30 B compatibility demonstrated, adoption pending; D30 J demonstrated | **Approved** 2026-10-22; B now reads *partially adopted* (`milestone3/CORRECTION_2026-10-22.md`) |
+| D | R5 adapter addendum | Supersede; retire as a current requirement, keep the historical record | **Approved** 2026-10-22 |
+| E | Process-security limitations and #181 | Record the three-level distinction; #181's own criteria are met; track the hostile case separately | **Approved** 2026-10-22; #181 closed, #216 and #217 opened |
 | F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Approved** 2026-10-22 (merged) |
 | G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Approved** 2026-10-22 (merged after independent confirmation) |
-| H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | **Open** |
-| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | **Open** |
+| H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | Step 1 **approved** 2026-10-22 (implementation PR); step 2 **open** |
+| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | Options **recorded** 2026-10-22; no spend cap, so **no run** |
 
 Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F), and HowlFrame #212
-after Antigravity's round-4 review accepted it (decision G).
-No branch protection was changed and no issue closed.
+after Antigravity's round-4 review accepted it (decision G). Later the same day the Owner accepted the recommendations for A–E, H step 1
+and the I options, with I limited to recording choices (no paid runs). Each item's Decision line says what was done.
 
 ---
 
@@ -41,7 +41,7 @@ No equally safe, simpler option was found.
 **Recommendation:** keep Go 1.25 as the minimum. Fix a stale library entry: `docs/installation.md` still says "Go 1.21 or newer".
 That holds only with `GOTOOLCHAIN=auto` (the default), which downloads 1.25. With `GOTOOLCHAIN=local` and an older Go, the build fails.
 
-**Decision:** _(Owner)_
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). `README.md` and `docs/installation.md` now say Go 1.25 and explain `GOTOOLCHAIN`.
 
 ## B. Required GitHub checks
 
@@ -70,7 +70,7 @@ gh api -X PUT repos/howlcipher/howlboard/branches/main/protection --input - <<'E
 EOF
 ```
 
-**Decision:** _(Owner)_
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend") and applied through the API: HowlFrame `main` requires `build`, `acceptance` and `race` (GitHub Actions app 15368) with `strict: true`; HowlBoard `main` requires `Build, Contract Tests, Docs & SEO Verification` with `strict: true`. Admins are not enforced on either. The optional `build` job rename was not done.
 
 ## C. Milestone 3 verdict wording (D30 A, B, J)
 
@@ -96,7 +96,7 @@ EOF
 Historical ACCEPTED records stay as written. The correction text belongs in a new dated file, for example
 `milestone3/CORRECTION_<date>.md`, once the Owner chooses the wording. It is not written here, to avoid pre-empting the decision.
 
-**Decision:** _(Owner)_
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). Recorded in `milestone3/CORRECTION_2026-10-22.md` (D30 A demonstrated; D30 B *partially adopted*, since HowlBoard #20 merged; D30 J demonstrated), with a pointer from `MILESTONE3_DECISION.md`, whose text is unchanged.
 
 ## D. R5 adapter addendum
 
@@ -109,7 +109,7 @@ historical evidence. Do not record it as Owner-approved. As a follow-up (needs a
 make `verify_workflows.py` apply the adapter only when the consumer declares no root `(grants ...)`, and otherwise run the unmodified
 consumer under its own declared grants. That is the configuration current upstream actually uses.
 
-**Decision:** _(Owner)_
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). The addendum carries a superseded notice and stays as history. The `verify_workflows.py` follow-up was not made.
 
 ## E. Process-security limitations and issue #181
 
@@ -128,7 +128,7 @@ before any live run grants process:exec." The implemented subreaper meets that c
 design noted in the #209 handoff as "runner-as-second-subreaper"). Do not describe HowlFrame as isolating hostile code.
 Not done here: closing an issue is the Owner's call.
 
-**Decision:** _(Owner)_
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). #181 closed against its own criterion, citing the three tests. New issues: #216 (hostile code that kills its supervisor) and #217 (macOS/BSD session escape and Windows descendants, which #181's Linux fix does not cover).
 
 ## F. HowlBoard ledger-import behavior change (HowlBoard #20)
 
@@ -152,7 +152,8 @@ accepted `7de10d4a`.
 
 A proposal with measured consumer impact is in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2. Nothing is implemented.
 **Recommendation:** approve step 1 (classified refusal of execution-steering families, no breakage measured); decide step 2
-(allowlist by default with an explicit opt-in for application names) separately. **Decision:** _(Owner)_
+(allowlist by default with an explicit opt-in for application names) separately.
+**Decision:** step 1 approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"); implemented in its own PR. Step 2 is still open: it breaks TaskFlow's frozen `T-R11-env-isolation`.
 
 ## I. Competitive pilot
 
@@ -169,4 +170,7 @@ gate is passed. No trial has run. The Owner needs to choose:
 4. **Spend cap** for a 4-run dry run, then the 96-run pilot (4 tasks × 4 languages × 2 providers × 3 repetitions), which is explicitly
    non-conclusive.
 
-**Decision:** _(Owner)_
+**Decision:** recorded by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"), choosing to record only:
+H2 **option A** (shared credit for equal non-zero results; mutual failures earn nothing); H4 **default** (Python, Go and JavaScript all gate);
+providers **Claude Code and Codex**, with exact model IDs fixed at freeze. **No spend cap is approved, so no dry run or pilot may run.**
+Building the pilot tasks and containers is a separate job, not started.
