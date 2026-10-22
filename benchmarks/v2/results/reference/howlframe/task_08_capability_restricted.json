@@ -10,7 +10,7 @@
     "eventual_success": true,
     "repair_attempts": 0,
     "total_generated_tokens": null,
-    "final_source_tokens": 46,
+    "final_source_tokens": 50,
     "elapsed_time_seconds": 0.01,
     "verification_commands_run": 2,
     "code_churn_lines": null,

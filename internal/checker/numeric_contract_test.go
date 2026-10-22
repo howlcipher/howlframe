@@ -101,6 +101,10 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		"set value":         `(let (a 1) (let (items (list)) (set a (append items 6))))`,
 		"list element":      `(let (items (list)) (print (list (append items 1))))`,
 		"void function":     `(defun noop () void (print "x")) (let (v (call noop)) (print v))`,
+		// HF-05: these passed the checker, performed the effect, then underflowed.
+		"try_let binding": `(try_let (r (write_file "out.txt" "x")) (catch e (print "c")) (print "b"))`,
+		"dict value":      `(print (encode_json (dict ("k" (write_file "out.txt" "x")))))`,
+		"return value":    `(defun f () (return (write_file "out.txt" "x"))) (print (call f))`,
 	}
 	for name, src := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -116,9 +120,17 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 			}
 		})
 	}
-	valid := `(let (items (list)) (do (append items 6) (print (list_len items))))`
-	if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
-		t.Fatalf("statement-position void rejected: %v", d)
+	for _, valid := range []string{
+		`(let (items (list)) (do (append items 6) (print (list_len items))))`,
+		`(do (write_file "out.txt" "x") (if true (write_file "out.txt" "y") (do)) (print "ok"))`,
+		`(defun save () void (write_file "out.txt" "x")) (call save)`,
+		`(try_let (r (read_file "out.txt")) (catch e (print "c")) (print (bytes_to_string r)))`,
+		`(try_let (r (do (write_file "out.txt" "x") 1)) (catch e (print "c")) (print r))`,
+		`(print (encode_json (dict ("k" 1) ("v" (to_string 2)))))`,
+	} {
+		if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
+			t.Fatalf("statement-position void rejected in %s: %v", valid, d)
+		}
 	}
 }
 

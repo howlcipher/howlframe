@@ -104,7 +104,9 @@ func TestAdapterRunDeadlineAndSleep(t *testing.T) {
 	}{
 		{"huge_sleep", `(cli_app (sleep 1000000000000000))`, 0, true},
 		{"busy_loop", `(cli_app (while true (do)))`, 5 * time.Millisecond, true},
-		{"caught_sleep", `(cli_app (try_let (x (sleep 1000000000000000)) (catch e (print "caught")) (print x)))`, 0, true},
+		// The bound expression must produce a value (sleep alone does not), so
+		// the sleep is followed by one; the deadline must still escape the catch.
+		{"caught_sleep", `(cli_app (try_let (x (do (sleep 1000000000000000) 1)) (catch e (print "caught")) (print x)))`, 0, true},
 		{"normal_sleep", `(cli_app (sleep 2) (print 7))`, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

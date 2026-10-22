@@ -514,7 +514,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			return ast.Layout(ast.Unknown)
 		}
 		binding := node.Children[1]
-		value := a.infer(binding.Children[1], env)
+		value := a.requireValue(binding.Children[1], a.infer(binding.Children[1], env), fmt.Sprintf("try_let binding of %q", binding.Children[0].Value))
 		catchEnv := cloneEnv(env)
 		if node.Children[2].Type == "List" && len(node.Children[2].Children) >= 3 {
 			catchEnv[node.Children[2].Children[1].Value] = ast.Layout(ast.Unknown)
@@ -563,7 +563,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Void)
 	case "return":
-		return a.inferChild(node, 1, env)
+		return a.inferValue(node, 1, env, "return value")
 	case "lambda":
 		if len(node.Children) >= 3 && node.Children[1].Type == "List" {
 			childEnv := cloneEnv(env)
@@ -612,7 +612,7 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 				if known(key) && key.Kind != ast.String {
 					a.add(node, fmt.Sprintf("dict key %d has type %s, want string", index+1, typeName(key)))
 				}
-				value := a.infer(pair.Children[1], env)
+				value := a.requireValue(pair.Children[1], a.infer(pair.Children[1], env), fmt.Sprintf("dict value %d", index+1))
 				if result.Element == nil && known(value) {
 					copy := value
 					result.Element = &copy
