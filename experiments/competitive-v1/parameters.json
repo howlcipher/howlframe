@@ -1,0 +1,26 @@
+{
+  "protocol": "competitive-v1",
+  "status": "draft-not-frozen",
+  "frozen_at_commit": null,
+  "arms": {
+    "howlframe": {"compiler_commit": null, "dependencies": "built-ins only"},
+    "python": {"version": "3.12.x (exact at freeze)", "dependencies": "standard library"},
+    "go": {"version": "1.25.x (exact at freeze)", "dependencies": "standard library"},
+    "javascript": {"runtime": "Node.js 22.x LTS (exact at freeze)", "dependencies": "built-in modules"}
+  },
+  "providers": [
+    {"provider": "anthropic", "agent": "Claude Code CLI", "model": null},
+    {"provider": "openai", "agent": "Codex CLI", "model": null}
+  ],
+  "budget_per_run": {"wall_clock_minutes": 45, "tool_calls": 150, "tokens": "provider session ceiling"},
+  "repetitions": 3,
+  "pilot": {"domains": ["D1", "D2", "D3", "D4"], "tasks": 4, "runs": 96, "matched_pairs_per_baseline": 24},
+  "scoring": {"win": "strictly higher held-out pass fraction with acceptance pass", "ties": "count against HowlFrame", "interval": "Wilson 95%"},
+  "infrastructure_reruns": 1,
+  "task_pool_manifest_sha256": null,
+  "draw_seed": "sha256 of the frozen task pool manifest",
+  "heldout_seal_sha256": null,
+  "container_digests": null,
+  "owner_spend_cap": null,
+  "fairness_review": null
+}
