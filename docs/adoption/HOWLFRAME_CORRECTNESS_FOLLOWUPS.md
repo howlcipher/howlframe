@@ -63,10 +63,11 @@ Design, all in existing structures (no new opcode, form, capability or lowering,
 | 2a | Codex | `692b4dfa` | Terminated by the same filter; no evidence |
 | 2b | Antigravity (Google) | `692b4dfa` | **REJECT**: 1 class (a `try_let` body in a value position); everything else confirmed, including the opcode table and that no test was weakened. Fixed in `8f45ad63` |
 | 3 | Antigravity (bounded confirmation) | `8f45ad63` | **REJECT**: nested variants. Fixed in `7de10d4a` by the recursive rule |
-| — | Implementer | `7de10d4a` | All reviewers' probes re-run as above. **No independent review of `7de10d4a` exists.** A fourth round was not started, to keep the loop bounded |
+| — | Implementer | `7de10d4a` | All reviewers' probes re-run as above |
+| 4 | Antigravity (bounded confirmation, 2026-10-22, at the Owner's request) | `7de10d4a` | **ACCEPT**: every round-3 variant and 20 new near variants refused on all four compile paths with no file written; valid diverging, statement-position and `log_event` code accepted and run; corpus 0 differences; gofmt, vet and tests clean (`evidence/reviews/hf05_antigravity_round4.md`) |
 
 Reviews found a new variant of one root cause in each round. The final rule addresses that root cause structurally,
-but an independent confirmation of `7de10d4a` is still the right gate before merge.
+and round 4 confirmed it independently. Merged 2026-10-22 as `6912b0bb`.
 
 ## 2. HF-11 / #182: `process:env` forwarding policy (proposal only; nothing implemented)
 

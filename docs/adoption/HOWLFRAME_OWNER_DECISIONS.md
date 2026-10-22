@@ -13,11 +13,12 @@ separately. When the Owner decides, record the decision, date and wording in the
 | D | R5 adapter addendum | Supersede; retire as a current requirement, keep the historical record | **Open** |
 | E | Process-security limitations and #181 | Record the three-level distinction; #181's own criteria are met; track the hostile case separately | **Open** |
 | F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Approved** 2026-10-22 (merged) |
-| G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Open**: the Owner asked to merge (2026-10-22); held for that confirmation |
+| G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Approved** 2026-10-22 (merged after independent confirmation) |
 | H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | **Open** |
 | I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | **Open** |
 
-Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F).
+Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F), and HowlFrame #212
+after Antigravity's round-4 review accepted it (decision G).
 No branch protection was changed and no issue closed.
 
 ---
@@ -143,7 +144,9 @@ charge to 256 MiB, which is not a grant. Full table: `HOWLFRAME_ADOPTION_REPORT.
 It rejects programs that could never run correctly. One reference program changed (it leaked a secret and then crashed when granted). Three review
 rounds each found a variant of the same root cause, and all are fixed. The final head `7de10d4a` is implementer-verified only. Details:
 `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §1. **Recommendation:** approve after one independent confirmation of `7de10d4a`
-(for example, Antigravity re-running its round-3 brief). **Decision:** _(Owner)_
+(for example, Antigravity re-running its round-3 brief).
+**Decision:** approved by the Owner on 2026-10-22 ("merge all for me"), merged as `6912b0bb` after Antigravity's round 4
+accepted `7de10d4a`.
 
 ## H. `process:env` policy (#182)
 
