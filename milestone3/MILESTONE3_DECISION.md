@@ -1,3 +1,7 @@
+> **Correction notice (2026-10-21):** this decision's statements about HowlBoard compatibility were checked against the
+> current upstream HowlBoard after an independent audit. See [EVIDENCE_STATEMENT_2026-10-21.md](EVIDENCE_STATEMENT_2026-10-21.md).
+> The decision text below is unchanged; the statement lists the differences and the Owner decisions still pending.
+
 # Milestone 3 decision
 
 ACCEPTED, 2026-10-21, implementation commit `b028e813`.

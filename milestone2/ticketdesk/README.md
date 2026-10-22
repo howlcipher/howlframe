@@ -23,8 +23,13 @@ existing directory), and optionally `TICKETDESK_PORT` (8080 by default). Run:
 
 The original user workflow and API are documented in
 [the HTTP guide](../../docs/guides/http_api.md). These commands use default
-request ceilings. Full startup validation scales with stored records, so larger
-states can require an explicit higher `--max-instructions` and memory budget.
+request ceilings. Startup validates every stored record before listening; that
+work runs under the server startup budget (`--max-startup-instructions`, default
+10,000,000 for HTTP servers), not the per-request budget. A 1,000-ticket,
+100-token state restarts in well under a second under the documented command;
+restart was checked at 6,000 tickets (2.2 MB of state). Validation costs about
+330 instructions per ticket, so extrapolating, states beyond roughly 30,000
+tickets need a larger `--max-startup-instructions` (not measured).
 The server serializes requests. Whole-store atomic replacement limits throughput.
 
 Unlike the previous implementation, each bucket publishes ticket records and

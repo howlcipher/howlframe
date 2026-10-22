@@ -85,7 +85,7 @@ func generateCheckedGo(t *testing.T, source string) string {
 func goRunCrash(t *testing.T, source string) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	gomod := "module chainrun\n\ngo 1.21\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + moduleRoot(t) + "\n"
+	gomod := "module chainrun\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + moduleRoot(t) + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}

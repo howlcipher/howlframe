@@ -1,0 +1,16 @@
+
+101 tests, 101 passed, 0 failed
+acceptance_exit=0
+13 checks, 13 passed, 0 failed
+dx_exit=0
+
+11 tests, 11 passed, 0 failed
+reassess_exit=0
+
+10 tests, 0 failed
+round1_exit=0
+  info: worst normal request 0.01 s; slow-header closed after [10.0, 10.0] s; slow-body closed after [30.0, 30.0, 30.0, 30.0, 30.0, 30.0] s
+PASS m10_slow_body_clients_bounded
+
+5 tests, 1 failed, 1 expected failures
+m10_exit=1

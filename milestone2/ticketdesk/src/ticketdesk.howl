@@ -73,7 +73,7 @@
                   (if (!= (call kind (map_get header "next")) "integer") (call abort_start 65 "invalid ticket counter"))
                   (if (< (map_get header "next") 1) (call abort_start 65 "invalid ticket counter"))))
               (if (not (granted "network")) (call abort_start 77 "capability denied: network"))
-              (if (not (port_available port)) (call abort_start 1 "port is already in use"))
+              (if (not (port_available port)) (call abort_start 1 (str "port " port " is already in use")))
               (try_let (written (call prepare_disk opened header))
                 (catch e
                   (if (str_contains e "CAPABILITY_DENIED")

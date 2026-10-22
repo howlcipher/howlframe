@@ -42,7 +42,7 @@ func TestIssue141WasmExamplesBuildOnGoJS(t *testing.T) {
 					}
 					return
 				}
-				mod := "module probe\n\ngo 1.21\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
+				mod := "module probe\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
 				os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(mod), 0o600)
 				cmd := exec.Command("go", "vet", ".")
 				cmd.Dir = outDir

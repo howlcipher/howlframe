@@ -1,0 +1,23 @@
+# Run by remediation on 2026-10-21T19:51:42Z; compiler: worktree of fix/post-audit-stabilization (HEAD 3b5c91ea + file-root fix); Board upstream HEAD f4c7bb544773a717d2bd0640e91ff9f154bdd9b6
+=== current upstream f4c7bb5 UNMODIFIED, grants=scoped
+board source sha256 664ee1473423c459d7b753a9e7b9e2702dba1b64565b867df38eb0a61480567f
+build exit 0 
+projector exit 0  ['howlboard_missions.json', 'howlboard_timeline.json']
+Traceback (most recent call last):
+ConnectionRefusedError: [Errno 111] Connection refused
+Traceback (most recent call last):
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+=== current upstream f4c7bb5 UNMODIFIED, grants=declared
+board source sha256 664ee1473423c459d7b753a9e7b9e2702dba1b64565b867df38eb0a61480567f
+build exit 0 
+projector exit 0  ['howlboard_missions.json', 'howlboard_timeline.json']
+PASS declared ledger=review.jsonl records=3 timeline_total=3 errors=[]
+projector exit 0  ['howlboard_missions.json', 'howlboard_timeline.json']
+PASS declared ledger=ledger_sample.jsonl records=72 timeline_total=72 errors=[]
+RESULT PASS
+=== historical cd2f2fdb UNMODIFIED, grants=scoped
+board source sha256 4d5233b5d0ac1cc2fc5f340721309b9010d07046fafffe602de4ba36fd1b89d9
+FAIL scoped ledger=review.jsonl records=3 timeline_total=0 errors=[('REVIEW-1', 500, '{"error":"internal server error","request_id":"912b7854b1126a1c2807473ebd4a0fec"}\n'), ('REVIE
+FAIL scoped ledger=ledger_sample.jsonl records=72 timeline_total=0 errors=[('IMP-51', 500, '{"error":"internal server error","request_id":"0e26779d769e915440a65926b69b782d"}\n'), (
+RESULT FAIL
