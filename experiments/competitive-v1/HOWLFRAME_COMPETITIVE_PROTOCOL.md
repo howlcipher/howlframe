@@ -4,7 +4,9 @@
 Authored 2026-10-21 by Claude Opus 5.5, the agent that also implemented HowlFrame changes in the same mission. That
 conflict is why §11 requires a different-provider fairness review and an Owner budget decision before anything runs.
 Revision 1 resolved the 12 findings of the first fairness review (Antigravity / Gemini, `FAIRNESS_REVIEW_R1.md`), and
-Revision 2 resolves the 5 new problems found in its re-review (`FAIRNESS_REVIEW_R2.md`). Dispositions are in §12.
+Revision 2 resolves the 5 new problems found in its re-review (`FAIRNESS_REVIEW_R2.md`). The third review
+(`FAIRNESS_REVIEW_R3.md`, 2026-10-22) found no blocking problem and returned READY FOR OWNER DECISION; its three
+non-blocking suggestions are applied. Dispositions are in §12.
 **Interpretation rule:** wherever this protocol could read a D16 target more loosely than its plain wording, the
 **default is the plain wording**, and the looser reading is listed as an explicit Owner option (§7.8).
 
@@ -16,11 +18,11 @@ and each is computed **per baseline language and per provider**.
 
 | ID | Hypothesis (directive D16 target) | Primary measure | Refuted if |
 |---|---|---|---|
-| H1 | Autonomous completion ≥ 80% in HowlFrame | Share of HowlFrame runs whose final code passes every frozen acceptance test with no human input | < 80% |
+| H1 | Autonomous completion ≥ 80% in HowlFrame | Share of HowlFrame runs whose final code passes every frozen acceptance test with no human input | §7.7 outcome *not met* at the 80% target |
 | H2 | Matched correctness wins ≥ 60% against **each** baseline | §7.2 win rate per baseline | §7.7 outcome *not met* against any one baseline |
-| H3 | ≥ 20% faster verified development | §7.3 restricted mean time-to-verified, HowlFrame / baseline | Ratio > 0.8 against any baseline |
-| H4 | Runtime within 2× on agreed comparable workloads | §7.4 per-workload execution-time ratio | Median ratio > 2.0 against any gated baseline (default: Python, Go and JavaScript; §7.4) |
-| H5 | Maintenance success ≥ 80% | Share of HowlFrame change requests completed with no held-out regressions; compared with each baseline (§7.5) | HowlFrame success < 80% |
+| H3 | ≥ 20% faster verified development | §7.3 restricted mean time-to-verified, HowlFrame / baseline | §7.7 outcome *not met* at ratio 0.8 against any one baseline |
+| H4 | Runtime within 2× on agreed comparable workloads | §7.4 per-workload execution-time ratio | §7.7 outcome *not met* at median ratio 2.0 against any gated baseline (default: Python, Go and JavaScript; §7.4) |
+| H5 | Maintenance success ≥ 80% | Share of HowlFrame change requests completed with no held-out regressions; compared with each baseline (§7.5) | §7.7 outcome *not met* at the 80% target |
 | H6 | Results reproduce across ≥ 2 independent providers | §7.6 consistency rule | §7.6 fails |
 
 Secondary questions, reported without targets: security and authorization failures, diagnostic quality, code size,
@@ -55,7 +57,7 @@ No study to date has measured model success, defects, maintenance, time-to-verif
 1. **Candidate pool, authored de novo.** A task author **from a provider not implementing HowlFrame changes, and not
    used as a trial agent for that task**, writes new candidates. The **pilot pool** has ≥ 6 candidates for each of D1–D4.
    The **full-study pool** is authored after the pilot and frozen before its draw. It holds at least 1.5× the
-   full-study task count from §9 (for example, ≥ 135 candidates for 90 tasks), with every domain represented in proportion.
+   full-study task count from §9 (for example, ≥ 120 candidates for 80 tasks), with every domain represented in proportion.
    Pilot tasks are not reused in the full study. Each is a language-neutral contract:
    CLI arguments, stdin/stdout/exit codes, files, or HTTP routes, with examples. Candidates are drawn from common
    real-world task categories. **No task card from any HowlFrame-repository corpus** (`live-v1-blind`, the
@@ -258,7 +260,7 @@ such cases as inconclusive rather than forcing a verdict. Adding repetitions doe
    committed. Then `parameters.json` is completed (including the beacon timestamp) and its hash recorded as the freeze.
 4. HowlFrame is pinned to a merged commit. No HowlFrame change may land between freeze and the end of the pilot.
 
-None of these gates has been passed as of this draft.
+Gate 1 passed on 2026-10-22 (`FAIRNESS_REVIEW_R3.md`: READY FOR OWNER DECISION, no blocking problem). Gates 2–4 are open.
 
 ## 12. Disposition of fairness review R1 (Antigravity / Gemini, 2026-10-21)
 
@@ -287,3 +289,13 @@ None of these gates has been passed as of this draft.
 | R2-4 | (W + ½T)/N diverged from D16's "matched correctness wins" wording | Default is the strict win rate; shared credit is Owner option A, decisive rate option B (§7.2, §7.8) |
 | R2-5 | Go was exempted from the runtime gate without ratification | Default gate is all three baselines; the Go exemption is Owner option C (§7.4, §7.8) |
 
+### Fairness re-review R3 (Antigravity / Gemini, 2026-10-22): READY FOR OWNER DECISION
+
+All three partially resolved R1 findings and all five R2 problems are resolved; no new blocking problem. Its three
+non-blocking suggestions are applied without changing any rule:
+
+| # | Suggestion (R3) | Disposition |
+|---|---|---|
+| S1 | Table 1's refutation column for H1, H3, H4 and H5 still gave bare point inequalities | Each now cites the §7.7 *not met* outcome at its target, as H2 already did |
+| S2 | `parameters.json` `h2_reported` labels did not mirror §7.2 | Labels now list W / shared successes / mutual failures / L and the option A rate |
+| S3 | §3.2.1's example (135 for 90) used Revision 1's range | Now ≥ 120 candidates for 80 tasks |

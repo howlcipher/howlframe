@@ -56,8 +56,9 @@
   },
   "scoring": {
     "h2_reported": [
-      "W/T/L",
+      "W / shared successes / mutual failures / L",
       "wins/pairs",
+      "(wins + 0.5*shared successes)/pairs",
       "wins/(wins+losses)"
     ],
     "h3_primary": "RMST over 45 minutes, unverified censored at 45",
