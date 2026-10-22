@@ -14,16 +14,24 @@
       ((code string) (msg string) (line int))
       any
       (return (dict ("error" (dict ("code" code) ("message" msg) ("line" line)))))))
+  ; parse keeps EvidenceDesk's frozen R2 ceiling of 262144 bytes. parse_within
+  ; lets another consumer, such as HowlBoard's ledger import, apply the same
+  ; validation under its own byte ceiling.
   (export
     (defun parse
       ((raw string) (maximum int))
+      any
+      (return (call parse_within raw maximum 262144))))
+  (export
+    (defun parse_within
+      ((raw string) (maximum int) (max_bytes int))
       any
       (let
         (events (list) seen (dict) n 0)
         (do
           (if
-            (> (list_len raw) 262144)
-            (return (call failure "payload_too_large" "Ledger exceeds 262144 bytes" 0)))
+            (> (list_len raw) max_bytes)
+            (return (call failure "payload_too_large" (str "Ledger exceeds " max_bytes " bytes") 0)))
           (if
             (not (utf8_valid raw))
             (return (call failure "invalid_ledger" "Ledger must be UTF-8" 0)))

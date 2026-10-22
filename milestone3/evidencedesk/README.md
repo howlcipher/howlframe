@@ -42,6 +42,8 @@ bash milestone3/evidencedesk/scripts/project.sh INPUT.jsonl OUTPUT_DIR 1000
 
 The projector validates the entire input before writing either native store.
 The optional maximum is an exact limit: excess input fails rather than truncates.
+`app/ledger.howl` is also usable on its own: `parse_within` applies the same
+validation under a caller-chosen byte ceiling (`parse` keeps 262144 bytes).
 It replaces the ledger-import responsibility of an existing HowlFrame component;
 this is not a claim that HowlBoard has newly adopted the language. The actual
 sibling consumer needs the transparent, temporary capability-declaration adapter
