@@ -1,0 +1,3 @@
+# SIGKILL storm, 40 rounds each, 1000-record realistic slice over a prior import
+new: {"rounds": 40, "full_run_seconds": 1.6, "torn_store_files": 0, "outcomes(missions,timeline)": {"prior,prior": 24, "partial,prior": 15, "leftover_files": 1, "partial,complete": 1}}
+old: {"rounds": 40, "full_run_seconds": 1.11, "torn_store_files": 0, "outcomes(missions,timeline)": {"partial,prior": 26, "prior,prior": 13, "leftover_files": 4, "partial,complete": 1}}

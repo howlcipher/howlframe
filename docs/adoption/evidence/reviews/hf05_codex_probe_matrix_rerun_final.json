@@ -1,0 +1,3865 @@
+[
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/base/try_binding/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/try_binding/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":2,\"opcode\":\"TRY_LET\",\"message\":\"stack underflow at TRY_LET\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":2,\"opcode\":\"TRY_LET\",\"message\":\"stack underflow at TRY_LET\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":2,\"opcode\":\"TRY_LET\",\"message\":\"stack underflow at TRY_LET\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/base/try_binding/direct",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"\\\"try_let\\\" is not supported under -run in Phase 1 (see docs/direct_execution_design.md)\",\"line\":1,\"column\":11}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/go/server.go"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/try_binding/go/server.go\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "try_binding",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/try_binding/js/app.js"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/try_binding/js/app.js\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/base/dict_value/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/dict_value/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":4,\"opcode\":\"MAKE_DICT\",\"message\":\"stack underflow at MAKE_DICT\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":4,\"opcode\":\"MAKE_DICT\",\"message\":\"stack underflow at MAKE_DICT\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":4,\"opcode\":\"MAKE_DICT\",\"message\":\"stack underflow at MAKE_DICT\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/base/dict_value/direct",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "{\"k\":null}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/dict_value/go/server.go\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "dict_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/dict_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/dict_value/js/app.js\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/base/return_value/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/return_value/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"RETURN\",\"message\":\"stack underflow at RETURN\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"RETURN\",\"message\":\"stack underflow at RETURN\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 1,
+      "out": "{\"phase\":\"runtime\",\"code\":\"STACK_UNDERFLOW\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"RETURN\",\"message\":\"stack underflow at RETURN\"}\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/base/return_value/direct",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"\\\"defun\\\" is not supported under -run in Phase 1 (see docs/direct_execution_design.md)\",\"line\":1,\"column\":15}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/base/return_value/go/server.go\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "base",
+    "case": "return_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/base-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/base/return_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"Unknown statement for JS: defun\",\"line\":1,\"column\":14}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/try_binding/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "try_binding",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/try_binding/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/dict_value/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":41}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/return_value/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "return_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/return_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"return value is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/read_path/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "read_path",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/read_path/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/write_data/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "write_data",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/write_data/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"write_file argument 2 is a void expression and produces no value\",\"line\":1,\"column\":34}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/mkdir_path/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "mkdir_path",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/mkdir_path/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"mkdir argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/sleep_duration/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "sleep_duration",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/sleep_duration/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"sleep argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/stderr_value/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "stderr_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/stderr_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"stderr argument 1 is a void expression and produces no value\",\"line\":1,\"column\":18}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/encode_value/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "encode_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/encode_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"encode_json argument 1 is a void expression and produces no value\",\"line\":1,\"column\":30}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/convert_value/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "convert_value",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/convert_value/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"to_string argument 1 is a void expression and produces no value\",\"line\":1,\"column\":28}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/for_iterable/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_iterable",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_iterable/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"for iterable is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/match_subject/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_subject",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_subject/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"match subject is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"initializer of \\\"r\\\" is an if without an else branch, which produces no value when its condition is false\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"initializer of \\\"r\\\" is an if without an else branch, which produces no value when its condition is false\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"initializer of \\\"r\\\" is an if without an else branch, which produces no value when its condition is false\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"initializer of \\\"r\\\" is an if without an else branch, which produces no value when its condition is false\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/if_partial/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"initializer of \\\"r\\\" is an if without an else branch, which produces no value when its condition is false\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: if used as a value is not supported on --target=go (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_partial",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_partial/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: if used as a value is not supported on --target=js (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":48}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/match_partial/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "match_partial",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/match_partial/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a match without a default arm, which produces no value when no arm matches\",\"line\":1,\"column\":47}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/nested_do/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: do used as a value is not supported on --target=go (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "nested_do",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/nested_do/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: do used as a value is not supported on --target=js (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "dict_nested_try",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/dict_nested_try/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"try_let binding of \\\"r\\\" is a void expression and produces no value\",\"line\":1,\"column\":40}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/if_void/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: if used as a value is not supported on --target=go (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "if_void",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/if_void/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: if used as a value is not supported on --target=js (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/for_result/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: for used as a value is not supported on --target=go (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "for_result",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/for_result/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: for used as a value is not supported on --target=js (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/map_set_result/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_result",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_result/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/append_result/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "append_result",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/append_result/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":33}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/map_set_key/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "map_set_key",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/map_set_key/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"map_set key must be string, got void\",\"line\":1,\"column\":26}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/store_put_result/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "store_put_result",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/store_put_result/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a store_put, which produces no value\",\"line\":1,\"column\":52}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/spawn_result/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "spawn_result",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/spawn_result/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"print argument 1 is a void expression and produces no value\",\"line\":1,\"column\":17}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/void_call_dict/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_dict",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_dict/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"dict value 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/check/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/void_call_read/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "void_call_read",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/void_call_read/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"read_file argument 1 is a void expression and produces no value\",\"line\":1,\"column\":76}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/pr/valid_statements/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_statements/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "y"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "y"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "y"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/valid_statements/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "y"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/go/server.go"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_statements/go/server.go\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_statements",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_statements/js/app.js"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_statements/js/app.js\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/pr/valid_void/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_void/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "ok\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/valid_void/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"\\\"defun\\\" is not supported under -run in Phase 1 (see docs/direct_execution_design.md)\",\"line\":1,\"column\":15}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/go/server.go"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_void/go/server.go\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_void",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_void/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"Unknown statement for JS: defun\",\"line\":1,\"column\":14}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "check",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "check",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/check/p.howl"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "OK: $SCRATCH/rematrix/probes/runs/pr/valid_do/check/p.howl\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "build",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/build/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/build/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": "Built $SCRATCH/rematrix/probes/runs/pr/valid_do/build/p.hfbc\n"
+    },
+    "run": {
+      "rc": 0,
+      "out": "1\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "bc",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/bc/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/bc/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "1\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "hfir",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-compile-hfir-bc",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/hfir/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/hfir/p.hfbc"
+    ],
+    "compile": {
+      "rc": 0,
+      "out": ""
+    },
+    "run": {
+      "rc": 0,
+      "out": "1\n"
+    },
+    "effects": {
+      "fx.txt": "x"
+    }
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "direct",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "-run",
+      "-allow-caps",
+      "filesystem:write=$SCRATCH/rematrix/probes/runs/pr/valid_do/direct",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/direct/p.howl"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"\\\"try_let\\\" is not supported under -run in Phase 1 (see docs/direct_execution_design.md)\",\"line\":1,\"column\":11}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "go",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "go",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/go/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/go/server.go"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: do used as a value is not supported on --target=go (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  },
+  {
+    "version": "pr",
+    "case": "valid_do",
+    "mode": "js",
+    "command": [
+      "$SCRATCH/rematrix/evidence/pr-howlframe",
+      "build",
+      "--target",
+      "js",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/js/p.howl",
+      "-o",
+      "$SCRATCH/rematrix/probes/runs/pr/valid_do/js/app.js"
+    ],
+    "compile": {
+      "rc": 1,
+      "out": "{\"reason\":\"UNSUPPORTED_ON_TARGET: do used as a value is not supported on --target=js (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead\",\"line\":1,\"column\":22}\n"
+    },
+    "effects": {}
+  }
+]
