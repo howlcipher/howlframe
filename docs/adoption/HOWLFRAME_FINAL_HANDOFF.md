@@ -2,16 +2,18 @@
 
 Dates: 2026-10-21 to 2026-10-22. Implementing agent: Claude Opus 5.5 (Anthropic). Reviewers: Codex (OpenAI) and
 Antigravity (Google, Gemini).
-**Nothing was merged. No branch protection was changed. No issue was closed. No model comparison trial was run.**
+**Update 2026-10-22:** at the Owner's request, HowlFrame #211 and HowlBoard #20 are **merged**. HowlFrame #212 is **not**
+merged: its final head still has no independent review. No branch protection was changed. No issue was closed. No model
+comparison trial was run.
 
-## Pull requests (all open, all unmerged)
+## Pull requests
 
 | PR | Branch @ final head | What | Hosted CI | Independent review | Status |
 |---|---|---|---|---|---|
-| howlboard #20 | `feat/adopt-evidencedesk-ledger-validation` @ `770b42b` | `make import` validates with EvidenceDesk's ledger module (vendored, hash-pinned); HowlBoard's projection unchanged | Pass | Codex R1 **REJECT** (2 P2 contract gaps, fixed) → R2 **ACCEPT WITH NOTES** (note fixed); R2 confirmed by HTTP that the served data is the import | **Ready for Owner review** (decision F) |
-| howlframe #211 | `feat/evidencedesk-ledger-parse-within` @ `9dbd8175` | `ledger.howl` exports `parse_within`; EvidenceDesk behavior unchanged | 4/4 pass | Covered by the #20 reviews (byte identity; 27-case EvidenceDesk probe identical) | **Ready**; merge before #20 |
-| howlframe #212 | `fix/hf05-value-position-stack-effects` @ `7de10d4a` | HF-05: the checker and HFIR adapter refuse value-less forms in value positions before any effect | 4/4 pass on the final head | Codex R1 filtered (no verdict; probes used), Codex R2 filtered; Antigravity R2 **REJECT** → fixed; Antigravity R3 **REJECT** → fixed in `7de10d4a`. **The final head has no independent review** | Implementer-verified; needs one independent confirmation before merge (decision G) |
-| howlframe #213 (draft) | `experiments/competitive-v1-protocol` @ `78f0aea7` | competitive-v1 preregistration, Revision 2; no trials | 4/4 pass | Antigravity fairness R1 **NEEDS REVISION** (12 findings) → Rev 1; R2 **NEEDS REVISION** (5 new) → Rev 2. A Revision 2 re-review is a listed pre-freeze gate, not run | **Must stay unmerged** until that gate and decision I |
+| howlboard #20 | `feat/adopt-evidencedesk-ledger-validation` @ `770b42b` | `make import` validates with EvidenceDesk's ledger module (vendored, hash-pinned); HowlBoard's projection unchanged | Pass | Codex R1 **REJECT** (2 P2 contract gaps, fixed) → R2 **ACCEPT WITH NOTES** (note fixed); R2 confirmed by HTTP that the served data is the import | **Merged** 2026-10-22 as `24c5917` (decision F approved) |
+| howlframe #211 | `feat/evidencedesk-ledger-parse-within` @ `9dbd8175` | `ledger.howl` exports `parse_within`; EvidenceDesk behavior unchanged | 4/4 pass | Covered by the #20 reviews (byte identity; 27-case EvidenceDesk probe identical) | **Merged** 2026-10-22 as `a154ddac` |
+| howlframe #212 | `fix/hf05-value-position-stack-effects` @ `7de10d4a` | HF-05: the checker and HFIR adapter refuse value-less forms in value positions before any effect | 4/4 pass on the final head | Codex R1 filtered (no verdict; probes used), Codex R2 filtered; Antigravity R2 **REJECT** → fixed; Antigravity R3 **REJECT** → fixed in `7de10d4a`. **The final head has no independent review** | **Open**. The Owner asked for it to be merged on 2026-10-22; the merge was held until its final head has one independent confirmation (decision G) |
+| howlframe #213 (draft) | `experiments/competitive-v1-protocol` @ `28febce3` | competitive-v1 preregistration, Revision 2; no trials | 4/4 pass | Antigravity fairness R1 **NEEDS REVISION** (12 findings) → Rev 1; R2 **NEEDS REVISION** (5 new) → Rev 2; R3 (2026-10-22) **READY FOR OWNER DECISION**, no blocking problem; its 3 non-blocking suggestions applied | Draft; stays unmerged until decision I |
 | howlframe #214 | `docs/adoption-competitive-validation` | These reports and the evidence | — | — | Ready |
 
 Unrelated open PRs, not touched: #178, #206, #210.
@@ -57,7 +59,13 @@ A (Go 1.25), B (required checks; needs admin), C (M3 wording), D (R5 adapter), E
 F (HowlBoard behavior changes), G (HF-05), H (`process:env` policy), I (pilot providers, H2/H4 options, budget).
 All are open; recommendations are in `HOWLFRAME_OWNER_DECISIONS.md`.
 
+## Post-merge check (2026-10-22)
+
+On HowlBoard `main` @ `24c5917`, with a compiler built from HowlFrame `main` @ `a154ddac`: `make import` imports the sample
+ledger (72 entries, 16 missions) and `make test` passes. The vendored module's SHA-256 matches HowlFrame `main`, and its cited
+upstream commit `9dbd8175` is in `main` history.
+
 ## Recommended next action
 
-Owner review and merge of **HowlFrame #211, then HowlBoard #20**. This is the step that turns "implemented and independently
-verified" into genuine adoption on HowlBoard `main`. Then run `make import` once on the merged `main`.
+One independent confirmation of HowlFrame #212 @ `7de10d4a` (for example, Antigravity re-running its round-3 brief), then merge.
+After that, decision I (providers, options and spend cap) is the only thing between the protocol and its pilot.

@@ -8,7 +8,9 @@ Reviewer: Codex (OpenAI). Evidence: `docs/adoption/evidence/` (harnesses in `evi
 HowlBoard's production ledger import (`make import`, `tools/ledger_import`) **would** adopt EvidenceDesk's ledger
 validation module under HowlBoard PR #20 (with HowlFrame PR #211). The integration is **implemented** and
 **independently verified**: a different-provider reviewer ran `make import` → `make run` → HTTP and found the served data
-is the import. It is **not merged and not approved**, so HowlBoard `main` does **not** yet use any Milestone 3 code.
+is the import. **Update 2026-10-22:** at the Owner's request, HowlFrame #211 (merge `a154ddac`) and HowlBoard #20 (merge `24c5917`) are
+**merged**, so HowlBoard `main` now uses the module. On merged `main`, `make import` imports the sample ledger (72 entries,
+16 missions) and `make test` passes, with a compiler built from HowlFrame `main`.
 EvidenceDesk's *projector* was evaluated as a replacement and **rejected on evidence**. The incumbent HowlBoard projection
 stays.
 
@@ -112,11 +114,11 @@ Behavior changes, all documented in the README and change log:
 
 | Claim | Status |
 |---|---|
-| A real HowlBoard workflow invokes HowlFrame Milestone 3 code | **Implemented** on the branch; **independently verified**; **not merged** |
-| HowlBoard `main` uses it | **No**, not until #20 and #211 merge |
+| A real HowlBoard workflow invokes HowlFrame Milestone 3 code | **Implemented**; **independently verified**; **merged** 2026-10-22 |
+| HowlBoard `main` uses it | **Yes**, since `24c5917` (2026-10-22) |
 | EvidenceDesk's projector replaces HowlBoard's importer | **No**, rejected on evidence |
 | The previous importer is removed or deprecated | Its input path is replaced in place; the projection is kept on purpose |
-| Owner approval of the behavior changes | **Pending** (decision F) |
+| Owner approval of the behavior changes | **Approved** 2026-10-22 (decision F; the Owner asked for the merge) |
 
-Recommended merge order if approved: HowlFrame #211, then HowlBoard #20, after updating `VENDORED.md` to the merge commit if
-#211 is squashed (the file hash is unchanged either way).
+Merged in that order with merge commits, so `VENDORED.md`'s upstream commit `9dbd8175` is in HowlFrame `main` history and the
+vendored file's SHA-256 matches `main` (checked 2026-10-22).

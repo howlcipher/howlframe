@@ -12,12 +12,13 @@ separately. When the Owner decides, record the decision, date and wording in the
 | C | Milestone 3 verdict wording | D30 A demonstrated; D30 B compatibility demonstrated, adoption pending; D30 J demonstrated | **Open** |
 | D | R5 adapter addendum | Supersede; retire as a current requirement, keep the historical record | **Open** |
 | E | Process-security limitations and #181 | Record the three-level distinction; #181's own criteria are met; track the hostile case separately | **Open** |
-| F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Open** |
-| G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Open** |
+| F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Approved** 2026-10-22 (merged) |
+| G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Open**: the Owner asked to merge (2026-10-22); held for that confirmation |
 | H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | **Open** |
-| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap; one more protocol re-review first | **Open** |
+| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | **Open** |
 
-No PR has been merged, no branch protection changed, and no issue closed in this mission.
+Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F).
+No branch protection was changed and no issue closed.
 
 ---
 
@@ -134,7 +135,8 @@ On valid input the output is unchanged (golden file plus 7-case differential). O
 number instead of skipping, double-counting, truncating, crashing, or (empty file) wiping the timeline. `make import` also raises the VM memory
 charge to 256 MiB, which is not a grant. Full table: `HOWLFRAME_ADOPTION_REPORT.md` §4.
 
-**Recommendation:** approve and merge after the independent review findings are resolved. **Decision:** _(Owner)_
+**Recommendation:** approve and merge after the independent review findings are resolved.
+**Decision:** approved by the Owner on 2026-10-22 ("merge all for me"); HowlBoard #20 merged as `24c5917`.
 
 ## G. HF-05 tightening (HowlFrame #212)
 
@@ -153,7 +155,8 @@ A proposal with measured consumer impact is in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.
 
 The protocol (`experiments/competitive-v1/HOWLFRAME_COMPETITIVE_PROTOCOL.md`, PR #213, Revision 2) went through two
 different-provider fairness reviews (Antigravity): R1 had 12 findings, R2 had 5 new problems, and both were dispositioned in protocol §12.
-A re-review of Revision 2 remains a pre-freeze gate. No trial has run. The Owner needs to choose:
+The R3 re-review of Revision 2 (2026-10-22) returned READY FOR OWNER DECISION with no blocking problem, so that pre-freeze
+gate is passed. No trial has run. The Owner needs to choose:
 1. **Providers and model IDs**, for example Claude Code with a named Claude model, and Codex with a named OpenAI model.
 2. **H2 metric:** default strict win rate (wins / pairs, D16's plain wording); option A, shared credit for equal non-zero results;
    option B, wins / decisive pairs. Recommendation: **option A**, because it avoids penalizing HowlFrame when both arms are perfect, while
