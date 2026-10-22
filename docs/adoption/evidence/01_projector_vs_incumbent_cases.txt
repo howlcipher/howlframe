@@ -1,0 +1,46 @@
+# projector (M3, bfc4ff8f) vs incumbent (HowlBoard f4c7bb5), compiler bfc4ff8f
+## valid_3
+  incumbent: {"exit": 0, "stdout": "entries=3\nmissions=2", "stderr": "", "missions": 2, "events": 3}
+  projector: {"exit": 0, "stdout": "entries=3 tasks=2", "stderr": "", "missions": 2, "events": 3}
+## empty_file
+  incumbent: {"exit": 0, "stdout": "entries=0\nmissions=0", "stderr": "", "missions": null, "events": 0}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":0,\"message\":\"Ledger has no records\"}}", "missions": null, "events": null}
+## blank_lines_only
+  incumbent: {"exit": 0, "stdout": "entries=0\nmissions=0", "stderr": "", "missions": null, "events": 0}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":0,\"message\":\"Ledger has no records\"}}", "missions": null, "events": null}
+## malformed_line_2
+  incumbent: {"exit": 0, "stdout": "entries=2\nmissions=1", "stderr": "", "missions": 1, "events": 2}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":2,\"message\":\"Malformed JSON\"}}", "missions": null, "events": null}
+## wrong_schema
+  incumbent: {"exit": 0, "stdout": "entries=1\nmissions=1", "stderr": "", "missions": 1, "events": 1}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":1,\"message\":\"Wrong schema\"}}", "missions": null, "events": null}
+## schema_valid_no_metadata
+  incumbent: {"exit": 1, "stdout": "", "stderr": "{\"phase\":\"runtime\",\"code\":\"TYPE_ERROR\",\"function\":\"main\",\"instruction\":408,\"opcode\":\"MAP_GET\",\"message\":\"map_get expected dict, got \\u003cnil\\u003e\"}", "missions": null, "events": null}
+  projector: {"exit": 0, "stdout": "entries=1 tasks=1", "stderr": "", "missions": 1, "events": 1}
+## missing_task_id
+  incumbent: {"exit": 0, "stdout": "entries=1\nmissions=1", "stderr": "", "missions": 1, "events": 1}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":1,\"message\":\"task_id must be a string\"}}", "missions": null, "events": null}
+## duplicate_entry_id
+  incumbent: {"exit": 0, "stdout": "entries=2\nmissions=2", "stderr": "", "missions": 2, "events": 2}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"invalid_ledger\",\"line\":2,\"message\":\"Duplicate entry_id\"}}", "missions": null, "events": null}
+## conflicting_state_order
+  incumbent: {"exit": 0, "stdout": "entries=2\nmissions=1", "stderr": "", "missions": 1, "events": 2}
+  projector: {"exit": 0, "stdout": "entries=2 tasks=1", "stderr": "", "missions": 1, "events": 2}
+## limit_exact_5_of_5
+  incumbent: {"exit": 0, "stdout": "entries=5\nmissions=5", "stderr": "", "missions": 5, "events": 5}
+  projector: {"exit": 0, "stdout": "entries=5 tasks=5", "stderr": "", "missions": 5, "events": 5}
+## limit_over_6_of_5
+  incumbent: {"exit": 0, "stdout": "entries=6\nmissions=6", "stderr": "", "missions": 6, "events": 6}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"payload_too_large\",\"line\":6,\"message\":\"Nonblank entry limit exceeded\"}}", "missions": null, "events": null}
+## human_approval_rejection
+  incumbent: {"exit": 0, "stdout": "entries=2\nmissions=2", "stderr": "", "missions": 2, "events": 2}
+  projector: {"exit": 0, "stdout": "entries=2 tasks=2", "stderr": "", "missions": 2, "events": 2}
+## boundary_400x~830B_(>256KiB)
+  incumbent: {"exit": 0, "stdout": "entries=400\nmissions=50", "stderr": "", "missions": 50, "events": 400}
+  projector: {"exit": 3, "stdout": "", "stderr": "{\"error\":{\"code\":\"payload_too_large\",\"line\":0,\"message\":\"Ledger exceeds 262144 bytes\"}}", "missions": null, "events": null}
+## 1001_records
+  incumbent: {"exit": 0, "stdout": "entries=1001\nmissions=20", "stderr": "", "missions": 20, "events": 1001}
+  projector: {"exit": 0, "stdout": "entries=1001 tasks=20", "stderr": "", "missions": 20, "events": 1001}
+## board_sanitized_72
+  incumbent: {"exit": 0, "stdout": "entries=72\nmissions=16", "stderr": "", "missions": 16, "events": 72}
+  projector: {"exit": 0, "stdout": "entries=72 tasks=16", "stderr": "", "missions": 16, "events": 72}
