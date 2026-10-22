@@ -2,8 +2,8 @@
 
 Dates: 2026-10-21 to 2026-10-22. Implementing agent: Claude Opus 5.5 (Anthropic). Reviewers: Codex (OpenAI) and
 Antigravity (Google, Gemini).
-**Update 2026-10-22:** at the Owner's request, HowlFrame #211 and HowlBoard #20 are **merged**. HowlFrame #212 is **not**
-merged: its final head still has no independent review. No branch protection was changed. No issue was closed. No model
+**Update 2026-10-22:** at the Owner's request, HowlFrame #211 and HowlBoard #20 are **merged**. HowlFrame #212 is **merged**
+after Antigravity's round-4 review accepted its final code (`7de10d4a`). No branch protection was changed. No issue was closed. No model
 comparison trial was run.
 
 ## Pull requests
@@ -12,7 +12,7 @@ comparison trial was run.
 |---|---|---|---|---|---|
 | howlboard #20 | `feat/adopt-evidencedesk-ledger-validation` @ `770b42b` | `make import` validates with EvidenceDesk's ledger module (vendored, hash-pinned); HowlBoard's projection unchanged | Pass | Codex R1 **REJECT** (2 P2 contract gaps, fixed) → R2 **ACCEPT WITH NOTES** (note fixed); R2 confirmed by HTTP that the served data is the import | **Merged** 2026-10-22 as `24c5917` (decision F approved) |
 | howlframe #211 | `feat/evidencedesk-ledger-parse-within` @ `9dbd8175` | `ledger.howl` exports `parse_within`; EvidenceDesk behavior unchanged | 4/4 pass | Covered by the #20 reviews (byte identity; 27-case EvidenceDesk probe identical) | **Merged** 2026-10-22 as `a154ddac` |
-| howlframe #212 | `fix/hf05-value-position-stack-effects` @ `7de10d4a` | HF-05: the checker and HFIR adapter refuse value-less forms in value positions before any effect | 4/4 pass on the final head | Codex R1 filtered (no verdict; probes used), Codex R2 filtered; Antigravity R2 **REJECT** → fixed; Antigravity R3 **REJECT** → fixed in `7de10d4a`. **The final head has no independent review** | **Open**. The Owner asked for it to be merged on 2026-10-22; the merge was held until its final head has one independent confirmation (decision G) |
+| howlframe #212 | `fix/hf05-value-position-stack-effects` @ `7de10d4a` | HF-05: the checker and HFIR adapter refuse value-less forms in value positions before any effect | 4/4 pass on the final head | Codex R1 filtered (no verdict; probes used), Codex R2 filtered; Antigravity R2 **REJECT** → fixed; Antigravity R3 **REJECT** → fixed in `7de10d4a`; Antigravity R4 **ACCEPT** at `7de10d4a` (`evidence/reviews/hf05_antigravity_round4.md`) | **Merged** 2026-10-22 as `6912b0bb` (decision G approved). Head `1e7ab8a6` adds only a `change_log.md` conflict resolution against `main`; the full gate passed on that merged tree and hosted CI 4/4 |
 | howlframe #213 (draft) | `experiments/competitive-v1-protocol` @ `28febce3` | competitive-v1 preregistration, Revision 2; no trials | 4/4 pass | Antigravity fairness R1 **NEEDS REVISION** (12 findings) → Rev 1; R2 **NEEDS REVISION** (5 new) → Rev 2; R3 (2026-10-22) **READY FOR OWNER DECISION**, no blocking problem; its 3 non-blocking suggestions applied | Draft; stays unmerged until decision I |
 | howlframe #214 | `docs/adoption-competitive-validation` | These reports and the evidence | — | — | Ready |
 
@@ -67,5 +67,5 @@ upstream commit `9dbd8175` is in `main` history.
 
 ## Recommended next action
 
-One independent confirmation of HowlFrame #212 @ `7de10d4a` (for example, Antigravity re-running its round-3 brief), then merge.
-After that, decision I (providers, options and spend cap) is the only thing between the protocol and its pilot.
+Decision I (providers, options and spend cap) is the only thing between the protocol and its pilot. Decisions A–E and H
+remain open.
