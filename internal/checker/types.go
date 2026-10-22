@@ -1038,6 +1038,8 @@ func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) as
 		// Their opcodes push nothing. They keep an unknown type so a statement-only
 		// helper that ends in one still infers, but they are never a value.
 		reason = fmt.Sprintf("%s is a %s, which produces no value", use, head)
+	case head == "try_let" && a.branchYieldsNoValue(node):
+		reason = fmt.Sprintf("%s is a try_let whose catch or success body produces no value", use)
 	case head == "if" && len(node.Children) == 3:
 		reason = fmt.Sprintf("%s is an if without an else branch, which produces no value when its condition is false", use)
 	case head == "match" && !hasDefaultArm(node):
@@ -1054,6 +1056,47 @@ func (a *Analysis) requireValue(node *ast.Node, got ast.TypeInfo, use string) as
 		a.add(node, reason)
 	}
 	return ast.Layout(ast.Unknown)
+}
+
+// branchYieldsNoValue reports a try_let whose catch or success body, when it
+// is the try_let's value, would leave nothing on the stack. A body that ends
+// the program or the function (exit, return) never falls through, so it is
+// allowed.
+func (a *Analysis) branchYieldsNoValue(node *ast.Node) bool {
+	if len(node.Children) < 4 {
+		return false
+	}
+	var bodies []*ast.Node
+	if catch := node.Children[2]; catch.Type == "List" && len(catch.Children) >= 3 {
+		bodies = append(bodies, catch.Children[2])
+	}
+	bodies = append(bodies, node.Children[3])
+	for _, body := range bodies {
+		if body.Type != "List" || len(body.Children) == 0 || diverges(body) {
+			continue
+		}
+		if got, ok := a.Types[body]; ok && got.Kind == ast.Void {
+			return true
+		}
+		if body.Children[0].Value == "try_let" && a.branchYieldsNoValue(body) {
+			return true
+		}
+	}
+	return false
+}
+
+// diverges reports a form that never falls through to its caller.
+func diverges(node *ast.Node) bool {
+	if node.Type != "List" || len(node.Children) == 0 {
+		return false
+	}
+	switch node.Children[0].Value {
+	case "exit", "return":
+		return true
+	case "do":
+		return len(node.Children) > 1 && diverges(node.Children[len(node.Children)-1])
+	}
+	return false
 }
 
 func hasDefaultArm(node *ast.Node) bool {

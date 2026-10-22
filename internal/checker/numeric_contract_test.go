@@ -121,6 +121,10 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		"if without else":       `(let (r (if false 1)) (print r))`,
 		"match without default": `(print (match 2 (1 42)))`,
 		"store_put value":       `(do (store_open s "memory://hf05") (print (store_put s "k" 1)))`,
+		// Found by the independent review of the second fix: a try_let used as a
+		// value whose success or catch body yields nothing.
+		"try_let success body": `(let (x (try_let (r "v") (catch e "err") (write_file "out.txt" "x"))) (print x))`,
+		"try_let catch body":   `(let (x (try_let (r (to_int "zz")) (catch e (write_file "out.txt" "x")) "ok")) (print x))`,
 	}
 	for name, src := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -150,6 +154,11 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		// HowlBoard's log_event shape: a helper whose last form is a store write.
 		`(defun log_event (id) (do (store_open s "memory://hf05") (store_put s "k" id))) (call log_event "a")`,
 		`(for i (list 1 2) (print i))`,
+		`(let (x (try_let (r "v") (catch e "err") r)) (print x))`,
+		// A catch that exits never falls through, so the try_let still yields a value.
+		`(let (raw (try_let (r (read_file "f")) (catch e (do (stderr "cannot read") (exit 3))) (bytes_to_string r))) (print raw))`,
+		// Mixed bodies are fine where no value is needed.
+		`(try_let (r (read_file "f")) (catch e (print "missing")) (print (bytes_to_string r)))`,
 	} {
 		if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
 			t.Fatalf("statement-position void rejected in %s: %v", valid, d)

@@ -980,14 +980,15 @@ func statementRole(kind, role string) bool {
 
 // validateValueRoles rejects a value-less node wired into a value role. A let
 // or sequence yields its last body's value, so it is followed; an if without
-// an else yields nothing when its condition is false. try and call stay with
-// the run-time contract.
+// an else yields nothing when its condition is false; an if or try yields its
+// branches' values, so a value-less branch (other than one that exits or
+// returns) makes it value-less. call stays with the run-time contract.
 func validateValueRoles(transport candidateTransport) *Diagnostic {
 	byID := make(map[NodeID]transportNode, len(transport.Nodes))
 	for _, node := range transport.Nodes {
 		byID[node.ID] = node
 	}
-	var noValue func(NodeID) bool
+	var noValue, branchNoValue func(NodeID) bool
 	noValue = func(id NodeID) bool {
 		node := byID[id]
 		switch node.Kind {
@@ -996,10 +997,29 @@ func validateValueRoles(transport candidateTransport) *Diagnostic {
 		case "sequence":
 			return len(node.Inputs) == 0 || noValue(node.Inputs[len(node.Inputs)-1].NodeID)
 		case "if":
-			return len(node.Inputs) < 3
+			return len(node.Inputs) < 3 || branchNoValue(node.Inputs[1].NodeID) || branchNoValue(node.Inputs[2].NodeID)
+		case "try":
+			if len(node.Inputs) != 3 {
+				return false
+			}
+			catch := byID[node.Inputs[2].NodeID]
+			return branchNoValue(node.Inputs[1].NodeID) || (len(catch.Inputs) == 1 && branchNoValue(catch.Inputs[0].NodeID))
 		}
 		return valueLessKinds[node.Kind]
 	}
+	// A branch that ends the program or function never falls through.
+	var diverges func(NodeID) bool
+	diverges = func(id NodeID) bool {
+		node := byID[id]
+		switch node.Kind {
+		case "exit", "return":
+			return true
+		case "sequence", "let":
+			return len(node.Inputs) > 0 && diverges(node.Inputs[len(node.Inputs)-1].NodeID)
+		}
+		return false
+	}
+	branchNoValue = func(id NodeID) bool { return !diverges(id) && noValue(id) }
 	for _, node := range transport.Nodes {
 		for _, input := range node.Inputs {
 			if !statementRole(node.Kind, input.Role) && noValue(input.NodeID) {
