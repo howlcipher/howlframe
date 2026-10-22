@@ -44,10 +44,12 @@ The projector validates the entire input before writing either native store.
 The optional maximum is an exact limit: excess input fails rather than truncates.
 `app/ledger.howl` is also usable on its own: `parse_within` applies the same
 validation under a caller-chosen byte ceiling (`parse` keeps 262144 bytes).
-It replaces the ledger-import responsibility of an existing HowlFrame component;
-this is not a claim that HowlBoard has newly adopted the language. The actual
-sibling consumer needs the transparent, temporary capability-declaration adapter
-in [the R5 clarification](requirements/R5_COMPATIBILITY_ADDENDUM.md).
+HowlBoard's production ledger import (`make import`) validates its input with this
+module, vendored byte-identical (HowlBoard #20, 2026-10-22). The projector does
+**not** replace HowlBoard's importer: it fails HowlBoard's own verification-truth
+tests (see `../CORRECTION_2026-10-22.md`). The temporary capability-declaration
+adapter in [the R5 clarification](requirements/R5_COMPATIBILITY_ADDENDUM.md) is
+superseded; it applies only to the historical HowlBoard checkout `cd2f2fd`.
 
 Verification:
 
