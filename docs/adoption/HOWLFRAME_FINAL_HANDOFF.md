@@ -7,6 +7,8 @@ after Antigravity's round-4 review accepted its final code (`7de10d4a`). Later t
 recommendations: branch protection is applied (B), #181 is closed with #216 and #217 opened (E), the Milestone 3 correction and R5
 supersession are recorded (C, D), Go 1.25 is documented (A), `process:env` step 1 is implemented in its own PR (H), and the pilot
 options are recorded (I). No model comparison trial was run, and none may run without a spend cap.
+**Update 2026-10-23:** #219 (H step 1) is merged; the five gaps its independent review found are refused in a follow-up PR;
+`verify_workflows.py` runs against current HowlBoard; H step 2 is deferred.
 
 ## Pull requests
 
@@ -57,7 +59,7 @@ Unrelated open PRs, not touched: #178, #206, #210.
 
 ## Outstanding Owner decisions
 
-A–G are decided. H step 2 (an env allowlist that breaks TaskFlow's frozen test) and I's spend cap are open.
+A–H are decided (H step 2 deferred: it breaks TaskFlow's frozen test and no consumer needs it). I's spend cap is open.
 Details are in `HOWLFRAME_OWNER_DECISIONS.md`.
 
 ## Post-merge check (2026-10-22)
@@ -69,4 +71,4 @@ upstream commit `9dbd8175` is in `main` history.
 ## Recommended next action
 
 Build the four pilot tasks, frozen tests and containers for competitive-v1 (no paid runs), then set a spend cap for the
-4-run dry run. Smaller: make `verify_workflows.py` apply the R5 adapter only when the consumer declares no root grants.
+4-run dry run.
