@@ -20,6 +20,9 @@ var EnvRefused = []string{
 	"GEM_PATH", "GEM_HOME", "RUBYGEMS_GEMDEPS", "BUNDLE_GEMFILE", "PHPRC", "ERL_LIBS",
 	"TMPDIR", "LESSOPEN", "PAGER", "EDITOR", "VISUAL", "SHELL", "SSH_ASKPASS", "RES_OPTIONS",
 	"PIP_INDEX_URL", "NPM_CONFIG_REGISTRY", "CARGO_HOME", "GOPROXY", "GOMODCACHE", "pythonioencoding",
+	// the review of #219
+	"RUSTFLAGS", "RUSTC_WRAPPER", "rustup_toolchain", "CC", "LDFLAGS", "cflags", "MAKEFLAGS",
+	"DOTNET_STARTUP_HOOKS", "COMPlus_EnableDiagnostics", "CORECLR_PROFILER_PATH", "COMSPEC", "PATHEXT", "WGETRC",
 }
 
 // EnvAllowed must still pass through on every target.
@@ -28,4 +31,5 @@ var EnvAllowed = []string{
 	// inert data and application names that sit next to the #182 families
 	"LC_ALL", "TERM", "NO_COLOR", "CI", "SOURCE_DATE_EPOCH", "USER", "HF_TEST_PASS",
 	"GOAL_ID", "MYPROXY", "APP_PROXY_URL", "TEMPLATE_DIR", "EDITOR_THEME",
+	"CCACHE_DIR", "RUST_LOG", "DOTNETAPP", "CC_EMAIL",
 }

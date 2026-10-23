@@ -125,7 +125,7 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   `BASH_FUNC_*`, `LUA_*`, and since #182 `OPENSSL_*`, `GLIBC_*`, `MALLOC_*`,
   `SSL_*`, `CURL_*`, `PYTHON*`, `PIP_*`, `NODE_*`, `NPM_CONFIG_*`, `YARN_*`,
   `PERL*`, `RUBY*`, `GEM_*`, `BUNDLE_*`, `PHP*`, `ERL_*`, `JAVA_*`, `JDK_*`,
-  `CARGO_*`) and the suffixes in `capability.CodeLoadingEnvSuffixes`
+  `CARGO_*`, `RUSTUP_*`, `DOTNET_*`, `COMPLUS_*`, `CORECLR_*`) and the suffixes in `capability.CodeLoadingEnvSuffixes`
   (`*_PROXY`); generated Go and JavaScript render the same tables
   and a parity test runs one independent list against all three (#177). It
   includes `PATH`, `HOME`, `XDG_CONFIG_HOME`/`XDG_CONFIG_DIRS`, shell options
@@ -138,7 +138,8 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   programs (`PAGER`, `EDITOR`, `VISUAL`, `LESSOPEN`, `BROWSER`, `SHELL`,
   `SSH_ASKPASS`), temporary directories (`TMPDIR`, `TMP`, `TEMP`), resolver
   options and Go toolchain module settings (`GOPROXY`, `GOSUMDB`, ..., exact
-  names). Passing one to an allow-listed program would let it load arbitrary
+  names), Rust, C and make build settings (`RUSTFLAGS`, `RUSTC_WRAPPER`, `CC`,
+  `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, ...), `COMSPEC`, `PATHEXT` and `WGETRC`. Passing one to an allow-listed program would let it load arbitrary
   code or config, run another program, or reroute its traffic. Any other name,
   including application names, passes with an explicit grant.
   The grant is rejected at parse time on the interpreter and `-run-bc`;

@@ -46,7 +46,7 @@ func TestCodeLoadingEnv(t *testing.T) {
  }
 }
 func TestSharedTables(t *testing.T) {
- if !reflect.DeepEqual(howlFrameCodeLoadingEnvNames,capability.CodeLoadingEnvNames)||!reflect.DeepEqual(howlFrameCodeLoadingEnvPrefixes,capability.CodeLoadingEnvPrefixes) {t.Fatal("env tables drifted")}
+ if !reflect.DeepEqual(howlFrameCodeLoadingEnvNames,capability.CodeLoadingEnvNames)||!reflect.DeepEqual(howlFrameCodeLoadingEnvPrefixes,capability.CodeLoadingEnvPrefixes)||!reflect.DeepEqual(howlFrameCodeLoadingEnvSuffixes,capability.CodeLoadingEnvSuffixes) {t.Fatal("env tables drifted")}
  if !reflect.DeepEqual(howlFrameRedirectSafeHeaders,capability.RedirectSafeHeaders) {t.Fatal("redirect header table drifted")}
  got:=[]string{}
  for _,p:=range howlFrameSpecialPrefixes {got=append(got,p.String())}

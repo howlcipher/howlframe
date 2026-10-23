@@ -121,18 +121,26 @@ var CodeLoadingEnvNames = []string{
 	// prefix would refuse application names such as GOAL_ID)
 	"GOPROXY", "GOPRIVATE", "GONOPROXY", "GONOSUMDB", "GONOSUMCHECK", "GOSUMDB", "GOINSECURE", "GOAUTH",
 	"GOCACHE", "GOMODCACHE", "GOBIN", "GOEXPERIMENT", "GOWORK", "GOVCS",
+	// Rust, C and make build steering: compiler, wrapper, flag and linker
+	// settings a build tool child passes to the code it compiles and loads
+	"RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
+	"CC", "CXX", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "MAKEFLAGS",
+	// Windows command interpreter and executable search, wget startup file
+	"COMSPEC", "PATHEXT", "WGETRC",
 }
 
 // CodeLoadingEnvPrefixes refuses whole families: the dynamic loader (LD_*,
 // DYLD_*), git hooks/config/exec path (GIT_*), exported bash functions
 // (BASH_FUNC_*), Lua module paths and init (LUA_*), and the configuration,
 // module and plugin settings of OpenSSL, glibc, the allocator and the
-// language runtimes and package managers an exec child may start (#182).
+// language runtimes and package managers an exec child may start, including
+// the .NET runtime's startup hooks and profilers and rustup's toolchain
+// selection (#182).
 var CodeLoadingEnvPrefixes = []string{
 	"LD_", "DYLD_", "GIT_", "BASH_FUNC_", "LUA_",
 	"OPENSSL_", "GLIBC_", "MALLOC_", "SSL_", "CURL_",
 	"PYTHON", "PIP_", "NODE_", "NPM_CONFIG_", "YARN_", "PERL", "RUBY", "GEM_", "BUNDLE_", "PHP", "ERL_",
-	"JAVA_", "JDK_", "CARGO_",
+	"JAVA_", "JDK_", "CARGO_", "RUSTUP_", "DOTNET_", "COMPLUS_", "CORECLR_",
 }
 
 // CodeLoadingEnvSuffixes refuses names by ending: *_PROXY (HTTP_PROXY,
