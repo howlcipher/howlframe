@@ -21,6 +21,7 @@ stays.
 * `main` had zero references to EvidenceDesk. The M3 consumption test had run against a stale checkout (`cd2f2fd`).
 * On `main`, EvidenceDesk's own `verify_workflows.py` fails against current upstream HowlBoard, because its R5 adapter
   inserts a second `(grants ...)` form (`evidence/07_*`). It passes only against the stale checkout (`evidence/08_*`).
+  *Fixed 2026-10-23:* the adapter now applies only when the consumer declares no root grants (`milestone3/CORRECTION_2026-10-22.md`).
 
 ## 3. Incumbent vs EvidenceDesk projector (black-box, observable outputs)
 

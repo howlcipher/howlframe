@@ -69,7 +69,7 @@ Design, all in existing structures (no new opcode, form, capability or lowering,
 Reviews found a new variant of one root cause in each round. The final rule addresses that root cause structurally,
 and round 4 confirmed it independently. Merged 2026-10-22 as `6912b0bb`.
 
-## 2. HF-11 / #182: `process:env` forwarding policy (step 1 implemented 2026-10-22; step 2 open)
+## 2. HF-11 / #182: `process:env` forwarding policy (step 1 implemented 2026-10-22; step 2 deferred 2026-10-23)
 
 **Update 2026-10-22:** the Owner approved step 1 (decision H). It is implemented as the class *execution-steering* below,
 with the prefix, suffix and name tables listed in `change_log.md`. Step 2 (an allowlist) is not implemented.
@@ -121,7 +121,7 @@ render the same tables into generated Go and JS, and add positive and negative c
 | HF-20 | Servers listen on all interfaces by default | Deferred | `--listen-host` exists |
 | — | Hostile-code process isolation (supervisor kill) | Deferred | Owner decision E; needs a new issue |
 | — | HowlBoard import write phase: each mission is a separate `store_put` (whole-file rewrite). It is O(n²) in missions, and a crash mid-phase leaves missions updated with the old timeline | Deferred (pre-existing; identical in the old importer) | 40-kill storm: 0 torn files, 15/40 partial (new), 27/40 partial (old) |
-| — | EvidenceDesk `verify_workflows.py` cannot run against current upstream HowlBoard (the R5 adapter is a compile error there) | Deferred to Owner decision D | Passes only against the stale `cd2f2fd` checkout |
+| — | EvidenceDesk `verify_workflows.py` cannot run against current upstream HowlBoard (the R5 adapter is a compile error there) | **Fixed** 2026-10-23 | The adapter applies only to a Board without root grants; current HowlBoard `0b9236b` runs unmodified under its pinned declared grants, and `cd2f2fd` still passes |
 | — | `docs/installation.md` says Go 1.21+ | Library update candidate | `go.mod` requires 1.25 (Owner decision A) |
 | — | `str_len` documentation says bytes; behavior counts characters | Library update candidate | Found by the HowlBoard reviewer (`internal/ast/desugar_corelib.go`) |
 | #147, #194 | Test flakes (fixed port; SIGSTOP self-test) | Open, unchanged | Not touched |

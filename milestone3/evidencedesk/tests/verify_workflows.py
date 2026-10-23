@@ -27,6 +27,16 @@ BOARD = Path(
     os.environ.get("HOWLBOARD_REPO", REPO.parent / "howlboard")
 ).resolve()
 ENV = dict(os.environ, HOWLFRAME_BIN=str(BIN), NO_PROXY="127.0.0.1,localhost")
+# Root authority declared by a HowlBoard that declares its own grants
+# (HowlBoard 0b9236b), and the runner grants that satisfy it.
+BOARD_DECLARED_GRANTS = (
+    b'(grants "database" "filesystem" "environment" '
+    b'"network:fetch=raw.githubusercontent.com" "network:fetch=github.com"'
+)
+BOARD_DECLARED_CAPS = (
+    "network,database,filesystem,environment,"
+    "network:fetch=raw.githubusercontent.com,network:fetch=github.com"
+)
 
 
 def command(argv, **kwargs):
@@ -370,20 +380,42 @@ def board_consumer(root):
     artifact = root / "board.hfbc"
     original = source.read_bytes()
     marker = b"(http_server 8080"
-    insertion = b'\n  (grants "database" "inherit:filesystem")'
     assert original.count(marker) == 1
-    adapted = original.replace(marker, marker + insertion, 1)
-    adapted_source = root / "board-adapted.howl"
-    adapted_source.write_bytes(adapted)
     print(
         "Board original source SHA256:", hashlib.sha256(original).hexdigest()
     )
-    print(
-        "Board adapter insertion SHA256:",
-        hashlib.sha256(insertion).hexdigest(),
-    )
-    print("Board adapted source SHA256:", hashlib.sha256(adapted).hexdigest())
-    command([BIN, "build", adapted_source, "-o", artifact])
+    # The R5 adapter (superseded, Owner decision D) is only for a Board that
+    # declares no root grants, such as cd2f2fd. A Board that declares its own
+    # is built unmodified (a second (grants ...) does not compile) and run
+    # with exactly the authority it declares, as HowlBoard's Makefile runs it,
+    # since its routes inherit that authority. The declaration is pinned, so
+    # a Board asking for more fails here instead of being granted it, and the
+    # Board process gets no host environment beyond PATH.
+    declared = original.split(marker, 1)[1].lstrip().startswith(b"(grants")
+    if declared:
+        form = original.split(marker, 1)[1].split(b")", 1)[0]
+        assert b" ".join(form.split()) == BOARD_DECLARED_GRANTS, (
+            "Board root grants differ from the pinned declaration",
+            form,
+        )
+        print(
+            "Board declares its own root grants: built unmodified, run with",
+            BOARD_DECLARED_CAPS,
+        )
+        build_source = source
+    else:
+        insertion = b'\n  (grants "database" "inherit:filesystem")'
+        adapted = original.replace(marker, marker + insertion, 1)
+        build_source = root / "board-adapted.howl"
+        build_source.write_bytes(adapted)
+        print(
+            "Board adapter insertion SHA256:",
+            hashlib.sha256(insertion).hexdigest(),
+        )
+        print(
+            "Board adapted source SHA256:", hashlib.sha256(adapted).hexdigest()
+        )
+    command([BIN, "build", build_source, "-o", artifact])
     for index, ledger in enumerate([FIXTURE, fixture]):
         records = [
             json.loads(line)
@@ -395,6 +427,13 @@ def board_consumer(root):
         command([APP / "scripts/project.sh", ledger, out])
         base = "http://127.0.0.1:8080"
         caps = f"network,database,filesystem:read={out},filesystem:write={out}"
+        board_env = ENV
+        if declared:
+            caps = BOARD_DECLARED_CAPS
+            board_env = {
+                "PATH": os.environ["PATH"],
+                "NO_PROXY": "127.0.0.1,localhost",
+            }
         with running(
             [
                 BIN,
@@ -408,7 +447,7 @@ def board_consumer(root):
                 artifact,
             ],
             out,
-            ENV,
+            board_env,
             lambda: request(base, "GET", "/api/missions")[0] == 200,
         ):
             listing = request(base, "GET", "/api/missions")

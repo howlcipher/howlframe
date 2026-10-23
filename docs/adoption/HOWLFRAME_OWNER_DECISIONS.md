@@ -14,7 +14,7 @@ separately. When the Owner decides, record the decision, date and wording in the
 | E | Process-security limitations and #181 | Record the three-level distinction; #181's own criteria are met; track the hostile case separately | **Approved** 2026-10-22; #181 closed, #216 and #217 opened |
 | F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Approved** 2026-10-22 (merged) |
 | G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Approved** 2026-10-22 (merged after independent confirmation) |
-| H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | Step 1 **approved** 2026-10-22 (implementation PR); step 2 **open** |
+| H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | Step 1 **approved** 2026-10-22 (merged, #219); step 2 **deferred** 2026-10-23 |
 | I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | Options **recorded** 2026-10-22; no spend cap, so **no run** |
 
 Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F), and HowlFrame #212
@@ -109,7 +109,7 @@ historical evidence. Do not record it as Owner-approved. As a follow-up (needs a
 make `verify_workflows.py` apply the adapter only when the consumer declares no root `(grants ...)`, and otherwise run the unmodified
 consumer under its own declared grants. That is the configuration current upstream actually uses.
 
-**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). The addendum carries a superseded notice and stays as history. The `verify_workflows.py` follow-up was not made.
+**Decision:** approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"). The addendum carries a superseded notice and stays as history. The `verify_workflows.py` follow-up was made on 2026-10-23 ("do what you recommend for the rest"): it passes against current HowlBoard `0b9236b` (unmodified, under its pinned declared grants) and against `cd2f2fd` (adapted).
 
 ## E. Process-security limitations and issue #181
 
@@ -153,7 +153,7 @@ accepted `7de10d4a`.
 A proposal with measured consumer impact is in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2. Nothing is implemented.
 **Recommendation:** approve step 1 (classified refusal of execution-steering families, no breakage measured); decide step 2
 (allowlist by default with an explicit opt-in for application names) separately.
-**Decision:** step 1 approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"); implemented in its own PR. Step 2 is still open: it breaks TaskFlow's frozen `T-R11-env-isolation`.
+**Decision:** step 1 approved by the Owner on 2026-10-22, accepting the recommendations ("do what you recommend"); implemented in its own PR (#219, merged). Step 2 **deferred** by the Owner on 2026-10-23, accepting the recommendation ("do what you recommend for the rest"): no consumer needs an allowlist today, and it would break TaskFlow's frozen `T-R11-env-isolation`, an existing contract that would need a recorded M1 requirements revision first. #182 stays open for it. The independent review of #219 found five more execution-steering families; they are refused in a follow-up PR.
 
 ## I. Competitive pilot
 

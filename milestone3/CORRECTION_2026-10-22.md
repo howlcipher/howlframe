@@ -28,6 +28,10 @@ requirement and kept as historical evidence, together with `board_unadapted_fail
 implementing orchestrator, not the Owner. It was written against HowlBoard `cd2f2fd`; current HowlBoard declares its own
 root grants and needs no adapter, and applying the adapter to it is a compile error (a second `(grants ...)` form).
 
-Consequence: `evidencedesk/scripts/verify_workflows.py` still applies the adapter unconditionally, so its real-consumer
-step passes only against `cd2f2fd`. Changing that frozen verification script (apply the adapter only when the consumer
-declares no root grants) is a separate change that has not been made.
+Consequence: `evidencedesk/tests/verify_workflows.py` applied the adapter unconditionally, so its real-consumer step passed
+only against `cd2f2fd`.
+
+**Update 2026-10-23:** the script now applies the adapter only when the consumer declares no root grants. A HowlBoard that
+declares its own is built unmodified and run with exactly the authority it declares (as HowlBoard's own Makefile runs it); that
+declaration is pinned in the script, so a Board asking for more fails instead of being granted it, and the Board process gets no
+host environment beyond `PATH`. `scripts/test.sh` passes against current HowlBoard `0b9236b` and against `cd2f2fd`.
