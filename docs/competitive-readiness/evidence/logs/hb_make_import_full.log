@@ -1,0 +1,13 @@
+mkdir -p build
+./howlframe_bin build frontend/app.howl --target=js -o frontend
+Built frontend/app.js
+./howlframe_bin -compile-bc backend/server.howl -o backend/server.hfbc
+./howlframe_bin -compile-bc tools/ledger_import/ledger_import.howl -o build/ledger_import.hfbc
+./howlframe_bin build docs/demo.howl --target=js -o docs
+Built docs/app.js
+mv docs/app.js docs/demo.js
+./howlframe_bin -run-bc -allow-caps filesystem,database \
+	-max-instructions 200000000 -max-memory-bytes 268435456 \
+	build/ledger_import.hfbc data/fixtures/ledger_sample.jsonl 2000
+entries=72
+missions=16

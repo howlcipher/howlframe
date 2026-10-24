@@ -1,0 +1,83 @@
+=== RUN   TestValuePositionVoidRejectedBeforeEffects
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/try_let_body
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/nested_try_let
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/try_let_binding
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/dict_value
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/return_value
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/builtin_argument
+=== RUN   TestValuePositionVoidRejectedBeforeEffects/if_without_else
+--- PASS: TestValuePositionVoidRejectedBeforeEffects (0.89s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/try_let_body (0.02s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/nested_try_let (0.02s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/try_let_binding (0.03s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/dict_value (0.02s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/return_value (0.02s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/builtin_argument (0.02s)
+    --- PASS: TestValuePositionVoidRejectedBeforeEffects/if_without_else (0.02s)
+PASS
+ok  	github.com/howlcipher/howlframe	0.907s
+=== RUN   TestVoidInValuePositionIsRejected
+=== RUN   TestVoidInValuePositionIsRejected/list_element
+=== RUN   TestVoidInValuePositionIsRejected/dict_value
+=== RUN   TestVoidInValuePositionIsRejected/return_value
+=== RUN   TestVoidInValuePositionIsRejected/sleep_duration
+=== RUN   TestVoidInValuePositionIsRejected/store_put_value
+=== RUN   TestVoidInValuePositionIsRejected/try_let_success_body
+=== RUN   TestVoidInValuePositionIsRejected/nested_in_try_let
+=== RUN   TestVoidInValuePositionIsRejected/let_initializer
+=== RUN   TestVoidInValuePositionIsRejected/direct_argument
+=== RUN   TestVoidInValuePositionIsRejected/print_argument
+=== RUN   TestVoidInValuePositionIsRejected/set_value
+=== RUN   TestVoidInValuePositionIsRejected/read_file_path
+=== RUN   TestVoidInValuePositionIsRejected/nested_in_do
+=== RUN   TestVoidInValuePositionIsRejected/write_file_data
+=== RUN   TestVoidInValuePositionIsRejected/if_without_else
+=== RUN   TestVoidInValuePositionIsRejected/match_without_default
+=== RUN   TestVoidInValuePositionIsRejected/void_function
+=== RUN   TestVoidInValuePositionIsRejected/encode_json_argument
+=== RUN   TestVoidInValuePositionIsRejected/stderr_value
+=== RUN   TestVoidInValuePositionIsRejected/match_subject
+=== RUN   TestVoidInValuePositionIsRejected/try_let_catch_body
+=== RUN   TestVoidInValuePositionIsRejected/function_argument
+=== RUN   TestVoidInValuePositionIsRejected/try_let_binding
+=== RUN   TestVoidInValuePositionIsRejected/mkdir_path
+=== RUN   TestVoidInValuePositionIsRejected/for_iterable
+=== RUN   TestVoidInValuePositionIsRejected/arithmetic
+=== RUN   TestVoidInValuePositionIsRejected/builtin_argument
+=== RUN   TestVoidInValuePositionIsRejected/void_call_argument
+=== RUN   TestVoidInValuePositionIsRejected/nested_in_if
+--- PASS: TestVoidInValuePositionIsRejected (0.01s)
+    --- PASS: TestVoidInValuePositionIsRejected/list_element (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/dict_value (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/return_value (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/sleep_duration (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/store_put_value (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/try_let_success_body (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/nested_in_try_let (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/let_initializer (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/direct_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/print_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/set_value (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/read_file_path (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/nested_in_do (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/write_file_data (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/if_without_else (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/match_without_default (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/void_function (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/encode_json_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/stderr_value (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/match_subject (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/try_let_catch_body (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/function_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/try_let_binding (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/mkdir_path (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/for_iterable (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/arithmetic (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/builtin_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/void_call_argument (0.00s)
+    --- PASS: TestVoidInValuePositionIsRejected/nested_in_if (0.00s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/checker	0.011s
+testing: warning: no tests to run
+PASS
+ok  	github.com/howlcipher/howlframe/internal/hfir	0.006s [no tests to run]
