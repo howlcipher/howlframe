@@ -1,0 +1,8 @@
+=== RUN   TestSerializedServerSurvivesNonReadingClient
+--- PASS: TestSerializedServerSurvivesNonReadingClient (4.06s)
+=== RUN   TestSerializedServerSurvivesNonReadingClient
+--- PASS: TestSerializedServerSurvivesNonReadingClient (4.08s)
+=== RUN   TestSerializedServerSurvivesNonReadingClient
+--- PASS: TestSerializedServerSurvivesNonReadingClient (4.06s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/vm	12.211s
