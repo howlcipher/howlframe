@@ -129,3 +129,22 @@ All six findings were reproduced against the code and accepted. None changes the
 | 4 | IMPORTANT | Accepted. An unpriceable usage block is charged the reserved worst case and still settles. Fixing it exposed a second crash in the post-charge bound check on the same input, now skipped unless usage priced cleanly | `harness/cv1/proxy.py`, `tests/test_proxy.py` |
 | 5 | MINOR | Accepted. Any exception while forwarding or streaming is caught, and settlement runs in `finally` | `harness/cv1/proxy.py` |
 | 6 | MINOR | Accepted, and fixed rather than documented: each reservation is written to the ledger before the call is forwarded; on replay, a reservation with no settled call is charged at its worst case, once | `harness/cv1/budget.py`, `tests/test_units.py` |
+
+---
+
+## Confirmation (Antigravity, 2026-10-24, reviewing commit `8c0babec`)
+
+> Recorded verbatim; local file links made repository-relative.
+
+### R4 confirmation: harness fixes in 8c0babec
+
+Verdict: CONFIRMED
+
+- Finding 1: RESOLVED — [`experiments/competitive-v1/harness/cv1/runner.py:41-44,222`](./harness/cv1/runner.py#L41-L44) and [`experiments/competitive-v1/harness/tests/test_proxy.py:19,40`](./harness/tests/test_proxy.py#L19): [`short_socket_root()`](./harness/cv1/runner.py#L41-L44) validates `os.path.isdir(xdg)` before using `XDG_RUNTIME_DIR` and falls back to `/tmp`, allowing the test suites and runner to execute without `FileNotFoundError` when `XDG_RUNTIME_DIR` is set to a nonexistent path.
+- Finding 2: RESOLVED — [`experiments/competitive-v1/harness/cv1/scorer.py:157-158`](./harness/cv1/scorer.py#L157-L158): The interpreter self-reference exemption was generalized to filter matches against `_arm_interpreters(arm)` across all scanned files, eliminating false-positive delegation flags for JavaScript `node:` standard library imports while continuing to flag cross-language delegation.
+- Finding 3: RESOLVED — [`experiments/competitive-v1/harness/cv1/feasibility.py:34-35,63-65`](./harness/cv1/feasibility.py#L34-L35): Explicit constants `MAX_CAP_USD = 150.0` and `MAX_RUN_CEILING_USD = 30.0` are strictly validated in `check_authorization`, raising `NotAuthorized` if an Owner authorization specifies limits exceeding protocol §8 hard caps.
+- Finding 4: RESOLVED — [`experiments/competitive-v1/harness/cv1/proxy.py:357-362,384`](./harness/cv1/proxy.py#L357-L362): `pricing.call_cost` is enclosed in a `try...except Exception` handler that charges the reserved worst-case cost on unpriceable usage, settles the reservation without leaking, and guards against secondary crashes in token bound validation.
+- Finding 5: RESOLVED — [`experiments/competitive-v1/harness/cv1/proxy.py:337-348`](./harness/cv1/proxy.py#L337-L348): Upstream connection, forwarding, streaming, and SSE parsing are caught under `except Exception`, and `self._settle` is relocated into the `finally` block to guarantee settlement under any stream-pumping or socket failure.
+- Finding 6: RESOLVED — [`experiments/competitive-v1/harness/cv1/budget.py:70-73,84-89,160-164`](./harness/cv1/budget.py#L70-L73): In-flight reservations are persisted to disk via `kind: reserve` entries with UUID tokens before request forwarding; on crash recovery, `_replay()` charges open reservations at their worst-case cost, settles them, and appends a `kind: call` record to avoid double-charging on subsequent re-runs.
+
+New defects in changed lines: None

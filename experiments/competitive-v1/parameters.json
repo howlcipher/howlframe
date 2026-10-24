@@ -108,7 +108,7 @@
     "r1": "FAIRNESS_REVIEW_R1.md (Antigravity/Gemini): NEEDS REVISION, 12 findings, all dispositioned in protocol section 12",
     "r2": "FAIRNESS_REVIEW_R2.md: NEEDS REVISION (5 new problems); dispositioned in protocol section 12",
     "r3": "FAIRNESS_REVIEW_R3.md (Antigravity/Gemini, 2026-10-22): READY FOR OWNER DECISION, no blocking problem; 3 non-blocking suggestions applied",
-    "r4_scoped": "FAIRNESS_REVIEW_R4_SCOPED.md (Antigravity/Gemini, 2026-10-24): NEEDS REVISION on harness defects only (1 blocking, 3 important, 2 minor), all fixed; no methodology change found",
+    "r4_scoped": "FAIRNESS_REVIEW_R4_SCOPED.md (Antigravity/Gemini, 2026-10-24): NEEDS REVISION on harness defects only (1 blocking, 3 important, 2 minor); all six fixed in 8c0babec and CONFIRMED by the same reviewer, no new defect; no methodology change found",
     "r4_note": "Gate 1a: one different-provider review of the Revision 3 changes only"
   },
   "revision": 3,
