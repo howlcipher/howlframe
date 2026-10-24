@@ -1,0 +1,23 @@
+evidencedesk rc=0 secs=5 cmd=env HOWLFRAME_BIN=$SCRATCH/bin/howlframe HOWLBOARD_REPO=$SCRATCH/hb bash milestone3/evidencedesk/scripts/test.sh
+evidencedesk_gitstatus rc=0 secs=0 cmd=git -C $SCRATCH/hf status --porcelain
+hb_make_test rc=2 secs=2 cmd=make test HOWLFRAME_BIN=./howlframe_bin
+hb_make_import rc=0 secs=0 cmd=make import HOWLFRAME_BIN=./howlframe_bin LEDGER=$SCRATCH/probes/slice.jsonl MAX=500
+hb_make_import_full rc=0 secs=0 cmd=make import HOWLFRAME_BIN=./howlframe_bin
+hb_test_docs rc=0 secs=0 cmd=python3 scripts/test_docs.py
+hb_test_seo rc=0 secs=0 cmd=python3 scripts/test_seo.py
+hb_timeline rc=0 secs=2 cmd=python3 scripts/test_timeline_layout.py
+hb_gitstatus rc=0 secs=0 cmd=git -C $SCRATCH/hb status --porcelain
+sec_fs rc=0 secs=3 cmd=go test -count=1 -v -run Scoped|FileRootGrant|FileStore|AbsoluteInRootSymlink|RaceHarness|OpenScope ./internal/vm/ ./internal/capability/
+sec_exec rc=0 secs=4 cmd=go test -count=1 -v -run TestExec ./internal/vm/
+sec_slow rc=0 secs=0 cmd=go test -count=1 -v -run Slow ./internal/vm/
+sec_env rc=0 secs=4 cmd=go test -count=1 -v -run Env|CodeLoading|Loader ./internal/capability/ ./internal/backend/gogen/ ./internal/backend/javascript/ .
+sec_hf05 rc=0 secs=1 cmd=go test -count=1 -v -run ValuePosition|VoidInValue|Void . ./internal/checker/ ./internal/hfir/
+sec_ticketdesk_restart rc=1 secs=1 cmd=env APP_ARTIFACT=$SCRATCH/probes/ticketdesk.hfbc bash -c $SCRATCH/bin/howlframe build milestone2/ticketdesk/src/ticketdesk.howl -o $SCRATCH/probes/ticketdesk.hfbc && python3 milestone2/ticketdesk/tests/regression/restart_default_budget.py milestone2/ticketdesk/tests/acceptance/launcher.example.sh
+DONE
+hb_make_test_rerun rc=0
+sec_ticketdesk_restart_rerun rc=0
+sec_slow_rerun rc=0 pass=3
+sec_scopedfs rc=0 pass=7
+hb_import_bad rc=2
+hb_import_dup rc=2
+evidencedesk_historical_cd2f2fd rc=0

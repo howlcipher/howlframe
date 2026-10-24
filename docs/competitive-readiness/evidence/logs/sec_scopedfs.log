@@ -1,0 +1,16 @@
+=== RUN   TestRootEscapeErrorIsRecognized
+--- PASS: TestRootEscapeErrorIsRecognized (0.00s)
+=== RUN   TestOpenScopeMissingRootIsIOErrorNotDenial
+--- PASS: TestOpenScopeMissingRootIsIOErrorNotDenial (0.00s)
+=== RUN   TestScopedMkdirCreatesMissingGrantedRoot
+--- PASS: TestScopedMkdirCreatesMissingGrantedRoot (0.00s)
+=== RUN   TestFileRootGrantReadsAndWritesExactlyThatFile
+--- PASS: TestFileRootGrantReadsAndWritesExactlyThatFile (0.00s)
+=== RUN   TestFileRootGrantDoesNotFollowSymlinkOutOfItsDirectory
+--- PASS: TestFileRootGrantDoesNotFollowSymlinkOutOfItsDirectory (0.00s)
+=== RUN   TestFileRootGrantRefusesRelativeSymlinkToSibling
+--- PASS: TestFileRootGrantRefusesRelativeSymlinkToSibling (0.00s)
+=== RUN   TestFileRootGrantWriteDoesNotTruncateBeforeVerifying
+--- PASS: TestFileRootGrantWriteDoesNotTruncateBeforeVerifying (0.00s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/capability	0.018s

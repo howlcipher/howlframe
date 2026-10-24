@@ -1,5 +1,10 @@
 # R5 integration compatibility clarification, 2026-10-20
 
+> **Superseded 2026-10-22 (Owner decision D).** Kept as a historical record only; it is not a current compatibility
+> requirement. It was approved by the implementing orchestrator, not the Owner, and was written against a stale HowlBoard
+> checkout (`cd2f2fd`). Current HowlBoard declares its own root grants, so applying this adapter to it adds a second
+> `(grants ...)` form and fails to compile. See [../../CORRECTION_2026-10-22.md](../../CORRECTION_2026-10-22.md).
+
 Approved by the parent agent within the user's all-milestone implementation
 scope before the adapted sibling integration is accepted. Independent selector:
 agent milestone3_requirements. Original REQUIREMENTS.md remains frozen intact.

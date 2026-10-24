@@ -171,6 +171,7 @@ func TestJSCodeLoadingEnv(t *testing.T) {
 func TestJSSharedTables(t *testing.T) {
 	names, _ := json.Marshal(capability.CodeLoadingEnvNames)
 	prefixes, _ := json.Marshal(capability.CodeLoadingEnvPrefixes)
+	suffixes, _ := json.Marshal(capability.CodeLoadingEnvSuffixes)
 	var rows [][2]any
 	for _, raw := range capability.SpecialPrefixes {
 		p := netip.MustParsePrefix(raw)
@@ -194,6 +195,7 @@ func TestJSSharedTables(t *testing.T) {
 	securityJS(t, `
  assert.deepEqual(howlFrameCodeLoadingEnvNames,`+string(names)+`);
  assert.deepEqual(howlFrameCodeLoadingEnvPrefixes,`+string(prefixes)+`);
+ assert.deepEqual(howlFrameCodeLoadingEnvSuffixes,`+string(suffixes)+`);
  assert.deepEqual(howlFrameSpecialPrefixes,`+string(special)+`);
  assert.deepEqual(howlFrameRedirectSafeHeaders,`+string(headers)+`);
 `)

@@ -101,13 +101,42 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 		"set value":         `(let (a 1) (let (items (list)) (set a (append items 6))))`,
 		"list element":      `(let (items (list)) (print (list (append items 1))))`,
 		"void function":     `(defun noop () void (print "x")) (let (v (call noop)) (print v))`,
+		// HF-05: these passed the checker, performed the effect, then underflowed.
+		"try_let binding": `(try_let (r (write_file "out.txt" "x")) (catch e (print "c")) (print "b"))`,
+		"dict value":      `(print (encode_json (dict ("k" (write_file "out.txt" "x")))))`,
+		"return value":    `(defun f () (return (write_file "out.txt" "x"))) (print (call f))`,
+		// Found by the independent review of the first HF-05 fix: builtin
+		// arguments, loop iterables, match subjects, partial if/match values
+		// and store writes used as values.
+		"builtin argument":      `(print (to_string (write_file "out.txt" "x")))`,
+		"encode_json argument":  `(print (encode_json (write_file "out.txt" "x")))`,
+		"read_file path":        `(print (read_file (write_file "out.txt" "x")))`,
+		"write_file data":       `(write_file "outer.txt" (write_file "out.txt" "x"))`,
+		"mkdir path":            `(mkdir (write_file "out.txt" "x"))`,
+		"sleep duration":        `(sleep (write_file "out.txt" "x"))`,
+		"stderr value":          `(stderr (write_file "out.txt" "x"))`,
+		"void call argument":    `(defun f () void (write_file "out.txt" "x")) (print (read_file (call f)))`,
+		"for iterable":          `(for i (write_file "out.txt" "x") (print i))`,
+		"match subject":         `(match (write_file "out.txt" "x") (default (print "d")))`,
+		"if without else":       `(let (r (if false 1)) (print r))`,
+		"match without default": `(print (match 2 (1 42)))`,
+		"store_put value":       `(do (store_open s "memory://hf05") (print (store_put s "k" 1)))`,
+		// Found by the independent review of the second fix: a try_let used as a
+		// value whose success or catch body yields nothing.
+		"try_let success body": `(let (x (try_let (r "v") (catch e "err") (write_file "out.txt" "x"))) (print x))`,
+		"try_let catch body":   `(let (x (try_let (r (to_int "zz")) (catch e (write_file "out.txt" "x")) "ok")) (print x))`,
+		// Found by the confirmation review: the same try_let nested in a do tail,
+		// an if branch, or another try_let's do body.
+		"nested in do":      `(let (x (do (print "a") (try_let (r "v") (catch e "err") (write_file "out.txt" "x")))) (print x))`,
+		"nested in if":      `(let (x (if true (try_let (r "v") (catch e "err") (write_file "out.txt" "x")) "other")) (print x))`,
+		"nested in try_let": `(let (x (try_let (r1 "a") (catch e1 "b") (do (print "hi") (try_let (r2 "c") (catch e2 "d") (write_file "out.txt" "x"))))) (print x))`,
 	}
 	for name, src := range invalid {
 		t.Run(name, func(t *testing.T) {
 			analysis := analyzeExpr(t, src)
 			found := false
 			for _, d := range analysis.Diagnostics {
-				if strings.Contains(d.Reason, "void expression") {
+				if strings.Contains(d.Reason, "produces no value") {
 					found = true
 				}
 			}
@@ -116,9 +145,31 @@ func TestVoidInValuePositionIsRejected(t *testing.T) {
 			}
 		})
 	}
-	valid := `(let (items (list)) (do (append items 6) (print (list_len items))))`
-	if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
-		t.Fatalf("statement-position void rejected: %v", d)
+	for _, valid := range []string{
+		`(let (items (list)) (do (append items 6) (print (list_len items))))`,
+		`(do (write_file "out.txt" "x") (if true (write_file "out.txt" "y") (do)) (print "ok"))`,
+		`(defun save () void (write_file "out.txt" "x")) (call save)`,
+		`(try_let (r (read_file "out.txt")) (catch e (print "c")) (print (bytes_to_string r)))`,
+		`(try_let (r (do (write_file "out.txt" "x") 1)) (catch e (print "c")) (print r))`,
+		`(print (encode_json (dict ("k" 1) ("v" (to_string 2)))))`,
+		`(if true (print "x"))`,
+		`(let (r (if true 1 2)) (print r))`,
+		`(print (match 2 (1 "a") (default "b")))`,
+		`(do (store_open s "memory://hf05") (store_put s "k" 1) (print (store_get s "k")))`,
+		// HowlBoard's log_event shape: a helper whose last form is a store write.
+		`(defun log_event (id) (do (store_open s "memory://hf05") (store_put s "k" id))) (call log_event "a")`,
+		`(for i (list 1 2) (print i))`,
+		`(let (x (try_let (r "v") (catch e "err") r)) (print x))`,
+		`(let (x (do (print "a") (try_let (r "v") (catch e "err") r))) (print x))`,
+		`(let (x (if true (do (print "a") 1) 2)) (print x))`,
+		// A catch that exits never falls through, so the try_let still yields a value.
+		`(let (raw (try_let (r (read_file "f")) (catch e (do (stderr "cannot read") (exit 3))) (bytes_to_string r))) (print raw))`,
+		// Mixed bodies are fine where no value is needed.
+		`(try_let (r (read_file "f")) (catch e (print "missing")) (print (bytes_to_string r)))`,
+	} {
+		if d := analyzeExpr(t, valid).Diagnostics; len(d) != 0 {
+			t.Fatalf("statement-position void rejected in %s: %v", valid, d)
+		}
 	}
 }
 

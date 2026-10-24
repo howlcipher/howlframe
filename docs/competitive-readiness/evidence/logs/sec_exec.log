@@ -1,0 +1,20 @@
+=== RUN   TestExecKillsBackgroundAndSessionEscapedDescendantsOnNormalExit
+--- PASS: TestExecKillsBackgroundAndSessionEscapedDescendantsOnNormalExit (0.14s)
+=== RUN   TestExecDeadlineKillsEveryDescendant
+--- PASS: TestExecDeadlineKillsEveryDescendant (1.66s)
+=== RUN   TestExecOutputLimitKillsEveryDescendant
+--- PASS: TestExecOutputLimitKillsEveryDescendant (0.11s)
+=== RUN   TestExecProgramThatClosesItsOutputEarlyKeepsRunning
+--- PASS: TestExecProgramThatClosesItsOutputEarlyKeepsRunning (0.55s)
+=== RUN   TestExecNonZeroExitExposesStatusAndOutputToCatch
+--- PASS: TestExecNonZeroExitExposesStatusAndOutputToCatch (0.10s)
+=== RUN   TestExecListIsArgumentVector
+--- PASS: TestExecListIsArgumentVector (0.04s)
+=== RUN   TestExecOutputCap
+--- PASS: TestExecOutputCap (0.04s)
+=== RUN   TestExecLargeOutputAndExit
+--- PASS: TestExecLargeOutputAndExit (0.06s)
+=== RUN   TestExecWithoutDeadlineWaitsForInheritedOutput
+--- PASS: TestExecWithoutDeadlineWaitsForInheritedOutput (0.27s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/vm	2.991s

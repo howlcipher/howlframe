@@ -373,6 +373,10 @@ function howlFrameCodeLoadingEnv(name) {
   for (var i = 0; i < howlFrameCodeLoadingEnvPrefixes.length; i++) {
     if (u.indexOf(howlFrameCodeLoadingEnvPrefixes[i]) === 0) return true;
   }
+  for (var j = 0; j < howlFrameCodeLoadingEnvSuffixes.length; j++) {
+    var s = howlFrameCodeLoadingEnvSuffixes[j];
+    if (u.length >= s.length && u.slice(u.length - s.length) === s) return true;
+  }
   return false;
 }
 
@@ -1539,8 +1543,9 @@ func specialPrefixJSSource() string {
 	return b.String()
 }
 
-// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames and
-// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames,
+// CodeLoadingEnvPrefixes and CodeLoadingEnvSuffixes, the refusal tables
+// shared by every target.
 func codeLoadingEnvJSSource() string {
 	quote := func(xs []string) string {
 		out := make([]string, len(xs))
@@ -1550,5 +1555,6 @@ func codeLoadingEnvJSSource() string {
 		return strings.Join(out, ", ")
 	}
 	return "var howlFrameCodeLoadingEnvNames = [" + quote(capability.CodeLoadingEnvNames) + "];\n" +
-		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n\n"
+		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n" +
+		"var howlFrameCodeLoadingEnvSuffixes = [" + quote(capability.CodeLoadingEnvSuffixes) + "];\n\n"
 }

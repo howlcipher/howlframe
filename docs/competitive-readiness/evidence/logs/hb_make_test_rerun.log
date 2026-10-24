@@ -1,0 +1,10 @@
+mkdir -p build
+$SCRATCH/hb/howlframe_bin build frontend/app.howl --target=js -o frontend
+Built frontend/app.js
+$SCRATCH/hb/howlframe_bin -compile-bc backend/server.howl -o backend/server.hfbc
+$SCRATCH/hb/howlframe_bin -compile-bc tools/ledger_import/ledger_import.howl -o build/ledger_import.hfbc
+$SCRATCH/hb/howlframe_bin build docs/demo.howl --target=js -o docs
+Built docs/app.js
+mv docs/app.js docs/demo.js
+cd backend && go test -count=1 ./...
+ok  	howlboard/backend	2.352s

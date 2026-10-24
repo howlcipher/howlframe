@@ -27,12 +27,16 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const Version = "0.1.0"
-const HFBCFormatVersion = "1"
+
+// HFBCFormatVersion advertises the envelope this compiler writes, not the
+// BCProgram instruction-set version or every legacy envelope it can read.
+var HFBCFormatVersion = strconv.FormatUint(uint64(bytecode.ArtifactVersion), 10)
 
 func init() {
 	gob.Register(float64(0))
