@@ -1,0 +1,2 @@
+#!/bin/sh
+exec howlframe run "$(dirname "$0")/app.hfbc" "$@"

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Agent-run entry point inside the jail: expose the proxy socket on loopback, then run the agent CLI.
+/opt/cv1/testpy/bin/python3 -I /opt/cv1/lib/forwarder.py --port 18080 --unix /run/cv1-proxy/proxy.sock \
+    --ready-file /tmp/.cv1-forwarder-ready &
+i=0
+while [ ! -s /tmp/.cv1-forwarder-ready ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+if [ ! -s /tmp/.cv1-forwarder-ready ]; then echo "jail-entry: forwarder did not start" >&2; exit 97; fi
+exec "$@"

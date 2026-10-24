@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cv1-score-result/1",
+  "title": "competitive-v1 scored outcome of one run",
+  "description": "Written by scorer.py after copying the final workspace into a fresh jail. Every protocol 7.9 outcome has a value here.",
+  "type": "object",
+  "required": [
+    "schema",
+    "run_id",
+    "task_id",
+    "arm",
+    "outcome",
+    "acceptance",
+    "heldout",
+    "tests_verified",
+    "tampering",
+    "delegation_flags",
+    "runtime",
+    "scored_utc"
+  ],
+  "properties": {
+    "schema": {
+      "const": "cv1-score-result/1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "arm": {
+      "enum": [
+        "howlframe",
+        "python",
+        "go",
+        "javascript"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "completed",
+        "not_completed_acceptance",
+        "not_completed_time",
+        "not_completed_budget",
+        "not_completed_tool_calls",
+        "infrastructure_failure",
+        "not_autonomous",
+        "expressibility_failure",
+        "not_started"
+      ]
+    },
+    "acceptance": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "heldout": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "heldout_fraction": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "tests_verified": {
+      "type": "boolean"
+    },
+    "tampering": {
+      "type": "array",
+      "description": "Agent changes to tests or fixtures, or to the workspace after the run. They never affect scoring (the harness's own copies are used) and are always reported (protocol 3.3)."
+    },
+    "delegation_flags": {
+      "type": "array",
+      "description": "Signs that the solution runs another language; a blind grader decides (Revision 3)."
+    },
+    "runtime": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "scored_utc": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "array"
+    }
+  }
+}
