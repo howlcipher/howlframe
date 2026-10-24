@@ -1,0 +1,68 @@
+{
+ "step_sets": [
+  {
+   "match": "task in Python",
+   "steps": [
+    {
+     "shell": "cat > /workspace/main.py <<'EOF'\nimport sys\ntry:\n    nums = [int(a) for a in sys.argv[1:]]\nexcept ValueError:\n    print(\"not an integer\", file=sys.stderr)\n    sys.exit(2)\nprint(sum(nums))\nEOF\nprintf '#!/bin/sh\\nexec python3 /workspace/main.py \"$@\"\\n' > /workspace/run\nchmod +x /workspace/run && run-acceptance-tests"
+    },
+    {
+     "shell": "task-complete"
+    },
+    {
+     "text": "done"
+    }
+   ]
+  },
+  {
+   "match": "task in JavaScript",
+   "steps": [
+    {
+     "shell": "cat > /workspace/main.js <<'EOF'\nconst args = process.argv.slice(2);\nif (!args.every((a) => /^-?\\d+$/.test(a))) { console.error(\"not an integer\"); process.exit(2); }\nconsole.log(args.reduce((s, a) => s + Number(a), 0));\nEOF\nprintf '#!/bin/sh\\nexec node /workspace/main.js \"$@\"\\n' > /workspace/run\nchmod +x /workspace/run && run-acceptance-tests"
+    },
+    {
+     "shell": "task-complete"
+    },
+    {
+     "text": "done"
+    }
+   ]
+  },
+  {
+   "match": "task in Go",
+   "steps": [
+    {
+     "shell": "cat > /workspace/main.go <<'EOF'\npackage main\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n)\n\nfunc main() {\n\tsum := 0\n\tfor _, a := range os.Args[1:] {\n\t\tn, err := strconv.Atoi(a)\n\t\tif err != nil {\n\t\t\tfmt.Fprintln(os.Stderr, \"not an integer\")\n\t\t\tos.Exit(2)\n\t\t}\n\t\tsum += n\n\t}\n\tfmt.Println(sum)\n}\nEOF\nprintf 'module toy\\n\\ngo 1.25\\n' > /workspace/go.mod\nprintf '#!/bin/sh\\nset -e\\ncd /workspace\\ngo build -o app .\\n' > /workspace/build\nprintf '#!/bin/sh\\nexec /workspace/app \"$@\"\\n' > /workspace/run\nchmod +x /workspace/build /workspace/run && /workspace/build && run-acceptance-tests"
+    },
+    {
+     "shell": "task-complete"
+    },
+    {
+     "text": "done"
+    }
+   ]
+  },
+  {
+   "match": "task in HowlFrame",
+   "steps": [
+    {
+     "shell": "printf '(cli_app\\n  (do 0))\\n' > /workspace/main.howl\nprintf '#!/bin/sh\\nset -e\\ncd /workspace\\nhowlframe build main.howl -o app.hfbc\\n' > /workspace/build\nprintf '#!/bin/sh\\nexec howlframe run /workspace/app.hfbc \"$@\"\\n' > /workspace/run\nchmod +x /workspace/build /workspace/run && /workspace/build; run-acceptance-tests; true"
+    },
+    {
+     "shell": "task-complete"
+    },
+    {
+     "text": "done"
+    }
+   ]
+  }
+ ],
+ "usage": {
+  "input_tokens": 2000,
+  "cache_creation_input_tokens": 3000,
+  "cache_read_input_tokens": 6000,
+  "output_tokens": 1200,
+  "cached_tokens": 6000
+ },
+ "note": "Harness self-test only. Usage stays below the request-size bound, as real usage must; a larger value would (correctly) stop the experiment."
+}

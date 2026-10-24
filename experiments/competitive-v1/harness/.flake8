@@ -1,0 +1,4 @@
+[flake8]
+max-line-length = 120
+# The Go solution in the integration test is a gofmt-style string literal, so it is indented with tabs.
+per-file-ignores = tests/test_integration.py:W191,E101

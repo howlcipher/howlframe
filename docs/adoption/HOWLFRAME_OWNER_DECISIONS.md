@@ -15,7 +15,7 @@ separately. When the Owner decides, record the decision, date and wording in the
 | F | HowlBoard ledger-import behavior change (HowlBoard #20) | Approve | **Approved** 2026-10-22 (merged) |
 | G | HF-05 checker/adapter tightening (HowlFrame #212) | Approve after one independent confirmation of the final head | **Approved** 2026-10-22 (merged after independent confirmation) |
 | H | `process:env` policy (#182) | Adopt the classified policy in `HOWLFRAME_CORRECTNESS_FOLLOWUPS.md` §2, in two steps | Step 1 **approved** 2026-10-22 (merged, #219); step 2 **deferred** 2026-10-23 |
-| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | Options **recorded** 2026-10-22; no spend cap, so **no run** |
+| I | Competitive pilot: providers, H2/H4 options, budget | Option A for H2, default for H4, a fixed cap (protocol re-review passed 2026-10-22) | Options **recorded** 2026-10-22; model IDs, limits, Revision 3 and harness **approved** 2026-10-24; **no spend authorized**, so **no run** |
 
 Update 2026-10-22: the Owner asked for the PRs to be merged. HowlFrame #211 and HowlBoard #20 are merged (decision F), and HowlFrame #212
 after Antigravity's round-4 review accepted it (decision G). Later the same day the Owner accepted the recommendations for A–E, H step 1
@@ -174,3 +174,10 @@ gate is passed. No trial has run. The Owner needs to choose:
 H2 **option A** (shared credit for equal non-zero results; mutual failures earn nothing); H4 **default** (Python, Go and JavaScript all gate);
 providers **Claude Code and Codex**, with exact model IDs fixed at freeze. **No spend cap is approved, so no dry run or pilot may run.**
 Building the pilot tasks and containers is a separate job, not started.
+
+**Decision, 2026-10-24:** the Owner answered the approval packet (`docs/competitive-readiness/HOWLFRAME_OWNER_APPROVAL_PACKET.md`)
+with "I approve everything but spending money". Approved: `claude-opus-5-5` and `gpt-6.1-sol`, both at effort high; Claude Code for
+the feasibility test; $150 total and $30 per run as the limits any paid run must use; Revision 3 drafting with one scoped re-review
+(the freeze still comes back for a separate yes); the experiment-only harness, validated against mocks; API-key billing; Antigravity
+or a human as task author; bubblewrap jails; the pilot cap deferred. **Not authorized:** any paid model call, the feasibility test,
+the freeze and the pilot. Revision 3 and the harness are in `experiments/competitive-v1/` (protocol §13).

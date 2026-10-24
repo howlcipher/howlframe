@@ -1,0 +1,43 @@
+{
+  "checked_utc": "2026-10-23",
+  "currency": "USD per 1M tokens, Standard tier, global endpoint",
+  "sources": {
+    "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "openai": "https://developers.openai.com/api/docs/pricing"
+  },
+  "note": "Re-check both pages on the day of the freeze and record any change as a parameters revision. The proxy charges every call at these rates; provider invoices are reconciled afterwards.",
+  "models": {
+    "claude-opus-5-5": {
+      "provider": "anthropic",
+      "context_window": 1000000,
+      "max_output_tokens": 128000,
+      "rates": {
+        "input": 4.0,
+        "cache_write_5m": 5.0,
+        "cache_write_1h": 8.0,
+        "cache_read": 0.2,
+        "output": 20.0
+      }
+    },
+    "gpt-6.1-sol": {
+      "provider": "openai",
+      "context_window": 872000,
+      "max_output_tokens": 128000,
+      "max_output_tokens_note": "Not published in the Codex catalog; 128K is an assumption used only for the worst-call reserve. Replace with the documented limit at freeze.",
+      "long_context_threshold": 272000,
+      "rates": {
+        "input": 2.0,
+        "cache_write": 2.5,
+        "cache_read": 0.1,
+        "output": 10.0
+      },
+      "long_context_rates": {
+        "input": 4.0,
+        "cache_write": 5.0,
+        "cache_read": 0.2,
+        "output": 15.0
+      },
+      "long_context_cache_write_note": "The pricing page lists no long-context cache-write rate; 2x the short rate is assumed, matching the other long-context multipliers."
+    }
+  }
+}

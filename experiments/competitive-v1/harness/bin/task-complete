@@ -1,0 +1,4 @@
+#!/bin/sh
+# Completion handshake (protocol §5). Ends the run: the harness stops the agent and ignores anything after this.
+date -u +%Y-%m-%dT%H:%M:%S.%NZ > /run/cv1/complete
+echo "task-complete: recorded. The run is over; the harness will stop this session now."
