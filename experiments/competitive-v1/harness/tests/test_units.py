@@ -147,6 +147,17 @@ class BudgetTests(unittest.TestCase):
             kinds = [json.loads(line)["kind"] for line in f]
         self.assertEqual(kinds[-1], "release")
 
+    def test_call_in_flight_at_a_crash_is_charged_its_worst_case(self):
+        b = Budget(self.ledger, 150, 30, 150)
+        b.admit("r1")
+        b.settle(b.reserve("r1", 5), 1.0, 0, {})
+        b.reserve("r1", 7.5)  # forwarded, then the process dies before settling
+        b2 = Budget(self.ledger, 150, 30, 150)
+        self.assertAlmostEqual(b2.spent, 8.5)
+        self.assertAlmostEqual(b2.run_spent["r1"], 8.5)
+        b3 = Budget(self.ledger, 150, 30, 150)  # replaying again does not double-charge
+        self.assertAlmostEqual(b3.spent, 8.5)
+
     def test_changed_limits_need_a_new_ledger(self):
         Budget(self.ledger, 150, 30, 150)
         with self.assertRaises(ValueError):
@@ -233,6 +244,29 @@ class Beacon(unittest.TestCase):
         self.assertEqual(sorted(s1), sorted(ids))
 
 
+class Delegation(unittest.TestCase):
+    def scan(self, arm, files):
+        from cv1 import scorer
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        for name, text in files.items():
+            with open(os.path.join(d, name), "w") as f:
+                f.write(text)
+        return scorer.delegation_flags(arm, d)
+
+    def test_own_interpreter_is_never_flagged_in_any_arm(self):
+        self.assertEqual(self.scan("javascript", {"main.js": 'import fs from "node:fs";\nrequire("node:path");\n',
+                                                  "run": "#!/bin/sh\nexec node main.js\n"}), [])
+        self.assertEqual(self.scan("python", {"main.py": "#!/usr/bin/env python3\n# python\n",
+                                              "run": "#!/bin/sh\nexec python3 main.py\n"}), [])
+
+    def test_other_interpreters_and_languages_are_flagged(self):
+        flags = self.scan("howlframe", {"main.howl": '(cli_app (do (exec "python3" "x.py")))\n', "x.py": "print(1)\n"})
+        whys = sorted(f["why"] for f in flags)
+        self.assertEqual(whys, ["names another interpreter", "source file in another language (.py)"])
+        self.assertEqual(self.scan("javascript", {"main.js": 'spawn("python3", ["x"])\n'})[0]["match"], "python3")
+
+
 class Schemas(unittest.TestCase):
     def good(self):
         return {"schema": "cv1-run-result/1", "run_id": "r", "task_id": "t", "arm": "go", "repetition": 1,
@@ -279,7 +313,8 @@ class Authorization(unittest.TestCase):
     def test_refusals(self):
         cases = [({"authorized_by": "agent"}, {}), ({}, {"day": "2026-11-08"}), ({}, {"day": "2026-10-31"}),
                  ({"model": "claude-fable-5-1"}, {}), ({}, {"provider": "openai"}), ({}, {"task": "other"}),
-                 ({"run_ceiling_usd": 200}, {})]
+                 ({"run_ceiling_usd": 200}, {}), ({"cap_usd": 500, "run_ceiling_usd": 30}, {}),
+                 ({"cap_usd": 150, "run_ceiling_usd": 31}, {})]
         for over, kw in cases:
             with self.assertRaises(feasibility.NotAuthorized, msg=str((over, kw))):
                 self.check(self.write(**over), **kw)

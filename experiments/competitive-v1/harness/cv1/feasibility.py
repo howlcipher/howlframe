@@ -30,6 +30,9 @@ UPSTREAM = {"anthropic": "https://api.anthropic.com", "openai": "https://api.ope
 MODELS = {"anthropic": "claude-opus-5-5", "openai": "gpt-6.1-sol"}
 TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "prompts",
                         "agent_task.md")
+# Protocol §8 hard limits for the feasibility test. An authorization may set lower limits, never higher.
+MAX_CAP_USD = 150.0
+MAX_RUN_CEILING_USD = 30.0
 REQUIRED_AUTH = ("authorized_by", "experiment", "date", "valid_through", "provider", "model", "cap_usd",
                  "run_ceiling_usd", "task_id", "statement")
 
@@ -57,6 +60,9 @@ def check_authorization(path, provider, task_id, today=None):
         raise NotAuthorized("authorization names a different task")
     if not (0 < float(auth["run_ceiling_usd"]) <= float(auth["cap_usd"])):
         raise NotAuthorized("authorization limits are inconsistent")
+    if float(auth["cap_usd"]) > MAX_CAP_USD or float(auth["run_ceiling_usd"]) > MAX_RUN_CEILING_USD:
+        raise NotAuthorized(f"authorization exceeds the protocol §8 limits (${MAX_CAP_USD:g} total, "
+                            f"${MAX_RUN_CEILING_USD:g} per run); raising them needs a protocol revision")
     return auth
 
 

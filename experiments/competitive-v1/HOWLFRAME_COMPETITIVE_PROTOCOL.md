@@ -310,7 +310,9 @@ such cases as inconclusive rather than forcing a verdict. Adding repetitions doe
 
 Gate 1 passed on 2026-10-22 (`FAIRNESS_REVIEW_R3.md`: READY FOR OWNER DECISION, no blocking problem). Revision 3 adds
 **gate 1a**: one scoped different-provider review of the Revision 3 changes only (§13), as §8's exit rule requires for a
-revised protocol. Gates 1a and 2–4 are open; gate 4 pins the compiler commit (G12; `e77e008f` is the current candidate,
+revised protocol. Review R4 (`FAIRNESS_REVIEW_R4_SCOPED.md`, Antigravity, 2026-10-24) found one blocking and five other
+harness defects, no methodology problem, and confirmed Revision 3 changes no hypothesis, metric, target or decision rule; all
+six are fixed (dispositions in that file). Gates 1a and 2–4 are open; gate 4 pins the compiler commit (G12; `e77e008f` is the current candidate,
 equal in compiler source to the verified `056fbf89`).
 
 ## 12. Disposition of fairness review R1 (Antigravity / Gemini, 2026-10-21)

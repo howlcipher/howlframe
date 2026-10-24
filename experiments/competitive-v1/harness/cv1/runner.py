@@ -38,6 +38,12 @@ INFRA_REASONS = {"server_tool", "wrong_model", "speed_tier", "inference_geo", "b
 HARNESS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def short_socket_root():
+    """A directory short enough for Unix socket paths (108 bytes): XDG_RUNTIME_DIR if it exists, else /tmp."""
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    return xdg if xdg and os.path.isdir(xdg) else "/tmp"
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -213,7 +219,7 @@ def run_one(spec, layout, budget, prices, out_dir, upstream_url, api_key, templa
         elif kind in ("served_model_mismatch", "bound_exceeded"):
             stop.set("infrastructure_failure", kind)
 
-    sock_dir = tempfile.mkdtemp(prefix="cv1-", dir=socket_root or os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+    sock_dir = tempfile.mkdtemp(prefix="cv1-", dir=socket_root or short_socket_root())
     os.chmod(sock_dir, 0o755)
     proxy = RunProxy(spec.run_id, spec.agent.provider, spec.agent.model, budget, prices, upstream_url, api_key,
                      os.path.join(sock_dir, "proxy.sock"), records, allowed_served_models=allowed_served,

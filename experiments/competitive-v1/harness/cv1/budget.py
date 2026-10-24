@@ -16,6 +16,7 @@ import json
 import os
 import threading
 import time
+import uuid
 
 
 class BudgetRefused(Exception):
@@ -41,7 +42,6 @@ class Budget:
         self.run_pending = {}
         self.active = set()
         self.stopped = None
-        self._next_reservation = 0
         self._reservations = {}
         self._replay()
 
@@ -51,6 +51,7 @@ class Budget:
             self._append({"kind": "open", "cap_usd": self.cap, "run_ceiling_usd": self.ceiling,
                           "max_tool_calls": self.max_tool_calls})
             return
+        open_reservations = {}
         with open(self.ledger_path) as f:
             for line in f:
                 line = line.strip()
@@ -66,7 +67,10 @@ class Budget:
                     self.active.add(e["run"])
                     self.run_spent.setdefault(e["run"], 0.0)
                     self.run_tools.setdefault(e["run"], 0)
+                elif kind == "reserve":
+                    open_reservations[e["token"]] = e
                 elif kind == "call":
+                    open_reservations.pop(e.get("token"), None)
                     self.spent += e["cost_usd"]
                     self.run_spent[e["run"]] = self.run_spent.get(e["run"], 0.0) + e["cost_usd"]
                     self.run_tools[e["run"]] = self.run_tools.get(e["run"], 0) + e.get("tool_calls", 0)
@@ -74,8 +78,15 @@ class Budget:
                     self.active.discard(e["run"])
                 elif kind == "stop":
                     self.stopped = e.get("reason", "stopped")
-        # Runs that were in flight when the previous process died are finished: they release their reservation
-        # and are reported as infrastructure failures by the runner.
+        # A call that was in flight when the previous process died may have been billed, so it is charged at its
+        # reserved worst case. Its run is then finished: it releases its admission reservation and is reported as
+        # an infrastructure failure by the runner.
+        for token, e in sorted(open_reservations.items()):
+            self.spent += e["worst_usd"]
+            self.run_spent[e["run"]] = self.run_spent.get(e["run"], 0.0) + e["worst_usd"]
+            self._append({"kind": "call", "run": e["run"], "token": token, "cost_usd": e["worst_usd"],
+                          "worst_usd": e["worst_usd"], "tool_calls": 0,
+                          "cost_basis": "in flight at a restart; charged the reserved worst case"})
         for run in sorted(self.active):
             self._append({"kind": "release", "run": run, "reason": "recovered after restart"})
         self.active.clear()
@@ -146,9 +157,10 @@ class Budget:
                 raise BudgetRefused("experiment_cap", f"spent ${self.spent:.4f} + worst ${worst_usd:.4f} "
                                                       f"> ${self.cap:.2f}")
             self.run_pending[run] = pending + worst_usd
-            self._next_reservation += 1
-            token = self._next_reservation
+            token = uuid.uuid4().hex
             self._reservations[token] = (run, worst_usd)
+            # Durable before the call is forwarded, so a crash mid-call cannot lose the call's cost (see _replay).
+            self._append({"kind": "reserve", "run": run, "token": token, "worst_usd": worst_usd})
             return token
 
     def settle(self, token, cost_usd, tool_calls, record):
@@ -159,7 +171,7 @@ class Budget:
             self.spent += cost_usd
             self.run_spent[run] = self.run_spent.get(run, 0.0) + cost_usd
             self.run_tools[run] = self.run_tools.get(run, 0) + tool_calls
-            self._append(dict(record, kind="call", run=run, cost_usd=cost_usd, worst_usd=worst,
+            self._append(dict(record, kind="call", run=run, token=token, cost_usd=cost_usd, worst_usd=worst,
                               tool_calls=tool_calls))
             self._settled.notify_all()
             exceeded = cost_usd > worst + 1e-9

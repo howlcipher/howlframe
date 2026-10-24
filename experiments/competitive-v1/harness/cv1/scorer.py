@@ -152,12 +152,12 @@ def delegation_flags(arm, ws):
             except OSError:
                 continue
             for pattern, why in DELEGATION_PATTERNS:
-                if arm == "python" and why == "names another interpreter" and ext == ".py":
-                    continue
-                m = pattern.search(text)
-                if m and not (os.path.basename(rel) in ("run", "build") and why == "names another interpreter"
-                              and m.group(0) in _arm_interpreters(arm)):
-                    flags.append({"file": rel, "why": why, "match": m.group(0)})
+                # An arm naming its own interpreter (`import "node:fs"`, `#!/usr/bin/env python3`, `exec node`) is
+                # not delegation, in source files and in ./run or ./build alike; the rule is the same for every arm.
+                hits = [m.group(0) for m in pattern.finditer(text)
+                        if not (why == "names another interpreter" and m.group(0) in _arm_interpreters(arm))]
+                if hits:
+                    flags.append({"file": rel, "why": why, "match": hits[0]})
     return flags
 
 

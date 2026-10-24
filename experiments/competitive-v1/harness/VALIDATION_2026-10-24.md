@@ -20,10 +20,16 @@ mock's scripted usage at list prices.
 | Suite | Command | Result |
 |---|---|---|
 | Lint | `flake8 cv1 tests mock` (`.flake8`, line length 120) | clean |
-| Unit and proxy | `python3 -m unittest tests.test_units tests.test_proxy` | 40 passed (also under Python 3.11) |
+| Unit and proxy | `python3 -m unittest tests.test_units tests.test_proxy` | 44 passed (also under Python 3.11, and with `XDG_RUNTIME_DIR` pointing at a missing directory) |
 | Integration | `python3 -m unittest tests.test_integration` (real CLIs, real jails, mock upstream) | 11 passed |
-| All together | `python3 -m unittest -v tests.test_units tests.test_proxy tests.test_integration` | 51 passed in 79 s |
+| All together | `python3 -m unittest -v tests.test_units tests.test_proxy tests.test_integration` | see "Final run" below |
 | Feasibility command, mock | `python3 -m cv1.feasibility --mock tests/fixtures/toy_mock_scenario.json --task tests/fixtures/toy_task --provider {anthropic,openai}` | Both providers: 4 arms co-scheduled, identical agent surface hash across arms, Python/Go/JavaScript *completed*, the deliberately wrong HowlFrame solution *not completed (acceptance)* |
+
+### Final run (after the review R4 fixes)
+
+`python3 -m unittest -v tests.test_units tests.test_proxy tests.test_integration`: **55 passed in 71 s** (44 unit and proxy, 11
+integration), flake8 clean, unit and proxy suites also passing under Python 3.11. The mock feasibility command, run again for
+both providers, gave the same outcomes as above with identical agent surfaces across arms.
 
 ## What the integration tests established
 
@@ -54,3 +60,8 @@ mock's scripted usage at list prices.
    exists.
 4. The first mock scenario reported 158K input tokens for a 15 KB request. The proxy correctly treated this as a broken
    cost bound and stopped the experiment; the scenario was corrected to realistic usage.
+5. Review R4 (`../FAIRNESS_REVIEW_R4_SCOPED.md`) found six more: socket directories when `XDG_RUNTIME_DIR` does not exist,
+   an asymmetric delegation scan, authorizations above the protocol limits, unpriceable usage leaking a reservation (and a
+   second crash on the same input in the bound check), settlement skipped on unexpected stream errors, and the cost of a
+   call in flight at a crash. All are fixed with tests.
+

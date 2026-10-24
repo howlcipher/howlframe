@@ -23,7 +23,7 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 ```sh
 cd experiments/competitive-v1/harness
 
-# Unit and proxy tests (no jail, no network): 40 tests
+# Unit and proxy tests (no jail, no network): 44 tests
 python3 -m unittest tests.test_units tests.test_proxy
 
 # Fetch and verify the pinned artifacts (about 900 MB unpacked), then build the HowlFrame arm

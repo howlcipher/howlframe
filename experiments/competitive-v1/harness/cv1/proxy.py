@@ -334,8 +334,9 @@ class _Handler(BaseHTTPRequestHandler):
                     observer.whole(json.loads(b"".join(whole) or b"{}"))
                 except ValueError:
                     observer.obs.error = "unparseable response"
-        except (OSError, http.client.HTTPException) as e:
-            observer.obs.error = f"upstream: {type(e).__name__}: {e}"
+        except Exception as e:  # any failure still settles below, at the worst case if usage is incomplete
+            observer.obs.error = f"{type(e).__name__}: {e}"
+            observer.obs.complete = False
             if not sent_head:
                 try:
                     self.send_error(502, "upstream unavailable")
@@ -344,7 +345,7 @@ class _Handler(BaseHTTPRequestHandler):
         finally:
             if conn is not None:
                 conn.close()
-        self._settle(body, token, worst, opaque, observer.obs, status, started, ttfb, resp_headers)
+            self._settle(body, token, worst, opaque, observer.obs, status, started, ttfb, resp_headers)
 
     def _settle(self, body, token, worst, opaque, obs, status, started, ttfb, resp_headers):
         p = self.proxy
@@ -353,8 +354,12 @@ class _Handler(BaseHTTPRequestHandler):
             cost = 0.0
             basis = "free route"
         elif usage and status == 200 and obs.complete:
-            cost = pricing.call_cost(p.prices, p.pinned_model, usage)
-            basis = "usage"
+            try:
+                cost = pricing.call_cost(p.prices, p.pinned_model, usage)
+                basis = "usage"
+            except Exception as e:  # a malformed usage block must still settle the reservation
+                cost = worst
+                basis = f"unpriceable usage ({type(e).__name__}); charged the reserved worst case"
         elif status is not None and status >= 400 and not usage:
             cost = 0.0
             basis = f"HTTP {status}, not billed"
@@ -376,7 +381,7 @@ class _Handler(BaseHTTPRequestHandler):
             exceeded = p.budget.settle(token, cost, obs.tool_calls, record)
             if exceeded:
                 p.on_event("bound_exceeded", record)
-            if usage and status == 200:
+            if basis == "usage":  # only a usage block that priced cleanly is checked against the bound
                 reported = pricing.input_tokens_reported(p.entry, usage)
                 bound = pricing.input_token_bound(p.entry, int(self.headers.get("Content-Length") or 0), opaque)
                 if reported > bound:

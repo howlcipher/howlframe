@@ -16,6 +16,7 @@ import unittest
 from cv1 import pricing
 from cv1.budget import Budget
 from cv1.proxy import RunProxy
+from cv1.runner import short_socket_root
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "mock"))
@@ -36,7 +37,7 @@ class UnixHTTPConnection(http.client.HTTPConnection):
 
 
 def short_tmp():
-    return tempfile.mkdtemp(prefix="cv1t-", dir=os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+    return tempfile.mkdtemp(prefix="cv1t-", dir=short_socket_root())
 
 
 class ProxyHarness:
@@ -290,6 +291,20 @@ class Enforcement(unittest.TestCase):
             self.assertIn("bound_exceeded", [k for k, _ in h.events])
             self.assertEqual(h.call(p)[0], 400)
             self.assertIsNotNone(h.budget.snapshot()["stopped"])
+        finally:
+            h.close()
+
+    def test_unpriceable_usage_still_settles_at_worst_case(self):
+        h = ProxyHarness("anthropic", {"steps": SHELL_STEPS,
+                                       "usage": {"input_tokens": "lots", "output_tokens": 10}})
+        try:
+            p = h.proxy()
+            self.assertEqual(h.call(p)[0], 200)
+            with open(os.path.join(p.record_dir, "proxy_calls.jsonl")) as f:
+                rec = json.loads(f.readline())
+            self.assertTrue(rec["cost_basis"].startswith("unpriceable usage"))
+            self.assertAlmostEqual(rec["cost_usd"], rec["worst_usd"], places=6)
+            self.assertEqual(h.budget.run_pending.get("r1", 0.0), 0.0, "the reservation must be released")
         finally:
             h.close()
 
