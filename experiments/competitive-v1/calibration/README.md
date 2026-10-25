@@ -48,7 +48,7 @@ and provider from the acceptance tests") here; the pilot pool needs its own arra
 | Python | completed | 18/18 | 29/29 | 2.01 s | none |
 | Go | completed | 18/18 | 29/29 | 2.43 s | none |
 | JavaScript | completed | 18/18 | 29/29 | 0.59 s | none |
-| HowlFrame | no reference | | | | |
+| HowlFrame | completed | 18/18 | 29/29 | 31.2 s | none |
 
 Seal (SHA-256 over each tree manifest, as printed by `check_task`):
 
@@ -60,8 +60,11 @@ Seal (SHA-256 over each tree manifest, as printed by `check_task`):
 
 ## Limits
 
-* **No HowlFrame reference.** §3.2 step 5 asks for references in each language for drawn tasks. For this task, the
-  HowlFrame run is scored without one, and a HowlFrame failure would not show whether the task is expressible.
+* **HowlFrame reference** (added 2026-10-25, Antigravity, from the agent's documentation only; `references/howlframe/`,
+  with `REFERENCE_NOTES.md`). It needed the VM's default limits raised (`--max-instructions`, `--max-memory-bytes`),
+  and an explicit NaN check because of howlframe#225. Its workload time, 31.2 s against Python's 2.1 s (about 15×), is
+  far above H4's 2× target. That is one reference on one calibration task: an infrastructure observation, not
+  evidence. It is also above the 0.5–5 s sizing range, which `check_task` applies to the baselines only.
 * **The held-out tests are committed in this repository.** Trial agents cannot read them, because the jails have no
   network and no host paths. The seal is the published hash above.
 * **The JavaScript workload time (0.59 s) is near the lower bound.** A faster machine could bring it below 0.5 s. Runtime is a secondary measure, and the feasibility test reports it only as an infrastructure check.

@@ -12,7 +12,7 @@ import unittest
 import datetime
 import hashlib
 
-from cv1 import beacon, check_task, feasibility, pricing, runner, scorer, testrunner, toolchains
+from cv1 import beacon, check_pool, check_task, feasibility, pricing, runner, scorer, testrunner, toolchains
 from cv1.budget import Budget, BudgetRefused
 from cv1.results import SchemaError, validate_result
 
@@ -469,6 +469,41 @@ class ScoringMeasures(unittest.TestCase):
             self.assertIs(r["file_read"], True)
         else:
             self.assertIsNone(r["file_read"])
+
+
+class TestRunnerCounting(unittest.TestCase):
+    def test_a_failing_subtest_fails_the_suite(self):
+        d = tempfile.mkdtemp(prefix="cv1-tr-")
+        self.addCleanup(shutil.rmtree, d)
+        with open(os.path.join(d, "test_x.py"), "w") as f:
+            f.write("import unittest\n\n\nclass T(unittest.TestCase):\n"
+                    "    def test_ok(self):\n        pass\n\n"
+                    "    def test_sub(self):\n        for v in (1, 2, 3):\n"
+                    "            with self.subTest(v=v):\n                self.assertNotEqual(v, 2)\n")
+        import io
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            s = testrunner.run(d, "/bin/true", verbosity=0)
+        self.assertEqual((s["total"], s["passed"], s["failed"], s["skipped"]), (2, 1, 1, 0))
+        self.assertFalse(s["all_passed"])
+        self.assertTrue(any(o.get("parent", "").endswith("test_sub") for o in s["outcomes"]))
+
+
+class PoolCorpusOverlap(unittest.TestCase):
+    def test_overlap_finds_a_copied_card_and_ignores_unrelated_text(self):
+        d = tempfile.mkdtemp(prefix="cv1-corpus-")
+        self.addCleanup(shutil.rmtree, d)
+        card = "Write a command line tool that reads a CSV of orders and prints the total revenue per region as JSON"
+        with open(os.path.join(d, "card.md"), "w") as f:
+            f.write(card)
+        with open(os.path.join(d, "other.md"), "w") as f:
+            f.write("An HTTP service that stores notes for users with rate limits and persistence on disk")
+        index = check_pool.corpus_index([d])
+        top = check_pool.closest(check_pool.shingles("Task: " + card + " sorted by region."), index)
+        self.assertEqual(os.path.basename(top[0]["file"]), "card.md")
+        self.assertGreater(top[0]["shared_5gram_fraction"], 0.5)
+        self.assertEqual(check_pool.closest(check_pool.shingles("completely different words about weather "
+                                                                "stations and rainfall in spring"), index), [])
 
 
 if __name__ == "__main__":

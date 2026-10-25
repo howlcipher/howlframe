@@ -21,6 +21,7 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 | Jail hashes | `lock.json`, `cv1/toolchains.py --verify` | The committed tree digests of the base root, toolchains and docs. A paid feasibility run refuses a cache that does not match |
 | Draw | `cv1/beacon.py` | NIST beacon pulse selection, seed and shuffle exactly as pinned in protocol §13.3 |
 | Task check | `cv1/check_task.py` | Validates a task directory and scores each reference implementation through the real scorer (fresh jail, acceptance and held-out tests, workload time in 0.5–5 s); prints the seal hashes |
+| Pool check | `cv1/check_pool.py` | Validates every candidate and scores its screen implementations (Python, JavaScript) in fresh jails; reports word 5-gram overlap with the HowlFrame corpora for the reviewer; prints the pool manifest digest |
 | Feasibility test | `cv1/feasibility.py` | Mock mode for infrastructure checks; live mode only with a dated Owner authorization file and a complete task (held-out tests and workload). Scores every arm on acceptance, held-out and runtime |
 | Mock provider | `mock/mock_upstream.py` | Deterministic Anthropic Messages and OpenAI Responses (including Codex code mode) for tests |
 
@@ -29,7 +30,7 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 ```sh
 cd experiments/competitive-v1/harness
 
-# Unit, proxy, transcript and analysis tests (no jail, no network): 71 tests
+# Unit, proxy, transcript and analysis tests (no jail, no network): 73 tests
 python3 -m unittest tests.test_units tests.test_proxy tests.test_transcript tests.test_analysis
 
 # Fetch and verify the pinned artifacts (about 900 MB unpacked), then build the HowlFrame arm
@@ -37,7 +38,7 @@ python3 -m cv1.toolchains --cache "$CV1_CACHE"
 python3 -m cv1.toolchains --cache "$CV1_CACHE" --only howlframe --howlframe-repo /path/to/howlframe \
     --howlframe-commit <merged main SHA> --skill-file /path/to/howlplane/.agents/skills/howlframe-app-development/SKILL.md
 
-# Integration: real CLIs in real jails against the mock (skipped without these variables): 13 tests
+# Integration: real CLIs in real jails against the mock (skipped without these variables): 14 tests
 export CV1_CACHE=... CV1_CLAUDE_BIN=/path/to/claude/binary CV1_CODEX_DIR=/dir/with/codex/and/codex-code-mode-host
 python3 -m unittest tests.test_integration
 

@@ -14,7 +14,7 @@ import tempfile
 import threading
 import unittest
 
-from cv1 import agents, check_task, jail, pricing, runner, scorer, transcript
+from cv1 import agents, check_pool, check_task, jail, pricing, runner, scorer, transcript
 from cv1.budget import Budget
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -248,6 +248,34 @@ class ReferenceCheck(unittest.TestCase):
         self.assertTrue(canary["connections"])
         self.assertIs(canary["file_read"], True, "the jail HOME is tmpfs, so reads are observable")
         self.assertTrue(canary["token_in_workspace"])
+
+
+@unittest.skipUnless(HAVE_JAIL, "needs CV1_CACHE with the pinned root and bwrap")
+class PoolCheck(unittest.TestCase):
+    def test_candidate_screens_are_scored_in_jails(self):
+        d = tempfile.mkdtemp(prefix="cv1-pool-")
+        self.addCleanup(shutil.rmtree, d, True)
+        cand = os.path.join(d, "pool", "D1-toy")
+        shutil.copytree(TOY, cand, ignore=shutil.ignore_patterns("references", "heldout"))
+        with open(os.path.join(cand, "task.json"), "w") as f:
+            json.dump({"id": "D1-toy", "domain": "D1", "authority_centred": False, "title": "toy", "author": "test",
+                       "attestation": "fixture"}, f)
+        shutil.copytree(os.path.join(TOY, "references", "python"), os.path.join(cand, "screen", "python"))
+        js = os.path.join(cand, "screen", "javascript")
+        os.makedirs(js)
+        with open(os.path.join(js, "main.js"), "w") as f:
+            f.write("const a = process.argv.slice(2);\n"
+                    "if (!a.every((x) => /^-?\\d+$/.test(x))) { console.error('not an integer'); process.exit(2); }\n"
+                    "console.log(a.reduce((s, x) => s + Number(x), 0));\n")
+        with open(os.path.join(js, "run"), "w") as f:
+            f.write('#!/bin/sh\nexec node "$(dirname "$0")/main.js" "$@"\n')
+        os.chmod(os.path.join(js, "run"), 0o755)
+        report = check_pool.check(os.path.join(d, "pool"), runner.Layout(CACHE), os.path.join(d, "out"))
+        [c] = report["candidates"]
+        self.assertEqual(c["problems"], [], c)
+        self.assertEqual({a: v["acceptance"] for a, v in c["screens"].items()}, {"python": "2/2", "javascript": "2/2"})
+        self.assertFalse(report["ok"], "one candidate cannot fill four domains")
+        self.assertTrue(any("D1: 1 passing" in p for p in report["problems"]))
 
 
 @unittest.skipUnless(HAVE_CLAUDE, "needs CV1_CLAUDE_BIN and the pinned cache")

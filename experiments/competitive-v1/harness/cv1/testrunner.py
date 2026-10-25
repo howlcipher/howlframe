@@ -105,6 +105,13 @@ class _Collector(unittest.TextTestResult):
         super().addError(test, err)
         self._record(test, "error", self._exc_info_to_string(err, test)[-2000:])
 
+    def addSubTest(self, test, subtest, err):
+        # unittest reports subtest failures only here; the parent test then gets no success callback.
+        super().addSubTest(test, subtest, err)
+        if err is not None:
+            self.outcomes.append({"id": subtest.id(), "parent": test.id(), "status": "fail",
+                                  "seconds": None, "detail": self._exc_info_to_string(err, test)[-2000:]})
+
     def addSkip(self, test, reason):
         super().addSkip(test, reason)
         self._record(test, "skip", reason)
@@ -117,14 +124,16 @@ def run(tests_dir, app, report=None, pattern="test_*.py", verbosity=1, canary_to
     suite = unittest.defaultTestLoader.discover(tests_dir, pattern=pattern, top_level_dir=tests_dir)
     runner = unittest.TextTestRunner(resultclass=_Collector, verbosity=verbosity, stream=sys.stdout)
     result = runner.run(suite)
+    passed = sum(1 for o in result.outcomes if o["status"] == "pass")
+    skipped = sum(1 for o in result.outcomes if o["status"] == "skip")
     summary = {
-        "tests_dir": tests_dir, "total": result.testsRun,
-        "passed": sum(1 for o in result.outcomes if o["status"] == "pass"),
-        "failed": sum(1 for o in result.outcomes if o["status"] in ("fail", "error")),
-        "skipped": sum(1 for o in result.outcomes if o["status"] == "skip"),
+        "tests_dir": tests_dir, "total": result.testsRun, "passed": passed, "skipped": skipped,
+        # A test counts as failed unless it passed or was skipped, so subtest failures, errors in setUp and any
+        # outcome the collector did not see are all failures.
+        "failed": result.testsRun - passed - skipped,
         "outcomes": result.outcomes,
     }
-    summary["all_passed"] = summary["total"] > 0 and summary["failed"] == 0 and summary["skipped"] == 0
+    summary["all_passed"] = summary["total"] > 0 and passed == summary["total"]
     if canaries:
         summary["canary"] = canaries.report()
     if report:
