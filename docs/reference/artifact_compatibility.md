@@ -16,13 +16,16 @@ This change introduces a new HowlFrame bytecode artifact format. Current HowlFra
 
 | Runtime Version | Reads Version 1 Artifacts (`.hfbc`) | Reads Version 2 Artifacts (`.hfbc`) | Emits Version |
 |---|---|---|---|
-| Older Runtimes (v0.1.0) | Supported | **Unsupported** (`ErrUnsupportedVer`) | Version 1 |
-| Current Runtime (v0.1.1+) | **Supported** (Backward Compatible) | **Supported** | Version 2 |
+| Older runtimes (before format 2) | Supported | **Unsupported** (`ErrUnsupportedVer`) | Version 1 |
+| Current runtime (`howlframe version` prints `HFBC format: 2`) | **Supported** (Backward Compatible) | **Supported** | Version 2 |
+
+The runtime version string was not changed with the format: current builds still print `HowlFrame 0.1.0` together
+with `HFBC format: 2`. Use the `HFBC format` line, not the version number, to tell which artifacts a binary emits.
 
 ### Backward Compatibility (Reading Older Artifacts)
 
 Current HowlFrame binaries retain backward compatibility with version 1 artifacts:
-- When reading an artifact header with `ArtifactVersion = 1`, [`ReadArtifact`](file:///run/media/system/tallgeese/dev/howlframe-stab/internal/bytecode/artifact.go) decodes the legacy map-based wire payload.
+- When reading an artifact header with `ArtifactVersion = 1`, [`ReadArtifact`](../../internal/bytecode/artifact.go) decodes the legacy map-based wire payload.
 - Existing pre-compiled artifacts continue to execute without requiring re-compilation if the runtime is updated.
 
 ### Forward Compatibility (Older Runtimes Reading Newer Artifacts)
@@ -37,6 +40,6 @@ Older HowlFrame binaries strictly check the version field in the artifact header
 
 ### Migration & Deployment Guidance
 
-1. **Upgrading Deployments**: When updating your HowlFrame runtime to version 0.1.1 or later, existing `.hfbc` artifacts can remain in place and will execute normally.
+1. **Upgrading Deployments**: When updating to a runtime that reports `HFBC format: 2`, existing `.hfbc` artifacts can remain in place and will execute normally.
 2. **Generating New Artifacts**: When you compile `.howl` source using the updated runtime, the output artifact will be written in format version 2. If downstream systems or worker nodes still run older HowlFrame binaries, upgrade those nodes before deploying newly compiled artifacts, or compile the artifacts using a runtime matching the older target version.
 3. **Artifact Hash Verification**: Because version 2 serializes functions in sorted order, artifact hashing (e.g. SHA-256) is deterministic across multiple compiler invocations and platforms.
