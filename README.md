@@ -383,7 +383,7 @@ HowlFrame supports the core control-flow and data primitives expected by the shi
 
 - `let`, `set`, `if`, `while`, `for`, `match`, and `do`.
 - `defun`, `call`, `return`, `type_hint`, and `type_param`.
-- Modules: a file whose root is `(module ...)` marks its public functions with `(export (defun ...))`. The program's top-level file imports it with `(use "file.howl" as m)` and calls an export as `(call m/name args...)`; definitions without `export` stay private to the module. `check` rejects the dotted spelling `m.name`, which only names Go interop calls. A used module cannot itself `use` another module.
+- Modules: a file whose root is `(module ...)` marks its public functions with `(export (defun ...))`. The program's top-level file imports it with `(use "file.howl" as m)` and calls an export as `(call m/name args...)`; definitions without `export` stay private to the module. `check` rejects the dotted spelling `(call m.name ...)` for a function the module defines; a dotted call otherwise names Go interop, and a bytecode build refuses any call it cannot resolve. A used module cannot itself `use` another module.
 - `list`, `dict`, `append`, `map_set`, `map_delete`, `map_get`, `map_keys`, and `list_get`.
 - `str_split`, `str_join`, `regex_match`, `to_int`, `to_float`, `to_string`, `bytes_to_string`, `html_escape`, and `attr_escape`.
 - `read_file`, `write_file`, `mkdir`, `exec`, `sleep`, and `cli_args`.
