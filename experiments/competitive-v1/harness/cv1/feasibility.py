@@ -89,6 +89,8 @@ def main(argv=None):
     if args.live:
         if not (args.authorization and args.key_file):
             p.error("--live needs --authorization and --key-file")
+        if not task.heldout or task.workload() is None:
+            p.error("a paid run needs a complete task: held-out tests and a workload")
         auth = check_authorization(args.authorization, provider, task.id)
         cap, ceiling = float(auth["cap_usd"]), float(auth["run_ceiling_usd"])
         from .proxy import read_api_key
@@ -112,6 +114,11 @@ def main(argv=None):
     cfg = agents.AgentConfig(provider, model, effort="high",
                              max_budget_usd=ceiling if provider == "anthropic" else None)
     limits = {"memory_max": "8G", "tasks_max": 1024, "cpus": args.cpus, "use_systemd": True}
+    task.prepare_workload(layout.python())
+    # Test hashes are frozen before any run starts; scoring verifies the task's tests against them.
+    frozen = runner.tree_manifest(task.acceptance)
+    frozen_heldout = runner.tree_manifest(task.heldout) if task.heldout else None
+    workload = task.workload()
     specs = [runner.RunSpec(f"feasibility-{provider}-{arm}", task, arm, cfg, limits=limits) for arm in runner.ARMS]
     results, errors = runner.run_group(
         specs, layout=layout, budget=budget, prices=pricing.load_prices(), out_dir=args.out, upstream_url=upstream,
@@ -120,12 +127,14 @@ def main(argv=None):
                "cap_usd": cap, "run_ceiling_usd": ceiling, "spent_usd": budget.snapshot()["spent_usd"],
                "surface_mismatch_arms": runner.audit_surfaces(results), "runs": [], "errors": errors,
                "note": "Infrastructure check and budget calibration only. Not evidence for or against any hypothesis."}
-    frozen = runner.tree_manifest(task.acceptance)
     for r in results:
         if r is None:
             continue
-        s = scorer.score_run(os.path.join(args.out, r["run_id"]), task, layout, frozen)
+        s = scorer.score_run(os.path.join(args.out, r["run_id"]), task, layout, frozen, task.heldout, frozen_heldout,
+                             workload=workload)
+        runtime = s["runtime"] or {}
         summary["runs"].append({"arm": r["arm"], "status": r["status"], "outcome": s["outcome"],
+                                "heldout_fraction": s["heldout_fraction"], "execution_s": runtime.get("execution_s"),
                                 "spend_usd": r["spend_usd"], "elapsed_s": r["elapsed_s"],
                                 "model_calls": r["model_calls"], "tool_calls": r["tool_calls"]})
     with open(os.path.join(args.out, "feasibility_summary.json"), "w") as f:

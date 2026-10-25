@@ -14,7 +14,7 @@ import tempfile
 import threading
 import unittest
 
-from cv1 import agents, jail, pricing, runner, scorer
+from cv1 import agents, check_task, jail, pricing, runner, scorer
 from cv1.budget import Budget
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -194,6 +194,21 @@ class JailIsolation(unittest.TestCase):
                                         "touch /usr/bin/x && echo WROTE-ROOT; true")
         for leak in ("WROTE-TESTS", "RM-TESTS", "WROTE-TOOLCHAIN", "WROTE-ROOT"):
             self.assertNotIn(leak, out)
+
+
+@unittest.skipUnless(HAVE_JAIL, "needs CV1_CACHE with the pinned root and bwrap")
+class ReferenceCheck(unittest.TestCase):
+    def test_reference_is_scored_like_a_run(self):
+        out = tempfile.mkdtemp(prefix="cv1-check-")
+        self.addCleanup(shutil.rmtree, out, True)
+        task = runner.Task(TOY)
+        r = check_task.score_reference(task, "python", runner.Layout(CACHE), out,
+                                       runner.tree_manifest(task.acceptance), runner.tree_manifest(task.heldout),
+                                       {"memory_max": "4G", "tasks_max": 512, "cpus": None, "use_systemd": True})
+        self.assertEqual(r["outcome"], "completed", r)
+        self.assertEqual((r["acceptance"], r["heldout"], r["heldout_all_passed"]), ("2/2", "2/2", True))
+        self.assertIsNotNone(r["execution_s"])
+        self.assertEqual(r["delegation_flags"], [])
 
 
 @unittest.skipUnless(HAVE_CLAUDE, "needs CV1_CLAUDE_BIN and the pinned cache")

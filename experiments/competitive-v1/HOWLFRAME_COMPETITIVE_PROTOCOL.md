@@ -405,3 +405,15 @@ binaries in the jails, through the proxy, against a deterministic local mock of 
 the experiment cap and admission, the worst-case bound, the tool-call limit, policy refusals, served-model mismatch, the
 wall-clock limit, key isolation, ledger replay after a restart, co-scheduled arms with identical agent surfaces, and
 scoring of completed, failed and budget-exhausted runs. These are infrastructure checks, not results.
+
+### 13.5 Calibration task (2026-10-24)
+
+The calibration task `calibration/calib-apilog-analyzer` (D1 shape, not authority-centred) was written by Antigravity
+(`gemini-3.8-flash-high`): contract, acceptance tests, Python, Go and JavaScript references, and a generated, hash-pinned
+workload. Its held-out tests are by Codex (`gpt-6-luna`), from the contract and acceptance tests only. OpenAI is not a
+trial provider in the feasibility test, so this meets §3.3 for this task; the pilot pool needs its own held-out
+arrangement. The held-out tests exposed two contract ambiguities that favoured Python, and the author resolved both
+before the seal. `harness/cv1/check_task.py` scored all three references in fresh scoring jails: each passes 18/18
+acceptance and 29/29 held-out tests, with workload times of 0.59–2.43 s. The feasibility command now also scores
+held-out tests and runtime, and refuses a paid run on a task without both. Provenance, revisions and seal hashes are in
+`calibration/README.md`. This satisfies the calibration-task part of gate 3; no HowlFrame reference exists for it.

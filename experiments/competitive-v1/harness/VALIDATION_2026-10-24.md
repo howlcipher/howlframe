@@ -65,3 +65,19 @@ both providers, gave the same outcomes as above with identical agent surfaces ac
    second crash on the same input in the bound check), settlement skipped on unexpected stream errors, and the cost of a
    call in flight at a crash. All are fixed with tests.
 
+
+## Addendum: task checking and the calibration task (later on 2026-10-24)
+
+Changes:
+* `cv1/check_task.py` (new) scores each reference implementation through the real scorer.
+* `Task` now finds held-out tests, workloads and references, and builds generated workloads pinned by SHA-256 with the
+  pinned CPython.
+* The feasibility command freezes test hashes before any run and scores held-out tests and runtime for every arm. It
+  refuses a paid run on a task without both.
+
+| Suite | Result |
+|---|---|
+| `flake8 cv1 tests mock` | clean |
+| `python3 -m unittest tests.test_units tests.test_proxy tests.test_integration` | **62 passed in 65 s** (50 unit and proxy, 12 integration); unit and proxy also pass under Python 3.11 |
+| `python3 -m cv1.check_task ../calibration/calib-apilog-analyzer` | exit 0: Python, Go and JavaScript references 18/18 acceptance and 29/29 held-out, workload 0.59–2.43 s, no delegation flags (`../calibration/README.md`) |
+| `python3 -m cv1.feasibility --mock tests/fixtures/toy_mock_scenario.json --task ../calibration/calib-apilog-analyzer` | 4 arms co-scheduled, identical agent surfaces. The mock's scripted toy solutions do not solve the calibration task, so every arm scores *not completed (acceptance)*, and held-out fractions are recorded for every arm. This shows the scoring path end to end on the real task |

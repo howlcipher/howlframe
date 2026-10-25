@@ -107,7 +107,7 @@ def run_suite(layout, arm, identity, ws_src, tests_dir, work, name, limits):
 
 
 def measure_runtime(layout, arm, identity, ws_src, workload, work, limits):
-    """workload: {"args": [...], "stdin": "relative/path" or null, "files_dir": "task-relative dir" or null}"""
+    """workload: {"args": [...], "stdin": file name in dir or null, "dir": host directory mounted at /workload}"""
     out = {"loadavg_before": os.getloadavg(), "cpus": limits.get("cpus")}
     for label, src in (("program", ws_src), ("empty", os.path.join(HARNESS, "empty", arm))):
         ws = _fresh_copy(src, work)

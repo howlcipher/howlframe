@@ -21,6 +21,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -83,9 +84,15 @@ class Layout:
     def docs(self, arm):
         return os.path.join(self.cache, "docs", arm)
 
+    def python(self):
+        """The pinned CPython (also the test runner's), used for workload generators so their output is reproducible."""
+        return os.path.join(self.testpy, "bin", "python3")
+
 
 class Task:
-    """A task directory: prompt.md, acceptance/ (visible tests), optional baseline/<arm>/ (D4) and task.json."""
+    """A task directory: task.json, prompt.md, acceptance/ (visible tests), and optionally heldout/ (sealed tests),
+    workload/ (runtime input, mounted at /workload), baseline/<arm>/ (D4) and references/<arm>/ (never shown to agents).
+    """
 
     def __init__(self, path):
         self.path = os.path.abspath(path)
@@ -93,6 +100,49 @@ class Task:
             self.meta = json.load(f)
         self.id = self.meta["id"]
         self.acceptance = os.path.join(self.path, "acceptance")
+        heldout = os.path.join(self.path, "heldout")
+        self.heldout = heldout if os.path.isdir(heldout) else None
+
+    def workload(self):
+        """task.json "workload" ({"args": [...], "stdin": file in workload/ or null}) with its mount source, or None."""
+        w = self.meta.get("workload")
+        if w is None:
+            return None
+        out = {"args": list(w.get("args", [])), "stdin": w.get("stdin")}
+        d = os.path.join(self.path, "workload")
+        if os.path.isdir(d):
+            out["dir"] = d
+        elif out["stdin"]:
+            raise ValueError(f"task {self.id}: workload stdin {out['stdin']!r} needs a workload/ directory")
+        return out
+
+    def prepare_workload(self, python=None):
+        """Create generated workload files if absent, then verify every one against its pinned SHA-256.
+
+        task.json may declare {"workload": {..., "generate": {"command": ["generate.py", ...],
+        "files": {"name": "sha256"}}}}: the command runs with `python -I` inside workload/, so large inputs need not be
+        committed. Raises ValueError if a generated file does not match its pin.
+        """
+        gen = (self.meta.get("workload") or {}).get("generate")
+        if not gen:
+            return
+        d = os.path.join(self.path, "workload")
+        files = gen["files"]
+
+        def mismatched():
+            return [n for n, h in sorted(files.items())
+                    if not os.path.isfile(os.path.join(d, n)) or sha256_file(os.path.join(d, n)) != h]
+
+        if mismatched():
+            subprocess.run([python or sys.executable, "-I", *gen["command"]], cwd=d, check=True,
+                           stdout=subprocess.DEVNULL)
+        bad = mismatched()
+        if bad:
+            raise ValueError(f"task {self.id}: generated workload files {bad} do not match their pinned SHA-256")
+
+    def reference(self, arm):
+        p = os.path.join(self.path, "references", arm)
+        return p if os.path.isdir(p) else None
 
     def prompt_body(self):
         with open(os.path.join(self.path, "prompt.md")) as f:

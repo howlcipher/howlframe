@@ -1,4 +1,4 @@
-"""Unit tests: pricing, budget ledger, beacon draw and record schemas. No network, no jail, no model."""
+"""Unit tests: pricing, budget ledger, beacon draw, record schemas and task layout. No network, no jail, no model."""
 
 import json
 import os
@@ -9,8 +9,9 @@ import threading
 import unittest
 
 import datetime
+import hashlib
 
-from cv1 import beacon, feasibility, pricing
+from cv1 import beacon, check_task, feasibility, pricing, runner
 from cv1.budget import Budget, BudgetRefused
 from cv1.results import SchemaError, validate_result
 
@@ -326,6 +327,77 @@ class Authorization(unittest.TestCase):
             json.dump(d, f)
         with self.assertRaises(feasibility.NotAuthorized):
             self.check(path)
+
+
+class TaskLayout(unittest.TestCase):
+    def make(self, meta, files):
+        d = tempfile.mkdtemp(prefix="cv1-task-")
+        self.addCleanup(shutil.rmtree, d)
+        with open(os.path.join(d, "task.json"), "w") as f:
+            json.dump(meta, f)
+        for rel, text in files.items():
+            path = os.path.join(d, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(text)
+            if os.path.basename(rel) == "run":
+                os.chmod(path, 0o755)
+        return runner.Task(d)
+
+    COMPLETE_META = {"id": "t", "domain": "D1", "authority_centred": False, "title": "T", "author": "A",
+                     "attestation": "new", "workload": {"args": ["/workload/in.txt"], "stdin": "in.txt"}}
+    COMPLETE_FILES = {"prompt.md": "Do it.", "acceptance/test_a.py": "", "heldout/test_h.py": "",
+                      "workload/in.txt": "x", "references/python/run": "", "references/go/run": "",
+                      "references/javascript/run": ""}
+
+    def test_heldout_workload_and_references_are_found(self):
+        task = self.make(self.COMPLETE_META, self.COMPLETE_FILES)
+        self.assertEqual(task.heldout, os.path.join(task.path, "heldout"))
+        self.assertEqual(task.workload(), {"args": ["/workload/in.txt"], "stdin": "in.txt",
+                                           "dir": os.path.join(task.path, "workload")})
+        self.assertEqual(task.reference("go"), os.path.join(task.path, "references", "go"))
+        self.assertIsNone(task.reference("howlframe"))
+        self.assertEqual(check_task.static_problems(task), [])
+
+    def test_optional_parts_absent(self):
+        task = self.make({"id": "t"}, {"prompt.md": "x", "acceptance/test_a.py": ""})
+        self.assertIsNone(task.heldout)
+        self.assertIsNone(task.workload())
+
+    def test_workload_stdin_needs_a_directory(self):
+        task = self.make({"id": "t", "workload": {"stdin": "in.txt"}}, {})
+        with self.assertRaises(ValueError):
+            task.workload()
+
+    GEN = "import sys\nopen('data.txt', 'w').write('x' * int(sys.argv[1]))\n"
+
+    def generated(self, size, pin):
+        meta = {"id": "t", "workload": {"args": [], "generate": {
+            "command": ["gen.py", str(size)], "files": {"data.txt": hashlib.sha256(b"x" * pin).hexdigest()}}}}
+        return self.make(meta, {"workload/gen.py": self.GEN})
+
+    def test_generated_workload_is_created_and_verified(self):
+        task = self.generated(1000, 1000)
+        task.prepare_workload()
+        with open(os.path.join(task.path, "workload", "data.txt")) as f:
+            self.assertEqual(len(f.read()), 1000)
+        os.unlink(os.path.join(task.path, "workload", "gen.py"))
+        task.prepare_workload()  # files already match their pins: the generator is not run again
+
+    def test_generated_workload_that_drifts_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.generated(999, 1000).prepare_workload()
+
+    def test_incomplete_task_problems_are_listed(self):
+        files = dict(self.COMPLETE_FILES)
+        del files["heldout/test_h.py"], files["references/go/run"]
+        files["workload/other.txt"] = files.pop("workload/in.txt")
+        meta = dict(self.COMPLETE_META, authority_centred="no")
+        del meta["attestation"]
+        problems = check_task.static_problems(self.make(meta, files))
+        for expected in ("lacks ['attestation']", "authority_centred", "heldout/ has no test_",
+                         "workload stdin 'in.txt'", "references/go/ is missing"):
+            self.assertTrue(any(expected in p for p in problems), (expected, problems))
 
 
 if __name__ == "__main__":

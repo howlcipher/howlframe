@@ -15,7 +15,8 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 | Scorer | `cv1/scorer.py`, `cv1/testrunner.py`, `cv1/testkit.py`, `cv1/runtime_probe.py`, `empty/` | Fresh-jail scoring with hash-verified acceptance and held-out tests, runtime minus empty-program startup, and a delegation scan for solutions that hand work to another language |
 | Records | `schema/`, `cv1/results.py` | Run and score records; every protocol §7.9 outcome has a value |
 | Draw | `cv1/beacon.py` | NIST beacon pulse selection, seed and shuffle exactly as pinned in protocol §13.3 |
-| Feasibility test | `cv1/feasibility.py` | Mock mode for infrastructure checks; live mode only with a dated Owner authorization file |
+| Task check | `cv1/check_task.py` | Validates a task directory and scores each reference implementation through the real scorer (fresh jail, acceptance and held-out tests, workload time in 0.5–5 s); prints the seal hashes |
+| Feasibility test | `cv1/feasibility.py` | Mock mode for infrastructure checks; live mode only with a dated Owner authorization file and a complete task (held-out tests and workload). Scores every arm on acceptance, held-out and runtime |
 | Mock provider | `mock/mock_upstream.py` | Deterministic Anthropic Messages and OpenAI Responses (including Codex code mode) for tests |
 
 ## Commands
@@ -23,7 +24,7 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 ```sh
 cd experiments/competitive-v1/harness
 
-# Unit and proxy tests (no jail, no network): 44 tests
+# Unit and proxy tests (no jail, no network): 50 tests
 python3 -m unittest tests.test_units tests.test_proxy
 
 # Fetch and verify the pinned artifacts (about 900 MB unpacked), then build the HowlFrame arm
@@ -31,9 +32,12 @@ python3 -m cv1.toolchains --cache "$CV1_CACHE"
 python3 -m cv1.toolchains --cache "$CV1_CACHE" --only howlframe --howlframe-repo /path/to/howlframe \
     --howlframe-commit <merged main SHA> --skill-file /path/to/howlplane/.agents/skills/howlframe-app-development/SKILL.md
 
-# Integration: real CLIs in real jails against the mock (skipped without these variables): 11 tests
+# Integration: real CLIs in real jails against the mock (skipped without these variables): 12 tests
 export CV1_CACHE=... CV1_CLAUDE_BIN=/path/to/claude/binary CV1_CODEX_DIR=/dir/with/codex/and/codex-code-mode-host
 python3 -m unittest tests.test_integration
+
+# Check a task directory: metadata, tests, and every reference scored in a fresh jail
+python3 -m cv1.check_task path/to/task --out /tmp/cv1-check
 
 # Feasibility test against the mock
 python3 -m cv1.feasibility --mock tests/fixtures/toy_mock_scenario.json --task tests/fixtures/toy_task \
@@ -45,13 +49,13 @@ pool must come from the independent task author (protocol §3.2, §8).
 
 ## What a paid run still needs
 
-None of these are done, and none may be done by an agent alone:
+The scoped different-provider review of Revision 3 (protocol §11 gate 1a) has passed
+(`../FAIRNESS_REVIEW_R4_SCOPED.md`). Still needed, and none may be done by an agent alone:
 
-1. The scoped different-provider review of Revision 3 (protocol §11 gate 1a).
-2. The calibration task and its tests from the independent author.
-3. A dedicated Anthropic workspace and API key with a spend limit of at most $150 and prepaid credit with auto-reload off.
+1. The calibration task and its tests from the independent authors, passing `cv1.check_task`.
+2. A dedicated Anthropic workspace and API key with a spend limit of at most $150 and prepaid credit with auto-reload off.
    The key goes in a `chmod 600` file read only by the proxy.
-4. A dated Owner authorization file naming provider, model, task, cap and dates (`cv1/feasibility.py` docstring).
+3. A dated Owner authorization file naming provider, model, task, cap and dates (`cv1/feasibility.py` docstring).
 
 ## Known limits
 
