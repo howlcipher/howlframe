@@ -195,3 +195,36 @@ Every finding was reproduced against the code and accepted. None changes a hypot
 Verification on the final tree: flake8 clean; **92 harness tests pass** (78 without a jail, also under Python 3.11; 14
 integration with the real CLIs against the mock); `check_task` on the calibration task and `check_pool` on the pool both
 pass; the jail lock verifies.
+
+
+---
+
+## Reviewer's confirmation (Antigravity, 2026-10-25, of `f214a0be`; recorded verbatim)
+
+**Verdict:** FIXES CONFIRMED, NO NEW BLOCKING PROBLEM
+
+---
+
+### Finding Confirmation Table
+
+| Item | Status | File:Line Evidence | Summary |
+|---|---|---|---|
+| **Finding 1** (Canary port collision) | **CONFIRMED FIXED** | [`cv1/scorer.py:35-36, 101-110, 275-281`](harness/cv1/scorer.py), [`tests/test_units.py:439-447`](harness/tests/test_units.py) | [`canary_ports_for`](harness/cv1/scorer.py) extracts ports referenced in `prompt.md` and `baseline_spec.md` matching loopback addresses or `port N`, removing them from the active canary listeners for that task. Verified by [`test_ports_named_by_a_contract_are_not_canaries`](harness/tests/test_units.py). |
+| **Finding 2** (Arm & provider leaks in blind.py) | **CONFIRMED FIXED** | [`cv1/blind.py:29-42, 45-62, 82-83, 95-97`](harness/cv1/blind.py), [`tests/test_transcript.py:94-103, 125`](harness/tests/test_transcript.py) | All delegation flag fields (`file`, `why`, `match`) are masked via `mask(str(v))`. [`command_text`](harness/cv1/blind.py) strips Claude Code JSON input and Codex `exec_command` wrappers. `MASKS` regexes now cover arbitrary Python exception types, traceback frames, JS stack frames, exit codes, and additional languages. Inherent lexical masking limits are documented in [`README.md:231-233`](harness/README.md). |
+| **Finding 3** (Rerun double-counting / selection) | **CONFIRMED FIXED** | [`cv1/analysis.py:84-92`](harness/cv1/analysis.py), [`tests/test_analysis.py:517-535`](harness/tests/test_analysis.py) | [`load_runs`](harness/cv1/analysis.py) identifies all superseded runs via `r["rerun_of"]`, drops them from analysis rows, and asserts that every remaining `(task, arm, provider, rep)` cell contains at most one run (raising `ValueError` on unlinked collisions). Tested by [`test_rerun_replaces_the_failed_run_and_unlinked_duplicates_are_refused`](harness/tests/test_analysis.py). |
+| **Finding 4** (Workspace modification after run) | **CONFIRMED FIXED** | [`cv1/scorer.py:269-278, 292-297`](harness/cv1/scorer.py), [`tests/test_units.py:449-463`](harness/tests/test_units.py) | When `current != result["final_workspace_sha256"]`, [`score_run`](harness/cv1/scorer.py) records the tampering event, refuses to invoke `run_suite` (`score["acceptance"]` remains `None`), and immediately assigns `outcome = "infrastructure_failure"`. Verified by [`test_workspace_changed_after_the_run_is_an_infrastructure_failure`](harness/tests/test_units.py). |
+| **Finding 5** (Clean errors on stdout in 10× probe) | **CONFIRMED FIXED** | [`cv1/runtime_probe.py:17, 21, 50-57`](harness/cv1/runtime_probe.py), [`cv1/scorer.py:181-184`](harness/cv1/scorer.py), [`tests/test_units.py:437-438`](harness/tests/test_units.py) | [`timed`](harness/cv1/runtime_probe.py) accepts an optional `stdout` stream; [`once`](harness/cv1/runtime_probe.py) captures tails of both `stderr` and `stdout`. [`classify_exit`](harness/cv1/scorer.py) evaluates `message = stderr_tail + stdout_tail`, correctly mapping $0 < \text{code} < 128$ with diagnostic messages on stdout to `"clean_error"`. |
+| **Q1 Silent Choices** | **CONFIRMED FIXED** | [`cv1/analysis.py:44-50, 255`](harness/cv1/analysis.py), [`tests/test_analysis.py:537-543`](harness/tests/test_analysis.py) | 1. **H4 weighting:** [`h4`](harness/cv1/analysis.py) collapses repeated pairs per task to a single task median before cluster bootstrap (`by_task = {t: [statistics.median(v)] ...}`), verified by [`test_h4_weights_each_task_once`](harness/tests/test_analysis.py).<br>2. **Open choices:** Total completion failure returning `"inconclusive"` and Option C keeping $\alpha = 0.05/3$ are now explicitly listed in [`OPEN_INTERPRETATIONS`](harness/cv1/analysis.py) for Owner determination. |
+
+---
+
+### New Defects
+
+**None.** 
+
+All modified files pass syntax and linting checks (`flake8 --max-line-length=120`), and all 78 harness unit, proxy, transcript, and analysis tests execute and pass cleanly:
+```
+python3 -B -m unittest tests.test_units tests.test_proxy tests.test_transcript tests.test_analysis
+Ran 78 tests in 15.744s
+OK
+```
