@@ -3,21 +3,21 @@
 HowlFrame v0.1 provides a clean, subcommand-based CLI for the core compilation and execution workflows.
 
 ## `howlframe check`
-Usage: `howlframe check <source.howl>`
+Usage: `howlframe check [--profile=default|governed] <source.howl>`
 
 Parses, type-checks, and verifies the `.howl` source file without emitting an artifact. It ensures that the code follows the syntax and structural rules. It will check the syntax, resolve modules, apply type-checking, and run the target-independent HFIR verification gate.
 
 If successful, it prints `OK: <source.howl>` and exits with status 0. Otherwise, it prints structured diagnostics and exits with a non-zero status.
 
 ## `howlframe build`
-Usage: `howlframe build <source.howl> [-o <output.hfbc>]`
+Usage: `howlframe build <source.howl> [-o <output>] [--target=bytecode|go|js|wasm] [--profile=default|governed]`
 
-Compiles a `.howl` source file to a standalone HowlFrame bytecode artifact (`.hfbc`). By default, it outputs to a file with the same basename and the `.hfbc` extension.
+Compiles a `.howl` source file to a standalone HowlFrame bytecode artifact (`.hfbc`) by default. Without `-o`, it writes `<basename>.hfbc` to the **current directory**, not next to the source. `--target go` writes `server.go` (and `server_test.go` when the program has tests), and `--target js` writes `app.js` (and `app.test.js`), into the current directory or the directory given with `-o`; an `-o` path ending in `.go` or `.js` writes only that file.
 
 ## `howlframe run`
-Usage: `howlframe run [options] <artifact.hfbc> [arguments...]`
+Usage: `howlframe run [options] <artifact.hfbc | source.howl> [arguments...]`
 
-Executes a compiled HowlFrame bytecode artifact.
+Executes a compiled HowlFrame bytecode artifact, or compiles and runs a `.howl` source file. Options go before the artifact. Every argument after the artifact is passed to the program verbatim as `(cli_args)`, including a literal `--` (the built-in usage text shows `[-- arguments...]`, but `--` is not consumed).
 
 **Important**: Capabilities are denied by default. You must explicitly grant capabilities to the runtime.
 
@@ -71,6 +71,11 @@ are independent of sealed ExecutionEvidence. See the
 
 These limits also apply to legacy `-run-bc`. The new flags apply to `run` targets `bytecode`/`bc`; AST interpreter memory and deadline behavior is unchanged. Exceeded ceilings produce structured `LIMIT_EXCEEDED`. Blocking `read_line` and HTTP serving are not cancelled by the deadline; print output remains uncapped.
 
+
+## `howlframe inspect`
+Usage: `howlframe inspect --caps <artifact.hfbc>`
+
+Reports, without executing anything, the capabilities a compiled artifact requires and the instruction sites that need them, as compact JSON, for example `{"capabilities":["filesystem"],"sites":[{"function":"main","index":1,"opcode":"READ_FILE","capability":"filesystem","reason":"opcode registry"}]}`. It reads `.hfbc` artifacts only; build source first.
 
 ## `howlframe version`
 Usage: `howlframe version`
