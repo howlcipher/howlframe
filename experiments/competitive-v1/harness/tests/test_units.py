@@ -434,6 +434,34 @@ class ScoringMeasures(unittest.TestCase):
                  ({"exit": 137, "stderr_tail": "Killed"}, "crash"), ({"exit": "timeout"}, "crash")]
         for run, expected in cases:
             self.assertEqual(scorer.classify_exit(run), expected, run)
+        self.assertEqual(scorer.classify_exit({"exit": 1, "stderr_tail": "", "stdout_tail": "too large"}),
+                         "clean_error", "a message on stdout is still a clean error")
+
+    def test_ports_named_by_a_contract_are_not_canaries(self):
+        d = tempfile.mkdtemp(prefix="cv1-ports-")
+        self.addCleanup(shutil.rmtree, d)
+        with open(os.path.join(d, "task.json"), "w") as f:
+            json.dump({"id": "p"}, f)
+        with open(os.path.join(d, "prompt.md"), "w") as f:
+            f.write("`--server` (default `http://127.0.0.1:8080`); the stub listens on port 9000; timeout 5000 ms.")
+        self.assertEqual(scorer.canary_ports_for(runner.Task(d)), [3000, 5000, 8000])
+
+    def test_workspace_changed_after_the_run_is_an_infrastructure_failure(self):
+        d = tempfile.mkdtemp(prefix="cv1-tamper-")
+        self.addCleanup(shutil.rmtree, d)
+        toy = os.path.join(HERE, "fixtures", "toy_task")
+        ws = os.path.join(d, "workspace")
+        shutil.copytree(os.path.join(toy, "references", "python"), ws)
+        frozen = runner.tree_manifest(os.path.join(toy, "acceptance"))
+        with open(os.path.join(d, "result.json"), "w") as f:
+            json.dump({"run_id": "r", "task_id": "toy-sum", "arm": "python", "status": "ended_by_agent",
+                       "final_workspace_sha256": runner.tree_manifest(ws), "acceptance_tests_sha256": frozen,
+                       "limits": {}}, f)
+        with open(os.path.join(ws, "sum.py"), "a") as f:
+            f.write("# edited after the run\n")
+        s = scorer.score_run(d, runner.Task(toy), None, frozen)
+        self.assertEqual(s["outcome"], "infrastructure_failure")
+        self.assertIsNone(s["acceptance"], "the modified state is never scored")
 
     def test_canary_verdict(self):
         quiet = {"canary": {"file_read": False, "connections": [], "token_in_workspace": []}}

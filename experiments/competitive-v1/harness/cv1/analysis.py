@@ -41,6 +41,13 @@ OPEN_INTERPRETATIONS = [
     "outcome is 'not met' (its interval lies entirely on the wrong side of the target).",
     "Interval method: GEE (independence, logit link, robust variance) for proportions; task-cluster percentile "
     "bootstrap for ratios. §9 names GEE or a mixed model for H2 and 'the same clustering' for the rest.",
+    "H4 aggregation: §7.4 defines a ratio 'per workload'. Each task's ratio is the median over its matched pairs, and "
+    "H4's estimate is the median of those per-task ratios, so a task with many completed pairs does not outweigh one "
+    "with few.",
+    "H4 without data: if no matched pair has runtimes for both arms (e.g. HowlFrame never completes), H4 is reported "
+    "'inconclusive', not 'not met'; the completion failure is already counted by H1 and H2.",
+    "H4 under Owner option C: alpha stays 0.05/3 (the adjustment is 'across the three baselines'), although only two "
+    "baselines gate.",
 ]
 
 
@@ -56,6 +63,9 @@ def task_domains(tasks_root):
 
 
 def load_runs(root, domains=None):
+    """One row per (task, arm, provider, repetition) cell. An infrastructure rerun (result.infrastructure_rerun_of)
+    replaces the run it reruns (§5, §7.9: both stay published, the rerun is the cell's result). Two runs in one cell
+    without that link are a data error, not something to choose between silently."""
     rows = []
     for result_path in sorted(glob.glob(os.path.join(root, "**", "result.json"), recursive=True)):
         run_dir = os.path.dirname(result_path)
@@ -68,7 +78,17 @@ def load_runs(root, domains=None):
                 score = json.load(f)
         row = row_from(result, score)
         row["domain"] = (domains or {}).get(row["task"])
+        row["run_id"] = result.get("run_id")
+        row["rerun_of"] = result.get("infrastructure_rerun_of")
         rows.append(row)
+    superseded = {r["rerun_of"] for r in rows if r["rerun_of"]}
+    rows = [r for r in rows if r["run_id"] not in superseded]
+    cells = {}
+    for r in rows:
+        cells.setdefault((r["task"], r["arm"], r["provider"], r["rep"]), []).append(r["run_id"])
+    duplicates = {k: v for k, v in cells.items() if len(v) > 1}
+    if duplicates:
+        raise ValueError(f"cells with more than one run and no rerun link: {duplicates}")
     return rows
 
 
@@ -231,6 +251,8 @@ def h4(rows, baseline, reference_runtimes=None):
     by_task = {}
     for p in ps:
         by_task.setdefault(p["task"], []).append(p["hf"]["execution_s"] / p["base"]["execution_s"])
+    # One ratio per workload (task): the median over its pairs. The bootstrap resamples tasks.
+    by_task = {t: [statistics.median(v)] for t, v in by_task.items()}
 
     def median_ratio(sample):
         return statistics.median(sample) if sample else None

@@ -14,11 +14,11 @@ import tempfile
 import time
 
 
-def timed(argv, stdin_path, cwd, timeout, stderr=subprocess.DEVNULL):
+def timed(argv, stdin_path, cwd, timeout, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL):
     stdin = open(stdin_path, "rb") if stdin_path else subprocess.DEVNULL
     try:
         t0 = time.perf_counter()
-        proc = subprocess.Popen(argv, stdin=stdin, stdout=subprocess.DEVNULL, stderr=stderr, cwd=cwd)
+        proc = subprocess.Popen(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd)
         deadline = time.monotonic() + timeout
         while True:
             pid, status, ru = os.wait4(proc.pid, os.WNOHANG)
@@ -47,12 +47,13 @@ def measure(argv, stdin_path=None, cwd=None, repeats=5, timeout=120):
 
 
 def once(argv, stdin_path=None, cwd=None, timeout=600):
-    """A single run that keeps the end of stderr, to classify behaviour on an oversized workload."""
-    with tempfile.TemporaryFile() as err:
-        r = timed(argv, stdin_path, cwd, timeout, stderr=err)
-        err.seek(0, os.SEEK_END)
-        err.seek(max(0, err.tell() - 2000))
-        r["stderr_tail"] = err.read().decode(errors="replace")
+    """A single run that keeps the ends of stderr and stdout, to classify behaviour on an oversized workload."""
+    with tempfile.TemporaryFile() as err, tempfile.TemporaryFile() as out:
+        r = timed(argv, stdin_path, cwd, timeout, stderr=err, stdout=out)
+        for name, f in (("stderr_tail", err), ("stdout_tail", out)):
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 2000))
+            r[name] = f.read().decode(errors="replace")
     return r
 
 

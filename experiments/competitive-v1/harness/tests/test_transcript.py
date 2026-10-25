@@ -91,6 +91,16 @@ class Blind(unittest.TestCase):
         leaks = ("main.py", "python3", "go build", "node ", "howlframe", ".howl", ".hfbc", "/opt/docs", "Traceback")
         for leak in leaks:
             self.assertNotIn(leak, masked, leak)
+        more = blind.mask('File "/w/x.py", line 3, in main\nAttributeError: x\n'
+                          '    at Object.<anonymous> (/w/a.js:1:1)\nExit code: 1\n{"exit_code":2}')
+        for leak in ("x.py", "AttributeError", "Object.<anonymous>", "Exit code", "exit_code"):
+            self.assertNotIn(leak, more, leak)
+
+    def test_command_wrappers_of_both_providers_reduce_to_the_command(self):
+        claude = json.dumps({"command": "go build ./...", "description": "Build"})
+        codex = "const r = await tools.exec_command({cmd: \"go build ./...\", yield_time_ms: 1000});"
+        self.assertEqual(blind.command_text(claude), "go build ./...")
+        self.assertEqual(blind.command_text(codex), "go build ./...")
 
     def test_packet_codes_map_back_only_through_the_key(self):
         d = tempfile.mkdtemp(prefix="cv1-blind-")
@@ -112,6 +122,7 @@ class Blind(unittest.TestCase):
         self.assertEqual(sorted(i["kind"] for i in items), ["delegation", "delegation", "diagnostic", "diagnostic"])
         self.assertEqual(set(key), {i["code"] for i in items})
         self.assertNotIn("arm", json.dumps(items))
+        self.assertNotIn(".pl", json.dumps([i["flags"] for i in items if i["kind"] == "delegation"]))
         self.assertEqual({k["arm"] for k in key.values()}, {"go", "howlframe"})
 
 

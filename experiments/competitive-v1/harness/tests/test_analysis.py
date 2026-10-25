@@ -135,5 +135,35 @@ class Hypotheses(unittest.TestCase):
         self.assertEqual((r["acceptance_passed"], r["heldout_fraction"], r["time_to_verified_s"]), (True, 0.75, 321.0))
 
 
+class DataRules(unittest.TestCase):
+    def write(self, d, run_id, rerun_of=None, task="t", outcome="completed"):
+        run = os.path.join(d, run_id)
+        os.makedirs(run)
+        with open(os.path.join(run, "result.json"), "w") as f:
+            json.dump({"run_id": run_id, "task_id": task, "arm": "howlframe", "agent": {"provider": "anthropic"},
+                       "repetition": 1, "infrastructure_rerun_of": rerun_of, "time_to_complete_s": 100.0}, f)
+        with open(os.path.join(run, "score.json"), "w") as f:
+            json.dump({"outcome": outcome, "acceptance": {"all_passed": outcome == "completed"}}, f)
+
+    def test_rerun_replaces_the_failed_run_and_unlinked_duplicates_are_refused(self):
+        d = tempfile.mkdtemp(prefix="cv1-rerun-")
+        self.addCleanup(shutil.rmtree, d)
+        self.write(d, "z-original", outcome="infrastructure_failure")
+        self.write(d, "a-rerun", rerun_of="z-original")
+        [r] = analysis.load_runs(d)
+        self.assertEqual((r["run_id"], r["outcome"]), ("a-rerun", "completed"))
+        self.write(d, "m-stray")
+        with self.assertRaises(ValueError):
+            analysis.load_runs(d)
+
+    def test_h4_weights_each_task_once(self):
+        rows = []
+        for rep in range(1, 7):  # task t0: six pairs at ratio 10
+            rows += [row("t0", "howlframe", rep=rep, exe=10.0), row("t0", "python", rep=rep, exe=1.0)]
+        for t in ("t1", "t2"):  # two tasks with one pair each at ratio 1
+            rows += [row(t, "howlframe", exe=1.0), row(t, "python", exe=1.0)]
+        self.assertEqual(analysis.h4(rows, "python")["estimate"], 1.0, "6 pairs on one task must not outvote 2 tasks")
+
+
 if __name__ == "__main__":
     unittest.main()

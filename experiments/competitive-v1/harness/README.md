@@ -30,7 +30,7 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 ```sh
 cd experiments/competitive-v1/harness
 
-# Unit, proxy, transcript and analysis tests (no jail, no network): 73 tests
+# Unit, proxy, transcript and analysis tests (no jail, no network): 78 tests
 python3 -m unittest tests.test_units tests.test_proxy tests.test_transcript tests.test_analysis
 
 # Fetch and verify the pinned artifacts (about 900 MB unpacked), then build the HowlFrame arm
@@ -64,6 +64,16 @@ The scoped different-provider review of Revision 3 (protocol §11 gate 1a) has p
 3. A dated Owner authorization file naming provider, model, task, cap and dates (`cv1/feasibility.py` docstring).
 
 ## Known limits
+
+* **Canaries detect reads during the test suites only.** They are not active during `./build`. A read is seen only where
+  the jail's filesystem records access times (it is reported as unobservable, not as clean, otherwise), and `stat()`,
+  directory listings or a reset access time are not reads. Ports a task's contract names are never canaries for that
+  task. A canary is reported for the blind graders, never scored as a failure.
+* **The call archive is complete and unredacted.** It holds every request and response, so it contains whatever the
+  agent read or printed, and takes several MB per run. Review it before publishing logs (§10). The API key is never in
+  it, because the proxy adds the key after archiving the body.
+* **Blind-grading masks are lexical.** Source code shown for a delegation ruling reveals its language to a reader who
+  knows the syntax (`cv1/blind.py`).
 
 * The worst-case bound assumes input tokens never exceed request bytes plus 8,192, with opaque fields (encrypted
   reasoning, signatures) counted four times. The proxy checks every response against it and stops the experiment if

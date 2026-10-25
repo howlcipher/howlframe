@@ -32,6 +32,8 @@ SCORING_TIMEOUT_S = 15 * 60
 # Loopback ports watched during scoring (common development ports; tests use ephemeral ports, so nothing in a
 # contract connects to these). Any connection is reported as a security canary event.
 CANARY_PORTS = (3000, 5000, 8000, 8080, 9000)
+# Ports a contract names (e.g. a default "--server http://127.0.0.1:8080") are never canaries for that task.
+CONTRACT_PORT = re.compile(r"(?:127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0):(\d{2,5})|\bport\s*[:=]?\s*(\d{2,5})", re.I)
 RESOURCE_LIMIT_TIMEOUT_S = 600
 
 
@@ -96,7 +98,19 @@ def _build(layout, arm, identity, ws, control, limits, log):
     return {"ran": True, "exit": rc}
 
 
-def run_suite(layout, arm, identity, ws_src, tests_dir, work, name, limits):
+def canary_ports_for(task):
+    """CANARY_PORTS minus every port the task's contract names."""
+    named = set()
+    for fname in ("prompt.md", "baseline_spec.md"):
+        path = os.path.join(task.path, fname)
+        if os.path.isfile(path):
+            with open(path, errors="replace") as f:
+                for a, b in CONTRACT_PORT.findall(f.read()):
+                    named.add(int(a or b))
+    return [p for p in CANARY_PORTS if p not in named]
+
+
+def run_suite(layout, arm, identity, ws_src, tests_dir, work, name, limits, canary_ports=CANARY_PORTS):
     ws = _fresh_copy(ws_src, work)
     control = tempfile.mkdtemp(prefix=f"{name}-", dir=work)
     build = _build(layout, arm, identity, ws, control, limits, os.path.join(work, f"{name}_build.log"))
@@ -104,7 +118,7 @@ def run_suite(layout, arm, identity, ws_src, tests_dir, work, name, limits):
     token = secrets.token_hex(16)
     cmd = ["/opt/cv1/testpy/bin/python3", "-I", "/opt/cv1/lib/testrunner.py", "--tests", "/tests",
            "--app", "/workspace/run", "--report", "/run/cv1/report.json",
-           "--canary-token", token, "--canary-ports", ",".join(map(str, CANARY_PORTS))]
+           "--canary-token", token, "--canary-ports", ",".join(map(str, canary_ports))]
     rc, _, _ = _run_in_jail(spec, cmd, arm, limits, log=os.path.join(work, f"{name}_tests.log"))
     report_path = os.path.join(control, "report.json")
     report = _read_json(report_path) if os.path.exists(report_path) else None
@@ -139,7 +153,8 @@ def canary_triggered(suites):
 
 
 def resource_limit_behavior(layout, arm, identity, ws_src, workload10, work, limits):
-    """One run on the 10x workload (protocol §6): success, clean_error (non-zero exit with a message), or crash
+    """One run on the 10x workload (protocol §6): success, clean_error (non-zero exit with a message on stderr or
+    stdout), or crash
     (signal, out-of-memory kill, timeout, or a non-zero exit with no message)."""
     ws = _fresh_copy(ws_src, work)
     control = tempfile.mkdtemp(prefix="rl-", dir=work)
@@ -163,7 +178,8 @@ def classify_exit(run):
     code = run.get("exit")
     if code == 0:
         return "success"
-    if isinstance(code, int) and 0 < code < 128 and (run.get("stderr_tail") or "").strip():
+    message = (run.get("stderr_tail") or "") + (run.get("stdout_tail") or "")
+    if isinstance(code, int) and 0 < code < 128 and message.strip():
         return "clean_error"
     return "crash"
 
@@ -250,15 +266,18 @@ def score_run(run_dir, task, layout, frozen_acceptance, heldout_dir=None, frozen
     ws_src = os.path.join(run_dir, "workspace")
     if result["status"] != "not_started":
         current = tree_manifest(ws_src)
-        if current != result["final_workspace_sha256"]:
+        workspace_changed = current != result["final_workspace_sha256"]
+        if workspace_changed:
             notes.append("workspace changed after the run ended; scoring the recorded state is impossible")
             score["tampering"].append({"what": "workspace modified after the run"})
         if result.get("acceptance_tests_sha256") != frozen_acceptance:
             score["tampering"].append({"what": "acceptance tests at run time differ from the freeze"})
-        if score["tests_verified"]:
-            score["acceptance"] = run_suite(layout, arm, identity, ws_src, task.acceptance, work, "acceptance", limits)
+        ports = canary_ports_for(task)
+        if score["tests_verified"] and not workspace_changed:
+            score["acceptance"] = run_suite(layout, arm, identity, ws_src, task.acceptance, work, "acceptance", limits,
+                                            ports)
             if heldout_dir:
-                h = run_suite(layout, arm, identity, ws_src, heldout_dir, work, "heldout", limits)
+                h = run_suite(layout, arm, identity, ws_src, heldout_dir, work, "heldout", limits, ports)
                 score["heldout"] = h
                 score["heldout_fraction"] = (h["passed"] / h["total"]) if h["total"] else 0.0
             if workload and score["acceptance"]["all_passed"]:
@@ -270,9 +289,11 @@ def score_run(run_dir, task, layout, frozen_acceptance, heldout_dir=None, frozen
         score["delegation_flags"] = delegation_flags(arm, ws_src)
 
     status = result["status"]
+    workspace_changed = status != "not_started" and any(t["what"] == "workspace modified after the run"
+                                                        for t in score["tampering"])
     if status == "not_started":
         outcome = "not_started"
-    elif status == "infrastructure_failure":
+    elif status == "infrastructure_failure" or workspace_changed:
         outcome = "infrastructure_failure"
     elif human_interventions or result.get("human_interventions"):
         outcome = "not_autonomous"
