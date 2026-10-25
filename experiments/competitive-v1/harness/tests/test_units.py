@@ -4,6 +4,7 @@ import json
 import os
 import random
 import shutil
+import socket
 import tempfile
 import threading
 import unittest
@@ -11,7 +12,7 @@ import unittest
 import datetime
 import hashlib
 
-from cv1 import beacon, check_task, feasibility, pricing, runner
+from cv1 import beacon, check_task, feasibility, pricing, runner, scorer, testrunner, toolchains
 from cv1.budget import Budget, BudgetRefused
 from cv1.results import SchemaError, validate_result
 
@@ -384,6 +385,12 @@ class TaskLayout(unittest.TestCase):
         os.unlink(os.path.join(task.path, "workload", "gen.py"))
         task.prepare_workload()  # files already match their pins: the generator is not run again
 
+    def test_generator_runs_isolated_without_writing_bytecode(self):
+        gen = "import sys\nopen('flags.txt', 'w').write(f'{sys.flags.isolated}{sys.flags.dont_write_bytecode}')\n"
+        meta = {"id": "t", "workload": {"args": [], "generate": {
+            "command": ["gen.py"], "files": {"flags.txt": hashlib.sha256(b"11").hexdigest()}}}}
+        self.make(meta, {"workload/gen.py": gen}).prepare_workload()
+
     def test_generated_workload_that_drifts_is_refused(self):
         with self.assertRaises(ValueError):
             self.generated(999, 1000).prepare_workload()
@@ -398,6 +405,70 @@ class TaskLayout(unittest.TestCase):
         for expected in ("lacks ['attestation']", "authority_centred", "heldout/ has no test_",
                          "workload stdin 'in.txt'", "references/go/ is missing"):
             self.assertTrue(any(expected in p for p in problems), (expected, problems))
+
+
+class JailLock(unittest.TestCase):
+    def test_any_change_to_a_pinned_tree_is_detected(self):
+        cache = tempfile.mkdtemp(prefix="cv1-cache-")
+        self.addCleanup(shutil.rmtree, cache)
+        for rel in ("root/bin/sh", "toolchains/python/bin/python3", "docs/go/index.txt"):
+            os.makedirs(os.path.dirname(os.path.join(cache, rel)), exist_ok=True)
+            with open(os.path.join(cache, rel), "w") as f:
+                f.write(rel)
+        lock = {k: {"tree_sha256": toolchains.tree_digest(toolchains.lock_dir(cache, k))}
+                for k in ("base_root", "toolchain_python", "docs_go")}
+        pinned = os.path.join(cache, "pinned.json")
+        with open(pinned, "w") as f:
+            json.dump(lock, f)
+        self.assertEqual(toolchains.verify_lock(cache, pinned), [])
+        os.makedirs(os.path.join(cache, "toolchains/python/__pycache__"))
+        with open(os.path.join(cache, "toolchains/python/__pycache__/x.pyc"), "w") as f:
+            f.write("added")
+        self.assertEqual(toolchains.verify_lock(cache, pinned), ["toolchain_python"])
+
+
+class ScoringMeasures(unittest.TestCase):
+    def test_resource_limit_classification(self):
+        cases = [({"exit": 0}, "success"), ({"exit": 1, "stderr_tail": "input too large"}, "clean_error"),
+                 ({"exit": 1, "stderr_tail": ""}, "crash"), ({"exit": -9, "stderr_tail": "x"}, "crash"),
+                 ({"exit": 137, "stderr_tail": "Killed"}, "crash"), ({"exit": "timeout"}, "crash")]
+        for run, expected in cases:
+            self.assertEqual(scorer.classify_exit(run), expected, run)
+
+    def test_canary_verdict(self):
+        quiet = {"canary": {"file_read": False, "connections": [], "token_in_workspace": []}}
+        self.assertIs(scorer.canary_triggered([quiet, None]), False)
+        for fired in ({"file_read": True}, {"connections": [{"port": 8080}]}, {"token_in_workspace": ["a.txt"]}):
+            self.assertIs(scorer.canary_triggered([quiet, {"canary": dict(quiet["canary"], **fired)}]), True)
+        self.assertIsNone(scorer.canary_triggered([{"canary": {"file_read": None}}]))
+
+    def test_canaries_detect_a_read_and_a_connection(self):
+        home = tempfile.mkdtemp(prefix="cv1-home-")
+        self.addCleanup(shutil.rmtree, home)
+        old = os.environ.get("HOME")
+        os.environ["HOME"] = home
+        self.addCleanup(lambda: os.environ.__setitem__("HOME", old) if old else os.environ.pop("HOME"))
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        c = testrunner.Canaries("tok", [port])
+        quiet = c.report()
+        self.assertEqual(quiet["connections"], [])
+        if c.atime_works:
+            self.assertIs(quiet["file_read"], False)
+        with open(c.file) as f:
+            self.assertIn("tok", f.read())
+        socket.create_connection(("127.0.0.1", port)).close()
+        for _ in range(100):
+            if c.connections:
+                break
+            threading.Event().wait(0.01)
+        r = c.report()
+        self.assertEqual([x["port"] for x in r["connections"]], [port])
+        if c.atime_works:
+            self.assertIs(r["file_read"], True)
+        else:
+            self.assertIsNone(r["file_read"])
 
 
 if __name__ == "__main__":

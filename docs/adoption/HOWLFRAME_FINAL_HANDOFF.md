@@ -20,6 +20,8 @@ options are recorded (I). No model comparison trial was run, and none may run wi
 | howlframe #213 (draft) | `experiments/competitive-v1-protocol` @ `28febce3` | competitive-v1 preregistration, Revision 2; no trials | 4/4 pass | Antigravity fairness R1 **NEEDS REVISION** (12 findings) → Rev 1; R2 **NEEDS REVISION** (5 new) → Rev 2; R3 (2026-10-22) **READY FOR OWNER DECISION**, no blocking problem; its 3 non-blocking suggestions applied | Draft; stays unmerged until decision I |
 | howlframe #214 | `docs/adoption-competitive-validation` | These reports and the evidence | — | — | Ready |
 
+*Erratum (2026-10-25, finding F2 of `docs/competitive-readiness/HOWLFRAME_CURRENT_VERIFICATION.md`): #213's head at the time of this handoff was `1116c48b` (the Owner pilot-options record), not `28febce3`. The row above is left as originally written.*
+
 Unrelated open PRs, not touched: #178, #206, #210.
 
 ## Required deliverables

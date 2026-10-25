@@ -81,3 +81,32 @@ Changes:
 | `python3 -m unittest tests.test_units tests.test_proxy tests.test_integration` | **62 passed in 65 s** (50 unit and proxy, 12 integration); unit and proxy also pass under Python 3.11 |
 | `python3 -m cv1.check_task ../calibration/calib-apilog-analyzer` | exit 0: Python, Go and JavaScript references 18/18 acceptance and 29/29 held-out, workload 0.59–2.43 s, no delegation flags (`../calibration/README.md`) |
 | `python3 -m cv1.feasibility --mock tests/fixtures/toy_mock_scenario.json --task ../calibration/calib-apilog-analyzer` | 4 arms co-scheduled, identical agent surfaces. The mock's scripted toy solutions do not solve the calibration task, so every arm scores *not completed (acceptance)*, and held-out fractions are recorded for every arm. This shows the scoring path end to end on the real task |
+
+## Addendum 2: measures the scorer lacked (2026-10-25)
+
+New:
+* **Call archive** (`proxy.py`) and **accounting** (`transcript.py`): tokens by class, documentation-reading calls,
+  active time and the first error. Before this, only each run's first request was kept, so these §6 measures could
+  not have been computed after a paid run.
+* **Security canaries** (`testrunner.py`, `scorer.py`): a credentials file, loopback listeners and a token search.
+* **10× workload** behaviour (`scorer.py`, `runtime_probe.py`).
+* **§7 analysis** (`analysis.py`), **blind-grading packets** (`blind.py`) and the committed **jail lock**
+  (`lock.json`, `toolchains.py --verify`, enforced before a paid feasibility run).
+
+Defect found and fixed: running the pinned CPython on the host (the workload generator) wrote 31 bytecode files into
+the cached toolchain, changing its tree digest. Generators now run with `-I -B`. The toolchain was re-unpacked from its
+verified archive and matches the lock again. A unit test checks the flags, and the lock check would catch any recurrence.
+The extra bytecode files did not affect any earlier result.
+
+| Suite | Result |
+|---|---|
+| `flake8 cv1 tests mock` | clean |
+| All suites (`tests.test_units`, `test_proxy`, `test_transcript`, `test_analysis`, `test_integration`) | **84 passed in 75 s** (71 without a jail, also under Python 3.11; 13 integration) |
+| `python3 -m cv1.toolchains --verify`, after the full suite | verified, no mismatch |
+| `check_task` on the calibration task | still passes. No reference trips a canary; the task has no 10× workload yet |
+
+The integration tests now also check:
+* every forwarded call is archived and summarised, for Claude Code and Codex;
+* a solution that reads the planted credentials, copies them and probes port 8080 trips all three canaries. It is
+  still scored *completed*, because canaries are reported, not counted as failures;
+* a well-behaved reference trips nothing, and its 10× run is a *success*.

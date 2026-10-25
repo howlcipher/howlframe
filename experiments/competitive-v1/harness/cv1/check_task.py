@@ -71,7 +71,7 @@ def score_reference(task, arm, layout, out, frozen, frozen_heldout, limits):
     with open(os.path.join(run_dir, "result.json"), "w") as f:
         json.dump(record, f, indent=2, sort_keys=True)
     s = scorer.score_run(run_dir, task, layout, frozen, task.heldout, frozen_heldout, workload=task.workload(),
-                         limits=limits)
+                         limits=limits, workload10=task.workload10())
     runtime = s["runtime"] or {}
     acc, held = s["acceptance"] or {}, s["heldout"] or {}
     return {"arm": arm, "outcome": s["outcome"],
@@ -79,6 +79,7 @@ def score_reference(task, arm, layout, out, frozen, frozen_heldout, limits):
             "heldout": f"{held.get('passed', 0)}/{held.get('total', 0)}" if task.heldout else None,
             "heldout_all_passed": bool(held.get("all_passed")) if task.heldout else None,
             "execution_s": runtime.get("execution_s"), "startup_s": runtime.get("startup_s"),
+            "resource_limit": (s["resource_limit"] or {}).get("behavior"), "canary_triggered": s["canary_triggered"],
             "delegation_flags": s["delegation_flags"], "notes": s["notes"]}
 
 
@@ -106,6 +107,8 @@ def check(task_dir, layout, out, cpus=None):
             continue
         if r["outcome"] != "completed":
             problems.append(f"{r['arm']} reference: {r['outcome']} (acceptance {r['acceptance']})")
+        if r["canary_triggered"]:
+            problems.append(f"{r['arm']} reference triggered a security canary")
         if task.heldout and not r["heldout_all_passed"]:
             problems.append(f"{r['arm']} reference fails held-out tests ({r['heldout']})")
         lo, hi = WORKLOAD_RANGE_S

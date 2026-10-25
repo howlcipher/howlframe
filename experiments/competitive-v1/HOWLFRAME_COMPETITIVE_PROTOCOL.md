@@ -417,3 +417,22 @@ before the seal. `harness/cv1/check_task.py` scored all three references in fres
 acceptance and 29/29 held-out tests, with workload times of 0.59–2.43 s. The feasibility command now also scores
 held-out tests and runtime, and refuses a paid run on a task without both. Provenance, revisions and seal hashes are in
 `calibration/README.md`. This satisfies the calibration-task part of gate 3; no HowlFrame reference exists for it.
+
+### 13.6 Measurement and analysis code (2026-10-25)
+
+The harness now implements the §6 measures it lacked:
+* a per-call archive, with token, documentation-reading, active-time and first-error accounting;
+* security canaries during scoring;
+* the 10× resource-limit run.
+
+It also adds:
+* §7 analysis code, which uses the GEE option of §9 for proportions and a task-cluster bootstrap for ratios;
+* blind-grading packets;
+* committed jail hashes, checked before any paid run.
+
+None of this changes a hypothesis, metric, target or decision rule. `harness/cv1/analysis.py` lists four
+interpretations the protocol text leaves open, and each needs a ruling before the freeze:
+* H4's decision basis (reference or agent-produced implementations);
+* the alpha for H1 and H5;
+* the reading of H6;
+* the interval method.

@@ -92,6 +92,10 @@ def main(argv=None):
         if not task.heldout or task.workload() is None:
             p.error("a paid run needs a complete task: held-out tests and a workload")
         auth = check_authorization(args.authorization, provider, task.id)
+        from .toolchains import verify_lock
+        mismatched = verify_lock(args.cache)
+        if mismatched:
+            p.error(f"the cache does not match the committed jail hashes (harness/lock.json): {mismatched}")
         cap, ceiling = float(auth["cap_usd"]), float(auth["run_ceiling_usd"])
         from .proxy import read_api_key
         api_key = read_api_key(args.key_file)
@@ -131,10 +135,12 @@ def main(argv=None):
         if r is None:
             continue
         s = scorer.score_run(os.path.join(args.out, r["run_id"]), task, layout, frozen, task.heldout, frozen_heldout,
-                             workload=workload)
+                             workload=workload, workload10=task.workload10())
         runtime = s["runtime"] or {}
         summary["runs"].append({"arm": r["arm"], "status": r["status"], "outcome": s["outcome"],
                                 "heldout_fraction": s["heldout_fraction"], "execution_s": runtime.get("execution_s"),
+                                "resource_limit": (s["resource_limit"] or {}).get("behavior"),
+                                "canary_triggered": s["canary_triggered"],
                                 "spend_usd": r["spend_usd"], "elapsed_s": r["elapsed_s"],
                                 "model_calls": r["model_calls"], "tool_calls": r["tool_calls"]})
     with open(os.path.join(args.out, "feasibility_summary.json"), "w") as f:

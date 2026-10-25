@@ -17,6 +17,7 @@ in the provider's error shape, and the `on_event` callback lets the runner end t
 retry behaviour.
 """
 
+import gzip
 import hashlib
 import http.client
 import json
@@ -139,6 +140,7 @@ class RunProxy:
         self.blocked = None
         self.first_request_saved = False
         self.calls = 0
+        self.archived = 0
         self._lock = threading.Lock()
         os.makedirs(record_dir, exist_ok=True)
         if os.path.exists(socket_path):
@@ -169,6 +171,20 @@ class RunProxy:
         with self._lock:
             with open(os.path.join(self.record_dir, "proxy_calls.jsonl"), "a") as f:
                 f.write(json.dumps(entry, sort_keys=True) + "\n")
+
+    def open_archive(self, raw):
+        """Archive one forwarded call: calls/NNNN.req.json.gz (the exact body) and NNNN.resp.gz (the response bytes
+        as relayed). Token and documentation-reading accounting, active time and first-error extraction are
+        computed from these after the run (cv1/transcript.py); they cannot be recovered any other way."""
+        with self._lock:
+            self.archived += 1
+            seq = self.archived
+        d = os.path.join(self.record_dir, "calls")
+        os.makedirs(d, exist_ok=True)
+        base = os.path.join(d, f"{seq:04d}")
+        with gzip.open(base + ".req.json.gz", "wb") as f:
+            f.write(raw)
+        return seq, gzip.open(base + ".resp.gz", "wb")
 
     def save_first_request(self, raw, body):
         with self._lock:
@@ -294,6 +310,7 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             headers["Authorization"] = f"Bearer {p.api_key}"
         observer = observer_for(p.provider)
+        seq, archive = p.open_archive(raw)
         started = time.time()
         ttfb = None
         status = None
@@ -322,6 +339,7 @@ class _Handler(BaseHTTPRequestHandler):
                 chunk = resp.read1(65536) if hasattr(resp, "read1") else resp.read(65536)
                 if not chunk:
                     break
+                archive.write(chunk)
                 self.wfile.write(chunk)
                 self.wfile.flush()
                 if parser:
@@ -345,9 +363,10 @@ class _Handler(BaseHTTPRequestHandler):
         finally:
             if conn is not None:
                 conn.close()
-            self._settle(body, token, worst, opaque, observer.obs, status, started, ttfb, resp_headers)
+            archive.close()
+            self._settle(body, token, worst, opaque, observer.obs, status, started, ttfb, resp_headers, seq)
 
-    def _settle(self, body, token, worst, opaque, obs, status, started, ttfb, resp_headers):
+    def _settle(self, body, token, worst, opaque, obs, status, started, ttfb, resp_headers, seq=None):
         p = self.proxy
         usage = obs.usage
         if token is None:
@@ -369,7 +388,7 @@ class _Handler(BaseHTTPRequestHandler):
             cost = worst
             basis = "usage missing or incomplete; charged the reserved worst case"
         record = {
-            "ts_start": started, "duration_s": round(time.time() - started, 3),
+            "seq": seq, "ts_start": started, "duration_s": round(time.time() - started, 3),
             "ttfb_s": round(ttfb, 3) if ttfb is not None else None, "status": status, "path": self.path,
             "requested_model": body.get("model"), "served_model": obs.served_model, "usage": usage,
             "cost_basis": basis, "tool_names": obs.tool_names, "complete": obs.complete, "error": obs.error,

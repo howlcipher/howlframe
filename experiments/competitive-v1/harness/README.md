@@ -14,6 +14,11 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 | Runner | `cv1/runner.py` | Admits, launches and supervises one run (45-minute limit, `task-complete`, budget stops, infrastructure faults); `run_group` launches the four arms together; `audit_surfaces` checks that a provider's arms got identical agent setups |
 | Scorer | `cv1/scorer.py`, `cv1/testrunner.py`, `cv1/testkit.py`, `cv1/runtime_probe.py`, `empty/` | Fresh-jail scoring with hash-verified acceptance and held-out tests, runtime minus empty-program startup, and a delegation scan for solutions that hand work to another language |
 | Records | `schema/`, `cv1/results.py` | Run and score records; every protocol §7.9 outcome has a value |
+| Call archive and accounting | `cv1/proxy.py`, `cv1/transcript.py` | The proxy archives every forwarded request and response (`records/calls/`). `transcript` derives tokens by class, documentation-reading calls and bytes, active time (wall minus provider wait) and the first error the agent hit |
+| Security canaries and 10× workload | `cv1/testrunner.py`, `cv1/scorer.py`, `cv1/runtime_probe.py` | During scoring: a planted credentials file (reads detected by access time in the jail's tmpfs), loopback listeners on common ports, and a search of the workspace for the canary token. The 10× workload (`workload.scale10`) is classified as success, clean error or crash |
+| Analysis | `cv1/analysis.py` | §7 decision rules for H1 to H6. Task-clustered GEE intervals for proportions, task-cluster bootstrap for ratios, Bonferroni across baselines; prints the interpretations that still need a pre-freeze ruling |
+| Blind grading | `cv1/blind.py` | Packets of first errors (diagnostic quality) and delegation flags with the language masked, plus a separate key |
+| Jail hashes | `lock.json`, `cv1/toolchains.py --verify` | The committed tree digests of the base root, toolchains and docs. A paid feasibility run refuses a cache that does not match |
 | Draw | `cv1/beacon.py` | NIST beacon pulse selection, seed and shuffle exactly as pinned in protocol §13.3 |
 | Task check | `cv1/check_task.py` | Validates a task directory and scores each reference implementation through the real scorer (fresh jail, acceptance and held-out tests, workload time in 0.5–5 s); prints the seal hashes |
 | Feasibility test | `cv1/feasibility.py` | Mock mode for infrastructure checks; live mode only with a dated Owner authorization file and a complete task (held-out tests and workload). Scores every arm on acceptance, held-out and runtime |
@@ -24,15 +29,15 @@ runtime code, and nothing here has made a paid model call. Python standard libra
 ```sh
 cd experiments/competitive-v1/harness
 
-# Unit and proxy tests (no jail, no network): 50 tests
-python3 -m unittest tests.test_units tests.test_proxy
+# Unit, proxy, transcript and analysis tests (no jail, no network): 71 tests
+python3 -m unittest tests.test_units tests.test_proxy tests.test_transcript tests.test_analysis
 
 # Fetch and verify the pinned artifacts (about 900 MB unpacked), then build the HowlFrame arm
 python3 -m cv1.toolchains --cache "$CV1_CACHE"
 python3 -m cv1.toolchains --cache "$CV1_CACHE" --only howlframe --howlframe-repo /path/to/howlframe \
     --howlframe-commit <merged main SHA> --skill-file /path/to/howlplane/.agents/skills/howlframe-app-development/SKILL.md
 
-# Integration: real CLIs in real jails against the mock (skipped without these variables): 12 tests
+# Integration: real CLIs in real jails against the mock (skipped without these variables): 13 tests
 export CV1_CACHE=... CV1_CLAUDE_BIN=/path/to/claude/binary CV1_CODEX_DIR=/dir/with/codex/and/codex-code-mode-host
 python3 -m unittest tests.test_integration
 

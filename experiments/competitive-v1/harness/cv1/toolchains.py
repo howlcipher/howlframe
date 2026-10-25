@@ -6,6 +6,7 @@ a tree digest (sorted relative paths, modes, and file or link-target SHA-256), w
 as the jail hash.
 
     python3 -m cv1.toolchains --cache ~/.cache/howlframe-cv1 [--howlframe-repo PATH --howlframe-commit SHA]
+    python3 -m cv1.toolchains --cache ~/.cache/howlframe-cv1 --verify   # check against the committed lock.json
 """
 
 import argparse
@@ -179,14 +180,42 @@ def howlframe_docs(repo, commit, skill, skill_source, target):
         shutil.copy(skill_source, os.path.join(target, "SKILL.md"))
 
 
+PINNED_LOCK = os.path.join(HARNESS, "lock.json")
+
+
+def lock_dir(cache, key):
+    """Cache directory for a lock.json key: base_root, toolchain_<arm> or docs_<arm>."""
+    if key == "base_root":
+        return os.path.join(cache, "root")
+    kind, arm = key.split("_", 1)
+    return os.path.join(cache, "toolchains" if kind == "toolchain" else "docs", arm)
+
+
+def verify_lock(cache, pinned=PINNED_LOCK):
+    """Recompute every tree digest pinned in the committed lock; returns the keys that do not match."""
+    with open(pinned) as f:
+        lock = json.load(f)
+    bad = []
+    for key, entry in sorted(lock.items()):
+        d = lock_dir(cache, key)
+        if not os.path.isdir(d) or tree_digest(d) != entry["tree_sha256"]:
+            bad.append(key)
+    return bad
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--cache", required=True)
+    p.add_argument("--verify", action="store_true", help="only check the cache against the committed harness lock.json")
     p.add_argument("--only", nargs="*", help="subset: base python go javascript docs howlframe")
     p.add_argument("--howlframe-repo")
     p.add_argument("--howlframe-commit")
     p.add_argument("--skill-file", help="local copy of the pinned HowlFrame skill text (digest-checked)")
     args = p.parse_args(argv)
+    if args.verify:
+        bad = verify_lock(os.path.abspath(args.cache))
+        print(json.dumps({"verified": not bad, "mismatched": bad}))
+        return 0 if not bad else 1
     with open(MANIFEST) as f:
         m = json.load(f)
     cache = os.path.abspath(args.cache)

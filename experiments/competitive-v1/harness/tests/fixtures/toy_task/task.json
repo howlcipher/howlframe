@@ -1,2 +1,2 @@
 {"id": "toy-sum", "domain": "test-fixture", "note": "Harness self-test fixture only. Not a calibration or pilot task.",
- "workload": {"args": ["1", "2", "3"], "stdin": null}}
+ "workload": {"args": ["1", "2", "3"], "stdin": null, "scale10": {"args": ["10", "20", "30"], "stdin": null}}}

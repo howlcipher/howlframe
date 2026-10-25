@@ -103,42 +103,61 @@ class Task:
         heldout = os.path.join(self.path, "heldout")
         self.heldout = heldout if os.path.isdir(heldout) else None
 
-    def workload(self):
-        """task.json "workload" ({"args": [...], "stdin": file in workload/ or null}) with its mount source, or None."""
+    def _workloads(self):
+        """(spec, directory name) for the workload and, if declared, its 10x variant (task.json workload.scale10)."""
         w = self.meta.get("workload")
         if w is None:
-            return None
-        out = {"args": list(w.get("args", [])), "stdin": w.get("stdin")}
-        d = os.path.join(self.path, "workload")
+            return []
+        out = [(w, "workload")]
+        if w.get("scale10"):
+            out.append((w["scale10"], "workload10"))
+        return out
+
+    def _resolve(self, spec, name):
+        out = {"args": list(spec.get("args", [])), "stdin": spec.get("stdin")}
+        d = os.path.join(self.path, name)
         if os.path.isdir(d):
             out["dir"] = d
         elif out["stdin"]:
-            raise ValueError(f"task {self.id}: workload stdin {out['stdin']!r} needs a workload/ directory")
+            raise ValueError(f"task {self.id}: {name} stdin {out['stdin']!r} needs a {name}/ directory")
         return out
+
+    def workload(self):
+        """task.json "workload" ({"args": [...], "stdin": file in workload/ or null}) with its mount source, or None."""
+        found = self._workloads()
+        return self._resolve(*found[0]) if found else None
+
+    def workload10(self):
+        """The 10x workload for the resource-limit measure (protocol §6), from workload.scale10 and workload10/."""
+        found = self._workloads()
+        return self._resolve(*found[1]) if len(found) > 1 else None
 
     def prepare_workload(self, python=None):
         """Create generated workload files if absent, then verify every one against its pinned SHA-256.
 
-        task.json may declare {"workload": {..., "generate": {"command": ["generate.py", ...],
-        "files": {"name": "sha256"}}}}: the command runs with `python -I` inside workload/, so large inputs need not be
-        committed. Raises ValueError if a generated file does not match its pin.
+        A workload (or workload.scale10) may declare "generate": {"command": ["generate.py", ...],
+        "files": {"name": "sha256"}}: the command runs with `python -I -B` inside workload/ (workload10/), so large
+        inputs need not be committed. -B writes no bytecode, so running the pinned interpreter cannot change its
+        hashed tree. Raises ValueError if a generated file does not match its pin.
         """
-        gen = (self.meta.get("workload") or {}).get("generate")
-        if not gen:
-            return
-        d = os.path.join(self.path, "workload")
-        files = gen["files"]
+        for spec, name in self._workloads():
+            gen = spec.get("generate")
+            if not gen:
+                continue
+            d = os.path.join(self.path, name)
+            os.makedirs(d, exist_ok=True)
+            files = gen["files"]
 
-        def mismatched():
-            return [n for n, h in sorted(files.items())
-                    if not os.path.isfile(os.path.join(d, n)) or sha256_file(os.path.join(d, n)) != h]
+            def mismatched():
+                return [n for n, h in sorted(files.items())
+                        if not os.path.isfile(os.path.join(d, n)) or sha256_file(os.path.join(d, n)) != h]
 
-        if mismatched():
-            subprocess.run([python or sys.executable, "-I", *gen["command"]], cwd=d, check=True,
-                           stdout=subprocess.DEVNULL)
-        bad = mismatched()
-        if bad:
-            raise ValueError(f"task {self.id}: generated workload files {bad} do not match their pinned SHA-256")
+            if mismatched():
+                subprocess.run([python or sys.executable, "-I", "-B", *gen["command"]], cwd=d, check=True,
+                               stdout=subprocess.DEVNULL)
+            bad = mismatched()
+            if bad:
+                raise ValueError(f"task {self.id}: generated {name} files {bad} do not match their pinned SHA-256")
 
     def reference(self, arm):
         p = os.path.join(self.path, "references", arm)

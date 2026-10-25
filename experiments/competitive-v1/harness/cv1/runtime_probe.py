@@ -10,14 +10,15 @@ import os
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 
 
-def timed(argv, stdin_path, cwd, timeout):
+def timed(argv, stdin_path, cwd, timeout, stderr=subprocess.DEVNULL):
     stdin = open(stdin_path, "rb") if stdin_path else subprocess.DEVNULL
     try:
         t0 = time.perf_counter()
-        proc = subprocess.Popen(argv, stdin=stdin, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd)
+        proc = subprocess.Popen(argv, stdin=stdin, stdout=subprocess.DEVNULL, stderr=stderr, cwd=cwd)
         deadline = time.monotonic() + timeout
         while True:
             pid, status, ru = os.wait4(proc.pid, os.WNOHANG)
@@ -45,6 +46,16 @@ def measure(argv, stdin_path=None, cwd=None, repeats=5, timeout=120):
             "all_succeeded": len(ok) == repeats}
 
 
+def once(argv, stdin_path=None, cwd=None, timeout=600):
+    """A single run that keeps the end of stderr, to classify behaviour on an oversized workload."""
+    with tempfile.TemporaryFile() as err:
+        r = timed(argv, stdin_path, cwd, timeout, stderr=err)
+        err.seek(0, os.SEEK_END)
+        err.seek(max(0, err.tell() - 2000))
+        r["stderr_tail"] = err.read().decode(errors="replace")
+    return r
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--app", required=True)
@@ -53,7 +64,11 @@ def main(argv=None):
     p.add_argument("--cwd")
     p.add_argument("--repeats", type=int, default=5)
     p.add_argument("--timeout", type=float, default=120)
+    p.add_argument("--once", action="store_true", help="one run, keeping the end of stderr")
     a = p.parse_args(argv)
+    if a.once:
+        print(json.dumps(once([a.app, *json.loads(a.args)], a.stdin, a.cwd, a.timeout)))
+        return 0
     print(json.dumps(measure([a.app, *json.loads(a.args)], a.stdin, a.cwd, a.repeats, a.timeout)))
     return 0
 
