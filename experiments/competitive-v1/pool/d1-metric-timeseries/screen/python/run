@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import math
+import os
+import sys
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "rollup":
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--interval", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--host", default=None)
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
+
+    try:
+        interval = int(args.interval)
+        if interval <= 0:
+            sys.exit(1)
+    except ValueError:
+        sys.exit(1)
+
+    if not os.path.isfile(args.input):
+        sys.exit(2)
+
+    total_processed = 0
+    skipped_lines = 0
+    groups = {}
+
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    skipped_lines += 1
+                    continue
+
+                if not isinstance(obj, dict):
+                    skipped_lines += 1
+                    continue
+
+                req_keys = ["timestamp", "host_id", "metric", "value"]
+                if not all(k in obj for k in req_keys):
+                    skipped_lines += 1
+                    continue
+
+                ts = obj["timestamp"]
+                hid = obj["host_id"]
+                metric = obj["metric"]
+                val = obj["value"]
+
+                if not isinstance(ts, int) or isinstance(ts, bool):
+                    skipped_lines += 1
+                    continue
+                if not isinstance(hid, str) or not hid or not isinstance(metric, str) or not metric:
+                    skipped_lines += 1
+                    continue
+                if not isinstance(val, (int, float)) or isinstance(val, bool):
+                    skipped_lines += 1
+                    continue
+
+                # Filter host
+                if args.host is not None and hid != args.host:
+                    continue
+
+                total_processed += 1
+                b_start = ts - (ts % interval)
+                key = (b_start, hid, metric)
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append(float(val))
+
+    except Exception:
+        sys.exit(2)
+
+    windows = []
+    for (b_start, hid, metric) in sorted(groups.keys(), key=lambda k: (k[0], k[1], k[2])):
+        vals = sorted(groups[(b_start, hid, metric)])
+        count = len(vals)
+        s_val = sum(vals)
+        min_v = vals[0]
+        max_v = vals[-1]
+        avg_v = round(s_val / count, 2)
+        sum_v = round(s_val, 2)
+
+        # p95: ceil(0.95 * count) - 1
+        p95_idx = max(0, min(count - 1, math.ceil(0.95 * count) - 1))
+        p95_v = vals[p95_idx]
+
+        windows.append({
+            "bucket_start": b_start,
+            "host_id": hid,
+            "metric": metric,
+            "count": count,
+            "min": min_v,
+            "max": max_v,
+            "sum": sum_v,
+            "avg": avg_v,
+            "p95": p95_v
+        })
+
+    report = {
+        "interval_seconds": interval,
+        "total_points_processed": total_processed,
+        "skipped_lines": skipped_lines,
+        "windows": windows
+    }
+
+    try:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except Exception:
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

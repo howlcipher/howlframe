@@ -1,0 +1,23 @@
+{
+  "id": "d1-ledger-reconcile",
+  "domain": "D1",
+  "authority_centred": false,
+  "title": "Dual-Ledger Financial Reconciliation",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Reconciles internal transaction journals with external settlement bank statements and detects discrepancies.",
+  "stdlib_plan": {
+    "python": "sys, os, json, csv, argparse",
+    "go": "os, encoding/json, encoding/csv, flag, fmt, sort, strconv",
+    "javascript": "node:fs, node:path, node:process"
+  },
+  "workload": {
+    "args": ["reconcile", "--internal", "workload/internal.json", "--external", "workload/external.csv", "--out", "workload/reconcile.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

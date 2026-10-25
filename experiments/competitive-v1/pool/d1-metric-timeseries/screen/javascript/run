@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'rollup') {
+    process.exit(1);
+  }
+  const parsed = {
+    input: null,
+    interval: null,
+    output: null,
+    host: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--input') {
+      parsed.input = args[++i];
+    } else if (arg === '--interval') {
+      parsed.interval = args[++i];
+    } else if (arg === '--output') {
+      parsed.output = args[++i];
+    } else if (arg === '--host') {
+      parsed.host = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.input || !parsed.interval || !parsed.output) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  const interval = Number(args.interval);
+  if (!Number.isInteger(interval) || interval <= 0) {
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(args.input)) {
+    process.exit(2);
+  }
+
+  let content;
+  try {
+    content = fs.readFileSync(args.input, 'utf8');
+  } catch {
+    process.exit(2);
+  }
+
+  const lines = content.split(/\r?\n/);
+  let totalProcessed = 0;
+  let skippedLines = 0;
+  const groups = new Map();
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      skippedLines++;
+      continue;
+    }
+
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      skippedLines++;
+      continue;
+    }
+
+    const { timestamp, host_id, metric, value } = obj;
+    if (typeof timestamp !== 'number' || !Number.isInteger(timestamp)) {
+      skippedLines++;
+      continue;
+    }
+    if (typeof host_id !== 'string' || !host_id || typeof metric !== 'string' || !metric) {
+      skippedLines++;
+      continue;
+    }
+    if (typeof value !== 'number' || isNaN(value)) {
+      skippedLines++;
+      continue;
+    }
+
+    if (args.host !== null && host_id !== args.host) {
+      continue;
+    }
+
+    totalProcessed++;
+    const bStart = timestamp - (timestamp % interval);
+    const key = `${bStart}__${host_id}__${metric}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { bStart, host_id, metric, vals: [] });
+    }
+    groups.get(key).vals.push(value);
+  }
+
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+    if (a.bStart !== b.bStart) return a.bStart - b.bStart;
+    if (a.host_id !== b.host_id) return a.host_id.localeCompare(b.host_id);
+    return a.metric.localeCompare(b.metric);
+  });
+
+  const windows = [];
+  for (const g of sortedGroups) {
+    const vals = g.vals.slice().sort((a, b) => a - b);
+    const count = vals.length;
+    const sumVal = vals.reduce((acc, v) => acc + v, 0);
+    const minVal = vals[0];
+    const maxVal = vals[count - 1];
+    const avgVal = Number((sumVal / count).toFixed(2));
+    const sumFormatted = Number(sumVal.toFixed(2));
+
+    const p95Idx = Math.max(0, Math.min(count - 1, Math.ceil(0.95 * count) - 1));
+    const p95Val = vals[p95Idx];
+
+    windows.push({
+      bucket_start: g.bStart,
+      host_id: g.host_id,
+      metric: g.metric,
+      count,
+      min: minVal,
+      max: maxVal,
+      sum: sumFormatted,
+      avg: avgVal,
+      p95: p95Val
+    });
+  }
+
+  const report = {
+    interval_seconds: interval,
+    total_points_processed: totalProcessed,
+    skipped_lines: skippedLines,
+    windows
+  };
+
+  try {
+    fs.writeFileSync(args.output, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+main();

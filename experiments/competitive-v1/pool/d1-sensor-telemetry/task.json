@@ -1,0 +1,23 @@
+{
+  "id": "d1-sensor-telemetry",
+  "domain": "D1",
+  "authority_centred": false,
+  "title": "Greenhouse Sensor Telemetry Auditor",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Validates IoT greenhouse sensor readings against threshold configs and aggregates anomalies into a JSON report.",
+  "stdlib_plan": {
+    "python": "sys, os, json, argparse",
+    "go": "os, encoding/json, flag, fmt, sort",
+    "javascript": "node:fs, node:path, node:process"
+  },
+  "workload": {
+    "args": ["audit", "--data", "workload/data.jsonl", "--config", "workload/config.json", "--out", "workload/output.json", "--summary"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

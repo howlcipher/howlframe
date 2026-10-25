@@ -1,0 +1,185 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function printUsageAndExit(code = 1) {
+  process.exit(code);
+}
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'audit') {
+    printUsageAndExit(1);
+  }
+  const parsed = {
+    subcommand: args[0],
+    data: null,
+    config: null,
+    out: null,
+    summary: false
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--data') {
+      parsed.data = args[++i];
+    } else if (arg === '--config') {
+      parsed.config = args[++i];
+    } else if (arg === '--out') {
+      parsed.out = args[++i];
+    } else if (arg === '--summary') {
+      parsed.summary = true;
+    } else {
+      printUsageAndExit(1);
+    }
+  }
+
+  if (!parsed.data || !parsed.config || !parsed.out) {
+    printUsageAndExit(1);
+  }
+  return parsed;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.data) || !fs.existsSync(args.config)) {
+    process.exit(2);
+  }
+
+  let config;
+  try {
+    const raw = fs.readFileSync(args.config, 'utf8');
+    config = JSON.parse(raw);
+  } catch {
+    process.exit(1);
+  }
+
+  let fileContent;
+  try {
+    fileContent = fs.readFileSync(args.data, 'utf8');
+  } catch {
+    process.exit(2);
+  }
+
+  const lines = fileContent.split(/\r?\n/);
+  let validRecords = 0;
+  let malformedRecords = 0;
+  let invalidRecords = 0;
+  const anomalies = [];
+  const ghMap = {};
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      malformedRecords++;
+      continue;
+    }
+
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      malformedRecords++;
+      continue;
+    }
+
+    const { timestamp, greenhouse_id, sensor_type, value, unit } = obj;
+    if (typeof timestamp !== 'string' || typeof greenhouse_id !== 'string' ||
+        typeof sensor_type !== 'string' || typeof unit !== 'string' ||
+        typeof value !== 'number' || Number.isNaN(value)) {
+      malformedRecords++;
+      continue;
+    }
+
+    const conf = config[sensor_type];
+    if (!conf || conf.unit !== unit) {
+      invalidRecords++;
+      continue;
+    }
+
+    validRecords++;
+    const vmin = typeof conf.min === 'number' ? conf.min : -Infinity;
+    const vmax = typeof conf.max === 'number' ? conf.max : Infinity;
+
+    let isAnomaly = false;
+    if (value < vmin) {
+      anomalies.push({
+        timestamp,
+        greenhouse_id,
+        sensor_type,
+        value,
+        threshold: vmin,
+        type: 'below_min'
+      });
+      isAnomaly = true;
+    } else if (value > vmax) {
+      anomalies.push({
+        timestamp,
+        greenhouse_id,
+        sensor_type,
+        value,
+        threshold: vmax,
+        type: 'above_max'
+      });
+      isAnomaly = true;
+    }
+
+    if (!ghMap[greenhouse_id]) {
+      ghMap[greenhouse_id] = {
+        reading_count: 0,
+        anomaly_count: 0,
+        sensor_types: new Set()
+      };
+    }
+    ghMap[greenhouse_id].reading_count++;
+    if (isAnomaly) {
+      ghMap[greenhouse_id].anomaly_count++;
+    }
+    ghMap[greenhouse_id].sensor_types.add(sensor_type);
+  }
+
+  anomalies.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp.localeCompare(b.timestamp);
+    if (a.greenhouse_id !== b.greenhouse_id) return a.greenhouse_id.localeCompare(b.greenhouse_id);
+    return a.sensor_type.localeCompare(b.sensor_type);
+  });
+
+  const greenhouseSummary = {};
+  const sortedGhIds = Object.keys(ghMap).sort();
+  for (const ghId of sortedGhIds) {
+    greenhouseSummary[ghId] = {
+      reading_count: ghMap[ghId].reading_count,
+      anomaly_count: ghMap[ghId].anomaly_count,
+      sensor_types: Array.from(ghMap[ghId].sensor_types).sort()
+    };
+  }
+
+  const report = {
+    valid_records: validRecords,
+    malformed_records: malformedRecords,
+    invalid_records: invalidRecords,
+    anomalies,
+    greenhouse_summary: greenhouseSummary
+  };
+
+  try {
+    fs.writeFileSync(args.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  if (args.summary) {
+    process.stdout.write(JSON.stringify({
+      valid: validRecords,
+      anomalies: anomalies.length,
+      malformed: malformedRecords
+    }) + '\n');
+  }
+
+  process.exit(0);
+}
+
+main();

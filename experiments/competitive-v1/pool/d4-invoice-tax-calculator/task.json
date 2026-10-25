@@ -1,0 +1,23 @@
+{
+  "id": "d4-invoice-tax-calculator",
+  "domain": "D4",
+  "authority_centred": false,
+  "title": "Multi-Category Tax and Currency Rounding Balancer",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade invoice computation engine to multi-category tax rates, luxury surcharges, proportional discount distribution, and banker's penny rounding balancing.",
+  "stdlib_plan": {
+    "python": "sys, os, json, math",
+    "go": "os, encoding/json, math, sort",
+    "javascript": "node:fs, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/tax_config.json", "workload/invoice.json", "workload/receipt.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

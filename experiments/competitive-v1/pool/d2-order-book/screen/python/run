@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+import time
+from urllib.parse import urlparse
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Engine:
+    def __init__(self, store_path):
+        self.store_path = store_path
+        self.orders = {}
+        self.trades = []
+        self.next_order_id = 1
+        self.next_trade_id = 1
+        self.load()
+
+    def load(self):
+        if self.store_path and os.path.isfile(self.store_path):
+            try:
+                with open(self.store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.orders = data.get("orders", {})
+                    self.trades = data.get("trades", [])
+                    self.next_order_id = data.get("next_order_id", 1)
+                    self.next_trade_id = data.get("next_trade_id", 1)
+            except Exception:
+                self.orders = {}
+                self.trades = []
+                self.next_order_id = 1
+                self.next_trade_id = 1
+
+    def save(self):
+        if self.store_path:
+            try:
+                with open(self.store_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "orders": self.orders,
+                        "trades": self.trades,
+                        "next_order_id": self.next_order_id,
+                        "next_trade_id": self.next_trade_id
+                    }, f, indent=2)
+            except Exception:
+                pass
+
+    def place_order(self, body):
+        if not isinstance(body, dict):
+            return 400, {"error": "invalid_order"}
+        symbol = body.get("symbol")
+        side = body.get("side")
+        price = body.get("price")
+        qty = body.get("quantity")
+
+        if not symbol or not isinstance(symbol, str):
+            return 400, {"error": "invalid_order"}
+        if side not in ("buy", "sell"):
+            return 400, {"error": "invalid_order"}
+        if not isinstance(price, (int, float)) or price <= 0:
+            return 400, {"error": "invalid_order"}
+        if not isinstance(qty, (int, float)) or qty <= 0:
+            return 400, {"error": "invalid_order"}
+
+        order_id = f"ord-{self.next_order_id}"
+        self.next_order_id += 1
+        now = time.time()
+
+        incoming = {
+            "order_id": order_id,
+            "symbol": symbol,
+            "side": side,
+            "price": float(price),
+            "quantity": float(qty),
+            "filled_quantity": 0.0,
+            "remaining_quantity": float(qty),
+            "status": "open",
+            "created_at": now
+        }
+
+        executed_trades = []
+
+        # Find matching resting orders
+        if side == "buy":
+            # Match resting sells with price <= buy.price
+            # lowest price first, then created_at
+            resting = [
+                o for o in self.orders.values()
+                if o["symbol"] == symbol and o["side"] == "sell" and o["status"] in ("open", "partially_filled") and o["price"] <= incoming["price"]
+            ]
+            resting.sort(key=lambda o: (o["price"], o["created_at"], o["order_id"]))
+        else:
+            # Match resting buys with price >= sell.price
+            # highest price first, then created_at
+            resting = [
+                o for o in self.orders.values()
+                if o["symbol"] == symbol and o["side"] == "buy" and o["status"] in ("open", "partially_filled") and o["price"] >= incoming["price"]
+            ]
+            resting.sort(key=lambda o: (-o["price"], o["created_at"], o["order_id"]))
+
+        for r in resting:
+            if incoming["remaining_quantity"] <= 0:
+                break
+
+            match_qty = min(incoming["remaining_quantity"], r["remaining_quantity"])
+            exec_price = r["price"]
+
+            incoming["remaining_quantity"] = round(incoming["remaining_quantity"] - match_qty, 6)
+            incoming["filled_quantity"] = round(incoming["filled_quantity"] + match_qty, 6)
+
+            r["remaining_quantity"] = round(r["remaining_quantity"] - match_qty, 6)
+            r["filled_quantity"] = round(r["filled_quantity"] + match_qty, 6)
+            r["status"] = "filled" if r["remaining_quantity"] <= 0 else "partially_filled"
+
+            trade_id = f"t-{self.next_trade_id}"
+            self.next_trade_id += 1
+
+            trade = {
+                "trade_id": trade_id,
+                "symbol": symbol,
+                "buy_order_id": incoming["order_id"] if side == "buy" else r["order_id"],
+                "sell_order_id": r["order_id"] if side == "buy" else incoming["order_id"],
+                "price": exec_price,
+                "quantity": match_qty,
+                "timestamp": now
+            }
+            executed_trades.append(trade)
+            self.trades.append(trade)
+
+        if incoming["remaining_quantity"] <= 0:
+            incoming["status"] = "filled"
+        elif incoming["filled_quantity"] > 0:
+            incoming["status"] = "partially_filled"
+        else:
+            incoming["status"] = "open"
+
+        self.orders[order_id] = incoming
+        self.save()
+
+        res_obj = dict(incoming)
+        res_obj["trades"] = executed_trades
+        return 201, res_obj
+
+    def cancel_order(self, order_id):
+        if order_id not in self.orders:
+            return 404, {"error": "not_found"}
+        order = self.orders[order_id]
+        if order["status"] in ("filled", "cancelled"):
+            return 400, {"error": "order_not_cancellable"}
+        order["status"] = "cancelled"
+        self.save()
+        return 200, {"order_id": order_id, "status": "cancelled"}
+
+    def get_order(self, order_id):
+        if order_id not in self.orders:
+            return 404, {"error": "not_found"}
+        return 200, self.orders[order_id]
+
+    def get_book(self, symbol):
+        bids_map = {}
+        asks_map = {}
+
+        for o in self.orders.values():
+            if o["symbol"] != symbol or o["status"] not in ("open", "partially_filled"):
+                continue
+            p = o["price"]
+            rem = o["remaining_quantity"]
+            if o["side"] == "buy":
+                bids_map[p] = bids_map.get(p, 0.0) + rem
+            else:
+                asks_map[p] = asks_map.get(p, 0.0) + rem
+
+        bids = [{"price": p, "quantity": round(bids_map[p], 6)} for p in sorted(bids_map.keys(), reverse=True)]
+        asks = [{"price": p, "quantity": round(asks_map[p], 6)} for p in sorted(asks_map.keys())]
+
+        return 200, {"symbol": symbol, "bids": bids, "asks": asks}
+
+    def get_trades(self, symbol):
+        sym_trades = [t for t in self.trades if t["symbol"] == symbol]
+        return 200, {"symbol": symbol, "trades": sym_trades}
+
+    def handle(self, method, full_path, body=None):
+        path = urlparse(full_path).path
+
+        if method == "POST" and path == "/orders":
+            return self.place_order(body or {})
+        elif method == "DELETE" and path.startswith("/orders/"):
+            order_id = path[len("/orders/"):]
+            return self.cancel_order(order_id)
+        elif method == "GET" and path.startswith("/orders/"):
+            order_id = path[len("/orders/"):]
+            return self.get_order(order_id)
+        elif method == "GET" and path.startswith("/book/"):
+            symbol = path[len("/book/"):]
+            return self.get_book(symbol)
+        elif method == "GET" and path.startswith("/trades/"):
+            symbol = path[len("/trades/"):]
+            return self.get_trades(symbol)
+        return 404, {"error": "not_found"}
+
+
+def run_server(engine, port):
+    class RequestHandler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+        def do_POST(self):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            body = None
+            if body_bytes:
+                try:
+                    body = json.loads(body_bytes.decode("utf-8"))
+                except Exception:
+                    body = {}
+            status, resp = engine.handle("POST", self.path, body)
+            self.send_response(status)
+            if resp is not None:
+                resp_bytes = json.dumps(resp).encode("utf-8")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_bytes)))
+                self.end_headers()
+                self.wfile.write(resp_bytes)
+            else:
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        def do_GET(self):
+            status, resp = engine.handle("GET", self.path)
+            self.send_response(status)
+            if resp is not None:
+                resp_bytes = json.dumps(resp).encode("utf-8")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_bytes)))
+                self.end_headers()
+                self.wfile.write(resp_bytes)
+            else:
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        def do_DELETE(self):
+            status, resp = engine.handle("DELETE", self.path)
+            self.send_response(status)
+            if resp is not None:
+                resp_bytes = json.dumps(resp).encode("utf-8")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_bytes)))
+                self.end_headers()
+                self.wfile.write(resp_bytes)
+            else:
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+    server = HTTPServer(("127.0.0.1", port), RequestHandler)
+    server.serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand", nargs="?", default=None)
+    parser.add_argument("extra_arg", nargs="?", default=None)
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--store", default="store.json")
+
+    args, unknown = parser.parse_known_args()
+
+    if args.subcommand == "replay":
+        reqs_file = args.extra_arg
+        if not reqs_file and unknown:
+            reqs_file = unknown[0]
+        if not reqs_file or not os.path.isfile(reqs_file):
+            sys.exit(1)
+
+        engine = Engine(args.store)
+        with open(reqs_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                req = json.loads(line)
+                method = req.get("method", "GET")
+                path = req.get("path", "/")
+                body = req.get("body")
+                status, res_body = engine.handle(method, path, body)
+                print(json.dumps({"status": status, "body": res_body}))
+        sys.exit(0)
+
+    port = args.port or int(os.environ.get("PORT", "0"))
+    if not port:
+        for i, a in enumerate(unknown):
+            if a == "--port" and i + 1 < len(unknown):
+                port = int(unknown[i+1])
+    if not port:
+        sys.exit(1)
+
+    engine = Engine(args.store)
+    run_server(engine, port)
+
+if __name__ == "__main__":
+    main()

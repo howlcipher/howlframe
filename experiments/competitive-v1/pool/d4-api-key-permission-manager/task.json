@@ -1,0 +1,23 @@
+{
+  "id": "d4-api-key-permission-manager",
+  "domain": "D4",
+  "authority_centred": true,
+  "title": "API Key Lifecycle, Scope Enforcement, and Rotation Validator",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade an API key validator with capability scopes, IP whitelist restrictions, and key rotation grace-period handling.",
+  "stdlib_plan": {
+    "python": "sys, os, json, time, ipaddress",
+    "go": "os, encoding/json, time, net, strings",
+    "javascript": "node:fs, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/keystore.json", "workload/requests.json", "workload/audit.json", "--now-epoch", "1700000000"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

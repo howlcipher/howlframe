@@ -1,0 +1,23 @@
+{
+  "id": "d3-cluster-health-aggregator",
+  "domain": "D3",
+  "authority_centred": false,
+  "title": "Multi-Node Service Health Aggregator and Standby Activator",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Poll health endpoints across a distributed service cluster, aggregate availability status, and dispatch activation requests to standby instances when primaries fail.",
+  "stdlib_plan": {
+    "python": "sys, os, json, urllib.request, urllib.error, time",
+    "go": "os, encoding/json, net/http, bytes, time",
+    "javascript": "node:fs, node:http, node:process, node:url"
+  },
+  "workload": {
+    "args": ["workload/cluster.json", "workload/status.json", "--offline-fixtures", "workload/fixtures.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

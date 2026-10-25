@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import json
+import os
+import sys
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "grade":
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand")
+    parser.add_argument("--students", required=True)
+    parser.add_argument("--grades", required=True)
+    parser.add_argument("--rubric", required=True)
+    parser.add_argument("--out", required=True)
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
+
+    if not os.path.isfile(args.students) or not os.path.isfile(args.grades) or not os.path.isfile(args.rubric):
+        sys.exit(2)
+
+    try:
+        with open(args.rubric, "r", encoding="utf-8") as f:
+            rubric = json.load(f)
+        with open(args.students, "r", encoding="utf-8") as f:
+            students = json.load(f)
+    except Exception:
+        sys.exit(1)
+
+    if not isinstance(rubric, dict) or not isinstance(students, list):
+        sys.exit(1)
+
+    weights = rubric.get("assignment_weights", {})
+    late_penalty_pct = float(rubric.get("late_penalty_percent_per_day", 0.0))
+    max_late_days = int(rubric.get("max_late_days", 0))
+    curve_points = float(rubric.get("curve_points", 0.0))
+    grade_scale = rubric.get("grade_scale", {})
+
+    # Sort grade_scale cutoffs descending
+    scale_sorted = sorted(grade_scale.items(), key=lambda kv: kv[1], reverse=True)
+
+    # Submissions: (student_id, assignment_id) -> effective assignment percentage
+    # Use last submission in file
+    submissions = {}
+    try:
+        with open(args.grades, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if not header:
+                sys.exit(1)
+            for row in reader:
+                if not row or len(row) < 5:
+                    continue
+                sid, aid, score_str, max_score_str, late_str = [c.strip() for c in row[:5]]
+                try:
+                    score = float(score_str)
+                    max_score = float(max_score_str)
+                    days_late = int(late_str)
+                except ValueError:
+                    continue
+
+                if max_score <= 0:
+                    continue
+
+                if days_late > max_late_days:
+                    eff_score = 0.0
+                else:
+                    deduction = max_score * ((days_late * late_penalty_pct) / 100.0)
+                    eff_score = max(0.0, score - deduction)
+
+                pct = (eff_score / max_score) * 100.0
+                submissions[(sid, aid)] = pct
+    except Exception:
+        sys.exit(2)
+
+    transcripts = []
+    final_scores = []
+    grade_counts = {k: 0 for k in grade_scale.keys()}
+
+    for s in students:
+        if not isinstance(s, dict):
+            continue
+        sid = s.get("student_id", "")
+        sname = s.get("name", "")
+
+        base_pct = 0.0
+        for aid, w in weights.items():
+            pct = submissions.get((sid, aid), 0.0)
+            base_pct += pct * float(w)
+
+        curved_pct = min(100.0, round(base_pct + curve_points, 2))
+        final_scores.append(curved_pct)
+
+        # Determine letter grade
+        letter = "F"
+        for ltr, cutoff in scale_sorted:
+            if curved_pct >= cutoff:
+                letter = ltr
+                break
+
+        if letter in grade_counts:
+            grade_counts[letter] += 1
+
+        transcripts.append({
+            "student_id": sid,
+            "name": sname,
+            "final_percentage": curved_pct,
+            "letter_grade": letter
+        })
+
+    transcripts.sort(key=lambda t: t["student_id"])
+
+    total = len(transcripts)
+    avg_score = round(sum(final_scores) / total, 2) if total > 0 else 0.0
+    highest = max(final_scores) if total > 0 else 0.0
+    lowest = min(final_scores) if total > 0 else 0.0
+
+    report = {
+        "transcripts": transcripts,
+        "class_statistics": {
+            "total_students": total,
+            "class_average": avg_score,
+            "highest_score": highest,
+            "lowest_score": lowest,
+            "grade_distribution": grade_counts
+        }
+    }
+
+    try:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except Exception:
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

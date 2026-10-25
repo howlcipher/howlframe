@@ -1,0 +1,23 @@
+{
+  "id": "d3-parallel-test-matrix",
+  "domain": "D3",
+  "authority_centred": false,
+  "title": "Test Matrix Execution Harness with Worker Pool and Failure Limits",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Execute a parameterized test command matrix across environments with bounded worker concurrency, per-case deadlines, fail-fast thresholds, and structured summary reporting.",
+  "stdlib_plan": {
+    "python": "sys, os, json, subprocess, time, concurrent.futures",
+    "go": "os, os/exec, encoding/json, time, sync",
+    "javascript": "node:fs, node:child_process, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/matrix.json", "workload/results.json", "--concurrency", "4"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

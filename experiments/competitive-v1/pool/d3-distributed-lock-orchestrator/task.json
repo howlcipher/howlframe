@@ -1,0 +1,23 @@
+{
+  "id": "d3-distributed-lock-orchestrator",
+  "domain": "D3",
+  "authority_centred": false,
+  "title": "Distributed Lease Lock Coordinator with Heartbeat Renewal",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Coordinate critical tasks via an HTTP distributed lock coordinator, maintaining lease renewal heartbeats and safe release upon termination.",
+  "stdlib_plan": {
+    "python": "sys, os, json, time, threading, subprocess, urllib.request, urllib.error",
+    "go": "os, os/exec, encoding/json, time, net/http, sync, bytes",
+    "javascript": "node:fs, node:http, node:child_process, node:process, node:url"
+  },
+  "workload": {
+    "args": ["workload/job.json", "workload/result.json", "--offline-mock", "workload/mock.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'verify-sbom') {
+    process.exit(1);
+  }
+  const parsed = {
+    sbom: null,
+    policy: null,
+    report: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--sbom') {
+      parsed.sbom = args[++i];
+    } else if (arg === '--policy') {
+      parsed.policy = args[++i];
+    } else if (arg === '--report') {
+      parsed.report = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.sbom || !parsed.policy || !parsed.report) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.sbom) || !fs.existsSync(args.policy)) {
+    process.exit(1);
+  }
+
+  let policy;
+  let sbom;
+  try {
+    policy = JSON.parse(fs.readFileSync(args.policy, 'utf8'));
+    sbom = JSON.parse(fs.readFileSync(args.sbom, 'utf8'));
+  } catch {
+    process.exit(1);
+  }
+
+  if (!policy || typeof policy !== 'object' || !sbom || typeof sbom !== 'object') {
+    process.exit(1);
+  }
+
+  const allowedLicenses = new Set(Array.isArray(policy.allowed_licenses) ? policy.allowed_licenses : []);
+  const tierCapabilities = policy.tier_capabilities || {};
+  const packageTiers = policy.package_tiers || {};
+  const defaultTier = policy.default_tier || 'tier_3_untrusted';
+
+  const packages = Array.isArray(sbom.packages) ? sbom.packages : [];
+  const violations = [];
+  const effectiveCapsMap = {};
+
+  for (const pkg of packages) {
+    if (!pkg || typeof pkg !== 'object') continue;
+    const name = pkg.name || 'unknown';
+    const lic = pkg.license || '';
+    const reqCaps = Array.isArray(pkg.requested_capabilities) ? pkg.requested_capabilities : [];
+
+    const tier = packageTiers[name] || defaultTier;
+    const allowedCaps = new Set(Array.isArray(tierCapabilities[tier]) ? tierCapabilities[tier] : []);
+
+    if (!allowedLicenses.has(lic)) {
+      violations.push({
+        package: name,
+        violation_type: 'disallowed_license',
+        detail: `License '${lic}' is not permitted`
+      });
+    }
+
+    const granted = [];
+    for (const cap of reqCaps) {
+      if (!allowedCaps.has(cap)) {
+        violations.push({
+          package: name,
+          violation_type: 'unauthorized_capability',
+          detail: `Capability '${cap}' not permitted for tier '${tier}'`
+        });
+      } else {
+        granted.push(cap);
+      }
+    }
+
+    effectiveCapsMap[name] = granted.sort();
+  }
+
+  violations.sort((a, b) => {
+    if (a.package !== b.package) return a.package.localeCompare(b.package);
+    if (a.violation_type !== b.violation_type) return a.violation_type.localeCompare(b.violation_type);
+    return a.detail.localeCompare(b.detail);
+  });
+
+  const sortedEffCaps = {};
+  for (const k of Object.keys(effectiveCapsMap).sort()) {
+    sortedEffCaps[k] = effectiveCapsMap[k];
+  }
+
+  const isCompliant = violations.length === 0;
+  const report = {
+    compliant: isCompliant,
+    total_packages: packages.length,
+    violations_count: violations.length,
+    violations,
+    effective_capabilities: sortedEffCaps
+  };
+
+  try {
+    fs.writeFileSync(args.report, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  if (!isCompliant) {
+    process.exit(2);
+  }
+  process.exit(0);
+}
+
+main();

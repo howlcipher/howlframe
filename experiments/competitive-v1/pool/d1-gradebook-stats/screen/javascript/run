@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'grade') {
+    process.exit(1);
+  }
+  const parsed = {
+    students: null,
+    grades: null,
+    rubric: null,
+    out: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--students') {
+      parsed.students = args[++i];
+    } else if (arg === '--grades') {
+      parsed.grades = args[++i];
+    } else if (arg === '--rubric') {
+      parsed.rubric = args[++i];
+    } else if (arg === '--out') {
+      parsed.out = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.students || !parsed.grades || !parsed.rubric || !parsed.out) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function parseCSVLine(line) {
+  return line.split(',').map(s => s.trim());
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.students) || !fs.existsSync(args.grades) || !fs.existsSync(args.rubric)) {
+    process.exit(2);
+  }
+
+  let rubric;
+  let students;
+  try {
+    rubric = JSON.parse(fs.readFileSync(args.rubric, 'utf8'));
+    students = JSON.parse(fs.readFileSync(args.students, 'utf8'));
+  } catch {
+    process.exit(1);
+  }
+
+  if (!rubric || typeof rubric !== 'object' || !Array.isArray(students)) {
+    process.exit(1);
+  }
+
+  const weights = rubric.assignment_weights || {};
+  const latePenaltyPct = Number(rubric.late_penalty_percent_per_day) || 0;
+  const maxLateDays = Number(rubric.max_late_days) || 0;
+  const curvePoints = Number(rubric.curve_points) || 0;
+  const gradeScale = rubric.grade_scale || {};
+
+  const scaleSorted = Object.entries(gradeScale).sort((a, b) => Number(b[1]) - Number(a[1]));
+
+  let csvContent;
+  try {
+    csvContent = fs.readFileSync(args.grades, 'utf8');
+  } catch {
+    process.exit(2);
+  }
+
+  const lines = csvContent.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) process.exit(1);
+
+  const header = parseCSVLine(lines[0]);
+  const expectedHeader = ['student_id', 'assignment_id', 'score', 'max_score', 'days_late'];
+  if (header.length < 5 || !expectedHeader.every((h, i) => header[i] === h)) {
+    process.exit(1);
+  }
+
+  const submissions = new Map();
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    if (row.length < 5) continue;
+    const [sid, aid, scoreStr, maxScoreStr, lateStr] = row;
+    const score = Number(scoreStr);
+    const maxScore = Number(maxScoreStr);
+    const daysLate = Number(lateStr);
+
+    if (isNaN(score) || isNaN(maxScore) || isNaN(daysLate) || maxScore <= 0) continue;
+
+    let effScore;
+    if (daysLate > maxLateDays) {
+      effScore = 0;
+    } else {
+      const deduction = maxScore * ((daysLate * latePenaltyPct) / 100);
+      effScore = Math.max(0, score - deduction);
+    }
+
+    const pct = (effScore / maxScore) * 100;
+    submissions.set(`${sid}:${aid}`, pct);
+  }
+
+  const transcripts = [];
+  const finalScores = [];
+  const gradeCounts = {};
+  for (const k of Object.keys(gradeScale)) {
+    gradeCounts[k] = 0;
+  }
+
+  for (const s of students) {
+    if (!s || typeof s !== 'object') continue;
+    const sid = s.student_id || '';
+    const sname = s.name || '';
+
+    let basePct = 0;
+    for (const [aid, w] of Object.entries(weights)) {
+      const pct = submissions.get(`${sid}:${aid}`) || 0;
+      basePct += pct * Number(w);
+    }
+
+    const curvedPct = Math.min(100, Number((basePct + curvePoints).toFixed(2)));
+    finalScores.push(curvedPct);
+
+    let letter = 'F';
+    for (const [ltr, cutoff] of scaleSorted) {
+      if (curvedPct >= Number(cutoff)) {
+        letter = ltr;
+        break;
+      }
+    }
+
+    if (gradeCounts[letter] !== undefined) {
+      gradeCounts[letter]++;
+    }
+
+    transcripts.push({
+      student_id: sid,
+      name: sname,
+      final_percentage: curvedPct,
+      letter_grade: letter
+    });
+  }
+
+  transcripts.sort((a, b) => a.student_id.localeCompare(b.student_id));
+
+  const total = transcripts.length;
+  const avg = total > 0 ? Number((finalScores.reduce((acc, v) => acc + v, 0) / total).toFixed(2)) : 0;
+  const highest = total > 0 ? Math.max(...finalScores) : 0;
+  const lowest = total > 0 ? Math.min(...finalScores) : 0;
+
+  const report = {
+    transcripts,
+    class_statistics: {
+      total_students: total,
+      class_average: avg,
+      highest_score: highest,
+      lowest_score: lowest,
+      grade_distribution: gradeCounts
+    }
+  };
+
+  try {
+    fs.writeFileSync(args.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+main();

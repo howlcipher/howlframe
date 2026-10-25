@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "audit":
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand")
+    parser.add_argument("--data", required=True)
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--summary", action="store_true")
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
+
+    if not os.path.isfile(args.data) or not os.path.isfile(args.config):
+        sys.exit(2)
+
+    try:
+        with open(args.config, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception:
+        sys.exit(1)
+
+    valid_records = 0
+    malformed_records = 0
+    invalid_records = 0
+    anomalies = []
+    gh_map = {}
+
+    try:
+        with open(args.data, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    malformed_records += 1
+                    continue
+                try:
+                    record = json.loads(line)
+                except Exception:
+                    malformed_records += 1
+                    continue
+
+                if not isinstance(record, dict):
+                    malformed_records += 1
+                    continue
+
+                req_keys = ["timestamp", "greenhouse_id", "sensor_type", "value", "unit"]
+                if not all(k in record for k in req_keys):
+                    malformed_records += 1
+                    continue
+
+                val = record["value"]
+                if not isinstance(val, (int, float)) or isinstance(val, bool):
+                    malformed_records += 1
+                    continue
+
+                stype = record["sensor_type"]
+                unit = record["unit"]
+
+                if stype not in config or config[stype].get("unit") != unit:
+                    invalid_records += 1
+                    continue
+
+                # Valid record
+                valid_records += 1
+                gh_id = record["greenhouse_id"]
+                ts = record["timestamp"]
+                vmin = config[stype].get("min", float("-inf"))
+                vmax = config[stype].get("max", float("inf"))
+
+                is_anomaly = False
+                if val < vmin:
+                    anomalies.append({
+                        "timestamp": ts,
+                        "greenhouse_id": gh_id,
+                        "sensor_type": stype,
+                        "value": val,
+                        "threshold": vmin,
+                        "type": "below_min"
+                    })
+                    is_anomaly = True
+                elif val > vmax:
+                    anomalies.append({
+                        "timestamp": ts,
+                        "greenhouse_id": gh_id,
+                        "sensor_type": stype,
+                        "value": val,
+                        "threshold": vmax,
+                        "type": "above_max"
+                    })
+                    is_anomaly = True
+
+                if gh_id not in gh_map:
+                    gh_map[gh_id] = {
+                        "reading_count": 0,
+                        "anomaly_count": 0,
+                        "sensor_types": set()
+                    }
+                gh_map[gh_id]["reading_count"] += 1
+                if is_anomaly:
+                    gh_map[gh_id]["anomaly_count"] += 1
+                gh_map[gh_id]["sensor_types"].add(stype)
+
+    except Exception:
+        sys.exit(2)
+
+    # Sort anomalies: timestamp asc, greenhouse_id asc, sensor_type asc
+    anomalies.sort(key=lambda a: (a["timestamp"], a["greenhouse_id"], a["sensor_type"]))
+
+    # Sort greenhouse_summary by key
+    gh_summary = {}
+    for gh_id in sorted(gh_map.keys()):
+        gh_summary[gh_id] = {
+            "reading_count": gh_map[gh_id]["reading_count"],
+            "anomaly_count": gh_map[gh_id]["anomaly_count"],
+            "sensor_types": sorted(list(gh_map[gh_id]["sensor_types"]))
+        }
+
+    report = {
+        "valid_records": valid_records,
+        "malformed_records": malformed_records,
+        "invalid_records": invalid_records,
+        "anomalies": anomalies,
+        "greenhouse_summary": gh_summary
+    }
+
+    try:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except Exception:
+        sys.exit(1)
+
+    if args.summary:
+        print(json.dumps({"valid": valid_records, "anomalies": len(anomalies), "malformed": malformed_records}))
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
