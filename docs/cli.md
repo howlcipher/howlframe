@@ -7,7 +7,7 @@ Usage: `howlframe check [--profile=default|governed] <source.howl>`
 
 Parses, type-checks, and verifies the `.howl` source file without emitting an artifact. It ensures that the code follows the syntax and structural rules. It will check the syntax, resolve modules, apply type-checking, and run the target-independent HFIR verification gate.
 
-If successful, it prints `OK: <source.howl>` and exits with status 0. Otherwise, it prints structured diagnostics and exits with a non-zero status.
+If successful, it prints `OK: <source.howl>` and exits with status 0. Otherwise, it prints structured diagnostics and exits with a non-zero status. `check` and `build` write diagnostics to **standard output**: a checker or parser error is one JSON object, `{"reason":"undefined reference to function \"nosuch\"","line":1,"column":23}`, and a target-feasibility error is a JSON array of objects with `code` (such as `HFIR_TARGET_INFEASIBLE`), `severity`, `message` and `location`. Both exit with status 1. Runtime failures from `run` go to standard error, for example `{"phase":"runtime","code":"CONVERSION_ERROR","function":"main","instruction":0,"opcode":"CONVERT","message":"cannot convert \"abc\" to float"}`.
 
 ## `howlframe build`
 Usage: `howlframe build <source.howl> [-o <output>] [--target=bytecode|go|js|wasm] [--profile=default|governed]`
@@ -71,6 +71,19 @@ are independent of sealed ExecutionEvidence. See the
 
 These limits also apply to legacy `-run-bc`. The new flags apply to `run` targets `bytecode`/`bc`; AST interpreter memory and deadline behavior is unchanged. Exceeded ceilings produce structured `LIMIT_EXCEEDED`. Blocking `read_line` and HTTP serving are not cancelled by the deadline; print output remains uncapped.
 
+
+### Sizing budgets for large inputs
+
+The defaults suit small programs. A program that processes a large file or many records usually needs both ceilings raised, and the runner chooses them, not the program:
+
+```bash
+howlframe run --allow-caps filesystem:read=./data \
+  --max-instructions 500000000 --max-memory-bytes 4294967296 app.hfbc data/input.log
+```
+
+* **Instructions.** Every executed instruction counts, including loop bookkeeping: `(while (< i n) (set i (+ i 1)))` costs 9 instructions per iteration. Run once on a representative input with a generous ceiling and `--receipt r.json`; the receipt's `instructions_used` is the measured cost, and a ceiling a small multiple above it keeps the bound without failing on normal variation.
+* **Memory.** `--max-memory-bytes` caps cumulative allocation charges, not live memory. A value is charged when an instruction creates it (for example string concatenation, each `str_split` part, `list`, `dict` and `append` slots, file and process output), and the charge is not returned when the value becomes garbage. Bytes are charged 9 bytes each (the byte plus an 8-byte list slot), so `read_file` of a 40 MB file is charged about 360 MB before any processing, and `bytes_to_string` plus `str_split` charge the text again. Size the ceiling from everything a run creates, not from what it keeps.
+* Exceeding either ceiling stops the program with `LIMIT_EXCEEDED` on standard error (`instruction limit exceeded`, or `memory limit exceeded (max N bytes)`) and exit status 1.
 
 ## `howlframe inspect`
 Usage: `howlframe inspect --caps <artifact.hfbc>`

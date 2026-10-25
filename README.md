@@ -392,6 +392,19 @@ HowlFrame supports the core control-flow and data primitives expected by the shi
 
 AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `optimize_signature`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive. On the standalone bytecode target that difference is enforced: `internal/construct` classifies every construct as `Supported`, `CompileTimeOnly`, or `Unsupported`, and `-compile-bc` rejects the unsupported ones before emitting an artifact. The Go backend deliberately stays permissive, because it supports a large open set of heads.
 
+### Authoring notes
+
+These hold for the standalone bytecode target (`build` and `run`):
+
+- `read_file` returns bytes. Convert with `(bytes_to_string b)` before string operations; `(list_len b)` counts bytes.
+- `print` takes any number of values and writes them separated by spaces with a trailing newline. `stderr` takes exactly one value and writes it with no trailing newline.
+- There is no `nil` or `null` literal. Reading a missing key with `map_get` yields null; test it with `(is_nil v)`, and `encode_json` writes it as `null`.
+- There is no rounding built-in: `round`, `floor`, `ceil` and `abs` fail `build` with `HFIR_TARGET_INFEASIBLE`. `to_int` truncates toward zero, so `(to_int (+ x 0.5))` rounds a non-negative `x` half up and `(to_int (- x 0.5))` rounds a negative `x` half down. Floating-point representation still applies (`2.675` is stored slightly below itself).
+- Write float literals with a decimal point (`2.5`, `1000000.0`). Exponent literals such as `1e3` are not accepted in source yet; `(to_float "1e3")` is.
+- Untyped `defun` parameters and returns are `string`; declare other types with `(type_hint x "int")` and `(type_hint return "int")`.
+- Programs run under an instruction ceiling (default 100,000) and a cumulative allocation ceiling (default 64 MiB). Large inputs need both raised at `run` time; see [sizing budgets](docs/cli.md#sizing-budgets-for-large-inputs).
+- Numeric conversions and comparisons follow the [numeric contract](docs/reference/NUMERIC_CONTRACT.md).
+
 ## Constrained Decoding Plans
 
 The `internal/masking` package compiles semantic `ast.TypeInfo` values and complete `checker.Analysis` results into deterministic, JSON-serializable mask plans. Plans describe provider-neutral token classes, literals, collection delimiters, struct fields, function parameter and return constraints, and schema bridges for use by downstream constrained decoders.
