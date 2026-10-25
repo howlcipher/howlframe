@@ -80,6 +80,9 @@ howlframe build hello.howl
 howlframe run hello.hfbc
 ```
 
+`build` writes `<name>.hfbc` to the current directory, even when the source is in another directory; use
+`-o <path>` to choose the output path.
+
 Output:
 ```
 Hello from HowlFrame
@@ -170,9 +173,11 @@ cd howlframe
 go run howlframe.go examples/cli_hello.howl
 ```
 
-The default Go backend writes `server.go`. Run the generated program with:
+With no subcommand, the compiler checks the program and runs it directly in the bytecode VM. To generate Go
+instead, build with `--target go`, which writes `server.go` to the current directory, then run it:
 
 ```bash
+go run howlframe.go build examples/cli_hello.howl --target go
 go run server.go
 ```
 
@@ -266,6 +271,12 @@ Run it:
 
 ```bash
 go run howlframe.go examples/hello.howl
+```
+
+This serves the program from the bytecode VM. To run it as generated Go instead:
+
+```bash
+go run howlframe.go build examples/hello.howl --target go
 go run server.go
 ```
 
@@ -280,7 +291,8 @@ existing JSON parser with the route request value:
 ```
 
 In the standalone bytecode VM, `req.body` is valid only as the input to
-`parse_json` in an HTTP route. `try_let` can turn malformed JSON into an
+`parse_json` in an HTTP route. Everywhere else, the input to `parse_json` must be
+a variable name, not an expression or literal: bind the text with `let` first. `try_let` can turn malformed JSON into an
 application response. This is a JSON-only route-input path; it does not
 provide a general request-body value, streaming input, or a configurable
 body-size limit. Request bodies are untrusted input, so applications should
@@ -328,9 +340,13 @@ router: no methods, no regular expressions, and no catch-all.
 ```
 
 ```bash
-go run howlframe.go counter.howl
+go run howlframe.go build counter.howl --target js
 node --test app.test.js
 ```
+
+`build --target js` writes `app.js` and, when the program has `test` blocks, `app.test.js` to the current
+directory (or to the directory given with `-o`; an `-o` path ending in `.js` writes only the app). Without
+`--target js`, a `web_app` is rejected by the bytecode target.
 
 ### WebAssembly Text
 
@@ -389,21 +405,23 @@ This API does not call a model or map constraints to provider-specific token IDs
 Use `optimize_signature` to record optimization intent around an otherwise normal body expression:
 
 ```lisp
-(optimize_signature support_prompt
-  (metric "accuracy")
-  (test "go test ./...")
-  (candidate "baseline" "Answer clearly.")
-  (candidate "strict" "Answer only with verified facts.")
-  (print "body"))
+(cli_app
+  (let (support_prompt "prompt")
+    (optimize_signature support_prompt
+      (metric "accuracy")
+      (test "go test ./...")
+      (candidate "baseline" "Answer clearly.")
+      (candidate "strict" "Answer only with verified facts.")
+      (print "body"))))
 ```
 
-The form requires a symbol name, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run howlframe.go -optimization-plan program.howl` prints deterministic `howlframe.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
+The form requires a symbol name that refers to a variable or function already in scope, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run howlframe.go -optimization-plan program.howl` prints deterministic `howlframe.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
 
 ## Orchestrator
 
 `tools/orchestrator/orchestrator.py` is an optional local-model experiment. It currently uses Outlines with an OpenAI-compatible Ollama endpoint to generate JSON bytecode that is executed by the HowlFrame VM through `-run-bc`.
 
-Start Ollama, make sure the configured model exists, then run:
+From a repository checkout, with Ollama installed, start Ollama, make sure the configured model exists, then run:
 
 ```bash
 ollama serve
@@ -423,7 +441,8 @@ By default, HowlFrame writes generated files into the current directory:
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
 - WebAssembly targets write `app.wat`.
 - SSA WebAssembly compilation writes `<input>.ssa.wat` by default.
-- Bytecode compilation writes `<input>.bc.bin` by default.
+- `howlframe build` (bytecode) writes `<name>.hfbc`; the legacy `-compile-bc` flag writes `<input>.bc.bin`
+  (for example `hello.howl.bc.bin`).
 
 Use `-o <dir>` to write generated artifacts elsewhere:
 
@@ -517,7 +536,7 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 
 The write-cost benchmark compares the time and token cost of having an LLM produce working programs in HowlFrame, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
 
-As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Dogfooded real apps (twelve densified apps) total **2331** versus Python **3025**, Go **3295**, and Node **2927**, with app tests and cross-language parity required. Prove locally with:
+As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Dogfooded real apps (twelve densified apps) total **2331** versus Python **3025**, Go **3295**, and Node **2927**, with app tests and cross-language parity required. Prove locally, from a repository checkout, with:
 
 ```bash
 go build -o howlframe howlframe.go
