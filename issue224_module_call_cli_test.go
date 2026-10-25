@@ -179,3 +179,53 @@ func TestIssue224GoInteropDottedCallsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// A local binding named like a module alias shadows it where the binding is
+// in scope, and only there: a let or try_let initializer, a for iterable and a
+// catch handler (for the try_let name) still see the module (#224 review R2).
+func TestIssue224ModuleAliasScoping(t *testing.T) {
+	env := newIssue224Env(t)
+	cases := []struct {
+		name, body string
+		reject     bool
+	}{
+		{"let body", `(let (m (dict)) (print (call m.add_one 1)))`, false},
+		{"let initializer", `(let (m (call m.add_one 41)) (print m))`, true},
+		{"sequential let", `(let (a 1 m (call m.add_one a)) (print m))`, true},
+		{"sequential let shadowed", `(let (m (dict) b (call m.add_one 1)) (print b))`, false},
+		{"try_let body", `(try_let (m (dict)) (catch err (print err)) (print (call m.add_one 41)))`, false},
+		{"try_let value", `(try_let (m (call m.add_one 1)) (catch err (print err)) (print m))`, true},
+		{"catch name", `(try_let (r (dict)) (catch m (print (call m.add_one 41))) (print r))`, false},
+		{"catch handler", `(try_let (m (dict)) (catch err (print (call m.add_one 1))) (print m))`, true},
+		{"for body", `(for m (list 1) (print (call m.add_one 1)))`, false},
+		{"for iterable", `(for m (call m.add_one 41) (print m))`, true},
+		{"lambda parameter", `(let (f (lambda (m) (call m.add_one 1))) (print 1))`, false},
+		{"typed defun parameter", `(do (defun g ((m "dict")) (return (call m.add_one 1))) (print 1))`, false},
+		{"after scope ends", `(do (let (m 10) (print m)) (print (call m.add_one 41)))`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env.write("main.howl", `(cli_app (use "inc.howl" as m) `+tc.body+`)`)
+			out, err := env.run("check", "main.howl")
+			if rejected := err != nil && strings.Contains(out, `(call m/add_one ...)`); rejected != tc.reject {
+				t.Fatalf("reject = %v, want %v\n%s", rejected, tc.reject, out)
+			}
+		})
+	}
+	env.write("dotted.howl", `(cli_app (use "inc.howl" as m.sub) (let (m.sub (dict)) (print (call m.sub.add_one 1))))`)
+	if out, err := env.run("check", "dotted.howl"); err != nil {
+		t.Fatalf("a local named like a dotted alias must shadow it:\n%s", out)
+	}
+}
+
+// A module with a defun that has no name reports an arity error instead of
+// panicking in module resolution.
+func TestIssue224MalformedModuleDefunDoesNotPanic(t *testing.T) {
+	env := newIssue224Env(t)
+	env.write("bad.howl", `(module (defun))`)
+	env.write("main.howl", `(cli_app (use "bad.howl" as m) (print 1))`)
+	out, err := env.run("check", "main.howl")
+	if err == nil || strings.Contains(out, "panic") || !strings.Contains(out, "ARITY_ERROR") {
+		t.Fatalf("err=%v\n%s", err, out)
+	}
+}
