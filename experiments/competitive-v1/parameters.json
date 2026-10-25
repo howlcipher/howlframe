@@ -1,0 +1,115 @@
+{
+  "protocol": "competitive-v1",
+  "status": "draft-not-frozen",
+  "frozen_at_commit": null,
+  "arms": {
+    "howlframe": {
+      "compiler_commit": null,
+      "dependencies": "built-ins only",
+      "offline_docs": "README.md, docs/cli.md, docs/reference/, HowlFrame skill"
+    },
+    "python": {
+      "version": "3.12.x (exact at freeze)",
+      "dependencies": "standard library",
+      "offline_docs": "CPython 3.12 library reference, pydoc"
+    },
+    "go": {
+      "version": "1.25.x (exact at freeze)",
+      "dependencies": "standard library",
+      "offline_docs": "go doc, standard library package docs"
+    },
+    "javascript": {
+      "runtime": "Node.js 22.x LTS (exact at freeze)",
+      "dependencies": "built-in modules",
+      "offline_docs": "Node.js 22 API docs"
+    }
+  },
+  "providers": [
+    {
+      "provider": "anthropic",
+      "agent": "Claude Code CLI",
+      "model": null
+    },
+    {
+      "provider": "openai",
+      "agent": "Codex CLI",
+      "model": null
+    }
+  ],
+  "budget_per_run": {
+    "wall_clock_minutes": 45,
+    "tool_calls": 150,
+    "tokens": "provider session ceiling"
+  },
+  "repetitions": 3,
+  "pilot": {
+    "domains": [
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+    ],
+    "tasks": 4,
+    "runs": 96,
+    "matched_pairs_per_baseline": 24,
+    "max_authority_centred_tasks": 1
+  },
+  "scoring": {
+    "h2_reported": [
+      "W / shared successes / mutual failures / L",
+      "wins/pairs",
+      "(wins + 0.5*shared successes)/pairs",
+      "wins/(wins+losses)"
+    ],
+    "h3_primary": "RMST over 45 minutes, unverified censored at 45",
+    "h4_gate_baselines": [
+      "python",
+      "go",
+      "javascript"
+    ],
+    "h6": "pooled meets target and no provider contradicts with interval excluding target",
+    "interval": "task-clustered 95%",
+    "h2_default": "strict win rate wins/pairs (mutual failures earn no credit)",
+    "h2_owner_options": {
+      "A": "(wins + 0.5*shared non-zero successes)/pairs",
+      "B": "wins/(wins+losses)"
+    },
+    "h4_owner_option_C": "gate on python and javascript only; go reported",
+    "decision_outcomes": "met / not met / inconclusive; task-clustered one-sided 95% intervals, Bonferroni alpha/3"
+  },
+  "infrastructure_reruns": 1,
+  "heldout_seal_sha256": null,
+  "container_digests": null,
+  "owner_spend_cap": null,
+  "fairness_review": {
+    "r1": "FAIRNESS_REVIEW_R1.md (Antigravity/Gemini): NEEDS REVISION, 12 findings, all dispositioned in protocol section 12",
+    "r2": "FAIRNESS_REVIEW_R2.md: NEEDS REVISION (5 new problems); dispositioned in protocol section 12",
+    "r3": "FAIRNESS_REVIEW_R3.md (Antigravity/Gemini, 2026-10-22): READY FOR OWNER DECISION, no blocking problem; 3 non-blocking suggestions applied"
+  },
+  "revision": 2,
+  "completion_command": "task-complete",
+  "full_study": {
+    "independent_tasks_planning_range": [
+      45,
+      80
+    ],
+    "max_authority_centred_share": 0.15,
+    "min_maintenance_share": 0.15,
+    "analysis": "mixed-effects logistic, random intercept per task (or GEE clustered by task)",
+    "pool": ">= 1.5x full-study task count, authored after the pilot"
+  },
+  "draw": {
+    "manifest_sha256": null,
+    "beacon": "NIST Randomness Beacon v2",
+    "beacon_pulse_not_before_utc": null,
+    "seed": "sha256(beacon outputValue || manifest_sha256)"
+  },
+  "documentation_audit": null,
+  "owner_options_selected": {
+    "recorded": "2026-10-22",
+    "h2": "A",
+    "h4": "default (python, go and javascript all gate); option C not taken",
+    "providers": "Claude Code (anthropic) and Codex (openai); exact model IDs fixed at freeze",
+    "spend_cap": "none approved; no dry run or pilot may run"
+  }
+}
