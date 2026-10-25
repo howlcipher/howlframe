@@ -63,6 +63,10 @@ type Analysis struct {
 	// jsTarget is true for web_app programs, whose generated JavaScript
 	// evaluates a parse_json body expression directly.
 	jsTarget bool
+	// goInterop is true when the program declares a Go package dependency
+	// (go_import or import), so a dotted call may name a Go package function
+	// that only the Go toolchain can resolve.
+	goInterop bool
 	// sugarReported dedupes operand-type diagnostics per % or // form.
 	sugarReported map[*ast.Node]bool
 	// valueReported dedupes value-position diagnostics per node.
@@ -85,6 +89,7 @@ func Analyze(root *ast.Node) *Analysis {
 		return a
 	}
 	a.jsTarget = root.Type == "List" && len(root.Children) > 0 && root.Children[0].Value == "web_app"
+	a.goInterop = declaresGoImport(root)
 	a.resolveNamespaces(root, "", false)
 	a.collectStructs(root)
 	a.collectFunctions(root)
@@ -856,9 +861,9 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 			if info, ok := a.Functions[name]; ok {
 				a.checkCall(node, name, node.Children[2:], info, env)
 				return info.Return
-			} else {
-				if !isKeyword(name) && !strings.Contains(name, ".") {
-					a.add(node.Children[1], fmt.Sprintf("undefined reference to function %q", name))
+			} else if !isKeyword(name) {
+				if reason := a.undefinedCallReason(name, env); reason != "" {
+					a.add(node.Children[1], reason)
 				}
 			}
 		}
@@ -869,6 +874,47 @@ func (a *Analysis) inferList(node *ast.Node, env typeEnv) ast.TypeInfo {
 		}
 		return ast.Layout(ast.Unknown)
 	}
+}
+
+// undefinedCallReason explains why a call target that is not a known function
+// is invalid, or returns "" when the name may still resolve outside the
+// checker. A dotted name is accepted only as Go interop: a method on a bound
+// value such as a db_connect handle, or a package function when the program
+// declares go_import. Module exports are called as alias/name; the dotted
+// alias.name spelling never names a function on any target (#224).
+func (a *Analysis) undefinedCallReason(name string, env typeEnv) string {
+	reason := fmt.Sprintf("undefined reference to function %q", name)
+	prefix, member, dotted := strings.Cut(name, ".")
+	if !dotted {
+		return reason
+	}
+	if _, ok := a.Functions[prefix+"_"+member]; ok {
+		return fmt.Sprintf("%s: call a function exported by an imported module with a slash, (call %s/%s ...), not a dot", reason, prefix, member)
+	}
+	if _, ok := a.Functions[prefix+"_private_"+member]; ok {
+		return fmt.Sprintf("%s: module %s does not export %s; add (export ...) around its defun in the module file, then call it as (call %s/%s ...)", reason, prefix, member, prefix, member)
+	}
+	if env[prefix].Kind != "" || a.goInterop {
+		return ""
+	}
+	return fmt.Sprintf("%s: a dotted call is only Go interop (a go_import package or a bound handle); if %s is a module alias from (use \"file.howl\" as %s), call its exported functions with a slash, (call %s/%s ...)", reason, prefix, prefix, prefix, member)
+}
+
+// declaresGoImport reports whether the program names a Go package
+// dependency anywhere in its tree.
+func declaresGoImport(root *ast.Node) bool {
+	for stack := []*ast.Node{root}; len(stack) > 0; {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if node == nil || node.Type != "List" || len(node.Children) == 0 {
+			continue
+		}
+		if head := node.Children[0]; head.Type == "SYMBOL" && (head.Value == "go_import" || head.Value == "import") {
+			return true
+		}
+		stack = append(stack, node.Children...)
+	}
+	return false
 }
 
 func (a *Analysis) inferOptimizationSignature(node *ast.Node, env typeEnv) ast.TypeInfo {

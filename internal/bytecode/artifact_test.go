@@ -2,6 +2,7 @@ package bytecode
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
@@ -189,5 +190,35 @@ func TestArtifactStructurallyInvalid(t *testing.T) {
 				t.Errorf("Expected structurally invalid program to fail, but it passed")
 			}
 		})
+	}
+}
+
+// Compiler output goes through WriteValidatedArtifact, which must refuse what
+// ReadArtifact would refuse and write nothing, so a build cannot emit an
+// artifact the VM rejects (#224).
+func TestWriteValidatedArtifactRefusesWhatTheReaderRefuses(t *testing.T) {
+	invalid := &BCProgram{
+		Version: 1,
+		Main:    []BCInstruction{{OpString: "CALL", Op: OpCall, StringOperand: "m.add_one", IntOperand: 1}},
+	}
+	var buf bytes.Buffer
+	err := WriteValidatedArtifact(&buf, invalid)
+	if !errors.Is(err, ErrInvalidProgram) {
+		t.Fatalf("WriteValidatedArtifact error = %v, want ErrInvalidProgram", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("WriteValidatedArtifact wrote %d bytes for an invalid program", buf.Len())
+	}
+
+	valid := &BCProgram{
+		Version:   1,
+		Main:      []BCInstruction{{OpString: "CALL", Op: OpCall, StringOperand: "m_add_one", IntOperand: 0}},
+		Functions: map[string]*BCFunction{"m_add_one": {Instructions: []BCInstruction{{OpString: "RETURN", Op: OpReturn}}}},
+	}
+	if err := WriteValidatedArtifact(&buf, valid); err != nil {
+		t.Fatalf("WriteValidatedArtifact rejected a valid program: %v", err)
+	}
+	if _, err := ReadArtifact(&buf); err != nil {
+		t.Fatalf("ReadArtifact rejected a validated artifact: %v", err)
 	}
 }

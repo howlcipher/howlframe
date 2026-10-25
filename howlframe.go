@@ -229,7 +229,7 @@ func main() {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
@@ -255,7 +255,7 @@ func main() {
 			ast.ReportError(fmt.Sprintf("HFIR direct lowering failed: %s", diags[0].Message), diags[0].Location.Line, diags[0].Location.Column)
 		}
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
@@ -292,7 +292,7 @@ func main() {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := filepath.Join(outputDir, strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))+".hfbc")
@@ -839,7 +839,7 @@ func buildSource() {
 		}
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to encode bytecode: %v\n", err)
 			os.Exit(1)
 		}
@@ -1071,6 +1071,10 @@ func runArtifact() {
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
 			prog = bytecode.CompileToBytecode(root)
+			if err := bytecode.ValidateProgram(prog); err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot compile bytecode: %v: %v\n", bytecode.ErrInvalidProgram, err)
+				os.Exit(1)
+			}
 			if *receiptPath != "" {
 				var canonical bytes.Buffer
 				if err := bytecode.WriteArtifact(&canonical, prog); err != nil {
