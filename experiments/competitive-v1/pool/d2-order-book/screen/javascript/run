@@ -1,0 +1,300 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+const { URL } = require('node:url');
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.orders = {};
+    this.trades = [];
+    this.nextOrderId = 1;
+    this.nextTradeId = 1;
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.orders = data.orders || {};
+        this.trades = data.trades || [];
+        this.nextOrderId = data.next_order_id || 1;
+        this.nextTradeId = data.next_trade_id || 1;
+      } catch {
+        this.orders = {};
+        this.trades = [];
+        this.nextOrderId = 1;
+        this.nextTradeId = 1;
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({
+          orders: this.orders,
+          trades: this.trades,
+          next_order_id: this.nextOrderId,
+          next_trade_id: this.nextTradeId
+        }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  placeOrder(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_order' }];
+    }
+    const { symbol, side, price, quantity } = body;
+    if (!symbol || typeof symbol !== 'string') {
+      return [400, { error: 'invalid_order' }];
+    }
+    if (side !== 'buy' && side !== 'sell') {
+      return [400, { error: 'invalid_order' }];
+    }
+    const p = Number(price);
+    const q = Number(quantity);
+    if (isNaN(p) || p <= 0 || isNaN(q) || q <= 0) {
+      return [400, { error: 'invalid_order' }];
+    }
+
+    const orderId = `ord-${this.nextOrderId++}`;
+    const now = Date.now() / 1000;
+
+    const incoming = {
+      order_id: orderId,
+      symbol,
+      side,
+      price: p,
+      quantity: q,
+      filled_quantity: 0,
+      remaining_quantity: q,
+      status: 'open',
+      created_at: now
+    };
+
+    const executedTrades = [];
+
+    // Matching
+    let resting = Object.values(this.orders).filter(o => {
+      if (o.symbol !== symbol || (o.status !== 'open' && o.status !== 'partially_filled')) return false;
+      if (side === 'buy') {
+        return o.side === 'sell' && o.price <= incoming.price;
+      } else {
+        return o.side === 'buy' && o.price >= incoming.price;
+      }
+    });
+
+    if (side === 'buy') {
+      resting.sort((a, b) => {
+        if (a.price !== b.price) return a.price - b.price;
+        if (a.created_at !== b.created_at) return a.created_at - b.created_at;
+        return a.order_id.localeCompare(b.order_id);
+      });
+    } else {
+      resting.sort((a, b) => {
+        if (a.price !== b.price) return b.price - a.price;
+        if (a.created_at !== b.created_at) return a.created_at - b.created_at;
+        return a.order_id.localeCompare(b.order_id);
+      });
+    }
+
+    for (const r of resting) {
+      if (incoming.remaining_quantity <= 0) break;
+
+      const matchQty = Math.min(incoming.remaining_quantity, r.remaining_quantity);
+      const execPrice = r.price;
+
+      incoming.remaining_quantity = Number((incoming.remaining_quantity - matchQty).toFixed(6));
+      incoming.filled_quantity = Number((incoming.filled_quantity + matchQty).toFixed(6));
+
+      r.remaining_quantity = Number((r.remaining_quantity - matchQty).toFixed(6));
+      r.filled_quantity = Number((r.filled_quantity + matchQty).toFixed(6));
+      r.status = r.remaining_quantity <= 0 ? 'filled' : 'partially_filled';
+
+      const tradeId = `t-${this.nextTradeId++}`;
+      const trade = {
+        trade_id: tradeId,
+        symbol,
+        buy_order_id: side === 'buy' ? incoming.order_id : r.order_id,
+        sell_order_id: side === 'buy' ? r.order_id : incoming.order_id,
+        price: execPrice,
+        quantity: matchQty,
+        timestamp: now
+      };
+
+      executedTrades.push(trade);
+      this.trades.push(trade);
+    }
+
+    if (incoming.remaining_quantity <= 0) {
+      incoming.status = 'filled';
+    } else if (incoming.filled_quantity > 0) {
+      incoming.status = 'partially_filled';
+    } else {
+      incoming.status = 'open';
+    }
+
+    this.orders[orderId] = incoming;
+    this.save();
+
+    const respObj = Object.assign({}, incoming, { trades: executedTrades });
+    return [201, respObj];
+  }
+
+  cancelOrder(orderId) {
+    if (!this.orders[orderId]) {
+      return [404, { error: 'not_found' }];
+    }
+    const order = this.orders[orderId];
+    if (order.status === 'filled' || order.status === 'cancelled') {
+      return [400, { error: 'order_not_cancellable' }];
+    }
+    order.status = 'cancelled';
+    this.save();
+    return [200, { order_id: orderId, status: 'cancelled' }];
+  }
+
+  getOrder(orderId) {
+    if (!this.orders[orderId]) {
+      return [404, { error: 'not_found' }];
+    }
+    return [200, this.orders[orderId]];
+  }
+
+  getBook(symbol) {
+    const bidsMap = new Map();
+    const asksMap = new Map();
+
+    for (const o of Object.values(this.orders)) {
+      if (o.symbol !== symbol || (o.status !== 'open' && o.status !== 'partially_filled')) continue;
+      const p = o.price;
+      const rem = o.remaining_quantity;
+      if (o.side === 'buy') {
+        bidsMap.set(p, (bidsMap.get(p) || 0) + rem);
+      } else {
+        asksMap.set(p, (asksMap.get(p) || 0) + rem);
+      }
+    }
+
+    const bids = Array.from(bidsMap.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([price, quantity]) => ({ price, quantity: Number(quantity.toFixed(6)) }));
+
+    const asks = Array.from(asksMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([price, quantity]) => ({ price, quantity: Number(quantity.toFixed(6)) }));
+
+    return [200, { symbol, bids, asks }];
+  }
+
+  getTrades(symbol) {
+    const symTrades = this.trades.filter(t => t.symbol === symbol);
+    return [200, { symbol, trades: symTrades }];
+  }
+
+  handle(method, fullUrl, body) {
+    const parsed = new URL(fullUrl, 'http://127.0.0.1');
+    const pathStr = parsed.pathname;
+
+    if (method === 'POST' && pathStr === '/orders') {
+      return this.placeOrder(body || {});
+    } else if (method === 'DELETE' && pathStr.startsWith('/orders/')) {
+      const orderId = pathStr.slice('/orders/'.length);
+      return this.cancelOrder(orderId);
+    } else if (method === 'GET' && pathStr.startsWith('/orders/')) {
+      const orderId = pathStr.slice('/orders/'.length);
+      return this.getOrder(orderId);
+    } else if (method === 'GET' && pathStr.startsWith('/book/')) {
+      const symbol = pathStr.slice('/book/'.length);
+      return this.getBook(symbol);
+    } else if (method === 'GET' && pathStr.startsWith('/trades/')) {
+      const symbol = pathStr.slice('/trades/'.length);
+      return this.getTrades(symbol);
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

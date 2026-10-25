@@ -1,0 +1,23 @@
+{
+  "id": "d1-package-sbom",
+  "domain": "D1",
+  "authority_centred": true,
+  "title": "SBOM Capability and License Authority Policy Verifier",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Enforces capability privilege boundaries and license authorization policies against software dependencies in an SBOM.",
+  "stdlib_plan": {
+    "python": "sys, os, json, argparse",
+    "go": "os, encoding/json, flag, fmt, sort",
+    "javascript": "node:fs, node:path, node:process"
+  },
+  "workload": {
+    "args": ["verify-sbom", "--sbom", "workload/sbom.json", "--policy", "workload/policy.json", "--report", "workload/report.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

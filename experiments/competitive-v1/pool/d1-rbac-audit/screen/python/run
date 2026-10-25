@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+
+SEVERITY_ORDER = {
+    "CRITICAL": 0,
+    "HIGH": 1,
+    "MEDIUM": 2
+}
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "audit-iam":
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand")
+    parser.add_argument("--iam", required=True)
+    parser.add_argument("--boundaries", required=True)
+    parser.add_argument("--out", required=True)
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
+
+    if not os.path.isfile(args.iam) or not os.path.isfile(args.boundaries):
+        sys.exit(1)
+
+    try:
+        with open(args.boundaries, "r", encoding="utf-8") as f:
+            boundaries = json.load(f)
+        with open(args.iam, "r", encoding="utf-8") as f:
+            iam = json.load(f)
+    except Exception:
+        sys.exit(1)
+
+    if not isinstance(boundaries, dict) or not isinstance(iam, dict):
+        sys.exit(1)
+
+    max_duration = boundaries.get("max_session_duration_hours", 24)
+    forbidden_actions = boundaries.get("forbidden_actions", [])
+    privilege_escalation_pairs = boundaries.get("privilege_escalation_pairs", [])
+
+    roles = iam.get("roles", [])
+    if not isinstance(roles, list):
+        sys.exit(1)
+
+    findings = []
+    user_roles_map = {}
+
+    for role in roles:
+        if not isinstance(role, dict):
+            continue
+        rname = role.get("role_name", "")
+        duration = role.get("session_duration_hours", 0)
+        perms = set(role.get("permissions", []))
+        users = role.get("assigned_users", [])
+
+        # User mapping
+        for u in users:
+            if u not in user_roles_map:
+                user_roles_map[u] = set()
+            user_roles_map[u].add(rname)
+
+        # 1. Forbidden actions
+        for perm in perms:
+            for pattern in forbidden_actions:
+                matched = False
+                if pattern.endswith("*"):
+                    prefix = pattern[:-1]
+                    if perm.startswith(prefix):
+                        matched = True
+                elif perm == pattern:
+                    matched = True
+
+                if matched:
+                    findings.append({
+                        "role_name": rname,
+                        "finding_type": "forbidden_action",
+                        "severity": "CRITICAL",
+                        "detail": f"Role grants forbidden action '{perm}'"
+                    })
+
+        # 2. Privilege escalation pairs
+        for pair in privilege_escalation_pairs:
+            if len(pair) == 2 and pair[0] in perms and pair[1] in perms:
+                findings.append({
+                    "role_name": rname,
+                    "finding_type": "privilege_escalation",
+                    "severity": "HIGH",
+                    "detail": f"Role contains toxic escalation pair: {pair[0]} + {pair[1]}"
+                })
+
+        # 3. Session duration
+        if duration > max_duration:
+            findings.append({
+                "role_name": rname,
+                "finding_type": "excessive_session",
+                "severity": "MEDIUM",
+                "detail": f"Session duration {duration}h exceeds limit {max_duration}h"
+            })
+
+    # Sort findings: role_name ASC, severity rank, finding_type ASC, detail ASC
+    findings.sort(key=lambda f: (
+        f["role_name"],
+        SEVERITY_ORDER.get(f["severity"], 99),
+        f["finding_type"],
+        f["detail"]
+    ))
+
+    sorted_user_roles = {}
+    for u in sorted(user_roles_map.keys()):
+        sorted_user_roles[u] = sorted(list(user_roles_map[u]))
+
+    report = {
+        "clean": len(findings) == 0,
+        "roles_audited": len(roles),
+        "findings_count": len(findings),
+        "findings": findings,
+        "user_effective_roles": sorted_user_roles
+    }
+
+    try:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except Exception:
+        sys.exit(1)
+
+    if len(findings) > 0:
+        sys.exit(2)
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

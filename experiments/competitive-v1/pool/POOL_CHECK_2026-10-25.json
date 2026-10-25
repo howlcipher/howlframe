@@ -1,0 +1,732 @@
+{
+  "pool": "experiments/competitive-v1/pool",
+  "candidates": [
+    {
+      "id": "d1-gradebook-stats",
+      "domain": "D1",
+      "authority_centred": false,
+      "title": "Academic Gradebook and Curved Distribution Analyzer",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "f6013166cb5bd10781733c85c09071ef95aa1c79e60b691cabe61a9d164dc95f",
+      "problems": []
+    },
+    {
+      "id": "d1-ledger-reconcile",
+      "domain": "D1",
+      "authority_centred": false,
+      "title": "Dual-Ledger Financial Reconciliation",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "ff3d9a0d87e69bd70f808fdbd3665325ba29f32cb1beeffb257130eb9ddd8d1f",
+      "problems": []
+    },
+    {
+      "id": "d1-logistics-manifest",
+      "domain": "D1",
+      "authority_centred": false,
+      "title": "Freight Container Packing Optimizer",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "192071885cd730406206e4971aa48374a2b4f91732066eb826c66a23f0ddb316",
+      "problems": []
+    },
+    {
+      "id": "d1-metric-timeseries",
+      "domain": "D1",
+      "authority_centred": false,
+      "title": "Infrastructure Metrics Timeseries Downsampler",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "fd43c9b61ffec8de8267b05f928dedb139f5efca57b4b8608c599477236ffb31",
+      "problems": []
+    },
+    {
+      "id": "d1-package-sbom",
+      "domain": "D1",
+      "authority_centred": true,
+      "title": "SBOM Capability and License Authority Policy Verifier",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "8c6e3b79bd8d8a8d757ef0c91c7f7b315560cac4cb6bfc9406cec528536fff08",
+      "problems": []
+    },
+    {
+      "id": "d1-rbac-audit",
+      "domain": "D1",
+      "authority_centred": true,
+      "title": "Cloud IAM Access Control and Privilege Escalation Auditor",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "be5c90b305606896d8fb360d7e86d89af87d722986f89f5256a0a851bc956184",
+      "problems": []
+    },
+    {
+      "id": "d1-sensor-telemetry",
+      "domain": "D1",
+      "authority_centred": false,
+      "title": "Greenhouse Sensor Telemetry Auditor",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "2834a7acfa114445b1e526fd1b194d799477a3faeebdb362861aece37f6bdaad",
+      "problems": []
+    },
+    {
+      "id": "d2-cache-invalidator",
+      "domain": "D2",
+      "authority_centred": false,
+      "title": "Distributed Cache Tag Index and Purge Coordinator",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "f8a0d952e902373cb8af10d5939dd1bf9a1c73b816cc242f479d34338ef56464",
+      "problems": []
+    },
+    {
+      "id": "d2-event-stream",
+      "domain": "D2",
+      "authority_centred": false,
+      "title": "Append-Only Event Stream Topic Broker",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "0cf810c22432f5930e7f41857ceb9e425c81c8535caa8461284bbf7c210077f5",
+      "problems": []
+    },
+    {
+      "id": "d2-feature-flag",
+      "domain": "D2",
+      "authority_centred": true,
+      "title": "Feature Entitlement and Authority Governance Engine",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "ec8c524f8004c37a14d76ca76520efa08581730fb6a6974113b50d133c87cc81",
+      "problems": []
+    },
+    {
+      "id": "d2-job-queue",
+      "domain": "D2",
+      "authority_centred": false,
+      "title": "Priority Job Queue Broker with Lease Acknowledgment",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "b821df8f8619bf8f08c4037f9863c11503404657fc0e489034646454998e6aff",
+      "problems": []
+    },
+    {
+      "id": "d2-kv-store",
+      "domain": "D2",
+      "authority_centred": false,
+      "title": "Versioned Key-Value Store with TTL",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "13/13",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "1214249b557d929a05c6221e1a36cf7c7131a9f3b3e0731862a9afdb5bf9cb79",
+      "problems": []
+    },
+    {
+      "id": "d2-order-book",
+      "domain": "D2",
+      "authority_centred": false,
+      "title": "Commodity Matching Engine Order Book",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "14/14",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "14/14",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "63a8c566855c6d01811520b7da86f0d44eb43ed00cd4359321e50b258cadddb6",
+      "problems": []
+    },
+    {
+      "id": "d2-rate-limiter",
+      "domain": "D2",
+      "authority_centred": true,
+      "title": "API Gateway Rate Limiter and Token Quota Authority",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "f9b803ba08cc4d90fefca7296b74d761826f301e46df3e5de69c19bf07eedae7",
+      "problems": []
+    },
+    {
+      "id": "d3-cluster-health-aggregator",
+      "domain": "D3",
+      "authority_centred": false,
+      "title": "Multi-Node Service Health Aggregator and Standby Activator",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [
+        {
+          "file": "experiments/falsifiable-v0/README.md",
+          "shared_5gram_fraction": 0.002
+        }
+      ],
+      "tree_sha256": "450c52691b2c808447832f933f6ea8a38b2e33f0cb3836dbb2c2b74a00f345bf",
+      "problems": []
+    },
+    {
+      "id": "d3-distributed-lock-orchestrator",
+      "domain": "D3",
+      "authority_centred": false,
+      "title": "Distributed Lease Lock Coordinator with Heartbeat Renewal",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [
+        {
+          "file": "experiments/falsifiable-v0/README.md",
+          "shared_5gram_fraction": 0.002
+        }
+      ],
+      "tree_sha256": "6ade68fd0b7e21a44c995ed4fd2ef05a3f51cefeec82b8ba6830f0f9471ec36f",
+      "problems": []
+    },
+    {
+      "id": "d3-parallel-test-matrix",
+      "domain": "D3",
+      "authority_centred": false,
+      "title": "Test Matrix Execution Harness with Worker Pool and Failure Limits",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "f911f341be076db64ad1f08f57b80e7f617fe330cc056970362131ccdbdd9ef6",
+      "problems": []
+    },
+    {
+      "id": "d3-pipeline-runner",
+      "domain": "D3",
+      "authority_centred": false,
+      "title": "DAG Pipeline Subprocess Runner with Deadlines",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": [
+            {
+              "file": "main.py",
+              "why": "names another interpreter",
+              "match": "node"
+            }
+          ]
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "097e5af2ddf75c3876c3799660ae35450c32c74d6031cf157801105833769570",
+      "problems": []
+    },
+    {
+      "id": "d3-sandbox-exec-policy",
+      "domain": "D3",
+      "authority_centred": true,
+      "title": "Policy-Enforced Subprocess Sandbox Runner",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "6bd07be24e87785fcebb449c7f25633f114a6c1c8b3de6699c4bd2ac7a3ec1c2",
+      "problems": []
+    },
+    {
+      "id": "d3-token-vault-agent",
+      "domain": "D3",
+      "authority_centred": true,
+      "title": "Scoped Capability Token Vault and Mediation Agent",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "10/10",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "10/10",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [
+        {
+          "file": "experiments/falsifiable-v0/README.md",
+          "shared_5gram_fraction": 0.0016
+        }
+      ],
+      "tree_sha256": "4e8c05679fd69d656358d798a7f78a7eb9bd8d0d43594e0d4d4c1c57fb58803b",
+      "problems": []
+    },
+    {
+      "id": "d3-webhook-dispatcher",
+      "domain": "D3",
+      "authority_centred": false,
+      "title": "Resilient Webhook Event Dispatcher with HMAC Signature",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [
+        {
+          "file": "experiments/falsifiable-v0/README.md",
+          "shared_5gram_fraction": 0.0019
+        }
+      ],
+      "tree_sha256": "f2de75257db14e34dfb5c830822c0768eb9ba1c2ed1f3655d2b6a67f2ad98312",
+      "problems": []
+    },
+    {
+      "id": "d4-api-key-permission-manager",
+      "domain": "D4",
+      "authority_centred": true,
+      "title": "API Key Lifecycle, Scope Enforcement, and Rotation Validator",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "f0d23a0bf4e73c4efe07b82b32515f34f54bada03e28d079b39fa5a918f44783",
+      "problems": []
+    },
+    {
+      "id": "d4-inventory-allocator",
+      "domain": "D4",
+      "authority_centred": false,
+      "title": "Warehouse Inventory Reservation and Lot Expiry Allocator",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "0b5f54fe240fce6abd184ceaeb941c672ed07e008aeef3f68402c200d0402783",
+      "problems": []
+    },
+    {
+      "id": "d4-invoice-tax-calculator",
+      "domain": "D4",
+      "authority_centred": false,
+      "title": "Multi-Category Tax and Currency Rounding Balancer",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "1a488e9655d3409e27e3b404cfc34d305f376eafa2f93dba39252c521efb352b",
+      "problems": []
+    },
+    {
+      "id": "d4-log-retention-purger",
+      "domain": "D4",
+      "authority_centred": false,
+      "title": "Tagged Log Retention and Disk Quota Purger",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "12/12",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "bb274b7b46184d0ab60d46b70a7ebfc79582841f9e6dcab2ccc810eb9e87c82b",
+      "problems": []
+    },
+    {
+      "id": "d4-rbac-audit-filter",
+      "domain": "D4",
+      "authority_centred": true,
+      "title": "Tenant-Isolated ABAC Policy Evaluator with Delegation",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "17f8c66f8807cf42c95d83e1a619921fbf76fcc20b45a8422f3d55e1314181f0",
+      "problems": []
+    },
+    {
+      "id": "d4-route-traffic-shaper",
+      "domain": "D4",
+      "authority_centred": false,
+      "title": "Dynamic Traffic Shaper with Canary Weighting and Fallback Redirection",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "91b2e2bab9526ada3a5e08fe0532597afb9e23f05248264bdb259dd383d927bc",
+      "problems": []
+    },
+    {
+      "id": "d4-timeseries-anomaly-detector",
+      "domain": "D4",
+      "authority_centred": false,
+      "title": "Sliding Window Time-Series Anomaly Detector with Alert Throttling",
+      "acceptance_tests": 1,
+      "screens": {
+        "python": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        },
+        "javascript": {
+          "outcome": "completed",
+          "acceptance": "11/11",
+          "canary_triggered": false,
+          "delegation_flags": []
+        }
+      },
+      "closest_corpus_files": [],
+      "tree_sha256": "be8c95d815f0ed6e746a3718f797f109cca0926b97b8e1953cb708edb7d01ef3",
+      "problems": []
+    }
+  ],
+  "manifest_sha256": "990e2601c6835f6e00c43ce9a138c903a48095d2ede33fe7e4e07a1582b85ee5",
+  "per_domain": {
+    "D1": 7,
+    "D2": 7,
+    "D3": 7,
+    "D4": 7
+  },
+  "authority_centred": [
+    "d1-package-sbom",
+    "d1-rbac-audit",
+    "d2-feature-flag",
+    "d2-rate-limiter",
+    "d3-sandbox-exec-policy",
+    "d3-token-vault-agent",
+    "d4-api-key-permission-manager",
+    "d4-rbac-audit-filter"
+  ],
+  "corpus_dirs": [
+    "benchmarks",
+    "experiments/falsifiable-v0",
+    "experiments/live-v1-blind",
+    "experiments/token-efficiency-v0",
+    "experiments/token-efficiency-heldout-v0",
+    "experiments/token-efficiency-heldout-v1",
+    "experiments/token-efficiency-heldout-v2",
+    "experiments/token-efficiency-heldout-v3"
+  ],
+  "problems": [],
+  "ok": true
+}

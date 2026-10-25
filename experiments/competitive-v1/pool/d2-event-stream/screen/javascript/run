@@ -1,0 +1,283 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+const { URL } = require('node:url');
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.topics = {};
+    this.subscriptions = {};
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.topics = data.topics || {};
+        this.subscriptions = data.subscriptions || {};
+      } catch {
+        this.topics = {};
+        this.subscriptions = {};
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({
+          topics: this.topics,
+          subscriptions: this.subscriptions
+        }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  createTopic(body) {
+    if (!body || typeof body !== 'object' || !body.topic) {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const topic = String(body.topic);
+    if (this.topics[topic]) {
+      return [409, { error: 'topic_exists' }];
+    }
+
+    const maxEvents = Number(body.max_events) || 500;
+    this.topics[topic] = {
+      max_events: maxEvents,
+      next_offset: 0,
+      events: []
+    };
+    this.save();
+    return [201, {
+      topic,
+      max_events: maxEvents,
+      head_offset: 0
+    }];
+  }
+
+  publishEvent(topic, body) {
+    if (!this.topics[topic]) {
+      return [404, { error: 'not_found' }];
+    }
+    if (!body || typeof body !== 'object' || !body.event_type) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const tData = this.topics[topic];
+    const offset = tData.next_offset++;
+    const now = Date.now() / 1000;
+
+    const event = {
+      offset,
+      event_type: String(body.event_type),
+      payload: body.payload || {},
+      timestamp: now
+    };
+
+    tData.events.push(event);
+    const maxEvents = tData.max_events || 500;
+    while (tData.events.length > maxEvents) {
+      tData.events.shift();
+    }
+
+    this.save();
+    return [201, { offset, timestamp: now }];
+  }
+
+  consume(group, body) {
+    if (!body || typeof body !== 'object' || !body.topic) {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const topic = body.topic;
+    if (!this.topics[topic]) {
+      return [404, { error: 'not_found' }];
+    }
+
+    const limit = Number(body.limit) || 10;
+    const autoCommit = body.auto_commit !== undefined ? Boolean(body.auto_commit) : true;
+
+    const tData = this.topics[topic];
+    const events = tData.events;
+
+    if (!this.subscriptions[group]) {
+      this.subscriptions[group] = {};
+    }
+
+    let cursor;
+    if (this.subscriptions[group][topic] === undefined) {
+      cursor = events.length > 0 ? events[0].offset : 0;
+      this.subscriptions[group][topic] = cursor;
+    } else {
+      cursor = this.subscriptions[group][topic];
+    }
+
+    const returned = [];
+    for (const e of events) {
+      if (e.offset >= cursor) {
+        returned.push(e);
+        if (returned.length >= limit) break;
+      }
+    }
+
+    let nextCursor = cursor;
+    if (returned.length > 0) {
+      nextCursor = returned[returned.length - 1].offset + 1;
+      if (autoCommit) {
+        this.subscriptions[group][topic] = nextCursor;
+        this.save();
+      }
+    }
+
+    return [200, {
+      topic,
+      group,
+      events: returned,
+      next_offset: nextCursor
+    }];
+  }
+
+  seek(group, body) {
+    if (!body || typeof body !== 'object' || !body.topic || body.offset === undefined) {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const topic = body.topic;
+    if (!this.topics[topic]) {
+      return [404, { error: 'not_found' }];
+    }
+
+    const offset = Number(body.offset);
+    if (!this.subscriptions[group]) {
+      this.subscriptions[group] = {};
+    }
+    this.subscriptions[group][topic] = offset;
+    this.save();
+
+    return [200, {
+      group,
+      topic,
+      committed_offset: offset
+    }];
+  }
+
+  getTopic(topic) {
+    if (!this.topics[topic]) {
+      return [404, { error: 'not_found' }];
+    }
+    const tData = this.topics[topic];
+    const events = tData.events;
+    const earliest = events.length > 0 ? events[0].offset : null;
+    return [200, {
+      topic,
+      max_events: tData.max_events || 500,
+      event_count: events.length,
+      earliest_offset: earliest,
+      next_offset: tData.next_offset
+    }];
+  }
+
+  handle(method, fullUrl, body) {
+    const parsed = new URL(fullUrl, 'http://127.0.0.1');
+    const pathStr = parsed.pathname;
+
+    if (method === 'POST' && pathStr === '/topics') {
+      return this.createTopic(body || {});
+    } else if (method === 'POST' && pathStr.startsWith('/topics/') && pathStr.endsWith('/publish')) {
+      const topic = pathStr.slice('/topics/'.length, -'/publish'.length);
+      return this.publishEvent(topic, body || {});
+    } else if (method === 'POST' && pathStr.startsWith('/subscriptions/') && pathStr.endsWith('/consume')) {
+      const group = pathStr.slice('/subscriptions/'.length, -'/consume'.length);
+      return this.consume(group, body || {});
+    } else if (method === 'POST' && pathStr.startsWith('/subscriptions/') && pathStr.endsWith('/seek')) {
+      const group = pathStr.slice('/subscriptions/'.length, -'/seek'.length);
+      return this.seek(group, body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/topics/')) {
+      const topic = pathStr.slice('/topics/'.length);
+      return this.getTopic(topic);
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

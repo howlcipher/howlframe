@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'reconcile') {
+    process.exit(1);
+  }
+  const parsed = {
+    internal: null,
+    external: null,
+    out: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--internal') {
+      parsed.internal = args[++i];
+    } else if (arg === '--external') {
+      parsed.external = args[++i];
+    } else if (arg === '--out') {
+      parsed.out = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.internal || !parsed.external || !parsed.out) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function parseCSVLine(line) {
+  return line.split(',').map(s => s.trim());
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.internal) || !fs.existsSync(args.external)) {
+    process.exit(2);
+  }
+
+  let internalRaw;
+  try {
+    internalRaw = JSON.parse(fs.readFileSync(args.internal, 'utf8'));
+  } catch {
+    process.exit(1);
+  }
+
+  if (!Array.isArray(internalRaw)) {
+    process.exit(1);
+  }
+
+  const internalMap = new Map();
+  const internalDups = new Set();
+  for (const item of internalRaw) {
+    const tid = item.txn_id;
+    if (!tid) continue;
+    if (internalMap.has(tid)) {
+      internalDups.add(tid);
+    } else {
+      internalMap.set(tid, item);
+    }
+  }
+
+  let externalContent;
+  try {
+    externalContent = fs.readFileSync(args.external, 'utf8');
+  } catch {
+    process.exit(2);
+  }
+
+  const lines = externalContent.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) process.exit(1);
+
+  const header = parseCSVLine(lines[0]);
+  const expectedHeader = ['ref_id', 'account_id', 'amount', 'currency', 'posted_at'];
+  if (header.length < 5 || !expectedHeader.every((h, i) => header[i] === h)) {
+    process.exit(1);
+  }
+
+  const externalMap = new Map();
+  const externalDups = new Set();
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    if (row.length < 5) continue;
+    const [refId, accId, amountStr, curr, posted] = row;
+    const amount = Number(amountStr);
+    if (isNaN(amount)) continue;
+
+    if (externalMap.has(refId)) {
+      externalDups.add(refId);
+    } else {
+      externalMap.set(refId, {
+        ref_id: refId,
+        account_id: accId,
+        amount,
+        currency: curr,
+        posted_at: posted
+      });
+    }
+  }
+
+  const duplicates = [];
+  for (const d of externalDups) {
+    duplicates.push({ source: 'external', id: d });
+  }
+  for (const d of internalDups) {
+    duplicates.push({ source: 'internal', id: d });
+  }
+  duplicates.sort((a, b) => {
+    if (a.source !== b.source) return a.source.localeCompare(b.source);
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const d of internalDups) internalMap.delete(d);
+  for (const d of externalDups) externalMap.delete(d);
+
+  const allIds = new Set([...internalMap.keys(), ...externalMap.keys()]);
+  const sortedIds = Array.from(allIds).sort();
+
+  let matchedCount = 0;
+  let netSettledAmount = 0;
+  const amountMismatch = [];
+  const metadataMismatch = [];
+  const unmatchedInternal = [];
+  const unmatchedExternal = [];
+
+  for (const cid of sortedIds) {
+    const inItem = internalMap.get(cid);
+    const exItem = externalMap.get(cid);
+
+    if (inItem && exItem) {
+      const inAcc = inItem.account_id;
+      const exAcc = exItem.account_id;
+      const inCurr = inItem.currency;
+      const exCurr = exItem.currency;
+      const inAmt = inItem.amount;
+      const exAmt = exItem.amount;
+
+      if (inAcc !== exAcc || inCurr !== exCurr) {
+        metadataMismatch.push({
+          id: cid,
+          internal_account: inAcc,
+          external_account: exAcc,
+          internal_currency: inCurr,
+          external_currency: exCurr
+        });
+      } else if (Math.round(inAmt * 100) !== Math.round(exAmt * 100)) {
+        amountMismatch.push({
+          id: cid,
+          account_id: inAcc,
+          currency: inCurr,
+          internal_amount: inAmt,
+          external_amount: exAmt,
+          difference: Number((inAmt - exAmt).toFixed(2))
+        });
+      } else {
+        matchedCount++;
+        netSettledAmount += inAmt;
+      }
+    } else if (inItem) {
+      unmatchedInternal.push({
+        id: cid,
+        account_id: inItem.account_id,
+        amount: inItem.amount,
+        currency: inItem.currency
+      });
+    } else if (exItem) {
+      unmatchedExternal.push({
+        id: cid,
+        account_id: exItem.account_id,
+        amount: exItem.amount,
+        currency: exItem.currency
+      });
+    }
+  }
+
+  const report = {
+    matched_count: matchedCount,
+    net_settled_amount: Number(netSettledAmount.toFixed(2)),
+    discrepancies: {
+      amount_mismatch: amountMismatch,
+      metadata_mismatch: metadataMismatch,
+      unmatched_internal: unmatchedInternal,
+      unmatched_external: unmatchedExternal,
+      duplicates
+    }
+  };
+
+  try {
+    fs.writeFileSync(args.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+main();

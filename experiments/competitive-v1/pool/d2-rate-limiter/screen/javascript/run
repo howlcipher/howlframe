@@ -1,0 +1,229 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+const TIERS = {
+  starter: { capacity: 5.0, refill: 1.0 },
+  standard: { capacity: 20.0, refill: 5.0 },
+  enterprise: { capacity: 100.0, refill: 20.0 }
+};
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.keys = {};
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.keys = data.keys || {};
+      } catch {
+        this.keys = {};
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({ keys: this.keys }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  refill(kdata) {
+    const now = Date.now() / 1000;
+    const tierInfo = TIERS[kdata.tier] || { capacity: 5.0, refill: 1.0 };
+    const elapsed = now - (kdata.last_refill || now);
+    const refilled = Math.min(tierInfo.capacity, kdata.tokens + (elapsed * tierInfo.refill));
+    kdata.tokens = refilled;
+    kdata.last_refill = now;
+  }
+
+  registerKey(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const { key, tier, scopes } = body;
+    if (!key || typeof key !== 'string' || !Array.isArray(scopes)) {
+      return [400, { error: 'invalid_payload' }];
+    }
+    if (!TIERS[tier]) {
+      return [400, { error: 'invalid_tier' }];
+    }
+
+    const cap = TIERS[tier].capacity;
+    this.keys[key] = {
+      tier,
+      scopes,
+      tokens: cap,
+      last_refill: Date.now() / 1000
+    };
+    this.save();
+    return [201, { key, tier, scopes, tokens: cap }];
+  }
+
+  check(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const { key, scope } = body;
+    const cost = typeof body.cost === 'number' ? body.cost : 1.0;
+
+    if (!this.keys[key]) {
+      return [401, { allowed: false, reason: 'invalid_key' }];
+    }
+
+    const kdata = this.keys[key];
+    this.refill(kdata);
+
+    if (!Array.isArray(kdata.scopes) || !kdata.scopes.includes(scope)) {
+      return [403, { allowed: false, reason: 'insufficient_scope' }];
+    }
+
+    if (kdata.tokens < cost) {
+      return [429, {
+        allowed: false,
+        reason: 'rate_limited',
+        remaining_tokens: Number(kdata.tokens.toFixed(2))
+      }];
+    }
+
+    kdata.tokens -= cost;
+    this.save();
+    return [200, {
+      allowed: true,
+      remaining_tokens: Number(kdata.tokens.toFixed(2))
+    }];
+  }
+
+  getKey(key) {
+    if (!this.keys[key]) {
+      return [404, { error: 'key_not_found' }];
+    }
+    const kdata = this.keys[key];
+    this.refill(kdata);
+    return [200, {
+      key,
+      tier: kdata.tier,
+      scopes: kdata.scopes,
+      tokens: Number(kdata.tokens.toFixed(2))
+    }];
+  }
+
+  reset(body) {
+    const targetKey = body && typeof body === 'object' ? body.key : null;
+    const now = Date.now() / 1000;
+    if (targetKey) {
+      if (!this.keys[targetKey]) {
+        return [404, { error: 'key_not_found' }];
+      }
+      const kdata = this.keys[targetKey];
+      const cap = TIERS[kdata.tier]?.capacity || 5.0;
+      kdata.tokens = cap;
+      kdata.last_refill = now;
+    } else {
+      for (const k of Object.keys(this.keys)) {
+        const kdata = this.keys[k];
+        const cap = TIERS[kdata.tier]?.capacity || 5.0;
+        kdata.tokens = cap;
+        kdata.last_refill = now;
+      }
+    }
+    this.save();
+    return [200, { status: 'reset' }];
+  }
+
+  handle(method, pathStr, body) {
+    if (method === 'POST' && pathStr === '/keys') {
+      return this.registerKey(body || {});
+    } else if (method === 'POST' && pathStr === '/check') {
+      return this.check(body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/keys/')) {
+      const key = pathStr.slice('/keys/'.length);
+      return this.getKey(key);
+    } else if (method === 'POST' && pathStr === '/reset') {
+      return this.reset(body || {});
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      const respBuffer = Buffer.from(JSON.stringify(resp));
+      res.writeHead(status, {
+        'Content-Type': 'application/json',
+        'Content-Length': respBuffer.length
+      });
+      res.end(respBuffer);
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

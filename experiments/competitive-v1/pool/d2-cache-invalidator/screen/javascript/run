@@ -1,0 +1,256 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+const { URL } = require('node:url');
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.entries = {};
+    this.totalPurged = 0;
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.entries = data.entries || {};
+        this.totalPurged = data.total_purged || 0;
+      } catch {
+        this.entries = {};
+        this.totalPurged = 0;
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({
+          entries: this.entries,
+          total_purged: this.totalPurged
+        }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  isActive(entry) {
+    if (!entry) return false;
+    if (entry.expires_at !== null && entry.expires_at !== undefined) {
+      if ((Date.now() / 1000) >= entry.expires_at) return false;
+    }
+    return true;
+  }
+
+  postCache(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const { key, value, tags, ttl_seconds } = body;
+    if (!key || typeof key !== 'string' || value === undefined || !Array.isArray(tags)) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const now = Date.now() / 1000;
+    const expiresAt = (typeof ttl_seconds === 'number' && ttl_seconds > 0) ? (now + ttl_seconds) : null;
+    const uniqueTags = Array.from(new Set(tags.map(String))).sort();
+
+    const entry = {
+      key,
+      value,
+      tags: uniqueTags,
+      expires_at: expiresAt
+    };
+
+    this.entries[key] = entry;
+    this.save();
+    return [201, entry];
+  }
+
+  getCache(key) {
+    const entry = this.entries[key];
+    if (!this.isActive(entry)) {
+      return [404, { error: 'not_found' }];
+    }
+    return [200, entry];
+  }
+
+  purgeTags(body) {
+    if (!body || typeof body !== 'object' || !Array.isArray(body.tags) || body.tags.length === 0) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const purgeSet = new Set(body.tags.map(String));
+    const toDelete = [];
+
+    for (const [k, e] of Object.entries(this.entries)) {
+      if (this.isActive(e)) {
+        const eTags = new Set(Array.isArray(e.tags) ? e.tags : []);
+        for (const t of purgeSet) {
+          if (eTags.has(t)) {
+            toDelete.push(k);
+            break;
+          }
+        }
+      }
+    }
+
+    for (const k of toDelete) {
+      delete this.entries[k];
+    }
+
+    this.totalPurged += toDelete.length;
+    this.save();
+
+    toDelete.sort();
+    return [200, {
+      purged_count: toDelete.length,
+      purged_keys: toDelete
+    }];
+  }
+
+  deleteCache(key) {
+    const entry = this.entries[key];
+    if (!this.isActive(entry)) {
+      return [404, { error: 'not_found' }];
+    }
+    delete this.entries[key];
+    this.totalPurged += 1;
+    this.save();
+    return [204, null];
+  }
+
+  getTags(tag) {
+    const matching = [];
+    for (const [k, e] of Object.entries(this.entries)) {
+      if (this.isActive(e) && Array.isArray(e.tags) && e.tags.includes(tag)) {
+        matching.push(k);
+      }
+    }
+    matching.sort();
+    return [200, { tag, keys: matching }];
+  }
+
+  getStats() {
+    let activeEntries = 0;
+    const allTags = new Set();
+    for (const e of Object.values(this.entries)) {
+      if (this.isActive(e)) {
+        activeEntries++;
+        if (Array.isArray(e.tags)) {
+          for (const t of e.tags) allTags.add(t);
+        }
+      }
+    }
+    return [200, {
+      active_entries: activeEntries,
+      total_purged: this.totalPurged,
+      active_tags: allTags.size
+    }];
+  }
+
+  handle(method, fullUrl, body) {
+    const parsed = new URL(fullUrl, 'http://127.0.0.1');
+    const pathStr = parsed.pathname;
+
+    if (method === 'POST' && pathStr === '/cache') {
+      return this.postCache(body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/cache/')) {
+      const key = pathStr.slice('/cache/'.length);
+      return this.getCache(key);
+    } else if (method === 'DELETE' && pathStr.startsWith('/cache/')) {
+      const key = pathStr.slice('/cache/'.length);
+      return this.deleteCache(key);
+    } else if (method === 'POST' && pathStr === '/purge') {
+      return this.purgeTags(body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/tags/')) {
+      const tag = pathStr.slice('/tags/'.length);
+      return this.getTags(tag);
+    } else if (method === 'GET' && pathStr === '/stats') {
+      return this.getStats();
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

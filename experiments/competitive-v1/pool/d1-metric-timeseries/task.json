@@ -1,0 +1,23 @@
+{
+  "id": "d1-metric-timeseries",
+  "domain": "D1",
+  "authority_centred": false,
+  "title": "Infrastructure Metrics Timeseries Downsampler",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Downsamples high-frequency timeseries metrics into fixed time-bucket rollups with min, max, avg, and p95.",
+  "stdlib_plan": {
+    "python": "sys, os, json, argparse, math",
+    "go": "os, encoding/json, flag, fmt, sort, math, strconv",
+    "javascript": "node:fs, node:path, node:process"
+  },
+  "workload": {
+    "args": ["rollup", "--input", "workload/metrics.jsonl", "--interval", "60", "--output", "workload/rollups.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

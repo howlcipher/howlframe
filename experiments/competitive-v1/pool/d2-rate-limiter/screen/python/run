@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+TIERS = {
+    "starter": {"capacity": 5.0, "refill": 1.0},
+    "standard": {"capacity": 20.0, "refill": 5.0},
+    "enterprise": {"capacity": 100.0, "refill": 20.0}
+}
+
+class Engine:
+    def __init__(self, store_path):
+        self.store_path = store_path
+        self.keys = {}
+        self.load()
+
+    def load(self):
+        if self.store_path and os.path.isfile(self.store_path):
+            try:
+                with open(self.store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.keys = data.get("keys", {})
+            except Exception:
+                self.keys = {}
+
+    def save(self):
+        if self.store_path:
+            try:
+                with open(self.store_path, "w", encoding="utf-8") as f:
+                    json.dump({"keys": self.keys}, f, indent=2)
+            except Exception:
+                pass
+
+    def refill(self, kdata):
+        now = time.time()
+        tier_info = TIERS.get(kdata["tier"], {"capacity": 5.0, "refill": 1.0})
+        elapsed = now - kdata.get("last_refill", now)
+        refilled = min(tier_info["capacity"], kdata["tokens"] + (elapsed * tier_info["refill"]))
+        kdata["tokens"] = refilled
+        kdata["last_refill"] = now
+
+    def register_key(self, body):
+        if not isinstance(body, dict):
+            return 400, {"error": "invalid_payload"}
+        key = body.get("key")
+        tier = body.get("tier")
+        scopes = body.get("scopes")
+        if not key or not isinstance(key, str) or not isinstance(scopes, list):
+            return 400, {"error": "invalid_payload"}
+        if tier not in TIERS:
+            return 400, {"error": "invalid_tier"}
+
+        cap = TIERS[tier]["capacity"]
+        self.keys[key] = {
+            "tier": tier,
+            "scopes": scopes,
+            "tokens": cap,
+            "last_refill": time.time()
+        }
+        self.save()
+        return 201, {
+            "key": key,
+            "tier": tier,
+            "scopes": scopes,
+            "tokens": cap
+        }
+
+    def check(self, body):
+        if not isinstance(body, dict):
+            return 400, {"error": "invalid_payload"}
+        key = body.get("key")
+        scope = body.get("scope")
+        cost = float(body.get("cost", 1.0))
+
+        if key not in self.keys:
+            return 401, {"allowed": False, "reason": "invalid_key"}
+
+        kdata = self.keys[key]
+        self.refill(kdata)
+
+        if scope not in kdata.get("scopes", []):
+            return 403, {"allowed": False, "reason": "insufficient_scope"}
+
+        if kdata["tokens"] < cost:
+            return 429, {
+                "allowed": False,
+                "reason": "rate_limited",
+                "remaining_tokens": round(kdata["tokens"], 2)
+            }
+
+        kdata["tokens"] -= cost
+        self.save()
+        return 200, {
+            "allowed": True,
+            "remaining_tokens": round(kdata["tokens"], 2)
+        }
+
+    def get_key(self, key):
+        if key not in self.keys:
+            return 404, {"error": "key_not_found"}
+        kdata = self.keys[key]
+        self.refill(kdata)
+        return 200, {
+            "key": key,
+            "tier": kdata["tier"],
+            "scopes": kdata["scopes"],
+            "tokens": round(kdata["tokens"], 2)
+        }
+
+    def reset(self, body):
+        target_key = body.get("key") if isinstance(body, dict) else None
+        now = time.time()
+        if target_key:
+            if target_key not in self.keys:
+                return 404, {"error": "key_not_found"}
+            kdata = self.keys[target_key]
+            cap = TIERS.get(kdata["tier"], {"capacity": 5.0})["capacity"]
+            kdata["tokens"] = cap
+            kdata["last_refill"] = now
+        else:
+            for k, kdata in self.keys.items():
+                cap = TIERS.get(kdata["tier"], {"capacity": 5.0})["capacity"]
+                kdata["tokens"] = cap
+                kdata["last_refill"] = now
+        self.save()
+        return 200, {"status": "reset"}
+
+    def handle(self, method, path, body=None):
+        if method == "POST" and path == "/keys":
+            return self.register_key(body or {})
+        elif method == "POST" and path == "/check":
+            return self.check(body or {})
+        elif method == "GET" and path.startswith("/keys/"):
+            key = path[len("/keys/"):]
+            return self.get_key(key)
+        elif method == "POST" and path == "/reset":
+            return self.reset(body or {})
+        return 404, {"error": "not_found"}
+
+
+def run_server(engine, port):
+    class RequestHandler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+        def do_POST(self):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            body = None
+            if body_bytes:
+                try:
+                    body = json.loads(body_bytes.decode("utf-8"))
+                except Exception:
+                    body = {}
+            status, resp = engine.handle("POST", self.path, body)
+            resp_bytes = json.dumps(resp).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_bytes)))
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+
+        def do_GET(self):
+            status, resp = engine.handle("GET", self.path)
+            resp_bytes = json.dumps(resp).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_bytes)))
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+
+    server = HTTPServer(("127.0.0.1", port), RequestHandler)
+    server.serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand", nargs="?", default=None)
+    parser.add_argument("extra_arg", nargs="?", default=None)
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--store", default="store.json")
+
+    args, unknown = parser.parse_known_args()
+
+    # Determine mode
+    if args.subcommand == "replay":
+        reqs_file = args.extra_arg
+        if not reqs_file and unknown:
+            reqs_file = unknown[0]
+        if not reqs_file or not os.path.isfile(reqs_file):
+            sys.exit(1)
+
+        engine = Engine(args.store)
+        with open(reqs_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                req = json.loads(line)
+                method = req.get("method", "GET")
+                path = req.get("path", "/")
+                body = req.get("body")
+                status, res_body = engine.handle(method, path, body)
+                print(json.dumps({"status": status, "body": res_body}))
+        sys.exit(0)
+
+    # Server mode
+    port = args.port or int(os.environ.get("PORT", "0"))
+    if not port:
+        # Check unknown args
+        for i, a in enumerate(unknown):
+            if a == "--port" and i + 1 < len(unknown):
+                port = int(unknown[i+1])
+    if not port:
+        sys.exit(1)
+
+    engine = Engine(args.store)
+    run_server(engine, port)
+
+if __name__ == "__main__":
+    main()

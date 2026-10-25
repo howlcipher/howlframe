@@ -1,0 +1,23 @@
+{
+  "id": "d3-pipeline-runner",
+  "domain": "D3",
+  "authority_centred": false,
+  "title": "DAG Pipeline Subprocess Runner with Deadlines",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Orchestrate dependency-ordered subprocess tasks with per-task deadlines, retry limits, and status reporting.",
+  "stdlib_plan": {
+    "python": "sys, os, json, subprocess, time",
+    "go": "os, os/exec, encoding/json, time, sort, context",
+    "javascript": "node:fs, node:child_process, node:path"
+  },
+  "workload": {
+    "args": ["workload/pipeline.json", "workload/report.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

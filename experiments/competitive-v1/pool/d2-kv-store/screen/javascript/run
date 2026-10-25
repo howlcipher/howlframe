@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+const { URL } = require('node:url');
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.entries = {};
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.entries = data.entries || {};
+      } catch {
+        this.entries = {};
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({ entries: this.entries }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  isActive(entry) {
+    if (!entry) return false;
+    if (entry.expires_at !== null && entry.expires_at !== undefined) {
+      if ((Date.now() / 1000) >= entry.expires_at) return false;
+    }
+    return true;
+  }
+
+  putKey(key, body) {
+    if (!body || typeof body !== 'object' || body.value === undefined) {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const val = body.value;
+    const expVer = body.expected_version;
+    const ttl = body.ttl_seconds;
+
+    const entry = this.entries[key];
+    const active = this.isActive(entry);
+    const currentVer = active ? entry.version : 0;
+
+    if (expVer !== undefined && expVer !== null) {
+      if (expVer === 0) {
+        if (active) {
+          return [409, { error: 'version_conflict', current_version: currentVer }];
+        }
+      } else {
+        if (!active || currentVer !== expVer) {
+          return [409, { error: 'version_conflict', current_version: currentVer }];
+        }
+      }
+    }
+
+    const newVer = currentVer + 1;
+    const now = Date.now() / 1000;
+    const expiresAt = (typeof ttl === 'number' && ttl > 0) ? (now + ttl) : null;
+
+    const newEntry = {
+      key,
+      value: val,
+      version: newVer,
+      expires_at: expiresAt
+    };
+    this.entries[key] = newEntry;
+    this.save();
+
+    const status = active ? 200 : 201;
+    return [status, newEntry];
+  }
+
+  getKey(key) {
+    const entry = this.entries[key];
+    if (!this.isActive(entry)) {
+      return [404, { error: 'not_found' }];
+    }
+    return [200, entry];
+  }
+
+  deleteKey(key) {
+    const entry = this.entries[key];
+    if (!this.isActive(entry)) {
+      return [404, { error: 'not_found' }];
+    }
+    delete this.entries[key];
+    this.save();
+    return [204, null];
+  }
+
+  listKeys(prefix = '', limit = null) {
+    const activeKeys = [];
+    for (const k of Object.keys(this.entries).sort()) {
+      if (this.isActive(this.entries[k]) && k.startsWith(prefix)) {
+        activeKeys.push(k);
+        if (limit && activeKeys.length >= limit) break;
+      }
+    }
+    return [200, { keys: activeKeys }];
+  }
+
+  handle(method, fullUrl, body) {
+    const parsed = new URL(fullUrl, 'http://127.0.0.1');
+    const pathStr = parsed.pathname;
+
+    if (method === 'PUT' && pathStr.startsWith('/keys/')) {
+      const key = pathStr.slice('/keys/'.length);
+      return this.putKey(key, body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/keys/')) {
+      const key = pathStr.slice('/keys/'.length);
+      return this.getKey(key);
+    } else if (method === 'DELETE' && pathStr.startsWith('/keys/')) {
+      const key = pathStr.slice('/keys/'.length);
+      return this.deleteKey(key);
+    } else if (method === 'GET' && pathStr === '/keys') {
+      const prefix = parsed.searchParams.get('prefix') || '';
+      const limitStr = parsed.searchParams.get('limit');
+      const limit = limitStr ? parseInt(limitStr, 10) : null;
+      return this.listKeys(prefix, limit);
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();
