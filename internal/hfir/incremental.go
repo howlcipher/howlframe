@@ -274,7 +274,7 @@ func (c *IncrementalCompiler) lowerArtifact(graph *Graph, preservedNodes []NodeI
 			}
 		}
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			return nil, "", loweredCount, nil, fmt.Errorf("encode bytecode artifact: %w", err)
 		}
 		return buf.Bytes(), "bytecode", loweredCount, newCache, nil
