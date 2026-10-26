@@ -373,6 +373,10 @@ function howlFrameCodeLoadingEnv(name) {
   for (var i = 0; i < howlFrameCodeLoadingEnvPrefixes.length; i++) {
     if (u.indexOf(howlFrameCodeLoadingEnvPrefixes[i]) === 0) return true;
   }
+  for (var j = 0; j < howlFrameCodeLoadingEnvSuffixes.length; j++) {
+    var s = howlFrameCodeLoadingEnvSuffixes[j];
+    if (u.length >= s.length && u.slice(u.length - s.length) === s) return true;
+  }
   return false;
 }
 
@@ -843,11 +847,16 @@ func jsReadFileCall(node *ast.Node, reqVar string, depth int) string {
 
 func jsFetchCall(node *ast.Node, reqVar string, depth int) string {
 	jsNeedsFetch = true
-	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
+	if node == nil || (len(node.Children) < 3 || len(node.Children) > 5) {
 		return ""
 	}
 	urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 	methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+	if len(node.Children) == 5 {
+		bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		headersStr := generateJSStatementRaw(node.Children[4], reqVar, depth+1)
+		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s, %s))", urlStr, methodStr, bodyStr, headersStr)
+	}
 	if len(node.Children) == 4 {
 		bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
 		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s))", urlStr, methodStr, bodyStr)
@@ -1450,6 +1459,9 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		attr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
 		val := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
 		return fmt.Sprintf("%s.setAttribute(%s, %s)", el, attr, val)
+	} else if head == "url_encode" {
+		value := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("(function(v){if(typeof v !== \"string\"){throw new Error(\"TYPE_ERROR: url_encode expected string\");}return encodeURIComponent(v);})(%s)", value)
 	} else if head == "dom_value" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
@@ -1531,8 +1543,9 @@ func specialPrefixJSSource() string {
 	return b.String()
 }
 
-// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames and
-// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+// codeLoadingEnvJSSource renders capability.CodeLoadingEnvNames,
+// CodeLoadingEnvPrefixes and CodeLoadingEnvSuffixes, the refusal tables
+// shared by every target.
 func codeLoadingEnvJSSource() string {
 	quote := func(xs []string) string {
 		out := make([]string, len(xs))
@@ -1542,5 +1555,6 @@ func codeLoadingEnvJSSource() string {
 		return strings.Join(out, ", ")
 	}
 	return "var howlFrameCodeLoadingEnvNames = [" + quote(capability.CodeLoadingEnvNames) + "];\n" +
-		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n\n"
+		"var howlFrameCodeLoadingEnvPrefixes = [" + quote(capability.CodeLoadingEnvPrefixes) + "];\n" +
+		"var howlFrameCodeLoadingEnvSuffixes = [" + quote(capability.CodeLoadingEnvSuffixes) + "];\n\n"
 }

@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import json
+import os
+import sys
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "reconcile":
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand")
+    parser.add_argument("--internal", required=True)
+    parser.add_argument("--external", required=True)
+    parser.add_argument("--out", required=True)
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
+
+    if not os.path.isfile(args.internal) or not os.path.isfile(args.external):
+        sys.exit(2)
+
+    try:
+        with open(args.internal, "r", encoding="utf-8") as f:
+            internal_raw = json.load(f)
+    except Exception:
+        sys.exit(1)
+
+    if not isinstance(internal_raw, list):
+        sys.exit(1)
+
+    # Detect duplicates in internal
+    internal_map = {}
+    internal_dups = set()
+    for item in internal_raw:
+        tid = item.get("txn_id")
+        if not tid:
+            continue
+        if tid in internal_map:
+            internal_dups.add(tid)
+        else:
+            internal_map[tid] = item
+
+    # Detect duplicates in external
+    external_map = {}
+    external_dups = set()
+    try:
+        with open(args.external, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if not header:
+                sys.exit(1)
+            for row in reader:
+                if not row or len(row) < 5:
+                    continue
+                ref_id, acc_id, amount_str, curr, posted = [c.strip() for c in row[:5]]
+                try:
+                    amount = float(amount_str)
+                except ValueError:
+                    continue
+                
+                if ref_id in external_map:
+                    external_dups.add(ref_id)
+                else:
+                    external_map[ref_id] = {
+                        "ref_id": ref_id,
+                        "account_id": acc_id,
+                        "amount": amount,
+                        "currency": curr,
+                        "posted_at": posted
+                    }
+    except Exception:
+        sys.exit(2)
+
+    duplicates = []
+    for d in external_dups:
+        duplicates.append({"source": "external", "id": d})
+    for d in internal_dups:
+        duplicates.append({"source": "internal", "id": d})
+    duplicates.sort(key=lambda d: (d["source"], d["id"]))
+
+    # Filter out duplicates
+    clean_internal = {k: v for k, v in internal_map.items() if k not in internal_dups}
+    clean_external = {k: v for k, v in external_map.items() if k not in external_dups}
+
+    matched_count = 0
+    net_settled_amount = 0.0
+    amount_mismatch = []
+    metadata_mismatch = []
+    unmatched_internal = []
+    unmatched_external = []
+
+    all_ids = set(clean_internal.keys()).union(set(clean_external.keys()))
+
+    for cid in sorted(all_ids):
+        in_item = clean_internal.get(cid)
+        ex_item = clean_external.get(cid)
+
+        if in_item and ex_item:
+            in_acc = in_item["account_id"]
+            ex_acc = ex_item["account_id"]
+            in_curr = in_item["currency"]
+            ex_curr = ex_item["currency"]
+            in_amt = round(float(in_item["amount"]), 2)
+            ex_amt = round(float(ex_item["amount"]), 2)
+
+            if in_acc != ex_acc or in_curr != ex_curr:
+                metadata_mismatch.append({
+                    "id": cid,
+                    "internal_account": in_acc,
+                    "external_account": ex_acc,
+                    "internal_currency": in_curr,
+                    "external_currency": ex_curr
+                })
+            elif in_amt != ex_amt:
+                amount_mismatch.append({
+                    "id": cid,
+                    "account_id": in_acc,
+                    "currency": in_curr,
+                    "internal_amount": in_item["amount"],
+                    "external_amount": ex_item["amount"],
+                    "difference": round(in_amt - ex_amt, 2)
+                })
+            else:
+                matched_count += 1
+                net_settled_amount += in_item["amount"]
+        elif in_item:
+            unmatched_internal.append({
+                "id": cid,
+                "account_id": in_item["account_id"],
+                "amount": in_item["amount"],
+                "currency": in_item["currency"]
+            })
+        elif ex_item:
+            unmatched_external.append({
+                "id": cid,
+                "account_id": ex_item["account_id"],
+                "amount": ex_item["amount"],
+                "currency": ex_item["currency"]
+            })
+
+    amount_mismatch.sort(key=lambda x: x["id"])
+    metadata_mismatch.sort(key=lambda x: x["id"])
+    unmatched_internal.sort(key=lambda x: x["id"])
+    unmatched_external.sort(key=lambda x: x["id"])
+
+    report = {
+        "matched_count": matched_count,
+        "net_settled_amount": round(net_settled_amount, 2),
+        "discrepancies": {
+            "amount_mismatch": amount_mismatch,
+            "metadata_mismatch": metadata_mismatch,
+            "unmatched_internal": unmatched_internal,
+            "unmatched_external": unmatched_external,
+            "duplicates": duplicates
+        }
+    }
+
+    try:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+    except Exception:
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

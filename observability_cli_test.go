@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -37,7 +36,7 @@ func TestRequestIDAccessLogAndFaultLine(t *testing.T) {
 		t.Fatalf("build: %v %s", err, out)
 	}
 	cmd := exec.Command(binary, "run", "--allow-caps", "network", "--access-log", artifact)
-	log := &bytes.Buffer{}
+	log := &syncBuffer{}
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -100,7 +99,7 @@ func TestAccessLogIsOptIn(t *testing.T) {
 		t.Fatalf("build: %v %s", err, out)
 	}
 	cmd := exec.Command(binary, "run", "--allow-caps", "network", artifact)
-	log := &bytes.Buffer{}
+	log := &syncBuffer{}
 	cmd.Stdout, cmd.Stderr = log, log
 	cmd.Start()
 	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })

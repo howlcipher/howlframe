@@ -1,0 +1,23 @@
+{
+  "id": "d4-inventory-allocator",
+  "domain": "D4",
+  "authority_centred": false,
+  "title": "Warehouse Inventory Reservation and Lot Expiry Allocator",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade inventory allocation engine from basic FIFO to customer priority tiering, expiry-date lot selection, and backorder splitting.",
+  "stdlib_plan": {
+    "python": "sys, os, json",
+    "go": "os, encoding/json, sort",
+    "javascript": "node:fs, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/inventory.json", "workload/orders.json", "workload/manifest.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

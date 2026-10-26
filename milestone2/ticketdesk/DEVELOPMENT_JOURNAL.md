@@ -94,3 +94,64 @@ benign state as a crash in create), and listing skips index ids that have no tic
 `b6_dangling_index_entry_does_not_break_listing` (mutation-checked). m17 partly addressed: the runtime's 400
 for a truncated upload now carries the request id. Carryover: m12 port probe race, m15 no migration of
 state written by an earlier build, m16 a crash in create can leave an unindexed ticket (unconfirmed request).
+
+## Closure verification (2026-10-20)
+
+Scope: close the accepted Milestone 2 only. Implementation base: `main` at
+`7092bcffc7f40c32309b2c6f54654e2aaa9279c5`. The initial worktree contained only the
+uncommitted Round 4 additions to REVIEW.md and MILESTONE2_DECISION.md; both are preserved,
+including superseded findings. Closure changes only documentation and acceptance records.
+
+Roles: the original journal identifies Claude (Sonnet 5.5) as implementer and an independent
+pre-implementation author of the frozen scope. REVIEW.md identifies an independent final
+reviewer without an implementation role. The supplied closure plan reports a separate read-only
+audit, but no audit transcript or evaluator identity is available here. Historical evaluator identities
+are incomplete: no cross-provider proof is claimed. Codex performed this documentation closure
+and fresh executable checks, not a new independent acceptance review.
+
+Host tools observed: Ubuntu 26.04 LTS, linux/amd64; Go 1.26.0; Python 3.14.4;
+GNU Bash 5.3.9; Git 2.53.0; GNU tar 1.35. Reproduction requires Bash, Git (a repository
+with HEAD for git archive), tar, mktemp, mkdir, tail and ordinary host utilities, Go and Python 3.
+Allow module-download access for the complete Go suite with empty caches; the root application
+build uses only the standard library. No external model service is required.
+
+Fresh checks at the implementation base:
+
+* `bash milestone2/scripts/clean_repro.sh`: exit 0; 101/101 acceptance, 9/9 review regressions
+  at default runner ceilings, 13/13 DX checks. The script archives committed HEAD, not worktree edits.
+* `go test -count=1 ./...`: exit 0, no failures (uncached execution).
+* `go build ./...`, `go vet ./...`, `test -z "$(gofmt -l .)"`, `git diff --check`: exit 0.
+* `git diff 10d9c2a8 HEAD --exit-code -- milestone2/ticketdesk/requirements milestone2/ticketdesk/tests/acceptance milestone2/ticketdesk/dx milestone2/PLAN.md`: exit 0, no frozen-file changes.
+
+Isolation procedure: create a fresh directory with `task_repro=$(mktemp -d)`, then run:
+
+```bash
+env -i PATH=/usr/bin:/bin HOME="$task_repro/home" TMPDIR="$task_repro/tmp" \
+  GOCACHE="$task_repro/go-build" GOMODCACHE="$task_repro/go-mod" GOTOOLCHAIN=local \
+  bash -c 'mkdir -p "$HOME" "$TMPDIR"; bash milestone2/scripts/clean_repro.sh'
+```
+
+Isolated reproduction result: exit 0; 101/101 acceptance, 9/9 regressions, 13/13 DX.
+
+This uses an empty inherited environment, fresh HOME, temporary directory and Go caches,
+and host tools. It is an isolated build environment, not OS sandboxing. An initial attempt
+with inherited PATH exited 127 because the user Go wrapper requires Distrobox environment;
+the explicit system PATH above avoids that wrapper. The temporary archive is removed by
+the reproduction script; outer cache directories are disposable.
+
+Historical adversarial probes (ADV01–ADV100, t19.py SIGKILL storm and other temporary scripts)
+are preserved as reviewer-reported evidence in REVIEW.md. Those scripts are unavailable and were
+not rerun for closure. Fresh retained regression tests include the crafted dangling-index case;
+they do not substitute for a rerun of the historical kill storm.
+
+The Round 4 decision remains ACCEPTED for D29 A, C, D, G, H. Its non-blocking carryover is
+retained. The handoff's pending-review and quadratic-sort descriptions were stale; the current
+review and bucket-index implementation supersede them. Older host-specific exec failures above
+remain historical records, not a claim about this Ubuntu verification run.
+
+Final documentation verification: local Markdown file targets exist; evidence anchor matches this
+section; `git diff --check` passes. Only README.md, change_log.md, the decision, review, handoff
+and this journal are in the closure commit. No unrelated changes were present at entry.
+
+Stop after the local documentation closure commit; no carryover implementation, Milestone 3,
+push, pull request or merge is authorized by this closure task.

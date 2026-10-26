@@ -632,6 +632,9 @@ func validateTransport(transport candidateTransport) *Diagnostic {
 	if diagnostic := validateTransportTypes(transport); diagnostic != nil {
 		return diagnostic
 	}
+	if diagnostic := validateValueRoles(transport); diagnostic != nil {
+		return diagnostic
+	}
 	if diagnostic := validateNoSharedEffects(transport); diagnostic != nil {
 		return diagnostic
 	}
@@ -948,6 +951,82 @@ func validateTransportTypes(transport candidateTransport) *Diagnostic {
 		if infer(node.ID) == "invalid" {
 			diagnostic := adapterDiagnostic("HFIR_TRANSPORT_TYPE", "node operands have incompatible known types", node.ID)
 			return &diagnostic
+		}
+	}
+	return nil
+}
+
+// valueLessKinds leave nothing on the operand stack: each lowers to an
+// opcode with Pushes == 0 (TestValueLessKindsMatchOpcodeTable), or is a
+// loop, definition or return statement. The source checker rejects the same
+// forms where a value is required (requireValue); without this check a
+// candidate could bind one, run its effect, and only then underflow.
+var valueLessKinds = map[string]bool{
+	"write_file": true, "mkdir": true, "print": true, "stderr": true, "exit": true, "set": true,
+	"map_set": true, "map_delete": true, "append": true, "sleep": true,
+	"for": true, "while": true, "defun": true, "return": true,
+}
+
+// statementRole reports a role whose input runs for its effects. Every other
+// role consumes the value its input produces.
+func statementRole(kind, role string) bool {
+	switch kind + "." + role {
+	case "program.body", "sequence.body", "let.body", "if.then", "if.else", "try.success_body", "try.catch",
+		"catch.body", "for.body", "while.body", "defun.param", "defun.body":
+		return true
+	}
+	return false
+}
+
+// validateValueRoles rejects a value-less node wired into a value role. A let
+// or sequence yields its last body's value, so it is followed; an if without
+// an else yields nothing when its condition is false; an if or try yields its
+// branches' values, so a value-less branch (other than one that exits or
+// returns) makes it value-less. call stays with the run-time contract.
+func validateValueRoles(transport candidateTransport) *Diagnostic {
+	byID := make(map[NodeID]transportNode, len(transport.Nodes))
+	for _, node := range transport.Nodes {
+		byID[node.ID] = node
+	}
+	var noValue, branchNoValue func(NodeID) bool
+	noValue = func(id NodeID) bool {
+		node := byID[id]
+		switch node.Kind {
+		case "let":
+			return len(node.Inputs) == 2 && noValue(node.Inputs[1].NodeID)
+		case "sequence":
+			return len(node.Inputs) == 0 || noValue(node.Inputs[len(node.Inputs)-1].NodeID)
+		case "if":
+			return len(node.Inputs) < 3 || branchNoValue(node.Inputs[1].NodeID) || branchNoValue(node.Inputs[2].NodeID)
+		case "try":
+			if len(node.Inputs) != 3 {
+				return false
+			}
+			catch := byID[node.Inputs[2].NodeID]
+			return branchNoValue(node.Inputs[1].NodeID) || (len(catch.Inputs) == 1 && branchNoValue(catch.Inputs[0].NodeID))
+		}
+		return valueLessKinds[node.Kind]
+	}
+	// A branch that ends the program or function never falls through.
+	var diverges func(NodeID) bool
+	diverges = func(id NodeID) bool {
+		node := byID[id]
+		switch node.Kind {
+		case "exit", "return":
+			return true
+		case "sequence", "let":
+			return len(node.Inputs) > 0 && diverges(node.Inputs[len(node.Inputs)-1].NodeID)
+		}
+		return false
+	}
+	branchNoValue = func(id NodeID) bool { return !diverges(id) && noValue(id) }
+	for _, node := range transport.Nodes {
+		for _, input := range node.Inputs {
+			if !statementRole(node.Kind, input.Role) && noValue(input.NodeID) {
+				diagnostic := adapterDiagnostic("HFIR_TRANSPORT_TYPE",
+					fmt.Sprintf("%s input of %s is a %s node, which produces no value", input.Role, node.Kind, byID[input.NodeID].Kind), node.ID)
+				return &diagnostic
+			}
 		}
 	}
 	return nil

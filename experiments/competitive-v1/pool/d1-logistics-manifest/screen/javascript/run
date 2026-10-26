@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'pack') {
+    process.exit(1);
+  }
+  const parsed = {
+    packages: null,
+    rules: null,
+    output: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--packages') {
+      parsed.packages = args[++i];
+    } else if (arg === '--rules') {
+      parsed.rules = args[++i];
+    } else if (arg === '--output') {
+      parsed.output = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.packages || !parsed.rules || !parsed.output) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function parseCSVLine(line) {
+  return line.split(',').map(s => s.trim());
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.packages) || !fs.existsSync(args.rules)) {
+    process.exit(2);
+  }
+
+  let rules;
+  try {
+    rules = JSON.parse(fs.readFileSync(args.rules, 'utf8'));
+  } catch {
+    process.exit(1);
+  }
+
+  const maxWeight = Number(rules.max_container_weight_kg) || 0;
+  const maxHazard = Number(rules.max_hazard_items_per_container) || 0;
+  const allowedDests = new Set(Array.isArray(rules.allowed_destinations) ? rules.allowed_destinations : []);
+
+  let fileContent;
+  try {
+    fileContent = fs.readFileSync(args.packages, 'utf8');
+  } catch {
+    process.exit(2);
+  }
+
+  const lines = fileContent.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) process.exit(1);
+
+  const header = parseCSVLine(lines[0]);
+  const expectedHeader = ['package_id', 'destination', 'weight_kg', 'is_hazardous', 'priority'];
+  if (header.length !== 5 || !header.every((col, i) => col === expectedHeader[i])) {
+    process.exit(1);
+  }
+
+  const validPackages = [];
+  const rejectedPackages = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVLine(lines[i]);
+    if (row.length !== 5) continue;
+    const [pkgId, dest, weightStr, hazStr, prioStr] = row;
+
+    if (!pkgId) {
+      rejectedPackages.push({ package_id: pkgId || 'UNKNOWN', reason: 'invalid_fields' });
+      continue;
+    }
+
+    const weight = Number(weightStr);
+    const prio = Number(prioStr);
+    const hazLower = hazStr.toLowerCase();
+
+    if (isNaN(weight) || isNaN(prio) || !Number.isInteger(prio) || (hazLower !== 'true' && hazLower !== 'false')) {
+      rejectedPackages.push({ package_id: pkgId, reason: 'invalid_fields' });
+      continue;
+    }
+
+    if (prio < 1 || prio > 5) {
+      rejectedPackages.push({ package_id: pkgId, reason: 'invalid_fields' });
+      continue;
+    }
+
+    if (!allowedDests.has(dest)) {
+      rejectedPackages.push({ package_id: pkgId, reason: 'invalid_destination' });
+      continue;
+    }
+
+    if (weight <= 0 || weight > maxWeight) {
+      rejectedPackages.push({ package_id: pkgId, reason: 'overweight' });
+      continue;
+    }
+
+    validPackages.push({
+      package_id: pkgId,
+      destination: dest,
+      weight_kg: weight,
+      is_hazardous: hazLower === 'true',
+      priority: prio
+    });
+  }
+
+  // Sort valid packages: priority ASC, weight_kg DESC, package_id ASC
+  validPackages.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    if (a.weight_kg !== b.weight_kg) return b.weight_kg - a.weight_kg;
+    return a.package_id.localeCompare(b.package_id);
+  });
+
+  const containers = [];
+
+  for (const pkg of validPackages) {
+    let placed = false;
+    for (const c of containers) {
+      if (c.destination !== pkg.destination) continue;
+      if (Number((c.total_weight_kg + pkg.weight_kg).toFixed(2)) > maxWeight) continue;
+      if (pkg.is_hazardous && c.hazard_count + 1 > maxHazard) continue;
+
+      c.package_ids.push(pkg.package_id);
+      c.total_weight_kg = Number((c.total_weight_kg + pkg.weight_kg).toFixed(2));
+      if (pkg.is_hazardous) c.hazard_count += 1;
+      placed = true;
+      break;
+    }
+
+    if (!placed) {
+      const cId = `CONT-${containers.length + 1}`;
+      containers.push({
+        container_id: cId,
+        destination: pkg.destination,
+        total_weight_kg: Number(pkg.weight_kg.toFixed(2)),
+        hazard_count: pkg.is_hazardous ? 1 : 0,
+        package_ids: [pkg.package_id]
+      });
+    }
+  }
+
+  rejectedPackages.sort((a, b) => a.package_id.localeCompare(b.package_id));
+
+  const totalPacked = containers.reduce((acc, c) => acc + c.package_ids.length, 0);
+
+  const manifest = {
+    total_containers: containers.length,
+    total_packed_packages: totalPacked,
+    containers,
+    rejected_packages: rejectedPackages
+  };
+
+  try {
+    fs.writeFileSync(args.output, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+main();

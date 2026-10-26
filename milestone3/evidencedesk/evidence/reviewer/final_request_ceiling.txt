@@ -1,0 +1,14 @@
+test_import_detail_and_order (acceptance.API.test_import_detail_and_order) ... ok
+test_invalid_import_preserves_state (acceptance.API.test_invalid_import_preserves_state) ... ok
+test_limits_media_and_routing (acceptance.API.test_limits_media_and_routing) ... ok
+test_notes_and_reimport (acceptance.API.test_notes_and_reimport) ... ok
+test_exact_limit_and_validate_before_write (acceptance.Projector.test_exact_limit_and_validate_before_write) ... ok
+test_native_outputs_deterministic (acceptance.Projector.test_native_outputs_deterministic) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.546s
+
+OK
+PASS live loopback listener: LISTEN 0      4096       127.0.0.1:46187      0.0.0.0:*    users:(("m1-independent-",pid=2715026,fd=5))
+PASS exact restart persistence, encoded ID, Unicode notes, physical line diagnostics
+PASS independently rerun final request-ceiling API/restart verification including262145,300001,400000 byte input preservation

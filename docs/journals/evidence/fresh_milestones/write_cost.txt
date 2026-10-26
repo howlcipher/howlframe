@@ -1,0 +1,11 @@
+Token method: tiktoken(cl100k_base)
+lang           A     B     C    tot
+HowlFrame     75    56    34    165
+go           148    97    73    318
+python       168    61    37    266
+node         115    87    72    274
+csharp       181    80    63    324
+java         241   127    74    442
+
+PASSED: HowlFrame under Python on A/B/C and under all language totals.
+Wrote /run/media/system/tallgeese/dev/howlframe/benchmarks/language_write_cost/proof_latest.json

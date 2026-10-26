@@ -1,0 +1,164 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+const SEVERITY_ORDER = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2
+};
+
+function parseArgs(args) {
+  if (args.length < 1 || args[0] !== 'audit-iam') {
+    process.exit(1);
+  }
+  const parsed = {
+    iam: null,
+    boundaries: null,
+    out: null
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--iam') {
+      parsed.iam = args[++i];
+    } else if (arg === '--boundaries') {
+      parsed.boundaries = args[++i];
+    } else if (arg === '--out') {
+      parsed.out = args[++i];
+    } else {
+      process.exit(1);
+    }
+  }
+
+  if (!parsed.iam || !parsed.boundaries || !parsed.out) {
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!fs.existsSync(args.iam) || !fs.existsSync(args.boundaries)) {
+    process.exit(1);
+  }
+
+  let boundaries;
+  let iam;
+  try {
+    boundaries = JSON.parse(fs.readFileSync(args.boundaries, 'utf8'));
+    iam = JSON.parse(fs.readFileSync(args.iam, 'utf8'));
+  } catch {
+    process.exit(1);
+  }
+
+  if (!boundaries || typeof boundaries !== 'object' || !iam || typeof iam !== 'object') {
+    process.exit(1);
+  }
+
+  const maxDuration = Number(boundaries.max_session_duration_hours) || 24;
+  const forbiddenActions = Array.isArray(boundaries.forbidden_actions) ? boundaries.forbidden_actions : [];
+  const privilegePairs = Array.isArray(boundaries.privilege_escalation_pairs) ? boundaries.privilege_escalation_pairs : [];
+
+  const roles = Array.isArray(iam.roles) ? iam.roles : [];
+  const findings = [];
+  const userRolesMap = {};
+
+  for (const role of roles) {
+    if (!role || typeof role !== 'object') continue;
+    const rname = role.role_name || '';
+    const duration = Number(role.session_duration_hours) || 0;
+    const permsList = Array.isArray(role.permissions) ? role.permissions : [];
+    const permsSet = new Set(permsList);
+    const assignedUsers = Array.isArray(role.assigned_users) ? role.assigned_users : [];
+
+    for (const u of assignedUsers) {
+      if (!userRolesMap[u]) {
+        userRolesMap[u] = new Set();
+      }
+      userRolesMap[u].add(rname);
+    }
+
+    // 1. Forbidden actions
+    for (const perm of permsList) {
+      for (const pattern of forbiddenActions) {
+        let matched = false;
+        if (pattern.endsWith('*')) {
+          const prefix = pattern.slice(0, -1);
+          if (perm.startsWith(prefix)) matched = true;
+        } else if (perm === pattern) {
+          matched = true;
+        }
+
+        if (matched) {
+          findings.push({
+            role_name: rname,
+            finding_type: 'forbidden_action',
+            severity: 'CRITICAL',
+            detail: `Role grants forbidden action '${perm}'`
+          });
+        }
+      }
+    }
+
+    // 2. Privilege escalation pairs
+    for (const pair of privilegePairs) {
+      if (Array.isArray(pair) && pair.length === 2 && permsSet.has(pair[0]) && permsSet.has(pair[1])) {
+        findings.push({
+          role_name: rname,
+          finding_type: 'privilege_escalation',
+          severity: 'HIGH',
+          detail: `Role contains toxic escalation pair: ${pair[0]} + ${pair[1]}`
+        });
+      }
+    }
+
+    // 3. Session duration
+    if (duration > maxDuration) {
+      findings.push({
+        role_name: rname,
+        finding_type: 'excessive_session',
+        severity: 'MEDIUM',
+        detail: `Session duration ${duration}h exceeds limit ${maxDuration}h`
+      });
+    }
+  }
+
+  findings.sort((a, b) => {
+    if (a.role_name !== b.role_name) return a.role_name.localeCompare(b.role_name);
+    const rankA = SEVERITY_ORDER[a.severity] ?? 99;
+    const rankB = SEVERITY_ORDER[b.severity] ?? 99;
+    if (rankA !== rankB) return rankA - rankB;
+    if (a.finding_type !== b.finding_type) return a.finding_type.localeCompare(b.finding_type);
+    return a.detail.localeCompare(b.detail);
+  });
+
+  const sortedUserRoles = {};
+  for (const u of Object.keys(userRolesMap).sort()) {
+    sortedUserRoles[u] = Array.from(userRolesMap[u]).sort();
+  }
+
+  const isClean = findings.length === 0;
+  const report = {
+    clean: isClean,
+    roles_audited: roles.length,
+    findings_count: findings.length,
+    findings,
+    user_effective_roles: sortedUserRoles
+  };
+
+  try {
+    fs.writeFileSync(args.out, JSON.stringify(report, null, 2) + '\n', 'utf8');
+  } catch {
+    process.exit(1);
+  }
+
+  if (!isClean) {
+    process.exit(2);
+  }
+  process.exit(0);
+}
+
+main();

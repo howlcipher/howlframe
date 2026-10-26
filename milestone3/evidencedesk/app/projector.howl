@@ -1,0 +1,117 @@
+(cli_app
+  (use "ledger.howl" as ledger)
+  (defun state_for
+    (action)
+    (let
+      (out "")
+      (do
+        (if (= action "task_created") (set out "CREATED") (do))
+        (if (= action "project_discovered") (set out "CREATED") (do))
+        (if (= action "route_selected") (set out "ROUTED") (do))
+        (if (= action "implementation_started") (set out "EXECUTING") (do))
+        (if (= action "implementation_completed") (set out "EXECUTING") (do))
+        (if (= action "review_started") (set out "EXECUTING") (do))
+        (if (= action "review_completed") (set out "EXECUTING") (do))
+        (if (= action "verification_started") (set out "VERIFYING") (do))
+        (if (= action "verification_completed") (set out "VERIFYING") (do))
+        (if (= action "remediation_started") (set out "REMEDIATING") (do))
+        (if (= action "remediation_completed") (set out "REMEDIATING") (do))
+        (if (= action "human_boundary_triggered") (set out "AWAITING_APPROVAL") (do))
+        (if (= action "human_decision_requested") (set out "AWAITING_APPROVAL") (do))
+        (if (= action "task_completed") (set out "COMPLETED") (do))
+        (if (= action "task_failed") (set out "FAILED") (do))
+        (if (= action "task_closed") (set out "CLOSED") (do))
+        (return out))))
+  (defun string_or_empty ((v any)) string (return (if (= (call ledger/kind v) "s") v "")))
+  (let
+    (input (cli_args 0) output (cli_args 1) limit (to_int (cli_args 2)))
+    (try_let
+      (raw (read_file input))
+      (catch e (do (stderr "Cannot read ledger") (exit 3)))
+      (let
+        (parsed (call ledger/parse (bytes_to_string raw) limit))
+        (do
+          (if (map_has parsed "error") (do (stderr (encode_json parsed)) (exit 3)))
+          (let
+            (ids (list) missions (dict) timeline (list))
+            (do
+              (for e
+                (map_get parsed "events")
+                (let
+                  (id
+                    (map_get e "task_id")
+                    action
+                    (map_get e "action")
+                    agent
+                    (map_get e "agent_id"))
+                  (do
+                    (if
+                      (not (map_has missions id))
+                      (do
+                        (append ids id)
+                        (map_set missions id
+                          (dict
+                            ("id" id)
+                            ("title" id)
+                            ("description" "Read-only evidence ledger projection")
+                            ("state" "CREATED")
+                            ("provenance" "LEDGER")
+                            ("origin" "control_plane")
+                            ("authority"
+                              (dict
+                                ("decision" "REQUIRE_APPROVAL")
+                                ("gates" (list))
+                                ("approval" "")))
+                            ("verification" (list))
+                            ("evidence" (list))
+                            ("plan" (list))
+                            ("execution" (dict))
+                            ("reasoning" (dict))
+                            ("created_at" 0)
+                            ("updated_at" 0)
+                            ("priority" "NORMAL")
+                            ("executor" agent)
+                            ("outcome" "")))))
+                    (let
+                      (m
+                        (map_get missions id)
+                        next
+                        (call state_for action)
+                        result
+                        (call string_or_empty (map_get e "result")))
+                      (do
+                        (if (!= next "") (map_set m "state" next))
+                        (if
+                          (str_contains
+                            (call string_or_empty (map_get e "artifact"))
+                            "pytest-of-")
+                          (map_set m "origin" "test_fixture"))
+                        (if
+                          (and (not (is_nil (map_get e "verification_summary"))) (!= result ""))
+                          (let
+                            (checks (map_get m "verification"))
+                            (do
+                              (append checks
+                                (dict
+                                  ("name" action)
+                                  ("status" result)
+                                  ("exit_code" 0)
+                                  ("output_digest" "")
+                                  ("started_at" 0)
+                                  ("finished_at" 0)))
+                              (map_set m "verification" checks))))
+                        (map_set missions id m)
+                        (append timeline
+                          (merge e
+                            (dict
+                              ("mission_id" id)
+                              ("action" action)
+                              ("actor" agent)
+                              ("detail" result)
+                              ("timestamp" 0)))))))))
+              (store_open ms (str "file://" output "/howlboard_missions.json"))
+              (for id ids (store_put ms (str "mission:" id) (map_get missions id)))
+              (store_open ts (str "file://" output "/howlboard_timeline.json"))
+              (store_put ts "feed" (dict ("events" timeline)))
+              (print
+                (str "entries=" (list_len (map_get parsed "events")) " tasks=" (list_len ids))))))))))

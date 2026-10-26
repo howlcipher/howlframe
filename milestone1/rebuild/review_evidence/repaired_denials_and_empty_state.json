@@ -1,0 +1,20 @@
+{
+  "taskflow": {
+    "code": 77,
+    "stdout": "",
+    "stderr": "taskflow: capability denied: filesystem\n",
+    "history_exists": false
+  },
+  "health_status": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "healthwatch: state: invalid JSON\n",
+    "state": ""
+  },
+  "health_run": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "healthwatch: state: invalid JSON\n",
+    "state": ""
+  }
+}

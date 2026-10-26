@@ -1,10 +1,18 @@
 # Milestone 2 handoff
 
-* Active milestone: Milestone 2 (gates A, C, D, G, H of directive D29). Plan, contract, acceptance suite and
-  DX checker frozen 2026-10-13 by an independent author.
-* Status: implemented. Acceptance 101/101; DX checker 13/13; guide rule test passes.
-* Reproduce everything from a clean checkout: `milestone2/scripts/clean_repro.sh`.
-* Remaining: independent final review against the frozen contract (REVIEW.md, MILESTONE2_DECISION.md in
-  `milestone2/`), then stop. Do not start Milestone 3 without a new instruction.
-* Known limitations: serialized single-process server; quadratic in-language sort for listings; the 14
-  host-specific exec test failures from Milestone 1 remain.
+Fresh implementation ACCEPTED for D29 A, C, D, G, H at `b028e813`, 2026-10-21.
+The canonical source matches the independently reviewed replacement snapshot.
+
+* Current acceptance: [milestone decision](../MILESTONE2_DECISION.md) and
+  [fresh independent review](../rebuild/ticketdesk/REVIEW.md).
+* Original requirements, frozen acceptance tests and DX checker remain unchanged.
+* [User guide](README.md) documents state format 2 and non-overwriting offline
+  migration. Ticket and token persistence are atomic at their collection boundary.
+* [Committed clean reproduction](../rebuild/scripts/clean_repro.sh) verifies
+  101 acceptance tests, 13 DX checks and 11 retained adversarial probes.
+  The canonical reproduction also retains the nine historical regressions;
+  its B6 legacy crash fixture is recovered through explicit migration.
+* Carryover: port-probe race, linear token authentication, whole-state writes,
+  finite budgets and transport/runtime limitations recorded in the review.
+* Stop: all three requested milestones are accepted. Do not implement carryover,
+  push, merge or begin another milestone without a new instruction.

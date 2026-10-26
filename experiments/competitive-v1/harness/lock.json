@@ -1,0 +1,42 @@
+{
+  "base_root": {
+    "archive_sha256": "a496a960472ce474a59590b8987d3a1135d3cbef1991f3b1abe8cacfea8bf85a",
+    "tree_sha256": "68ff237267bc82d156b16a5032a9743a1006b49eea20a0bbc299307253375ebc"
+  },
+  "docs_go": {
+    "tree_sha256": "4fb67b0ca9e13499b21c3042625fe106e5f9a035e08ec8139e4aca9eaa5a3ad2"
+  },
+  "docs_howlframe": {
+    "commit": "e77e008f7eb944f286414f4a5725b306fcc02d31",
+    "skill_included": true,
+    "tree_sha256": "3ae3d857b2b99b8401afdd8e41a2b2f0d358d30f0622d9320344b880408406e7"
+  },
+  "docs_javascript": {
+    "files": 64,
+    "tree_sha256": "c28637ada3865e792ab32111dab514ed6869ca3a98310b055dde0bca0f0d5b46"
+  },
+  "docs_python": {
+    "archive_sha256": "77669708280b7a2aeac8b2a45f0af44dd6a75713ce97e8702c5efac7fe991b76",
+    "tree_sha256": "5998e3415ca0fd2ce6063d2f195ce70200e78a8db8bb6d90e459f800d24d3f54"
+  },
+  "toolchain_go": {
+    "archive_sha256": "a21ae5633a269bcd7e90cf767e48225633795e99d831742cbf3397064fee7712",
+    "tree_sha256": "e995e31b9fa3b2180094968f65664d178919dcccffb0089a680b6b56fadc807b",
+    "version": "1.25.14"
+  },
+  "toolchain_howlframe": {
+    "built_with": "go version go1.26.0 linux/amd64",
+    "commit": "e77e008f7eb944f286414f4a5725b306fcc02d31",
+    "tree_sha256": "3d39e96bfb423cc4c14ddef39c69c7c370252f9764a4858b02c4c98866e190dc"
+  },
+  "toolchain_javascript": {
+    "archive_sha256": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce",
+    "tree_sha256": "f7842c59c857f8eafa7ca47a0589cc688f60c694f9a2a4260ad2ed7ebc711f15",
+    "version": "22.23.4"
+  },
+  "toolchain_python": {
+    "archive_sha256": "5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124",
+    "tree_sha256": "fca48407d45b30f0bb99b9195e7b01f0eebbf3f9ef7b9e51152d30637555294d",
+    "version": "3.12.15"
+  }
+}

@@ -1,0 +1,20 @@
+memory=default records=1000 bytes=854234 old: entries=1000 missions=243 1.02s rss=75868KB 
+memory=default records=1000 bytes=854234 new: entries=1000 missions=243 1.70s rss=76220KB 
+memory=default records=2000 bytes=1709810 old: entries=2000 missions=486 3.70s rss=135828KB 
+memory=default records=2000 bytes=1709810 new: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 2.13s rss=118348KB 
+memory=default records=3000 bytes=2565526 old: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 0.61s rss=177704KB 
+memory=default records=3000 bytes=2565526 new: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 2.04s rss=157412KB 
+memory=default records=3500 bytes=2993106 old: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 0.62s rss=215380KB 
+memory=default records=3500 bytes=2993106 new: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 1.93s rss=185020KB 
+memory=default records=5000 bytes=4277456 old: RAW memory limit exceeded (max 67108864 bytes) Command exited with non-zero status 1 0.73s rss=301012KB 
+memory=default records=5000 bytes=4277456 new: ledger_import: payload_too_large: Ledger exceeds 3145728 bytes; nothing was importedCommand exited with non-zero status 
+memory=268435456 records=1000 bytes=854234 old: entries=1000 missions=243 1.08s rss=63564KB 
+memory=268435456 records=1000 bytes=854234 new: entries=1000 missions=243 1.57s rss=74612KB 
+memory=268435456 records=2000 bytes=1709810 old: entries=2000 missions=486 3.59s rss=114796KB 
+memory=268435456 records=2000 bytes=1709810 new: entries=2000 missions=486 5.46s rss=134792KB 
+memory=268435456 records=3000 bytes=2565526 old: entries=3000 missions=730 7.66s rss=172624KB 
+memory=268435456 records=3000 bytes=2565526 new: entries=3000 missions=730 11.58s rss=199652KB 
+memory=268435456 records=3500 bytes=2993106 old: entries=3500 missions=853 10.19s rss=203912KB 
+memory=268435456 records=3500 bytes=2993106 new: entries=3500 missions=853 15.50s rss=234000KB 
+memory=268435456 records=5000 bytes=4277456 old: entries=5000 missions=1221 20.18s rss=285968KB 
+memory=268435456 records=5000 bytes=4277456 new: ledger_import: payload_too_large: Ledger exceeds 3145728 bytes; nothing was importedCommand exited with non-zero status 

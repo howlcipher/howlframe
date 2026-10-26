@@ -1,0 +1,380 @@
+
+==== Milestone 1: frozen acceptance suites ====
+Built /tmp/tmp.P5cLqBS4Jy/ledgerlens.hfbc
+
+==== ledgerlens ====
+PASS L-R1-version [R1] version prints fixed string, needs no grants
+PASS L-R1-help [R1] help/--help/-h print usage to stdout, exit 0
+PASS L-R1-usage-errors [R1,R18] usage errors exit 2, nothing on stdout, no output file
+PASS L-R1-option-order [R1] options may precede or follow INPUT
+PASS L-R2-basic-golden [R2,R6,R7,R8,R9,R11,R17] golden summary text for basic fixture, exit 1 (budget over)
+PASS L-R2-header-variants [R2] header case/order/extra columns/BOM/CRLF/no trailing newline/blank lines
+PASS L-R2-quoting-and-trim [R2,R3,R12] quoted fields, doubled quotes, trimming, extra columns, signs, 12 digits
+PASS L-R2-utf8 [R2] UTF-8 descriptions pass through byte-exact
+PASS L-R2-structure-errors [R2,R4] malformed headers/rows abort with exit 65 and physical line numbers
+PASS L-R3-invalid-values [R3,R4] each invalid date/amount aborts with exit 65 naming the line
+PASS L-R3-valid-values [R3,R12] boundary-valid dates/amounts accepted and canonicalized
+PASS L-R3-exact-cents [R3,R7] sums are exact (no float drift), large values exact
+PASS L-R4-strict-no-side-effects [R4,R14] strict failure: empty stdout, no --out file, diagnostic names line
+PASS L-R4-lenient [R4] --lenient skips invalid rows, counts them, header errors stay fatal
+PASS L-R5-check-rules-ok [R5] check-rules OK line
+PASS L-R5-check-rules-errors [R5] rules errors name the physical line, exit 65
+PASS L-R6-priority-and-regex [R6,R12] first matching rule wins, unanchored, case-sensitive, (?i)
+PASS L-R6-no-rules [R6,R7,R8] summary without --rules: everything Uncategorized, no budgets section
+PASS L-R8-category-order [R8] category rows: month, expenses desc, name asc
+PASS L-R9-budget-semantics [R9] equal is OK, refunds do not reduce spend, Uncategorized budget, zero-spend rows
+PASS L-R10-month-filter [R10] --month filters; no match gives empty report; bad month is usage error
+PASS L-R11-json-golden [R11] JSON document shape and values for basic fixture
+PASS L-R7-negative-net-format [R7] negative net formatting, income-only month, no '-0.00'
+PASS L-R12-categorize-golden [R12,R6] categorize golden output
+PASS L-R12-quoting-rules [R12] category/description quoting only when needed
+PASS L-R13-stdin [R13,R16] INPUT '-' reads stdin; no grants needed without --rules
+PASS L-R14-out-file [R14,R9] --out writes the stdout bytes, keeps exit code, stdout empty
+PASS L-R15-max-rows [R15] --max-rows limit exit 70, empty stdout, no file
+PASS L-R15-runtime-limits [R15] tiny instruction/memory ceilings stop the run promptly with no partial report
+PASS L-R16-read-denied [R16,R18] no grants: reading input/rules file is a clean denial (77)
+PASS L-R16-scope [R16] read grant is scoped to its root; paths outside are denied; missing inside is 66
+PASS L-R16-write-denied [R16,R14] read-only grant: --out is denied (77), nothing created; write-only grant cannot read
+PASS L-R16-minimal-grants [R16] works with ONLY the narrow filesystem grants (no network/process/env/db)
+PASS L-R17-scale-oracle [R17,R7,R8,R9,R6] 5,000 generated rows match an independent Python oracle; output deterministic
+PASS L-R18-no-stderr-on-success [R18] successful runs write nothing to stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+PASS R16
+PASS R17
+PASS R18
+
+35 tests, 35 passed, 0 failed
+Built /tmp/tmp.P5cLqBS4Jy/healthwatch.hfbc
+
+==== healthwatch ====
+PASS H-R1-version-help [R1] version string; help usage text
+PASS H-R1-usage-errors [R1,R14] usage errors: exit 2, no stdout, no I/O, no network, no state
+PASS H-R2-validate-ok [R2,R12] validate accepts good configs; needs only file read; stdin works with no grants
+PASS H-R2-validate-errors [R2,R14] every config rule yields exit 65 with 'config: <path>:' and nothing else on stdout
+PASS H-R2-run-validates-before-io [R2,R7] run reports config errors before any request or state change
+PASS H-R2-defaults-merge [R2,R3,R4] defaults are inherited and overridden per check
+PASS H-R3-basic-golden [R3,R4,R7,R8,R14] golden text report for the basic config with fresh state; exit 1
+PASS H-R8-json-format [R8,R3] JSON report shape
+PASS H-R3-no-state-no-events [R3,R7,R13] without --state: no events, no state files, only network grant needed (config on stdin)
+PASS H-R4-expectations [R4,R3] status lists, body_contains, json_assert semantics and reasons
+PASS H-R4-methods-and-bodies [R4,R3] method and body observed by the server are exactly the configured ones
+PASS H-R5-retries [R5,R3] retry counts, attempts, stop at first PASS, request counts at the server
+PASS H-R5-retry-delay [R5] retry_delay_ms pauses between attempts
+PASS H-R6-resilience-and-size-limit [R6,R11] refused / oversized / bad checks never stop the run; fetch-size limit => response_too_large
+PASS H-R7-state-lifecycle [R7,R8] new/down/recovered/removed events, since & consecutive_failures bookkeeping across runs
+PASS H-R7-all-fail-first-run [R7] state is written even when every check fails; ERROR results recorded with null http status
+PASS H-R7-state-corrupt [R7,R2] invalid state files => exit 65 before any request, file left untouched
+PASS H-R7-preflight-denied [R7,R12] state not readable/writable => exit 77 with ZERO requests sent
+PASS H-R7-denied-keeps-state [R7,R12] DENIED checks leave existing state untouched, add nothing, emit no events
+PASS H-R9-status [R9] status command: sorting, formats, --fail-if-down, missing/corrupt
+PASS H-R10-env-interpolation [R10,R14] ${ENV:} expands in url/body, secrets never leak to stdout/stderr/state
+PASS H-R11-check-limit [R11] more than 500 checks => exit 70, no requests
+PASS H-R11-deadline [R11,R7] runner deadline stops a slow run promptly, state untouched
+PASS H-R11-instruction-limit [R11] tiny instruction ceiling stops the program with non-zero exit
+PASS H-R12-network-denied [R12,R3,R14] no fetch grant: every check DENIED, full report, exit 77, zero requests, no retries
+PASS H-R12-mixed-and-redirect [R12,R3,R6] per-host grants; DENIED outranks FAIL in the exit code; redirect hop to ungranted port is DENIED
+PASS H-R12-fs-denied [R12,R14] config read denied/out-of-scope => 77 and zero requests; missing config => 66
+PASS H-R12-minimal-grants [R12,R13] success with exactly: read dir + write dir + fetch grant (no process/database/network-serving)
+PASS H-R14-hygiene [R14] diagnostics prefixed; no URLs/hosts/bodies in any output; clean runs are silent on stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+
+29 tests, 29 passed, 0 failed
+Built /tmp/tmp.P5cLqBS4Jy/taskflow.hfbc
+
+==== taskflow ====
+PASS T-R1-version-help [R1] version string; help usage text; needs no grants
+PASS T-R1-usage-errors [R1,R15] usage errors: exit 2, no stdout, no I/O, nothing executed
+PASS T-R1-default-task-and-stdin [R1,R5] default task used when none given; -f - reads stdin; -f file works with read grant
+PASS T-R2-parse-errors [R2,R5,R14] every grammar violation: exit 65 with '-:LINE:' prefix, nothing on stdout
+PASS T-R2-cycles [R2,R5] dependency cycles are load errors naming the cycle, even if unreferenced
+PASS T-R2-filename-in-diagnostic [R2,R13] diagnostic names the -f argument exactly; missing file => 66
+PASS T-R2-valid-formats [R2,R5] CRLF, tabs, comments, blank lines, zero-run tasks, desc; list golden
+PASS T-R5-plan-order [R5] post-order, declaration-order deps, no repeats, multiple/duplicate targets
+PASS T-R5-scale-chain [R5,R15] 300 chained tasks planned correctly; 1000 tasks fine, 1001 => exit 70
+PASS T-R3-variables-dry [R3,R8] set, -D override, -D-only, recursion, $$, quoting contexts (dry-run shows expanded argv)
+PASS T-R3-variable-errors [R3] undefined variable / cycles found by run (exit 65, FILE:LINE), not by plan/list
+PASS T-R8-dry-run-semantics [R8,R12,R11] dry-run: nothing executed, no process/env grants needed, ${env:} stays verbatim, relative program rejected
+PASS T-R4-argv-fidelity [R4,R3,R11] child argv equals the expanded words exactly (quotes, blanks, empty args, UTF-8, no re-splitting)
+PASS T-R4-no-shell [R4,R15] shell metacharacters in arguments have no effect
+PASS T-R4-program-checks [R4,R6,R7] relative program => 65 before anything runs; missing absolute program => FAILED (error)
+PASS T-R6-basic-run-golden [R6,R5] golden output of a successful pipeline, exit 0
+PASS T-R6-output-shapes [R6] output without trailing newline, empty lines, interleaved stderr, no output, exit codes
+PASS T-R7-fail-fast [R7,R6] fail-fast: first failure aborts, later tasks skipped (aborted), later commands of a failed task not run
+PASS T-R7-keep-going [R7,R6] --keep-going: independent branches run; dependents skipped naming the first non-ok dependency
+PASS T-R6-exit-and-unknown-failure-kinds [R6,R7] exit status 0 only when every task ok; summary counts
+PASS T-R9-report [R9,R7] report JSON for ok and failed runs, written even on failure; plan order
+PASS T-R10-history [R10] history append, formats, --last, trimming to 50, corrupt/missing handling
+PASS T-R11-process-denied [R11,R6,R7] no exec grant: FAILED (denied), one stderr line per denied task, exit 77, nothing executed
+PASS T-R11-exec-allow-list [R11,R7] per-program / per-argv grants honored; denial does not stop independent tasks with --keep-going; 77 outranks 1
+PASS T-R11-env-isolation [R11,R4] children get only process:env= variables; nothing else is inherited
+PASS T-R12-env-expansion-and-denial [R12,R3,R15] ${env:} needs 'environment'; denial before anything runs; no secret leakage
+PASS T-R13-fs-denied [R13,R9,R10] Flowfile/report/history access is governed; denials leave no side effects
+PASS T-R13-minimal-grants [R13,R11] works with exactly: read dir + write dir + exec grant (no network/database/coarse process)
+PASS T-R14-exec-output-limit [R14,R7] runner exec-output limit => FAILED (output limit exceeded), run continues per policy, oversize output not printed
+PASS T-R14-deadline [R14] runner deadline stops a run with a running child promptly
+PASS T-R14-instruction-limit [R14] tiny instruction ceiling stops the program non-zero without success output
+PASS T-R15-determinism-and-hygiene [R15,R6] identical stdout across runs; stderr silent on success; no secret in report/history/stderr
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+
+32 tests, 32 passed, 0 failed
+
+==== Milestone 1: retained regressions ====
+PASS: uncapped budgets, nested dry-run environment, config precedence, state denial
+PASS: 6 supplemental input and state boundaries
+PASS
+PASS
+
+==== Milestone 2: TicketDesk ====
+Built /tmp/tmp.P5cLqBS4Jy/ticketdesk.hfbc
+
+==== frozen acceptance (101) ====
+PASS T-R1-ready-and-sigterm [R1,R4] starts, answers /v1/health, exits within 5s of SIGTERM (0.1s)
+PASS T-R1-missing-admin-token [R1] no TICKETDESK_ADMIN_TOKEN: exit 2 (0.0s)
+PASS T-R1-bad-admin-token [R1] empty / <16 chars / space / non-ASCII admin token: exit 2 (0.1s)
+PASS T-R1-admin-token-length-bounds [R1] 16-char and 256-char admin tokens are accepted (0.2s)
+PASS T-R1-missing-data [R1] no TICKETDESK_DATA: exit 2 (0.0s)
+PASS T-R1-bad-port [R1] TICKETDESK_PORT abc / 0 / 70000 / -1: exit 2 (0.1s)
+PASS T-R1-corrupt-data [R1,R13] garbage in the data file: exit 65, file untouched (0.0s)
+PASS T-R1-data-is-directory [R1] TICKETDESK_DATA is a directory: exit 65 (0.0s)
+PASS T-R1-missing-data-dir [R1] directory of TICKETDESK_DATA missing: exit 66 (0.0s)
+PASS T-R1-empty-data-file-ok [R1,R13] zero-byte data file is valid empty state (0.1s)
+PASS T-R1-error-precedence [R1] env problems (2) win over data (66) problems (0.0s)
+PASS T-R1-port-in-use [R1] busy port: nonzero exit within 15s, no hang (0.0s)
+PASS T-R2-exact-grants-workflow [R2,R5] full workflow under exactly the documented five grants (0.1s)
+PASS T-R2-missing-network [R2] grant network missing: clean startup failure, exit 77 (0.0s)
+PASS T-R2-missing-database [R2] grant database missing: clean startup failure, exit 77 (0.0s)
+PASS T-R2-missing-environment [R2] grant environment missing: clean startup failure, exit 77 (0.0s)
+PASS T-R2-missing-filesystem-read [R2] grant filesystem:read missing: clean startup failure, exit 77 (0.0s)
+PASS T-R2-missing-filesystem-write [R2] grant filesystem:write missing: clean startup failure, exit 77 (0.0s)
+PASS T-R2-missing-grant-not-listening [R2] with a missing grant nothing ever listens (0.0s)
+PASS T-R3-health-public [R3,R4] GET /v1/health needs no token, ignores garbage Authorization (0.1s)
+PASS T-R3-unknown-routes [R3,R8] unknown paths: 404 not_found for every method, with or without auth (0.1s)
+PASS T-R3-method-not-allowed [R3,R8] known path, wrong method: 405 + exact Allow, before authentication (0.0s)
+PASS T-R3-head-not-allowed [R3] HEAD on every route: 405 with Allow (0.0s)
+PASS T-R3-common-headers [R3,R8] Content-Type + X-Request-Id on every response class (0.0s)
+PASS T-R3-request-id-unique [R3] X-Request-Id differs for each of 60 requests; error request_id matches it (0.0s)
+PASS T-R3-request-id-not-echoed [R3] client-supplied X-Request-Id is ignored (0.0s)
+PASS T-R3-location-headers [R3,R5,R11] 201 responses carry Location (0.0s)
+PASS T-R3-check-order [R3,R8,R10] order: route, method, auth, role, existence, ownership, media type, size, JSON, fields (0.0s)
+PASS T-R3-media-type [R3,R7,R8] Content-Type negotiation: accepted and rejected media types (0.0s)
+PASS T-R3-ignored-inputs [R3] unknown query params and GET/DELETE bodies are ignored (0.0s)
+PASS T-R4-me [R4,R9] /v1/me for bootstrap, member, viewer, admin tokens (0.0s)
+PASS T-R5-crud-workflow [R5,R3] create, read, list, patch, delete, read-404 (0.1s)
+PASS T-R5-create-defaults [R5] defaults: body '', priority normal, status open; exact key set (0.0s)
+PASS T-R5-patch-partial [R5] PATCH changes only the given fields, keeps id/owner/created_at, updated_at non-decreasing (0.0s)
+PASS T-R5-ids [R5] ids unique, well-formed and never reused after delete (0.2s)
+PASS T-R5-unicode-roundtrip [R5,R7] unicode, quotes, newlines and escapes round-trip exactly (0.0s)
+PASS T-R5-unknown-id-variants [R5,R8] odd ids are plain 404s (0.0s)
+PASS T-R6-pagination-walk [R6] limit/cursor walk returns everything once, in creation order; exact end has null cursor (0.2s)
+PASS T-R6-default-limit [R6] default limit 20, max 100 accepted (0.2s)
+PASS T-R6-status-filter [R6] status filter applies before paging (0.2s)
+PASS T-R6-invalid-query [R6,R7,R8] invalid limit/status/cursor: 400 validation_failed invalid_value (0.0s)
+PASS T-R6-empty-query-values [R6] empty ?limit= ?status= ?cursor= behave as absent (0.1s)
+PASS T-R6-delete-during-walk [R6] deleting tickets between pages does not break the walk (0.1s)
+PASS T-R6-order-stable-under-edit [R6,R5] editing an old ticket does not move it in the list (0.1s)
+PASS T-R6-visible-to-all-roles [R6,R10] every role sees all tickets (0.1s)
+PASS T-R7-malformed-json [R7,R8] syntactically broken bodies: 400 invalid_json (POST and PATCH) (0.0s)
+PASS T-R7-non-object-json [R7,R8] valid JSON that is not an object: validation_failed on $ (0.0s)
+PASS T-R7-title-rules [R7] title required, string, 1..120 (0.0s)
+PASS T-R7-length-code-points [R7] lengths count code points, not bytes (0.0s)
+PASS T-R7-body-rules [R7] body optional string 0..4000 (0.0s)
+PASS T-R7-priority-rules [R7] priority enum low|normal|high, strict type (0.0s)
+PASS T-R7-status-rules-patch [R7] status enum on PATCH, strict type (0.0s)
+PASS T-R7-unknown-fields [R7,R8] unknown fields are rejected with unknown_field per key (0.0s)
+PASS T-R7-multiple-violations [R7,R8] all violated fields reported together (0.0s)
+PASS T-R7-patch-empty-and-atomic [R7,R5] {} is rejected; invalid patch changes nothing (0.0s)
+PASS T-R7-token-fields [R7,R11] token name/role validation (0.0s)
+PASS T-R8-code-table [R8] each documented error code appears with exactly its documented status (0.0s)
+PASS T-R8-401-message-identical [R8,R9] every 401 has the same fixed message (0.0s)
+PASS T-R8-no-secret-in-errors [R8,R12] error bodies never echo tokens or Authorization values (0.0s)
+PASS T-R9-garbled-credentials [R9,R8] no/garbled/unknown credentials: 401 + WWW-Authenticate (1.1s)
+PASS T-R9-scheme-case [R9] Bearer scheme is case-insensitive (0.0s)
+PASS T-R9-repeated-header [R9] with repeated Authorization headers the first value counts (0.0s)
+PASS T-R9-unauth-writes-do-nothing [R9] unauthenticated mutations do not mutate (0.1s)
+PASS T-R10-matrix [R10] role x operation matrix (R10 table) (0.2s)
+PASS T-R10-ownership [R10] member edits only own tickets; admin edits any without changing owner (0.1s)
+PASS T-R10-role-before-existence [R10,R3] 403/404 ordering for missing tickets (0.0s)
+PASS T-R10-forbidden-no-mutation [R10] denied operations change nothing (0.1s)
+PASS T-R10-privilege-escalation [R10,R7] a member cannot mint a stronger token or change roles (0.0s)
+PASS T-R11-create-token-shape [R11,R3] 201 shape, formats, Cache-Control: no-store, uniqueness (0.0s)
+PASS T-R11-secret-only-once [R11,R12] the secret appears in no later response (0.1s)
+PASS T-R11-list-tokens [R11] list: creation order, revoked included, no bootstrap, no secrets (0.1s)
+PASS T-R11-revoke-effect [R11,R9] revoked token gets 401 on the very next request; revoke is idempotent (0.1s)
+PASS T-R11-revoke-unknown-and-bootstrap [R11,R8] unknown id 404; bootstrap 409 (0.0s)
+PASS T-R11-admin-token-powers [R11,R10] an issued admin token manages tokens, may revoke itself (0.1s)
+PASS T-R11-tickets-outlive-token [R11,R5] tickets stay with their owner id after revocation (0.1s)
+PASS T-R12-secrets-not-in-state [R12,R13] no token secret or Authorization value in any state file; SHA-256 hex is there (0.3s)
+PASS T-R12-secrets-not-on-stderr [R12,R16] no secret or Authorization value on stderr/stdout after a mixed workload (0.3s)
+PASS T-R13-restart-sigterm [R13] tickets, order and tokens identical after SIGTERM restart (0.3s)
+PASS T-R13-sigkill-durability [R13] confirmed mutations survive SIGKILL immediately after the response (0.3s)
+PASS T-R13-id-no-reuse-after-restart [R13,R5] ids of deleted tickets are not reused after restart (0.2s)
+PASS T-R13-bootstrap-rotation [R13,R9] restart with a new bootstrap token: new accepted, old rejected, issued tokens kept (0.2s)
+PASS T-R13-state-in-granted-directory [R13,R2] state lives at TICKETDESK_DATA's directory only (0.1s)
+PASS T-R13-concurrent-no-lost-updates [R13,R17] parallel PATCHes and creates lose nothing (0.3s)
+PASS T-R14-default-ceiling [R14] default 1048576: N bytes processed, N+1 rejected with 413 (0.1s)
+PASS T-R14-custom-ceiling [R14] --max-request-bytes 2048: exact boundary on POST/PATCH/tokens (0.1s)
+PASS T-R14-ceiling-before-json [R14,R8] oversize non-JSON is 413, not invalid_json; multibyte counted in bytes (0.1s)
+PASS T-R14-invalid-flag-values [R14] --max-request-bytes 0 / -5 / abc: runner exits 2 with a diagnostic (0.1s)
+PASS T-R15-fault-shape [R15,R8] forced fault: safe 500, request id, no internals in body or headers (0.1s)
+PASS T-R15-fault-stderr-line [R15,R16] stderr has 'fault request_id=... method=... path=... error=...' with the same id (0.0s)
+PASS T-R15-fault-every-route [R15] fault honored on every known path/method, with and without auth (0.0s)
+PASS T-R15-fault-no-side-effects-and-recovery [R15,R13] after faults the server serves normally and state is unchanged (0.1s)
+PASS T-R15-fault-header-value [R15] only the value 1 triggers; other values and unknown routes are unaffected (0.0s)
+PASS T-R15-fault-disabled-by-default [R15,R9] without TICKETDESK_ALLOW_DEBUG_FAULT=1 the header is inert (0.7s)
+PASS T-R16-access-log-lines [R16] --access-log: one exact line per request incl. 401/404/405/413, path without query (0.3s)
+PASS T-R16-access-log-secrets [R16,R12] access lines never contain tokens or Authorization (0.3s)
+PASS T-R16-no-access-without-flag [R16] without --access-log no 'access ' lines (0.4s)
+PASS T-R16-fault-line-without-flag [R16,R15] fault line is written even without --access-log (0.1s)
+PASS T-R16-access-line-for-fault [R16,R15] a faulting request also gets an access line with status=500 (0.0s)
+PASS T-R17-concurrency-smoke [R17,R5] 20 sequential then 20 parallel creates/reads: all correct, unique ids, healthy (0.3s)
+PASS T-R17-max-size-roundtrip [R17,R7] largest valid ticket (120-char title, 4000-char body) round-trips (0.0s)
+PASS T-R17-error-storm-survival [R17,R8] 50 hostile requests in a row; server stays healthy and consistent (0.3s)
+
+== per-requirement ==
+PASS R1
+PASS R2
+PASS R3
+PASS R4
+PASS R5
+PASS R6
+PASS R7
+PASS R8
+PASS R9
+PASS R10
+PASS R11
+PASS R12
+PASS R13
+PASS R14
+PASS R15
+PASS R16
+PASS R17
+
+101 tests, 101 passed, 0 failed
+
+==== developer-experience checks (13) ====
+PASS extra_close/check [item 1]
+PASS extra_close/build [item 1]
+PASS extra_close_end/check [item 1]
+PASS extra_close_end/build [item 1]
+PASS if_void_int/check [item 4]
+PASS if_void_int/build [item 4]
+PASS let_three_args/check [item 3]
+PASS let_three_args/build [item 3]
+PASS missing_call/build [item 2]
+INFO-no  missing_call/check (optional)
+PASS ok_program/check [item 0]
+PASS ok_program/build [item 0]
+PASS unclosed_deep/check [item 1]
+PASS unclosed_deep/build [item 1]
+
+13 checks, 13 passed, 0 failed
+
+==== reassessment / adversarial ====
+PASS fresh.startup.busy_unchanged [R1.3] occupied port preserves existing empty state bytes (0.0s)
+PASS fresh.startup.network_unchanged [R1.3,R2.2] missing network preserves existing state bytes (0.0s)
+PASS fresh.upload.truncated [R3.3,R7.1,R8,R16] truncated upload keeps error schema, request id and access log (0.1s)
+PASS candidate.state_shape [R1.3] invalid v2 buckets and ticket shapes rejected unchanged (0.2s)
+PASS candidate.truncated_order [R3.4,R15] route/method/auth/fault checks beat truncated body (0.1s)
+PASS candidate.ignored_body [R3.4] GET and DELETE ignore a stalled declared body immediately (0.1s)
+PASS candidate.default_limits [R5,R6,R14] default ceilings handle boundary records across buckets (5.6s)
+PASS candidate.kill_consistency [R13] SIGKILL concurrent creates keep acknowledgments and list/GET consistent (1.7s)
+PASS candidate.kill_updates [R13] SIGKILL patch/delete preserves acknowledgments and bucket consistency (1.0s)
+PASS candidate.token_interruption [R13] atomic token publication preserves confirmed state across real kills (0.6s)
+PASS candidate.migration [R13] offline migration preserves orphan legacy records, tokens and counters (0.4s)
+
+== per-requirement ==
+PASS R1.3
+PASS R2.2
+PASS R3.3
+PASS R3.4
+PASS R5
+PASS R6
+PASS R7.1
+PASS R8
+PASS R13
+PASS R14
+PASS R15
+PASS R16
+
+11 tests, 11 passed, 0 failed
+
+==== historical review regressions ====
+PASS b6_dangling_index_entry_does_not_break_listing
+PASS b6_run24_unindexed_survivor_then_cleanup_deletes
+PASS b5_listing_survives_mass_deletion
+PASS m11_truncated_upload_is_not_executed
+PASS m13_encoded_slash_is_not_an_alias
+PASS b1_default_ceilings
+PASS b2_port_in_use
+PASS b3_stalled_body_does_not_freeze
+PASS b4_exact_paths
+PASS wrong_shape_state
+
+10 tests, 0 failed
+
+==== Assurance m10 (strict expected failures allowed only as recorded) ====
+PASS m10_port_in_use_stderr_shape
+XFAIL m10_port_lost_race_stderr_shape - expected failure, m12 (waiver W-m12, ASSURANCE_M2_FINAL_REVIEW.md): a port taken between the startup probe and the listen prints the raw runtime error object - every stderr line must start with 'ticketdesk: ': '{"phase":"runtime","code":"IO_ERROR","function":"main","instruction":37,"opcode":"HTTP_SERVER_SERVE","message":"http listen failed: listen tcp :53395: bind: address already in use"}\n'
+PASS m10_default_flag_operation
+PASS m10_double_slash_routing_and_authz
+  info: worst normal request 0.01 s; slow-header closed after [10.0, 10.0] s; slow-body closed after [30.0, 30.0, 30.0, 30.0, 30.0, 30.0] s
+PASS m10_slow_body_clients_bounded
+
+5 tests, 0 failed, 1 expected failures
+
+==== restart at default ceilings (1,000 tickets, 100 tokens), SIGKILL, invalid state ====
+  restart with 1000 tickets and 100 tokens took 0.3s
+PASS restart_with_1000_tickets_100_tokens_default_ceilings (21s)
+PASS invalid_state_rejected_without_damage (0s)
+PASS sigkill_keeps_acknowledged_writes_at_default_ceilings (7s)
+3 tests, 0 failed
+
+==== all accepted-application suites passed ====
+acceptance_exit=0

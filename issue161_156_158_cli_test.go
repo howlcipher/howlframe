@@ -39,6 +39,9 @@ func TestIssue156EncodeJSONInt64ExactOnEveryPath(t *testing.T) {
 
 // Issue #158: <, <=, > and >= with a NaN operand are false (IEEE 754,
 // Python), and sort/min/max and the _by forms keep their prior output.
+// to_float refuses "nan" since #225, so the NaN comes from float overflow
+// (Inf - Inf), which NUMERIC_CONTRACT section 7 forbids but the runtimes
+// still allow; the ordering guarantee matters as long as NaN is reachable.
 func TestIssue158NaNOrderingOnEveryPath(t *testing.T) {
 	cmp := []string{}
 	for _, op := range []string{"<", "<=", ">", ">="} {
@@ -46,7 +49,7 @@ func TestIssue158NaNOrderingOnEveryPath(t *testing.T) {
 			cmp = append(cmp, "("+op+" "+pair+")")
 		}
 	}
-	src := `(do (let (n (to_float "nan")) (do (print (str_join (list ` + strings.Join(cmp, " ") + `) " ")) (print (< 1 2.0) (<= 2 2.0) (>= 3.0 3) (> 1.5 1))` +
+	src := `(do (let (big (to_float "1e308") n (- (* big 10.0) (* big 10.0))) (do (print (str_join (list ` + strings.Join(cmp, " ") + `) " ")) (print (< 1 2.0) (<= 2 2.0) (>= 3.0 3) (> 1.5 1))` +
 		` (let (xs (list 3.0 n 1.0 2.0)) (do (print (sort xs)) (print (min xs)) (print (max xs))` +
 		` (print (sort_by x xs (* x 1.0))) (print (max_by x xs x)) (print (min_by x xs x)))))))`
 	want := strings.TrimSpace(strings.Repeat("false ", len(cmp))) + "\ntrue true true true\n[1 2 3 NaN]\n1\n3\n[1 2 3 NaN]\n3\n1\n"

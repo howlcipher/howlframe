@@ -1,0 +1,23 @@
+{
+  "id": "d4-rbac-audit-filter",
+  "domain": "D4",
+  "authority_centred": true,
+  "title": "Tenant-Isolated ABAC Policy Evaluator with Delegation",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade an RBAC access policy evaluator to support multi-tenant boundaries, resource ownership constraints, and time-bounded delegation tokens.",
+  "stdlib_plan": {
+    "python": "sys, os, json, time",
+    "go": "os, encoding/json, time, sort",
+    "javascript": "node:fs, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/policy.json", "workload/requests.json", "workload/decisions.json", "--timestamp", "1700000000"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

@@ -2,6 +2,11 @@
 
 > **Website & Interactive Documentation:** https://howlcipher.github.io/howlframe/
 
+Fresh requirements-first implementations of all three milestones are independently
+accepted and reproducible from committed archives. See [the rebuild evidence ledger](docs/journals/2026-10-21_fresh_milestones.md).
+Historical acceptance is retained separately in [Milestone 2's decision](milestone2/MILESTONE2_DECISION.md).
+The separate remote [Milestone 3 draft](milestone3/M3_ACCEPTANCE_SPEC.md) is preserved as another project track; EvidenceDesk does not claim to implement that receipt-verifier specification.
+
 ## What is HowlFrame?
 
 HowlFrame is an experimental AI-native language and capability-bounded execution runtime.
@@ -21,6 +26,12 @@ Positive exec tests select installed canonical executable paths and matching arg
 grants, so symlinked system coreutils do not invalidate successful-execution
 fixtures. Runtime symlink rejection and explicit denial tests remain unchanged;
 missing fixture executables fail rather than silently skipping acceptance.
+The CLI `version`/`--version` output and interop `hfbc_format` field identify
+the artifact envelope this compiler **writes**, derived from the bytecode writer.
+They do not enumerate all legacy envelopes the reader accepts or identify the
+BCProgram instruction-set version. Check actual artifact compatibility as well
+as these fields before choosing a consumer artifact.
+
 
 ## Why does it exist?
 
@@ -68,6 +79,9 @@ howlframe check hello.howl
 howlframe build hello.howl
 howlframe run hello.hfbc
 ```
+
+`build` writes `<name>.hfbc` to the current directory, even when the source is in another directory; use
+`-o <path>` to choose the output path.
 
 Output:
 ```
@@ -139,7 +153,7 @@ See:
 
 ## Requirements
 
-- Go 1.21 or newer.
+- Go 1.25 or newer (`go.mod` requires it; with the default `GOTOOLCHAIN=auto`, an older Go downloads 1.25 for you).
 - Python 3.10 or newer if you use the optional orchestrator.
 - Ollama or another OpenAI-compatible local model endpoint if you use LLM-backed orchestration.
 
@@ -159,9 +173,11 @@ cd howlframe
 go run howlframe.go examples/cli_hello.howl
 ```
 
-The default Go backend writes `server.go`. Run the generated program with:
+With no subcommand, the compiler checks the program and runs it directly in the bytecode VM. To generate Go
+instead, build with `--target go`, which writes `server.go` to the current directory, then run it:
 
 ```bash
+go run howlframe.go build examples/cli_hello.howl --target go
 go run server.go
 ```
 
@@ -255,6 +271,12 @@ Run it:
 
 ```bash
 go run howlframe.go examples/hello.howl
+```
+
+This serves the program from the bytecode VM. To run it as generated Go instead:
+
+```bash
+go run howlframe.go build examples/hello.howl --target go
 go run server.go
 ```
 
@@ -269,7 +291,8 @@ existing JSON parser with the route request value:
 ```
 
 In the standalone bytecode VM, `req.body` is valid only as the input to
-`parse_json` in an HTTP route. `try_let` can turn malformed JSON into an
+`parse_json` in an HTTP route. Everywhere else, the input to `parse_json` must be
+a variable name, not an expression or literal: bind the text with `let` first. `try_let` can turn malformed JSON into an
 application response. This is a JSON-only route-input path; it does not
 provide a general request-body value, streaming input, or a configurable
 body-size limit. Request bodies are untrusted input, so applications should
@@ -317,9 +340,13 @@ router: no methods, no regular expressions, and no catch-all.
 ```
 
 ```bash
-go run howlframe.go counter.howl
+go run howlframe.go build counter.howl --target js
 node --test app.test.js
 ```
+
+`build --target js` writes `app.js` and, when the program has `test` blocks, `app.test.js` to the current
+directory (or to the directory given with `-o`; an `-o` path ending in `.js` writes only the app). Without
+`--target js`, a `web_app` is rejected by the bytecode target.
 
 ### WebAssembly Text
 
@@ -356,6 +383,7 @@ HowlFrame supports the core control-flow and data primitives expected by the shi
 
 - `let`, `set`, `if`, `while`, `for`, `match`, and `do`.
 - `defun`, `call`, `return`, `type_hint`, and `type_param`.
+- Modules: a file whose root is `(module ...)` marks its public functions with `(export (defun ...))`. The program's top-level file imports it with `(use "file.howl" as m)` and calls an export as `(call m/name args...)`; definitions without `export` stay private to the module. `check` rejects the dotted spelling `(call m.name ...)` for a function the module defines; a dotted call otherwise names Go interop, and a bytecode build refuses any call it cannot resolve. A used module cannot itself `use` another module.
 - `list`, `dict`, `append`, `map_set`, `map_delete`, `map_get`, `map_keys`, and `list_get`.
 - `str_split`, `str_join`, `regex_match`, `to_int`, `to_float`, `to_string`, `bytes_to_string`, `html_escape`, and `attr_escape`.
 - `read_file`, `write_file`, `mkdir`, `exec`, `sleep`, and `cli_args`.
@@ -364,6 +392,19 @@ HowlFrame supports the core control-flow and data primitives expected by the shi
 - Bytecode-native record stores through `store_open`, `store_put`, `store_get`, and `store_delete`.
 
 AI-oriented primitives include `llm_generate`, `fuzzy_cast`, `assert_semantic`, `semantic_match`, `neural_circuit`, `ephemeral_circuit`, `achieve`, `lazy_synthesize`, `optimize_block`, `optimize_signature`, `patch`, `with_context`, `spawn_agent`, and `task`. Backend and VM coverage differs by primitive. On the standalone bytecode target that difference is enforced: `internal/construct` classifies every construct as `Supported`, `CompileTimeOnly`, or `Unsupported`, and `-compile-bc` rejects the unsupported ones before emitting an artifact. The Go backend deliberately stays permissive, because it supports a large open set of heads.
+
+### Authoring notes
+
+These hold for the standalone bytecode target (`build` and `run`):
+
+- `read_file` returns bytes. Convert with `(bytes_to_string b)` before string operations; `(list_len b)` counts bytes.
+- `print` takes any number of values and writes them separated by spaces with a trailing newline. `stderr` takes exactly one value and writes it with no trailing newline.
+- There is no `nil` or `null` literal. Reading a missing key with `map_get` yields null; test it with `(is_nil v)`, and `encode_json` writes it as `null`.
+- There are no rounding or absolute-value built-ins: `round`, `floor`, `ceil` and `abs` fail `build` with `HFIR_TARGET_INFEASIBLE` (`check` does not test target support, so build to confirm). `to_int` truncates toward zero, so `(to_int (+ x 0.5))` rounds a non-negative `x` half up and `(to_int (- x 0.5))` rounds a negative `x` half down. Floating-point representation still applies (`2.675` is stored slightly below itself).
+- Write float literals with a decimal point (`2.5`, `1000000.0`). The [numeric contract](docs/reference/NUMERIC_CONTRACT.md) defines exponent literals such as `1e3`, but the current lexer does not accept them in source (a known deviation); `(to_float "1e3")` works.
+- Untyped `defun` parameters and returns are `string`; declare other types with `(type_hint x "int")` and `(type_hint return "int")`.
+- Programs run under an instruction ceiling (default 100,000) and a cumulative allocation ceiling (default 64 MiB). Large inputs need both raised at `run` time; see [sizing budgets](docs/cli.md#sizing-budgets-for-large-inputs).
+- Numeric conversions and comparisons follow the [numeric contract](docs/reference/NUMERIC_CONTRACT.md).
 
 ## Constrained Decoding Plans
 
@@ -378,21 +419,23 @@ This API does not call a model or map constraints to provider-specific token IDs
 Use `optimize_signature` to record optimization intent around an otherwise normal body expression:
 
 ```lisp
-(optimize_signature support_prompt
-  (metric "accuracy")
-  (test "go test ./...")
-  (candidate "baseline" "Answer clearly.")
-  (candidate "strict" "Answer only with verified facts.")
-  (print "body"))
+(cli_app
+  (let (support_prompt "prompt")
+    (optimize_signature support_prompt
+      (metric "accuracy")
+      (test "go test ./...")
+      (candidate "baseline" "Answer clearly.")
+      (candidate "strict" "Answer only with verified facts.")
+      (print "body"))))
 ```
 
-The form requires a symbol name, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run howlframe.go -optimization-plan program.howl` prints deterministic `howlframe.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
+The form requires a symbol name that refers to a variable or function already in scope, one metric, one or more test commands, one or more labeled candidate payloads, and one body. `go run howlframe.go -optimization-plan program.howl` prints deterministic `howlframe.optimization_plan/v1` JSON containing that metadata, source coordinates, and the inferred body type. The compiler records commands as strings only: it does not run tests, call a model, rewrite source, or select a candidate. Normal Go codegen, direct execution, and bytecode execution evaluate only the wrapped body.
 
 ## Orchestrator
 
 `tools/orchestrator/orchestrator.py` is an optional local-model experiment. It currently uses Outlines with an OpenAI-compatible Ollama endpoint to generate JSON bytecode that is executed by the HowlFrame VM through `-run-bc`.
 
-Start Ollama, make sure the configured model exists, then run:
+From a repository checkout, with Ollama installed, start Ollama, make sure the configured model exists, then run:
 
 ```bash
 ollama serve
@@ -412,7 +455,8 @@ By default, HowlFrame writes generated files into the current directory:
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
 - WebAssembly targets write `app.wat`.
 - SSA WebAssembly compilation writes `<input>.ssa.wat` by default.
-- Bytecode compilation writes `<input>.bc.bin` by default.
+- `howlframe build` (bytecode) writes `<name>.hfbc`; the legacy `-compile-bc` flag writes `<input>.bc.bin`
+  (for example `hello.howl.bc.bin`).
 
 Use `-o <dir>` to write generated artifacts elsewhere:
 
@@ -506,7 +550,7 @@ The project root intentionally keeps only the primary compiler entry point, Go m
 
 The write-cost benchmark compares the time and token cost of having an LLM produce working programs in HowlFrame, Go, Python, Node.js, C#, and Java. The benchmark is measured from checked-in runs, not estimated.
 
-As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Dogfooded real apps (twelve densified apps) total **2331** versus Python **3025**, Go **3295**, and Node **2927**, with app tests and cross-language parity required. Prove locally with:
+As of 2026-10-10 (`cl100k_base`), densified HowlFrame fixtures total **165** tokens across the three tasks versus Python **266**. Dogfooded real apps (twelve densified apps) total **2331** versus Python **3025**, Go **3295**, and Node **2927**, with app tests and cross-language parity required. Prove locally, from a repository checkout, with:
 
 ```bash
 go build -o howlframe howlframe.go

@@ -1,0 +1,37 @@
+=== RUN   TestEnvGrantRefusesCodeLoading
+--- PASS: TestEnvGrantRefusesCodeLoading (0.00s)
+=== RUN   TestEnvGrantRefusesDynamicLoader
+--- PASS: TestEnvGrantRefusesDynamicLoader (0.00s)
+=== RUN   TestExecSlotsAndEnv
+--- PASS: TestExecSlotsAndEnv (0.00s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/capability	0.005s
+=== RUN   TestGoEnvRequiresGrantBeforeRead
+--- PASS: TestGoEnvRequiresGrantBeforeRead (1.20s)
+=== RUN   TestGoEnvExpressionPositionIsMediated
+--- PASS: TestGoEnvExpressionPositionIsMediated (0.00s)
+=== RUN   TestGoExecEnvironmentAndFlagSlots
+--- PASS: TestGoExecEnvironmentAndFlagSlots (1.70s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/backend/gogen	2.911s
+=== RUN   TestNodeEnvironmentCannotBeWidenedByBrowserGrant
+--- PASS: TestNodeEnvironmentCannotBeWidenedByBrowserGrant (0.18s)
+=== RUN   TestJSEnvRequiresGrantBeforeRead
+--- PASS: TestJSEnvRequiresGrantBeforeRead (0.47s)
+=== RUN   TestJSExecEnvironmentAndFlagSlots
+--- PASS: TestJSExecEnvironmentAndFlagSlots (0.64s)
+=== RUN   TestJSCodeLoadingEnv
+--- PASS: TestJSCodeLoadingEnv (0.16s)
+=== RUN   TestJSProxyEnvIgnored
+--- PASS: TestJSProxyEnvIgnored (0.20s)
+=== RUN   TestJSProxyEnvAtStartup
+--- PASS: TestJSProxyEnvAtStartup (0.26s)
+PASS
+ok  	github.com/howlcipher/howlframe/internal/backend/javascript	1.925s
+=== RUN   TestAuthorityExecEnvironment
+    authority_cli_test.go:405: no canonical env
+--- SKIP: TestAuthorityExecEnvironment (0.68s)
+=== RUN   TestIssue166EnvGrantRefusesLoaderVars
+--- PASS: TestIssue166EnvGrantRefusesLoaderVars (0.80s)
+PASS
+ok  	github.com/howlcipher/howlframe	1.493s

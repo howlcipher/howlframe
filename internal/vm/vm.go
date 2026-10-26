@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
@@ -20,6 +21,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"io"
+	"io/fs"
 	"math"
 	"net"
 	"net/http"
@@ -652,10 +654,13 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		case int64:
 			return float64(typed)
 		case float64:
+			if math.IsNaN(typed) || math.IsInf(typed, 0) {
+				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to float", typed), node.Children[1])
+			}
 			return typed
 		case string:
-			parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-			if err != nil {
+			parsed, ok := parseFiniteFloat(typed)
+			if !ok {
 				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", typed), node.Children[1])
 			}
 			return parsed
@@ -864,10 +869,10 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if denied != nil {
 			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
 		}
-		child := exec.Command(cmd, args...)
 		// Children never inherit the host environment; only process:env= names pass.
-		child.Env = capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv)
-		out, err := child.CombinedOutput()
+		var combined bytes.Buffer
+		err := runContained(context.Background(), cmd, args, capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv), &combined)
+		out := combined.Bytes()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
 		}
@@ -879,8 +884,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		path := fmt.Sprint(interp.eval(node.Children[1], env))
 		path = interp.requireFilesystem(path, false, node)
-		b, err := os.ReadFile(path)
+		b, err := capability.Grants(interp.AllowedCaps).ScopedReadFile(path)
 		if err != nil {
+			interp.failScopedFilesystem(err, node)
 			InterpErr(fmt.Sprintf("IO_ERROR: read_file failed: %v", err), node)
 		}
 		return b
@@ -901,7 +907,8 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 				InterpErr(fmt.Sprintf("TYPE_ERROR: write_file expected string data, got %T", v), node)
 			}
 			writePath = interp.requireFilesystem(writePath, true, node)
-			if err := os.WriteFile(writePath, data, 0644); err != nil {
+			if err := capability.Grants(interp.AllowedCaps).ScopedWriteFile(writePath, data, 0644); err != nil {
+				interp.failScopedFilesystem(err, node)
 				InterpErr(fmt.Sprintf("IO_ERROR: write_file failed: %v", err), node)
 			}
 			return nil
@@ -914,12 +921,16 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			dirPath := fmt.Sprint(interp.eval(node.Children[1], env))
 			dirPath = interp.requireFilesystem(dirPath, true, node)
-			if err := os.MkdirAll(dirPath, 0755); err != nil {
+			if err := capability.Grants(interp.AllowedCaps).ScopedMkdirAll(dirPath, 0755); err != nil {
+				interp.failScopedFilesystem(err, node)
 				InterpErr(fmt.Sprintf("IO_ERROR: mkdir failed: %v", err), node)
 			}
 			return nil
 		}
 	case "fetch":
+		if len(node.Children) == 5 {
+			InterpErr("UNSUPPORTED_ON_TARGET: fetch headers are supported only by the JavaScript target", node)
+		}
 		// requireCapability already ran for network. The request is sent only
 		// after that grant, so a denial cannot open a connection.
 		if len(node.Children) != 3 && len(node.Children) != 4 {
@@ -1621,6 +1632,9 @@ func SliceToAny(strs []string) []any {
 }
 
 type BCVM struct {
+	// startup marks the root VM of an HTTP server program (see instructionLimit).
+	startup bool
+
 	receipt         *receiptRecorder
 	receiptDecision *effectDecision
 
@@ -1788,7 +1802,7 @@ func newBCStoreRegistry() *bcStoreRegistry {
 	return &bcStoreRegistry{stores: make(map[string]*bcMemoryStore)}
 }
 
-func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
+func (registry *bcStoreRegistry) open(uri string, grants capability.Grants) (*bcMemoryStore, error) {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 
@@ -1797,7 +1811,7 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 		store = &bcMemoryStore{records: make(map[string]map[string]any)}
 		if strings.HasPrefix(uri, "file://") {
 			store.file = strings.TrimPrefix(uri, "file://")
-			data, err := os.ReadFile(store.file)
+			data, err := grants.ScopedReadFile(store.file)
 			if err != nil && !os.IsNotExist(err) {
 				return nil, fmt.Errorf("read persisted store %q: %w", store.file, err)
 			}
@@ -1816,8 +1830,10 @@ func (registry *bcStoreRegistry) open(uri string) (*bcMemoryStore, error) {
 	return store, nil
 }
 
+// syncToFile persists records with unrestricted file access. It exists for
+// tests and tools; the VM persists through syncToFileScoped.
 func (s *bcMemoryStore) syncToFile(records map[string]map[string]any) error {
-	return s.syncToFileTimed(records, nil)
+	return s.syncToFileScoped(records, nil, capability.Grants{capability.Filesystem})
 }
 
 // storePersistTiming records how long each phase of one persisted-store write
@@ -1833,7 +1849,10 @@ type storePersistTiming struct {
 // force the line.
 var storeTimingThreshold = 100 * time.Millisecond
 
-func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timing *storePersistTiming) error {
+// syncToFileScoped writes the store file through a scope opened on the granted
+// root, so a path component replaced while the program runs cannot redirect the
+// write outside that root.
+func (s *bcMemoryStore) syncToFileScoped(records map[string]map[string]any, timing *storePersistTiming, grants capability.Grants) error {
 	if s.file == "" {
 		return nil
 	}
@@ -1846,7 +1865,12 @@ func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timin
 	if err != nil {
 		return fmt.Errorf("encode persisted store %q: %w", s.file, err)
 	}
-	if err := writeFileAtomicTimed(s.file, data, timing); err != nil {
+	scope, err := grants.OpenScope(s.file, true)
+	if err != nil {
+		return fmt.Errorf("write persisted store %q: %w", s.file, err)
+	}
+	defer scope.Close()
+	if err := writeAtomicScoped(scope, data, timing); err != nil {
 		return fmt.Errorf("write persisted store %q: %w", s.file, err)
 	}
 	if timing != nil {
@@ -1856,14 +1880,22 @@ func (s *bcMemoryStore) syncToFileTimed(records map[string]map[string]any, timin
 }
 
 // writeFileAtomic replaces path with data through a synced temporary sibling
-// and a rename, so a crash leaves either the old or the new complete file.
+// and a rename, so a crash leaves either the old or the new complete file. It
+// uses unrestricted file access; the VM uses writeAtomicScoped.
 func writeFileAtomic(path string, data []byte) error {
-	return writeFileAtomicTimed(path, data, nil)
+	scope, err := capability.Grants{capability.Filesystem}.OpenScope(path, true)
+	if err != nil {
+		return err
+	}
+	defer scope.Close()
+	return writeAtomicScoped(scope, data, nil)
 }
 
-// writeFileAtomicTimed is writeFileAtomic that also records per-phase
-// durations into timing when it is non-nil. The I/O sequence is identical.
-func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) error {
+// writeAtomicScoped replaces the scope's target with data through a synced
+// temporary sibling in the same directory and a rename, recording per-phase
+// durations into timing when it is non-nil. Every step goes through the scope's
+// filesystem, so for a scoped grant none of them can leave the granted root.
+func writeAtomicScoped(scope *capability.Scope, data []byte, timing *storePersistTiming) error {
 	mark := time.Now()
 	lap := func() time.Duration {
 		now := time.Now()
@@ -1871,18 +1903,30 @@ func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) 
 		mark = now
 		return elapsed
 	}
-	dir, base := filepath.Split(path)
-	if dir == "" {
-		dir = "." // CreateTemp("") would use system temp, possibly another device.
+	base := filepath.Base(scope.Name)
+	var (
+		tmp  *os.File
+		name string
+		err  error
+	)
+	for attempt := 0; attempt < 100; attempt++ {
+		var suffix [8]byte
+		if _, rerr := rand.Read(suffix[:]); rerr != nil {
+			return rerr
+		}
+		name = scope.Sibling(base + ".tmp-" + hex.EncodeToString(suffix[:]))
+		tmp, err = scope.FS.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil || !errors.Is(err, fs.ErrExist) {
+			break
+		}
 	}
-	tmp, err := os.CreateTemp(dir, base+".tmp-*")
 	if err != nil {
-		return err
+		return scope.Classify(err)
 	}
-	name := tmp.Name()
+	remove := func() { scope.FS.Remove(name) }
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
@@ -1890,32 +1934,33 @@ func writeFileAtomicTimed(path string, data []byte, timing *storePersistTiming) 
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
 		timing.Fsync = lap()
 	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		remove()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(name)
+		remove()
 		return err
 	}
 	if timing != nil {
 		timing.Close = lap()
 	}
-	if err := os.Chmod(name, 0o644); err != nil {
-		os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return err
+	if err := scope.FS.Rename(name, scope.Name); err != nil {
+		remove()
+		return scope.Classify(err)
 	}
 	if timing != nil {
 		timing.Rename = lap()
 	}
 	// Make the rename itself durable.
-	if d, err := os.Open(filepath.Dir(path)); err == nil {
+	if d, err := scope.FS.OpenFile(scope.Dir(), os.O_RDONLY, 0); err == nil {
 		d.Sync()
 		d.Close()
 	}
@@ -2007,6 +2052,7 @@ func runBytecodeEvidence(prog *bytecode.BCProgram, cliArgs []string, policy Exec
 		ErrOut:      errOut,
 		trace:       &boundedTrace{limit: traceLimit},
 		mapLedger:   newMapStateLedger(),
+		startup:     programServesHTTP(prog),
 	}
 	if vm.In == nil {
 		vm.In = os.Stdin
@@ -2210,7 +2256,7 @@ func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string
 	if vm.Limits.LogTiming && store.file != "" {
 		timing = &storePersistTiming{}
 	}
-	err := store.syncToFileTimed(records, timing)
+	err := store.syncToFileScoped(records, timing, capability.Grants(vm.AllowedCaps))
 	if timing != nil && err == nil && timing.Total >= storeTimingThreshold && vm.ErrOut != nil {
 		kind := "put"
 		if op == bytecode.OpStoreDelete {
@@ -2221,6 +2267,7 @@ func (vm *BCVM) persistStore(store *bcMemoryStore, records map[string]map[string
 			durMS(timing.Rename), durMS(timing.DirSync), durMS(timing.Total), durMS(time.Since(processStart)))
 	}
 	if err != nil {
+		vm.failScopedFilesystem(err, op)
 		panic(NewRuntimeError("STORE_PERSISTENCE_WRITE_FAILED", "main", vm.ip, op, "%v", err))
 	}
 	store.records = records
@@ -2413,7 +2460,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		// MaxInstructions is the maximum number of instructions allowed. Check
 		// before incrementing so an exact budget succeeds and even MaxInt cannot
 		// overflow into effectively unlimited execution.
-		if vm.Limits.MaxInstructions <= 0 || vm.executed >= vm.Limits.MaxInstructions {
+		if limit := vm.instructionLimit(); limit <= 0 || vm.executed >= limit {
 			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
 		}
 		vm.executed++
@@ -2536,7 +2583,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if strings.HasPrefix(uri, "file://") {
 				uri = "file://" + vm.requireFilesystem(strings.TrimPrefix(uri, "file://"), false, inst.Op)
 			}
-			store, err := vm.stores.open(uri)
+			store, err := vm.stores.open(uri, capability.Grants(vm.AllowedCaps))
 			if err != nil {
 				code := "STORE_PERSISTENCE_READ_FAILED"
 				if strings.Contains(err.Error(), "decode persisted store") {
@@ -2698,8 +2745,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
 			path = vm.requireFilesystem(path, false, inst.Op)
-			b, err := os.ReadFile(path)
+			b, err := capability.Grants(vm.AllowedCaps).ScopedReadFile(path)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
 			}
 			vm.chargeBytes(len(b), ip, inst.Op)
@@ -2719,15 +2767,17 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			default:
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "write_file expected string or byte list data, got %T", dataAny))
 			}
-			err := os.WriteFile(path, data, 0644)
+			err := capability.Grants(vm.AllowedCaps).ScopedWriteFile(path, data, 0644)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "write_file failed: %v", err))
 			}
 		case bytecode.OpMkdir:
 			path := vm.popCheckedString(inst, ip, "mkdir expected string")
 			path = vm.requireFilesystem(path, true, inst.Op)
-			err := os.MkdirAll(path, 0755)
+			err := capability.Grants(vm.AllowedCaps).ScopedMkdirAll(path, 0755)
 			if err != nil {
+				vm.failScopedFilesystem(err, inst.Op)
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "mkdir failed: %v", err))
 			}
 		case bytecode.OpExec:
@@ -2744,16 +2794,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
 			}
 			cmdCtx, cancel := context.WithCancel(vm.ctx)
-			cmd := exec.CommandContext(cmdCtx, cmdStr, args...)
-			// Children never inherit the host environment; only process:env= names pass.
-			cmd.Env = capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv)
 			output := &limitedOutput{max: max, cancel: cancel}
-			cmd.Stdout, cmd.Stderr = output, output
-			// Bound inherited pipe waits when the runner has a deadline.
-			if vm.ctx.Done() != nil {
-				cmd.WaitDelay = 100 * time.Millisecond
-			}
-			err := cmd.Run()
+			// Children never inherit the host environment; only process:env= names pass.
+			// runContained also ends every descendant when the call ends (HF-02).
+			err := runContained(cmdCtx, cmdStr, args, capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv), output)
 			cancel()
 			vm.checkDeadline(ip, inst.Op)
 			if output.exceeded {
@@ -2797,7 +2841,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				limitedReader := io.LimitReader(req.Body, int64(maxBodyBytes)+1)
 				readData, err := io.ReadAll(limitedReader)
 				if err != nil {
-					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", err))
+					panicRequestBodyError(ip, inst, err)
 				}
 				if len(readData) > maxBodyBytes {
 					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBodyBytes))
@@ -2807,7 +2851,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			} else {
 				bodyAny, ok := env.get(bodyVar)
 				if !ok {
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined var: "+bodyVar))
+					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "undefined var: %s", bodyVar))
 				}
 				if s, ok := bodyAny.(string); ok {
 					data = []byte(s)
@@ -2946,31 +2990,20 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 							durMS(locked.Sub(started)), durMS(ended.Sub(locked)), durMS(ended.Sub(started)))
 					}()
 				}
-				if serial, ok := capturedEnv.vars["__http_serial"].(*sync.Mutex); ok {
-					// Read the body (bounded) before taking the lock, so a slow
-					// client cannot hold every other request hostage.
-					if r.Body != nil {
-						limit := vm.Limits.MaxRequestBodyBytes
-						if limit <= 0 {
-							limit = DefaultLimits.MaxRequestBodyBytes
-						}
-						buffered, readErr := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
-						if readErr != nil {
-							// A truncated or stalled upload is never executed.
-							w.Header().Set("Content-Type", "application/json")
-							w.WriteHeader(http.StatusBadRequest)
-							_, _ = io.WriteString(w, `{"error":"request body was not received completely","request_id":"`+requestID+`"}`+"\n")
-							return
-						}
-						r.Body = io.NopCloser(bytes.NewReader(buffered))
-					}
-					serial.Lock()
-					defer serial.Unlock()
-					locked = time.Now()
-				}
 				r = httpreq.WithRequestID(r, requestID)
 				w.Header().Set("X-Request-Id", requestID)
-				recorder := &httpResponseRecorder{ResponseWriter: w}
+				// With (serialize_requests) the handler runs under a process-wide lock.
+				// Its response is collected in memory and written to the client only
+				// after the lock is released, so a client that stops reading cannot
+				// hold the lock and stall every other request (audit HF-04). Without
+				// the lock, writes go straight to the client under a write deadline.
+				serial, isSerial := capturedEnv.vars["__http_serial"].(*sync.Mutex)
+				var buffered *bufferedResponse
+				recorder := &httpResponseRecorder{ResponseWriter: w, deadline: true}
+				if isSerial {
+					buffered = newBufferedResponse(w.Header())
+					recorder = &httpResponseRecorder{ResponseWriter: buffered}
+				}
 				if vm.Limits.LogRequests {
 					defer func() {
 						status := recorder.status
@@ -2980,6 +3013,37 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 						fmt.Fprintf(vm.ErrOut, "access method=%s path=%s status=%d duration_ms=%d request_id=%s\n",
 							r.Method, r.URL.EscapedPath(), status, time.Since(started).Milliseconds(), requestID)
 					}()
+				}
+				if isSerial {
+					// Read the body (bounded) before taking the lock, so a slow
+					// client cannot hold every other request hostage.
+					if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodDelete || r.Method == http.MethodOptions {
+						// These methods have no application body. Do not wait for
+						// ignored bytes or let net/http drain them before responding.
+						if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+							r.Close = true
+							recorder.Header().Set("Connection", "close")
+						}
+						r.Body = http.NoBody
+					} else if r.Body != nil {
+						limit := vm.Limits.MaxRequestBodyBytes
+						if limit <= 0 {
+							limit = DefaultLimits.MaxRequestBodyBytes
+						}
+						buffered, readErr := io.ReadAll(io.LimitReader(r.Body, int64(limit)+1))
+						if readErr != nil {
+							// Keep route/method/auth checks ahead of body validation.
+							// Never expose partial bytes as a complete JSON document.
+							r.Body = incompleteRequestBody{}
+						} else {
+							r.Body = io.NopCloser(bytes.NewReader(buffered))
+						}
+					}
+					serial.Lock()
+					locked = time.Now()
+					// Deferred first so it runs after the unlock below.
+					defer buffered.flushTo(w)
+					defer serial.Unlock()
 				}
 				reqEnv := NewBcEnv(capturedEnv)
 				reqEnv.vars["w"] = http.ResponseWriter(recorder)
@@ -3005,6 +3069,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 								Code:    "HANDLER_PANIC",
 								Message: fmt.Sprint(recovered),
 							}
+						}
+						if failure.Code == "INVALID_REQUEST_BODY" && !recorder.wrote {
+							recorder.Header().Set("Content-Type", "application/json")
+							recorder.WriteHeader(http.StatusBadRequest)
+							_ = json.NewEncoder(recorder).Encode(map[string]any{"error": map[string]string{
+								"code": "invalid_json", "message": "Request body was not received completely.", "request_id": requestID,
+							}})
+							return
 						}
 						// Details (code, opcode, message) stay in the server log
 						// and the receipt; the client only learns that the
@@ -3040,7 +3112,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			// Timeouts keep a stalled client from holding a connection (and, with
 			// (serialize_requests), the handler lock) forever.
 			server := &http.Server{
-				Addr:              ":" + port,
+				Addr:              net.JoinHostPort(vm.Limits.HTTPListenHost, port),
 				Handler:           dispatch,
 				ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout:       30 * time.Second,
@@ -3500,7 +3572,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if req.Body != nil {
 				readData, readErr := io.ReadAll(io.LimitReader(req.Body, int64(maxBody)+1))
 				if readErr != nil {
-					panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "failed to read request body: %v", readErr))
+					panicRequestBodyError(ip, inst, readErr)
 				}
 				if len(readData) > maxBody {
 					panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "request body exceeds maximum limit of %d bytes", maxBody))
@@ -3529,7 +3601,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if convErr != nil || n < 1 || n > 65535 {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "port_available: port must be an integer 1..65535"))
 			}
-			ln, listenErr := net.Listen("tcp", ":"+strconv.Itoa(n))
+			ln, listenErr := net.Listen("tcp", net.JoinHostPort(vm.Limits.HTTPListenHost, strconv.Itoa(n)))
 			if listenErr == nil {
 				ln.Close()
 			}
@@ -3890,7 +3962,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, startup: vm.startup, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
@@ -4096,12 +4168,15 @@ func BcConvert(target string, a any) any {
 	case "to_float":
 		switch t := a.(type) {
 		case string:
-			v, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
-			if err != nil {
+			v, ok := parseFiniteFloat(t)
+			if !ok {
 				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %q to float", t))
 			}
 			return v
 		case float64:
+			if math.IsNaN(t) || math.IsInf(t, 0) {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %v to float", t))
+			}
 			return t
 		case int64:
 			return float64(t)
@@ -4124,6 +4199,18 @@ func BcConvert(target string, a any) any {
 		return strings.TrimSpace(fmt.Sprint(a))
 	}
 	return a
+}
+
+// parseFiniteFloat is to_float on a string for the interpreter and the VM
+// (NUMERIC_CONTRACT sections 2.3 and 8.2). It trims surrounding whitespace and
+// refuses overflow, as strconv.ParseFloat does, and also refuses the NaN, Inf
+// and Infinity spellings that strconv.ParseFloat accepts in any case (#225).
+func parseFiniteFloat(text string) (float64, bool) {
+	value, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0, false
+	}
+	return value, true
 }
 
 func BcSliceToAny(strs []string) []any {
@@ -4205,10 +4292,31 @@ func normalizeForJSON(v any) any {
 // httpResponseRecorder tracks whether a route handler committed a response.
 // The VM needs this to tell a handler that answered from one that panicked
 // before writing anything, so only the latter is converted into a 500.
+// A serial handler sees a framing error only if it reads its request body.
+// The reader discards partial bytes, so valid-looking truncated JSON cannot mutate
+// an application that validates the body before writing state.
+var errIncompleteRequestBody = errors.New("request body was not received completely")
+
+type incompleteRequestBody struct{}
+
+func (incompleteRequestBody) Read([]byte) (int, error) { return 0, errIncompleteRequestBody }
+func (incompleteRequestBody) Close() error             { return nil }
+
+func panicRequestBodyError(ip int, inst bytecode.BCInstruction, err error) {
+	code := "IO_ERROR"
+	if errors.Is(err, errIncompleteRequestBody) {
+		code = "INVALID_REQUEST_BODY"
+	}
+	panic(NewRuntimeError(code, "main", ip, inst.Op, "failed to read request body: %v", err))
+}
+
 type httpResponseRecorder struct {
 	http.ResponseWriter
 	wrote  bool
 	status int
+	// deadline sets a write deadline before each write to the client. It is off
+	// when the sink is an in-memory buffer, which flushes with its own deadline.
+	deadline bool
 }
 
 func (w *httpResponseRecorder) WriteHeader(status int) {
@@ -4216,12 +4324,20 @@ func (w *httpResponseRecorder) WriteHeader(status int) {
 		w.status = status
 	}
 	w.wrote = true
+	w.armWriteDeadline()
 	w.ResponseWriter.WriteHeader(status)
 }
 
 func (w *httpResponseRecorder) Write(b []byte) (int, error) {
 	w.wrote = true
+	w.armWriteDeadline()
 	return w.ResponseWriter.Write(b)
+}
+
+func (w *httpResponseRecorder) armWriteDeadline() {
+	if w.deadline {
+		setResponseWriteDeadline(w.ResponseWriter)
+	}
 }
 
 // Shared across child VMs; charges are cumulative and never reclaimed.
@@ -4255,6 +4371,27 @@ func (vm *BCVM) chargeBytes(n, ip int, op bytecode.Opcode) {
 	// Source bytes plus the converted any-slice representation (eight bytes/slot).
 	vm.chargeAlloc(n, ip, op)
 	vm.chargeSlots(n, 8, ip, op)
+}
+
+// instructionLimit is the instruction ceiling in force for this VM. Startup code
+// of an HTTP server program may have its own, larger ceiling
+// (VMLimits.MaxStartupInstructions); request handlers never do.
+func (vm *BCVM) instructionLimit() int {
+	limit := vm.Limits.MaxInstructions
+	if vm.startup && vm.Limits.MaxStartupInstructions > limit && limit > 0 {
+		limit = vm.Limits.MaxStartupInstructions
+	}
+	return limit
+}
+
+// programServesHTTP reports whether the program's main code defines an HTTP server.
+func programServesHTTP(prog *bytecode.BCProgram) bool {
+	for _, inst := range prog.Main {
+		if inst.Op == bytecode.OpHttpServerStart {
+			return true
+		}
+	}
+	return false
 }
 
 func (vm *BCVM) checkDeadline(ip int, op bytecode.Opcode) {
@@ -4443,6 +4580,22 @@ func (interp *Interpreter) requireFilesystem(path string, write bool, node *ast.
 		InterpErr("capability denied: filesystem", node)
 	}
 	return filesystemIOPath(path, grants)
+}
+
+// failScopedFilesystem converts the scoped-I/O refusal (the target left the
+// granted root while the operation ran, or no grant covers it) into the same
+// CAPABILITY_DENIED the up-front check reports. Other errors return unchanged.
+func (vm *BCVM) failScopedFilesystem(err error, op bytecode.Opcode) {
+	if errors.Is(err, capability.ErrFilesystemDenied) {
+		vm.recordEffect(capability.Filesystem, op, "denied")
+		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", capability.Filesystem))
+	}
+}
+
+func (interp *Interpreter) failScopedFilesystem(err error, node *ast.Node) {
+	if errors.Is(err, capability.ErrFilesystemDenied) {
+		InterpErr("capability denied: filesystem", node)
+	}
 }
 
 // Use exactly the normalized path checked by scoped grants, so symlink/.. OS

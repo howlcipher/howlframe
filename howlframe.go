@@ -24,14 +24,19 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 	"github.com/howlcipher/howlframe/internal/vm"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const Version = "0.1.0"
-const HFBCFormatVersion = "1"
+
+// HFBCFormatVersion advertises the envelope this compiler writes, not the
+// BCProgram instruction-set version or every legacy envelope it can read.
+var HFBCFormatVersion = strconv.FormatUint(uint64(bytecode.ArtifactVersion), 10)
 
 func init() {
 	gob.Register(float64(0))
@@ -41,7 +46,7 @@ func init() {
 func main() {
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help") {
+		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help" || cmd == "interop") {
 			runSubcommand()
 			return
 		}
@@ -68,6 +73,7 @@ func main() {
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := flag.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	timingLog := flag.Bool("timing-log", false, "diagnostic: write per-request timing and slow store-write timing lines to stderr")
 	deadline := flag.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 	validateMode := flag.Bool("validate", false, "run lexer, parser, and semantic checker without transpiling")
@@ -163,6 +169,11 @@ func main() {
 			os.Exit(1)
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInstructions
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.LogTiming = *timingLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
@@ -218,7 +229,7 @@ func main() {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
@@ -244,7 +255,7 @@ func main() {
 			ast.ReportError(fmt.Sprintf("HFIR direct lowering failed: %s", diags[0].Message), diags[0].Location.Line, diags[0].Location.Column)
 		}
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
@@ -281,7 +292,7 @@ func main() {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
 		}
 		outFile := filepath.Join(outputDir, strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))+".hfbc")
@@ -634,6 +645,8 @@ func runSubcommand() {
 		}
 	case "version":
 		fmt.Printf("HowlFrame %s\nHFBC format: %s\n", Version, HFBCFormatVersion)
+	case "interop":
+		printInterop(os.Args[2:])
 	case "inspect":
 		inspectArtifact()
 	case "check":
@@ -660,6 +673,7 @@ Commands:
   build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
   run       Execute a bytecode artifact or source script (--target=bytecode|interpreter).
   version   Print version information.
+  interop   Print the howl.interop/v1 descriptor other Howl components check (--json).
   help      Print this help message.
 
 Capabilities are denied by default and must be granted by the runner with --allow-caps.
@@ -825,7 +839,7 @@ func buildSource() {
 		}
 		prog := bytecode.CompileToBytecode(root)
 		var buf bytes.Buffer
-		if err := bytecode.WriteArtifact(&buf, prog); err != nil {
+		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to encode bytecode: %v\n", err)
 			os.Exit(1)
 		}
@@ -918,12 +932,30 @@ func buildSource() {
 	}
 }
 
+// startupInstructionLimit resolves the startup ceiling for HTTP server programs:
+// an explicit --max-startup-instructions wins; otherwise the default applies
+// only when --max-instructions was not given, so an explicit limit keeps
+// governing everything as before. The VM applies it to server programs only.
+func startupInstructionLimit(fs *flag.FlagSet, explicit int) int {
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	switch {
+	case given["max-startup-instructions"]:
+		return explicit
+	case given["max-instructions"]:
+		return 0
+	default:
+		return vm.DefaultStartupInstructions
+	}
+}
+
 func runArtifact() {
 	runFlags := flag.NewFlagSet("run", flag.ExitOnError)
 	receiptPath := runFlags.String("receipt", "", "write runner-owned bytecode execution receipt JSON to this path")
 	target := runFlags.String("target", "bytecode", "execution target: bytecode (or bc), interpreter (or run)")
 	allowCaps := runFlags.String("allow-caps", "", "comma-separated capabilities to allow (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database)")
 	maxInst := runFlags.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "finite instruction limit")
+	maxStartupInst := runFlags.Int("max-startup-instructions", 0, "finite instruction limit for the startup code of an HTTP server program, such as validating persisted state (default 10000000 for servers unless --max-instructions is given; request handlers always use --max-instructions)")
 
 	maxCallDepth := runFlags.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting (default 1000)")
 	maxMemory := runFlags.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
@@ -931,6 +963,7 @@ func runArtifact() {
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
+	listenHost := runFlags.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
 	timingLog := runFlags.Bool("timing-log", false, "diagnostic: write per-request timing and slow store-write timing lines to stderr")
 	deadline := runFlags.String("deadline", "", "optional positive wall-clock duration (e.g. 5s)")
 
@@ -972,6 +1005,10 @@ func runArtifact() {
 		fmt.Fprintln(os.Stderr, "-max-call-depth must be greater than zero")
 		os.Exit(1)
 	}
+	if *maxStartupInst < 0 {
+		fmt.Fprintln(os.Stderr, "-max-startup-instructions must not be negative")
+		os.Exit(1)
+	}
 
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	switch targetVal {
@@ -1005,6 +1042,12 @@ func runArtifact() {
 			os.Exit(2) // usage error: an invalid resource flag value
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
+		executionPolicy.Limits.MaxStartupInstructions = startupInstructionLimit(runFlags, *maxStartupInst)
+		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
+			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
+			os.Exit(2)
+		}
+		executionPolicy.Limits.HTTPListenHost = *listenHost
 		executionPolicy.Limits.LogRequests = *accessLog
 		executionPolicy.Limits.LogTiming = *timingLog
 		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
@@ -1028,6 +1071,10 @@ func runArtifact() {
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
 			prog = bytecode.CompileToBytecode(root)
+			if err := bytecode.ValidateProgram(prog); err != nil {
+				fmt.Fprintf(os.Stderr, "Cannot compile bytecode: %v: %v\n", bytecode.ErrInvalidProgram, err)
+				os.Exit(1)
+			}
 			if *receiptPath != "" {
 				var canonical bytes.Buffer
 				if err := bytecode.WriteArtifact(&canonical, prog); err != nil {
@@ -1367,4 +1414,79 @@ func compileViaModelAdapter(graph *hfir.Graph) (*bytecode.BCProgram, []hfir.Diag
 		return nil, diags
 	}
 	return hfir.CompileCandidate(candidate)
+}
+
+// interopCommand is one entry of the howl.interop/v1 descriptor. See
+// https://github.com/howlcipher/howl/blob/main/docs/INTEROP.md.
+type interopCommand struct {
+	Path  []string `json:"path"`
+	Flags []string `json:"flags"`
+	JSON  bool     `json:"json"`
+	Emits []string `json:"emits,omitempty"`
+}
+
+type interopDescriptor struct {
+	Schema      string            `json:"schema"`
+	Component   string            `json:"component"`
+	Version     string            `json:"version"`
+	HFBCFormat  string            `json:"hfbc_format"`
+	Commands    []interopCommand  `json:"commands"`
+	ExitCodes   map[string]string `json:"exit_codes"`
+	Env         []string          `json:"env"`
+	Consumes    []any             `json:"consumes"`
+	Description string            `json:"description"`
+}
+
+// The flag lists mirror the flag sets in howlframe.go;
+// TestInteropDescriptorMatchesFlagSets keeps them in step.
+var interopCommands = []interopCommand{
+	{Path: []string{}, Flags: []string{
+		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
+		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
+		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-request-bytes", "-access-log",
+		"-timing-log", "-listen-host", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
+	}, Emits: []string{"howlframe.receipt/v0"}},
+	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
+	{Path: []string{"check"}, Flags: []string{"--profile"}},
+	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target"}},
+	{Path: []string{"run"}, Flags: []string{
+		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
+		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
+		"--deadline",
+	}, Emits: []string{"howlframe.receipt/v0"}},
+	{Path: []string{"version"}, Flags: []string{}},
+	{Path: []string{"help"}, Flags: []string{}},
+	{Path: []string{"interop"}, Flags: []string{"--json"}, JSON: true, Emits: []string{"howl.interop/v1"}},
+}
+
+func interopDescription() interopDescriptor {
+	return interopDescriptor{
+		Schema:     "howl.interop/v1",
+		Component:  "howlframe",
+		Version:    Version,
+		HFBCFormat: HFBCFormatVersion,
+		Commands:   interopCommands,
+		ExitCodes: map[string]string{
+			"0": "ok; under run, the program's own exit status passes through",
+			"1": "error: a diagnostic (JSON on stdout for compile errors) or a runtime trap",
+			"2": "invalid resource flag (zero, negative, or non-numeric limit)",
+		},
+		Env:         []string{},
+		Consumes:    []any{},
+		Description: "HowlFrame language toolchain and capability-bounded VM; runs no other Howl component.",
+	}
+}
+
+// printInterop answers `howlframe interop --json`. The descriptor is the
+// same with or without --json; the flag exists so every component answers
+// the same command line.
+func printInterop(args []string) {
+	for _, a := range args {
+		if a != "--json" && a != "-json" {
+			fmt.Fprintf(os.Stderr, "Usage: howlframe interop --json\nunknown argument %q\n", a)
+			os.Exit(1)
+		}
+	}
+	out, _ := json.MarshalIndent(interopDescription(), "", "  ")
+	fmt.Println(string(out))
 }

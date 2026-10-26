@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+S=$1; cd "$S/hf"; L=$S/logs
+run() { local n=$1; shift; local t0=$(date +%s); "$@" >"$L/$n.log" 2>&1; local rc=$?; echo "$n rc=$rc secs=$(( $(date +%s)-t0 )) cmd=$*" >> "$L/summary.txt"; }
+: > $L/summary.txt
+echo "go: $(go version)" >> $L/summary.txt
+run gofmt bash -c 'test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }'
+run build go build ./...
+run vet go vet ./...
+run cli go build -o "$S/bin/howlframe" howlframe.go
+run test go test -count=1 ./...
+run race go test -race -count=1 ./...
+run acceptance env HF_BIN="$S/bin/howlframe" scripts/ci_acceptance.sh
+echo DONE >> $L/summary.txt

@@ -1,0 +1,23 @@
+{
+  "id": "d3-token-vault-agent",
+  "domain": "D3",
+  "authority_centred": true,
+  "title": "Scoped Capability Token Vault and Mediation Agent",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Mediate downstream HTTP service requests by validating capability scopes against authority grants, minting delegation bearer tokens from a local token vault, and forwarding requests with sanitized credentials.",
+  "stdlib_plan": {
+    "python": "sys, os, json, urllib.request, urllib.error, time",
+    "go": "os, encoding/json, net/http, bytes, time",
+    "javascript": "node:fs, node:http, node:process, node:url"
+  },
+  "workload": {
+    "args": ["workload/grants.json", "workload/requests.json", "workload/audit.json", "--offline-vault"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

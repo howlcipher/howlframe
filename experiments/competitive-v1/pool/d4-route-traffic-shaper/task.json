@@ -1,0 +1,23 @@
+{
+  "id": "d4-route-traffic-shaper",
+  "domain": "D4",
+  "authority_centred": false,
+  "title": "Dynamic Traffic Shaper with Canary Weighting and Fallback Redirection",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade a route dispatch engine with deterministic hash canary splitting, header matching conditions, and unhealthy backend fallback redirection.",
+  "stdlib_plan": {
+    "python": "sys, os, json, hashlib",
+    "go": "os, encoding/json, crypto/sha256, encoding/hex, strings",
+    "javascript": "node:fs, node:crypto, node:process, node:path"
+  },
+  "workload": {
+    "args": ["workload/routing_table.json", "workload/requests.json", "workload/dispatch_log.json"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

@@ -107,14 +107,22 @@ func (g Grants) allows(path, mode string) bool {
 	if g.HasUnrestrictedFilesystem() {
 		return true
 	}
+	_, ok := g.matchRoot(path, mode)
+	return ok
+}
+
+// matchRoot returns the granted root that covers path for mode, using the
+// lexical and symlink-resolved containment checks. It is the authorization
+// decision; OpenScope then pins the I/O to the root it returns.
+func (g Grants) matchRoot(path, mode string) (string, bool) {
 	target, err := filepath.Abs(path)
 	if err != nil {
-		return false
+		return "", false
 	}
 	target = filepath.Clean(target)
 	resolvedTarget, err := resolveAncestor(target)
 	if err != nil {
-		return false
+		return "", false
 	}
 	prefix := "filesystem:" + mode + "="
 	for _, grant := range g {
@@ -129,8 +137,8 @@ func (g Grants) allows(path, mode string) bool {
 		}
 		resolvedRoot, err := resolveAncestor(filepath.Clean(root))
 		if err == nil && contained(resolvedRoot, resolvedTarget) {
-			return true
+			return filepath.Clean(root), true
 		}
 	}
-	return false
+	return "", false
 }

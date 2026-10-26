@@ -1,0 +1,4 @@
+FAIL restart_with_1000_tickets_100_tokens_default_ceilings: server exited 1: b'{"phase":"runtime","code":"LIMIT_EXCEEDED","function":"main","instruction":127,"opcode":"JUMP_IF_FALSE","message":"instruction limit exceeded"}\n'
+PASS invalid_state_rejected_without_damage (0s)
+FAIL sigkill_keeps_acknowledged_writes_at_default_ceilings: server exited 1: b'{"phase":"runtime","code":"LIMIT_EXCEEDED","function":"main","instruction":127,"opcode":"JUMP_IF_FALSE","message":"instruction limit exceeded"}\n'
+3 tests, 2 failed

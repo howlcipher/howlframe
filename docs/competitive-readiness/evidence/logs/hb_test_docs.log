@@ -1,0 +1,26 @@
+PASS  documented transitions exist in backend/server.howl
+PASS  documented function 'can_transition' exists in backend/server.howl
+PASS  section tags balance in docs/index.html
+PASS  all markup classes are styled
+PASS  published demo data exists
+PASS  published demo data matches the application fixtures
+PASS  published demo is compiled from docs/demo.howl
+PASS  published demo carries HowlFrame provenance
+PASS  published demo shares the application's renderer
+PASS  published demo offers no mutating actions
+PASS  published demo is labelled read-only
+PASS  limitations no longer claims depends_on is unrendered
+PASS  limitations states informational-only depends_on
+PASS  roadmap no longer claims depends_on is unrendered
+PASS  domain_model documents depends_on
+PASS  shared mission view renders depends_on
+PASS  limitations mentions navigable depends_on
+PASS  roadmap describes navigable informational deps
+PASS  mission_view depends controls use data-mission-id + constant handler
+PASS  app open_mission uses encode_json for get body
+PASS  server exposes factory status and pending-row routes
+PASS  factory demo describes a missing snapshot and an exact Pending row
+PASS  factory demo does not add a second admit path
+PASS  limitations keep factory start out of Board
+
+All documentation checks passed

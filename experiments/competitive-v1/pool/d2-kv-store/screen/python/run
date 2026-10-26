@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+import time
+from urllib.parse import urlparse, parse_qs
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Engine:
+    def __init__(self, store_path):
+        self.store_path = store_path
+        self.entries = {}
+        self.load()
+
+    def load(self):
+        if self.store_path and os.path.isfile(self.store_path):
+            try:
+                with open(self.store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.entries = data.get("entries", {})
+            except Exception:
+                self.entries = {}
+
+    def save(self):
+        if self.store_path:
+            try:
+                with open(self.store_path, "w", encoding="utf-8") as f:
+                    json.dump({"entries": self.entries}, f, indent=2)
+            except Exception:
+                pass
+
+    def is_active(self, entry):
+        if not entry:
+            return False
+        expires_at = entry.get("expires_at")
+        if expires_at is not None and time.time() >= expires_at:
+            return False
+        return True
+
+    def put_key(self, key, body):
+        if not isinstance(body, dict) or "value" not in body:
+            return 400, {"error": "invalid_payload"}
+
+        val = body["value"]
+        exp_ver = body.get("expected_version")
+        ttl = body.get("ttl_seconds")
+
+        entry = self.entries.get(key)
+        active = self.is_active(entry)
+
+        current_ver = entry["version"] if active else 0
+
+        if exp_ver is not None:
+            if exp_ver == 0:
+                if active:
+                    return 409, {"error": "version_conflict", "current_version": current_ver}
+            else:
+                if not active or current_ver != exp_ver:
+                    return 409, {"error": "version_conflict", "current_version": current_ver}
+
+        new_ver = current_ver + 1
+        now = time.time()
+        expires_at = (now + float(ttl)) if ttl is not None and float(ttl) > 0 else None
+
+        new_entry = {
+            "key": key,
+            "value": val,
+            "version": new_ver,
+            "expires_at": expires_at
+        }
+        self.entries[key] = new_entry
+        self.save()
+
+        status = 200 if active else 201
+        return status, new_entry
+
+    def get_key(self, key):
+        entry = self.entries.get(key)
+        if not self.is_active(entry):
+            return 404, {"error": "not_found"}
+        return 200, entry
+
+    def delete_key(self, key):
+        entry = self.entries.get(key)
+        if not self.is_active(entry):
+            return 404, {"error": "not_found"}
+        del self.entries[key]
+        self.save()
+        return 204, None
+
+    def list_keys(self, query):
+        params = parse_qs(query)
+        prefix = params.get("prefix", [""])[0]
+        limit_str = params.get("limit", [None])[0]
+        limit = int(limit_str) if limit_str and limit_str.isdigit() else None
+
+        active_keys = []
+        for k in sorted(self.entries.keys()):
+            if self.is_active(self.entries[k]) and k.startswith(prefix):
+                active_keys.append(k)
+                if limit and len(active_keys) >= limit:
+                    break
+
+        return 200, {"keys": active_keys}
+
+    def handle(self, method, full_path, body=None):
+        parsed = urlparse(full_path)
+        path = parsed.path
+        query = parsed.query
+
+        if method == "PUT" and path.startswith("/keys/"):
+            key = path[len("/keys/"):]
+            return self.put_key(key, body or {})
+        elif method == "GET" and path.startswith("/keys/"):
+            key = path[len("/keys/"):]
+            return self.get_key(key)
+        elif method == "DELETE" and path.startswith("/keys/"):
+            key = path[len("/keys/"):]
+            return self.delete_key(key)
+        elif method == "GET" and path == "/keys":
+            return self.list_keys(query)
+        return 404, {"error": "not_found"}
+
+
+def run_server(engine, port):
+    class RequestHandler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+        def do_PUT(self):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            body = None
+            if body_bytes:
+                try:
+                    body = json.loads(body_bytes.decode("utf-8"))
+                except Exception:
+                    body = {}
+            status, resp = engine.handle("PUT", self.path, body)
+            self.send_response(status)
+            if resp is not None:
+                resp_bytes = json.dumps(resp).encode("utf-8")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_bytes)))
+                self.end_headers()
+                self.wfile.write(resp_bytes)
+            else:
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        def do_GET(self):
+            status, resp = engine.handle("GET", self.path)
+            self.send_response(status)
+            if resp is not None:
+                resp_bytes = json.dumps(resp).encode("utf-8")
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_bytes)))
+                self.end_headers()
+                self.wfile.write(resp_bytes)
+            else:
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        def do_DELETE(self):
+            status, resp = engine.handle("DELETE", self.path)
+            self.send_response(status)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    server = HTTPServer(("127.0.0.1", port), RequestHandler)
+    server.serve_forever()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("subcommand", nargs="?", default=None)
+    parser.add_argument("extra_arg", nargs="?", default=None)
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--store", default="store.json")
+
+    args, unknown = parser.parse_known_args()
+
+    if args.subcommand == "replay":
+        reqs_file = args.extra_arg
+        if not reqs_file and unknown:
+            reqs_file = unknown[0]
+        if not reqs_file or not os.path.isfile(reqs_file):
+            sys.exit(1)
+
+        engine = Engine(args.store)
+        with open(reqs_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                req = json.loads(line)
+                method = req.get("method", "GET")
+                path = req.get("path", "/")
+                body = req.get("body")
+                status, res_body = engine.handle(method, path, body)
+                print(json.dumps({"status": status, "body": res_body}))
+        sys.exit(0)
+
+    port = args.port or int(os.environ.get("PORT", "0"))
+    if not port:
+        for i, a in enumerate(unknown):
+            if a == "--port" and i + 1 < len(unknown):
+                port = int(unknown[i+1])
+    if not port:
+        sys.exit(1)
+
+    engine = Engine(args.store)
+    run_server(engine, port)
+
+if __name__ == "__main__":
+    main()

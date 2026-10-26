@@ -1,0 +1,23 @@
+{
+  "id": "d4-log-retention-purger",
+  "domain": "D4",
+  "authority_centred": false,
+  "title": "Tagged Log Retention and Disk Quota Purger",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Upgrade a basic log cleaner with tag-based retention policies, disk storage quota enforcement with compliance exemptions, and dry-run execution.",
+  "stdlib_plan": {
+    "python": "sys, os, json, time",
+    "go": "os, encoding/json, time, sort, path/filepath",
+    "javascript": "node:fs, node:path, node:process"
+  },
+  "workload": {
+    "args": ["workload/rules.json", "workload/logs", "workload/report.json", "--now-epoch", "1700000000"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

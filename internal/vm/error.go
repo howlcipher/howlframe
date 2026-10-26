@@ -87,13 +87,24 @@ type VMLimits struct {
 	// MaxRequestBodyBytes bounds a route's req.body read (parse_json); <=0 means the default.
 	MaxRequestBodyBytes int
 	// LogRequests (runner flag --access-log) writes one access line per HTTP request to stderr.
-	LogRequests bool
-	// LogTiming (runner flag --timing-log) writes diagnostic-only timing lines
-	// to stderr: one "timing" line per HTTP request and one "store_timing" line
-	// per persisted-store write slower than 100 ms. It never changes behaviour.
+	// HTTPListenHost is a runner-owned IP literal; empty preserves all-interface binding.
+	HTTPListenHost string
+	LogRequests    bool
+	// LogTiming writes diagnostic-only request/store timing; it never changes authority.
 	LogTiming          bool
 	MaxExecOutputBytes int
+	// MaxStartupInstructions is the instruction ceiling for the startup code of a
+	// program that defines an HTTP server: everything that runs before the server
+	// begins serving, such as validating persisted state, whose cost grows with the
+	// stored data. Request handlers always use MaxInstructions, each with a fresh
+	// budget. Zero means startup uses MaxInstructions like any other program; when
+	// both are set the larger applies to startup.
+	MaxStartupInstructions int
 }
+
+// DefaultStartupInstructions is the startup ceiling the "run" command applies to
+// HTTP server programs when --max-instructions was not given explicitly.
+const DefaultStartupInstructions = 10_000_000
 
 // ExecutionPolicy is authority supplied by the trusted bytecode runner. It
 // may constrain an application, but application code cannot inspect or widen

@@ -113,7 +113,7 @@ func TestIssue141MotokoArityRepros(t *testing.T) {
 		{"lazy_synthesize1", `(lazy_synthesize f)`, "ARITY_ERROR: lazy_synthesize expects 3 args, got 1"},
 		{"lazy_synthesize2", `(lazy_synthesize f ())`, "ARITY_ERROR: lazy_synthesize expects 3 args, got 2"},
 		{"confidence0", `(print (confidence))`, "ARITY_ERROR: confidence expects"},
-		{"fetch1", `(print (fetch "http://127.0.0.1:1/"))`, "ARITY_ERROR: fetch expects 2 to 3 args, got 1"},
+		{"fetch1", `(print (fetch "http://127.0.0.1:1/"))`, "ARITY_ERROR: fetch expects 2 to 4 args, got 1"},
 	}
 	for _, tc := range cases {
 		tc := tc

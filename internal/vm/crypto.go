@@ -43,6 +43,17 @@ func randHex(nAny any) (string, error) {
 // coarse name. A scoped grant ("filesystem:read=/x") counts for its family,
 // except that "network:fetch=..." never counts as serving "network".
 func capabilityGranted(caps []capability.Capability, name string) bool {
+	// Scoped filesystem queries ask the same canonical containment question as
+	// an actual read/write, without opening or creating the requested file.
+	// This lets applications preflight several destinations before any mutation.
+	if strings.HasPrefix(name, "filesystem:read=") {
+		path := strings.TrimPrefix(name, "filesystem:read=")
+		return path != "" && capability.Grants(caps).AllowsRead(path)
+	}
+	if strings.HasPrefix(name, "filesystem:write=") {
+		path := strings.TrimPrefix(name, "filesystem:write=")
+		return path != "" && capability.Grants(caps).AllowsWrite(path)
+	}
 	for _, c := range caps {
 		s := string(c)
 		if s == name {

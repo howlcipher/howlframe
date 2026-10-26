@@ -1,0 +1,26 @@
+{
+  "id": "calib-apilog-analyzer",
+  "domain": "D1",
+  "authority_centred": false,
+  "title": "API Access Log & SLA Analyzer",
+  "author": "Antigravity (Gemini 3.8 Flash (High))",
+  "authored_utc": "2026-10-25T00:38:00Z",
+  "attestation": "Written new for this purpose, not copied or adapted from any benchmark or HowlFrame repository task.",
+  "workload": {
+    "args": [
+      "--input",
+      "/workload/requests.jsonl",
+      "--output",
+      "/tmp/report.json"
+    ],
+    "stdin": null,
+    "generate": {
+      "command": [
+        "generate.py"
+      ],
+      "files": {
+        "requests.jsonl": "40b9455b5705883f35af5728d1e0c40680cf76c8093c08cb76934c649ad174c4"
+      }
+    }
+  }
+}

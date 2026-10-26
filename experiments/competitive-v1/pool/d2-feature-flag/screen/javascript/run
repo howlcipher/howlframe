@@ -1,0 +1,211 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+
+const TIER_LEVELS = {
+  basic: 1,
+  pro: 2,
+  enterprise: 3
+};
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.flags = {};
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.flags = data.flags || {};
+      } catch {
+        this.flags = {};
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({ flags: this.flags }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  createFlag(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const { key, min_tier, allowed_roles, user_overrides } = body;
+    const enabled = body.enabled !== undefined ? Boolean(body.enabled) : true;
+
+    if (!key || typeof key !== 'string' || !TIER_LEVELS[min_tier] || !Array.isArray(allowed_roles)) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const flagObj = {
+      key,
+      enabled,
+      min_tier,
+      allowed_roles,
+      user_overrides: Array.isArray(user_overrides) ? user_overrides : []
+    };
+
+    this.flags[key] = flagObj;
+    this.save();
+    return [201, flagObj];
+  }
+
+  evaluate(body) {
+    if (!body || typeof body !== 'object') {
+      return [400, { error: 'invalid_payload' }];
+    }
+    const { key, user_id, tier, role } = body;
+
+    if (!this.flags[key]) {
+      return [404, { error: 'flag_not_found' }];
+    }
+
+    const flag = this.flags[key];
+    if (!flag.enabled) {
+      return [200, { granted: false, reason: 'flag_disabled' }];
+    }
+
+    if (Array.isArray(flag.user_overrides) && flag.user_overrides.includes(user_id)) {
+      return [200, { granted: true, reason: 'user_override' }];
+    }
+
+    const subLevel = TIER_LEVELS[tier] || 0;
+    const reqLevel = TIER_LEVELS[flag.min_tier] || 99;
+    if (subLevel < reqLevel) {
+      return [200, { granted: false, reason: 'insufficient_tier' }];
+    }
+
+    if (!Array.isArray(flag.allowed_roles) || !flag.allowed_roles.includes(role)) {
+      return [200, { granted: false, reason: 'role_unauthorized' }];
+    }
+
+    return [200, { granted: true, reason: 'entitled' }];
+  }
+
+  getFlag(key) {
+    if (!this.flags[key]) {
+      return [404, { error: 'flag_not_found' }];
+    }
+    return [200, this.flags[key]];
+  }
+
+  deleteFlag(key) {
+    if (!this.flags[key]) {
+      return [404, { error: 'flag_not_found' }];
+    }
+    delete this.flags[key];
+    this.save();
+    return [204, null];
+  }
+
+  listFlags() {
+    const keys = Object.keys(this.flags).sort();
+    return [200, { flags: keys.map(k => this.flags[k]) }];
+  }
+
+  handle(method, pathStr, body) {
+    if (method === 'POST' && pathStr === '/flags') {
+      return this.createFlag(body || {});
+    } else if (method === 'POST' && pathStr === '/evaluate') {
+      return this.evaluate(body || {});
+    } else if (method === 'GET' && pathStr === '/flags') {
+      return this.listFlags();
+    } else if (method === 'GET' && pathStr.startsWith('/flags/')) {
+      const key = pathStr.slice('/flags/'.length);
+      return this.getFlag(key);
+    } else if (method === 'DELETE' && pathStr.startsWith('/flags/')) {
+      const key = pathStr.slice('/flags/'.length);
+      return this.deleteFlag(key);
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

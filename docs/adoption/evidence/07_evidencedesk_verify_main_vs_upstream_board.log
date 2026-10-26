@@ -1,0 +1,37 @@
+Built $DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/build/backend.hfbc
+Built $DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/build/projector.hfbc
+Built $DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/static/app.js
+Implementation verification compiler: $SCRATCH/bin/howlframe-main
+test_import_detail_and_order (acceptance.API.test_import_detail_and_order) ... ok
+test_invalid_import_preserves_state (acceptance.API.test_invalid_import_preserves_state) ... ok
+test_limits_media_and_routing (acceptance.API.test_limits_media_and_routing) ... ok
+test_notes_and_reimport (acceptance.API.test_notes_and_reimport) ... ok
+test_exact_limit_and_validate_before_write (acceptance.Projector.test_exact_limit_and_validate_before_write) ... ok
+test_native_outputs_deterministic (acceptance.Projector.test_native_outputs_deterministic) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.247s
+
+OK
+PASS live loopback listener: LISTEN 0      4096       127.0.0.1:46805      0.0.0.0:*    users:(("howlframe-main",pid=1136467,fd=6))
+PASS exact restart persistence, encoded ID, Unicode notes, physical line diagnostics
+PASS real Chromium 148.0.7778.96 import/header/filter/ordered claims/notes/reload/errors/XSS/keyboard
+Board commit: f4c7bb544773a717d2bd0640e91ff9f154bdd9b6
+Board sanitized fixture SHA256: 439ca83f19b564cdea4510de5b7a7324ed0a0f1c489263a85ba4b5695e8e7316
+Board original source SHA256: 664ee1473423c459d7b753a9e7b9e2702dba1b64565b867df38eb0a61480567f
+Board adapter insertion SHA256: 7c4a4e00ceafafb71d4c36568449a8d9a962949d23f83b078ba33507c98b105a
+Board adapted source SHA256: d1bb19a5c906ff626b49cd590d07bc299d8a05318f4388429423f947b1b977ea
+Traceback (most recent call last):
+  File "$DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/tests/verify_workflows.py", line 571, in <module>
+    main()
+    ~~~~^^
+  File "$DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/tests/verify_workflows.py", line 565, in main
+    board_consumer(root)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "$DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/tests/verify_workflows.py", line 386, in board_consumer
+    command([BIN, "build", adapted_source, "-o", artifact])
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "$DEV/worktrees/adopt-hf-docs/milestone3/evidencedesk/tests/verify_workflows.py", line 41, in command
+    assert result.returncode == 0, (
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ([PosixPath('$SCRATCH/bin/howlframe-main'), 'build', PosixPath('/tmp/evidencedesk-verify-_e8_bsm_/board-adapted.howl'), '-o', PosixPath('/tmp/evidencedesk-verify-_e8_bsm_/board.hfbc')], 1, '{"reason":"http_server accepts at most one (grants ...) form","line":25,"column":3}\n', '')

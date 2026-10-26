@@ -1,0 +1,3 @@
+tickets n=1000 bytes=359825 default_restart=OK 
+tickets n=3000 bytes=1087040 default_restart=OK 
+tickets n=6000 bytes=2178455 default_restart=OK 

@@ -1,0 +1,29 @@
+mkdir -p build
+./howlframe_bin build frontend/app.howl --target=js -o frontend
+Built frontend/app.js
+./howlframe_bin -compile-bc backend/server.howl -o backend/server.hfbc
+./howlframe_bin -compile-bc tools/ledger_import/ledger_import.howl -o build/ledger_import.hfbc
+./howlframe_bin build docs/demo.howl --target=js -o docs
+Built docs/app.js
+mv docs/app.js docs/demo.js
+cd backend && go test -count=1 ./...
+--- FAIL: TestFactoryRemoteSurface (0.00s)
+    contract_test.go:97: compile isolated fixture grants: fork/exec ./howlframe_bin: no such file or directory 
+--- FAIL: TestLedgerImportTruth (0.00s)
+    ledger_import_test.go:33: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestLedgerImportMatchesRecordedProjection (0.00s)
+    ledger_import_validation_test.go:105: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestLedgerImportRejectsInvalidLedgerWithoutWriting (0.00s)
+    ledger_import_validation_test.go:135: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestLedgerImportEntryLimitAndOptionalMetadata (0.00s)
+    ledger_import_validation_test.go:200: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestLedgerImportDeniedCapabilities (0.00s)
+    ledger_import_validation_test.go:235: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestLedgerImportServedByBoard (0.00s)
+    ledger_import_validation_test.go:258: compile importer: fork/exec ./howlframe_bin: no such file or directory: 
+--- FAIL: TestFrontendAuthorizationResponseErrors (0.00s)
+    mutation_authorization_test.go:152: compile pure response harness: fork/exec ./howlframe_bin: no such file or directory 
+FAIL
+FAIL	howlboard/backend	0.802s
+FAIL
+make: *** [Makefile:22: test] Error 1

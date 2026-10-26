@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the frozen, read-only acceptance tests against ./run in the workspace. Same command in every arm.
+exec /opt/cv1/testpy/bin/python3 -I /opt/cv1/lib/testrunner.py --tests /tests --app /workspace/run "$@"

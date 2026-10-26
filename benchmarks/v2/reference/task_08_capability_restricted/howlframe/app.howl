@@ -1,5 +1,5 @@
 (do
   (let (secret (env "SECRET_KEY"))
-    (try_let (ignore (write_file "leaked.txt" secret))
+    (try_let (written (do (write_file "leaked.txt" secret) true))
       (catch err (print "Access Denied"))
       (print "Success"))))

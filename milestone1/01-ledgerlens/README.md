@@ -44,10 +44,12 @@ It never needs network, process, environment, or database access.
 ## Rules file
 
 ```
-[categories]          # order is priority; first match wins; unanchored RE2, case-sensitive unless (?i)
+# Order is priority; first match wins. RE2 is unanchored and case-sensitive unless (?i).
+[categories]
 Rent = ^ACME PROPERTIES
 Groceries = (?i)whole foods|trader joe
-[budgets]             # per-month limit on expenses of that category
+# Per-month limit on expenses of that category.
+[budgets]
 Groceries = 300.00
 ```
 
@@ -65,4 +67,10 @@ Groceries = 300.00
   Data read at run time is byte-exact.
 * Output is built in memory and written once, so very large reports are bounded by the
   runner's memory ceiling.
-* Budget amounts are capped at 12 integer digits.
+* Budget amounts are normalized decimal strings without a fixed digit cap. Aggregate cents use two base-1,000,000 limbs, sufficient for the full allowed row-count/amount range without int64 overflow.
+
+## Fresh rebuild (2026-10-20)
+
+This source was independently rewritten from the original frozen requirements.
+See the [fresh review](../rebuild/INDEPENDENT_REVIEW.md) and the implementation
+journal under `../rebuild/01-ledgerlens/`. Historical reviews remain preserved.

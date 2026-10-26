@@ -1,0 +1,16 @@
+--- FAIL: TestScopedReadNeverEscapesWhileSymlinkChanges (0.44s)
+    filesystem_race_test.go:120: scoped read returned content from outside the granted root 2063 times
+--- FAIL: TestScopedWriteNeverEscapesWhileSymlinkChanges (0.69s)
+    filesystem_race_test.go:134: scoped write modified a file outside the granted root: "changed" <nil>
+--- FAIL: TestScopedMkdirNeverEscapesWhileSymlinkChanges (0.70s)
+    filesystem_race_test.go:147: scoped mkdir created a directory outside the granted root: <nil>
+--- FAIL: TestFileStoreNeverEscapesWhileSymlinkChanges (0.00s)
+    filesystem_race_test.go:160: unknown capability: "filesystem:database=/tmp/TestFileStoreNeverEscapesWhileSymlinkChanges2569146599/001"
+FAIL
+FAIL	github.com/howlcipher/howlframe/internal/vm	1.844s
+FAIL
+--- FAIL: TestFileStoreNeverEscapesWhileSymlinkChanges (0.11s)
+    filesystem_race_test.go:168: file-backed store wrote "s.json.tmp-1087443626" outside the granted root
+FAIL
+FAIL	github.com/howlcipher/howlframe/internal/vm	0.114s
+FAIL

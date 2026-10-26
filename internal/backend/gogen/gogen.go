@@ -603,6 +603,11 @@ func howlFrameCodeLoadingEnv(name string) bool {
 			return true
 		}
 	}
+	for _, s := range howlFrameCodeLoadingEnvSuffixes {
+		if strings.HasSuffix(u, s) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -684,8 +689,9 @@ func fetchImports(extra []string) string {
 	return out
 }
 
-// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames and
-// CodeLoadingEnvPrefixes, the refusal tables shared by every target.
+// codeLoadingEnvGoSource renders capability.CodeLoadingEnvNames,
+// CodeLoadingEnvPrefixes and CodeLoadingEnvSuffixes, the refusal tables
+// shared by every target.
 func codeLoadingEnvGoSource() string {
 	var b strings.Builder
 	b.WriteString("var howlFrameCodeLoadingEnvNames = []string{\n")
@@ -695,6 +701,10 @@ func codeLoadingEnvGoSource() string {
 	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvPrefixes = []string{\n")
 	for _, p := range capability.CodeLoadingEnvPrefixes {
 		fmt.Fprintf(&b, "\t%q,\n", p)
+	}
+	b.WriteString("}\n\nvar howlFrameCodeLoadingEnvSuffixes = []string{\n")
+	for _, s := range capability.CodeLoadingEnvSuffixes {
+		fmt.Fprintf(&b, "\t%q,\n", s)
 	}
 	b.WriteString("}\n\n")
 	return b.String()
@@ -1055,14 +1065,14 @@ func numericHelperSource() string {
 	case int64:
 		return float64(x)
 	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to float", x))
+		}
 		return x
 	case string:
 		f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
-		if err != nil {
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", x))
-		}
-		if math.IsNaN(f) || math.IsInf(f, 0) {
-			panic("CONVERSION_ERROR: cannot convert to float")
 		}
 		return f
 	default:
@@ -1177,6 +1187,9 @@ func goReadFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string
 // still binds (bytes, error). Every other use gets one []byte. A missing
 // body is a nil reader, the same request the previous closure sent.
 func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+	if node != nil && len(node.Children) == 5 {
+		ast.ReportError("UNSUPPORTED_ON_TARGET: fetch headers are supported only on --target=js", node.Line, node.Column)
+	}
 	gogenNeedsFetch = true
 	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
 		return ""

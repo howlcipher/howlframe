@@ -1,0 +1,3 @@
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec howlframe run --allow-caps filesystem --max-instructions 2000000000 --max-memory-bytes 68719476736 "$DIR/main.hfbc" "$@"

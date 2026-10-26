@@ -1,0 +1,189 @@
+(web_app
+  (defun result_text
+    (value)
+    (type_hint value "any")
+    (type_hint return "string")
+    (do (if (is_nil value) (return "unknown")) (return (to_string value))))
+  (defun items
+    ()
+    (type_hint return "list")
+    (let
+      (raw (dom_value (dom_query "#items-state")))
+      (let (data (parse_json Any raw)) (return data))))
+  (defun status (message) (set_text (dom_query "#status") message))
+  (defun render_list
+    ()
+    (let
+      (html "" needle (dom_value (dom_query "#task-filter")) index 0)
+      (do
+        (for task
+          (call items)
+          (do
+            (if
+              (or (= needle "") (str_contains (map_get task "id") needle))
+              (set html
+                (str_join
+                  (list
+                    (to_string html)
+                    (to_string "<option value=\"")
+                    (to_string index)
+                    (to_string "\">")
+                    (to_string (html_escape (map_get task "id")))
+                    (to_string " (")
+                    (to_string (map_get task "events"))
+                    (to_string " events)</option>"))
+                  "")))
+            (set index (+ index 1))))
+        (set_html (dom_query "#task-list") html))))
+  (defun error_text
+    (response)
+    (type_hint response "dict")
+    (type_hint return "string")
+    (let
+      (e (map_get response "error") suffix "")
+      (do
+        (if
+          (> (map_get e "line") 0)
+          (set suffix
+            (str_join
+              (list (to_string " (line ") (to_string (map_get e "line")) (to_string ")"))
+              "")))
+        (return (str_join (list (to_string (map_get e "message")) (to_string suffix)) "")))))
+  (defun refresh
+    ()
+    (try_let
+      (raw (fetch "/api/tasks" "GET"))
+      (catch request_error (call status "Could not load tasks. Retry by reloading."))
+      (let
+        (data (parse_json Any raw))
+        (do
+          (set_attr (dom_query "#items-state") "value" (encode_json (map_get data "items")))
+          (call render_list)))))
+  (defun show_detail
+    (data)
+    (type_hint data "dict")
+    (let
+      (html
+        (str_join
+          (list
+            (to_string "<h2>")
+            (to_string (html_escape (map_get data "id")))
+            (to_string "</h2><ol>"))
+          ""))
+      (do
+        (for event
+          (map_get data "events")
+          (set html
+            (str_join
+              (list
+                (to_string html)
+                (to_string "<li><p>Action: ")
+                (to_string (html_escape (to_string (map_get event "action"))))
+                (to_string "</p><p>Result: ")
+                (to_string (html_escape (call result_text (map_get event "result"))))
+                (to_string "</p><p>Verification summary: ")
+                (to_string
+                  (html_escape (call result_text (map_get event "verification_summary"))))
+                (to_string "</p><pre>")
+                (to_string (html_escape (encode_json event)))
+                (to_string "</pre></li>"))
+              "")))
+        (set_html
+          (dom_query "#task-detail")
+          (str_join (list (to_string html) (to_string "</ol>")) ""))
+        (set_html
+          (dom_query "#note-editor")
+          (str_join
+            (list
+              (to_string "<label for=\"note-input\">Reviewer annotation (not evidence or approval)</label><textarea id=\"note-input\" maxlength=\"4000\">")
+              (to_string (html_escape (map_get data "note")))
+              (to_string "</textarea>"))
+            "")))))
+  (defun open_task
+    (id)
+    (do
+      (call status "Loading task...")
+      (try_let
+        (raw
+          (fetch
+            (str_join (list (to_string "/api/task?id=") (to_string (url_encode id))) "")
+            "GET"))
+        (catch request_error (call status "Could not load task."))
+        (let
+          (data (parse_json Any raw))
+          (if
+            (is_nil (map_get data "error"))
+            (do
+              (set_attr (dom_query "#selected-state") "value" id)
+              (call show_detail data)
+              (call status "Task loaded. Source claims are not verified approvals."))
+            (call status (call error_text data)))))))
+  (defun import_ledger
+    ()
+    (do
+      (call status "Validating ledger...")
+      (try_let
+        (raw
+          (fetch "/api/import" "POST"
+            (dom_value (dom_query "#ledger-input"))
+            (dict ("Content-Type" "application/x-ndjson"))))
+        (catch request_error
+          (call status "Import request failed. Existing tasks remain available."))
+        (let
+          (data (parse_json Any raw))
+          (if
+            (is_nil (map_get data "error"))
+            (do
+              (set_attr (dom_query "#selected-state") "value" "")
+              (set_text
+                (dom_query "#task-detail")
+                "Select a task to inspect its ordered source events.")
+              (call refresh)
+              (call status
+                (str_join
+                  (list
+                    (to_string "Imported ")
+                    (to_string (map_get data "entries"))
+                    (to_string " entries in ")
+                    (to_string (map_get data "tasks"))
+                    (to_string " tasks."))
+                  "")))
+            (call status (call error_text data)))))))
+  (defun save_note
+    ()
+    (let
+      (id (dom_value (dom_query "#selected-state")))
+      (if
+        (= id "")
+        (call status "Select a task before saving a note.")
+        (do
+          (call status "Saving annotation...")
+          (try_let
+            (raw
+              (fetch
+                (str_join (list (to_string "/api/task?id=") (to_string (url_encode id))) "")
+                "PATCH"
+                (encode_json (dict ("note" (dom_value (dom_query "#note-input")))))
+                (dict ("Content-Type" "application/json"))))
+            (catch request_error (call status "Could not save annotation."))
+            (let
+              (data (parse_json Any raw))
+              (if
+                (is_nil (map_get data "error"))
+                (do (call refresh) (call status "Annotation saved."))
+                (call status (call error_text data)))))))))
+  (on_event (dom_query "#import-button") "click" (lambda (e) (call import_ledger)))
+  (on_event (dom_query "#task-filter") "input" (lambda (e) (call render_list)))
+  (on_event
+    (dom_query "#task-list")
+    "change"
+    (lambda
+      (e)
+      (let
+        (index (to_int (dom_value (dom_query "#task-list"))) task_items (call items))
+        (call open_task (map_get (list_get task_items index) "id")))))
+  (on_event (dom_query "#save-note") "click" (lambda (e) (call save_note)))
+  (do
+    (call status "Loading saved tasks...")
+    (call refresh)
+    (call status "Ready. Import a ledger or select a saved task.")))

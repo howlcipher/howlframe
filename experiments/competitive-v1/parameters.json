@@ -1,0 +1,186 @@
+{
+  "protocol": "competitive-v1",
+  "status": "draft-not-frozen (Revision 3, 2026-10-24)",
+  "frozen_at_commit": null,
+  "arms": {
+    "howlframe": {
+      "compiler_commit": null,
+      "dependencies": "built-ins only",
+      "offline_docs": "README.md, docs/cli.md, docs/reference/, HowlFrame skill",
+      "compiler_commit_candidate": "e77e008f7eb944f286414f4a5725b306fcc02d31 (compiler source equal to verified 056fbf89)",
+      "skill_text": {
+        "repo": "howlcipher/howlplane",
+        "commit": "9681bbd472cb7dc267c8b61d7ccf705eb3ffb5ea",
+        "path": ".agents/skills/howlframe-app-development/SKILL.md",
+        "sha256": "725e7d7dcdbe709439ee56a4d0f817511b8cffde06e844bdc93231e25b3218e4"
+      }
+    },
+    "python": {
+      "version": "3.12.x (candidate 3.12.15; harness/toolchains.json)",
+      "dependencies": "standard library",
+      "offline_docs": "CPython 3.12 library reference, pydoc"
+    },
+    "go": {
+      "version": "1.25.x (candidate 1.25.14; harness/toolchains.json)",
+      "dependencies": "standard library",
+      "offline_docs": "go doc, standard library package docs"
+    },
+    "javascript": {
+      "runtime": "Node.js 22.x LTS (candidate 22.23.4; harness/toolchains.json)",
+      "dependencies": "built-in modules",
+      "offline_docs": "Node.js 22 API docs"
+    }
+  },
+  "providers": [
+    {
+      "provider": "anthropic",
+      "agent": "Claude Code CLI",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "speed": "standard",
+      "endpoint": "global",
+      "cli_version_candidate": "2.1.309",
+      "flags": "see harness/cv1/agents.py"
+    },
+    {
+      "provider": "openai",
+      "agent": "Codex CLI",
+      "model": "gpt-6.1-sol",
+      "model_snapshot": null,
+      "model_snapshot_note": "pin the dated snapshot if GET /v1/models lists one at freeze",
+      "effort": "high",
+      "service_tier": "default",
+      "cli_version_candidate": "0.163.0",
+      "config": "see harness/cv1/agents.py"
+    }
+  ],
+  "budget_per_run": {
+    "wall_clock_minutes": 45,
+    "model_tool_calls": 150,
+    "usd_ceiling": 30,
+    "enforcement": "metering proxy worst-case reservation, harness admission, claude --max-budget-usd, provider-side limit with prepaid credit (Revision 3 G2)"
+  },
+  "repetitions": 3,
+  "pilot": {
+    "domains": [
+      "D1",
+      "D2",
+      "D3",
+      "D4"
+    ],
+    "tasks": 4,
+    "runs": 96,
+    "matched_pairs_per_baseline": 24,
+    "max_authority_centred_tasks": 1
+  },
+  "scoring": {
+    "h2_reported": [
+      "W / shared successes / mutual failures / L",
+      "wins/pairs",
+      "(wins + 0.5*shared successes)/pairs",
+      "wins/(wins+losses)"
+    ],
+    "h3_primary": "RMST over 45 minutes, unverified censored at 45",
+    "h4_gate_baselines": [
+      "python",
+      "go",
+      "javascript"
+    ],
+    "h6": "pooled meets target and no provider contradicts with interval excluding target",
+    "interval": "task-clustered 95%",
+    "h2_default": "strict win rate wins/pairs (mutual failures earn no credit)",
+    "h2_owner_options": {
+      "A": "(wins + 0.5*shared non-zero successes)/pairs",
+      "B": "wins/(wins+losses)"
+    },
+    "h4_owner_option_C": "gate on python and javascript only; go reported",
+    "decision_outcomes": "met / not met / inconclusive; task-clustered one-sided 95% intervals, Bonferroni alpha/3"
+  },
+  "infrastructure_reruns": 1,
+  "heldout_seal_sha256": null,
+  "owner_spend_cap": {
+    "feasibility_usd": 150,
+    "pilot_usd": null,
+    "pilot_note": "deferred until feasibility results exist",
+    "spend_authorized": false
+  },
+  "fairness_review": {
+    "r1": "FAIRNESS_REVIEW_R1.md (Antigravity/Gemini): NEEDS REVISION, 12 findings, all dispositioned in protocol section 12",
+    "r2": "FAIRNESS_REVIEW_R2.md: NEEDS REVISION (5 new problems); dispositioned in protocol section 12",
+    "r3": "FAIRNESS_REVIEW_R3.md (Antigravity/Gemini, 2026-10-22): READY FOR OWNER DECISION, no blocking problem; 3 non-blocking suggestions applied",
+    "r4_scoped": "FAIRNESS_REVIEW_R4_SCOPED.md (Antigravity/Gemini, 2026-10-24): NEEDS REVISION on harness defects only (1 blocking, 3 important, 2 minor); all six fixed in 8c0babec and CONFIRMED by the same reviewer, no new defect; no methodology change found",
+    "r4_note": "Gate 1a: one different-provider review of the Revision 3 changes only"
+  },
+  "revision": 3,
+  "completion_command": "task-complete",
+  "full_study": {
+    "independent_tasks_planning_range": [
+      45,
+      80
+    ],
+    "max_authority_centred_share": 0.15,
+    "min_maintenance_share": 0.15,
+    "analysis": "mixed-effects logistic, random intercept per task (or GEE clustered by task)",
+    "pool": ">= 1.5x full-study task count, authored after the pilot"
+  },
+  "draw": {
+    "manifest_sha256": null,
+    "beacon": "NIST Randomness Beacon v2",
+    "beacon_pulse_not_before_utc": null,
+    "seed": "sha256(bytes.fromhex(outputValue) || bytes.fromhex(manifest_sha256))",
+    "procedure": "Revision 3 section 13.3; harness/cv1/beacon.py"
+  },
+  "documentation_audit": null,
+  "owner_options_selected": {
+    "recorded": "2026-10-22",
+    "h2": "A",
+    "h4": "default (python, go and javascript all gate); option C not taken",
+    "providers": "Claude Code (anthropic) and Codex (openai); exact model IDs fixed at freeze",
+    "spend_cap": "none approved; no dry run or pilot may run"
+  },
+  "sandbox": {
+    "kind": "bubblewrap jail per arm (Revision 3 G4(b))",
+    "base_root": "ubuntu-base-26.04.1 (harness/toolchains.json)",
+    "network": "none except the metering proxy socket",
+    "jail_hashes": null
+  },
+  "feasibility_test": {
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "task": "calib-apilog-analyzer (calibration/calib-apilog-analyzer; Antigravity task, Codex held-out tests; checked 2026-10-24, see calibration/README.md)",
+    "runs": 4,
+    "cap_usd": 150,
+    "run_ceiling_usd": 30,
+    "authorized_to_run": false,
+    "requires": "dated Owner authorization file (harness/cv1/feasibility.py)"
+  },
+  "owner_decisions_2026_10_24": {
+    "statement": "I approve everything but spending money.",
+    "approved": [
+      "model IDs and effort",
+      "Claude Code for the feasibility test",
+      "$150 cap and $30 per-run ceiling as limits for any paid run",
+      "Revision 3 drafting and one scoped re-review (freeze needs a separate yes)",
+      "experiment-only harness validated against mocks",
+      "API-key billing",
+      "Antigravity or a human as task author; held-out tests by a different author and provider",
+      "bubblewrap jails",
+      "pilot cap deferred"
+    ],
+    "not_authorized": [
+      "any paid model call",
+      "the feasibility test",
+      "the freeze",
+      "the pilot"
+    ]
+  },
+  "harness": {
+    "path": "harness/",
+    "prices": "harness/prices.json (checked 2026-10-23)",
+    "schemas": [
+      "harness/schema/run_result.schema.json",
+      "harness/schema/score_result.schema.json"
+    ],
+    "prompt_template": "prompts/agent_task.md"
+  }
+}

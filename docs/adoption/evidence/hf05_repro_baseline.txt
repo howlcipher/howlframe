@@ -1,0 +1,23 @@
+# HF-05 baseline reproduction on HowlFrame main bfc4ff8f, 2026-10-22T03:17:34Z
+$ cat repro.howl
+(cli_app
+  (try_let (r (write_file "side_effect.txt" "written"))
+    (catch e (print "caught"))
+    (print "bound")))
+$ howlframe check repro.howl
+OK: repro.howl
+exit=0
+$ howlframe -compile-bc repro.howl -o r.hfbc
+exit=0
+$ howlframe -run-bc -allow-caps filesystem r.hfbc
+{"phase":"runtime","code":"STACK_UNDERFLOW","function":"main","instruction":2,"opcode":"TRY_LET","message":"stack underflow at TRY_LET"}
+exit=1
+$ cat side_effect.txt
+written
+# Same program on PR #212 head 692b4dfa:
+{"reason":"try_let binding of \"r\" is a void expression and produces no value","line":2,"column":15}
+check exit=1
+{"reason":"try_let binding of \"r\" is a void expression and produces no value","line":2,"column":15}
+compile exit=1
+ls: cannot access 'side_effect.txt': No such file or directory
+ls: cannot access 'r.hfbc': No such file or directory

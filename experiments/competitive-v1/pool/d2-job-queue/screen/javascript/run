@@ -1,0 +1,261 @@
+#!/usr/bin/env node
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const process = require('node:process');
+const { URL } = require('node:url');
+
+class Engine {
+  constructor(storePath) {
+    this.storePath = storePath;
+    this.jobs = {};
+    this.nextId = 1;
+    this.load();
+  }
+
+  load() {
+    if (this.storePath && fs.existsSync(this.storePath)) {
+      try {
+        const raw = fs.readFileSync(this.storePath, 'utf8');
+        const data = JSON.parse(raw);
+        this.jobs = data.jobs || {};
+        this.nextId = data.next_id || 1;
+      } catch {
+        this.jobs = {};
+        this.nextId = 1;
+      }
+    }
+  }
+
+  save() {
+    if (this.storePath) {
+      try {
+        fs.writeFileSync(this.storePath, JSON.stringify({ jobs: this.jobs, next_id: this.nextId }, null, 2) + '\n', 'utf8');
+      } catch {}
+    }
+  }
+
+  enqueue(body) {
+    if (!body || typeof body !== 'object' || !body.topic) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const jobId = `job-${this.nextId++}`;
+    const job = {
+      job_id: jobId,
+      topic: String(body.topic),
+      payload: body.payload || {},
+      priority: Number(body.priority) || 0,
+      max_retries: Number(body.max_retries) || 3,
+      lease_seconds: Number(body.lease_seconds) || 30,
+      status: 'pending',
+      attempts: 0,
+      leased_by: null,
+      lease_expires_at: null,
+      created_at: Date.now() / 1000
+    };
+
+    this.jobs[jobId] = job;
+    this.save();
+    return [201, job];
+  }
+
+  lease(body) {
+    if (!body || typeof body !== 'object' || !body.topic || !body.worker_id) {
+      return [400, { error: 'invalid_payload' }];
+    }
+
+    const { topic, worker_id } = body;
+    const now = Date.now() / 1000;
+
+    const candidates = [];
+    for (const j of Object.values(this.jobs)) {
+      if (j.topic !== topic) continue;
+      if (j.status === 'pending') {
+        candidates.push(j);
+      } else if (j.status === 'leased' && j.lease_expires_at && now >= j.lease_expires_at) {
+        candidates.push(j);
+      }
+    }
+
+    if (candidates.length === 0) {
+      return [204, null];
+    }
+
+    candidates.sort((a, b) => {
+      if (a.priority !== b.priority) return b.priority - a.priority;
+      if (a.created_at !== b.created_at) return a.created_at - b.created_at;
+      return a.job_id.localeCompare(b.job_id);
+    });
+
+    const chosen = candidates[0];
+    chosen.status = 'leased';
+    chosen.attempts += 1;
+    chosen.leased_by = worker_id;
+    chosen.lease_expires_at = now + chosen.lease_seconds;
+
+    this.save();
+    return [200, chosen];
+  }
+
+  ack(jobId, body) {
+    const workerId = body && typeof body === 'object' ? body.worker_id : null;
+    if (!this.jobs[jobId]) {
+      return [404, { error: 'not_found' }];
+    }
+
+    const job = this.jobs[jobId];
+    if (job.status !== 'leased' || job.leased_by !== workerId) {
+      return [409, { error: 'not_leased_by_worker' }];
+    }
+
+    job.status = 'completed';
+    this.save();
+    return [200, { status: 'completed' }];
+  }
+
+  fail(jobId, body) {
+    const workerId = body && typeof body === 'object' ? body.worker_id : null;
+    if (!this.jobs[jobId]) {
+      return [404, { error: 'not_found' }];
+    }
+
+    const job = this.jobs[jobId];
+    if (job.status !== 'leased' || job.leased_by !== workerId) {
+      return [409, { error: 'not_leased_by_worker' }];
+    }
+
+    if (job.attempts >= job.max_retries) {
+      job.status = 'dead_letter';
+    } else {
+      job.status = 'pending';
+    }
+
+    job.leased_by = null;
+    job.lease_expires_at = null;
+    this.save();
+    return [200, { status: job.status, attempts: job.attempts }];
+  }
+
+  getJob(jobId) {
+    if (!this.jobs[jobId]) {
+      return [404, { error: 'not_found' }];
+    }
+    return [200, this.jobs[jobId]];
+  }
+
+  getStats() {
+    const stats = { pending: 0, leased: 0, completed: 0, dead_letter: 0 };
+    const now = Date.now() / 1000;
+    for (const j of Object.values(this.jobs)) {
+      let st = j.status;
+      if (st === 'leased' && j.lease_expires_at && now >= j.lease_expires_at) {
+        stats.pending += 1;
+      } else if (stats[st] !== undefined) {
+        stats[st] += 1;
+      }
+    }
+    return [200, stats];
+  }
+
+  handle(method, fullUrl, body) {
+    const parsed = new URL(fullUrl, 'http://127.0.0.1');
+    const pathStr = parsed.pathname;
+
+    if (method === 'POST' && pathStr === '/jobs') {
+      return this.enqueue(body || {});
+    } else if (method === 'POST' && pathStr === '/jobs/lease') {
+      return this.lease(body || {});
+    } else if (method === 'POST' && pathStr.startsWith('/jobs/') && pathStr.endsWith('/ack')) {
+      const jobId = pathStr.slice('/jobs/'.length, -'/ack'.length);
+      return this.ack(jobId, body || {});
+    } else if (method === 'POST' && pathStr.startsWith('/jobs/') && pathStr.endsWith('/fail')) {
+      const jobId = pathStr.slice('/jobs/'.length, -'/fail'.length);
+      return this.fail(jobId, body || {});
+    } else if (method === 'GET' && pathStr.startsWith('/jobs/')) {
+      const jobId = pathStr.slice('/jobs/'.length);
+      return this.getJob(jobId);
+    } else if (method === 'GET' && pathStr === '/stats') {
+      return this.getStats();
+    }
+    return [404, { error: 'not_found' }];
+  }
+}
+
+function parseCliArgs(args) {
+  let mode = 'server';
+  let replayFile = null;
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  let store = 'store.json';
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === 'replay') {
+      mode = 'replay';
+    } else if (a === '--port') {
+      port = parseInt(args[++i], 10);
+    } else if (a === '--store') {
+      store = args[++i];
+    } else if (!a.startsWith('--') && mode === 'replay' && !replayFile) {
+      replayFile = a;
+    }
+  }
+
+  return { mode, port, store, replayFile };
+}
+
+function main() {
+  const cli = parseCliArgs(process.argv.slice(2));
+  const engine = new Engine(cli.store);
+
+  if (cli.mode === 'replay') {
+    if (!cli.replayFile || !fs.existsSync(cli.replayFile)) {
+      process.exit(1);
+    }
+    const lines = fs.readFileSync(cli.replayFile, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const req = JSON.parse(line);
+      const [status, resp] = engine.handle(req.method || 'GET', req.path || '/', req.body);
+      process.stdout.write(JSON.stringify({ status, body: resp }) + '\n');
+    }
+    process.exit(0);
+  }
+
+  if (!cli.port) {
+    process.exit(1);
+  }
+
+  const server = http.createServer((req, res) => {
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+    req.on('end', () => {
+      let body = null;
+      if (bodyData) {
+        try {
+          body = JSON.parse(bodyData);
+        } catch {
+          body = {};
+        }
+      }
+      const [status, resp] = engine.handle(req.method, req.url, body);
+      if (resp !== null) {
+        const respBuffer = Buffer.from(JSON.stringify(resp));
+        res.writeHead(status, {
+          'Content-Type': 'application/json',
+          'Content-Length': respBuffer.length
+        });
+        res.end(respBuffer);
+      } else {
+        res.writeHead(status, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  });
+
+  server.listen(cli.port, '127.0.0.1');
+}
+
+main();

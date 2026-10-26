@@ -1,0 +1,32 @@
+{
+  "ledger_exact_aggregate": {
+    "code": 1,
+    "stdout": "",
+    "stderr": "{\"phase\":\"runtime\",\"code\":\"LIMIT_EXCEEDED\",\"function\":\"main\",\"instruction\":566,\"opcode\":\"APPEND\",\"message\":\"memory limit exceeded (max 4294967296 bytes)\"}\n",
+    "seconds": 20.519,
+    "expected_income": "92233999999999077.66",
+    "pass": false
+  },
+  "taskflow_multi_output_denial": {
+    "code": 77,
+    "stdout": "",
+    "stderr": "taskflow: capability denied: filesystem\n",
+    "seconds": 0.023,
+    "history_created": true,
+    "pass": false
+  },
+  "healthwatch_unknown_assertion_key": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "healthwatch: config: checks[0].json_assert[0].zzz: invalid value\n",
+    "seconds": 0.009,
+    "pass": true
+  },
+  "taskflow_cycle_origin": {
+    "code": 65,
+    "stdout": "",
+    "stderr": "taskflow: -:1: variable cycle: A -> B -> A\n",
+    "seconds": 0.015,
+    "pass": true
+  }
+}

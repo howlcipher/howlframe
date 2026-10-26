@@ -1,0 +1,23 @@
+{
+  "id": "d2-kv-store",
+  "domain": "D2",
+  "authority_centred": false,
+  "title": "Versioned Key-Value Store with TTL",
+  "author": "Antigravity (Gemini 3.8 Flash)",
+  "authored_utc": "2026-10-25T16:25:00Z",
+  "attestation": "written new for this pool, not copied or adapted from any benchmark or HowlFrame repository task",
+  "summary": "Lightweight REST key-value store supporting optimistic concurrency version locking, TTL expiration, and prefix queries.",
+  "stdlib_plan": {
+    "python": "sys, os, json, time, urllib.parse, http.server, argparse",
+    "go": "net/http, encoding/json, flag, os, sync, time, strings",
+    "javascript": "node:http, node:fs, node:path, node:process, node:url"
+  },
+  "workload": {
+    "args": ["replay", "--store", "workload/store.json", "workload/requests.jsonl"],
+    "stdin": null,
+    "generate": {
+      "command": ["generate.py"],
+      "files": {}
+    }
+  }
+}

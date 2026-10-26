@@ -1,0 +1,5 @@
+--- FAIL: TestSerializedServerSurvivesNonReadingClient (2.03s)
+    slow_reader_test.go:108: an unrelated request was blocked by a client that stopped reading: status=0 after 1.501043575s: Get "http://127.0.0.1:39615/health": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+FAIL
+FAIL	github.com/howlcipher/howlframe/internal/vm	2.037s
+FAIL
