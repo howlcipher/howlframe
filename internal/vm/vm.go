@@ -654,10 +654,13 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		case int64:
 			return float64(typed)
 		case float64:
+			if math.IsNaN(typed) || math.IsInf(typed, 0) {
+				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to float", typed), node.Children[1])
+			}
 			return typed
 		case string:
-			parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-			if err != nil {
+			parsed, ok := parseFiniteFloat(typed)
+			if !ok {
 				InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", typed), node.Children[1])
 			}
 			return parsed
@@ -4165,12 +4168,15 @@ func BcConvert(target string, a any) any {
 	case "to_float":
 		switch t := a.(type) {
 		case string:
-			v, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
-			if err != nil {
+			v, ok := parseFiniteFloat(t)
+			if !ok {
 				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %q to float", t))
 			}
 			return v
 		case float64:
+			if math.IsNaN(t) || math.IsInf(t, 0) {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %v to float", t))
+			}
 			return t
 		case int64:
 			return float64(t)
@@ -4193,6 +4199,18 @@ func BcConvert(target string, a any) any {
 		return strings.TrimSpace(fmt.Sprint(a))
 	}
 	return a
+}
+
+// parseFiniteFloat is to_float on a string for the interpreter and the VM
+// (NUMERIC_CONTRACT sections 2.3 and 8.2). It trims surrounding whitespace and
+// refuses overflow, as strconv.ParseFloat does, and also refuses the NaN, Inf
+// and Infinity spellings that strconv.ParseFloat accepts in any case (#225).
+func parseFiniteFloat(text string) (float64, bool) {
+	value, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0, false
+	}
+	return value, true
 }
 
 func BcSliceToAny(strs []string) []any {
