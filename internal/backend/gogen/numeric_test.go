@@ -59,6 +59,12 @@ func main() {
 	assertPanics(func() { howlFrameToFloat("abc") }, "to_float(\"abc\")")
 	assertPanics(func() { howlFrameToFloat("NaN") }, "to_float(\"NaN\")")
 	assertPanics(func() { howlFrameToFloat("Inf") }, "to_float(\"Inf\")")
+	assertPanics(func() { howlFrameToFloat(" -infinity ") }, "to_float(\" -infinity \")")
+	assertPanics(func() { howlFrameToFloat("nan") }, "to_float(\"nan\")")
+	assertPanics(func() { howlFrameToFloat("1e400") }, "to_float(\"1e400\")")
+	assertPanics(func() { howlFrameToFloat(math.NaN()) }, "to_float(NaN)")
+	assertPanics(func() { howlFrameToFloat(math.Inf(-1)) }, "to_float(-Inf)")
+	assertEqual(howlFrameToFloat(" 1e2 "), 100.0, "to_float(\" 1e2 \")")
 
 	// real division semantics
 	assertEqual(howlFrameDiv(9, 2), 4.5, "9 / 2")

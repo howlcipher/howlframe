@@ -1065,14 +1065,14 @@ func numericHelperSource() string {
 	case int64:
 		return float64(x)
 	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %v to float", x))
+		}
 		return x
 	case string:
 		f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
-		if err != nil {
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 			panic(fmt.Sprintf("CONVERSION_ERROR: cannot convert %q to float", x))
-		}
-		if math.IsNaN(f) || math.IsInf(f, 0) {
-			panic("CONVERSION_ERROR: cannot convert to float")
 		}
 		return f
 	default:
