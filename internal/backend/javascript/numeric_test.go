@@ -32,6 +32,10 @@ assert.throws(() => howlFrameToFloat("   "), /CONVERSION_ERROR/);
 assert.throws(() => howlFrameToFloat("abc"), /CONVERSION_ERROR/);
 assert.throws(() => howlFrameToFloat("Infinity"), /CONVERSION_ERROR/);
 assert.throws(() => howlFrameToFloat("NaN"), /CONVERSION_ERROR/);
+assert.throws(() => howlFrameToFloat(" -Infinity "), /CONVERSION_ERROR/);
+assert.throws(() => howlFrameToFloat("1e400"), /CONVERSION_ERROR/);
+assert.throws(() => howlFrameToFloat(NaN), /CONVERSION_ERROR/);
+assert.strictEqual(howlFrameToFloat(" 1e2 "), 100);
 
 // real division semantics
 assert.strictEqual(howlFrameDiv(9, 2), 4.5);

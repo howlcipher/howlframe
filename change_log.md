@@ -23,6 +23,7 @@
 * Verification jobs explicitly forbid local inference through HOWL_FORBID_LOCAL_INFERENCE=1.
 
 ### Fixed
+* #225: `to_float` follows NUMERIC_CONTRACT §2.3 on the interpreter and the bytecode VM. Every NaN and infinity spelling (`"nan"`, `"Inf"`, `"-Infinity"`, any case, with surrounding whitespace) now fails with `CONVERSION_ERROR`, as overflow such as `"1e400"` already did, so a range check can no longer accept NaN. `to_float` of a non-finite float value also fails on the interpreter, the VM and generated Go, as it already did in generated JavaScript. Finite text, whitespace trimming and signed zero are unchanged.
 * Derive advertised HFBC envelope format from the actual artifact writer; CLI version and interop no longer report format 1 while emitting format 2. A public CLI regression compiles a real artifact and checks all three advertised surfaces.
 
 * Fresh Ledgerlens exact aggregate arithmetic across the complete allowed amount/row-count range; uncapped decimal budgets. Fresh Taskflow segmented expansion and side-effect-free multi-output permission preflight; fresh Healthwatch distinguishes absent and invalid empty state.
