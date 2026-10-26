@@ -112,6 +112,17 @@ func WriteArtifact(w io.Writer, prog *BCProgram) error {
 	return nil
 }
 
+// WriteValidatedArtifact is WriteArtifact for compiler output. It refuses a
+// program that fails ValidateProgram, so a build never emits an artifact that
+// ReadArtifact, and therefore the VM, would reject (#224). WriteArtifact stays
+// a plain encoder so tests can still build malformed artifacts for the reader.
+func WriteValidatedArtifact(w io.Writer, prog *BCProgram) error {
+	if err := ValidateProgram(prog); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidProgram, err)
+	}
+	return WriteArtifact(w, prog)
+}
+
 // ReadArtifact reads and verifies a HowlFrame bytecode artifact.
 func ReadArtifact(r io.Reader) (*BCProgram, error) {
 	magic := make([]byte, 4)
