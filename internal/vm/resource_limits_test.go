@@ -180,9 +180,14 @@ func TestFetchLimitsInMemory(t *testing.T) {
 			t.Fatalf("under cap: %#v", e)
 		}
 	}
+	// A 10-byte body is charged one byte per byte: 9 is short, 10 is enough.
 	policy := DefaultExecutionPolicy()
-	policy.Limits.MaxMemoryBytes = 89
+	policy.Limits.MaxMemoryBytes = 9
 	requireResourceFailure(t, runResourceTest(t, `(cli_app (fetch "http://test/body" "GET"))`, policy), "memory limit")
+	policy.Limits.MaxMemoryBytes = 10
+	if e := runResourceTest(t, `(cli_app (fetch "http://test/body" "GET"))`, policy); e != nil {
+		t.Fatalf("10-byte body within a 10-byte budget: %#v", e)
+	}
 	policy = DefaultExecutionPolicy()
 	policy.Deadline = 50 * time.Millisecond
 	requireResourceFailure(t, runResourceTest(t, `(cli_app (fetch "http://test/block" "GET"))`, policy), "deadline")
@@ -237,8 +242,12 @@ func TestExecLargeOutputAndExit(t *testing.T) {
 		t.Fatalf("nonzero exit: %#v", e)
 	}
 	policy = DefaultExecutionPolicy()
-	policy.Limits.MaxMemoryBytes = 89
+	policy.Limits.MaxMemoryBytes = 9
 	requireResourceFailure(t, runResourceTest(t, `(cli_app (exec "/bin/sh" "-c" "printf 0123456789"))`, policy), "memory limit")
+	policy.Limits.MaxMemoryBytes = 10
+	if e := runResourceTest(t, `(cli_app (exec "/bin/sh" "-c" "printf 0123456789"))`, policy); e != nil {
+		t.Fatalf("10-byte output within a 10-byte budget: %#v", e)
+	}
 }
 
 type deadlineBody struct{ ctx context.Context }
