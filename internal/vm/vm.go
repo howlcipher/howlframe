@@ -1568,11 +1568,11 @@ func ToBool(v any, node *ast.Node) bool {
 
 func ValuesEqual(a, b any) bool {
 	switch a.(type) {
-	case []any, map[string]any:
+	case []any, []byte, map[string]any:
 		return false
 	}
 	switch b.(type) {
-	case []any, map[string]any:
+	case []any, []byte, map[string]any:
 		return false
 	}
 	if eq, ok := numericEqual(a, b); ok {
@@ -1778,12 +1778,14 @@ func (trace *boundedTrace) branch(taken bool) {
 
 // state records an opaque state-key fingerprint after the VM has consumed the
 // actual key. It is runner-owned evidence, not a program-visible value.
-func (trace *boundedTrace) state(resource string, key any) {
+// The resource is kind+name, joined only when a trace is being recorded so an
+// untraced run builds no key strings.
+func (trace *boundedTrace) state(kind, name string, key any) {
 	if trace == nil || len(trace.events) == 0 {
 		return
 	}
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%T:%#v", key, key)))
-	trace.events[len(trace.events)-1].Resource = resource
+	trace.events[len(trace.events)-1].Resource = kind + name
 	trace.events[len(trace.events)-1].StateKey = hex.EncodeToString(digest[:])
 }
 
@@ -2307,6 +2309,9 @@ func cloneStoreValue(value any) any {
 			clone[index] = cloneStoreValue(item)
 		}
 		return clone
+	case []byte:
+		// Stored bytes are their number list, as the store file records them.
+		return bytesToAnySlice(typed)
 	default:
 		return value
 	}
@@ -2385,16 +2390,47 @@ func collectionLen(val any) (int, bool) {
 	}
 }
 
-// bytesToAnySlice converts a []byte into a []any of float64 elements, the
-// representation HowlFrame values use for byte data on the operand stack.
-// Shared by every instruction that returns raw bytes (fetch responses, file
-// reads, subprocess output) to avoid repeating the same conversion loop.
-func bytesToAnySlice(b []byte) []any {
-	var bytesAny []any
-	for _, bb := range b {
-		bytesAny = append(bytesAny, float64(bb))
+// listElement returns item i of a []any or native byte list; the caller has
+// checked the bounds.
+func listElement(list any, i int) any {
+	if b, ok := list.([]byte); ok {
+		return byteValues[b[i]]
 	}
-	return bytesAny
+	return list.([]any)[i]
+}
+
+// byteValues holds every byte value boxed once as the float64 a byte list
+// element reads as, so materializing a byte list allocates no element.
+var byteValues = func() (values [256]any) {
+	for i := range values {
+		values[i] = float64(i)
+	}
+	return values
+}()
+
+// bytesToAnySlice converts native bytes into the equivalent list of float64
+// elements. Instructions that return raw bytes (fetch responses, file reads,
+// subprocess output) push the []byte itself; an operation that needs list
+// items materializes them here only when it runs.
+func bytesToAnySlice(b []byte) []any {
+	out := make([]any, len(b))
+	for i, c := range b {
+		out[i] = byteValues[c]
+	}
+	return out
+}
+
+// listItems returns the items of a list value. Native bytes become their
+// number list, charged like any other list of that length.
+func (vm *BCVM) listItems(v any, ip int, op bytecode.Opcode) ([]any, bool) {
+	switch typed := v.(type) {
+	case []any:
+		return typed, true
+	case []byte:
+		vm.chargeSlots(len(typed), 8, ip, op)
+		return bytesToAnySlice(typed), true
+	}
+	return nil, false
 }
 
 // popCheckedStatus pops a value and converts it to an int HTTP status code,
@@ -2699,7 +2735,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch body read failed: %v", err))
 			}
 			vm.chargeBytes(len(b), ip, inst.Op)
-			vm.push(bytesToAnySlice(b))
+			vm.push(b)
 		case bytecode.OpHttpRequest:
 			var bodyReader io.Reader
 			if inst.IntOperand == 1 {
@@ -2740,7 +2776,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.chargeBytes(len(b), ip, inst.Op)
 			vm.push(map[string]any{
 				"status": resp.StatusCode,
-				"body":   bytesToAnySlice(b),
+				"body":   b,
 			})
 		case bytecode.OpReadFile:
 			path := vm.popCheckedString(inst, ip, "read_file expected string")
@@ -2751,7 +2787,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "read_file failed: %v", err))
 			}
 			vm.chargeBytes(len(b), ip, inst.Op)
-			vm.push(bytesToAnySlice(b))
+			vm.push(b)
 		case bytecode.OpWriteFile:
 			dataAny := vm.pop(inst.Op)
 			path := vm.popCheckedString(inst, ip, "write_file expected string path")
@@ -2816,7 +2852,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(execErr)
 			}
 			vm.chargeBytes(len(out), ip, inst.Op)
-			vm.push(bytesToAnySlice(out))
+			vm.push(out)
 		case bytecode.OpParseJson:
 			bodyVar := inst.StringOperand
 			var data []byte
@@ -2926,7 +2962,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(data)
+			json.NewEncoder(w).Encode(normalizeForJSON(data))
 		case bytecode.OpHttpServerStart:
 			port := inst.StringOperand
 			if inst.IntOperand&1 != 0 {
@@ -3336,7 +3372,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(inst.ValueOperand)
 		case bytecode.OpLoadVar:
 			name := inst.StringOperand
-			vm.trace.state("var:"+name, "value")
+			vm.trace.state("var:", name, "value")
 			if val, ok := env.get(name); ok {
 				vm.push(val)
 			} else {
@@ -3344,11 +3380,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 		case bytecode.OpStoreVar:
 			name := inst.StringOperand
-			vm.trace.state("var:"+name, "value")
+			vm.trace.state("var:", name, "value")
 			env.vars[name] = vm.pop(inst.Op)
 		case bytecode.OpSetVar:
 			name := inst.StringOperand
-			vm.trace.state("var:"+name, "value")
+			vm.trace.state("var:", name, "value")
 			if !env.set(name, vm.pop(inst.Op)) {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", name))
 			}
@@ -3365,12 +3401,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			continue
 		case bytecode.OpForInit:
 			list := vm.pop(inst.Op)
-			items, ok := list.([]any)
-			if !ok {
+			switch list.(type) {
+			case []any, []byte:
+			default:
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", list))
 			}
 			loopBases = append(loopBases, len(vm.stack))
-			vm.push(items)
+			vm.push(list)
 			vm.push(0.0) // index
 		case bytecode.OpForNext:
 			varName := inst.StringOperand
@@ -3382,7 +3419,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxAny := vm.pop(inst.Op)
 			itemsAny := vm.pop(inst.Op)
 
-			items, ok := itemsAny.([]any)
+			n, ok := 0, false
+			switch items := itemsAny.(type) {
+			case []any:
+				n, ok = len(items), true
+			case []byte:
+				n, ok = len(items), true
+			}
 			if !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", itemsAny))
 			}
@@ -3394,10 +3437,10 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index must be an integer, got %v", f))
 			}
 
-			if idx < 0 || idx > int64(len(items)) {
-				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index %d out of range [0,%d)", idx, len(items)))
+			if idx < 0 || idx > int64(n) {
+				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index %d out of range [0,%d)", idx, n))
 			}
-			if idx == int64(len(items)) {
+			if idx == int64(n) {
 				if n := len(loopBases); n > 0 {
 					loopBases = loopBases[:n-1]
 				}
@@ -3405,8 +3448,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				continue
 			}
 
-			env.vars[varName] = items[idx]
-			vm.push(items)
+			env.vars[varName] = listElement(itemsAny, int(idx))
+			vm.push(itemsAny)
 			vm.push(float64(idx + 1))
 		case bytecode.OpCall:
 			funcName := inst.StringOperand
@@ -3676,7 +3719,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			sepVal := vm.pop(inst.Op)
 			listVal := vm.pop(inst.Op)
 			sep, ok1 := sepVal.(string)
-			list, ok2 := listVal.([]any)
+			list, ok2 := vm.listItems(listVal, ip, inst.Op)
 			if !ok1 || !ok2 {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_join expected list and string, got %T and %T", listVal, sepVal))
 			}
@@ -3738,18 +3781,26 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			items, ok := current.([]any)
-			if !ok {
+			n, ok := collectionLen(current)
+			if _, isString := current.(string); isString || !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %T", current))
 			}
-			vm.trace.state("list:"+varName, len(items))
+			vm.trace.state("list:", varName, n)
 			// Approximate list storage as eight bytes per slot, plus new string payload.
-			vm.chargeSlots(len(items)+1, 8, ip, inst.Op)
+			vm.chargeSlots(n+1, 8, ip, inst.Op)
 			if str, ok := item.(string); ok {
 				vm.chargeAlloc(len(str), ip, inst.Op)
 			}
-			newItems := append(append([]any{}, items...), item)
-			env.set(varName, newItems)
+			newItems := make([]any, n, n+1)
+			switch items := current.(type) {
+			case []any:
+				copy(newItems, items)
+			case []byte:
+				for i, c := range items {
+					newItems[i] = byteValues[c]
+				}
+			}
+			env.set(varName, append(newItems, item))
 		case bytecode.OpMapSet:
 			varName := inst.StringOperand
 			val := vm.pop(inst.Op)
@@ -3768,7 +3819,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.chargeAlloc(len(key), ip, inst.Op)
 			}
 			dict[key] = val
-			vm.trace.state("map:"+varName, key)
+			vm.trace.state("map:", varName, key)
 			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 			vm.mapLedger.mutation(dict, ip, nodeID, "SET", key, val, false)
 		case bytecode.OpMapDelete:
@@ -3785,7 +3836,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			_, deleted := dict[key]
 			delete(dict, key)
-			vm.trace.state("map:"+varName, key)
+			vm.trace.state("map:", varName, key)
 			nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 			vm.mapLedger.mutation(dict, ip, nodeID, "DELETE", key, nil, deleted)
 		case bytecode.OpMapGet:
@@ -3813,12 +3864,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
 			}
 			if val, ok := dict[key]; ok {
-				vm.trace.state("map:"+varName, key)
+				vm.trace.state("map:", varName, key)
 				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 				vm.mapLedger.read(dict, ip, nodeID, key, true, val)
 				vm.push(val)
 			} else {
-				vm.trace.state("map:"+varName, key)
+				vm.trace.state("map:", varName, key)
 				nodeID, _ := vm.prog.TrustedMainOriginAt(ip)
 				vm.mapLedger.read(dict, ip, nodeID, key, false, nil)
 				// A missing key is nil (is_nil true; nz supplies a default).
@@ -3833,20 +3884,20 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get index must be a number, got %T", idxAny))
 			}
-			vm.trace.state("list:"+varName, idx)
+			vm.trace.state("list:", varName, idx)
 
 			current, ok := env.get(varName)
 			if !ok {
 				panic(NewRuntimeError("UNDEFINED_VAR", "main", ip, inst.Op, "undefined variable: %s", varName))
 			}
-			items, ok := current.([]any)
-			if !ok {
+			n, ok := collectionLen(current)
+			if _, isString := current.(string); isString || !ok {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get expected list, got %T", current))
 			}
-			if idx < 0 || idx >= len(items) {
+			if idx < 0 || idx >= n {
 				vm.push("")
 			} else {
-				vm.push(items[idx])
+				vm.push(listElement(current, idx))
 			}
 		case bytecode.OpListLen:
 			val := vm.pop(inst.Op)
@@ -4131,11 +4182,11 @@ func ToBCFloat(v any) float64 {
 
 func BcValuesEqual(a, b any) bool {
 	switch a.(type) {
-	case []any, map[string]any:
+	case []any, []byte, map[string]any:
 		return false
 	}
 	switch b.(type) {
-	case []any, map[string]any:
+	case []any, []byte, map[string]any:
 		return false
 	}
 	if eq, ok := numericEqual(a, b); ok {
@@ -4186,6 +4237,9 @@ func BcConvert(target string, a any) any {
 	case "to_string":
 		return TextOf(a)
 	case "bytes_to_string":
+		if b, ok := a.([]byte); ok {
+			return string(b)
+		}
 		items, ok := a.([]any)
 		if !ok {
 			panic(NewRuntimeError("TYPE_ERROR", "main", 0, bytecode.OpConvert, "bytes_to_string expected []any, got %T", a))
@@ -4282,6 +4336,9 @@ func normalizeForJSON(v any) any {
 			out[i] = normalizeForJSON(val)
 		}
 		return out
+	case []byte:
+		// Bytes encode as their number list, never as base64 text.
+		return bytesToAnySlice(t)
 	default:
 		// int64 stays int64 so encoding/json writes it exactly; the old
 		// float64 conversion rounded integers above 2^53 (#156).
@@ -4367,10 +4424,11 @@ func (vm *BCVM) chargeSlots(n, size, ip int, op bytecode.Opcode) {
 	vm.chargeAlloc(n*size, ip, op)
 }
 
+// chargeBytes charges native byte data one byte per byte. An operation that
+// later needs the bytes as list items charges those slots when it builds them
+// (listItems).
 func (vm *BCVM) chargeBytes(n, ip int, op bytecode.Opcode) {
-	// Source bytes plus the converted any-slice representation (eight bytes/slot).
 	vm.chargeAlloc(n, ip, op)
-	vm.chargeSlots(n, 8, ip, op)
 }
 
 // instructionLimit is the instruction ceiling in force for this VM. Startup code

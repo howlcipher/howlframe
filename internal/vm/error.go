@@ -31,8 +31,11 @@ type VMError struct {
 // process:exec allow-list is checked against the final vector.
 func execArgv(raw []any) []string {
 	if len(raw) == 1 {
-		if list, ok := raw[0].([]any); ok {
+		switch list := raw[0].(type) {
+		case []any:
 			raw = list
+		case []byte:
+			raw = bytesToAnySlice(list)
 		}
 	}
 	args := make([]string, len(raw))
