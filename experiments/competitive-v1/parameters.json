@@ -7,12 +7,12 @@
       "compiler_commit": null,
       "dependencies": "built-ins only",
       "offline_docs": "README.md, docs/cli.md, docs/reference/, HowlFrame skill",
-      "compiler_commit_candidate": "e77e008f7eb944f286414f4a5725b306fcc02d31 (compiler source equal to verified 056fbf89)",
+      "compiler_commit_candidate": "eb7abf602235bd92258beee12bd404d3ee54367e (main after howlframe#224, #225, #229, #230 and the 2026-10-27 documentation re-audit fixes, #231; refreshed 2026-10-27)",
       "skill_text": {
         "repo": "howlcipher/howlplane",
-        "commit": "9681bbd472cb7dc267c8b61d7ccf705eb3ffb5ea",
+        "commit": "24ac9ad14a47410065433f9ac11ece7b90fc5ce6",
         "path": ".agents/skills/howlframe-app-development/SKILL.md",
-        "sha256": "725e7d7dcdbe709439ee56a4d0f817511b8cffde06e844bdc93231e25b3218e4"
+        "sha256": "2b32eecd4ae656a29ff794195f2418cbc4dffe1a6ae0a1a1b9ce54b64cf57335"
       }
     },
     "python": {
