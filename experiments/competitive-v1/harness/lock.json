@@ -7,9 +7,9 @@
     "tree_sha256": "4fb67b0ca9e13499b21c3042625fe106e5f9a035e08ec8139e4aca9eaa5a3ad2"
   },
   "docs_howlframe": {
-    "commit": "e77e008f7eb944f286414f4a5725b306fcc02d31",
+    "commit": "eb7abf602235bd92258beee12bd404d3ee54367e",
     "skill_included": true,
-    "tree_sha256": "3ae3d857b2b99b8401afdd8e41a2b2f0d358d30f0622d9320344b880408406e7"
+    "tree_sha256": "e28a562c70771a271e1c586e9459cfb830f47413eeb56bb87414e71fb853ef31"
   },
   "docs_javascript": {
     "files": 64,
@@ -26,8 +26,8 @@
   },
   "toolchain_howlframe": {
     "built_with": "go version go1.26.0 linux/amd64",
-    "commit": "e77e008f7eb944f286414f4a5725b306fcc02d31",
-    "tree_sha256": "3d39e96bfb423cc4c14ddef39c69c7c370252f9764a4858b02c4c98866e190dc"
+    "commit": "eb7abf602235bd92258beee12bd404d3ee54367e",
+    "tree_sha256": "87f1d08f66009df3d472202c87ef63b6f5dc76f8c9449a06702008fbd679535c"
   },
   "toolchain_javascript": {
     "archive_sha256": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce",

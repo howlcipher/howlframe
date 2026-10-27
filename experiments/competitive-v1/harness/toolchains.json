@@ -57,10 +57,10 @@
       "repo_paths": ["README.md", "docs/cli.md", "docs/reference"],
       "skill": {
         "repo": "https://github.com/howlcipher/howlplane",
-        "commit": "9681bbd472cb7dc267c8b61d7ccf705eb3ffb5ea",
+        "commit": "24ac9ad14a47410065433f9ac11ece7b90fc5ce6",
         "path": ".agents/skills/howlframe-app-development/SKILL.md",
-        "sha256": "725e7d7dcdbe709439ee56a4d0f817511b8cffde06e844bdc93231e25b3218e4",
-        "last_changed": "2026-08-20 (ef8b3cc2); the documentation audit must confirm it still matches the pinned compiler"
+        "sha256": "2b32eecd4ae656a29ff794195f2418cbc4dffe1a6ae0a1a1b9ce54b64cf57335",
+        "last_changed": "2026-10-27 (howlplane#186, merge 24ac9ad): the documentation audit's corrections and its independent review; the documentation audit must confirm it still matches the pinned compiler"
       }
     }
   }
