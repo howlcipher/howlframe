@@ -207,10 +207,10 @@ go run howlframe.go -run-bc --max-instructions 1000000 /tmp/test_store_bytecode.
 For WebAssembly Text:
 
 ```bash
-go run howlframe.go -o build examples/wasm_math.howl
+go run howlframe.go build examples/wasm_math.howl --target wasm -o build
 ```
 
-That writes `build/app.wat`.
+That writes `build/app.wat`. Without `-o` it writes `<input>.ssa.wat`.
 
 To compile a checked `cli_app` expression through the typed SSA/CFG backend:
 
@@ -293,9 +293,9 @@ existing JSON parser with the route request value:
 In the standalone bytecode VM, `req.body` is valid only as the input to
 `parse_json` in an HTTP route. Everywhere else, the input to `parse_json` must be
 a variable name, not an expression or literal: bind the text with `let` first. `try_let` can turn malformed JSON into an
-application response. This is a JSON-only route-input path; it does not
-provide a general request-body value, streaming input, or a configurable
-body-size limit. Request bodies are untrusted input, so applications should
+application response. A route can also read the raw body as a string with
+`(req_body req)`. Neither path streams its input; `--max-request-bytes` sets the
+body ceiling (default 1048576 bytes). Request bodies are untrusted input, so applications should
 keep payloads small and validate their decoded fields.
 
 A handler can also read one query parameter, one request header, and one
@@ -453,8 +453,7 @@ By default, HowlFrame writes generated files into the current directory:
 
 - Go targets write `server.go` and, when tests exist, `server_test.go`.
 - JavaScript targets write `app.js` and, when tests exist, `app.test.js`.
-- WebAssembly targets write `app.wat`.
-- SSA WebAssembly compilation writes `<input>.ssa.wat` by default.
+- WebAssembly (`--target wasm`) writes `<input>.ssa.wat`, or `app.wat` inside a directory given with `-o`.
 - `howlframe build` (bytecode) writes `<name>.hfbc`; the legacy `-compile-bc` flag writes `<input>.bc.bin`
   (for example `hello.howl.bc.bin`).
 
@@ -464,8 +463,8 @@ Use `-o <dir>` to write generated artifacts elsewhere:
 go run howlframe.go -o build examples/hello.howl
 ```
 
-`-o <dir>` may also follow the input file for Go, JavaScript, and legacy WAT
-generation; the directory is created when it does not exist:
+`-o <dir>` may also follow the input file; the directory is created when it does
+not exist:
 
 ```bash
 go run howlframe.go examples/hello.howl -o build
