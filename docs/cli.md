@@ -82,7 +82,7 @@ howlframe run --allow-caps filesystem:read=./data \
 ```
 
 * **Instructions.** Every executed instruction counts, including loop bookkeeping: `(while (< i n) (set i (+ i 1)))` costs 9 instructions per iteration. Run once on a representative input with a generous ceiling and `--receipt r.json`; the receipt's `instructions_used` is the measured cost, and a ceiling a small multiple above it keeps the bound without failing on normal variation.
-* **Memory.** `--max-memory-bytes` caps cumulative allocation charges, not live memory. A value is charged when an instruction creates it (for example string concatenation, each `str_split` part, `list`, `dict` and `append` slots, file and process output), and the charge is not returned when the value becomes garbage. Output of `read_file`, `exec` and `fetch` is charged one byte per byte, so `read_file` of a 40 MB file is charged about 40 MB. `list_len`, `list_get`, `for` and `bytes_to_string` use the bytes as they are; `str_join` and `append` build a list from them and charge 8 bytes per element. `bytes_to_string` charges the text again, and `str_split`, `str_len` and `str_slice` charge every part they split the text into. Size the ceiling from everything a run creates, not from what it keeps.
+* **Memory.** `--max-memory-bytes` caps cumulative allocation charges, not live memory. A value is charged when an instruction creates it (for example string concatenation, each `str_split` part, `list`, `dict` and `append` slots, file and process output), and the charge is not returned when the value becomes garbage. Output of `read_file`, `exec` and `fetch` is charged one byte per byte, so `read_file` of a 40 MB file is charged about 40 MB. `list_len` and `for` read those bytes without charging anything more, and `bytes_to_string` charges the string it makes, one byte per byte. `append` charges 8 bytes per element of the new list on every call, so appending n items one at a time charges about 4n² bytes. `str_split`, `str_len` and `str_slice` charge every part they split the text into. Size the ceiling from everything a run creates, not from what it keeps.
 * Exceeding either ceiling stops the program with exit status 1 and writes the usual runtime error object to standard error, with `"code":"LIMIT_EXCEEDED"` and `"message"` set to `"instruction limit exceeded"` or `"memory limit exceeded (max N bytes)"`.
 
 ## `howlframe inspect`
@@ -101,9 +101,9 @@ Prints the current version of the HowlFrame CLI and the supported HFBC artifact 
 The v0.1 CLI retains full backward compatibility with the original flat flag structure:
 
 * `-validate` : Run lexer, parser, semantic checker, and AOT HFIR verifier without transpiling.
-* `-compile-bc` : Compile AST to bytecode JSON (production bytecode compiler, gated by AOT HFIR semantic verifier; HOWL-CANON-010). Emission stays `bytecode.CompileToBytecode`. The promote, defer, and kill checklist is `docs/reference/lowered_hfir_prod_flip_criteria.md`. #90 stays Partial.
-* `-compile-hfir-bc` : Compile directly from semantic HFIR to bytecode JSON (experimental research direct lowering pathway; HOWL-CANON-010). This flag stays the dogfood path until the Owner authorizes a flip PR.
-* `-run-bc` : Run bytecode from JSON file.
+* `-compile-bc` : Compile AST to a bytecode artifact (binary HFBC) (production bytecode compiler, gated by AOT HFIR semantic verifier; HOWL-CANON-010). Emission stays `bytecode.CompileToBytecode`. The promote, defer, and kill checklist is `docs/reference/lowered_hfir_prod_flip_criteria.md`. #90 stays Partial.
+* `-compile-hfir-bc` : Compile directly from semantic HFIR to a bytecode artifact (experimental research direct lowering pathway; HOWL-CANON-010). This flag stays the dogfood path until the Owner authorizes a flip PR.
+* `-run-bc` : Run a bytecode artifact.
 * `-compile-wasm` : Compile typed SSA/CFG to WebAssembly Text.
 * `-run` : Interpret and execute a script directly.
 * `-mask-plan` : Print the deterministic constrained-decoding mask plan.

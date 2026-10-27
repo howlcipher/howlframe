@@ -47,7 +47,9 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
 * The program path must be symlink-free (it must equal its own
   `EvalSymlinks` result). Calling a symlink to a granted program, or granting
   the symlink itself, is refused. On usr-merged systems `/bin/sh` is a
-  symlink; grant and call the canonical target (for example `/usr/bin/dash`).
+  symlink, and where coreutils is one multicall binary so is `/usr/bin/printf`
+  (`-> ../lib/cargo/bin/coreutils/printf`); grant and call the canonical target
+  (for example `/usr/bin/dash`, or what `readlink -f /usr/bin/printf` prints).
 * Literal arguments cannot contain spaces or commas (grants are
   comma-separated and patterns space-separated); use `*` for such arguments.
 * Denial is `CAPABILITY_DENIED` with a reason (`exec argv is not in the
