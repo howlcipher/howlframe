@@ -64,9 +64,9 @@ decision. The rule for fixes still applies to everything else.
 ## Refresh and re-audit (2026-10-27)
 
 **Pins.** The HowlFrame compiler and documentation are pinned at `eb7abf60` (`../harness/lock.json`,
-`../parameters.json`). That is main after howlframe#224 (dotted module calls rejected at `check`; every bytecode emit path
-validates), #225 (`to_float` refuses NaN and infinity, as `NUMERIC_CONTRACT.md` §2.3 says; the contract was not
-changed), #229 (the Owner's documentation additions), #230 (byte output kept as native bytes; one byte of
+`../parameters.json`). That is main after the fixes for issues howlframe#224 (PR #228: dotted module calls rejected at
+`check`; every bytecode emit path validates) and #225 (PR #227: `to_float` refuses NaN and infinity, as
+`NUMERIC_CONTRACT.md` §2.3 says; the contract was not changed), and PRs #229 (the Owner's documentation additions), #230 (byte output kept as native bytes; one byte of
 `--max-memory-bytes` per byte) and #231 (the re-audit corrections below). The skill is pinned at HowlPlane `24ac9ad`
 (howlplane#186). Two builds into separate caches gave identical tree digests.
 
@@ -75,8 +75,9 @@ backend example's routes declared no `(grants ...)`, so every request failed wit
 gets only its route's grants); that is fixed. It also found that a `write_file`/`try_let` recipe and #224 history were new
 guidance; they were removed. Round 2 accepted.
 
-**Re-audit.** Antigravity (`gemini-3.8-flash-high`) re-ran the audit on the exact pinned bundle with the pinned compiler.
-Its report is `AUDIT_antigravity_2026-10-27.md`, unedited. It re-tested the 20 earlier findings and reported 10
+**Re-audit.** Antigravity (`gemini-3.8-flash-high`) re-ran the audit on the bundle and compiler built by
+`cv1.toolchains` at `ee8dd445`, the candidate before #231, with the skill pinned above. Its report is
+`AUDIT_antigravity_2026-10-27.md`, unedited, so it describes the documentation before #231 corrected it. It re-tested the 20 earlier findings and reported 10
 discrepancies: 3 *breaks*, 5 *misleads* and 2 *cosmetic*. Each was checked against the compiler before acting, and the
 `printf` one also against the pinned base root. The corrections are howlframe#231, which Antigravity reviewed separately
 (accepted with an informational note).

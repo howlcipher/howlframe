@@ -314,7 +314,7 @@ revised protocol. Review R4 (`FAIRNESS_REVIEW_R4_SCOPED.md`, Antigravity, 2026-1
 harness defects, no methodology problem, and confirmed Revision 3 changes no hypothesis, metric, target or decision rule; all
 six are fixed (dispositions in that file), and the reviewer confirmed the fixes with no new defect. Gate 1a is
 passed. Gates 2–4 are open; gate 4 pins the compiler commit (G12; `eb7abf60` is the current candidate, refreshed
-2026-10-27 after howlframe#224, #225, #229, #230 and #231; it replaced `e77e008f`).
+2026-10-27 after howlframe PRs #227, #228, #229, #230 and #231; it replaced `e77e008f`).
 
 ## 12. Disposition of fairness review R1 (Antigravity / Gemini, 2026-10-21)
 
