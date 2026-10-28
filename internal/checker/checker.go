@@ -241,6 +241,18 @@ func checkJSStatement(node *ast.Node, depth int) {
 					checkJSStatement(kid.Children[1], depth+1)
 				}
 			}
+		case "append", "map_set", "map_delete":
+			// These mutate a named variable, as on the Go and bytecode targets.
+			if target := irNode.Kids[0]; target.Type != "SYMBOL" {
+				what := "dict"
+				if irNode.Kind == "append" {
+					what = "list"
+				}
+				ast.ReportError(fmt.Sprintf("%s requires a symbol for %s", irNode.Kind, what), target.Line, target.Column)
+			}
+			for _, kid := range irNode.Kids[1:] {
+				checkJSStatement(kid, depth+1)
+			}
 		default:
 			for _, kid := range irNode.Kids {
 				checkJSStatement(kid, depth+1)

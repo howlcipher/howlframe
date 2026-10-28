@@ -100,3 +100,22 @@ func TestJSLoopAsValueStillRejected(t *testing.T) {
 		t.Fatalf("while as a value must stay rejected, got %v %s", err, out)
 	}
 }
+
+// map_set, map_delete and append mutate a named variable on every target.
+// The JavaScript checker did not say so, and the backend emitted
+// howlFrameMapSet(, ...) for an expression target: a build that cannot run.
+func TestJSMutationTargetsMustBeSymbols(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	for _, tc := range []struct{ form, want string }{
+		{`(map_set (list_get xs 0) "a" 2)`, "map_set requires a symbol for dict"},
+		{`(map_delete (list_get xs 0) "a")`, "map_delete requires a symbol for dict"},
+		{`(append (list_get ys 0) 2)`, "append requires a symbol for list"},
+	} {
+		src := mustWriteFile(t, dir, "m.howl", `(web_app (let (xs (list (dict ("a" 1))) ys (list (list 1))) `+tc.form+`))`)
+		out, err := exec.Command(bin, "build", src, "--target", "js", "-o", filepath.Join(dir, "out")).CombinedOutput()
+		if err == nil || !strings.Contains(string(out), tc.want) {
+			t.Fatalf("%s: want %q, got %v %s", tc.form, tc.want, err, out)
+		}
+	}
+}

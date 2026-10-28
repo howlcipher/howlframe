@@ -24,6 +24,9 @@
   could only print. Both now build: `stderr` writes one value without a newline and `exit` ends a Node process with
   its status (in a browser it throws). In `app.test.js` an exit fails the running test, with the `assertion failed`
   message, and the remaining tests still run.
+* `check` and `build --target=js` reject `map_set`, `map_delete` and `append` whose target is not a variable, with the
+  same `requires a symbol` diagnostic as the Go and bytecode targets. The JavaScript build used to succeed and emit
+  `howlFrameMapSet(, ...)`, which does not parse.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
   clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
   undefined value.
