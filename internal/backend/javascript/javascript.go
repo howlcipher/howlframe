@@ -52,6 +52,10 @@ var jsNeedsRequestRead bool
 // attr_escape. Both share one helper. It is reset on every call.
 var jsNeedsHTMLEscape bool
 
+// jsNeedsArchive is set when GenerateJSCode emits dom_text, zip_build, or
+// download_file, so the browser archive helpers are prepended.
+var jsNeedsArchive bool
+
 // jsNeedsCollection is set when GenerateJSCode emits a dict or list op
 // that must fail closed. map_keys keeps its own guard. The flag is reset
 // on every call.
@@ -1238,6 +1242,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
+	jsNeedsArchive = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1340,6 +1345,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsHTMLEscape {
 		helper := htmlEscapeJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsArchive {
+		helper := archiveJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
@@ -1482,6 +1494,20 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("%s.value", el)
+	} else if head == "dom_text" {
+		jsNeedsArchive = true
+		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameDomText(%s)", el)
+	} else if head == "zip_build" {
+		jsNeedsArchive = true
+		entries := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameZipBuild(%s)", entries)
+	} else if head == "download_file" {
+		jsNeedsArchive = true
+		name := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		mime := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		data := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameDownloadFile(%s, %s, %s)", name, mime, data)
 	} else if head == "fetch" {
 		return jsFetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {

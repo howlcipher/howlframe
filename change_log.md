@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Correctness
+* Source text is decoded as UTF-8. The lexer read one byte per code point, so every non-ASCII string literal was
+  re-encoded byte by byte: `(print "é")` printed `Ã©` on the bytecode VM, the direct interpreter and generated
+  JavaScript alike, and columns after a multibyte character were off by its extra bytes. Literals now reach every
+  target unchanged, columns count code points, and a file that is not valid UTF-8 is rejected with
+  `source is not valid UTF-8` instead of being silently reinterpreted.
+
+### JavaScript backend
+* `web_app` gains three browser host operations. `(zip_build entries)` returns the base64 of a deterministic ZIP of
+  stored entries, each a dict with `path` and exactly one of `text` (written as UTF-8) or `base64`; unsafe paths
+  (absolute, `..`, `.`, empty segments, backslashes, drive letters, characters outside `[A-Za-z0-9._~@+-]`),
+  case-insensitive duplicates, more than 10,000 entries and more than 512 MiB are refused with `ZIP_INVALID_PATH`,
+  `ZIP_DUPLICATE_PATH`, `ZIP_INVALID_ENTRY` or `ZIP_LIMIT`. `(download_file name mime base64)` hands bytes to the
+  browser download mechanism through a revoked Blob URL, validating the plain file name and media type first, and
+  fails with `UNSUPPORTED_HOST` where there is no document. `(dom_text el)` reads an element's text without parsing
+  it as HTML. `check` enforces their arity, and `cli_app` builds refuse them.
+
 ## v0.2.0 (2026-10-28)
 
 Tag `v0.2.0` on `77cb55c8`; https://github.com/howlcipher/howlframe/releases/tag/v0.2.0. v0.1.0 (2026-08-13) was

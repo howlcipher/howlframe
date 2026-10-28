@@ -344,6 +344,19 @@ go run howlframe.go build counter.howl --target js
 node --test app.test.js
 ```
 
+A `web_app` can package files and hand them to the browser to save:
+
+```lisp
+(download_file "site.zip" "application/zip"
+  (zip_build (list
+    (dict ("path" "index.html") ("text" "<h1>Hello</h1>"))
+    (dict ("path" "img/logo.png") ("base64" logo_b64)))))
+```
+
+`zip_build` writes a deterministic archive of stored entries and refuses unsafe paths, so an archive cannot name a
+file outside the directory it is extracted into. `download_file` validates the file name and media type, and fails
+with `UNSUPPORTED_HOST` outside a browser. `(dom_text el)` reads an element's text content.
+
 `build --target js` writes `app.js` and, when the program has `test` blocks, `app.test.js` to the current
 directory (or to the directory given with `-o`; an `-o` path ending in `.js` writes only the app). Without
 `--target js`, a `web_app` is rejected by the bytecode target.

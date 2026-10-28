@@ -303,6 +303,23 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "dom_text" {
+		if len(node.Children) != 2 {
+			ast.ReportError("dom_text expects (dom_text el)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "zip_build" {
+		if len(node.Children) != 2 {
+			ast.ReportError("zip_build expects (zip_build entries)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "download_file" {
+		if len(node.Children) != 4 {
+			ast.ReportError("download_file expects (download_file name mime base64)", node.Line, node.Column)
+		}
+		for _, child := range node.Children[1:] {
+			checkJSStatement(child, depth+1)
+		}
 	} else if head == "parse_json" {
 		if len(node.Children) != 3 {
 			ast.ReportError("parse_json expects (parse_json type body)", node.Line, node.Column)
