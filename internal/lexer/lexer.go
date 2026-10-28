@@ -5,6 +5,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ast"
 	"strconv"
 	"unicode"
+	"unicode/utf8"
 )
 
 type TokenType string
@@ -41,8 +42,8 @@ func (l *Lexer) nextChar() rune {
 	if l.pos >= len(l.input) {
 		return 0
 	}
-	ch := rune(l.input[l.pos])
-	l.pos++
+	ch, size := decodeSourceRune(l.input[l.pos:], l.line, l.column)
+	l.pos += size
 	if ch == '\n' {
 		l.line++
 		l.column = 1
@@ -56,7 +57,19 @@ func (l *Lexer) peekChar() rune {
 	if l.pos >= len(l.input) {
 		return 0
 	}
-	return rune(l.input[l.pos])
+	ch, _ := decodeSourceRune(l.input[l.pos:], l.line, l.column)
+	return ch
+}
+
+// decodeSourceRune reads one UTF-8 encoded code point. Source text is UTF-8;
+// a byte sequence that is not valid UTF-8 is rejected instead of being
+// reinterpreted one byte per code point.
+func decodeSourceRune(rest string, line, column int) (rune, int) {
+	ch, size := utf8.DecodeRuneInString(rest)
+	if ch == utf8.RuneError && size == 1 {
+		ast.ReportError("source is not valid UTF-8", line, column)
+	}
+	return ch, size
 }
 
 func (l *Lexer) NextToken() Token {
