@@ -1,7 +1,9 @@
 # HowlFrame v0.2.0 release candidate
 
-**Status: prepared for Owner approval. Not tagged, not published.** No tag was created, no release workflow ran, no
-asset or package was published, and nothing was merged.
+**Status: PUBLISHED AND VERIFIED** (2026-10-28). The Owner approved v0.2.0; the tag `v0.2.0` points at
+`77cb55c87076aef846a601f18ace6bba78a12010` and the published assets were verified. Publication evidence:
+`HOWLFRAME_RELEASE_PUBLICATION.md`. The rest of this file is the candidate record as prepared, when nothing had been
+tagged, published or merged.
 
 ## Verdict
 
@@ -89,14 +91,14 @@ unsigned binaries; macOS and Windows binaries unexecuted.
 
 ## Approval checklist
 
-- [ ] Review and merge the numeric PR; CI green on `main`.
-- [ ] Merge the RC PR; CI green on `main`.
-- [ ] On the merged commit: `go run howlframe.go version` prints `HowlFrame 0.2.0`, `HFBC format: 2`.
-- [ ] Decide on macOS and Windows (decision 2).
-- [ ] Tag the merged commit: `git tag -a v0.2.0 <sha> -m "HowlFrame v0.2.0"` and `git push origin v0.2.0`. The release
+- [x] Review and merge the numeric PR; CI green on `main`. (#233, `2685f945`)
+- [x] Merge the RC PR; CI green on `main`. (#234, `77cb55c8`)
+- [x] On the merged commit: `go run howlframe.go version` prints `HowlFrame 0.2.0`, `HFBC format: 2`.
+- [x] Decide on macOS and Windows (decision 2). (Publish, labelled cross-compiled and not executed)
+- [x] Tag the merged commit: `git tag -a v0.2.0 <sha> -m "HowlFrame v0.2.0"` and `git push origin v0.2.0`. The release
       workflow refuses the tag if the version disagrees, builds the five archives, requires `docs/releases/v0.2.0.md`,
       and publishes with `SHA256SUMS`.
-- [ ] Download the published assets, run `sha256sum -c SHA256SUMS`, extract the Linux binary and compare its SHA-256
+- [x] Download the published assets, run `sha256sum -c SHA256SUMS`, extract the Linux binary and compare its SHA-256
       with `af9216894e9a14148b8592fc12aacc6e1d6c6115033799a6c99882a0b223bbb7`. A mismatch means CI used a different Go
       1.25 patch release or different source; restage with that toolchain before trusting the match.
-- [ ] Follow `docs/installation.md` once from the published URLs.
+- [x] Follow `docs/installation.md` once from the published URLs.
