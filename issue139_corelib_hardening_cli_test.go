@@ -82,10 +82,12 @@ func TestEmptyMinMaxIsValueError(t *testing.T) {
 	}
 }
 
-// Lain's guard: Go/JS builds reject the #138 core-library built-ins and nz
-// (both lower to let-expressions those backends cannot emit) with a clear
+// Lain's guard: Go builds reject the #138 core-library built-ins and nz
+// (both lower to let-expressions that backend cannot emit) with a clear
 // error, nonzero exit, no "Built" and no output file. A user variable that
-// shares a built-in name is unaffected.
+// shares a built-in name is unaffected. The JavaScript backend emits those
+// let-expressions as value blocks; TestJSValueFormsMatchBytecode checks the
+// same built-ins there against the bytecode VM.
 func TestGoJSTargetsRejectCoreLibraryAndNz(t *testing.T) {
 	bin := c1c2Binary(t)
 	programs := map[string]string{
@@ -97,7 +99,7 @@ func TestGoJSTargetsRejectCoreLibraryAndNz(t *testing.T) {
 		"nz":         `(cli_app (let (m (dict ("a" "x"))) (print (nz (map_get m "b") "d"))))`,
 		"list_slice": `(cli_app (let (xs (list 1 2 3)) (print (list_len (list_slice xs 1)))))`,
 	}
-	for _, target := range []string{"go", "js"} {
+	for _, target := range []string{"go"} {
 		for name, program := range programs {
 			t.Run(target+"/"+name, func(t *testing.T) {
 				dir := t.TempDir()

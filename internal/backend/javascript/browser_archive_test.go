@@ -286,3 +286,20 @@ Promise.resolve(vm.runInNewContext(` + string(encoded) + `, browser)).then(() =>
 		t.Fatalf("dom_text of a missing element must be TYPE_ERROR, got %q", stdout)
 	}
 }
+
+// A try_let whose catch variable is named e must still see the error. The
+// generated catch clause bound its own parameter as e, so assigning e = e
+// wrote to that parameter and the outer variable stayed null: the error was
+// dropped and the success branch ran with an undefined value.
+func TestTryLetCatchVariableNamedEReceivesError(t *testing.T) {
+	for _, name := range []string{"e", "err", "error"} {
+		out := runWebAppOutput(t, `(web_app
+  (let (raw "{not json")
+    (try_let (v (parse_json Any raw))
+      (catch `+name+` (print "caught"))
+      (print "missed"))))`)
+		if out != "caught" {
+			t.Fatalf("catch variable %s: want caught, got %q", name, out)
+		}
+	}
+}

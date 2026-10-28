@@ -10,6 +10,19 @@
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
 ### JavaScript backend
+* A `let`, `do` or `if` used as a value (an operand, a binding or a call argument) now builds on `--target=js`: it is
+  emitted as an awaited async arrow that returns the form's value. That is the shape `not`, `starts_with`/`ends_with`,
+  `map_has`, `list_contains`, `all`/`any`, `ver_gt`/`ver_ge`, `nz`, `parse_json` of an expression and the core library
+  (`str_slice`, `index_of`, `map_list`, `filter`, `reduce`, `sum`, `reverse`, `sort`, `count_by`, `list_slice`) lower
+  to, so all of them are available to a `web_app`; `TestJSValueFormsMatchBytecode` checks each against the bytecode
+  VM's output. A `return` inside such a form is refused, since it would leave only the generated arrow, and `for` and
+  `while` still have no value form. `--target=go` is unchanged. The two-argument slice sentinel is now 2^53-1, which
+  every target represents exactly, instead of the int64 maximum JavaScript refuses.
+* `to_lower`, `to_upper` and `str_trim` build on `--target=js`. `check` rejected them as unknown statements: their
+  emission sat in the shared-IR switch, which never lowers those heads.
+* `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
+  clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
+  undefined value.
 * `web_app` gains three browser host operations. `(zip_build entries)` returns the base64 of a deterministic ZIP of
   stored entries, each a dict with `path` and exactly one of `text` (written as UTF-8) or `base64`; unsafe paths
   (absolute, `..`, `.`, empty segments, backslashes, drive letters, characters outside `[A-Za-z0-9._~@+-]`),

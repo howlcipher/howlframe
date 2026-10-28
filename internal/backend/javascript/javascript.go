@@ -1041,7 +1041,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		catchBodyCode := generateJSStatement(catchNode.Children[2], reqVar, depth+1)
 		successBodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
 
-		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (e) {\n\t\t%s = e;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
+		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (__howlFrameCaught) {\n\t\t%s = __howlFrameCaught;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
 	case "for":
 		itemNode := ir.Kids[0].Value
 		// The iterable may be any expression, not only a bound symbol. Reading
@@ -1115,15 +1115,6 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("((_v) => _v == null ? \"\" : String(_v))(%s)", valStr)
-	case "to_lower":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).toLowerCase()", valStr)
-	case "to_upper":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).toUpperCase()", valStr)
-	case "str_trim":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).trim()", valStr)
 	case "encode_json":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("JSON.stringify(%s)", valStr)
@@ -1426,6 +1417,24 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	}
 	if ir, ok := ir.LowerShared(node); ok {
 		return EmitJSIR(ir, reqVar, depth)
+	}
+	if head == valueBlockHead {
+		return jsValueBlock(node, reqVar, depth)
+	}
+	// to_lower, to_upper and str_trim are not shared IR kinds, so they are
+	// emitted here rather than in EmitJSIR.
+	switch head {
+	case "to_lower":
+		return fmt.Sprintf("String(%s).toLowerCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "to_upper":
+		return fmt.Sprintf("String(%s).toUpperCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "str_trim":
+		return fmt.Sprintf("String(%s).trim()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "parse_json":
+		// Bindings special-case parse_json above; this covers every other
+		// value position, such as the result of a value block.
+		jsNumeric = true
+		return fmt.Sprintf("howlFrameParseJSON(%s)", generateJSStatementRaw(node.Children[2], reqVar, depth+1))
 	}
 	if head == "time_now" {
 		// Unix seconds, matching the bytecode VM and the Go backend.

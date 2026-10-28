@@ -824,7 +824,7 @@ func buildSource() {
 		reportHFIRDiagnostics(diags)
 	}
 	rejectUnsupportedTargetSugar(root, strings.ToLower(strings.TrimSpace(*target)))
-	rejectUnsupportedTargetValueForms(root, strings.ToLower(strings.TrimSpace(*target)))
+	jsValueForms := rejectUnsupportedTargetValueForms(root, strings.ToLower(strings.TrimSpace(*target)))
 
 	analysis := checker.Check(root)
 	hfirModule := filepath.Base(inputFile)
@@ -899,6 +899,7 @@ func buildSource() {
 
 	case "js", "javascript":
 		runHFIRGate(root, hfirModule, hfirTargetJavaScript)
+		javascript.WrapValueForms(jsValueForms)
 		jsCode, testCode := javascript.GenerateJSCode(root)
 		outFile := *outPath
 		if outFile != "" && strings.HasSuffix(outFile, ".js") {
@@ -1198,7 +1199,9 @@ func writeExecutionReceipt(path string, receipt vm.ExecutionReceipt) error {
 // so a user variable or defun with the same name is not rejected. It runs
 // before any file is written: nonzero exit, no "Built", no output.
 func rejectUnsupportedTargetSugar(root *ast.Node, target string) {
-	if target != "go" && target != "js" && target != "javascript" {
+	// JavaScript emits the let-expressions these lower to (see
+	// rejectUnsupportedTargetValueForms), so only Go still refuses them.
+	if target != "go" {
 		return
 	}
 	var walk func(n *ast.Node)
@@ -1236,10 +1239,18 @@ var targetStatementForms = map[string]bool{
 // output would not compile; desugared sugar (all/any, ver_gt/ver_ge,
 // starts_with, list_contains, map_has, not, list_get/parse_json operand
 // binding, ...) reaches the backend in exactly this shape (#141).
-func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
-	if target != "go" && target != "js" && target != "javascript" {
-		return
+//
+// On --target=js a let, do or if in value position is accepted instead and
+// returned, so the build can wrap it as a value block once checking is done
+// (javascript.WrapValueForms). A return inside such a form is refused: it
+// would return from the generated arrow, not from the enclosing function.
+// for and while still have no value form on either target.
+func rejectUnsupportedTargetValueForms(root *ast.Node, target string) []*ast.Node {
+	js := target == "js" || target == "javascript"
+	if target != "go" && !js {
+		return nil
 	}
+	var valueForms []*ast.Node
 	isForm := func(n *ast.Node) string {
 		if n == nil || n.Type != "List" || len(n.Children) == 0 || n.Children[0].Type != "SYMBOL" {
 			return ""
@@ -1256,7 +1267,10 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
 			return
 		}
 		if value {
-			if h := isForm(n); h != "" {
+			if h := isForm(n); h != "" && js && (h == "let" || h == "do" || h == "if") {
+				rejectReturnInsideValueForm(n, h)
+				valueForms = append(valueForms, n)
+			} else if h != "" {
 				ast.ReportError(fmt.Sprintf("UNSUPPORTED_ON_TARGET: %s used as a value is not supported on --target=%s (this backend emits it as a statement, so the output would not compile; sugar such as all/any, ver_gt/ver_ge, not, starts_with/ends_with, list_contains, map_has, nz, the core-library built-ins and list_get/parse_json on a computed operand lowers to this shape); build for the bytecode target instead", h, target), n.Line, n.Column)
 				return
 			}
@@ -1307,6 +1321,28 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) {
 		}
 	}
 	walk(root, false)
+	return valueForms
+}
+
+// rejectReturnInsideValueForm refuses an explicit return inside a value-position
+// form. Function and lambda bodies inside it are their own scope.
+func rejectReturnInsideValueForm(form *ast.Node, head string) {
+	var walk func(n *ast.Node)
+	walk = func(n *ast.Node) {
+		if n == nil || n.Type != "List" || len(n.Children) == 0 {
+			return
+		}
+		switch n.Children[0].Value {
+		case "lambda", "defun":
+			return
+		case "return":
+			ast.ReportError(fmt.Sprintf("UNSUPPORTED_ON_TARGET: return inside %s used as a value is not supported on --target=js (it would leave only the value block, not the function); bind the value with let and return it after", head), n.Line, n.Column)
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(form)
 }
 
 // rejectUnsupportedTargetControlflow fails closed on --target=go|js for the
