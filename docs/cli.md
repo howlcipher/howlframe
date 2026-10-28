@@ -1,6 +1,6 @@
 # Command Line Interface (CLI)
 
-HowlFrame v0.1 provides a clean, subcommand-based CLI for the core compilation and execution workflows.
+HowlFrame provides a clean, subcommand-based CLI for the core compilation and execution workflows.
 
 ## `howlframe check`
 Usage: `howlframe check [--profile=default|governed] <source.howl>`
@@ -98,7 +98,7 @@ Prints the current version of the HowlFrame CLI and the supported HFBC artifact 
 ---
 
 ## Legacy Compatibility Interface
-The v0.1 CLI retains full backward compatibility with the original flat flag structure:
+The CLI retains full backward compatibility with the original flat flag structure:
 
 * `-validate` : Run lexer, parser, semantic checker, and AOT HFIR verifier without transpiling.
 * `-compile-bc` : Compile AST to a bytecode artifact (binary HFBC) (production bytecode compiler, gated by AOT HFIR semantic verifier; HOWL-CANON-010). Emission stays `bytecode.CompileToBytecode`. The promote, defer, and kill checklist is `docs/reference/lowered_hfir_prod_flip_criteria.md`. #90 stays Partial.
@@ -109,7 +109,7 @@ The v0.1 CLI retains full backward compatibility with the original flat flag str
 * `-mask-plan` : Print the deterministic constrained-decoding mask plan.
 * `-optimization-plan` : Print the deterministic compile-time optimization plan.
 
-These flags are not part of the primary v0.1 onboarding path but remain fully supported for existing integrations.
+These flags are not part of the primary onboarding path but remain fully supported for existing integrations.
 
 ## JavaScript `web_app` generation
 

@@ -38,6 +38,17 @@ jobs:
         with:
           go-version: '1.25'
 
+      # The version is a constant in howlframe.go, not derived from the tag, so a
+      # tag that disagrees with it would publish binaries reporting another version.
+      - name: Verify the tag matches the reported version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          REPORTED=$(go run howlframe.go version | head -n 1)
+          if [ "$REPORTED" != "HowlFrame ${VERSION#v}" ]; then
+            echo "::error::Tag $VERSION does not match '$REPORTED' from howlframe.go. Aborting release."
+            exit 1
+          fi
+
       - name: Build Binary
         env:
           CGO_ENABLED: 0
@@ -50,7 +61,7 @@ jobs:
             BINARY_NAME=howlframe.exe
           fi
           
-          go build -ldflags="-w -s" -o $BINARY_NAME howlframe.go
+          go build -trimpath -ldflags="-w -s" -o $BINARY_NAME howlframe.go
           
           ARCHIVE_NAME=howlframe_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}
           if [ "${{ matrix.ext }}" = "zip" ]; then

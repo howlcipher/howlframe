@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // HFBCFormatVersion advertises the envelope this compiler writes, not the
 // BCProgram instruction-set version or every legacy envelope it can read.
@@ -662,7 +662,7 @@ func runSubcommand() {
 }
 
 func printHelp() {
-	fmt.Println(`HowlFrame v0.1 CLI
+	fmt.Println(`HowlFrame ` + Version + ` CLI
 
 Usage:
   howlframe <command> [arguments]
