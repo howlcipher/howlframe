@@ -10,7 +10,7 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="HowlFrame">
     <meta property="og:title" content="HowlFrame | Language, HFIR &amp; Bytecode VM">
-    <meta property="og:description" content="Intent is not authority. A typed IR gate, AI-native Lisp DSL, and capability-bounded VM for safe AI systems.">
+    <meta property="og:description" content="Intent is not authority. A typed IR gate, AI-native Lisp DSL, and capability-bounded VM for governed AI systems.">
     <meta property="og:url" content="https://howlcipher.github.io/howlframe/">
     <meta property="og:image" content="https://howlcipher.github.io/howlframe/social-preview.png">
     <meta property="og:image:width" content="1200">
@@ -20,7 +20,7 @@
     <!-- Twitter Card Metadata -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="HowlFrame | Language, HFIR &amp; Bytecode VM">
-    <meta name="twitter:description" content="Intent is not authority. A typed IR gate, AI-native Lisp DSL, and capability-bounded VM for safe AI systems.">
+    <meta name="twitter:description" content="Intent is not authority. A typed IR gate, AI-native Lisp DSL, and capability-bounded VM for governed AI systems.">
     <meta name="twitter:image" content="https://howlcipher.github.io/howlframe/social-preview.png">
     <meta name="twitter:image:alt" content="HowlFrame pipeline architecture and capability boundary overview">
 
@@ -122,7 +122,7 @@
                     <span class="node-card-name">HOWLFRAME</span>
                     <span class="node-card-role" style="color: var(--color-magenta);">[VM &amp; COMPILER]</span>
                 </div>
-                <div class="node-card-desc">AI-native reasoning language, typed intermediate representation, and sandboxed bytecode VM.</div>
+                <div class="node-card-desc">AI-native reasoning language, typed intermediate representation, and capability-governed bytecode VM.</div>
             </a>
 
             <a href="https://howlcipher.github.io/howlplane/" class="drawer-node-card">
@@ -291,7 +291,7 @@
                                 <div class="pipe-step-body">
                                     <div class="pipe-step-title">Target Execution</div>
                                     <div class="pipe-step-desc">Bytecode VM, Native Go, WebAssembly WAT, or Browser JS.</div>
-                                    <div class="pipe-step-tag">[SANDBOXED]</div>
+                                    <div class="pipe-step-tag">[GOVERNED]</div>
                                 </div>
                             </div>
                         </div>
@@ -388,7 +388,7 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                                 <tr>
                                     <th>Capability</th>
                                     <th>OpCodes &amp; DSL Forms</th>
-                                    <th>Default Sandbox Policy</th>
+                                    <th>Default Policy</th>
                                     <th>Enforcement Mechanism</th>
                                 </tr>
                             </thead>
@@ -431,7 +431,7 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                 </div>
                 <div class="tech-body">
                     <p class="section-intro">
-                        Autonomous AI coding agents generate non-deterministic code. HowlFrame provides deterministic architectural guarantees, preventing unauthorized capability escape through verifiable compiler gates and isolated bytecode execution.
+                        Autonomous AI coding agents generate non-deterministic code. HowlFrame checks programs before they run and denies undeclared effects by default in its bytecode VM. It is a capability-governed runtime, not an OS sandbox: capability checks run inside the host process, so untrusted code still needs external isolation such as a container or VM.
                     </p>
 
                     <div class="card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">
@@ -445,14 +445,14 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                         <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
                             <h3 style="font-size: 1rem; color: var(--color-magenta); margin-bottom: 0.5rem;">How does a capability-bounded runtime prevent unauthorized AI side effects?</h3>
                             <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
-                                HowlFrame bytecode (<code>.hfbc</code>) executes in a capability-checked virtual machine where all external interactions (network access, native store persistence, filesystem mutations, system process invocation) are denied by default. Privileged operations require explicit runner capability flags (e.g. <code>-allow-caps network,database</code>), preventing autonomous agent jailbreaks or prompt-injected side effects from escaping the VM sandbox.
+                                HowlFrame bytecode (<code>.hfbc</code>) executes in a capability-checked virtual machine where all external interactions (network access, native store persistence, filesystem mutations, system process invocation) are denied by default. Privileged operations require explicit runner capability flags (e.g. <code>-allow-caps network,database</code>), so a prompt-injected or mistaken program cannot use an effect the runner did not grant. These are logic-level checks inside the host process, not OS isolation; see SECURITY.md.
                             </p>
                         </article>
 
                         <article class="tech-card" style="background: rgba(10, 14, 20, 0.6); border: 1px solid var(--border-color); padding: 1.25rem;">
                             <h3 style="font-size: 1rem; color: var(--color-amber); margin-bottom: 0.5rem;">How does HowlFrame differ from standard general-purpose runtimes?</h3>
                             <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-muted);">
-                                General-purpose runtimes (Node.js, Python, standard Go) allow arbitrary I/O whenever an imported package invokes it. HowlFrame isolates capabilities at the instruction level. AI-generated modules cannot read environment variables, open sockets, or mutate local disk unless an explicit capability grant is cryptographically or administratively attached to that specific execution context.
+                                General-purpose runtimes (Node.js, Python, standard Go) allow arbitrary I/O whenever an imported package invokes it. HowlFrame isolates capabilities at the instruction level. AI-generated modules cannot read environment variables, open sockets, or mutate local disk unless the runner explicitly grants that capability for that execution.
                             </p>
                         </article>
 

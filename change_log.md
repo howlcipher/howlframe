@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+Proposed as v0.2.0 (release candidate; not tagged). v0.1.0 (2026-08-13) was released without its own section, so this
+section also holds entries from before v0.1.0. `docs/releases/v0.2.0.md` summarizes the changes since v0.1.0.
+
+### Release
+* Version 0.2.0: `howlframe version`, `help` and `interop --json` report 0.2.0 with HFBC format 2. Format 2 artifacts do
+  not load on v0.1.0, and grants and numeric errors changed, so this is a minor (0.x breaking) release, not 0.1.1.
+* The release workflow refuses a tag that differs from the version `howlframe.go` reports, and builds with `-trimpath`
+  so a binary rebuilt from the same commit and toolchain is byte-identical.
+* Installation instructions use the published archive names (`howlframe_v0.2.0_linux_amd64.tar.gz`; the v0.1.0 guide
+  omitted the `v`), verify `SHA256SUMS`, and state which platforms were executed.
+* `docs/reference/artifact_compatibility.md` states what a format 1 artifact does on v0.2.0, measured with artifacts
+  built by the published v0.1.0 binary: the earlier text said they "execute normally", but `store_open` artifacts fail
+  closed and `map_get` of a missing key now returns `nil`.
+* The project page no longer calls the VM a sandbox or "isolated" execution, or says grants are attached
+  cryptographically; `SECURITY.md` lists the known limitations of this release (#216, #217, #182).
+
 ### Applications
 * EvidenceDesk's ledger module (`milestone3/evidencedesk/app/ledger.howl`) exports `parse_within(raw, maximum, max_bytes)`, the same validation as `parse` under a caller-chosen byte ceiling, so HowlBoard's ledger import can reuse it at HowlBoard's own input sizes. `parse` delegates with the frozen 262144-byte ceiling; EvidenceDesk's API and projector behavior is unchanged (its full workflow suite and a 14-case black-box projector comparison are identical before and after). `TestEvidenceDeskLedgerParseWithin` pins both ceilings.
 
