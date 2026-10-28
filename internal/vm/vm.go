@@ -593,6 +593,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr(fmt.Sprintf("confidence: response decode failed: %v", err), node)
 		}
 		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)), node)
+		}
 		return val
 	case "list":
 		items := make([]any, 0, len(node.Children)-1)
@@ -1329,15 +1332,32 @@ func interpNumericArithmetic(op string, a, b any, node *ast.Node) any {
 	if !aOk || !bOk {
 		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
 	}
+	res, finite := floatArithmetic(op, af, bf)
+	if !finite {
+		InterpErr(floatOverflowMessage(op, af, bf), node)
+	}
+	return res
+}
+
+// floatArithmetic applies +, - or * to float64 operands. NUMERIC_CONTRACT
+// section 7 allows no NaN or infinite result, so ok is false when the result
+// is not finite and the caller raises a numeric error. Float overflow used to
+// return +Inf, and Inf - Inf NaN, which then passed range checks.
+func floatArithmetic(op string, a, b float64) (res float64, ok bool) {
 	switch op {
 	case "+":
-		return af + bf
+		res = a + b
 	case "-":
-		return af - bf
+		res = a - b
 	case "*":
-		return af * bf
+		res = a * b
 	}
-	return nil
+	return res, !math.IsNaN(res) && !math.IsInf(res, 0)
+}
+
+func floatOverflowMessage(op string, a, b float64) string {
+	return fmt.Sprintf("floating-point overflow: %s %s %s is not finite",
+		strconv.FormatFloat(a, 'g', -1, 64), op, strconv.FormatFloat(b, 'g', -1, 64))
 }
 
 func interpNumericDiv(a, b any, node *ast.Node) any {
@@ -3338,6 +3358,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence response decode failed: %v", err))
 			}
 			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+			// A model can answer "NaN", "Inf" or "1e400". NUMERIC_CONTRACT
+			// section 2.3 keeps those out of policy decisions, as to_float does.
+			if math.IsNaN(val) || math.IsInf(val, 0) {
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", ip, inst.Op, "confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)))
+			}
 			vm.push(val)
 
 		case bytecode.OpLlmGenerate:
@@ -4100,14 +4125,11 @@ func bcNumericBinop(op string, a, b any) any {
 		if !aOk || !bOk {
 			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
 		}
-		switch op {
-		case "+":
-			return af + bf
-		case "-":
-			return af - bf
-		case "*":
-			return af * bf
+		res, finite := floatArithmetic(op, af, bf)
+		if !finite {
+			panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "%s", floatOverflowMessage(op, af, bf)))
 		}
+		return res
 	case "/":
 		af, aOk := toFloat64(a)
 		bf, bOk := toFloat64(b)

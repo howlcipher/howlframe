@@ -16,7 +16,7 @@ This contract governs the meaning of numeric values and numeric operations in ev
 ### 2.2 Floating-point
 
 * IEEE 754 binary64 (`float64`).
-* Floating literals that contain a decimal point or exponent are `float64`.
+* Floating literals that contain a decimal point are `float64`.
 * Results of operations that must be real (division) are `float64`.
 
 ### 2.3 No implicit NaN or Infinity in policy values
@@ -28,8 +28,10 @@ This contract governs the meaning of numeric values and numeric operations in ev
 ## 3. Literal Semantics
 
 * Integer literal: `42`, `-7`, `0` → `int64`.
-* Floating literal: `3.14`, `2.0`, `1e10` → `float64`.
+* Floating literal: `3.14`, `2.0` → `float64`.
 * A literal `2.0` is a float; a literal `2` is an integer. The type is determined by syntax, not by magnitude.
+* Source has no exponent notation: `1e10` lexes as the integer `1` followed by the name `e10` and fails the check (`undefined reference to "e10"`). Write the digits, or convert text with `(to_float "1e10")`.
+* An integer literal outside the int64 range, or a float literal outside the finite float64 range, is a check error on every entry point (`check`, `build` for every target, `run`, `-run`, `-compile-bc`): `integer literal … is outside the int64 range …` or `float literal … is outside the finite float64 range`.
 
 ## 4. Mixed Arithmetic
 
@@ -81,6 +83,9 @@ Ordering follows exact mathematical order:
 
 * Signed 64-bit integer overflow, underflow, and division by zero are runtime errors.
 * Floating-point overflow to `+Inf`/`-Inf` or NaN is not allowed as a policy value; if an operation would produce one, the runtime reports a numeric error.
+* `+`, `-` and `*` whose float result is not finite raise `RUNTIME_ERROR` `floating-point overflow: <a> <op> <b> is not finite` on the interpreter, the VM (AST and HFIR artifacts) and generated JavaScript. Float underflow is not an error: a result too small for float64 becomes a subnormal or zero, as in IEEE 754.
+* `confidence` raises `CONVERSION_ERROR` when the model's answer parses as NaN or an infinity (`"NaN"`, `"Inf"`, `"1e400"`), as `to_float` does.
+* The VM refuses to load an artifact whose `LOAD_CONST` holds NaN or an infinity, so neither a stale nor a hand-made artifact can introduce one.
 * Backend implementations must check before relying on host-language wraparound or infinities.
 
 ## 8. Numeric Conversions
@@ -133,6 +138,7 @@ If a backend cannot represent a value or perform an operation in a way that pres
 
 * **Generated JavaScript** represents every number as binary64, so integers outside +/-(2^53-1) are not exact. In obedience to section 12, the checker rejects integer literals outside that range in `web_app` programs, and the generated `parse_json` rejects integer JSON tokens outside that range (using the token source where the engine exposes it, and otherwise rejecting any integer-valued number outside the exact range). Statically int-typed `+`, `-`, and `*` in generated JavaScript raise a runtime error when the result leaves that range instead of rounding. The VM, interpreter, and Go keep exact int64 results there, so such programs fail closed on JavaScript rather than agreeing with the other backends. Where operand types are not statically known (for example JSON fields), generated JavaScript applies the same range check at runtime when both operands are integer-valued, which also rejects whole-valued float results beyond 2^53; that is a deliberate fail-closed trade-off.
 * **Wasm** has no int-to-float promotion for `/`; integer division fails closed at serialization.
+* **Generated Go** does not implement sections 4 and 7 for `+`, `-` and `*`. It emits Go's own operators on Go's static types, so int64 overflow of runtime values wraps (`(let (a 9223372036854775807 b 1) (print (+ a b)))` prints `-9223372036854775808`; overflowing constants fail to compile), float overflow yields `+Inf`/`-Inf`, a mixed int/float expression follows Go typing (`(* a 2.5)` with an int `a` fails to compile; `(* a 10.0)` stays an int), constant expressions fold exactly (`(+ 0.1 0.2)` prints `0.3`), and `confidence` can return a non-finite value. Division (`/`), `to_int` and `to_float` do follow the contract. Generated Go is a secondary target (product directive §3.1); run policy-bearing numeric code on the standalone VM.
 
 ## 14. Version
 

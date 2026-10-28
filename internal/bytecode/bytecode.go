@@ -339,13 +339,22 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 		return nil
 	}
 	var insts []BCInstruction
+	// The checker rejects these literals first. Reporting here as well keeps a
+	// direct CompileToBytecode caller from saturating an out-of-range integer
+	// or loading +Inf.
 	if node.Type == "INT" {
-		val, _ := strconv.ParseInt(node.Value, 10, 64)
+		val, err := strconv.ParseInt(node.Value, 10, 64)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("invalid integer literal: %s", node.Value), node.Line, node.Column)
+		}
 		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: val})
 		return insts
 	}
 	if node.Type == "FLOAT" {
-		val, _ := strconv.ParseFloat(node.Value, 64)
+		val, err := strconv.ParseFloat(node.Value, 64)
+		if err != nil {
+			ast.ReportError(fmt.Sprintf("invalid float literal: %s", node.Value), node.Line, node.Column)
+		}
 		insts = append(insts, BCInstruction{OpString: "LOAD_CONST", Op: OpLoadConst, ValueOperand: val})
 		return insts
 	}

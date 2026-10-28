@@ -75,3 +75,28 @@ func TestJSParseJSONFailsClosedWithoutSourceAccess(t *testing.T) {
 		t.Fatalf("source-less engine accepted an unsafe integer: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 }
+
+// NUMERIC_CONTRACT section 7: float +, - and * that leave the finite range
+// raise a RUNTIME_ERROR instead of producing Infinity or NaN, so a NaN score
+// cannot pass a range check. Finite floats and string + are unchanged.
+func TestJSFloatOverflowFailsClosed(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is not available")
+	}
+	for _, src := range []string{
+		`(web_app (let (x (to_float "1e308")) (print (* x 10.0))))`,
+		`(web_app (let (x (to_float "1.7976931348623157e308")) (print (+ x x))))`,
+		`(web_app (let (x (to_float "1.7976931348623157e308")) (print (- (- 0.0 x) x))))`,
+		`(web_app (let (raw "{\"a\":1e308,\"b\":10.5}") (let (obj (parse_json Doc raw)) (print (* (map_get obj "a") (map_get obj "b"))))))`,
+		`(web_app (let (big (to_float "1e308")) (let (inf (* big 10.0)) (let (score (- inf inf)) (if (or (< score 0.0) (> score 100.0)) (print "REJECT") (print "ACCEPT"))))))`,
+	} {
+		stdout, stderr, err := runNode(t, generateCheckedJS(t, src))
+		if err == nil || !strings.Contains(stderr, "RUNTIME_ERROR: floating-point overflow") || stdout != "" {
+			t.Errorf("%s: stdout=%q stderr=%.200q err=%v, want floating-point overflow", src, stdout, stderr, err)
+		}
+	}
+	stdout, stderr, err := runNode(t, generateCheckedJS(t, `(web_app (let (m (to_float "1.7976931348623157e308")) (let (s "a") (print (+ 0.1 0.2) (* m 1.0) (- m m) (* (to_float "1e-200") (to_float "1e-200")) (+ s "b")))))`))
+	if err != nil || strings.TrimSpace(stdout) != "0.30000000000000004 1.7976931348623157e+308 0 0 ab" {
+		t.Fatalf("finite arithmetic changed: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+}
