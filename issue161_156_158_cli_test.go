@@ -38,20 +38,19 @@ func TestIssue156EncodeJSONInt64ExactOnEveryPath(t *testing.T) {
 }
 
 // Issue #158: <, <=, > and >= with a NaN operand are false (IEEE 754,
-// Python), and sort/min/max and the _by forms keep their prior output.
-// to_float refuses "nan" since #225, so the NaN comes from float overflow
-// (Inf - Inf), which NUMERIC_CONTRACT section 7 forbids but the runtimes
-// still allow; the ordering guarantee matters as long as NaN is reachable.
+// Python). This test used to build its NaN from Inf - Inf. NUMERIC_CONTRACT
+// section 7 is now enforced, so no source program can build a NaN: to_float
+// refuses "nan" (#225) and the overflow that makes the infinity fails. The
+// operator guarantee is kept by TestNaNOrderingIsFalseAtTheOperators
+// (internal/vm); here mixed int/float ordering is kept and the former NaN
+// construction must fail on every path.
 func TestIssue158NaNOrderingOnEveryPath(t *testing.T) {
-	cmp := []string{}
-	for _, op := range []string{"<", "<=", ">", ">="} {
-		for _, pair := range []string{"n 1", "1 n", "n 1.0", "1.0 n", "n n"} {
-			cmp = append(cmp, "("+op+" "+pair+")")
+	issue161Run(t, `(do (print (< 1 2.0) (<= 2 2.0) (>= 3.0 3) (> 1.5 1)))`, "true true true true\n")
+	bin := c1c2Binary(t)
+	src := `(do (let (big (to_float "1e308") n (- (* big 10.0) (* big 10.0))) (print (< n 1) (> n 1))))`
+	for _, args := range issue149Paths(t, bin, src) {
+		if out, err := issue151Run(t, bin, args); err == nil || !strings.Contains(out, "floating-point overflow") || strings.Contains(out, "false") {
+			t.Errorf("%v: err=%v out=%q, want floating-point overflow before any comparison", args[0], err, out)
 		}
 	}
-	src := `(do (let (big (to_float "1e308") n (- (* big 10.0) (* big 10.0))) (do (print (str_join (list ` + strings.Join(cmp, " ") + `) " ")) (print (< 1 2.0) (<= 2 2.0) (>= 3.0 3) (> 1.5 1))` +
-		` (let (xs (list 3.0 n 1.0 2.0)) (do (print (sort xs)) (print (min xs)) (print (max xs))` +
-		` (print (sort_by x xs (* x 1.0))) (print (max_by x xs x)) (print (min_by x xs x)))))))`
-	want := strings.TrimSpace(strings.Repeat("false ", len(cmp))) + "\ntrue true true true\n[1 2 3 NaN]\n1\n3\n[1 2 3 NaN]\n3\n1\n"
-	issue161Run(t, src, want)
 }

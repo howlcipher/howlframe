@@ -85,11 +85,35 @@ func Analyze(root *ast.Node) *Analysis {
 		return a
 	}
 	a.jsTarget = root.Type == "List" && len(root.Children) > 0 && root.Children[0].Value == "web_app"
+	a.checkNumericLiterals(root)
 	a.resolveNamespaces(root, "", false)
 	a.collectStructs(root)
 	a.collectFunctions(root)
 	a.inferRoot(root)
 	return a
+}
+
+// checkNumericLiterals rejects literals the runtime cannot hold exactly
+// (NUMERIC_CONTRACT sections 2 and 12). The interpreter refused them at run
+// time, but the bytecode compiler ignored the parse error, so an out-of-range
+// integer saturated to an int64 bound and an out-of-range float became +Inf.
+func (a *Analysis) checkNumericLiterals(node *ast.Node) {
+	if node == nil {
+		return
+	}
+	switch node.Type {
+	case "INT":
+		if _, err := strconv.ParseInt(node.Value, 10, 64); err != nil {
+			a.add(node, fmt.Sprintf("integer literal %s is outside the int64 range [-9223372036854775808, 9223372036854775807]", node.Value))
+		}
+	case "FLOAT":
+		if _, err := strconv.ParseFloat(node.Value, 64); err != nil {
+			a.add(node, fmt.Sprintf("float literal %s is outside the finite float64 range", node.Value))
+		}
+	}
+	for _, child := range node.Children {
+		a.checkNumericLiterals(child)
+	}
 }
 
 func (a *Analysis) resolveNamespaces(node *ast.Node, currentModule string, inExport bool) {

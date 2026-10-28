@@ -133,25 +133,29 @@ func TestIssue151FloatModDivOnEveryPath(t *testing.T) {
 	}
 }
 
+// The infinite and NaN operands below can no longer be built: the overflow
+// that makes the infinity is refused first (NUMERIC_CONTRACT section 7), so
+// those cases now expect that error. Either way no non-finite value reaches
+// % or //, whose own finite-operand check stays as a backstop.
 func TestIssue151ErrorsOnEveryPath(t *testing.T) {
 	bin := c1c2Binary(t)
 	inf := "(* 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0)"
 	nan := "(let (i " + inf + ") (- i i))"
 	cases := map[string]string{
-		"(do (print (% " + inf + " 2.0)))":              "VALUE_ERROR: % and // need finite operands",
-		"(do (print (% 2.0 " + inf + ")))":              "VALUE_ERROR: % and // need finite operands",
-		"(do (print (% -2 (- 0.0 " + inf + "))))":       "VALUE_ERROR: % and // need finite operands",
-		"(do (print (// " + inf + " 3)))":               "VALUE_ERROR: % and // need finite operands",
-		"(do (print (% " + nan + " 2.0)))":              "VALUE_ERROR: % and // need finite operands",
-		"(do (print (// 1.5 " + nan + ")))":             "VALUE_ERROR: % and // need finite operands",
-		"(do (print (% 7.5 0.0)))":                      "division by zero",
-		"(do (print (// 7.5 -0.0)))":                    "division by zero",
-		"(do (print (% 9223372036854775807 0.0)))":      "division by zero",
-		"(do (print (// -9223372036854775808 0.5)))":    "VALUE_ERROR: // result outside int64",
-		"(do (print (// 9223372036854775807 1.0)))":     "VALUE_ERROR: // result outside int64",
-		"(do (print (// 1000000000000000000000.0 -3)))": "VALUE_ERROR: // result outside int64",
-		"(do\n  (print (// 1.5 " + nan + ")))":          "at line 2, column 10",
-		"(do\n (let ((a b) (list 1 2 3)) (print a b)))": "VALUE_ERROR: destructuring expects 2 elements at line 2, column 8",
+		"(do (print (% " + inf + " 2.0)))":                 "floating-point overflow",
+		"(do (print (% 2.0 " + inf + ")))":                 "floating-point overflow",
+		"(do (print (% -2 (- 0.0 " + inf + "))))":          "floating-point overflow",
+		"(do (print (// " + inf + " 3)))":                  "floating-point overflow",
+		"(do (print (% " + nan + " 2.0)))":                 "floating-point overflow",
+		"(do (print (// 1.5 " + nan + ")))":                "floating-point overflow",
+		"(do (print (% 7.5 0.0)))":                         "division by zero",
+		"(do (print (// 7.5 -0.0)))":                       "division by zero",
+		"(do (print (% 9223372036854775807 0.0)))":         "division by zero",
+		"(do (print (// -9223372036854775808 0.5)))":       "VALUE_ERROR: // result outside int64",
+		"(do (print (// 9223372036854775807 1.0)))":        "VALUE_ERROR: // result outside int64",
+		"(do (print (// 1000000000000000000000.0 -3)))":    "VALUE_ERROR: // result outside int64",
+		"(do\n  (print (// 1000000000000000000000.0 -3)))": "VALUE_ERROR: // result outside int64 at line 2, column 10",
+		"(do\n (let ((a b) (list 1 2 3)) (print a b)))":    "VALUE_ERROR: destructuring expects 2 elements at line 2, column 8",
 	}
 	for src, want := range cases {
 		for _, args := range issue149Paths(t, bin, src) {

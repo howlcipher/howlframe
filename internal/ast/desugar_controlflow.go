@@ -86,13 +86,17 @@ const cfCheapMod = "(let ($R (- $A (* $B (to_int (/ $A $B))))) (if (and (!= $R 0
 // fits under |A|, then subtracted back from the largest down. Each
 // subtraction is exact (Sterbenz), so the result is the correctly rounded
 // fmod for any magnitudes (1e308 % 5e-324 included). The loop runs about
-// twice the binary-exponent gap between A and B. extra runs after the guard;
+// twice the binary-exponent gap between A and B. The doubling stops while
+// 2Q <= R, tested as Q <= R - Q, so it never overflows: NUMERIC_CONTRACT
+// section 7 makes float overflow an error, and R near the float64 maximum
+// used to double Q to +Inf to end the loop. R - Q is exact once Q > R/2
+// (Sterbenz) and cannot round below Q while 2Q <= R. extra runs after the guard;
 // tail sees R (fmod), N (float A), DN (float B), AD (|B|). The caller closes
 // four parens.
 func cfFloatCore(extra string) string {
 	return "(let ($S (if (= $B 0) (/ $A $B) (/ 0 1)) $ZF (+ (* 0 $A) (* 0 $B))) (let ($N (+ $A $ZF) $DN (+ $B $ZF)) (let ($R (if (< $N 0) (- 0 $N) $N) $AD (if (< $DN 0) (- 0 $DN) $DN) $P (list) $Q $ZF $I 0) (do " +
 		"(when (or (str_contains (str $A) $INFS) (str_contains (str $A) $NANS) (str_contains (str $B) $INFS) (str_contains (str $B) $NANS)) (do (stderr $FMSG) (exit 1))) " + extra +
-		" (set $Q $AD) (while (<= $Q $R) (do (append $P $Q) (set $Q (* $Q 2)))) (set $I (- (list_len $P) 1)) (while (>= $I 0) (do (when (>= $R (list_get $P $I)) (set $R (- $R (list_get $P $I)))) (set $I (- $I 1)))) (when (< $N 0) (set $R (- 0 $R))) "
+		" (set $Q $AD) (when (<= $Q $R) (do (append $P $Q) (while (<= $Q (- $R $Q)) (do (set $Q (* $Q 2)) (append $P $Q))))) (set $I (- (list_len $P) 1)) (while (>= $I 0) (do (when (>= $R (list_get $P $I)) (set $R (- $R (list_get $P $I)))) (set $I (- $I 1)))) (when (< $N 0) (set $R (- 0 $R))) "
 }
 
 // cfFloatMod floors the exact fmod like Python: a non-zero remainder whose
@@ -103,8 +107,10 @@ var cfFloatMod = cfFloatCore("") + "(if (= $R 0) (if (< $DN 0) (* (- 0 1) (* $R 
 // when the remainder's sign differs from B, then floor with a round-to-nearest
 // fix-up) and returns it as an int like the rest of //. A quotient outside
 // int64 fails with "VALUE_ERROR: // result outside int64" (checked before the
-// loop when |A| > |B|*2^63, so huge quotients stay cheap).
-var cfFloatDiv = cfFloatCore("(when (> $R (* $AD $TWO63)) (do (stderr $RMSG) (exit 1)))") +
+// loop when |A| > |B|*2^63, so huge quotients stay cheap). The check is
+// written |A|/2^63 > |B| so a large |B| cannot overflow; where |A|/2^63 is
+// subnormal and rounds, the check after the loop still catches the quotient.
+var cfFloatDiv = cfFloatCore("(when (> (/ $R $TWO63) $AD) (do (stderr $RMSG) (exit 1)))") +
 	"(let ($T (/ (- $N $R) $DN)) (do (when (and (!= $R 0) (!= (< $DN 0) (< $R 0))) (set $T (- $T 1))) (when (or (>= $T $TWO63) (< $T $NTWO63)) (do (stderr $RMSG) (exit 1))) (let ($I (to_int $T)) (do (when (> $I $T) (set $I (- $I 1))) (when (> (- $T $I) $HALF) (set $I (+ $I 1))) $I))))))))"
 
 // cfIntCore computes, in exact int64 arithmetic, Q = |trunc(A/B)| and

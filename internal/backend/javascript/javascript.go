@@ -737,6 +737,16 @@ function howlFrameArith(op, a, b) {
   if (typeof v === "number" && !Number.isSafeInteger(v) && Number.isInteger(a) && Number.isInteger(b)) {
     throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
   }
+  return howlFrameFinite(op, a, b, v);
+}
+// NUMERIC_CONTRACT section 7: float overflow is an error, not Infinity or NaN.
+function howlFrameFloatArith(op, a, b) {
+  return howlFrameFinite(op, a, b, op === "+" ? a + b : op === "-" ? a - b : a * b);
+}
+function howlFrameFinite(op, a, b, v) {
+  if (typeof v === "number" && !Number.isFinite(v)) {
+    throw new Error("RUNTIME_ERROR: floating-point overflow: " + a + " " + op + " " + b + " is not finite");
+  }
   return v;
 }
 function howlFrameParseJSON(text) {
@@ -928,6 +938,10 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			// helper checks at runtime and still concatenates strings.
 			jsNumeric = true
 			return fmt.Sprintf("howlFrameArith(%q, %s, %s)", ir.Op, arg1, arg2)
+		}
+		if ir.Op == "+" || ir.Op == "-" || ir.Op == "*" {
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameFloatArith(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":

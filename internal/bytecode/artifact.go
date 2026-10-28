@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 )
 
@@ -306,6 +307,12 @@ func validateInstructions(insts []BCInstruction, prog *BCProgram) error {
 				}
 				remaining -= length
 			}
+		}
+
+		// NUMERIC_CONTRACT section 2.3: NaN and infinity are not values, so
+		// no artifact may carry one into the VM as a constant.
+		if f, ok := inst.ValueOperand.(float64); ok && op == OpLoadConst && (math.IsNaN(f) || math.IsInf(f, 0)) {
+			return fmt.Errorf("instruction %d: LOAD_CONST %v is not a finite number", i, f)
 		}
 
 		// Function calls
