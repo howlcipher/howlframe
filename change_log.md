@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-Proposed as v0.2.0 (release candidate; not tagged). v0.1.0 (2026-08-13) was released without its own section, so this
-section also holds entries from before v0.1.0. `docs/releases/v0.2.0.md` summarizes the changes since v0.1.0.
+## v0.2.0 (2026-10-28)
+
+Tag `v0.2.0` on `77cb55c8`; https://github.com/howlcipher/howlframe/releases/tag/v0.2.0. v0.1.0 (2026-08-13) was
+released without its own section, so this section also holds entries from before v0.1.0. `docs/releases/v0.2.0.md`
+summarizes the changes since v0.1.0.
 
 ### Release
 * Version 0.2.0: `howlframe version`, `help` and `interop --json` report 0.2.0 with HFBC format 2. Format 2 artifacts do
