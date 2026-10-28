@@ -56,6 +56,10 @@ var jsNeedsHTMLEscape bool
 // download_file, so the browser archive helpers are prepended.
 var jsNeedsArchive bool
 
+// jsNeedsExit is set when GenerateJSCode emits stderr or exit (assert lowers
+// to both).
+var jsNeedsExit bool
+
 // jsNeedsCollection is set when GenerateJSCode emits a dict or list op
 // that must fail closed. map_keys keeps its own guard. The flag is reset
 // on every call.
@@ -1234,6 +1238,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
 	jsNeedsArchive = false
+	jsNeedsExit = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1341,6 +1346,14 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = helper + testCode
 		}
 	}
+	if jsNeedsExit {
+		code = exitJSHelper() + code
+		if testCode != "" {
+			// Inside node:test an exit fails the current test instead of
+			// ending the process, so the remaining tests still run.
+			testCode = exitJSHelper() + testExitJSHelper() + testCode
+		}
+	}
 	if jsNeedsArchive {
 		helper := archiveJSHelper()
 		code = helper + code
@@ -1430,6 +1443,13 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("String(%s).toUpperCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
 	case "str_trim":
 		return fmt.Sprintf("String(%s).trim()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "stderr":
+		jsNeedsExit = true
+		return fmt.Sprintf("howlFrameStderr(%s)", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "exit":
+		jsNeedsExit = true
+		where := fmt.Sprintf("%s:%d", node.Filename, node.Line)
+		return fmt.Sprintf("howlFrameExit(%s, %q)", generateJSStatementRaw(node.Children[1], reqVar, depth+1), where)
 	case "parse_json":
 		// Bindings special-case parse_json above; this covers every other
 		// value position, such as the result of a value block.

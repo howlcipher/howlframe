@@ -20,6 +20,10 @@
   every target represents exactly, instead of the int64 maximum JavaScript refuses.
 * `to_lower`, `to_upper` and `str_trim` build on `--target=js`. `check` rejected them as unknown statements: their
   emission sat in the shared-IR switch, which never lowers those heads.
+* A `web_app` `test` block can fail. `assert` lowers to `stderr` and `exit`, which `--target=js` rejected, so a test
+  could only print. Both now build: `stderr` writes one value without a newline and `exit` ends a Node process with
+  its status (in a browser it throws). In `app.test.js` an exit fails the running test, with the `assertion failed`
+  message, and the remaining tests still run.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
   clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
   undefined value.

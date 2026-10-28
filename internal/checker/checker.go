@@ -308,6 +308,11 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError(head+" expects ("+head+" string)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "stderr" || head == "exit" {
+		if len(node.Children) != 2 {
+			ast.ReportError(head+" expects ("+head+" value)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
 	} else if head == "dom_text" {
 		if len(node.Children) != 2 {
 			ast.ReportError("dom_text expects (dom_text el)", node.Line, node.Column)

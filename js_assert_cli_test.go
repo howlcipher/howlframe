@@ -1,0 +1,65 @@
+package main
+
+import (
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// A web_app test block must be able to fail. assert lowers to stderr and exit,
+// which the JavaScript backend did not emit, so a test could only print.
+func TestJSTestBlockAssertFailsTheTest(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := mustWriteFile(t, dir, "a.howl", `(web_app
+  (defun two ()
+    (type_hint return "int")
+    (return 2))
+  (test "passes" (assert (= (call two) 2)))
+  (test "fails" (assert (= (call two) 3)))
+  (test "runs after a failure" (assert (= (call two) 2))))`)
+	out := filepath.Join(dir, "js")
+	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, b)
+	}
+	cmd := exec.Command("node", "--test", "--test-reporter=tap", "app.test.js")
+	cmd.Dir = out
+	b, err := cmd.CombinedOutput()
+	report := string(b)
+	if err == nil {
+		t.Fatalf("a failing assert must fail node --test:\n%s", report)
+	}
+	for _, want := range []string{"ok 1 - passes", "not ok 2 - fails", "ok 3 - runs after a failure", "assertion failed"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report lacks %q:\n%s", want, report)
+		}
+	}
+}
+
+func TestJSStderrAndExitInNode(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := mustWriteFile(t, dir, "e.howl", `(web_app (do (print "before") (stderr "bad input") (exit 3) (print "after")))`)
+	out := filepath.Join(dir, "js")
+	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, b)
+	}
+	cmd := exec.Command("node", filepath.Join(out, "app.js"))
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok || exitErr.ExitCode() != 3 {
+		t.Fatalf("want exit status 3, got %v", err)
+	}
+	if stdout.String() != "before\n" || stderr.String() != "bad input" {
+		t.Fatalf("stdout %q stderr %q", stdout.String(), stderr.String())
+	}
+}
