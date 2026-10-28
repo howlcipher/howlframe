@@ -54,7 +54,7 @@ absolute URL; page globals do not provide Node authority or a URL base.
 ## Install
 
 ### Release binaries
-Download the latest release binary for your platform from the GitHub Releases page. Extract the archive and place `howlframe` in your PATH.
+Download the latest release binary for your platform from the GitHub Releases page. Extract the archive and place `howlframe` in your PATH. [docs/installation.md](docs/installation.md) gives the exact archive names, checksum verification and which platforms each release was executed on.
 
 ### Build from source
 ```bash

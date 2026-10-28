@@ -38,7 +38,7 @@ under `docs/release-readiness/v0.2.0/`):
 |---|---|
 | Printing, strings, lists, file reads, finite arithmetic (`cli_hello`, `log_analyzer`, `action_executor`) | Same output and exit status |
 | `store_open` (`kv_cli`, `todo_cli`) | Fails closed: `STACK_UNDERFLOW` at `STORE_OPEN` (the instruction now takes its URI from the stack) |
-| `spawn_agent` | Fails closed: `STACK_UNDERFLOW` at `SPAWN_AGENT` (it was already unusable on v0.1.0: `unknown opcode: SPAWN_AGENT`) |
+| `spawn_agent` (did not run on v0.1.0: `unknown opcode: SPAWN_AGENT` or `TASK`) | **Depends on the form**: with `(task ...)` bodies it now runs (`examples/swarm_dogfood` completes under `process`); a body without `task` fails closed with `STACK_UNDERFLOW` at `SPAWN_AGENT` |
 | `map_get` of a missing key | **Different result**: `nil` instead of `""` (#137), so `release_authority` prints `"target": "unknown"` where v0.1.0 printed `""` |
 | `to_float` of NaN/Inf text, float overflow, division by zero | Fails closed with `CONVERSION_ERROR` or `RUNTIME_ERROR` where v0.1.0 produced `NaN` or `+Inf` (NUMERIC_CONTRACT) |
 | `confidence`, `neural_circuit`, `ephemeral_circuit` | Needs the `network` grant |
