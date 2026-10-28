@@ -56,7 +56,10 @@ binary hashes in `HOWLFRAME_RELEASE_TEST_RESULTS.md`. They are reproducible: a C
   file before it was committed. Resolved by committing this file; per the one-round limit, no further review cycle was
   started. Verdict: ACCEPT WITH DOCUMENTED LIMITATIONS.
 * **Reports, verbatim:** `INDEPENDENT_REVIEW_bbd4c8f5.md` and `INDEPENDENT_REVERIFY_29c6108c.md` in this directory
-  (they contain the reviewer's local scratch paths).
+  (they contain the reviewer's local scratch paths). Both are byte-identical to the reviewer's final files.
+* **Process note.** The first review wrote its complete report at 11:53, kept running, and its process exited at 13:00
+  with a transport error on a later model call (`connection reset by peer`, exit status 3). The report was not
+  modified after 11:53. The re-verification run exited normally.
 * **Review caveats.** The reviewer reported HealthWatch 27 and TaskFlow 45 tests; the frozen suites contain 29 and 32
   (observed in four runs here) and it kept no raw log, so its acceptance item corroborates rather than independently
   proves the result. It did not run EvidenceDesk (Chromium and HowlBoard), and could not execute macOS or Windows
