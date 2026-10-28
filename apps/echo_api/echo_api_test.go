@@ -16,6 +16,9 @@ import (
 
 const echoAddr = "127.0.0.1:8106"
 
+// echoListenAddr is the address the server binds (all interfaces).
+const echoListenAddr = ":8106"
+
 // failAfterStartEnv makes TestEchoAPI fail once the server answers, so
 // TestEchoAPIStopsServerWhenTestFails can check cleanup on the failure path.
 const failAfterStartEnv = "ECHO_API_TEST_FAIL_AFTER_START"
@@ -49,6 +52,9 @@ func startEchoServer(t *testing.T) (stop func()) {
 	var once sync.Once
 	stop = func() {
 		once.Do(func() {
+			// Close the client side first, so no connection the server held
+			// lingers on the port after it is killed.
+			http.DefaultClient.CloseIdleConnections()
 			syscall.Kill(-srv.Process.Pid, syscall.SIGKILL)
 			<-errc
 		})
@@ -57,19 +63,19 @@ func startEchoServer(t *testing.T) (stop func()) {
 	return stop
 }
 
-// waitPortReleased fails the test if something still accepts connections on
-// echoAddr shortly after the server was stopped.
+// waitPortReleased fails the test unless the server's port can be listened on
+// again shortly after the server was stopped, as the next server must do.
 func waitPortReleased(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		conn, err := net.DialTimeout("tcp", echoAddr, 200*time.Millisecond)
-		if err != nil {
+		ln, err := net.Listen("tcp", echoListenAddr)
+		if err == nil {
+			ln.Close()
 			return
 		}
-		conn.Close()
 		if time.Now().After(deadline) {
-			t.Fatalf("%s still accepts connections after the server was stopped", echoAddr)
+			t.Fatalf("%s cannot be listened on after the server was stopped: %v", echoListenAddr, err)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
