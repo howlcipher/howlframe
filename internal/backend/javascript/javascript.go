@@ -1347,11 +1347,9 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		}
 	}
 	if jsNeedsExit {
-		code = exitJSHelper() + code
+		code = exitJSHelper(false) + code
 		if testCode != "" {
-			// Inside node:test an exit fails the current test instead of
-			// ending the process, so the remaining tests still run.
-			testCode = exitJSHelper() + testExitJSHelper() + testCode
+			testCode = exitJSHelper(true) + testCode
 		}
 	}
 	if jsNeedsArchive {

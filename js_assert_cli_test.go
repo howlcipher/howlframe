@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,15 @@ func TestJSTestBlockAssertFailsTheTest(t *testing.T) {
 	out := filepath.Join(dir, "js")
 	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, b)
+	}
+	test, err := os.ReadFile(filepath.Join(out, "app.test.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One declaration only: a redeclared function is a SyntaxError wherever
+	// the file is evaluated as a module or in strict mode.
+	if n := strings.Count(string(test), "function howlFrameExit("); n != 1 {
+		t.Fatalf("app.test.js declares howlFrameExit %d times", n)
 	}
 	cmd := exec.Command("node", "--test", "--test-reporter=tap", "app.test.js")
 	cmd.Dir = out
