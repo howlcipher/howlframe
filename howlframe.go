@@ -12,6 +12,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/backend/gogen"
 	"github.com/howlcipher/howlframe/internal/backend/javascript"
 	"github.com/howlcipher/howlframe/internal/backend/wasm"
+	"github.com/howlcipher/howlframe/internal/backend/wasmgc"
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/checker"
@@ -739,7 +740,7 @@ func buildSource() {
 	buildFlags := flag.NewFlagSet("build", flag.ExitOnError)
 	outPath := buildFlags.String("o", "", "output artifact file path")
 	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
-	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm")
+	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm, wasmgc (in development)")
 	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
 
 	buildFlags.Usage = func() {
@@ -936,8 +937,32 @@ func buildSource() {
 			fmt.Printf("Built %s\n", appFile)
 		}
 
+	case "wasmgc":
+		// The WebAssembly GC backend (docs/design/wasm_gc_backend.md), in
+		// development; it becomes the wasm target once it covers it.
+		wasmBytes, err := wasmgc.Compile(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		outputDir := *outPath
+		if outputDir == "" {
+			outputDir = "."
+		}
+		for _, f := range []struct {
+			name string
+			body []byte
+		}{{"app.wasm", wasmBytes}, {"app.mjs", []byte(wasmgc.Loader())}} {
+			path := filepath.Join(outputDir, f.name)
+			if err := writeArtifact(path, f.body); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", path, err)
+				os.Exit(1)
+			}
+		}
+		fmt.Printf("Built %s\n", filepath.Join(outputDir, "app.wasm"))
+
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm\n", *target)
+		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm, wasmgc\n", *target)
 		os.Exit(1)
 	}
 }

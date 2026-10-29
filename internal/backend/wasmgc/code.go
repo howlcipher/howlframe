@@ -109,6 +109,9 @@ func (c *Code) I64DivS() *Code { return c.op(0x7F) }
 func (c *Code) I64RemS() *Code { return c.op(0x81) }
 func (c *Code) I64DivU() *Code { return c.op(0x80) }
 func (c *Code) I64RemU() *Code { return c.op(0x82) }
+func (c *Code) I64And() *Code  { return c.op(0x83) }
+func (c *Code) I64Or() *Code   { return c.op(0x84) }
+func (c *Code) I64Xor() *Code  { return c.op(0x85) }
 
 // f64 arithmetic and comparison.
 
@@ -123,6 +126,8 @@ func (c *Code) F64Sub() *Code   { return c.op(0xA1) }
 func (c *Code) F64Mul() *Code   { return c.op(0xA2) }
 func (c *Code) F64Div() *Code   { return c.op(0xA3) }
 func (c *Code) F64Floor() *Code { return c.op(0x9C) }
+func (c *Code) F64Neg() *Code   { return c.op(0x9A) }
+func (c *Code) F64Abs() *Code   { return c.op(0x99) }
 func (c *Code) F64Trunc() *Code { return c.op(0x9D) }
 
 // Conversions.
