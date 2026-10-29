@@ -241,6 +241,18 @@ func checkJSStatement(node *ast.Node, depth int) {
 					checkJSStatement(kid.Children[1], depth+1)
 				}
 			}
+		case "append", "map_set", "map_delete":
+			// These mutate a named variable, as on the Go and bytecode targets.
+			if target := irNode.Kids[0]; target.Type != "SYMBOL" {
+				what := "dict"
+				if irNode.Kind == "append" {
+					what = "list"
+				}
+				ast.ReportError(fmt.Sprintf("%s requires a symbol for %s", irNode.Kind, what), target.Line, target.Column)
+			}
+			for _, kid := range irNode.Kids[1:] {
+				checkJSStatement(kid, depth+1)
+			}
 		default:
 			for _, kid := range irNode.Kids {
 				checkJSStatement(kid, depth+1)
@@ -303,6 +315,33 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "to_lower" || head == "to_upper" || head == "str_trim" {
+		if len(node.Children) != 2 {
+			ast.ReportError(head+" expects ("+head+" string)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "stderr" || head == "exit" {
+		if len(node.Children) != 2 {
+			ast.ReportError(head+" expects ("+head+" value)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "dom_text" {
+		if len(node.Children) != 2 {
+			ast.ReportError("dom_text expects (dom_text el)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "zip_build" {
+		if len(node.Children) != 2 {
+			ast.ReportError("zip_build expects (zip_build entries)", node.Line, node.Column)
+		}
+		checkJSStatement(node.Children[1], depth+1)
+	} else if head == "download_file" {
+		if len(node.Children) != 4 {
+			ast.ReportError("download_file expects (download_file name mime base64)", node.Line, node.Column)
+		}
+		for _, child := range node.Children[1:] {
+			checkJSStatement(child, depth+1)
+		}
 	} else if head == "parse_json" {
 		if len(node.Children) != 3 {
 			ast.ReportError("parse_json expects (parse_json type body)", node.Line, node.Column)

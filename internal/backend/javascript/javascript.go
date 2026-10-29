@@ -52,6 +52,14 @@ var jsNeedsRequestRead bool
 // attr_escape. Both share one helper. It is reset on every call.
 var jsNeedsHTMLEscape bool
 
+// jsNeedsArchive is set when GenerateJSCode emits dom_text, zip_build, or
+// download_file, so the browser archive helpers are prepended.
+var jsNeedsArchive bool
+
+// jsNeedsExit is set when GenerateJSCode emits stderr or exit (assert lowers
+// to both).
+var jsNeedsExit bool
+
 // jsNeedsCollection is set when GenerateJSCode emits a dict or list op
 // that must fail closed. map_keys keeps its own guard. The flag is reset
 // on every call.
@@ -1037,7 +1045,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		catchBodyCode := generateJSStatement(catchNode.Children[2], reqVar, depth+1)
 		successBodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
 
-		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (e) {\n\t\t%s = e;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
+		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (__howlFrameCaught) {\n\t\t%s = __howlFrameCaught;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
 	case "for":
 		itemNode := ir.Kids[0].Value
 		// The iterable may be any expression, not only a bound symbol. Reading
@@ -1111,15 +1119,6 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	case "to_string", "bytes_to_string":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("((_v) => _v == null ? \"\" : String(_v))(%s)", valStr)
-	case "to_lower":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).toLowerCase()", valStr)
-	case "to_upper":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).toUpperCase()", valStr)
-	case "str_trim":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("String(%s).trim()", valStr)
 	case "encode_json":
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("JSON.stringify(%s)", valStr)
@@ -1238,6 +1237,8 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
+	jsNeedsArchive = false
+	jsNeedsExit = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1345,6 +1346,19 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = helper + testCode
 		}
 	}
+	if jsNeedsExit {
+		code = exitJSHelper(false) + code
+		if testCode != "" {
+			testCode = exitJSHelper(true) + testCode
+		}
+	}
+	if jsNeedsArchive {
+		helper := archiveJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
 	if jsNeedsCollection {
 		helper := collectionJSHelper()
 		code = helper + code
@@ -1415,6 +1429,31 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if ir, ok := ir.LowerShared(node); ok {
 		return EmitJSIR(ir, reqVar, depth)
 	}
+	if head == valueBlockHead {
+		return jsValueBlock(node, reqVar, depth)
+	}
+	// to_lower, to_upper and str_trim are not shared IR kinds, so they are
+	// emitted here rather than in EmitJSIR.
+	switch head {
+	case "to_lower":
+		return fmt.Sprintf("String(%s).toLowerCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "to_upper":
+		return fmt.Sprintf("String(%s).toUpperCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "str_trim":
+		return fmt.Sprintf("String(%s).trim()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "stderr":
+		jsNeedsExit = true
+		return fmt.Sprintf("howlFrameStderr(%s)", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+	case "exit":
+		jsNeedsExit = true
+		where := fmt.Sprintf("%s:%d", node.Filename, node.Line)
+		return fmt.Sprintf("howlFrameExit(%s, %q)", generateJSStatementRaw(node.Children[1], reqVar, depth+1), where)
+	case "parse_json":
+		// Bindings special-case parse_json above; this covers every other
+		// value position, such as the result of a value block.
+		jsNumeric = true
+		return fmt.Sprintf("howlFrameParseJSON(%s)", generateJSStatementRaw(node.Children[2], reqVar, depth+1))
+	}
 	if head == "time_now" {
 		// Unix seconds, matching the bytecode VM and the Go backend.
 		return "Math.floor(Date.now() / 1000)"
@@ -1482,6 +1521,20 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("%s.value", el)
+	} else if head == "dom_text" {
+		jsNeedsArchive = true
+		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameDomText(%s)", el)
+	} else if head == "zip_build" {
+		jsNeedsArchive = true
+		entries := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameZipBuild(%s)", entries)
+	} else if head == "download_file" {
+		jsNeedsArchive = true
+		name := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		mime := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		data := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		return fmt.Sprintf("howlFrameDownloadFile(%s, %s, %s)", name, mime, data)
 	} else if head == "fetch" {
 		return jsFetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {

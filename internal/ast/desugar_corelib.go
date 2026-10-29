@@ -71,9 +71,11 @@ func desugarCorelib(node *Node) bool {
 	head := node.Children[0].Value
 	spec := corelibTemplates[head]
 	// The two-argument slice forms run to the end: b defaults to the length
-	// (any b >= length selects the rest; the operand is evaluated once).
+	// (any b >= length selects the rest; the operand is evaluated once). The
+	// sentinel is 2^53-1, the largest integer every target represents exactly;
+	// no list or string is that long.
 	if (head == "list_slice" || head == "str_slice") && len(node.Children) == 3 {
-		big := &Node{Type: "INT", Value: "9223372036854775807", Line: node.Line, Column: node.Column, Filename: node.Filename}
+		big := &Node{Type: "INT", Value: "9007199254740991", Line: node.Line, Column: node.Column, Filename: node.Filename}
 		node.Children = append(node.Children, big)
 	}
 	if len(node.Children) != spec.arity+1 {

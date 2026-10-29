@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Correctness
+* Source text is decoded as UTF-8. The lexer read one byte per code point, so every non-ASCII string literal was
+  re-encoded byte by byte: `(print "é")` printed `Ã©` on the bytecode VM, the direct interpreter and generated
+  JavaScript alike, and columns after a multibyte character were off by its extra bytes. Literals now reach every
+  target unchanged, columns count code points, and a file that is not valid UTF-8 is rejected with
+  `source is not valid UTF-8` instead of being silently reinterpreted.
+
+### JavaScript backend
+* A `let`, `do` or `if` used as a value (an operand, a binding or a call argument) now builds on `--target=js`: it is
+  emitted as an awaited async arrow that returns the form's value. That is the shape `not`, `starts_with`/`ends_with`,
+  `map_has`, `list_contains`, `all`/`any`, `ver_gt`/`ver_ge`, `nz`, `parse_json` of an expression and the core library
+  (`str_slice`, `index_of`, `map_list`, `filter`, `reduce`, `sum`, `reverse`, `sort`, `count_by`, `list_slice`) lower
+  to, so all of them are available to a `web_app`; `TestJSValueFormsMatchBytecode` checks each against the bytecode
+  VM's output. A `return` inside such a form is refused, since it would leave only the generated arrow, and `for` and
+  `while` still have no value form. `--target=go` is unchanged. The two-argument slice sentinel is now 2^53-1, which
+  every target represents exactly, instead of the int64 maximum JavaScript refuses.
+* `to_lower`, `to_upper` and `str_trim` build on `--target=js`. `check` rejected them as unknown statements: their
+  emission sat in the shared-IR switch, which never lowers those heads.
+* A `web_app` `test` block can fail. `assert` lowers to `stderr` and `exit`, which `--target=js` rejected, so a test
+  could only print. Both now build: `stderr` writes one value without a newline and `exit` ends a Node process with
+  its status (in a browser it throws). In `app.test.js` an exit fails the running test, with the `assertion failed`
+  message, and the remaining tests still run.
+* `check` and `build --target=js` reject `map_set`, `map_delete` and `append` whose target is not a variable, with the
+  same `requires a symbol` diagnostic as the Go and bytecode targets. The JavaScript build used to succeed and emit
+  `howlFrameMapSet(, ...)`, which does not parse.
+* `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
+  clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
+  undefined value.
+* `web_app` gains three browser host operations. `(zip_build entries)` returns the base64 of a deterministic ZIP of
+  stored entries, each a dict with `path` and exactly one of `text` (written as UTF-8) or `base64`; unsafe paths
+  (absolute, `..`, `.`, empty segments, backslashes, drive letters, characters outside `[A-Za-z0-9._~@+-]`),
+  case-insensitive duplicates, more than 10,000 entries and more than 512 MiB are refused with `ZIP_INVALID_PATH`,
+  `ZIP_DUPLICATE_PATH`, `ZIP_INVALID_ENTRY` or `ZIP_LIMIT`. `(download_file name mime base64)` hands bytes to the
+  browser download mechanism through a revoked Blob URL, validating the plain file name and media type first, and
+  fails with `UNSUPPORTED_HOST` where there is no document. `(dom_text el)` reads an element's text without parsing
+  it as HTML. `check` enforces their arity, and `cli_app` builds refuse them.
+
 ## v0.2.0 (2026-10-28)
 
 Tag `v0.2.0` on `77cb55c8`; https://github.com/howlcipher/howlframe/releases/tag/v0.2.0. v0.1.0 (2026-08-13) was
