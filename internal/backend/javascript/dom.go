@@ -20,6 +20,11 @@ var jsDOMHelpers = map[string]string{
 	"remove_attr":   "howlFrameRemoveAttr",
 	"dialog_open":   "howlFrameDialogOpen",
 	"dialog_close":  "howlFrameDialogClose",
+
+	"richtext_attach":  "howlFrameRichtextAttach",
+	"richtext_set":     "howlFrameRichtextSet",
+	"richtext_get":     "howlFrameRichtextGet",
+	"richtext_command": "howlFrameRichtextCommand",
 }
 
 // jsBrowserIOHelpers maps the storage, file and image host operations to

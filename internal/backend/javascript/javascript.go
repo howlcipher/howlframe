@@ -1376,9 +1376,9 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		}
 	}
 	if jsNeedsDOM {
-		code = domJSHelper() + code
+		code = domJSHelper() + richtextJSHelper() + code
 		if testCode != "" {
-			testCode = domJSHelper() + testCode
+			testCode = domJSHelper() + richtextJSHelper() + testCode
 		}
 	}
 	if jsNeedsArchive {

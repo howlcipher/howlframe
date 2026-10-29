@@ -44,6 +44,7 @@ func TestBrowserDomHostOperationArity(t *testing.T) {
 		`(web_app (dom_checked))`, `(web_app (set_checked (dom_query "#a")))`, `(web_app (dom_focus))`, `(web_app (remove_attr (dom_query "#a")))`,
 		`(web_app (dialog_open))`, `(web_app (dialog_close))`,
 		`(web_app (storage_get "a"))`, `(web_app (storage_put "a" "b"))`, `(web_app (storage_keys))`, `(web_app (file_read_input (dom_query "#f")))`,
+		`(web_app (richtext_get))`, `(web_app (richtext_set (dom_query "#e")))`, `(web_app (richtext_command (dom_query "#e") "bold"))`, `(web_app (richtext_attach (dom_query "#e")))`,
 		`(web_app (sniff_media_type))`, `(web_app (image_decode "x"))`, `(web_app (image_encode "x" "image/png" 10 "image/png"))`,
 	} {
 		path := mustWriteFile(t, dir, "a.howl", src)

@@ -223,6 +223,11 @@ var jsHostOperations = map[string]string{
 	"sniff_media_type": "(sniff_media_type base64)",
 	"image_decode":     "(image_decode base64 mime)",
 	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
+
+	"richtext_attach":  "(richtext_attach el label)",
+	"richtext_set":     "(richtext_set el blocks)",
+	"richtext_get":     "(richtext_get el)",
+	"richtext_command": "(richtext_command el command value)",
 }
 
 func checkJSStatement(node *ast.Node, depth int) {
