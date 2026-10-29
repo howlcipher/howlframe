@@ -186,7 +186,6 @@ func TestDiffShadowing(t *testing.T) {
 // % and // are desugared into exact integer code that uses lists and
 // string operations.
 func TestDiffModulo(t *testing.T) {
-	t.Skip("needs string operations (str_split; next M1 slice)")
 	sameAsVM(t, `(cli_app (print (% 7 3) (% -7 3) (% 7 -3) (% 7.5 2) (// 7 2) (// -7 2)))`)
 	sameAsVM(t, `(cli_app (print (% 5 0)))`)
 }
@@ -204,6 +203,33 @@ func TestDiffLists(t *testing.T) {
 		"build in a loop":    `(let (xs (list) i 0) (do (while (< i 50) (do (append xs i) (set i (+ i 1)))) (print (list_len xs) (list_get xs 49))))`,
 		"slice and contains": `(let (l (list 1 2 3 4)) (print (list_slice l 1 3) (list_slice l 0 9) (list_slice l 2 1) (list_contains l 3) (list_contains l 7)))`,
 		"identity equality":  `(print (= (list 1) (list 1)))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+func TestDiffStrings(t *testing.T) {
+	for name, body := range map[string]string{
+		"split":         `(print (str_split "a,b,,c" ",") (str_split "" ",") (str_split "abc" "") (str_split "héllo✓" "") (str_split "a--b--" "--") (str_split "abc" "x"))`,
+		"split counts":  `(print (list_len (str_split "a,b,,c" ",")) (list_len (str_split "" "")) (list_len (str_split "é✓" "")))`,
+		"join":          `(print (str_join (list "a" "b" "c") ", ") (str_join (list) "-") (str_join (list 1 2) "+"))`,
+		"case":          `(print (to_lower "Hello WORLD 1") (to_upper "Hello world 1") (to_lower 12))`,
+		"trim":          `(print (+ "[" (+ (str_trim "  a b \n\t") "]")))`,
+		"escape":        `(print (html_escape "<a href=\"x\">Tom & 'Jerry'</a>") (attr_escape "a\"b"))`,
+		"is_nil":        `(let (l (list "a")) (print (is_nil (list_get l 5)) (is_nil (list_get l 0)) (+ "[" (+ (list_get l 5) "]"))))`,
+		"len and slice": `(print (str_len "héllo✓") (str_slice "héllo" 1 3) (str_slice "abc" 1) (str_len ""))`,
+		"contains":      `(print (str_contains "hello" "ell") (str_contains "hello" "xyz") (starts_with "hello" "he") (ends_with "hello" "lo") (starts_with "hi" "hello"))`,
+		"replace":       `(print (str_replace "a-b-c" "-" "+") (str_replace "aaa" "a" "bb"))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+func TestDiffStderrAndExit(t *testing.T) {
+	for name, body := range map[string]string{
+		"exit status":     `(do (print "a") (exit 3) (print "never"))`,
+		"exit zero":       `(do (print "a") (exit 0))`,
+		"stderr and exit": `(do (stderr "problem") (exit 2))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
 	}

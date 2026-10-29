@@ -24,20 +24,23 @@ const parts = (x) => {
   const [mantissa, exponent] = x.toExponential().split("e");
   return { digits: BigInt(mantissa.replace(".", "")), point: Number(exponent) + 1 };
 };
-// Go's ParseFloat syntax: decimal with optional exponent, inf, infinity
-// and nan in any case; anything else is not a number.
+// to_float's string rule (the VM's parseFiniteFloat): Go's decimal
+// ParseFloat syntax, finite results only; NaN and Inf spellings and
+// out-of-range values are refused.
 const goFloat = (t) => {
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return Number(t);
-  if (/^[+-]?(inf|infinity)$/i.test(t)) return t.startsWith("-") ? -Infinity : Infinity;
-  return NaN;
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return NaN;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : NaN;
 };
 const imports = {
   hf: {
     print: (s) => { process.stdout.write(text(s) + "\n"); },
+    stderr: (s) => { process.stderr.write(text(s)); },
+    exit: (code) => { process.exit(code); },
     float_digits: (x) => parts(x).digits,
     float_point: (x) => parts(x).point,
     parse_float: (s) => goFloat(text(s)),
-    parse_float_ok: (s) => (Number.isNaN(goFloat(text(s))) && !/^[+-]?nan$/i.test(text(s)) ? 0 : 1),
+    parse_float_ok: (s) => (Number.isNaN(goFloat(text(s))) ? 0 : 1),
   },
 };
 const { instance } = await WebAssembly.instantiate(wasm, imports);

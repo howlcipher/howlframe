@@ -269,6 +269,26 @@ func (f *fn) stmt(n *ast.Node) error {
 		return nil
 	case "for":
 		return f.forLoop(n)
+	case "stderr":
+		if len(n.Children) != 2 {
+			return unsupported(n, "stderr")
+		}
+		if err := f.expr(n.Children[1]); err != nil {
+			return err
+		}
+		c.Call(f.c.rt.fText).Call(f.c.rt.iStderr)
+		return nil
+	case "exit":
+		if len(n.Children) != 2 {
+			return unsupported(n, "exit")
+		}
+		if err := f.expr(n.Children[1]); err != nil {
+			return err
+		}
+		c.Call(f.c.rt.fToInt)
+		f.check()
+		c.RefCast(f.c.rt.tInt).StructGet(f.c.rt.tInt, 0).I32WrapI64().Call(f.c.rt.iExit)
+		return nil
 	case "type_hint", "type_hints", "type_param":
 		return nil
 	}
@@ -533,6 +553,32 @@ func (f *fn) expr(n *ast.Node) error {
 			c.Call(r.fListGet)
 		} else {
 			c.Call(r.fListLen)
+		}
+		f.check()
+		return nil
+	case "str_split", "str_join", "to_lower", "to_upper", "str_trim", "html_escape", "attr_escape", "is_nil":
+		unary := map[string]int{"to_lower": r.fLower, "to_upper": r.fUpper, "str_trim": r.fStrTrim, "html_escape": r.fEscape, "attr_escape": r.fEscape, "is_nil": -1}
+		binaryOps := map[string]int{"str_split": r.fStrSplit, "str_join": r.fStrJoin}
+		want := 1
+		if _, ok := binaryOps[h]; ok {
+			want = 2
+		}
+		if len(args) != want {
+			return unsupported(n, h)
+		}
+		for _, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+		}
+		if h == "is_nil" {
+			c.RefIsNull().Call(r.fBoxBool)
+			return nil
+		}
+		if idx, ok := binaryOps[h]; ok {
+			c.Call(idx)
+		} else {
+			c.Call(unary[h])
 		}
 		f.check()
 		return nil

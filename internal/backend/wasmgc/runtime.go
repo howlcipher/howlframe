@@ -27,14 +27,16 @@ type rt struct {
 
 	// Imports.
 	iPrint, iFloatDigits, iFloatPoint, iParseFloat, iParseFloatOK int
+	iStderr, iExit                                                int
 
 	// Functions.
-	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail         int
-	fAdd, fSub, fMul, fDiv, fMod, fCompare, fEq          int
-	fConcat, fText, fItoa, fFtoa, fStrEq, fStrCmp        int
-	fStrLen, fStrByte, fError                            int
-	fToInt, fToFloat, fQuote, fTrim, fTypeName           int
-	fListNew, fListAppend, fListGet, fListLen, fListText int
+	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail           int
+	fAdd, fSub, fMul, fDiv, fMod, fCompare, fEq            int
+	fConcat, fText, fItoa, fFtoa, fStrEq, fStrCmp          int
+	fStrLen, fStrByte, fError                              int
+	fToInt, fToFloat, fQuote, fTrim, fTypeName             int
+	fListNew, fListAppend, fListGet, fListLen, fListText   int
+	fStrSplit, fStrJoin, fLower, fUpper, fStrTrim, fEscape int
 
 	strings map[string]int // literal -> data segment
 }
@@ -87,6 +89,10 @@ func newRuntime(m *Module) *rt {
 	// syntax (temporary, like float_digits).
 	r.iParseFloat = m.AddImport("hf", "parse_float", r.funcType([]ValType{EqRef}, F64))
 	r.iParseFloatOK = m.AddImport("hf", "parse_float_ok", r.tEqToI32)
+	// stderr writes a $Str without a newline; exit ends the program with a
+	// status (the host does not return).
+	r.iStderr = m.AddImport("hf", "stderr", r.tEqToVoid)
+	r.iExit = m.AddImport("hf", "exit", r.funcType([]ValType{I32}))
 
 	r.gErr = m.AddGlobal(Global{Type: EqRef, Mutable: true, Init: []byte{0xD0, HeapNone}})
 	r.gTrue = m.AddGlobal(Global{Type: Ref(r.tBool), Init: append(append([]byte{0x41}, sleb(1)...), gcOp(0, r.tBool)...)})
@@ -180,6 +186,12 @@ func (r *rt) emitAll() {
 		{&r.fListGet, "list_get", r.tEqEqToEq},
 		{&r.fListLen, "list_len", r.funcType([]ValType{EqRef}, EqRef)},
 		{&r.fListText, "list_text", r.tEqToStr},
+		{&r.fStrSplit, "str_split", r.tEqEqToEq},
+		{&r.fStrJoin, "str_join", r.tEqEqToEq},
+		{&r.fLower, "to_lower", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fUpper, "to_upper", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fStrTrim, "str_trim", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fEscape, "html_escape", r.funcType([]ValType{EqRef}, EqRef)},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -221,6 +233,7 @@ func (r *rt) emitAll() {
 	set(r.fError, nil, func(c *Code) { c.GlobalGet(r.gErr) })
 	r.emitConversions()
 	r.emitLists()
+	r.emitStringOps()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -767,18 +780,21 @@ func (r *rt) emitLists() {
 		c.LocalGet(4).I32Const(1).I32Add().LocalGet(5).RefAsNonNull().StructNew(r.tBuf)
 		c.StructNew(r.tList)
 	})
-	// list_get(l, i): the element, or nil when i is out of range.
-	// locals: 0 l, 1 i, 2 idx
-	r.body(r.fListGet, []ValType{I64}, func(c *Code) {
+	// list_get(l, i) as the VM: the index is any value whose text is a whole
+	// number (so 2, 2.0 and "2" all work); out of range gives "" (not nil).
+	// locals: 0 l, 1 i, 2 idx, 3 boxed index
+	r.body(r.fListGet, []ValType{I64, EqRef}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
-		typeErr(c, "list_get expects a list")
+		typeErr(c, "list_get expected list")
 		c.End()
-		c.LocalGet(1).RefTest(r.tInt).I32Eqz().If(NoResult)
-		typeErr(c, "list_get expects an integer index")
+		c.LocalGet(1).Call(r.fText).Call(r.fToInt).LocalSet(3)
+		c.GlobalGet(r.gErr).RefIsNull().I32Eqz().If(NoResult)
+		c.RefNull(HeapNone).GlobalSet(r.gErr)
+		typeErr(c, "list_get index must be a number")
 		c.End()
-		c.LocalGet(1).RefCast(r.tInt).StructGet(r.tInt, 0).LocalTee(2)
+		c.LocalGet(3).RefCast(r.tInt).StructGet(r.tInt, 0).LocalTee(2)
 		c.I64Const(0).I64LtS().LocalGet(2).LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0).I64ExtendI32U().I64GeS().I32Or().If(NoResult)
-		c.RefNull(HeapNone).Return().End()
+		r.StrLiteral(c, "").Return().End()
 		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).I32WrapI64().ArrayGet(r.tItems)
 	})
 	r.body(r.fListLen, nil, func(c *Code) {
@@ -804,5 +820,139 @@ func (r *rt) emitLists() {
 		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
 		c.LocalGet(3).RefAsNonNull()
 		r.StrLiteral(c, "]").Call(r.fConcat)
+	})
+}
+
+// emitStringOps writes the VM's string primitives. Everything else on
+// strings (str_len, str_slice, str_contains, str_replace, starts_with,
+// index_of, ...) is desugared into these.
+func (r *rt) emitStringOps() {
+	needStr := func(c *Code, local int, op string) {
+		c.LocalGet(local).RefTest(r.tStr).I32Eqz().If(NoResult)
+		r.failWith(c, "TYPE_ERROR: "+op+" expected string").Return()
+		c.End()
+	}
+	bytesOf := func(c *Code, local int) *Code { return c.LocalGet(local).RefCast(r.tStr).StructGet(r.tStr, 0) }
+	// piece pushes a new $Str with src[from:to] (locals).
+	piece := func(c *Code, src, from, to, scratch int) {
+		c.LocalGet(to).LocalGet(from).I32Sub().ArrayNewDefault(r.tBytes).LocalSet(scratch)
+		c.LocalGet(scratch).I32Const(0).LocalGet(src).LocalGet(from).LocalGet(to).LocalGet(from).I32Sub().ArrayCopy(r.tBytes, r.tBytes)
+		c.LocalGet(scratch).RefAsNonNull().StructNew(r.tStr)
+	}
+	// str_split(s, sep) as Go's strings.Split: an empty separator splits
+	// after each UTF-8 sequence (an invalid byte stands alone); an empty
+	// string with a separator gives one empty piece.
+	// locals: 0 s, 1 sep, 2 sb, 3 pb, 4 n, 5 m, 6 i, 7 start, 8 out (list), 9 j, 10 scratch, 11 step
+	r.body(r.fStrSplit, []ValType{RefNull(r.tBytes), RefNull(r.tBytes), I32, I32, I32, I32, EqRef, I32, RefNull(r.tBytes), I32}, func(c *Code) {
+		needStr(c, 0, "str_split")
+		needStr(c, 1, "str_split")
+		bytesOf(c, 0).LocalTee(2).ArrayLen().LocalSet(4)
+		bytesOf(c, 1).LocalTee(3).ArrayLen().LocalSet(5)
+		c.ArrayNewFixed(r.tItems, 0).Call(r.fListNew).LocalSet(8)
+		c.LocalGet(5).I32Eqz().If(NoResult)
+		// Characters: the length of each UTF-8 sequence from its lead byte.
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(6).LocalGet(4).I32GeU().BrIf(1)
+		c.LocalGet(2).LocalGet(6).ArrayGetU(r.tBytes).LocalTee(9)
+		c.I32Const(0xF0).I32GeU().If(Result(I32)).I32Const(4).Else()
+		c.LocalGet(9).I32Const(0xE0).I32GeU().If(Result(I32)).I32Const(3).Else()
+		c.LocalGet(9).I32Const(0xC0).I32GeU().If(Result(I32)).I32Const(2).Else().I32Const(1).End().End().End()
+		c.LocalSet(11)
+		// Clamp at the end and fall back to one byte for a truncated sequence.
+		c.LocalGet(6).LocalGet(11).I32Add().LocalGet(4).I32GtU().If(NoResult).I32Const(1).LocalSet(11).End()
+		c.LocalGet(6).LocalGet(11).I32Add().LocalSet(7)
+		c.LocalGet(8)
+		piece(c, 2, 6, 7, 10)
+		c.Call(r.fListAppend).LocalSet(8)
+		c.LocalGet(7).LocalSet(6).Br(0).End().End()
+		c.LocalGet(8).Return()
+		c.End()
+		// Separator: scan for each occurrence.
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(6).LocalGet(5).I32Add().LocalGet(4).I32GtU().BrIf(1)
+		// Compare sep at i.
+		c.I32Const(0).LocalSet(9)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(9).LocalGet(5).I32GeU().BrIf(1)
+		c.LocalGet(2).LocalGet(6).LocalGet(9).I32Add().ArrayGetU(r.tBytes).LocalGet(3).LocalGet(9).ArrayGetU(r.tBytes).I32Ne().BrIf(1)
+		c.LocalGet(9).I32Const(1).I32Add().LocalSet(9).Br(0).End().End()
+		c.LocalGet(9).LocalGet(5).I32Eq().If(NoResult)
+		c.LocalGet(8)
+		piece(c, 2, 7, 6, 10)
+		c.Call(r.fListAppend).LocalSet(8)
+		c.LocalGet(6).LocalGet(5).I32Add().LocalTee(6).LocalSet(7)
+		c.Br(1)
+		c.End()
+		c.LocalGet(6).I32Const(1).I32Add().LocalSet(6).Br(0).End().End()
+		c.LocalGet(4).LocalSet(6)
+		c.LocalGet(8)
+		piece(c, 2, 7, 6, 10)
+		c.Call(r.fListAppend)
+	})
+	// str_join(list, sep): each element's text, separated by sep.
+	// locals: 0 l, 1 sep, 2 list, 3 i, 4 acc
+	r.body(r.fStrJoin, []ValType{RefNull(r.tList), I32, RefNull(r.tStr)}, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tList).LocalGet(1).RefTest(r.tStr).I32And().I32Eqz().If(NoResult)
+		r.failWith(c, "TYPE_ERROR: str_join expected list and string").Return()
+		c.End()
+		c.LocalGet(0).RefCast(r.tList).LocalSet(2)
+		r.StrLiteral(c, "").LocalSet(4)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).StructGet(r.tList, 0).I32GeU().BrIf(1)
+		c.LocalGet(3).If(NoResult).LocalGet(4).RefAsNonNull().LocalGet(1).RefCast(r.tStr).Call(r.fConcat).LocalSet(4).End()
+		c.LocalGet(4).RefAsNonNull()
+		c.LocalGet(2).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(3).ArrayGet(r.tItems).Call(r.fText).Call(r.fConcat).LocalSet(4)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+		c.LocalGet(4)
+	})
+	// to_lower and to_upper of any value's text. ASCII letters only for
+	// now; the VM maps all of Unicode (recorded in the design plan).
+	// locals: 0 v, 1 in, 2 out, 3 i, 4 n, 5 b
+	caseMap := func(idx int, from, to byte) {
+		r.body(idx, []ValType{RefNull(r.tBytes), RefNull(r.tBytes), I32, I32, I32}, func(c *Code) {
+			c.LocalGet(0).Call(r.fText).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalTee(4).ArrayNewDefault(r.tBytes).LocalSet(2)
+			c.Block(NoResult).Loop(NoResult)
+			c.LocalGet(3).LocalGet(4).I32GeU().BrIf(1)
+			c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).LocalSet(5)
+			c.LocalGet(2).LocalGet(3)
+			c.LocalGet(5).I32Const(int32(from)).I32GeU().LocalGet(5).I32Const(int32(from + 25)).I32LeU().I32And()
+			c.If(Result(I32)).LocalGet(5).I32Const(int32(to) - int32(from)).I32Add().Else().LocalGet(5).End()
+			c.ArraySet(r.tBytes)
+			c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+			c.LocalGet(2).RefAsNonNull().StructNew(r.tStr)
+		})
+	}
+	caseMap(r.fLower, 'A', 'a')
+	caseMap(r.fUpper, 'a', 'A')
+	r.body(r.fStrTrim, nil, func(c *Code) {
+		c.LocalGet(0).Call(r.fText).Call(r.fTrim)
+	})
+	// html_escape and attr_escape: Go's html.EscapeString.
+	// locals: 0 v, 1 in, 2 n, 3 i, 4 b, 5 buf, 6 pos, 7 out
+	r.body(r.fEscape, []ValType{RefNull(r.tBytes), I32, I32, I32, RefNull(r.tBytes), I32, RefNull(r.tBytes)}, func(c *Code) {
+		needStr(c, 0, "html_escape")
+		bytesOf(c, 0).LocalTee(1).ArrayLen().LocalSet(2)
+		c.LocalGet(2).I32Const(5).I32Mul().ArrayNewDefault(r.tBytes).LocalSet(5)
+		put := func(c *Code, text string) {
+			for _, b := range []byte(text) {
+				c.LocalGet(5).LocalGet(6).I32Const(int32(b)).ArraySet(r.tBytes).LocalGet(6).I32Const(1).I32Add().LocalSet(6)
+			}
+		}
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).I32GeU().BrIf(1)
+		c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).LocalSet(4)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3)
+		for _, e := range []struct {
+			b   byte
+			out string
+		}{{'&', "&amp;"}, {'\'', "&#39;"}, {'<', "&lt;"}, {'>', "&gt;"}, {'"', "&#34;"}} {
+			c.LocalGet(4).I32Const(int32(e.b)).I32Eq().If(NoResult)
+			put(c, e.out)
+			c.Br(1).End()
+		}
+		c.LocalGet(5).LocalGet(6).LocalGet(4).ArraySet(r.tBytes).LocalGet(6).I32Const(1).I32Add().LocalSet(6)
+		c.Br(0).End().End()
+		c.I32Const(0).LocalSet(3)
+		r.copyOut(c, 5, 3, 7, func(c *Code) { c.LocalGet(6) })
 	})
 }

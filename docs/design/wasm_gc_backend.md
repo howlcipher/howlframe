@@ -106,7 +106,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists done (values with Go-style tip append). Next: string operations, then dicts. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. 58 differential fixtures pass. Next: dicts, then the core-library sugar, `try_let` and modules. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -162,13 +162,13 @@ as the work it describes: tick tasks, move the status line, record findings.
       printing; `list_slice` and `list_contains` (desugared). Lists are
       values: an immutable (length, buffer) pair where only the list at the
       buffer's tip appends in place.
-- [ ] Constructs, in this order, each with fixtures: `not` and the
-      rest of the boolean sugar; `%` and `//` (desugared, need lists); strings
-      (`str_len`, `str_slice`, `str_split`, `str_join`, `str_replace`,
-      `str_contains`, `str_trim`, `to_lower`, `to_upper`, `starts_with`,
-      `ends_with`); conversions (`to_string`, `to_int`, `to_float`); lists
-      (`list`, `append`, `list_get`, `list_len`, `list_slice`, `list_contains`);
-      dicts (`dict`, `map_get`, `map_set`, `map_has`, `map_keys`,
+- [x] String primitives `str_split`, `str_join`, `to_lower`, `to_upper`,
+      `str_trim`, `html_escape`, `attr_escape`, `is_nil`; through their
+      desugaring `str_len`, `str_slice`, `str_contains`, `str_replace`,
+      `starts_with`, `ends_with`; `%` and `//`; `stderr` and `exit`.
+      Gap: `to_lower`, `to_upper` and `str_trim` handle ASCII only (the VM
+      uses Go's Unicode tables).
+- [ ] Constructs, in this order, each with fixtures: dicts (`dict`, `map_get`, `map_set`, `map_has`, `map_keys`,
       `map_delete`); the core-library sugar after desugaring (`filter`,
       `map_list`, `reduce`, `sort` and the rest); `try_let`, `catch`, `exit`,
       `stderr`; `is_nil`; modules (`use`, `export`).
@@ -228,7 +228,14 @@ The order of M1 and M3 work follows what the application needs.
   JavaScript backend and this backend print `2 1`). Fixed in the VM's
   compiler first (bugs.md); the fixture is skipped until then.
 - `%` and `//` are not VM instructions: the desugarer rewrites them into
-  exact integer code that uses lists and `to_int`.
+  exact integer code that uses lists, string operations and `to_int`.
+  Most list and string operations are likewise sugar over a few VM
+  primitives, so this backend implements only the primitives.
+- `list_get` out of range gives `""` on the VM (not nil); its index may be
+  any value whose text is a whole number, though the checker only admits
+  integers.
+- Node validates functions lazily, so a module can run in Node and still
+  be invalid; `wasm-tools validate` caught two such runtime bugs.
 - VM semantics confirmed by probes: checked integer overflow is an error;
   `/` always divides as floats; division by zero is an error for floats
   too; `str_len` counts characters; `map_keys` are sorted; list and dict
