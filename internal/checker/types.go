@@ -271,7 +271,7 @@ func (a *Analysis) inferRoot(root *ast.Node) {
 			case "export":
 				// A top-level exported function (a web_app module export) is
 				// checked like any other function, with its parameters bound.
-				if len(child.Children) == 2 && child.Children[1].Type == "List" && len(child.Children[1].Children) >= 4 && child.Children[1].Children[0].Value == "defun" {
+				if root.Children[0].Value == "web_app" && len(child.Children) == 2 && child.Children[1].Type == "List" && len(child.Children[1].Children) >= 4 && child.Children[1].Children[0].Value == "defun" {
 					a.inferFunction(child.Children[1])
 					continue
 				}
