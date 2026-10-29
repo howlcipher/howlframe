@@ -272,6 +272,12 @@ func checkJSStatement(node *ast.Node, depth int) {
 					checkJSStatement(kid.Children[1], depth+1)
 				}
 			}
+		case "spawn":
+			lambda := irNode.Kids[0]
+			if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
+				ast.ReportError("spawn expects a lambda", node.Line, node.Column)
+			}
+			checkJSStatement(lambda.Children[2], depth+1)
 		case "append", "map_set", "map_delete":
 			// These mutate a named variable, as on the Go and bytecode targets.
 			if target := irNode.Kids[0]; target.Type != "SYMBOL" {
