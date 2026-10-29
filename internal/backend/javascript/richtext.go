@@ -105,21 +105,39 @@ function howlFrameRichtextInline(nodes) {
 function howlFrameRichtextHasText(runs) {
   return runs.some(function (r) { return r.text.trim() !== ""; });
 }
-function howlFrameRichtextGet(el) {
-  if (el === null || el === undefined || typeof el !== "object") throw new Error("TYPE_ERROR: richtext_get expected an element");
-  var blocks = [], loose = [];
+function howlFrameRichtextBlockType(n) {
+  var tag = n.nodeType === 1 ? n.tagName : "";
+  if (tag === "P" || tag === "DIV") return "p";
+  if (tag === "H1" || tag === "H2") return "h2";
+  if (/^H[3-6]$/.test(tag)) return "h3";
+  if (tag === "UL") return "ul";
+  if (tag === "OL") return "ol";
+  return "";
+}
+function howlFrameRichtextHasBlocks(n) {
+  for (var i = 0; i < n.childNodes.length; i++) {
+    if (howlFrameRichtextBlockType(n.childNodes[i]) !== "") return true;
+  }
+  return false;
+}
+// Reads the blocks of container into blocks. Inline nodes between blocks
+// form paragraphs; a p or div that holds blocks is read as a container,
+// because browsers nest blocks inside paragraphs while editing.
+function howlFrameRichtextBlocks(container, blocks) {
+  var loose = [];
   var flush = function () {
     var runs = howlFrameRichtextInline(loose);
     if (howlFrameRichtextHasText(runs)) blocks.push({ type: "p", content: runs });
     loose = [];
   };
-  for (var i = 0; i < el.childNodes.length; i++) {
-    var n = el.childNodes[i];
-    var tag = n.nodeType === 1 ? n.tagName : "";
-    var type = tag === "P" || tag === "DIV" ? "p" : tag === "H1" || tag === "H2" ? "h2" : /^H[3-6]$/.test(tag) ? "h3" : tag === "UL" ? "ul" : tag === "OL" ? "ol" : "";
+  for (var i = 0; i < container.childNodes.length; i++) {
+    var n = container.childNodes[i];
+    var type = howlFrameRichtextBlockType(n);
     if (type === "") { loose.push(n); continue; }
     flush();
-    if (type === "ul" || type === "ol") {
+    if (type === "p" && howlFrameRichtextHasBlocks(n)) {
+      howlFrameRichtextBlocks(n, blocks);
+    } else if (type === "ul" || type === "ol") {
       var items = [];
       for (var j = 0; j < n.childNodes.length; j++) {
         var li = n.childNodes[j];
@@ -133,6 +151,11 @@ function howlFrameRichtextGet(el) {
     }
   }
   flush();
+}
+function howlFrameRichtextGet(el) {
+  if (el === null || el === undefined || typeof el !== "object") throw new Error("TYPE_ERROR: richtext_get expected an element");
+  var blocks = [];
+  howlFrameRichtextBlocks(el, blocks);
   return blocks;
 }
 function howlFrameRichtextAttach(el, label) {

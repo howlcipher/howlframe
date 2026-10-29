@@ -123,3 +123,18 @@ func TestRichtextSetRejectsMalformedModels(t *testing.T) {
 		}
 	}
 }
+
+// Browsers nest blocks inside paragraphs while editing: Chrome's list command
+// turns <p>text</p> into <p><ul><li>text</li></ul></p>. A p or div that
+// holds block elements is read as a container, so the list survives.
+func TestRichtextGetReadsBlocksNestedInParagraphs(t *testing.T) {
+	setup := `ed.appendChild(h("p", h("ul", h("li", h("b", "Analyst")), h("li", "Two"))));
+ed.appendChild(h("div", "lead ", h("h2", "Inner title"), "tail"));`
+	code := compileWebApp(t, `(web_app (print (encode_json (richtext_get (dom_query "#ed")))))`)
+	got := richtextHarness(t, code, setup)
+	want := `[{\"type\":\"ul\",\"items\":[[{\"text\":\"Analyst\",\"bold\":true}],[{\"text\":\"Two\"}]]},` +
+		`{\"type\":\"p\",\"content\":[{\"text\":\"lead \"}]},{\"type\":\"h2\",\"content\":[{\"text\":\"Inner title\"}]},{\"type\":\"p\",\"content\":[{\"text\":\"tail\"}]}]`
+	if !strings.Contains(got, want) {
+		t.Fatalf("got %s\nwant out containing %s", got, want)
+	}
+}
