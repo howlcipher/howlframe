@@ -80,8 +80,10 @@ func jsMotionCall(head string, node *ast.Node, reqVar string, depth int) (string
 // set_class takes a plain class name; set_style_var sets only custom
 // properties ("--name"), to values of letters, digits, spaces and . , % # ( )
 // + -, never url(), so a value cannot add declarations or load anything.
-// scroll_into_view brings an element to the top of the viewport at once,
-// without smooth scrolling, so a page can restore a reading position.
+// scroll_into_view brings an element to the top of the document's own
+// viewport at once, without smooth scrolling, so a page can restore a reading
+// position. It scrolls only that window: Element.scrollIntoView would also
+// scroll a page embedding this one, such as an editor around a preview.
 // pref_get and pref_put keep small strings in localStorage under
 // "howlframe:" + key; where storage is unavailable, pref_get is "" and
 // pref_put returns false.
@@ -143,7 +145,9 @@ function howlFrameElementBox(el) {
   return { top: r.top, height: r.height };
 }
 function howlFrameScrollIntoView(el) {
-  howlFrameMotionElement("scroll_into_view", el).scrollIntoView({ block: "start", behavior: "instant" });
+  var r = howlFrameMotionElement("scroll_into_view", el).getBoundingClientRect();
+  if (typeof scrollTo !== "function") return;
+  scrollTo({ top: r.top + howlFrameScrollY(), left: typeof scrollX === "number" ? scrollX : 0, behavior: "instant" });
 }
 function howlFrameMediaList(q) {
   if (typeof q !== "string" || q.length > 200) throw new Error("TYPE_ERROR: expected a media query string");
