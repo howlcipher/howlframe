@@ -232,6 +232,7 @@ var jsHostOperations = map[string]string{
 	"scroll_y":           "(scroll_y)",
 	"viewport_height":    "(viewport_height)",
 	"element_box":        "(element_box el)",
+	"scroll_into_view":   "(scroll_into_view el)",
 	"media_matches":      "(media_matches query)",
 	"pref_get":           "(pref_get key)",
 	"pref_put":           "(pref_put key value)",

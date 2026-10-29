@@ -295,6 +295,7 @@ var jsHostSugarParents = map[string]bool{
 	"set_html":           true,
 	"set_style_var":      true,
 	"set_text":           true,
+	"scroll_into_view":   true,
 	"set_value":          true,
 	"sniff_media_type":   true,
 	"storage_delete":     true,
