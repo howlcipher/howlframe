@@ -25,6 +25,14 @@
   it (`FILE_TOO_LARGE`). `(sniff_media_type base64)` names PNG, JPEG, GIF or WebP data from its leading bytes.
   `(image_decode base64 mime)` reports dimensions and `(image_encode base64 mime max_side out_mime quality)` redraws
   the image, which drops metadata, scaled to fit; undecodable data is `IMAGE_INVALID`.
+* `web_app` layout, preference and subscription host operations for scroll-driven pages. `(dom_query_all sel)`,
+  `(set_class el name on)`, `(set_style_var el "--name" value)` (custom properties only, with a plain value
+  allowlist and no `url(`), `(scroll_y)`, `(viewport_height)`, `(element_box el)` and `(media_matches query)`.
+  `(pref_get key)` and `(pref_put key value)` keep small strings in `localStorage`, reading `""` and returning `false`
+  where storage is unavailable. `(on_media query (lambda (matches) ...))`, `(on_visible elements (lambda (el visible)
+  ...))` and `(on_scroll (lambda () ...))` return a subscription that `(off s)` disposes completely (listeners,
+  observers and any pending animation frame); `on_scroll` runs at most once per frame from passive listeners, and
+  `(subscription_count)` reports live subscriptions so a program can prove it left nothing running.
 * `(zip_read base64 max_entries max_bytes)` reads a ZIP archive from untrusted data as a list of
   `{"path", "base64"}` dicts, taking stored and deflated entries and skipping directories. It refuses rather than
   repairs: unsafe paths (absolute, `.`/`..` or empty segments, backslashes, colons, control characters) are
