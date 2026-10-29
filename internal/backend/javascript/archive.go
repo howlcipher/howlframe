@@ -1,7 +1,7 @@
 package javascript
 
 // archiveJSHelper returns the browser archive runtime used by dom_text,
-// zip_build, and download_file.
+// zip_build, zip_read, base64_text and download_file.
 //
 // zip_build writes a ZIP of stored (uncompressed) entries. Each entry is a
 // dict with a "path" and exactly one of "text" (encoded as UTF-8) or "base64"
@@ -11,6 +11,20 @@ package javascript
 // conservative portable character set, so an archive can never name a file
 // outside the directory it is extracted into. Paths that differ only in case
 // are rejected because they collide on case-insensitive file systems.
+//
+// zip_read is the reader for archives from anywhere, so it trusts nothing in
+// them. It takes stored and deflated entries (deflate through the host's
+// DecompressionStream) and returns a list of {"path", "base64"} dicts in
+// central directory order, skipping directory entries. It refuses, rather
+// than repairs: paths that are absolute, contain "." or ".." segments, empty
+// segments, backslashes, colons or control characters (ZIP_INVALID_PATH);
+// paths that differ only in case (ZIP_DUPLICATE_PATH); more entries or more
+// declared bytes than the caller's limits (ZIP_LIMIT); encryption, ZIP64,
+// multi-part archives and other compression methods (ZIP_UNSUPPORTED);
+// structures that do not fit in the data (ZIP_INVALID); and entries whose data
+// does not match its declared size or CRC-32 (ZIP_CORRUPT). Inflation stops
+// as soon as an entry passes its declared size, so a small declaration cannot
+// expand into a large allocation. base64_text decodes base64 as strict UTF-8.
 //
 // download_file hands bytes to the browser's download mechanism through a
 // Blob object URL that is revoked after the click. It writes no file itself;
@@ -155,6 +169,133 @@ function howlFrameZipBuild(entries) {
   dv.setUint32(off, cdStart, true); off += 4;
   dv.setUint16(off, 0, true); off += 2;
   return howlFrameBytesBase64(buf);
+}
+function howlFrameZipReadPathOK(p) {
+  if (p.length === 0 || p.length > 1024 || /[\u0000-\u001f\u007f\\:]/.test(p)) return false;
+  var parts = p.split("/");
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i] === "" || parts[i] === "." || parts[i] === "..") return false;
+  }
+  return true;
+}
+function howlFrameZipReadLimit(kind, v, cap) {
+  if (typeof v !== "number" || !(v >= 1) || Math.floor(v) !== v) {
+    throw new Error("TYPE_ERROR: zip_read " + kind + " must be a positive whole number");
+  }
+  return Math.min(v, cap);
+}
+async function howlFrameZipInflate(data, size, path) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("ZIP_UNSUPPORTED: this host cannot inflate deflated entries");
+  }
+  var ds = new DecompressionStream("deflate-raw");
+  var writer = ds.writable.getWriter();
+  writer.write(data).catch(function () {});
+  writer.close().catch(function () {});
+  var reader = ds.readable.getReader();
+  var out = new Uint8Array(size);
+  var n = 0;
+  try {
+    for (;;) {
+      var r = await reader.read();
+      if (r.done) break;
+      if (n + r.value.length > size) {
+        reader.cancel().catch(function () {});
+        throw new Error("ZIP_CORRUPT: " + path + " expands past its declared size");
+      }
+      out.set(r.value, n);
+      n += r.value.length;
+    }
+  } catch (e) {
+    if (/^ZIP_/.test(e && e.message)) throw e;
+    throw new Error("ZIP_CORRUPT: " + path + " is not valid deflate data");
+  }
+  if (n !== size) throw new Error("ZIP_CORRUPT: " + path + " is shorter than its declared size");
+  return out;
+}
+async function howlFrameZipRead(data, maxEntries, maxBytes) {
+  maxEntries = howlFrameZipReadLimit("max_entries", maxEntries, howlFrameZipMaxEntries);
+  maxBytes = howlFrameZipReadLimit("max_bytes", maxBytes, howlFrameZipMaxBytes);
+  var buf = howlFrameBase64Bytes("ZIP_INVALID", data);
+  var dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  function u16(at) { return dv.getUint16(at, true); }
+  function u32(at) { return dv.getUint32(at, true); }
+  function invalid(msg) { return new Error("ZIP_INVALID: " + msg); }
+  var eocd = -1;
+  for (var i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65535; i--) {
+    if (u32(i) === 0x06054b50 && i + 22 + u16(i + 20) === buf.length) { eocd = i; break; }
+  }
+  if (eocd < 0) throw invalid("not a ZIP archive");
+  var count = u16(eocd + 10), cdSize = u32(eocd + 12), cdStart = u32(eocd + 16);
+  if (count === 0xFFFF || cdSize === 0xFFFFFFFF || cdStart === 0xFFFFFFFF) {
+    throw new Error("ZIP_UNSUPPORTED: ZIP64 archives are not supported");
+  }
+  if (u16(eocd + 4) !== 0 || u16(eocd + 6) !== 0 || u16(eocd + 8) !== count) {
+    throw new Error("ZIP_UNSUPPORTED: multi-part archives are not supported");
+  }
+  var cdEnd = cdStart + cdSize;
+  if (cdEnd > eocd) throw invalid("the central directory is out of range");
+  if (count > maxEntries) throw new Error("ZIP_LIMIT: more than " + maxEntries + " entries");
+  var utf8 = new TextDecoder("utf-8", { fatal: true });
+  var entries = [];
+  var seen = Object.create(null);
+  var total = 0;
+  var off = cdStart;
+  for (var k = 0; k < count; k++) {
+    if (off + 46 > cdEnd || u32(off) !== 0x02014b50) throw invalid("the central directory is damaged");
+    var flags = u16(off + 8), method = u16(off + 10), crc = u32(off + 16);
+    var csize = u32(off + 20), usize = u32(off + 24), local = u32(off + 42);
+    var nameEnd = off + 46 + u16(off + 28);
+    var next = nameEnd + u16(off + 30) + u16(off + 32);
+    if (next > cdEnd) throw invalid("the central directory is damaged");
+    var name;
+    try { name = utf8.decode(buf.subarray(off + 46, nameEnd)); } catch (e) {
+      throw new Error("ZIP_INVALID_PATH: entry " + k + " has a name that is not UTF-8");
+    }
+    off = next;
+    if (flags & 1) throw new Error("ZIP_UNSUPPORTED: encrypted entries are not supported");
+    if (method !== 0 && method !== 8) throw new Error("ZIP_UNSUPPORTED: compression method " + method);
+    if (csize === 0xFFFFFFFF || usize === 0xFFFFFFFF || local === 0xFFFFFFFF) {
+      throw new Error("ZIP_UNSUPPORTED: ZIP64 archives are not supported");
+    }
+    var isDir = name.charAt(name.length - 1) === "/";
+    var path = isDir ? name.slice(0, -1) : name;
+    if (!howlFrameZipReadPathOK(path)) throw new Error("ZIP_INVALID_PATH: " + JSON.stringify(name.slice(0, 80)));
+    if (isDir) continue;
+    var key = path.toLowerCase();
+    if (seen[key]) throw new Error("ZIP_DUPLICATE_PATH: " + path);
+    seen[key] = true;
+    total += usize;
+    if (total > maxBytes) throw new Error("ZIP_LIMIT: archive expands past " + maxBytes + " bytes");
+    entries.push({ path: path, method: method, crc: crc, csize: csize, usize: usize, local: local });
+  }
+  var out = [];
+  for (var j = 0; j < entries.length; j++) {
+    var e = entries[j];
+    if (e.local + 30 > cdStart || u32(e.local) !== 0x04034b50) throw invalid(e.path + " has a damaged header");
+    if (u16(e.local + 6) & 1) throw new Error("ZIP_UNSUPPORTED: encrypted entries are not supported");
+    var start = e.local + 30 + u16(e.local + 26) + u16(e.local + 28);
+    if (start + e.csize > cdStart) throw invalid(e.path + " has data out of range");
+    var raw = buf.subarray(start, start + e.csize);
+    var bytes;
+    if (e.method === 0) {
+      if (e.csize !== e.usize) throw new Error("ZIP_CORRUPT: " + e.path + " has inconsistent sizes");
+      bytes = raw;
+    } else {
+      bytes = await howlFrameZipInflate(raw, e.usize, e.path);
+    }
+    if (howlFrameZipCRC32(bytes) !== e.crc) throw new Error("ZIP_CORRUPT: " + e.path + " fails its checksum");
+    out.push({ path: e.path, base64: howlFrameBytesBase64(bytes) });
+  }
+  return out;
+}
+function howlFrameBase64Text(v) {
+  var bytes = howlFrameBase64Bytes("TEXT_INVALID_BASE64", v);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (e) {
+    throw new Error("TEXT_INVALID_UTF8: data is not valid UTF-8 text");
+  }
 }
 function howlFrameDownloadFile(name, mime, data) {
   if (typeof name !== "string" || !/^[A-Za-z0-9._ ()-]{1,128}$/.test(name) || /^[. ]/.test(name)) {

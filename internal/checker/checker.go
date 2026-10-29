@@ -223,6 +223,8 @@ var jsHostOperations = map[string]string{
 	"sniff_media_type": "(sniff_media_type base64)",
 	"image_decode":     "(image_decode base64 mime)",
 	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
+	"zip_read":         "(zip_read base64 max_entries max_bytes)",
+	"base64_text":      "(base64_text base64)",
 
 	"richtext_attach":  "(richtext_attach el label)",
 	"richtext_set":     "(richtext_set el blocks)",
