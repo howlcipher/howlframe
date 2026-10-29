@@ -1252,6 +1252,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsArchive = false
 	jsNeedsExit = false
 	jsNeedsDOM = false
+	jsNeedsBrowserIO = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1366,6 +1367,12 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		code = exitJSHelper(false) + code
 		if testCode != "" {
 			testCode = exitJSHelper(true) + testCode
+		}
+	}
+	if jsNeedsBrowserIO {
+		code = browserIOJSHelper() + code
+		if testCode != "" {
+			testCode = browserIOJSHelper() + testCode
 		}
 	}
 	if jsNeedsDOM {

@@ -22,20 +22,46 @@ var jsDOMHelpers = map[string]string{
 	"dialog_close":  "howlFrameDialogClose",
 }
 
+// jsBrowserIOHelpers maps the storage, file and image host operations to
+// their runtime helpers. All but sniff_media_type are asynchronous and are
+// awaited.
+var jsBrowserIOHelpers = map[string]string{
+	"storage_get":      "howlFrameStorageGet",
+	"storage_put":      "howlFrameStoragePut",
+	"storage_delete":   "howlFrameStorageDelete",
+	"storage_keys":     "howlFrameStorageKeys",
+	"file_read_input":  "howlFrameFileReadInput",
+	"sniff_media_type": "howlFrameSniffMediaType",
+	"image_decode":     "howlFrameImageDecode",
+	"image_encode":     "howlFrameImageEncode",
+}
+
+// jsNeedsBrowserIO is set when GenerateJSCode emits a storage, file or image
+// host operation.
+var jsNeedsBrowserIO bool
+
 // jsNeedsDOM is set when GenerateJSCode emits a DOM or event host operation.
 var jsNeedsDOM bool
 
 func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
 	helper, ok := jsDOMHelpers[head]
-	if !ok {
+	format := "%s(%s)"
+	if ok {
+		jsNeedsDOM = true
+	} else if helper, ok = jsBrowserIOHelpers[head]; ok {
+		jsNeedsBrowserIO = true
+		jsNeedsArchive = true // base64 helpers
+		if head != "sniff_media_type" {
+			format = "(await %s(%s))"
+		}
+	} else {
 		return "", false
 	}
-	jsNeedsDOM = true
 	args := make([]string, 0, len(node.Children)-1)
 	for _, child := range node.Children[1:] {
 		args = append(args, generateJSStatementRaw(child, reqVar, depth+1))
 	}
-	return fmt.Sprintf("%s(%s)", helper, strings.Join(args, ", ")), true
+	return fmt.Sprintf(format, helper, strings.Join(args, ", ")), true
 }
 
 // domJSHelper returns the DOM and event runtime. event_attr reads an

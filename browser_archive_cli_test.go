@@ -43,6 +43,8 @@ func TestBrowserDomHostOperationArity(t *testing.T) {
 		`(web_app (let (e "x") (event_attr e)))`, `(web_app (event_key))`, `(web_app (event_prevent))`, `(web_app (set_value (dom_query "#a")))`,
 		`(web_app (dom_checked))`, `(web_app (set_checked (dom_query "#a")))`, `(web_app (dom_focus))`, `(web_app (remove_attr (dom_query "#a")))`,
 		`(web_app (dialog_open))`, `(web_app (dialog_close))`,
+		`(web_app (storage_get "a"))`, `(web_app (storage_put "a" "b"))`, `(web_app (storage_keys))`, `(web_app (file_read_input (dom_query "#f")))`,
+		`(web_app (sniff_media_type))`, `(web_app (image_decode "x"))`, `(web_app (image_encode "x" "image/png" 10 "image/png"))`,
 	} {
 		path := mustWriteFile(t, dir, "a.howl", src)
 		out, err := exec.Command(bin, "check", path).CombinedOutput()

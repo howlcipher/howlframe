@@ -214,6 +214,15 @@ var jsHostOperations = map[string]string{
 	"remove_attr":   "(remove_attr el name)",
 	"dialog_open":   "(dialog_open el)",
 	"dialog_close":  "(dialog_close el)",
+
+	"storage_get":      "(storage_get namespace key)",
+	"storage_put":      "(storage_put namespace key value)",
+	"storage_delete":   "(storage_delete namespace key)",
+	"storage_keys":     "(storage_keys namespace)",
+	"file_read_input":  "(file_read_input el max_bytes)",
+	"sniff_media_type": "(sniff_media_type base64)",
+	"image_decode":     "(image_decode base64 mime)",
+	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
 }
 
 func checkJSStatement(node *ast.Node, depth int) {

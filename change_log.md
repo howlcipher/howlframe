@@ -18,6 +18,13 @@
   `(event_key e)`, `(event_prevent e)`, `(set_value el v)` sets a control's live value, `(dom_checked el)`,
   `(set_checked el b)`, `(dom_focus el)`, `(remove_attr el name)`, and `(dialog_open el)` / `(dialog_close el)` for
   modal `<dialog>` elements. Each fails with `TYPE_ERROR` on a missing element.
+* `web_app` storage, file and image host operations. `storage_get`, `storage_put`, `storage_delete` and
+  `storage_keys` keep string values in IndexedDB, one database per namespace; a full disk is `STORAGE_QUOTA`, a host
+  without usable IndexedDB is `STORAGE_UNAVAILABLE`, and a failed write never reports success.
+  `(file_read_input el max_bytes)` returns the chosen files as base64, refusing any file over the limit before reading
+  it (`FILE_TOO_LARGE`). `(sniff_media_type base64)` names PNG, JPEG, GIF or WebP data from its leading bytes.
+  `(image_decode base64 mime)` reports dimensions and `(image_encode base64 mime max_side out_mime quality)` redraws
+  the image, which drops metadata, scaled to fit; undecodable data is `IMAGE_INVALID`.
 * `build --target js --module` writes a library: `app.mjs`, an ES module exporting the program's top-level
   `(export (defun ...))` functions, and `app.d.mts`, TypeScript declarations from their type hints (`string`,
   `number`, `boolean`, `unknown[]`, `Record<string, unknown>`, `unknown`, each wrapped in `Promise`). A program
