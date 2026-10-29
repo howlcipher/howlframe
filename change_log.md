@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Correctness
+* The bytecode VM scopes `let`, `for` and `try_let` bindings like the interpreter and the other backends: an inner
+  binding with the name of an outer variable no longer overwrites it (`(let (x 1) (do (let (x 2) (print x)) (print x)))`
+  printed `2 2` on the VM and `2 1` elsewhere). Shadowing bindings are renamed at compile time; no opcode or artifact
+  change. Found by the WebAssembly backend's differential tests (bugs.md #58).
 * A `defun` with several body forms runs all of them on every target. The bytecode VM did; the JavaScript and Go
   backends emitted only the last form, so `(defun f (m) (if (= m "a") (return "A")) (return "Z"))` returned `"A"` on
   the VM and `"Z"` in generated code. `TestDefunWithSeveralBodyFormsMatchesBytecode` compares all three.
