@@ -12,6 +12,11 @@
   target unchanged, columns count code points, and a file that is not valid UTF-8 is rejected with
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
+* Sugar nested in an argument of a `web_app` browser host operation expands as it does under any other value-taking
+  form. The desugarer did not know those heads, so `(set_value el (not x))`, `(set_attr el "k" (str ...))` and the
+  like failed with `Unknown statement for JS: not`. `TestEveryJSHostOperationExpandsNestedSugar` keeps the
+  desugarer's list in step with the checker's host operation tables.
+
 ### JavaScript backend
 * `web_app` DOM and event host operations for interactive pages: `(event_attr e name)` reads an attribute from the
   event target or its nearest ancestor that has it (for delegated handlers; the name must be a plain attribute name),
