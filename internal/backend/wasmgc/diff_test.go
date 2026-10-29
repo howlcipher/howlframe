@@ -177,10 +177,10 @@ func TestDiffConversions(t *testing.T) {
 
 // An inner let shadows an outer variable of the same name. The interpreter,
 // the JavaScript backend and this backend print 2 then 1; the bytecode VM
-// printed 2 then 2 until its compiler scoped let bindings (bugs.md).
+// printed 2 then 2 until its compiler scoped let bindings (bugs.md #58).
 func TestDiffShadowing(t *testing.T) {
-	t.Skip("blocked on the bytecode VM's let scoping fix (bugs.md, VM let shadowing)")
 	sameAsVM(t, `(cli_app (let (x 1) (do (let (x 2) (print x)) (print x))))`)
+	sameAsVM(t, `(cli_app (let (x 10) (do (for x (list 1 2) (print x)) (print x))))`)
 }
 
 // % and // are desugared into exact integer code that uses lists and

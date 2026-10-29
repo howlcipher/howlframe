@@ -226,7 +226,7 @@ The order of M1 and M3 work follows what the application needs.
 - The bytecode VM did not scope `let`: an inner binding overwrote an outer
   variable of the same name (prints `2 2` where the interpreter, the
   JavaScript backend and this backend print `2 1`). Fixed in the VM's
-  compiler first (bugs.md); the fixture is skipped until then.
+  compiler first (bugs.md #58, howlframe#249); the fixture now passes.
 - `%` and `//` are not VM instructions: the desugarer rewrites them into
   exact integer code that uses lists, string operations and `to_int`.
   Most list and string operations are likewise sugar over a few VM
