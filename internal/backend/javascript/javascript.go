@@ -1251,6 +1251,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsHTMLEscape = false
 	jsNeedsArchive = false
 	jsNeedsExit = false
+	jsNeedsDOM = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1367,6 +1368,12 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = exitJSHelper(true) + testCode
 		}
 	}
+	if jsNeedsDOM {
+		code = domJSHelper() + code
+		if testCode != "" {
+			testCode = domJSHelper() + testCode
+		}
+	}
 	if jsNeedsArchive {
 		helper := archiveJSHelper()
 		code = helper + code
@@ -1446,6 +1453,9 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	}
 	if head == valueBlockHead {
 		return jsValueBlock(node, reqVar, depth)
+	}
+	if call, ok := jsDOMCall(head, node, reqVar, depth); ok {
+		return call
 	}
 	// to_lower, to_upper and str_trim are not shared IR kinds, so they are
 	// emitted here rather than in EmitJSIR.

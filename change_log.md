@@ -13,6 +13,11 @@
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
 ### JavaScript backend
+* `web_app` DOM and event host operations for interactive pages: `(event_attr e name)` reads an attribute from the
+  event target or its nearest ancestor that has it (for delegated handlers; the name must be a plain attribute name),
+  `(event_key e)`, `(event_prevent e)`, `(set_value el v)` sets a control's live value, `(dom_checked el)`,
+  `(set_checked el b)`, `(dom_focus el)`, `(remove_attr el name)`, and `(dialog_open el)` / `(dialog_close el)` for
+  modal `<dialog>` elements. Each fails with `TYPE_ERROR` on a missing element.
 * `build --target js --module` writes a library: `app.mjs`, an ES module exporting the program's top-level
   `(export (defun ...))` functions, and `app.d.mts`, TypeScript declarations from their type hints (`string`,
   `number`, `boolean`, `unknown[]`, `Record<string, unknown>`, `unknown`, each wrapped in `Promise`). A program

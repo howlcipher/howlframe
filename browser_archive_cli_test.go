@@ -35,3 +35,19 @@ func TestBrowserArchivePrimitivesCheckAndTargetBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestBrowserDomHostOperationArity(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	for _, src := range []string{
+		`(web_app (let (e "x") (event_attr e)))`, `(web_app (event_key))`, `(web_app (event_prevent))`, `(web_app (set_value (dom_query "#a")))`,
+		`(web_app (dom_checked))`, `(web_app (set_checked (dom_query "#a")))`, `(web_app (dom_focus))`, `(web_app (remove_attr (dom_query "#a")))`,
+		`(web_app (dialog_open))`, `(web_app (dialog_close))`,
+	} {
+		path := mustWriteFile(t, dir, "a.howl", src)
+		out, err := exec.Command(bin, "check", path).CombinedOutput()
+		if err == nil || !strings.Contains(string(out), " expects (") {
+			t.Fatalf("%s: want an arity diagnostic, got %v %s", src, err, out)
+		}
+	}
+}
