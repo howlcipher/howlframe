@@ -18,6 +18,7 @@ var jsDOMHelpers = map[string]string{
 	"set_checked":   "howlFrameSetChecked",
 	"dom_focus":     "howlFrameDomFocus",
 	"remove_attr":   "howlFrameRemoveAttr",
+	"dom_attr":      "howlFrameDomAttr",
 	"dialog_open":   "howlFrameDialogOpen",
 	"dialog_close":  "howlFrameDialogClose",
 
@@ -116,6 +117,10 @@ function howlFrameSetChecked(el, b) {
 }
 function howlFrameDomFocus(el) {
   howlFrameElement("dom_focus", el).focus();
+}
+function howlFrameDomAttr(el, name) {
+  var v = howlFrameElement("dom_attr", el).getAttribute(howlFrameAttrName(name));
+  return v === null ? "" : v;
 }
 function howlFrameRemoveAttr(el, name) {
   howlFrameElement("remove_attr", el).removeAttribute(howlFrameAttrName(name));

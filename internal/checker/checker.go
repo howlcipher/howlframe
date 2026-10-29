@@ -212,6 +212,7 @@ var jsHostOperations = map[string]string{
 	"set_checked":   "(set_checked el bool)",
 	"dom_focus":     "(dom_focus el)",
 	"remove_attr":   "(remove_attr el name)",
+	"dom_attr":      "(dom_attr el name)",
 	"dialog_open":   "(dialog_open el)",
 	"dialog_close":  "(dialog_close el)",
 

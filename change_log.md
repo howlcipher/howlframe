@@ -25,7 +25,8 @@
   it (`FILE_TOO_LARGE`). `(sniff_media_type base64)` names PNG, JPEG, GIF or WebP data from its leading bytes.
   `(image_decode base64 mime)` reports dimensions and `(image_encode base64 mime max_side out_mime quality)` redraws
   the image, which drops metadata, scaled to fit; undecodable data is `IMAGE_INVALID`.
-* `web_app` layout, preference and subscription host operations for scroll-driven pages. `(dom_query_all sel)`,
+* `web_app` layout, preference and subscription host operations for scroll-driven pages. `(dom_attr el name)` reads
+  an attribute (`""` when absent; plain names only), `(dom_query_all sel)`,
   `(set_class el name on)`, `(set_style_var el "--name" value)` (custom properties only, with a plain value
   allowlist and no `url(`), `(scroll_y)`, `(viewport_height)`, `(element_box el)` and `(media_matches query)`.
   `(pref_get key)` and `(pref_put key value)` keep small strings in `localStorage`, reading `""` and returning `false`
