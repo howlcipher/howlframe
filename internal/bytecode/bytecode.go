@@ -318,6 +318,7 @@ type BCCompiler struct {
 
 func CompileToBytecode(root *ast.Node) *BCProgram {
 	ast.Desugar(root)
+	ScopeBindings(root)
 	comp := &BCCompiler{
 		prog: &BCProgram{
 			Version:   1,

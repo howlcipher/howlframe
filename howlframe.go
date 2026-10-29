@@ -244,6 +244,10 @@ func main() {
 	// Bounded Phase-1 research pathway for direct semantic graph lowering.
 	// Not a replacement compiler backend.
 	if *compileHfirBc {
+		// The VM stores bindings by name per call, so shadowing bindings
+		// are renamed first, as CompileToBytecode does.
+		ast.Desugar(root)
+		bytecode.ScopeBindings(root)
 		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		var prog *bytecode.BCProgram
 		var diags []hfir.Diagnostic
