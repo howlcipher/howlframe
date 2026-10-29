@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 59 | [The JavaScript backend treats a list or dict as equal to itself](#59-the-javascript-backend-treats-a-list-or-dict-as-equal-to-itself) | Pending | 3.0 (6×1÷2) | — | — | — | `(= l l)` prints `false` on the VM and the interpreter (collections are never equal) but `true` from `--target js`, which compiles `=` to `===`. Found by the WebAssembly backend's differential tests. |
 | 58 | [The bytecode VM did not scope `let`, `for` or `try_let` bindings](#58-the-bytecode-vm-did-not-scope-let-for-or-try_let-bindings) | Done (2026-10-29) | 8.0 (8×1÷1) | Opus 5.5 | — | — | An inner binding with the name of an outer variable overwrote it for the rest of the function on the VM, while the interpreter and the JavaScript backend scoped lexically: the same program printed `2 2` on the VM and `2 1` elsewhere. Found by the WebAssembly backend's differential tests. |
 | 49 | [A `//go:build ignore` archive is counted as production Go, pushing `go_production` over its ceiling](#49-a-gobuild-ignore-archive-is-counted-as-production-go-pushing-go_production-over-its-ceiling) | Done (2026-08-29) | 6.0 (6×1÷1) | Opus 5 | — | — | `go_production`'s `scan_path: .` / `**/*.go` glob matched `docs/archive/old_howlframe.go`, a build-excluded archive of the old monolithic implementation, so 4177 lines of dead history counted as production source and held the scope at 291 active clones against a committed ceiling of 290. |
 | 48 | [`parse_json req.body` reads unbounded request data and ignores read errors](#48-parse_json-reqbody-reads-unbounded-request-data-and-ignores-read-errors) | Done (2026-08-18) | 2.0 (8×1÷4) | Sonnet 5 | Gemini 3.1 Pro | gpt-5.6-terra | The standalone HTTP bytecode VM bounded to 10MB limit and handles read errors cleanly without silent data corruption. |
@@ -157,6 +158,21 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 59. The JavaScript backend treats a list or dict as equal to itself
+
+* **Problem:** The VM's `BcValuesEqual` and the interpreter return false for
+  `=` whenever either side is a list or a dict, even the same value. The
+  JavaScript backend compiles `=` to `===` and `!=` to `!==`, which compare
+  references, so a collection equals itself there.
+* **Evidence:** `(cli_app (let (l (list 1) d (dict)) (print (= l l) (= d d) (= (list 1) (list 1)))))`
+  prints `false false false` with `howlframe prog.howl` and with `-run`, and
+  `true true false` from `build --target js` run in Node (2026-10-29). The
+  WebAssembly backend follows the VM (`TestDiffLists/never_equal`,
+  `TestDiffDicts/never_equal` in `internal/backend/wasmgc/diff_test.go`).
+* **Scope:** Make the JavaScript backend's `=` and `!=` follow the VM's rule
+  (and its numeric equality across int and float) through a runtime helper,
+  with a differential test against the VM.
 
 ### 58. The bytecode VM did not scope `let`, `for` or `try_let` bindings
 * **Symptom:** `(cli_app (let (x 1) (do (let (x 2) (print x)) (print x))))` printed `2` then `2` on the bytecode VM (production `-compile-bc`, the default `run`, and the experimental `-compile-hfir-bc`), and `2` then `1` under `run --target interpreter` and on the JavaScript backend. A `for` loop variable or a `try_let` name with the name of an outer variable overwrote it the same way, and a `set` inside the inner scope changed the outer variable.

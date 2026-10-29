@@ -37,6 +37,9 @@ type rt struct {
 	fToInt, fToFloat, fQuote, fTrim, fTypeName             int
 	fListNew, fListAppend, fListGet, fListLen, fListText   int
 	fStrSplit, fStrJoin, fLower, fUpper, fStrTrim, fEscape int
+	fGoType, fElemText, fDictNew, fDictPut, fDictFind      int
+	fMapGet, fMapSet, fMapDelete, fMapKeys                 int
+	fSortedKeys, fDictText                                 int
 
 	strings map[string]int // literal -> data segment
 }
@@ -138,6 +141,13 @@ func (r *rt) def(name string, typ int, locals []ValType, body func(c *Code)) int
 	return r.m.AddFunc(Func{Name: name, Type: typ, Locals: locals, Body: c})
 }
 
+// failWithType fails with msg followed by the Go type name (%T) of the
+// value in local, as the VM's type errors read.
+func (r *rt) failWithType(c *Code, msg string, local int) *Code {
+	r.StrLiteral(c, msg)
+	return c.LocalGet(local).Call(r.fGoType).Call(r.fConcat).Call(r.fFail)
+}
+
 // Errors: fail sets $err to a message and returns null, so a caller can
 // "return (call fail msg)". Callers test $err after anything that can fail.
 func (r *rt) failWith(c *Code, msg string) *Code {
@@ -192,6 +202,17 @@ func (r *rt) emitAll() {
 		{&r.fUpper, "to_upper", r.funcType([]ValType{EqRef}, EqRef)},
 		{&r.fStrTrim, "str_trim", r.funcType([]ValType{EqRef}, EqRef)},
 		{&r.fEscape, "html_escape", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fGoType, "go_type", r.tEqToStr},
+		{&r.fElemText, "elem_text", r.tEqToStr},
+		{&r.fDictNew, "dict_new", r.funcType([]ValType{Ref(r.tItems)}, EqRef)},
+		{&r.fDictPut, "dict_put", r.funcType([]ValType{Ref(r.tDict), Ref(r.tStr), EqRef})},
+		{&r.fDictFind, "dict_find", r.funcType([]ValType{Ref(r.tDict), Ref(r.tStr)}, I32)},
+		{&r.fMapGet, "map_get", r.tEqEqToEq},
+		{&r.fMapSet, "map_set", r.funcType([]ValType{EqRef, EqRef, EqRef}, EqRef)},
+		{&r.fMapDelete, "map_delete", r.tEqEqToEq},
+		{&r.fMapKeys, "map_keys", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fSortedKeys, "sorted_keys", r.funcType([]ValType{Ref(r.tDict)}, Ref(r.tItems))},
+		{&r.fDictText, "dict_text", r.tEqToStr},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -234,6 +255,7 @@ func (r *rt) emitAll() {
 	r.emitConversions()
 	r.emitLists()
 	r.emitStringOps()
+	r.emitDicts()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -392,7 +414,9 @@ func (r *rt) emitArith() {
 		r.failWith(c, "TYPE_ERROR: cannot compare these values").Drop().I32Const(0)
 	})
 	// eq: numbers by value (int and float compare numerically), strings by
-	// content, booleans by value, nil only to nil, lists and dicts by identity.
+	// content, booleans by value, nil only to nil. Lists and dicts are never
+	// equal, not even to themselves (the VM's BcValuesEqual), and values of
+	// different types differ.
 	r.body(r.fEq, nums, func(c *Code) {
 		c.LocalGet(0).RefIsNull().LocalGet(1).RefIsNull().I32Or().If(NoResult).
 			LocalGet(0).RefIsNull().LocalGet(1).RefIsNull().I32And().Return().End()
@@ -408,7 +432,7 @@ func (r *rt) emitArith() {
 			LocalGet(0).RefCast(r.tStr).LocalGet(1).RefCast(r.tStr).Call(r.fStrEq).Return().End()
 		c.LocalGet(0).RefTest(r.tBool).LocalGet(1).RefTest(r.tBool).I32And().If(NoResult).
 			LocalGet(0).RefCast(r.tBool).StructGet(r.tBool, 0).LocalGet(1).RefCast(r.tBool).StructGet(r.tBool, 0).I32Eq().Return().End()
-		c.LocalGet(0).LocalGet(1).RefEq()
+		c.I32Const(0)
 	})
 }
 
@@ -482,6 +506,7 @@ func (r *rt) emitText() {
 		r.StrLiteral(c, "true").Return().End()
 		r.StrLiteral(c, "false").Return().End()
 		c.LocalGet(0).RefTest(r.tList).If(NoResult).LocalGet(0).Call(r.fListText).Return().End()
+		c.LocalGet(0).RefTest(r.tDict).If(NoResult).LocalGet(0).Call(r.fDictText).Return().End()
 		r.StrLiteral(c, "<value>")
 	})
 }
@@ -744,8 +769,8 @@ func (r *rt) emitConversions() {
 // emitLists writes the list primitives. Everything else on lists
 // (list_slice, list_contains, map_list, filter, ...) is desugared into these.
 func (r *rt) emitLists() {
-	typeErr := func(c *Code, what string) {
-		r.failWith(c, "TYPE_ERROR: "+what).Return()
+	typeErr := func(c *Code, what string, local int) {
+		r.failWithType(c, "TYPE_ERROR: "+what+", got ", local).Return()
 	}
 	// list_new(items): a list owning a fresh buffer holding items.
 	r.body(r.fListNew, nil, func(c *Code) {
@@ -757,7 +782,7 @@ func (r *rt) emitLists() {
 	// 3 buf, 4 n, 5 items
 	r.body(r.fListAppend, []ValType{RefNull(r.tList), RefNull(r.tBuf), I32, RefNull(r.tItems)}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
-		typeErr(c, "append expects a list")
+		typeErr(c, "append expected list", 0)
 		c.End()
 		c.LocalGet(0).RefCast(r.tList).LocalTee(2).StructGet(r.tList, 0).LocalSet(4)
 		c.LocalGet(2).StructGet(r.tList, 1).LocalSet(3)
@@ -785,25 +810,30 @@ func (r *rt) emitLists() {
 	// locals: 0 l, 1 i, 2 idx, 3 boxed index
 	r.body(r.fListGet, []ValType{I64, EqRef}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
-		typeErr(c, "list_get expected list")
+		typeErr(c, "list_get expected list", 0)
 		c.End()
 		c.LocalGet(1).Call(r.fText).Call(r.fToInt).LocalSet(3)
 		c.GlobalGet(r.gErr).RefIsNull().I32Eqz().If(NoResult)
 		c.RefNull(HeapNone).GlobalSet(r.gErr)
-		typeErr(c, "list_get index must be a number")
+		typeErr(c, "list_get index must be a number", 1)
 		c.End()
 		c.LocalGet(3).RefCast(r.tInt).StructGet(r.tInt, 0).LocalTee(2)
 		c.I64Const(0).I64LtS().LocalGet(2).LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0).I64ExtendI32U().I64GeS().I32Or().If(NoResult)
 		r.StrLiteral(c, "").Return().End()
 		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).I32WrapI64().ArrayGet(r.tItems)
 	})
+	// list_len of a string is its length in bytes, as on the VM.
 	r.body(r.fListLen, nil, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tStr).If(NoResult)
+		c.LocalGet(0).RefCast(r.tStr).StructGet(r.tStr, 0).ArrayLen().I64ExtendI32U().Call(r.fBoxInt).Return()
+		c.End()
 		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
-		typeErr(c, "list_len expects a list")
+		typeErr(c, "list_len expected list, string, or bytes", 0)
 		c.End()
 		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0).I64ExtendI32U().Call(r.fBoxInt)
 	})
-	// list_text(l): "[" elements as text, separated by spaces "]".
+	// list_text(l): "[" elements as text, separated by spaces "]"; a nil
+	// element is "<nil>", as fmt.Sprint shows it.
 	// locals: 0 l, 1 list, 2 i, 3 acc
 	r.body(r.fListText, []ValType{RefNull(r.tList), I32, RefNull(r.tStr)}, func(c *Code) {
 		c.LocalGet(0).RefCast(r.tList).LocalSet(1)
@@ -815,7 +845,7 @@ func (r *rt) emitLists() {
 		r.StrLiteral(c, " ").Call(r.fConcat).LocalSet(3)
 		c.End()
 		c.LocalGet(3).RefAsNonNull()
-		c.LocalGet(1).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).ArrayGet(r.tItems).Call(r.fText)
+		c.LocalGet(1).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).ArrayGet(r.tItems).Call(r.fElemText)
 		c.Call(r.fConcat).LocalSet(3)
 		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
 		c.LocalGet(3).RefAsNonNull()
@@ -954,5 +984,162 @@ func (r *rt) emitStringOps() {
 		c.Br(0).End().End()
 		c.I32Const(0).LocalSet(3)
 		r.copyOut(c, 5, 3, 7, func(c *Code) { c.LocalGet(6) })
+	})
+}
+
+// emitDicts writes dicts. A dict is a reference (map_set and map_delete
+// change it in place, and every alias sees the change), its keys are the
+// text of any value as fmt.Sprint gives it (nil is "<nil>"), and it is
+// printed and listed in sorted key order. Entries are kept in insertion
+// order and found by a linear scan; an index can come later without
+// changing any behavior.
+func (r *rt) emitDicts() {
+	needDict := func(c *Code, local int, op string) {
+		c.LocalGet(local).RefTest(r.tDict).I32Eqz().If(NoResult)
+		r.failWithType(c, "TYPE_ERROR: "+op+" expected dict, got ", local).Return()
+		c.End()
+	}
+	keys := func(c *Code, d int) *Code { return c.LocalGet(d).StructGet(r.tDict, 1) }
+	values := func(c *Code, d int) *Code { return c.LocalGet(d).StructGet(r.tDict, 2) }
+	length := func(c *Code, d int) *Code { return c.LocalGet(d).StructGet(r.tDict, 0) }
+
+	// go_type(v): the name %T gives the VM's value.
+	r.body(r.fGoType, nil, func(c *Code) {
+		c.LocalGet(0).RefIsNull().If(NoResult)
+		r.StrLiteral(c, "<nil>").Return().End()
+		for _, tn := range []struct {
+			t    int
+			name string
+		}{{r.tInt, "int64"}, {r.tFloat, "float64"}, {r.tStr, "string"}, {r.tBool, "bool"}, {r.tList, "[]interface {}"}, {r.tDict, "map[string]interface {}"}} {
+			c.LocalGet(0).RefTest(tn.t).If(NoResult)
+			r.StrLiteral(c, tn.name).Return().End()
+		}
+		r.StrLiteral(c, "value")
+	})
+	// elem_text(v): fmt.Sprint of a value inside a collection or used as a
+	// key, where nil is "<nil>" (a nil printed on its own is "").
+	r.body(r.fElemText, nil, func(c *Code) {
+		c.LocalGet(0).RefIsNull().If(NoResult)
+		r.StrLiteral(c, "<nil>").Return().End()
+		c.LocalGet(0).Call(r.fText)
+	})
+	// dict_find(d, k): the entry index of key k, or -1.
+	// locals: 0 d, 1 k, 2 i
+	r.body(r.fDictFind, []ValType{I32}, func(c *Code) {
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(2).Do(func(c *Code) { length(c, 0) }).I32GeU().BrIf(1)
+		keys(c, 0).LocalGet(2).ArrayGet(r.tItems).RefCast(r.tStr).LocalGet(1).Call(r.fStrEq).If(NoResult)
+		c.LocalGet(2).Return().End()
+		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
+		c.I32Const(-1)
+	})
+	// dict_put(d, k, v): replace k's value, or add the entry at the end
+	// (doubling the arrays when full).
+	// locals: 0 d, 1 k, 2 v, 3 i, 4 n, 5 grown keys, 6 grown values
+	r.body(r.fDictPut, []ValType{I32, I32, RefNull(r.tItems), RefNull(r.tItems)}, func(c *Code) {
+		c.LocalGet(0).LocalGet(1).Call(r.fDictFind).LocalTee(3).I32Const(0).I32GeS().If(NoResult)
+		values(c, 0).LocalGet(3).LocalGet(2).ArraySet(r.tItems).Return().End()
+		length(c, 0).LocalTee(4).Do(func(c *Code) { keys(c, 0) }).ArrayLen().I32Eq().If(NoResult)
+		for _, g := range []struct{ field, local int }{{1, 5}, {2, 6}} {
+			c.LocalGet(4).I32Const(2).I32Mul().I32Const(4).I32Add().ArrayNewDefault(r.tItems).LocalSet(g.local)
+			c.LocalGet(g.local).I32Const(0).LocalGet(0).StructGet(r.tDict, g.field).I32Const(0).LocalGet(4).ArrayCopy(r.tItems, r.tItems)
+			c.LocalGet(0).LocalGet(g.local).RefAsNonNull().StructSet(r.tDict, g.field)
+		}
+		c.End()
+		keys(c, 0).LocalGet(4).LocalGet(1).ArraySet(r.tItems)
+		values(c, 0).LocalGet(4).LocalGet(2).ArraySet(r.tItems)
+		c.LocalGet(0).LocalGet(4).I32Const(1).I32Add().StructSet(r.tDict, 0)
+	})
+	// dict_new(items): a dict of the (key, value) pairs laid out in items, in
+	// order, so a later duplicate key wins.
+	// locals: 0 items, 1 d, 2 i
+	r.body(r.fDictNew, []ValType{RefNull(r.tDict), I32}, func(c *Code) {
+		c.I32Const(0)
+		c.LocalGet(0).ArrayLen().I32Const(1).I32ShrU().ArrayNewDefault(r.tItems)
+		c.LocalGet(0).ArrayLen().I32Const(1).I32ShrU().ArrayNewDefault(r.tItems)
+		c.StructNew(r.tDict).LocalSet(1)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(2).LocalGet(0).ArrayLen().I32GeU().BrIf(1)
+		c.LocalGet(1).RefAsNonNull()
+		c.LocalGet(0).LocalGet(2).ArrayGet(r.tItems).Call(r.fElemText)
+		c.LocalGet(0).LocalGet(2).I32Const(1).I32Add().ArrayGet(r.tItems)
+		c.Call(r.fDictPut)
+		c.LocalGet(2).I32Const(2).I32Add().LocalSet(2).Br(0).End().End()
+		c.LocalGet(1)
+	})
+	// map_get(d, k): k's value, or nil when it is missing.
+	// locals: 0 d, 1 k, 2 i
+	r.body(r.fMapGet, []ValType{I32}, func(c *Code) {
+		needDict(c, 0, "map_get")
+		c.LocalGet(0).RefCast(r.tDict).LocalGet(1).Call(r.fElemText).Call(r.fDictFind).LocalTee(2).I32Const(0).I32LtS().If(NoResult)
+		c.RefNull(HeapNone).Return().End()
+		c.LocalGet(0).RefCast(r.tDict).StructGet(r.tDict, 2).LocalGet(2).ArrayGet(r.tItems)
+	})
+	// map_set(d, k, v) changes d in place.
+	r.body(r.fMapSet, nil, func(c *Code) {
+		needDict(c, 0, "map_set")
+		c.LocalGet(0).RefCast(r.tDict).LocalGet(1).Call(r.fElemText).LocalGet(2).Call(r.fDictPut)
+		c.RefNull(HeapNone)
+	})
+	// map_delete(d, k) removes k's entry, if any, keeping the others in
+	// order. locals: 0 d, 1 k, 2 dict, 3 i, 4 n
+	r.body(r.fMapDelete, []ValType{RefNull(r.tDict), I32, I32}, func(c *Code) {
+		needDict(c, 0, "map_delete")
+		c.LocalGet(0).RefCast(r.tDict).LocalTee(2).RefAsNonNull().LocalGet(1).Call(r.fElemText).Call(r.fDictFind).LocalTee(3).I32Const(0).I32LtS().If(NoResult)
+		c.RefNull(HeapNone).Return().End()
+		length(c, 2).I32Const(1).I32Sub().LocalSet(4)
+		for _, field := range []int{1, 2} {
+			c.LocalGet(2).StructGet(r.tDict, field).LocalGet(3)
+			c.LocalGet(2).StructGet(r.tDict, field).LocalGet(3).I32Const(1).I32Add()
+			c.LocalGet(4).LocalGet(3).I32Sub().ArrayCopy(r.tItems, r.tItems)
+			// Clear the vacated slot so the collector can free its value.
+			c.LocalGet(2).StructGet(r.tDict, field).LocalGet(4).RefNull(HeapNone).ArraySet(r.tItems)
+		}
+		c.LocalGet(2).LocalGet(4).StructSet(r.tDict, 0)
+		c.RefNull(HeapNone)
+	})
+	// sorted_keys(d): a new array of d's keys in byte order (sort.Strings),
+	// by insertion sort. locals: 0 d, 1 out, 2 n, 3 i, 4 j, 5 x
+	r.body(r.fSortedKeys, []ValType{RefNull(r.tItems), I32, I32, I32, EqRef}, func(c *Code) {
+		length(c, 0).LocalTee(2).ArrayNewDefault(r.tItems).LocalSet(1)
+		c.LocalGet(1).I32Const(0).Do(func(c *Code) { keys(c, 0) }).I32Const(0).LocalGet(2).ArrayCopy(r.tItems, r.tItems)
+		c.I32Const(1).LocalSet(3)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).I32GeU().BrIf(1)
+		c.LocalGet(1).LocalGet(3).ArrayGet(r.tItems).LocalSet(5)
+		c.LocalGet(3).I32Const(1).I32Sub().LocalSet(4)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(4).I32Const(0).I32LtS().BrIf(1)
+		c.LocalGet(1).LocalGet(4).ArrayGet(r.tItems).RefCast(r.tStr).LocalGet(5).RefCast(r.tStr).Call(r.fStrCmp).I32Const(0).I32LeS().BrIf(1)
+		c.LocalGet(1).LocalGet(4).I32Const(1).I32Add().LocalGet(1).LocalGet(4).ArrayGet(r.tItems).ArraySet(r.tItems)
+		c.LocalGet(4).I32Const(1).I32Sub().LocalSet(4).Br(0).End().End()
+		c.LocalGet(1).LocalGet(4).I32Const(1).I32Add().LocalGet(5).ArraySet(r.tItems)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+		c.LocalGet(1).RefAsNonNull()
+	})
+	// map_keys(d): a list of d's keys, sorted.
+	r.body(r.fMapKeys, nil, func(c *Code) {
+		needDict(c, 0, "map_keys")
+		c.LocalGet(0).RefCast(r.tDict).Call(r.fSortedKeys).Call(r.fListNew)
+	})
+	// dict_text(d): "map[" k:v pairs in key order, separated by spaces "]".
+	// locals: 0 v, 1 d, 2 ks, 3 i, 4 acc
+	r.body(r.fDictText, []ValType{RefNull(r.tDict), RefNull(r.tItems), I32, RefNull(r.tStr)}, func(c *Code) {
+		c.LocalGet(0).RefCast(r.tDict).LocalTee(1).RefAsNonNull().Call(r.fSortedKeys).LocalSet(2)
+		r.StrLiteral(c, "map[").LocalSet(4)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).ArrayLen().I32GeU().BrIf(1)
+		c.LocalGet(3).If(NoResult)
+		c.LocalGet(4).RefAsNonNull()
+		r.StrLiteral(c, " ").Call(r.fConcat).LocalSet(4)
+		c.End()
+		c.LocalGet(4).RefAsNonNull().LocalGet(2).LocalGet(3).ArrayGet(r.tItems).RefCast(r.tStr).Call(r.fConcat)
+		r.StrLiteral(c, ":").Call(r.fConcat)
+		c.LocalGet(1).StructGet(r.tDict, 2)
+		c.LocalGet(1).RefAsNonNull().LocalGet(2).LocalGet(3).ArrayGet(r.tItems).RefCast(r.tStr).Call(r.fDictFind)
+		c.ArrayGet(r.tItems).Call(r.fElemText).Call(r.fConcat).LocalSet(4)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+		c.LocalGet(4).RefAsNonNull()
+		r.StrLiteral(c, "]").Call(r.fConcat)
 	})
 }

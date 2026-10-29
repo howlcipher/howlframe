@@ -39,7 +39,7 @@ casts `ref.cast`.
 | float | `$Float` struct `(field f64)` |
 | string | `$Str` struct `(field (ref $Bytes))`, `$Bytes` = `(array i8)`, UTF-8 |
 | list | `$List` struct `(field (mut i32) len) (field (mut (ref $Items)) items)`, `$Items` = `(array (mut eqref))`, growing by doubling |
-| dict | `$Dict` struct: insertion-ordered keys and values arrays, length, and an open-addressing index added when a dict outgrows a linear scan |
+| dict | `$Dict` struct `(field (mut i32) len) (field (mut (ref $Items)) keys) (field (mut (ref $Items)) values)`: insertion-ordered entries, keys as `$Str`, found by a linear scan for now (an index can be added later without changing behavior). A dict is a reference: `map_set` and `map_delete` change it in place. |
 | closure (`lambda`) | `$Closure` struct `(field (ref $Fn)) (field (ref $Items))` (code and captured environment) |
 | host object (DOM element, event, subscription) | `$Host` struct `(field externref)` |
 
@@ -47,8 +47,8 @@ Integers stay boxed in M1; type hints let a later optimization keep
 `int`/`float` locals unboxed.
 
 Printing follows the VM (`fmt.Sprint`): integers in decimal, floats in
-Go's shortest form, `true`/`false`, nil as the empty string, lists as
-`[a b]`, dicts as `map[k:v ...]` with sorted keys.
+Go's shortest form, `true`/`false`, nil as the empty string (but `<nil>` inside a
+list or dict), lists as `[a b]`, dicts as `map[k:v ...]` with sorted keys.
 
 ## Functions and calls
 
@@ -106,7 +106,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. 58 differential fixtures pass. Next: dicts, then the core-library sugar, `try_let` and modules. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. 92 differential fixtures pass. Next: `not` and the core-library sugar, then `try_let` and modules. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -149,7 +149,8 @@ as the work it describes: tick tasks, move the status line, record findings.
       string concatenation and comparison, printing of scalars as
       `fmt.Sprint` (float digits from the host for now), `to_int`,
       `to_float`, `to_string`.
-- [ ] Printing of lists and dicts (`[a b]`, `map[k:v]` with sorted keys).
+- [x] Printing of lists and dicts (`[a b]`, `map[k:v]` with sorted keys,
+      `<nil>` for a nil element).
 - [x] `build --target wasmgc` (named `wasm` once it covers the legacy WAT
       target): writes `app.wasm` and a generated loader (`app.mjs`) that
       runs a `cli_app` in Node with print as a host import. Arguments and
@@ -168,8 +169,11 @@ as the work it describes: tick tasks, move the status line, record findings.
       `starts_with`, `ends_with`; `%` and `//`; `stderr` and `exit`.
       Gap: `to_lower`, `to_upper` and `str_trim` handle ASCII only (the VM
       uses Go's Unicode tables).
-- [ ] Constructs, in this order, each with fixtures: dicts (`dict`, `map_get`, `map_set`, `map_has`, `map_keys`,
-      `map_delete`); the core-library sugar after desugaring (`filter`,
+- [x] Dicts: `dict`, `map_get`, `map_set`, `map_keys`, `map_delete`, and
+      `map_has` through its desugaring; type errors name the value's Go type
+      (`%T`) as the VM's do, also for `for`, `append`, `list_get` and
+      `list_len` (which gives a string's byte length).
+- [ ] Constructs, in this order, each with fixtures: the core-library sugar after desugaring (`filter`,
       `map_list`, `reduce`, `sort` and the rest); `try_let`, `catch`, `exit`,
       `stderr`; `is_nil`; modules (`use`, `export`).
 - [ ] Standard library in HowlFrame (`std/`), on byte intrinsics:
@@ -239,16 +243,27 @@ The order of M1 and M3 work follows what the application needs.
 - VM semantics confirmed by probes: checked integer overflow is an error;
   `/` always divides as floats; division by zero is an error for floats
   too; `str_len` counts characters; `map_keys` are sorted; list and dict
-  equality is identity; float text is Go's `%v` (exponent form below
+  values are never equal, not even to themselves (`BcValuesEqual`); float text is Go's `%v` (exponent form below
   1e-4 and from 1e+06).
+- Dicts on the VM (probed): every key is `fmt.Sprint` of the key value, so
+  a runtime key `1`, `"1"` or `1.0` is the key `1` and nil is `<nil>`; the
+  checker admits only string keys statically, so other keys arrive only
+  through values of unknown type. A later duplicate in a literal wins.
+  `map_keys` sorts in byte order (`sort.Strings`). `map_get` of a missing key
+  is nil, of a non-dict a `TYPE_ERROR` naming its Go type (`int64`,
+  `[]interface {}`, `<nil>`, ...). Dicts are references (a function's
+  `map_set` is seen by its caller) while lists stay values. `for` over a
+  dict is an error. `map_has` is desugared to a scan of `map_keys` with `=`.
+- The JavaScript backend compiles `=` to `===`, so a list or dict equals
+  itself there while the VM and the interpreter say false (bugs.md #59).
+- The VM's JSON error report escapes `<` and `>` (`\u003cnil\u003e`), so the
+  differential harness compares decoded messages.
 - Temporary host dependencies, to be replaced by standard-library
   HowlFrame: shortest float digits (`float_digits`, `float_point`) and
   float parsing (`parse_float`, `parse_float_ok`).
 
 ### Open questions
 
-- Dict key types: the VM accepts which key types, and how does it order
-  `map_keys`? To settle with fixtures before implementing dicts.
 - Integer overflow and float formatting: match the VM exactly; collect
   edge cases (large values, negative zero, NaN) as fixtures.
 - Asynchronous operations: resumable frames or JSPI (M3).
