@@ -18,7 +18,7 @@ execution engine for servers and command-line programs.
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Reference semantics | The bytecode VM | It is the verified engine. Where the JavaScript backend differs (for example `str_len` counts UTF-16 units there and bytes on the VM), this backend follows the VM. Every construct is checked against the VM by the differential harness (`tools/difftest`, new target `wasm`). |
+| Reference semantics | The bytecode VM | It is the verified engine. Where the JavaScript backend differs (for example `str_len`: the VM counts characters, the JavaScript backend UTF-16 units), this backend follows the VM. Every construct is checked against the VM by the differential harness (`tools/difftest`, new target `wasm`). |
 | Memory | WasmGC structs and arrays | The engine's garbage collector manages strings, lists, dicts and closures; no allocator or collector of our own. Supported in Chrome 119, Firefox 120, Safari 18.2, Node 22 and wasmtime. |
 | Output | Binary `.wasm` written by the compiler | No external assembler is needed to build. A text (WAT) dump is available for debugging. `wasm-tools`, Node and wasmtime are used by tests as independent validators and engines. |
 | Errors | Explicit propagation, no exception handling | A failing operation sets an error value and returns; callers check and pass it up to the nearest `try_let`, `catch` or the program's top level. This avoids depending on either version of WebAssembly exception handling, which engines support unevenly. |
@@ -106,7 +106,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Binary encoder and instruction builder done (`internal/backend/wasmgc/encode.go`, `code.go`), validated by Node and `wasm-tools`. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. 58 differential fixtures pass. Next: dicts, then the core-library sugar, `try_let` and modules. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -141,25 +141,34 @@ as the work it describes: tick tasks, move the status line, record findings.
 - [x] Instruction builder: control flow, locals and globals, i32, i64 and
       f64 arithmetic, conversions, references, GC struct and array
       instructions, casts.
-- [ ] Runtime value types (`$Bool`, `$Int`, `$Float`, `$Str`, `$Bytes`,
-      `$List`, `$Items`, `$Dict`, `$Closure`, `$Host`) and the error global.
-- [ ] Core runtime functions: boxing, truthiness, equality, comparison,
+- [x] Runtime value types (`$Bool`, `$Int`, `$Float`, `$Str`, `$Bytes`,
+      `$List`, `$Items`, `$Dict`) and the error global. (`$Closure`,
+      `$Host` come with M3.)
+- [x] Core runtime functions: boxing, truthiness, equality, comparison,
       arithmetic with the VM's integer and float rules and division errors,
-      string concatenation, VM-identical printing (`fmt.Sprint`, including
-      float formatting and sorted dict keys).
-- [ ] `build --target wasm` (new backend; the legacy `wasm_app` WAT path
-      keeps working until this backend covers it): writes `app.wasm` and a
-      generated loader (`app.mjs`) that runs a `cli_app` in Node with print,
-      arguments and exit as host imports.
+      string concatenation and comparison, printing of scalars as
+      `fmt.Sprint` (float digits from the host for now), `to_int`,
+      `to_float`, `to_string`.
+- [ ] Printing of lists and dicts (`[a b]`, `map[k:v]` with sorted keys).
+- [x] `build --target wasmgc` (named `wasm` once it covers the legacy WAT
+      target): writes `app.wasm` and a generated loader (`app.mjs`) that
+      runs a `cli_app` in Node with print as a host import. Arguments and
+      exit to follow.
 - [ ] `tools/difftest` target `wasm`, run in Node and in wasmtime.
-- [ ] Constructs, in this order, each with fixtures: literals and `print`;
-      `let`, `set`, `do`, `if`, `while`, `for`; arithmetic and comparison;
-      `and`, `or`, `not`; `defun`, `call`, `return` and recursion; strings
-      (`str_len`, `str_slice`, `str_split`, `str_join`, `str_replace`,
-      `str_contains`, `str_trim`, `to_lower`, `to_upper`, `starts_with`,
-      `ends_with`); conversions (`to_string`, `to_int`, `to_float`); lists
-      (`list`, `append`, `list_get`, `list_len`, `list_slice`, `list_contains`);
-      dicts (`dict`, `map_get`, `map_set`, `map_has`, `map_keys`,
+- [x] Literals and `print`; `let`, `set`, `do`, `if`, `while`;
+      arithmetic and comparison; `and`, `or`; `defun`, `call`, `return` and
+      recursion; `to_int`, `to_float`, `to_string`.
+- [x] Lists: `list`, `append`, `list_get`, `list_len`, `for`; list
+      printing; `list_slice` and `list_contains` (desugared). Lists are
+      values: an immutable (length, buffer) pair where only the list at the
+      buffer's tip appends in place.
+- [x] String primitives `str_split`, `str_join`, `to_lower`, `to_upper`,
+      `str_trim`, `html_escape`, `attr_escape`, `is_nil`; through their
+      desugaring `str_len`, `str_slice`, `str_contains`, `str_replace`,
+      `starts_with`, `ends_with`; `%` and `//`; `stderr` and `exit`.
+      Gap: `to_lower`, `to_upper` and `str_trim` handle ASCII only (the VM
+      uses Go's Unicode tables).
+- [ ] Constructs, in this order, each with fixtures: dicts (`dict`, `map_get`, `map_set`, `map_has`, `map_keys`,
       `map_delete`); the core-library sugar after desugaring (`filter`,
       `map_list`, `reduce`, `sort` and the rest); `try_let`, `catch`, `exit`,
       `stderr`; `is_nil`; modules (`use`, `export`).
@@ -212,6 +221,30 @@ The order of M1 and M3 work follows what the application needs.
 | Published-site runtime | the above plus DOM queries and attributes, classes, style variables, layout reads, media queries, visibility and scroll subscriptions, preferences, `on_event`, `lambda` |
 | Editor | the above plus dialogs, form values, focus, storage, file input, image decode and encode, ZIP build and read, downloads, rich text, `spawn`, `sleep` |
 
+### Findings so far
+
+- The bytecode VM did not scope `let`: an inner binding overwrote an outer
+  variable of the same name (prints `2 2` where the interpreter, the
+  JavaScript backend and this backend print `2 1`). Fixed in the VM's
+  compiler first (bugs.md #58, howlframe#249); the fixture now passes.
+- `%` and `//` are not VM instructions: the desugarer rewrites them into
+  exact integer code that uses lists, string operations and `to_int`.
+  Most list and string operations are likewise sugar over a few VM
+  primitives, so this backend implements only the primitives.
+- `list_get` out of range gives `""` on the VM (not nil); its index may be
+  any value whose text is a whole number, though the checker only admits
+  integers.
+- Node validates functions lazily, so a module can run in Node and still
+  be invalid; `wasm-tools validate` caught two such runtime bugs.
+- VM semantics confirmed by probes: checked integer overflow is an error;
+  `/` always divides as floats; division by zero is an error for floats
+  too; `str_len` counts characters; `map_keys` are sorted; list and dict
+  equality is identity; float text is Go's `%v` (exponent form below
+  1e-4 and from 1e+06).
+- Temporary host dependencies, to be replaced by standard-library
+  HowlFrame: shortest float digits (`float_digits`, `float_point`) and
+  float parsing (`parse_float`, `parse_float_ok`).
+
 ### Open questions
 
 - Dict key types: the VM accepts which key types, and how does it order
@@ -221,6 +254,10 @@ The order of M1 and M3 work follows what the application needs.
 - Asynchronous operations: resumable frames or JSPI (M3).
 - Size: measure each milestone's output; the published-site runtime has a
   250 KiB budget.
+- Resource limits: the VM stops a program at an instruction limit (100,000
+  by default; `--max-instructions`). This backend has no limit yet. Decide
+  whether WebAssembly programs get fuel (a counter on loops and calls) or
+  limits stay a VM run policy. Fixtures stay within the VM's default.
 
 ### Resuming
 

@@ -21,6 +21,14 @@
   like failed with `Unknown statement for JS: not`. `TestEveryJSHostOperationExpandsNestedSugar` keeps the
   desugarer's list in step with the checker's host operation tables.
 
+### WebAssembly GC backend (in development)
+* `build --target wasmgc` compiles a `cli_app` to `app.wasm` (WebAssembly with the GC proposal, written by the compiler
+  with no external assembler) and `app.mjs`, a generated Node loader. It covers values, printing, arithmetic and
+  comparison with the VM's rules, control flow, functions and recursion, conversions, lists (values, as on the VM),
+  string primitives and the operations desugared from them (`str_len`, `str_slice`, `%`, `//` and others), `stderr`
+  and `exit`. Unsupported constructs fail the build with `WASM_UNSUPPORTED`. Differential tests run every fixture on
+  the VM and as WebAssembly and require identical output. Design and plan: `docs/design/wasm_gc_backend.md`.
+
 ### JavaScript backend
 * `(scroll_into_view el)` brings an element to the top of the document's own viewport at once (no smooth scrolling),
   so a page can restore a reading position after it is re-rendered. Unlike `Element.scrollIntoView`, it never scrolls
