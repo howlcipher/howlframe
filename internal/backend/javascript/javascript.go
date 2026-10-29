@@ -1252,7 +1252,9 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsArchive = false
 	jsNeedsExit = false
 	jsNeedsDOM = false
+	jsNeedsRichtext = false
 	jsNeedsBrowserIO = false
+	jsNeedsMotion = false
 	jsNeedsCollection = false
 	jsNeedsMapKeyOrder = false
 	jsNeedsEnv = false
@@ -1375,10 +1377,20 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = browserIOJSHelper() + testCode
 		}
 	}
-	if jsNeedsDOM {
-		code = domJSHelper() + richtextJSHelper() + code
+	if jsNeedsMotion {
+		code = motionJSHelper() + code
 		if testCode != "" {
-			testCode = domJSHelper() + richtextJSHelper() + testCode
+			testCode = motionJSHelper() + testCode
+		}
+	}
+	if jsNeedsDOM {
+		helper := domJSHelper()
+		if jsNeedsRichtext {
+			helper += richtextJSHelper()
+		}
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
 		}
 	}
 	if jsNeedsArchive {
@@ -1462,6 +1474,9 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return jsValueBlock(node, reqVar, depth)
 	}
 	if call, ok := jsDOMCall(head, node, reqVar, depth); ok {
+		return call
+	}
+	if call, ok := jsMotionCall(head, node, reqVar, depth); ok {
 		return call
 	}
 	// to_lower, to_upper and str_trim are not shared IR kinds, so they are

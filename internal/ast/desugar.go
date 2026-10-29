@@ -252,6 +252,63 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 	}
 }
 
+// jsHostSugarParents are the browser host operations of the JavaScript
+// target. Every argument is a value (a lambda argument is its own form), so
+// sugar nested in them expands. checker's TestEveryJSHostOperationExpandsNestedSugar
+// keeps this in step with the checker's host operation tables.
+var jsHostSugarParents = map[string]bool{
+	"base64_text":        true,
+	"dialog_close":       true,
+	"dialog_open":        true,
+	"dom_attr":           true,
+	"dom_checked":        true,
+	"dom_focus":          true,
+	"dom_query":          true,
+	"dom_query_all":      true,
+	"dom_text":           true,
+	"dom_value":          true,
+	"download_file":      true,
+	"element_box":        true,
+	"event_attr":         true,
+	"event_key":          true,
+	"event_prevent":      true,
+	"file_read_input":    true,
+	"image_decode":       true,
+	"image_encode":       true,
+	"media_matches":      true,
+	"off":                true,
+	"on_event":           true,
+	"on_media":           true,
+	"on_scroll":          true,
+	"on_visible":         true,
+	"pref_get":           true,
+	"pref_put":           true,
+	"remove_attr":        true,
+	"richtext_attach":    true,
+	"richtext_command":   true,
+	"richtext_get":       true,
+	"richtext_set":       true,
+	"scroll_y":           true,
+	"set_attr":           true,
+	"set_checked":        true,
+	"set_class":          true,
+	"set_html":           true,
+	"set_style_var":      true,
+	"set_text":           true,
+	"set_value":          true,
+	"sniff_media_type":   true,
+	"storage_delete":     true,
+	"storage_get":        true,
+	"storage_keys":       true,
+	"storage_put":        true,
+	"subscription_count": true,
+	"toggle_class":       true,
+	"url_encode":         true,
+	"viewport_height":    true,
+	"zip_build":          true,
+	"zip_read":           true,
+}
+
 func isSugarExprContext(parentHead string, childIndex int) bool {
 	switch parentHead {
 	case "root", "cli_app", "do", "http_server", "web_app", "wasm_app",
@@ -296,7 +353,7 @@ func isSugarExprContext(parentHead string, childIndex int) bool {
 	case "params", "binding":
 		return false
 	default:
-		return false
+		return jsHostSugarParents[parentHead]
 	}
 }
 

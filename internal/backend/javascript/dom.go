@@ -18,6 +18,7 @@ var jsDOMHelpers = map[string]string{
 	"set_checked":   "howlFrameSetChecked",
 	"dom_focus":     "howlFrameDomFocus",
 	"remove_attr":   "howlFrameRemoveAttr",
+	"dom_attr":      "howlFrameDomAttr",
 	"dialog_open":   "howlFrameDialogOpen",
 	"dialog_close":  "howlFrameDialogClose",
 
@@ -51,11 +52,18 @@ var jsNeedsBrowserIO bool
 // jsNeedsDOM is set when GenerateJSCode emits a DOM or event host operation.
 var jsNeedsDOM bool
 
+// jsNeedsRichtext is set when it emits a richtext_* operation, which needs
+// the rich text runtime on top of the DOM runtime.
+var jsNeedsRichtext bool
+
 func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
 	helper, ok := jsDOMHelpers[head]
 	format := "%s(%s)"
 	if ok {
 		jsNeedsDOM = true
+		if strings.HasPrefix(head, "richtext_") {
+			jsNeedsRichtext = true
+		}
 	} else if helper, ok = jsBrowserIOHelpers[head]; ok {
 		jsNeedsBrowserIO = true
 		jsNeedsArchive = true // base64 helpers
@@ -116,6 +124,10 @@ function howlFrameSetChecked(el, b) {
 }
 function howlFrameDomFocus(el) {
   howlFrameElement("dom_focus", el).focus();
+}
+function howlFrameDomAttr(el, name) {
+  var v = howlFrameElement("dom_attr", el).getAttribute(howlFrameAttrName(name));
+  return v === null ? "" : v;
 }
 function howlFrameRemoveAttr(el, name) {
   howlFrameElement("remove_attr", el).removeAttribute(howlFrameAttrName(name));

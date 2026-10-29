@@ -94,10 +94,36 @@ func TestDomHostOperationsRejectMissingElements(t *testing.T) {
 	for _, form := range []string{
 		`(set_value (dom_query "#none") "x")`, `(dom_checked (dom_query "#none"))`, `(set_checked (dom_query "#none") true)`,
 		`(dom_focus (dom_query "#none"))`, `(dialog_open (dom_query "#none"))`, `(remove_attr (dom_query "#none") "x")`,
+		`(dom_attr (dom_query "#none") "x")`,
 	} {
 		code := compileWebApp(t, `(web_app (try_let (v `+form+`) (catch err (print (to_string err))) (print "ran")))`)
 		if got := domHarness(t, code); !strings.Contains(got, "TYPE_ERROR") {
 			t.Fatalf("%s: want TYPE_ERROR, got %s", form, got)
 		}
+	}
+}
+
+func TestDomAttrReadsAttributes(t *testing.T) {
+	code := compileWebApp(t, `(web_app (do
+  (set_attr (dom_query "#field") "data-motion" "calm")
+  (print (dom_attr (dom_query "#field") "data-motion"))
+  (print (+ "[" (+ (dom_attr (dom_query "#field") "data-missing") "]")))
+  (try_let (v (dom_attr (dom_query "#field") "x],y")) (catch err (print (to_string err))) (print v))))`)
+	got := domHarness(t, code)
+	if !strings.Contains(got, `"out":["calm","[]","Error: INVALID_ATTRIBUTE_NAME: x],y"]`) {
+		t.Fatalf("got %s", got)
+	}
+}
+
+// A page that only uses DOM operations does not ship the rich text adapter;
+// it is emitted with the first richtext_* operation.
+func TestDomOperationsDoNotShipRichText(t *testing.T) {
+	plain := compileWebApp(t, `(web_app (dom_focus (dom_query "#field")))`)
+	if !strings.Contains(plain, "function howlFrameDomFocus") || strings.Contains(plain, "howlFrameRichtext") {
+		t.Fatalf("DOM-only output must hold the DOM runtime and no rich text runtime")
+	}
+	rich := compileWebApp(t, `(web_app (richtext_attach (dom_query "#field") "Body"))`)
+	if !strings.Contains(rich, "function howlFrameRichtextAttach") || !strings.Contains(rich, "function howlFrameElement") {
+		t.Fatalf("rich text output must hold both runtimes")
 	}
 }

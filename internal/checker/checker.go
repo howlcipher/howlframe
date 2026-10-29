@@ -212,6 +212,7 @@ var jsHostOperations = map[string]string{
 	"set_checked":   "(set_checked el bool)",
 	"dom_focus":     "(dom_focus el)",
 	"remove_attr":   "(remove_attr el name)",
+	"dom_attr":      "(dom_attr el name)",
 	"dialog_open":   "(dialog_open el)",
 	"dialog_close":  "(dialog_close el)",
 
@@ -224,12 +225,32 @@ var jsHostOperations = map[string]string{
 	"image_decode":     "(image_decode base64 mime)",
 	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
 	"zip_read":         "(zip_read base64 max_entries max_bytes)",
-	"base64_text":      "(base64_text base64)",
+
+	"dom_query_all":      "(dom_query_all selector)",
+	"set_class":          "(set_class el name on)",
+	"set_style_var":      "(set_style_var el name value)",
+	"scroll_y":           "(scroll_y)",
+	"viewport_height":    "(viewport_height)",
+	"element_box":        "(element_box el)",
+	"media_matches":      "(media_matches query)",
+	"pref_get":           "(pref_get key)",
+	"pref_put":           "(pref_put key value)",
+	"off":                "(off subscription)",
+	"subscription_count": "(subscription_count)",
+	"base64_text":        "(base64_text base64)",
 
 	"richtext_attach":  "(richtext_attach el label)",
 	"richtext_set":     "(richtext_set el blocks)",
 	"richtext_get":     "(richtext_get el)",
 	"richtext_command": "(richtext_command el command value)",
+}
+
+// jsSubscriptionOperations take a lambda as their last argument and return a
+// subscription handle for off; usage follows jsHostOperations.
+var jsSubscriptionOperations = map[string]string{
+	"on_media":   "(on_media query lambda)",
+	"on_visible": "(on_visible elements lambda)",
+	"on_scroll":  "(on_scroll lambda)",
 }
 
 func checkJSStatement(node *ast.Node, depth int) {
@@ -303,6 +324,20 @@ func checkJSStatement(node *ast.Node, depth int) {
 		return
 	}
 
+	if usage, ok := jsSubscriptionOperations[head]; ok {
+		if len(node.Children) != strings.Count(usage, " ")+1 {
+			ast.ReportError(fmt.Sprintf("%s expects %s", head, usage), node.Line, node.Column)
+		}
+		for _, child := range node.Children[1 : len(node.Children)-1] {
+			checkJSStatement(child, depth+1)
+		}
+		lambda := node.Children[len(node.Children)-1]
+		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" || lambda.Children[1].Type != "List" {
+			ast.ReportError(head+" expects a lambda as its last argument", lambda.Line, lambda.Column)
+		}
+		checkJSStatement(lambda.Children[2], depth+1)
+		return
+	}
 	if usage, ok := jsHostOperations[head]; ok {
 		if len(node.Children) != strings.Count(usage, " ")+1 {
 			ast.ReportError(fmt.Sprintf("%s expects %s", head, usage), node.Line, node.Column)
