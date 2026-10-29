@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/ir"
+	"strings"
 )
 
 func Check(node *ast.Node) *Analysis {
@@ -199,6 +200,36 @@ func checkWebAppHandler(handlerNode *ast.Node) {
 	checkJSStatement(handlerNode, 0)
 }
 
+// jsHostOperations are browser host operations of the JavaScript target,
+// keyed by head, with their usage; the argument count is the number of
+// spaces in the usage. The backend emits each as a runtime helper.
+var jsHostOperations = map[string]string{
+	"event_attr":    "(event_attr event name)",
+	"event_key":     "(event_key event)",
+	"event_prevent": "(event_prevent event)",
+	"set_value":     "(set_value el value)",
+	"dom_checked":   "(dom_checked el)",
+	"set_checked":   "(set_checked el bool)",
+	"dom_focus":     "(dom_focus el)",
+	"remove_attr":   "(remove_attr el name)",
+	"dialog_open":   "(dialog_open el)",
+	"dialog_close":  "(dialog_close el)",
+
+	"storage_get":      "(storage_get namespace key)",
+	"storage_put":      "(storage_put namespace key value)",
+	"storage_delete":   "(storage_delete namespace key)",
+	"storage_keys":     "(storage_keys namespace)",
+	"file_read_input":  "(file_read_input el max_bytes)",
+	"sniff_media_type": "(sniff_media_type base64)",
+	"image_decode":     "(image_decode base64 mime)",
+	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
+
+	"richtext_attach":  "(richtext_attach el label)",
+	"richtext_set":     "(richtext_set el blocks)",
+	"richtext_get":     "(richtext_get el)",
+	"richtext_command": "(richtext_command el command value)",
+}
+
 func checkJSStatement(node *ast.Node, depth int) {
 	if depth > 1000 {
 		ast.ReportError("AST too deep", node.Line, node.Column)
@@ -241,6 +272,12 @@ func checkJSStatement(node *ast.Node, depth int) {
 					checkJSStatement(kid.Children[1], depth+1)
 				}
 			}
+		case "spawn":
+			lambda := irNode.Kids[0]
+			if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
+				ast.ReportError("spawn expects a lambda", node.Line, node.Column)
+			}
+			checkJSStatement(lambda.Children[2], depth+1)
 		case "append", "map_set", "map_delete":
 			// These mutate a named variable, as on the Go and bytecode targets.
 			if target := irNode.Kids[0]; target.Type != "SYMBOL" {
@@ -264,6 +301,15 @@ func checkJSStatement(node *ast.Node, depth int) {
 		return
 	}
 
+	if usage, ok := jsHostOperations[head]; ok {
+		if len(node.Children) != strings.Count(usage, " ")+1 {
+			ast.ReportError(fmt.Sprintf("%s expects %s", head, usage), node.Line, node.Column)
+		}
+		for _, child := range node.Children[1:] {
+			checkJSStatement(child, depth+1)
+		}
+		return
+	}
 	if head == "dom_query" {
 		if len(node.Children) != 2 {
 			ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)

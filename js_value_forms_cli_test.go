@@ -45,6 +45,8 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		{"case_and_trim", `(do (print (to_lower "AbC")) (print (to_upper "AbC")) (print (str_trim "  x y  ")))`},
 		{"trim_in_binding", `(let (s (str_trim "  {} ")) (print s))`},
 		{"parse_json_expr", `(let (d (parse_json Any (str_trim " {\"a\": 1} "))) (print (map_get d "a")))`},
+		{"dict_value_sugar", `(let (d (dict ("a" (list_get (str_split "x,y" ",") 1)) ("b" (if true "yes" "no")) ("c" (not false)))) (print (encode_json d)))`},
+		{"nested_dict_value", `(let (d (dict ("outer" (dict ("inner" (str_slice "abcdef" 1 3)))))) (print (encode_json d)))`},
 		{"nz", `(let (d (dict ("a" "b"))) (do (print (nz (map_get d "a") "z")) (print (nz (map_get d "q") "z"))))`},
 	}
 	for _, p := range probes {
@@ -117,5 +119,32 @@ func TestJSMutationTargetsMustBeSymbols(t *testing.T) {
 		if err == nil || !strings.Contains(string(out), tc.want) {
 			t.Fatalf("%s: want %q, got %v %s", tc.form, tc.want, err, out)
 		}
+	}
+}
+
+// spawn runs its lambda body concurrently. The JavaScript backend emitted it,
+// but check rejected the lambda as an unknown statement, so no web_app could
+// use spawn. Statements after spawn run before the spawned body's await.
+func TestJSSpawnRunsTheLambdaBody(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := mustWriteFile(t, dir, "s.howl", `(web_app (let (d (dict ("n" 1))) (do
+  (spawn (lambda () (do (sleep 10) (print (map_get d "n")))))
+  (map_set d "n" 2)
+  (print "first"))))`)
+	out := filepath.Join(dir, "js")
+	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, b)
+	}
+	got, err := exec.Command("node", filepath.Join(out, "app.js")).CombinedOutput()
+	if err != nil || string(got) != "first\n2\n" {
+		t.Fatalf("got %q %v", got, err)
+	}
+	bad := mustWriteFile(t, dir, "b.howl", `(web_app (spawn (print "x")))`)
+	if b, err := exec.Command(bin, "check", bad).CombinedOutput(); err == nil || !strings.Contains(string(b), "spawn expects a lambda") {
+		t.Fatalf("spawn without a lambda must be refused: %v %s", err, b)
 	}
 }

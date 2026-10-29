@@ -13,6 +13,24 @@
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
 ### JavaScript backend
+* `web_app` DOM and event host operations for interactive pages: `(event_attr e name)` reads an attribute from the
+  event target or its nearest ancestor that has it (for delegated handlers; the name must be a plain attribute name),
+  `(event_key e)`, `(event_prevent e)`, `(set_value el v)` sets a control's live value, `(dom_checked el)`,
+  `(set_checked el b)`, `(dom_focus el)`, `(remove_attr el name)`, and `(dialog_open el)` / `(dialog_close el)` for
+  modal `<dialog>` elements. Each fails with `TYPE_ERROR` on a missing element.
+* `web_app` storage, file and image host operations. `storage_get`, `storage_put`, `storage_delete` and
+  `storage_keys` keep string values in IndexedDB, one database per namespace; a full disk is `STORAGE_QUOTA`, a host
+  without usable IndexedDB is `STORAGE_UNAVAILABLE`, and a failed write never reports success.
+  `(file_read_input el max_bytes)` returns the chosen files as base64, refusing any file over the limit before reading
+  it (`FILE_TOO_LARGE`). `(sniff_media_type base64)` names PNG, JPEG, GIF or WebP data from its leading bytes.
+  `(image_decode base64 mime)` reports dimensions and `(image_encode base64 mime max_side out_mime quality)` redraws
+  the image, which drops metadata, scaled to fit; undecodable data is `IMAGE_INVALID`.
+* `web_app` rich text over a contenteditable element, with a portable model: a list of blocks (`p`, `h2`, `h3` with
+  runs; `ul`, `ol` with items of runs), where a run is `{"text": s}` with optional `bold`, `italic` and `link`.
+  `(richtext_set el blocks)` builds the DOM with elements and text nodes only, never parsing HTML;
+  `(richtext_get el)` reads it back through an allowlist (other elements contribute only their text);
+  `(richtext_attach el label)` makes the element a labelled multiline textbox that pastes plain text only; and
+  `(richtext_command el command value)` applies `bold`, `italic`, `link`, `unlink`, `p`, `h2`, `h3`, `ul` or `ol`.
 * `build --target js --module` writes a library: `app.mjs`, an ES module exporting the program's top-level
   `(export (defun ...))` functions, and `app.d.mts`, TypeScript declarations from their type hints (`string`,
   `number`, `boolean`, `unknown[]`, `Record<string, unknown>`, `unknown`, each wrapped in `Promise`). A program
@@ -39,6 +57,11 @@
   wrote `{"__proto__": v}`, both of which replace the object's prototype: the key disappeared from `map_keys` (so a
   validator that rejects unknown keys never saw it) and the value's fields became readable as inherited properties.
   `map_set` now defines an own property and literals use a computed key.
+* A value inside a dict literal is a value position. Sugar there that lowers to a `let` (such as `list_get` of an
+  expression, `if`, `not`) was emitted as a raw block and the JavaScript did not parse; it is now a value block on
+  `--target=js` and `UNSUPPORTED_ON_TARGET` on `--target=go`.
+* `spawn` builds on `--target=js`. The backend emitted it, but `check` walked into the lambda and rejected it as an
+  unknown statement.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
   clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
   undefined value.
