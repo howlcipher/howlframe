@@ -303,3 +303,30 @@ func TestTryLetCatchVariableNamedEReceivesError(t *testing.T) {
 		}
 	}
 }
+
+// Dict keys are data. In JavaScript, assigning obj["__proto__"] or writing a
+// literal {"__proto__": v} replaces the object's prototype instead of adding
+// a key, so the key vanished from map_keys and inherited values appeared.
+func TestDictProtoKeyIsAnOrdinaryKey(t *testing.T) {
+	out := runWebAppOutput(t, `(web_app
+  (let (d (dict))
+    (let (lit (dict ("__proto__" (dict ("polluted" "yes")))))
+      (let (raw "{\"__proto__\":{\"polluted\":\"yes\"}}")
+        (try_let (parsed (parse_json Any raw))
+          (catch err (print "parse failed"))
+          (do
+            (map_set d "__proto__" (dict ("polluted" "yes")))
+            (print (encode_json (map_keys d)))
+            (print (is_nil (map_get d "polluted")))
+            (print (encode_json (map_keys lit)))
+            (print (is_nil (map_get lit "polluted")))
+            (map_set parsed "__proto__" (dict ("polluted" "again")))
+            (print (encode_json (map_keys parsed)))
+            (print (is_nil (map_get parsed "polluted")))
+            (map_delete d "__proto__")
+            (print (encode_json (map_keys d)))))))))`)
+	want := "[\"__proto__\"]\ntrue\n[\"__proto__\"]\ntrue\n[\"__proto__\"]\ntrue\n[]"
+	if out != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
+	}
+}

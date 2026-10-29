@@ -35,6 +35,10 @@
 * `check` and `build --target=js` reject `map_set`, `map_delete` and `append` whose target is not a variable, with the
   same `requires a symbol` diagnostic as the Go and bytecode targets. The JavaScript build used to succeed and emit
   `howlFrameMapSet(, ...)`, which does not parse.
+* A dict key named `__proto__` is an ordinary key on `--target=js`. `map_set` assigned `d["__proto__"]` and a literal
+  wrote `{"__proto__": v}`, both of which replace the object's prototype: the key disappeared from `map_keys` (so a
+  validator that rejects unknown keys never saw it) and the value's fields became readable as inherited properties.
+  `map_set` now defines an own property and literals use a computed key.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
   clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
   undefined value.
