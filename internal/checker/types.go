@@ -268,6 +268,13 @@ func (a *Analysis) inferRoot(root *ast.Node) {
 			case "defun", "lazy_synthesize":
 				a.inferFunction(child)
 				continue
+			case "export":
+				// A top-level exported function (a web_app module export) is
+				// checked like any other function, with its parameters bound.
+				if root.Children[0].Value == "web_app" && len(child.Children) == 2 && child.Children[1].Type == "List" && len(child.Children[1].Children) >= 4 && child.Children[1].Children[0].Value == "defun" {
+					a.inferFunction(child.Children[1])
+					continue
+				}
 			case "struct", "schema", "import", "intent", "test":
 				if child.Children[0].Value == "test" && len(child.Children) > 2 {
 					for _, body := range child.Children[2:] {
@@ -307,6 +314,12 @@ func (a *Analysis) inferFunction(node *ast.Node) {
 	if ret.Kind != ast.Unknown && ret.Kind != ast.Any && got.Kind != ast.Unknown && got.Kind != ast.Any && !compatible(ret, got) {
 		a.add(node, fmt.Sprintf("function %q returns %s but body has type %s", node.Children[1].Value, typeName(ret), typeName(got)))
 	}
+}
+
+// Signature reports a defun's parameter and return types as the checker
+// resolves them from its type hints.
+func (a *Analysis) Signature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {
+	return a.functionSignature(node)
 }
 
 func (a *Analysis) functionSignature(node *ast.Node) ([]ast.TypeInfo, ast.TypeInfo) {

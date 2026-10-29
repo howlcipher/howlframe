@@ -311,3 +311,28 @@ func ParamNames(paramsNode *Node) []string {
 	}
 	return params
 }
+
+// DefunBody returns the body forms of a defun, in order: every form after
+// the parameter list and an optional return-type symbol that is not a
+// type_hint, type_hints or type_param annotation. The bytecode VM runs all of
+// them; every backend must emit all of them.
+func DefunBody(node *Node) []*Node {
+	if node == nil || len(node.Children) < 4 {
+		return nil
+	}
+	start := 3
+	if len(node.Children) > 4 && node.Children[3].Type == "SYMBOL" {
+		start = 4
+	}
+	var body []*Node
+	for _, form := range node.Children[start:] {
+		if form != nil && form.Type == "List" && len(form.Children) > 0 {
+			switch form.Children[0].Value {
+			case "type_hint", "type_hints", "type_param":
+				continue
+			}
+		}
+		body = append(body, form)
+	}
+	return body
+}

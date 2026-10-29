@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Correctness
+* A `defun` with several body forms runs all of them on every target. The bytecode VM did; the JavaScript and Go
+  backends emitted only the last form, so `(defun f (m) (if (= m "a") (return "A")) (return "Z"))` returned `"A"` on
+  the VM and `"Z"` in generated code. `TestDefunWithSeveralBodyFormsMatchesBytecode` compares all three.
 * Source text is decoded as UTF-8. The lexer read one byte per code point, so every non-ASCII string literal was
   re-encoded byte by byte: `(print "é")` printed `Ã©` on the bytecode VM, the direct interpreter and generated
   JavaScript alike, and columns after a multibyte character were off by its extra bytes. Literals now reach every
@@ -10,6 +13,11 @@
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
 ### JavaScript backend
+* `build --target js --module` writes a library: `app.mjs`, an ES module exporting the program's top-level
+  `(export (defun ...))` functions, and `app.d.mts`, TypeScript declarations from their type hints (`string`,
+  `number`, `boolean`, `unknown[]`, `Record<string, unknown>`, `unknown`, each wrapped in `Promise`). A program
+  with no exports, or one using `env`, `exec`, `read_file`, `write_file` or `mkdir`, is refused. `check` now binds the
+  parameters of a top-level exported function in a `web_app`; it used to report them as undefined references.
 * A `let`, `do` or `if` used as a value (an operand, a binding or a call argument) now builds on `--target=js`: it is
   emitted as an awaited async arrow that returns the form's value. That is the shape `not`, `starts_with`/`ends_with`,
   `map_has`, `list_contains`, `all`/`any`, `ver_gt`/`ver_ge`, `nz`, `parse_json` of an expression and the core library
@@ -27,6 +35,10 @@
 * `check` and `build --target=js` reject `map_set`, `map_delete` and `append` whose target is not a variable, with the
   same `requires a symbol` diagnostic as the Go and bytecode targets. The JavaScript build used to succeed and emit
   `howlFrameMapSet(, ...)`, which does not parse.
+* A dict key named `__proto__` is an ordinary key on `--target=js`. `map_set` assigned `d["__proto__"]` and a literal
+  wrote `{"__proto__": v}`, both of which replace the object's prototype: the key disappeared from `map_keys` (so a
+  validator that rejects unknown keys never saw it) and the value's fields became readable as inherited properties.
+  `map_set` now defines an own property and literals use a computed key.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the
   clause's own parameter, so the outer variable stayed null, the error was dropped and the success branch ran with an
   undefined value.

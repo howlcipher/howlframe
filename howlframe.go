@@ -740,6 +740,7 @@ func buildSource() {
 	outPath := buildFlags.String("o", "", "output artifact file path")
 	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
 	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm")
+	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
 
 	buildFlags.Usage = func() {
 		fmt.Println("Usage: howlframe build <source.howl> [-o <output>] [--target={bytecode|go|js|wasm}]")
@@ -830,6 +831,10 @@ func buildSource() {
 	hfirModule := filepath.Base(inputFile)
 
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
+	if *jsModule && targetVal != "js" && targetVal != "javascript" {
+		fmt.Fprintln(os.Stderr, "--module requires --target js")
+		os.Exit(1)
+	}
 	switch targetVal {
 	case "bytecode", "bc":
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
@@ -900,6 +905,10 @@ func buildSource() {
 	case "js", "javascript":
 		runHFIRGate(root, hfirModule, hfirTargetJavaScript)
 		javascript.WrapValueForms(jsValueForms)
+		if *jsModule {
+			writeJSModule(root, analysis, *outPath)
+			return
+		}
 		jsCode, testCode := javascript.GenerateJSCode(root)
 		outFile := *outPath
 		if outFile != "" && strings.HasSuffix(outFile, ".js") {
@@ -931,6 +940,34 @@ func buildSource() {
 		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm\n", *target)
 		os.Exit(1)
 	}
+}
+
+// writeJSModule writes app.mjs, app.d.mts and, when the program has tests,
+// app.test.js into outputDir.
+func writeJSModule(root *ast.Node, analysis *checker.Analysis, outputDir string) {
+	exports := javascript.ModuleExports(root)
+	code, testCode, err := javascript.GenerateJSModule(root, exports)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	files := []struct{ name, body string }{
+		{"app.mjs", code},
+		{"app.d.mts", javascript.DeclarationsTS(exports, analysis.Signature)},
+	}
+	if testCode != "" {
+		files = append(files, struct{ name, body string }{"app.test.js", testCode})
+	} else {
+		os.Remove(filepath.Join(outputDir, "app.test.js"))
+	}
+	for _, f := range files {
+		path := filepath.Join(outputDir, f.name)
+		if err := writeArtifact(path, []byte(f.body)); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", path, err)
+			os.Exit(1)
+		}
+	}
+	fmt.Printf("Built %s\n", filepath.Join(outputDir, "app.mjs"))
 }
 
 // startupInstructionLimit resolves the startup ceiling for HTTP server programs:
@@ -1484,7 +1521,7 @@ var interopCommands = []interopCommand{
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
 	{Path: []string{"check"}, Flags: []string{"--profile"}},
-	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target"}},
+	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
 		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",

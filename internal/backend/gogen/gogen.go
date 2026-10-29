@@ -1508,8 +1508,11 @@ func GenerateCode(node *ast.Node) (string, string) {
 				returnTypeStr = ""
 			}
 
-			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
-			bodyCode := generateStatement(bodyNode, "", 0)
+			var bodyParts []string
+			for _, form := range ast.DefunBody(handlerNode) {
+				bodyParts = append(bodyParts, generateStatement(form, "", 0))
+			}
+			bodyCode := strings.Join(bodyParts, "\n")
 			traceArgs := "map[string]any{"
 			for _, arg := range argsList {
 				argName := strings.Split(arg, " ")[0]

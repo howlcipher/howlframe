@@ -12,7 +12,7 @@ If successful, it prints `OK: <source.howl>` and exits with status 0. Otherwise,
 ## `howlframe build`
 Usage: `howlframe build <source.howl> [-o <output>] [--target=bytecode|go|js|wasm] [--profile=default|governed]`
 
-Compiles a `.howl` source file to a standalone HowlFrame bytecode artifact (`.hfbc`) by default. Without `-o`, it writes `<basename>.hfbc` to the **current directory**, not next to the source. `--target go` writes `server.go` (and `server_test.go` when the program has tests), and `--target js` writes `app.js` (and `app.test.js`), into the current directory or the directory given with `-o`; an `-o` path ending in `.go` or `.js` writes only that file.
+Compiles a `.howl` source file to a standalone HowlFrame bytecode artifact (`.hfbc`) by default. Without `-o`, it writes `<basename>.hfbc` to the **current directory**, not next to the source. `--target go` writes `server.go` (and `server_test.go` when the program has tests), and `--target js` writes `app.js` (and `app.test.js`), into the current directory or the directory given with `-o`; an `-o` path ending in `.go` or `.js` writes only that file. With `--target js --module`, the build writes `app.mjs`, an ES module that exports the program's top-level `(export (defun ...))` functions (each returns a Promise), and `app.d.mts`, TypeScript declarations derived from their `type_hint`s, into the `-o` directory; `env`, `exec`, `read_file`, `write_file` and `mkdir` are refused there because a module has no `require`.
 
 ## `howlframe run`
 Usage: `howlframe run [options] <artifact.hfbc | source.howl> [arguments...]`

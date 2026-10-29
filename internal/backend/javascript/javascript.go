@@ -121,7 +121,12 @@ function howlFrameMapSet(dict, key, val) {
   if (!howlFrameIsDict(dict)) {
     throw new Error("TYPE_ERROR: map_set expected dict, got " + howlFrameValueKind(dict));
   }
-  dict[key] = val;
+  if (key === "__proto__") {
+    // Assignment would replace the prototype; a dict key is data.
+    Object.defineProperty(dict, key, { value: val, writable: true, enumerable: true, configurable: true });
+  } else {
+    dict[key] = val;
+  }
 }
 function howlFrameMapDelete(dict, key) {
   if (!howlFrameIsDict(dict)) {
@@ -901,6 +906,19 @@ func jsMkdirCall(node *ast.Node, reqVar string, depth int) string {
 	return fmt.Sprintf("howlFrameMkdir(%s)", pathStr)
 }
 
+// jsDictKey emits a dict literal key. A key named __proto__, quoted or not,
+// is emitted as a computed key (["__proto__"]), which creates an ordinary
+// property; written plainly it would set the object's prototype instead.
+func jsDictKey(key *ast.Node) string {
+	if key.Value == "__proto__" {
+		return `["__proto__"]`
+	}
+	if key.Type == "STRING" {
+		return fmt.Sprintf("%q", key.Value)
+	}
+	return key.Value
+}
+
 func sanitizeJSName(name string) string {
 	if !strings.Contains(name, "/") {
 		return name
@@ -992,10 +1010,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 					for j := 1; j < len(valNode.Children); j++ {
 						pair := valNode.Children[j]
 						if pair.Type == "List" && len(pair.Children) == 2 {
-							k := pair.Children[0].Value
-							if pair.Children[0].Type == "STRING" {
-								k = fmt.Sprintf("%q", k)
-							}
+							k := jsDictKey(pair.Children[0])
 							v := pair.Children[1].Value
 							if pair.Children[1].Type == "STRING" {
 								v = fmt.Sprintf("%q", v)
@@ -1204,10 +1219,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			if kid.Type != "List" || len(kid.Children) != 2 {
 				// ast.ReportError("dict expects (k v) pairs", kid.Line, kid.Column)
 			}
-			k := kid.Children[0].Value
-			if kid.Children[0].Type == "STRING" {
-				k = fmt.Sprintf("%q", k)
-			}
+			k := jsDictKey(kid.Children[0])
 			v := kid.Children[1].Value
 			if kid.Children[1].Type == "STRING" {
 				v = fmt.Sprintf("%q", v)
@@ -1300,8 +1312,11 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 			argsStr := strings.Join(ast.ParamNames(argsNode), ", ")
 
-			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
-			bodyCode := generateJSStatement(bodyNode, "", 0)
+			var bodyParts []string
+			for _, form := range ast.DefunBody(handlerNode) {
+				bodyParts = append(bodyParts, generateJSStatement(form, "", 0)+";")
+			}
+			bodyCode := strings.Join(bodyParts, "\n")
 			funcsCode += fmt.Sprintf("async function %s(%s) {\n%s\n}\n\n", name, argsStr, bodyCode)
 			continue
 		}
