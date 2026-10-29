@@ -269,6 +269,31 @@ func (f *fn) stmt(n *ast.Node) error {
 		return nil
 	case "for":
 		return f.forLoop(n)
+	case "map_set", "map_delete":
+		// (map_set d k v) and (map_delete d k) change the dict d names in
+		// place; dicts are references.
+		want := map[string]int{"map_set": 4, "map_delete": 3}[head(n)]
+		if len(n.Children) != want || n.Children[1].Type != "SYMBOL" {
+			return unsupported(n, head(n))
+		}
+		idx, ok := f.lookup(n.Children[1].Value)
+		if !ok {
+			return unsupported(n, head(n)+" of an unknown variable")
+		}
+		c.LocalGet(idx)
+		for _, a := range n.Children[2:] {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+		}
+		if head(n) == "map_set" {
+			c.Call(f.c.rt.fMapSet)
+		} else {
+			c.Call(f.c.rt.fMapDelete)
+		}
+		f.check()
+		c.Drop()
+		return nil
 	case "stderr":
 		if len(n.Children) != 2 {
 			return unsupported(n, "stderr")
@@ -539,6 +564,37 @@ func (f *fn) expr(n *ast.Node) error {
 		}
 		c.ArrayNewFixed(r.tItems, len(args)).Call(r.fListNew)
 		return nil
+	case "dict":
+		// (dict (k v) ...): the pairs are laid out key, value in one array.
+		for _, p := range args {
+			if p.Type != "List" || len(p.Children) != 2 {
+				return unsupported(n, "dict entry")
+			}
+			for _, kv := range p.Children {
+				if err := f.expr(kv); err != nil {
+					return err
+				}
+			}
+		}
+		c.ArrayNewFixed(r.tItems, 2*len(args)).Call(r.fDictNew)
+		return nil
+	case "map_get", "map_keys":
+		want := map[string]int{"map_get": 2, "map_keys": 1}[h]
+		if len(args) != want {
+			return unsupported(n, h)
+		}
+		for _, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+		}
+		if h == "map_get" {
+			c.Call(r.fMapGet)
+		} else {
+			c.Call(r.fMapKeys)
+		}
+		f.check()
+		return nil
 	case "list_get", "list_len":
 		want := map[string]int{"list_get": 2, "list_len": 1}[h]
 		if len(args) != want {
@@ -647,7 +703,7 @@ func (f *fn) forLoop(n *ast.Node) error {
 	list := f.local(EqRef)
 	c.LocalTee(list).RefTest(r.tList).I32Eqz().If(NoResult)
 	f.labels++
-	r.failWith(c, "TYPE_ERROR: for expects a list").Drop()
+	r.failWithType(c, "TYPE_ERROR: for requires a list, got ", list).Drop()
 	f.check()
 	f.labels--
 	c.End()

@@ -28,6 +28,10 @@
   string primitives and the operations desugared from them (`str_len`, `str_slice`, `%`, `//` and others), `stderr`
   and `exit`. Unsupported constructs fail the build with `WASM_UNSUPPORTED`. Differential tests run every fixture on
   the VM and as WebAssembly and require identical output. Design and plan: `docs/design/wasm_gc_backend.md`.
+* Dicts on `--target wasmgc`: `dict`, `map_get`, `map_set`, `map_delete`, `map_keys` and `map_has`, with the VM's
+  semantics (keys are the text of any value, dicts are references, `map_keys` and printing in sorted key order).
+  Lists and dicts print `<nil>` for a nil element, are never equal (even to themselves), and type errors name the
+  value's Go type as the VM's messages do.
 
 ### JavaScript backend
 * `(scroll_into_view el)` brings an element to the top of the document's own viewport at once (no smooth scrolling),

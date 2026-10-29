@@ -2,6 +2,7 @@ package wasmgc
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,12 +95,10 @@ func sameAsVM(t *testing.T, src string) {
 		t.Fatalf("failure differs: vm failed=%v (%s), wasm failed=%v (%s)", want.failed, want.errMsg, got.failed, got.errMsg)
 	}
 	if want.failed {
-		// Output before the error, then the message.
-		vmMsg := want.errMsg
-		if i := strings.Index(vmMsg, `"message":"`); i >= 0 {
-			vmMsg = strings.SplitN(vmMsg[i+len(`"message":"`):], `"`, 2)[0]
-		}
-		if !strings.Contains(got.errMsg, vmMsg) {
+		// Output before the error, then the message, compared decoded (the VM
+		// escapes < and > in its JSON report; the loader does not).
+		vmMsg := errorMessage(want.errMsg)
+		if vmMsg == "" || !strings.Contains(errorMessage(got.errMsg), vmMsg) {
 			t.Fatalf("error differs:\nvm   %s\nwasm %s", want.errMsg, got.errMsg)
 		}
 		return
@@ -107,6 +106,20 @@ func sameAsVM(t *testing.T, src string) {
 	if got.stdout != want.stdout {
 		t.Fatalf("output differs:\nvm   %q\nwasm %q", want.stdout, got.stdout)
 	}
+}
+
+// errorMessage is the message of the JSON error report in a run's output,
+// or the whole output when there is none.
+func errorMessage(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		var report struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal([]byte(line), &report) == nil && report.Message != "" {
+			return report.Message
+		}
+	}
+	return out
 }
 
 func TestDiffValuesAndPrinting(t *testing.T) {
@@ -202,7 +215,58 @@ func TestDiffLists(t *testing.T) {
 		"for snapshot":       `(let (xs (list 1 2)) (do (for x xs (append xs (* x 10))) (print xs)))`,
 		"build in a loop":    `(let (xs (list) i 0) (do (while (< i 50) (do (append xs i) (set i (+ i 1)))) (print (list_len xs) (list_get xs 49))))`,
 		"slice and contains": `(let (l (list 1 2 3 4)) (print (list_slice l 1 3) (list_slice l 0 9) (list_slice l 2 1) (list_contains l 3) (list_contains l 7)))`,
-		"identity equality":  `(print (= (list 1) (list 1)))`,
+		// The VM never treats a list or dict as equal, even to itself.
+		"never equal":   `(let (l (list 1)) (print (= (list 1) (list 1)) (= l l) (!= l l) (list_contains (list l) l)))`,
+		"nil elements":  `(let (d (dict ("a" 1) ("b" "s"))) (print (list (map_get d "z") 1) (to_string (list (map_get d "z")))))`,
+		"len of string": `(print (list_len "héllo") (list_len ""))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+// mixed is a dict whose values have different types, so the checker leaves
+// the type of a map_get unknown and the runtime checks it.
+const mixed = `(dict ("a" 1) ("b" "s") ("c" (list 1)) ("d" 2.5) ("e" true) ("n" (dict)))`
+
+func TestDiffDicts(t *testing.T) {
+	for name, body := range map[string]string{
+		"literals and printing": `(print (dict ("b" 2) ("a" 1)) (dict) (dict ("x" (dict ("y" (list 1 2)))) ("s" "") ("f" 1.5) ("t" false)))`,
+		"duplicate key":         `(print (dict ("a" 1) ("b" 2) ("a" 3)))`,
+		"key expressions":       `(let (k "z") (print (dict (k 1) ((+ k "2") 2))))`,
+		"get":                   `(let (d (dict ("a" 1) ("b" "x"))) (print (map_get d "a") (map_get d "b") (is_nil (map_get d "z")) (+ "[" (+ (to_string (map_get d "z")) "]"))))`,
+		"get of an expression":  `(print (map_get (dict ("a" 1)) "a") (map_get (map_get (dict ("a" (dict ("b" 5)))) "a") "b"))`,
+		"keys sorted":           `(print (map_keys (dict ("b" 1) ("a" 2) ("é" 3) ("" 4) ("A" 5) ("B" 6) ("ab" 7))) (map_keys (dict)))`,
+		"set and order": `(let (d (dict)) (do (map_set d "z" 1) (map_set d "a" 2) (map_set d "m" 3) (map_set d "a" 9)
+		  (print d (map_keys d) (list_len (map_keys d)))))`,
+		"delete":          `(let (d (dict ("a" 1) ("b" 2) ("c" 3))) (do (map_delete d "a") (map_delete d "zz") (print d) (map_delete d "c") (map_delete d "b") (print d)))`,
+		"delete then set": `(let (d (dict ("a" 1) ("b" 2))) (do (map_delete d "a") (map_set d "a" 5) (map_set d "c" 6) (print d (map_get d "a"))))`,
+		"has":             `(let (d (dict ("a" 1))) (print (map_has d "a") (map_has d "b")))`,
+		"references":      `(let (d (dict) e d) (do (map_set d "k" 1) (print e)))`,
+		"function mutates": `(defun f (d) (type_hint d "dict") (type_hint return "void") (map_set d "x" 1))
+  (let (d (dict)) (do (call f d) (print d)))`,
+		"list values are copies": `(let (d (dict ("c" (list 1))) x (map_get d "c")) (do (append x 2) (print x d)))`,
+		"dict in a list":         `(print (list (dict ("a" 1)) (dict)) (to_string (dict ("a" (list 1 2)))))`,
+		"never equal":            `(let (d (dict)) (print (= d d) (= (dict) (dict)) (!= d d)))`,
+		"many keys": `(let (d (dict) i 0) (do (while (< i 40) (do (map_set d (+ "k" (to_string (- 40 i))) i) (set i (+ i 1))))
+		  (print (list_len (map_keys d)) (map_get d "k1") (map_get d "k40") (list_get (map_keys d) 0) (list_get (map_keys d) 39))))`,
+		"loop over keys": `(let (d (dict ("b" 2) ("a" 1)) total 0) (do (for k (map_keys d) (set total (+ total (map_get d k)))) (print total)))`,
+		// Keys are the text of any value: fmt.Sprint, so nil is "<nil>".
+		"stringified keys": `(let (d ` + mixed + ` e (dict)) (do (map_set e (map_get d "a") "i") (map_set e (map_get d "d") "f") (map_set e (map_get d "e") "b") (map_set e (map_get d "zz") "nil")
+		  (print e (map_get e (map_get d "a")) (map_get e "1") (map_keys e) (map_has e "1") (map_get e "<nil>"))))`,
+		"get of nil":         `(let (d (dict)) (print (map_get (map_get d "a") "b")))`,
+		"get of a string":    `(let (d ` + mixed + `) (print (map_get (map_get d "b") "x")))`,
+		"get of a list":      `(let (d ` + mixed + `) (print (map_get (map_get d "c") "x")))`,
+		"get of a float":     `(let (d ` + mixed + `) (print (map_get (map_get d "d") "x")))`,
+		"get of a bool":      `(let (d ` + mixed + `) (print (map_get (map_get d "e") "x")))`,
+		"keys of an int":     `(let (d ` + mixed + `) (print (map_keys (map_get d "a"))))`,
+		"set on an int":      `(let (d ` + mixed + ` x (map_get d "a")) (map_set x "k" 1))`,
+		"delete on a string": `(let (d ` + mixed + ` x (map_get d "b")) (map_delete x "k"))`,
+		"for over a dict":    `(let (d ` + mixed + `) (for x (map_get d "n") (print x)))`,
+		"for over nil":       `(let (d ` + mixed + `) (for x (map_get d "zz") (print x)))`,
+		"len of a dict":      `(let (d ` + mixed + `) (print (list_len (map_get d "n"))))`,
+		"len of an int":      `(let (d ` + mixed + `) (print (list_len (map_get d "a"))))`,
+		"list_get of an int": `(let (d ` + mixed + ` x (map_get d "a")) (print (list_get x 0)))`,
+		"append to a dict":   `(let (d ` + mixed + ` x (map_get d "n")) (append x 0))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
 	}
