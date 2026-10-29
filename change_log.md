@@ -18,6 +18,9 @@
   desugarer's list in step with the checker's host operation tables.
 
 ### JavaScript backend
+* `(scroll_into_view el)` brings an element to the top of the document's own viewport at once (no smooth scrolling),
+  so a page can restore a reading position after it is re-rendered. Unlike `Element.scrollIntoView`, it never scrolls
+  a page that embeds this one in a frame.
 * A `web_app` that uses DOM operations but no `richtext_*` operation no longer ships the rich text runtime; it was
   emitted with every DOM operation, so a small page script carried the whole editor adapter.
 * `web_app` DOM and event host operations for interactive pages: `(event_attr e name)` reads an attribute from the

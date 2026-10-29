@@ -27,7 +27,8 @@ function el(id) {
   return { id, props: {},
     classList: { toggle(n, on) { if (on) classes.add(n); else classes.delete(n); return on; }, contains: (n) => classes.has(n), get list() { return [...classes].sort(); } },
     style: { setProperty(n, v) { this.owner.props[n] = v; } },
-    getBoundingClientRect() { return { top: 120.5, height: 300, left: 0, width: 10 }; } };
+    getBoundingClientRect() { return { top: 120.5, height: 300, left: 0, width: 10 }; },
+    scrollIntoView(opts) { out.push("scrolled:" + id + ":" + JSON.stringify(opts)); } };
 }
 const a = el("a"), b = el("b");
 a.style.owner = a; b.style.owner = b;
@@ -43,7 +44,8 @@ const store = new Map();
 const browser = {
   console: { log: (v) => out.push(String(v)), error: (e) => out.push("error:" + String(e && e.message || e)) },
   setTimeout, Promise,
-  scrollY: 250, innerHeight: 800,
+  scrollY: 250, scrollX: 0, innerHeight: 800,
+  scrollTo(opts) { out.push("scrollTo:" + JSON.stringify(opts)); },
   document: {
     querySelector: (s) => ({ "#a": a, "#b": b, "html": html })[s] || null,
     querySelectorAll: (s) => s === ".scene" ? [a, b] : [],
@@ -195,6 +197,20 @@ func TestSubscriptionsDegradeWithoutBrowserSupport(t *testing.T) {
 	// Without IntersectionObserver every element counts as visible at once;
 	// without matchMedia no query matches and no change ever arrives.
 	if !strings.Contains(got, `"out":["false","visible true","visible true","2"]`) {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestScrollIntoViewScrollsOnlyItsOwnDocument(t *testing.T) {
+	// The element's top (120.5 in the viewport, scrolled 250) goes to the top
+	// of this document's viewport. Element.scrollIntoView is not used: it
+	// also scrolls any page embedding this one, such as an editor around a
+	// preview frame.
+	code := compileWebApp(t, `(web_app (do
+  (scroll_into_view (dom_query "#a"))
+  (try_let (v (scroll_into_view (dom_query "#none"))) (catch err (print (to_string err))) (print "ran"))))`)
+	got := motionHarness(t, code, "")
+	if !strings.Contains(got, `"out":["scrollTo:{\"top\":370.5,\"left\":0,\"behavior\":\"instant\"}","Error: TYPE_ERROR: scroll_into_view expected an element"]`) || strings.Contains(got, "scrolled:") {
 		t.Fatalf("got %s", got)
 	}
 }
