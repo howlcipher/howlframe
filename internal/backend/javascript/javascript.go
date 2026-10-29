@@ -1252,6 +1252,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsArchive = false
 	jsNeedsExit = false
 	jsNeedsDOM = false
+	jsNeedsRichtext = false
 	jsNeedsBrowserIO = false
 	jsNeedsMotion = false
 	jsNeedsCollection = false
@@ -1383,9 +1384,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 		}
 	}
 	if jsNeedsDOM {
-		code = domJSHelper() + richtextJSHelper() + code
+		helper := domJSHelper()
+		if jsNeedsRichtext {
+			helper += richtextJSHelper()
+		}
+		code = helper + code
 		if testCode != "" {
-			testCode = domJSHelper() + richtextJSHelper() + testCode
+			testCode = helper + testCode
 		}
 	}
 	if jsNeedsArchive {

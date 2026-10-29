@@ -18,6 +18,8 @@
   desugarer's list in step with the checker's host operation tables.
 
 ### JavaScript backend
+* A `web_app` that uses DOM operations but no `richtext_*` operation no longer ships the rich text runtime; it was
+  emitted with every DOM operation, so a small page script carried the whole editor adapter.
 * `web_app` DOM and event host operations for interactive pages: `(event_attr e name)` reads an attribute from the
   event target or its nearest ancestor that has it (for delegated handlers; the name must be a plain attribute name),
   `(event_key e)`, `(event_prevent e)`, `(set_value el v)` sets a control's live value, `(dom_checked el)`,

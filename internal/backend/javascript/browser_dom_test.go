@@ -114,3 +114,16 @@ func TestDomAttrReadsAttributes(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+// A page that only uses DOM operations does not ship the rich text adapter;
+// it is emitted with the first richtext_* operation.
+func TestDomOperationsDoNotShipRichText(t *testing.T) {
+	plain := compileWebApp(t, `(web_app (dom_focus (dom_query "#field")))`)
+	if !strings.Contains(plain, "function howlFrameDomFocus") || strings.Contains(plain, "howlFrameRichtext") {
+		t.Fatalf("DOM-only output must hold the DOM runtime and no rich text runtime")
+	}
+	rich := compileWebApp(t, `(web_app (richtext_attach (dom_query "#field") "Body"))`)
+	if !strings.Contains(rich, "function howlFrameRichtextAttach") || !strings.Contains(rich, "function howlFrameElement") {
+		t.Fatalf("rich text output must hold both runtimes")
+	}
+}
