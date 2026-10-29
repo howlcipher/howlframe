@@ -25,6 +25,13 @@
   it (`FILE_TOO_LARGE`). `(sniff_media_type base64)` names PNG, JPEG, GIF or WebP data from its leading bytes.
   `(image_decode base64 mime)` reports dimensions and `(image_encode base64 mime max_side out_mime quality)` redraws
   the image, which drops metadata, scaled to fit; undecodable data is `IMAGE_INVALID`.
+* `(zip_read base64 max_entries max_bytes)` reads a ZIP archive from untrusted data as a list of
+  `{"path", "base64"}` dicts, taking stored and deflated entries and skipping directories. It refuses rather than
+  repairs: unsafe paths (absolute, `.`/`..` or empty segments, backslashes, colons, control characters) are
+  `ZIP_INVALID_PATH`, case-insensitive duplicates `ZIP_DUPLICATE_PATH`, too many entries or declared bytes
+  `ZIP_LIMIT`, encryption, ZIP64, multi-part archives and other methods `ZIP_UNSUPPORTED`, structures that do not fit
+  `ZIP_INVALID`, and data that does not match its declared size or CRC-32 `ZIP_CORRUPT`. Inflation stops as soon as
+  an entry passes its declared size. `(base64_text base64)` decodes strict UTF-8 (`TEXT_INVALID_UTF8`).
 * `web_app` rich text over a contenteditable element, with a portable model: a list of blocks (`p`, `h2`, `h3` with
   runs; `ul`, `ol` with items of runs), where a run is `{"text": s}` with optional `bold`, `italic` and `link`.
   `(richtext_set el blocks)` builds the DOM with elements and text nodes only, never parsing HTML;

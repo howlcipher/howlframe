@@ -27,9 +27,10 @@ var jsDOMHelpers = map[string]string{
 	"richtext_command": "howlFrameRichtextCommand",
 }
 
-// jsBrowserIOHelpers maps the storage, file and image host operations to
-// their runtime helpers. All but sniff_media_type are asynchronous and are
-// awaited.
+// jsBrowserIOHelpers maps the storage, file, image and archive host
+// operations to their runtime helpers. All but sniff_media_type and
+// base64_text are asynchronous and are awaited. zip_read and base64_text
+// live in the archive runtime.
 var jsBrowserIOHelpers = map[string]string{
 	"storage_get":      "howlFrameStorageGet",
 	"storage_put":      "howlFrameStoragePut",
@@ -39,6 +40,8 @@ var jsBrowserIOHelpers = map[string]string{
 	"sniff_media_type": "howlFrameSniffMediaType",
 	"image_decode":     "howlFrameImageDecode",
 	"image_encode":     "howlFrameImageEncode",
+	"zip_read":         "howlFrameZipRead",
+	"base64_text":      "howlFrameBase64Text",
 }
 
 // jsNeedsBrowserIO is set when GenerateJSCode emits a storage, file or image
@@ -56,7 +59,7 @@ func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, b
 	} else if helper, ok = jsBrowserIOHelpers[head]; ok {
 		jsNeedsBrowserIO = true
 		jsNeedsArchive = true // base64 helpers
-		if head != "sniff_media_type" {
+		if head != "sniff_media_type" && head != "base64_text" {
 			format = "(await %s(%s))"
 		}
 	} else {
