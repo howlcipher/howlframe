@@ -57,6 +57,9 @@
   wrote `{"__proto__": v}`, both of which replace the object's prototype: the key disappeared from `map_keys` (so a
   validator that rejects unknown keys never saw it) and the value's fields became readable as inherited properties.
   `map_set` now defines an own property and literals use a computed key.
+* A value inside a dict literal is a value position. Sugar there that lowers to a `let` (such as `list_get` of an
+  expression, `if`, `not`) was emitted as a raw block and the JavaScript did not parse; it is now a value block on
+  `--target=js` and `UNSUPPORTED_ON_TARGET` on `--target=go`.
 * `spawn` builds on `--target=js`. The backend emitted it, but `check` walked into the lambda and rejected it as an
   unknown statement.
 * `try_let` delivers the error when the catch variable is named `e`. The generated `catch (e) { e = e; }` assigned the

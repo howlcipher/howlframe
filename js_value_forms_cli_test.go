@@ -45,6 +45,8 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		{"case_and_trim", `(do (print (to_lower "AbC")) (print (to_upper "AbC")) (print (str_trim "  x y  ")))`},
 		{"trim_in_binding", `(let (s (str_trim "  {} ")) (print s))`},
 		{"parse_json_expr", `(let (d (parse_json Any (str_trim " {\"a\": 1} "))) (print (map_get d "a")))`},
+		{"dict_value_sugar", `(let (d (dict ("a" (list_get (str_split "x,y" ",") 1)) ("b" (if true "yes" "no")) ("c" (not false)))) (print (encode_json d)))`},
+		{"nested_dict_value", `(let (d (dict ("outer" (dict ("inner" (str_slice "abcdef" 1 3)))))) (print (encode_json d)))`},
 		{"nz", `(let (d (dict ("a" "b"))) (do (print (nz (map_get d "a") "z")) (print (nz (map_get d "q") "z"))))`},
 	}
 	for _, p := range probes {

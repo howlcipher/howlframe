@@ -1324,6 +1324,15 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) []*ast.Nod
 		}
 		args := n.Children[1:]
 		switch {
+		case head == "dict":
+			// (dict (k v) ...): each v is a value; the pair itself is not a form.
+			for _, pair := range args {
+				if pair.Type == "List" && len(pair.Children) == 2 {
+					walk(pair.Children[1], true)
+				} else {
+					walk(pair, false)
+				}
+			}
 		case head == "let" && len(args) >= 1:
 			b := args[0]
 			for k := 1; k < len(b.Children); k += 2 {
