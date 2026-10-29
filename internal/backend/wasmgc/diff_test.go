@@ -183,9 +183,28 @@ func TestDiffShadowing(t *testing.T) {
 	sameAsVM(t, `(cli_app (let (x 1) (do (let (x 2) (print x)) (print x))))`)
 }
 
-// % is desugared into exact integer code that uses lists; enabled with them.
+// % and // are desugared into exact integer code that uses lists and
+// string operations.
 func TestDiffModulo(t *testing.T) {
-	t.Skip("needs lists (next M1 slice)")
+	t.Skip("needs string operations (str_split; next M1 slice)")
 	sameAsVM(t, `(cli_app (print (% 7 3) (% -7 3) (% 7 -3) (% 7.5 2) (// 7 2) (// -7 2)))`)
 	sameAsVM(t, `(cli_app (print (% 5 0)))`)
+}
+
+func TestDiffLists(t *testing.T) {
+	for name, body := range map[string]string{
+		"literals and printing": `(print (list) (list 1 2) (list "x" "y") (list 1.5 2.0) (list true) (list (list 1) (list 2 3)) (list "a b" ""))`,
+		"values not references": `(let (a (list 1 2) b a) (do (append b 3) (print a b)))`,
+		"both ends append":      `(let (a (list 1) b a) (do (append a 2) (append b 3) (print a b)))`,
+		"function gets a copy": `(defun f (l) (type_hint l "list") (type_hint return "void") (append l 9))
+  (let (a (list 1)) (do (call f a) (print a)))`,
+		"get and len":        `(let (l (list 10 20)) (print (list_get l 1) (list_len l) (list_get l 5) (list_get l -1) "|"))`,
+		"for":                `(let (xs (list 3 1 2) total 0) (do (for x xs (do (print x) (set total (+ total x)))) (print total)))`,
+		"for snapshot":       `(let (xs (list 1 2)) (do (for x xs (append xs (* x 10))) (print xs)))`,
+		"build in a loop":    `(let (xs (list) i 0) (do (while (< i 50) (do (append xs i) (set i (+ i 1)))) (print (list_len xs) (list_get xs 49))))`,
+		"slice and contains": `(let (l (list 1 2 3 4)) (print (list_slice l 1 3) (list_slice l 0 9) (list_slice l 2 1) (list_contains l 3) (list_contains l 7)))`,
+		"identity equality":  `(print (= (list 1) (list 1)))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
 }

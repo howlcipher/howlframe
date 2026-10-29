@@ -106,7 +106,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Next: lists, then dicts. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists done (values with Go-style tip append). Next: string operations, then dicts. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -158,7 +158,11 @@ as the work it describes: tick tasks, move the status line, record findings.
 - [x] Literals and `print`; `let`, `set`, `do`, `if`, `while`;
       arithmetic and comparison; `and`, `or`; `defun`, `call`, `return` and
       recursion; `to_int`, `to_float`, `to_string`.
-- [ ] Constructs, in this order, each with fixtures: `for`; `not` and the
+- [x] Lists: `list`, `append`, `list_get`, `list_len`, `for`; list
+      printing; `list_slice` and `list_contains` (desugared). Lists are
+      values: an immutable (length, buffer) pair where only the list at the
+      buffer's tip appends in place.
+- [ ] Constructs, in this order, each with fixtures: `not` and the
       rest of the boolean sugar; `%` and `//` (desugared, need lists); strings
       (`str_len`, `str_slice`, `str_split`, `str_join`, `str_replace`,
       `str_contains`, `str_trim`, `to_lower`, `to_upper`, `starts_with`,

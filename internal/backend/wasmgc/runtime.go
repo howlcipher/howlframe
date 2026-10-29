@@ -15,6 +15,7 @@ type rt struct {
 
 	// Types.
 	tBytes, tStr, tInt, tFloat, tBool, tItems, tList, tDict int
+	tBuf                                                    int
 	tStrNull                                                int
 	fnTypes                                                 map[int]int // HowlFrame function arity -> type
 	tEqToI32, tEqEqToI32, tEqEqToEq, tEqToStr, tStrStrToStr int
@@ -28,11 +29,12 @@ type rt struct {
 	iPrint, iFloatDigits, iFloatPoint, iParseFloat, iParseFloatOK int
 
 	// Functions.
-	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail  int
-	fAdd, fSub, fMul, fDiv, fMod, fCompare, fEq   int
-	fConcat, fText, fItoa, fFtoa, fStrEq, fStrCmp int
-	fStrLen, fStrByte, fError                     int
-	fToInt, fToFloat, fQuote, fTrim, fTypeName    int
+	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail         int
+	fAdd, fSub, fMul, fDiv, fMod, fCompare, fEq          int
+	fConcat, fText, fItoa, fFtoa, fStrEq, fStrCmp        int
+	fStrLen, fStrByte, fError                            int
+	fToInt, fToFloat, fQuote, fTrim, fTypeName           int
+	fListNew, fListAppend, fListGet, fListLen, fListText int
 
 	strings map[string]int // literal -> data segment
 }
@@ -45,7 +47,12 @@ func newRuntime(m *Module) *rt {
 	r.tFloat = m.AddType(TypeDef{Name: "Float", Struct: []Field{{Type: F64}}})
 	r.tBool = m.AddType(TypeDef{Name: "Bool", Struct: []Field{{Type: I32}}})
 	r.tItems = m.AddType(TypeDef{Name: "Items", Array: &Field{Type: EqRef, Mutable: true}})
-	r.tList = m.AddType(TypeDef{Name: "List", Struct: []Field{{Type: I32, Mutable: true}, {Type: Ref(r.tItems), Mutable: true}}})
+	// A list is an immutable (length, buffer) pair. Lists are values: the
+	// buffer records how far it is used, and only a list whose length equals
+	// that mark may append in place (Go-style append to the tip); any other
+	// list copies first, so no list ever sees another's appends.
+	r.tBuf = m.AddType(TypeDef{Name: "Buf", Struct: []Field{{Type: I32, Mutable: true}, {Type: Ref(r.tItems), Mutable: true}}})
+	r.tList = m.AddType(TypeDef{Name: "List", Struct: []Field{{Type: I32}, {Type: Ref(r.tBuf)}}})
 	// Dict: length, keys ($Str values in an Items array), values.
 	r.tDict = m.AddType(TypeDef{Name: "Dict", Struct: []Field{{Type: I32, Mutable: true}, {Type: Ref(r.tItems), Mutable: true}, {Type: Ref(r.tItems), Mutable: true}}})
 	r.tStrNull = -1
@@ -168,6 +175,11 @@ func (r *rt) emitAll() {
 		{&r.fQuote, "quote", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fTrim, "trim_space", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fTypeName, "type_name", r.tEqToStr},
+		{&r.fListNew, "list_new", r.funcType([]ValType{Ref(r.tItems)}, EqRef)},
+		{&r.fListAppend, "list_append", r.tEqEqToEq},
+		{&r.fListGet, "list_get", r.tEqEqToEq},
+		{&r.fListLen, "list_len", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fListText, "list_text", r.tEqToStr},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -208,6 +220,7 @@ func (r *rt) emitAll() {
 	})
 	set(r.fError, nil, func(c *Code) { c.GlobalGet(r.gErr) })
 	r.emitConversions()
+	r.emitLists()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -455,6 +468,7 @@ func (r *rt) emitText() {
 			LocalGet(0).RefCast(r.tBool).StructGet(r.tBool, 0).If(NoResult)
 		r.StrLiteral(c, "true").Return().End()
 		r.StrLiteral(c, "false").Return().End()
+		c.LocalGet(0).RefTest(r.tList).If(NoResult).LocalGet(0).Call(r.fListText).Return().End()
 		r.StrLiteral(c, "<value>")
 	})
 }
@@ -711,5 +725,84 @@ func (r *rt) emitConversions() {
 		r.StrLiteral(c, " to float").Call(r.fConcat).Call(r.fFail).Return()
 		c.End()
 		cannot(c, "float")
+	})
+}
+
+// emitLists writes the list primitives. Everything else on lists
+// (list_slice, list_contains, map_list, filter, ...) is desugared into these.
+func (r *rt) emitLists() {
+	typeErr := func(c *Code, what string) {
+		r.failWith(c, "TYPE_ERROR: "+what).Return()
+	}
+	// list_new(items): a list owning a fresh buffer holding items.
+	r.body(r.fListNew, nil, func(c *Code) {
+		c.LocalGet(0).ArrayLen()
+		c.LocalGet(0).ArrayLen().LocalGet(0).StructNew(r.tBuf)
+		c.StructNew(r.tList)
+	})
+	// list_append(l, v): a new list one longer. locals: 0 l, 1 v, 2 list,
+	// 3 buf, 4 n, 5 items
+	r.body(r.fListAppend, []ValType{RefNull(r.tList), RefNull(r.tBuf), I32, RefNull(r.tItems)}, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
+		typeErr(c, "append expects a list")
+		c.End()
+		c.LocalGet(0).RefCast(r.tList).LocalTee(2).StructGet(r.tList, 0).LocalSet(4)
+		c.LocalGet(2).StructGet(r.tList, 1).LocalSet(3)
+		// At the tip of its buffer: append in place (growing the array).
+		c.LocalGet(4).LocalGet(3).StructGet(r.tBuf, 0).I32Eq().If(NoResult)
+		c.LocalGet(4).LocalGet(3).StructGet(r.tBuf, 1).ArrayLen().I32Eq().If(NoResult)
+		c.LocalGet(4).I32Const(2).I32Mul().I32Const(4).I32Add().ArrayNewDefault(r.tItems).LocalSet(5)
+		c.LocalGet(5).I32Const(0).LocalGet(3).StructGet(r.tBuf, 1).I32Const(0).LocalGet(4).ArrayCopy(r.tItems, r.tItems)
+		c.LocalGet(3).LocalGet(5).RefAsNonNull().StructSet(r.tBuf, 1)
+		c.End()
+		c.LocalGet(3).StructGet(r.tBuf, 1).LocalGet(4).LocalGet(1).ArraySet(r.tItems)
+		c.LocalGet(3).LocalGet(4).I32Const(1).I32Add().StructSet(r.tBuf, 0)
+		c.LocalGet(4).I32Const(1).I32Add().LocalGet(3).RefAsNonNull().StructNew(r.tList).Return()
+		c.End()
+		// Behind the tip: copy into a new buffer.
+		c.LocalGet(4).I32Const(2).I32Mul().I32Const(4).I32Add().ArrayNewDefault(r.tItems).LocalSet(5)
+		c.LocalGet(5).I32Const(0).LocalGet(3).StructGet(r.tBuf, 1).I32Const(0).LocalGet(4).ArrayCopy(r.tItems, r.tItems)
+		c.LocalGet(5).LocalGet(4).LocalGet(1).ArraySet(r.tItems)
+		c.LocalGet(4).I32Const(1).I32Add()
+		c.LocalGet(4).I32Const(1).I32Add().LocalGet(5).RefAsNonNull().StructNew(r.tBuf)
+		c.StructNew(r.tList)
+	})
+	// list_get(l, i): the element, or nil when i is out of range.
+	// locals: 0 l, 1 i, 2 idx
+	r.body(r.fListGet, []ValType{I64}, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
+		typeErr(c, "list_get expects a list")
+		c.End()
+		c.LocalGet(1).RefTest(r.tInt).I32Eqz().If(NoResult)
+		typeErr(c, "list_get expects an integer index")
+		c.End()
+		c.LocalGet(1).RefCast(r.tInt).StructGet(r.tInt, 0).LocalTee(2)
+		c.I64Const(0).I64LtS().LocalGet(2).LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0).I64ExtendI32U().I64GeS().I32Or().If(NoResult)
+		c.RefNull(HeapNone).Return().End()
+		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).I32WrapI64().ArrayGet(r.tItems)
+	})
+	r.body(r.fListLen, nil, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
+		typeErr(c, "list_len expects a list")
+		c.End()
+		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0).I64ExtendI32U().Call(r.fBoxInt)
+	})
+	// list_text(l): "[" elements as text, separated by spaces "]".
+	// locals: 0 l, 1 list, 2 i, 3 acc
+	r.body(r.fListText, []ValType{RefNull(r.tList), I32, RefNull(r.tStr)}, func(c *Code) {
+		c.LocalGet(0).RefCast(r.tList).LocalSet(1)
+		r.StrLiteral(c, "[").LocalSet(3)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(2).LocalGet(1).StructGet(r.tList, 0).I32GeU().BrIf(1)
+		c.LocalGet(2).If(NoResult)
+		c.LocalGet(3).RefAsNonNull()
+		r.StrLiteral(c, " ").Call(r.fConcat).LocalSet(3)
+		c.End()
+		c.LocalGet(3).RefAsNonNull()
+		c.LocalGet(1).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(2).ArrayGet(r.tItems).Call(r.fText)
+		c.Call(r.fConcat).LocalSet(3)
+		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
+		c.LocalGet(3).RefAsNonNull()
+		r.StrLiteral(c, "]").Call(r.fConcat)
 	})
 }

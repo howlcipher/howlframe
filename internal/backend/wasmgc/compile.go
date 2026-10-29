@@ -250,6 +250,25 @@ func (f *fn) stmt(n *ast.Node) error {
 		}
 		c.Return()
 		return nil
+	case "append":
+		// (append xs v) rebinds xs to a list one longer; lists are values.
+		if len(n.Children) != 3 || n.Children[1].Type != "SYMBOL" {
+			return unsupported(n, "append")
+		}
+		idx, ok := f.lookup(n.Children[1].Value)
+		if !ok {
+			return unsupported(n, "append to an unknown variable")
+		}
+		c.LocalGet(idx)
+		if err := f.expr(n.Children[2]); err != nil {
+			return err
+		}
+		c.Call(f.c.rt.fListAppend)
+		f.check()
+		c.LocalSet(idx)
+		return nil
+	case "for":
+		return f.forLoop(n)
 	case "type_hint", "type_hints", "type_param":
 		return nil
 	}
@@ -492,6 +511,31 @@ func (f *fn) expr(n *ast.Node) error {
 			return unsupported(n, "call")
 		}
 		return f.call(n, args[0].Value, args[1:])
+	case "list":
+		for _, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+		}
+		c.ArrayNewFixed(r.tItems, len(args)).Call(r.fListNew)
+		return nil
+	case "list_get", "list_len":
+		want := map[string]int{"list_get": 2, "list_len": 1}[h]
+		if len(args) != want {
+			return unsupported(n, h)
+		}
+		for _, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+		}
+		if h == "list_get" {
+			c.Call(r.fListGet)
+		} else {
+			c.Call(r.fListLen)
+		}
+		f.check()
+		return nil
 	case "to_int", "to_float":
 		if len(args) != 1 {
 			return unsupported(n, h)
@@ -540,5 +584,46 @@ func (f *fn) call(n *ast.Node, name string, args []*ast.Node) error {
 	}
 	f.code.Call(idx)
 	f.check()
+	return nil
+}
+
+// forLoop compiles (for item list body...): the list is evaluated once and
+// iterated as it was then (appends inside the body do not extend the loop).
+func (f *fn) forLoop(n *ast.Node) error {
+	r := f.c.rt
+	c := f.code
+	if len(n.Children) < 4 || n.Children[1].Type != "SYMBOL" {
+		return unsupported(n, "for")
+	}
+	if err := f.expr(n.Children[2]); err != nil {
+		return err
+	}
+	list := f.local(EqRef)
+	c.LocalTee(list).RefTest(r.tList).I32Eqz().If(NoResult)
+	f.labels++
+	r.failWith(c, "TYPE_ERROR: for expects a list").Drop()
+	f.check()
+	f.labels--
+	c.End()
+	length := f.local(I32)
+	i := f.local(I32)
+	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 0).LocalSet(length)
+	c.I32Const(0).LocalSet(i)
+	f.scopes = append(f.scopes, map[string]int{})
+	item := f.local(EqRef)
+	f.scopes[len(f.scopes)-1][n.Children[1].Value] = item
+	c.Block(NoResult).Loop(NoResult)
+	f.labels += 2
+	c.LocalGet(i).LocalGet(length).I32GeU().BrIf(1)
+	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(i).ArrayGet(r.tItems).LocalSet(item)
+	for _, k := range n.Children[3:] {
+		if err := f.stmt(k); err != nil {
+			return err
+		}
+	}
+	c.LocalGet(i).I32Const(1).I32Add().LocalSet(i).Br(0)
+	f.labels -= 2
+	c.End().End()
+	f.scopes = f.scopes[:len(f.scopes)-1]
 	return nil
 }
