@@ -10,6 +10,11 @@
   `source is not valid UTF-8` instead of being silently reinterpreted.
 
 ### JavaScript backend
+* `build --target js --module` writes a library: `app.mjs`, an ES module exporting the program's top-level
+  `(export (defun ...))` functions, and `app.d.mts`, TypeScript declarations from their type hints (`string`,
+  `number`, `boolean`, `unknown[]`, `Record<string, unknown>`, `unknown`, each wrapped in `Promise`). A program
+  with no exports, or one using `env`, `exec`, `read_file`, `write_file` or `mkdir`, is refused. `check` now binds the
+  parameters of a top-level exported function in a `web_app`; it used to report them as undefined references.
 * A `let`, `do` or `if` used as a value (an operand, a binding or a call argument) now builds on `--target=js`: it is
   emitted as an awaited async arrow that returns the form's value. That is the shape `not`, `starts_with`/`ends_with`,
   `map_has`, `list_contains`, `all`/`any`, `ver_gt`/`ver_ge`, `nz`, `parse_json` of an expression and the core library
