@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Correctness
+* A `defun` with several body forms runs all of them on every target. The bytecode VM did; the JavaScript and Go
+  backends emitted only the last form, so `(defun f (m) (if (= m "a") (return "A")) (return "Z"))` returned `"A"` on
+  the VM and `"Z"` in generated code. `TestDefunWithSeveralBodyFormsMatchesBytecode` compares all three.
 * Source text is decoded as UTF-8. The lexer read one byte per code point, so every non-ASCII string literal was
   re-encoded byte by byte: `(print "é")` printed `Ã©` on the bytecode VM, the direct interpreter and generated
   JavaScript alike, and columns after a multibyte character were off by its extra bytes. Literals now reach every

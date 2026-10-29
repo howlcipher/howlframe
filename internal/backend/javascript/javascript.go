@@ -1300,8 +1300,11 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 			argsStr := strings.Join(ast.ParamNames(argsNode), ", ")
 
-			bodyNode := handlerNode.Children[len(handlerNode.Children)-1]
-			bodyCode := generateJSStatement(bodyNode, "", 0)
+			var bodyParts []string
+			for _, form := range ast.DefunBody(handlerNode) {
+				bodyParts = append(bodyParts, generateJSStatement(form, "", 0)+";")
+			}
+			bodyCode := strings.Join(bodyParts, "\n")
 			funcsCode += fmt.Sprintf("async function %s(%s) {\n%s\n}\n\n", name, argsStr, bodyCode)
 			continue
 		}
