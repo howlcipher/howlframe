@@ -11,6 +11,8 @@
 * `howlframe -max-instructions N prog.howl` (or another flag that only shapes a run) is refused with a message naming
   `howlframe run --max-instructions N prog.howl`; it wrote `prog.hfbc` and exited 0 without running anything
   (bugs.md #62).
+* `=` and `!=` on `--target js` follow the VM: a list or dict is never equal, not even to itself (it compared identity),
+  and nil equals nil (bugs.md #59).
 * A `try_let` used as a value (`(print (try_let (v ...) (catch e ...) v))`) runs on `--target js`; the generated file did
   not parse (bugs.md #65). `--target go` refuses it instead of emitting code that does not compile.
 * `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so

@@ -56,6 +56,10 @@ var jsNeedsHTMLEscape bool
 // writes JSON as the VM's Go encoding/json does.
 var jsNeedsEncodeJSON bool
 
+// jsNeedsEq is set when GenerateJSCode emits =, == or !=, which follow the
+// VM's equality through howlFrameEq.
+var jsNeedsEq bool
+
 // jsNeedsArchive is set when GenerateJSCode emits dom_text, zip_build, or
 // download_file, so the browser archive helpers are prepended.
 var jsNeedsArchive bool
@@ -264,6 +268,26 @@ function howlFrameEncodeJSON(v) {
     return "{" + keys.map((k) => howlFrameJSONString(k) + ":" + howlFrameEncodeJSON(v[k])).join(",") + "}";
   }
   return JSON.stringify(v);
+}
+`
+}
+
+// eqJSHelper is = as the VM has it (BcValuesEqual): nil equals only nil, a
+// list or dict (an array or plain object) equals nothing, not even itself,
+// numbers compare by value (an int held as a BigInt included), and anything
+// else by ===, so host objects such as elements keep their identity.
+func eqJSHelper() string {
+	return `function howlFrameEq(a, b) {
+  if (a === null || a === undefined || b === null || b === undefined) {
+    return (a === null || a === undefined) && (b === null || b === undefined);
+  }
+  const collection = (v) => Array.isArray(v) || (typeof v === "object" && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null));
+  if (collection(a) || collection(b)) return false;
+  if (typeof a === "bigint" || typeof b === "bigint") {
+    const num = (v) => typeof v === "bigint" || typeof v === "number";
+    return num(a) && num(b) && a == b;
+  }
+  return a === b;
 }
 `
 }
@@ -1036,6 +1060,13 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			jsNumeric = true
 			return fmt.Sprintf("howlFrameFloatArith(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
+		if ir.Op == "=" || ir.Op == "==" || ir.Op == "!=" {
+			jsNeedsEq = true
+			if ir.Op == "!=" {
+				return fmt.Sprintf("(!howlFrameEq(%s, %s))", arg1, arg2)
+			}
+			return fmt.Sprintf("howlFrameEq(%s, %s)", arg1, arg2)
+		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":
 		var letPrefix strings.Builder
@@ -1318,6 +1349,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
 	jsNeedsEncodeJSON = false
+	jsNeedsEq = false
 	jsNeedsArchive = false
 	jsNeedsExit = false
 	jsNeedsDOM = false
@@ -1429,6 +1461,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	}
 	if jsNeedsEncodeJSON {
 		helper := encodeJSONJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsEq {
+		helper := eqJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
