@@ -455,7 +455,23 @@ The order of M1 and M3 work follows what the application needs.
 
 ### Resuming
 
-1. Read the status table and the first unticked task.
+1. Read the status table and the first unticked task, and the milestone's
+   journal in `docs/journals/` (`2026-10-30_wasmgc_m2_journal.md` for M2).
 2. `go test ./internal/backend/wasmgc/ ./tools/difftest/` to see the
    current state.
 3. Work test first; update this plan in the same pull request.
+
+### Verification
+
+Before merging a change to this backend, run the regression gate on the
+final tree (after any merge of main):
+
+    HOWLSCENE_HF=<howlscene-hf checkout> scripts/wasmgc_gate.sh
+
+It runs `go test ./...` on the default toolchain and on Go 1.27.2, and the
+HowlScene HF gates. It fails when node, wasmtime, wasm-tools or the checkout
+is missing, and when a WebAssembly test skips for one of them, since a
+skipped leg passes while testing less. CI's `build` job installs pinned
+wasmtime and wasm-tools, so the wasmtime legs and module validation run on
+every pull request. The HowlScene HF gates run only locally (the repository
+is private).

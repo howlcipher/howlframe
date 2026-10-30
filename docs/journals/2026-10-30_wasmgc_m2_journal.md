@@ -66,3 +66,14 @@ Findings:
   HowlScene gates in Node and wasmtime).
 - #67 merged main; only bugs.md conflicted (both sides added rows), resolved as #68, #67, #66 in descending order.
   Full gate under Go 1.26 and 1.27.2 passed on the merged tree. Opened as #278.
+
+### 2026-10-30 18:40: regression gate
+
+- Asked to make sure each change is regression tested. Gaps found: CI had no wasmtime or wasm-tools, so every
+  wasmtime leg and every module validation skipped there; the HowlScene HF gates skip without `HOWLSCENE_HF`
+  (private repository, not in CI); and a skipped leg reads as a pass.
+- CI's `build` job now installs wasmtime 47.0.3 and wasm-tools 1.254.0, pinned by SHA-256.
+- `scripts/wasmgc_gate.sh` is the local gate before every merge: `go test ./...` on Go 1.26 and 1.27.2 and the
+  HowlScene HF gates. It refuses to run without node, wasmtime, wasm-tools and the checkout, and fails when a
+  WebAssembly test skips for one of them (both checked by removing wasmtime from PATH and unsetting the variable).
+  Its summary goes in each PR's Test Impact Assessment. Plan: "Verification".
