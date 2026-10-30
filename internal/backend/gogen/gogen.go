@@ -675,6 +675,13 @@ func howlFrameReadFileBytes(path string) []byte {
 // an IO failure there panics after the grant check.
 // fetchImports lists the packages the fetch helper needs beyond the default
 // header, skipping any the program already imports.
+// fetchImportUse names a declaration of each package fetchImports adds,
+// for a file that imports them without using them.
+var fetchImportUse = map[string]string{
+	"context": "context.Background", "errors": "errors.New", "net": "net.Dial",
+	"net/netip": "netip.ParseAddr", "net/url": "url.Parse", "syscall": "syscall.Getpid",
+}
+
 func fetchImports(extra []string) string {
 	have := map[string]bool{}
 	for _, imp := range extra {
@@ -1274,6 +1281,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	var routesCode string
 	var cliCode string
 	var testCode string
+	testNames := map[string]int{}
 	var extraImports []string
 	defaultImports := map[string]bool{
 		"bufio":         true,
@@ -1340,12 +1348,20 @@ func GenerateCode(node *ast.Node) (string, string) {
 			if len(safeDesc) > 0 {
 				testFuncName += "_" + safeDesc
 			}
+			// Descriptions that differ only in punctuation, or repeat, still
+			// get a function each.
+			if testNames[testFuncName] > 0 {
+				testNames[testFuncName]++
+				testFuncName += fmt.Sprintf("_%d", testNames[testFuncName])
+			} else {
+				testNames[testFuncName] = 1
+			}
 
 			var testBodyCode string
 			for j := 2; j < len(handlerNode.Children); j++ {
 				testBodyCode += generateStatement(handlerNode.Children[j], "", 0) + "\n"
 			}
-			testCode += fmt.Sprintf("func %s(t *testing.T) {\n%s\n}\n\n", testFuncName, testBodyCode)
+			testCode += fmt.Sprintf("func %s(t *testing.T) {\n\tdefer howlFrameTestRecover(t)\n%s\n}\n\n", testFuncName, testBodyCode)
 			continue
 		}
 
@@ -1712,6 +1728,9 @@ import (
 		code += htmlEscapeHelperSource()
 	}
 	code += goHostHelpers()
+	// exit goes through howlFrameExit so that server_test.go can make it
+	// fail the running test instead of ending the test binary (bugs.md #68).
+	code += "var howlFrameExit = func(code int, where string) { os.Exit(code) }\n\n"
 	code += funcsCode
 	code += `func main() {
 	defer func() {
@@ -1823,19 +1842,37 @@ var _ = observer.Trace
 		if gogenHTMLEscape {
 			fullTestCode = strings.Replace(fullTestCode, "\t\"github.com/howlcipher/howlframe/observer\"\n", "\t\"github.com/howlcipher/howlframe/observer\"\n\t\"html\"\n", 1)
 		}
-		if gogenMapGet {
-			fullTestCode += mapGetHelperSource()
-		}
+		// The helpers live in server.go, the same package (bugs.md #68); the
+		// imports they would have used stay referenced.
 		if gogenNumeric {
-			fullTestCode += numericHelperSource()
-		}
-		if gogenCollection {
-			fullTestCode += collectionHelperSource()
+			fullTestCode += "var _ = math.Abs\n"
 		}
 		if gogenHTMLEscape {
-			fullTestCode += htmlEscapeHelperSource()
+			fullTestCode += "var _ = html.EscapeString\n"
 		}
-		fullTestCode += goHostHelpers()
+		if gogenNeedsFetch {
+			for _, imp := range strings.Split(strings.TrimSpace(fetchImports(extraImports)), "\n") {
+				if imp = strings.Trim(strings.TrimSpace(imp), `"`); imp != "" {
+					fullTestCode += fmt.Sprintf("var _ = %s\n", fetchImportUse[imp])
+				}
+			}
+		}
+		// A failing assert (stderr and exit) or a run-time panic fails the
+		// running test only; the rest still run.
+		fullTestCode += `
+func init() {
+	howlFrameExit = func(code int, where string) {
+		panic(fmt.Sprintf("HowlFrame exit %d at %s", code, where))
+	}
+}
+
+func howlFrameTestRecover(t *testing.T) {
+	if r := recover(); r != nil {
+		t.Fatal(r)
+	}
+}
+
+`
 		fullTestCode += testCode
 		testCode = fullTestCode
 	}
@@ -2772,7 +2809,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return fmt.Sprintf("		fmt.Fprint(os.Stderr, %s)", valStr)
 	} else if head == "exit" {
 		codeStr := generateExpression(node.Children[1], reqVar, depth+1)
-		return fmt.Sprintf("		os.Exit(func() int { _c, _ := strconv.Atoi(fmt.Sprint(%s)); return _c }())", codeStr)
+		where := fmt.Sprintf("%s:%d", node.Filename, node.Line)
+		return fmt.Sprintf("		howlFrameExit(func() int { _c, _ := strconv.Atoi(fmt.Sprint(%s)); return _c }(), %q)", codeStr, where)
 	} else if head == "read_line" {
 		return "func() string { _reader := bufio.NewReader(os.Stdin); _line, _ := _reader.ReadString('\\n'); return strings.TrimRight(_line, \"\\r\\n\") }()"
 	}
