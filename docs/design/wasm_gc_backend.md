@@ -413,10 +413,10 @@ The order of M1 and M3 work follows what the application needs.
   there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.
   Whether programs should get such an operation is open.
 - Running programs on the JavaScript backend as the reference for base64
-  found two divergences of that backend from the VM: `encode_json` keeps
-  insertion order and does not escape `<`, `>`, `&` (bugs.md #64), and a
-  `try_let` used as a value generates JavaScript that does not parse
-  (bugs.md #65).
+  found two divergences of that backend from the VM, both fixed:
+  `encode_json` kept insertion order and did not escape `<`, `>`, `&`
+  (bugs.md #64; the backup gate now compares bytes), and a `try_let` used
+  as a value generated JavaScript that did not parse (bugs.md #65).
 - Text that is not valid UTF-8 (made with `bytes_to_string`) exposed two
   divergences that were unreachable before: `str_split` with an empty
   separator took a character's length from its lead byte, so `0xFF`

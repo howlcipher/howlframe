@@ -6,6 +6,8 @@
 * The VM's JSON text (`encode_json`, `res_json`, `parse_json` values and errors) no longer depends on the Go toolchain
   that built it: the VM writes and reads it itself, as Go 1.25's `encoding/json` does. Built with Go 1.27 it wrote invalid
   UTF-8 as a raw U+FFFD and worded syntax errors differently (bugs.md #63).
+* `encode_json` on `--target js` writes what the VM writes: keys sorted (it kept insertion order), `<`, `>`, `&` and
+  U+2028/U+2029 escaped, `-0` kept. A project file written in the browser is now byte-identical to the VM's (bugs.md #64).
 * A `try_let` used as a value (`(print (try_let (v ...) (catch e ...) v))`) runs on `--target js`; the generated file did
   not parse (bugs.md #65). `--target go` refuses it instead of emitting code that does not compile.
 * `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so

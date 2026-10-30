@@ -94,6 +94,44 @@ func TestJSValueFormRejectsReturnInside(t *testing.T) {
 	}
 }
 
+// encode_json on the JavaScript backend writes what the VM's Go
+// encoding/json writes (bugs.md #64): sorted keys in UTF-8 byte order (an
+// astral key after U+FFFF), HTML-safe escapes, -0, Go's float layout.
+func TestJSEncodeJSONMatchesBytecode(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	for name, body := range map[string]string{
+		"key order":   `(print (encode_json (dict ("b" 1) ("a" (dict ("z" 1) ("y" 2))) ("" (dict)) ("B" 3) ("ab" 4))))`,
+		"astral keys": "(print (encode_json (dict (\"\U0001F600\" 1) (\"\uffff\" 2) (\"é\" 3) (\"z\" 4))))",
+		"escapes":     "(print (encode_json (list \"<a href=\\\"x\\\">&amp;</a>\" \"tab\\tnl\\nbs\\\\\" \"\u2028\u2029\")))",
+		"numbers":     `(print (encode_json (list 1.5 -0.0 0.000001 0.0000001 1000000000000000000000.0 2.0 123456789.125)) (encode_json (list 0 -7 9007199254740991)))`,
+		"scalars":     `(let (d (dict ("a" 1))) (print (encode_json true) (encode_json "s") (encode_json (map_get d "zz")) (encode_json (list)) (encode_json (dict))))`,
+		"nested":      `(print (encode_json (dict ("rows" (list (dict ("tags" (list "x" "y")) ("id" 2)) (dict ("tags" (list)) ("id" 1)))))))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cli := filepath.Join(dir, "cli.howl")
+			os.WriteFile(cli, []byte("(cli_app\n"+body+")\n"), 0o600)
+			want, err := exec.Command(bin, "run", cli).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bytecode run failed: %v %s", err, want)
+			}
+			web := filepath.Join(dir, "web.howl")
+			os.WriteFile(web, []byte("(web_app\n"+body+")\n"), 0o600)
+			outDir := filepath.Join(dir, "js")
+			if out, err := exec.Command(bin, "build", web, "--target", "js", "-o", outDir).CombinedOutput(); err != nil {
+				t.Fatalf("js build rejected: %v %s", err, out)
+			}
+			got, err := exec.Command("node", filepath.Join(outDir, "app.js")).CombinedOutput()
+			if err != nil {
+				t.Fatalf("node failed: %v %s", err, got)
+			}
+			if string(got) != string(want) {
+				t.Fatalf("javascript printed %q, bytecode printed %q", got, want)
+			}
+		})
+	}
+}
+
 // A try_let used as a value has no value form on the Go target, which
 // emits it as a statement; the build refuses it (bugs.md #65).
 func TestGoTryLetAsValueRejected(t *testing.T) {
