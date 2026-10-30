@@ -594,5 +594,8 @@
                     (let (c (call dynamic_codes s buf path))
                       (set out (call codes s buf out size (list_get c 0) (list_get c 1) path)))
                     (call corrupt path)))))))
+        ; Bytes after the final block are an error, as the Compression
+        ; Streams standard has DecompressionStream reject them.
+        (if (< (__hf_aget s 0) to) (call corrupt path))
         (if (< (list_len out) size) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " is shorter than its declared size"))))
         (return out)))))

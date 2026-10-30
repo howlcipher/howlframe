@@ -451,9 +451,13 @@ The order of M1 and M3 work follows what the application needs.
   arbitrary-precision decimal) uses integer intrinsics.
 - ZIP (2026-10-30). The JavaScript backend's `zip_read` is asynchronous
   (it inflates through `DecompressionStream`); in this backend it is an
-  ordinary call, since the inflate is HowlFrame code. Node's zlib ignores
-  data after a deflate stream's final block, so `zip_read` does too
-  (browsers may refuse it). Paths are compared for duplicates in lower
+  ordinary call, since the inflate is HowlFrame code. Data after a deflate
+  stream's final block is `ZIP_CORRUPT`, as the Compression Streams
+  standard has `DecompressionStream` reject it. Node rejects it from
+  22.23 (CI's runner) and accepts it before (22.22 here), so the JavaScript
+  backend's result depends on the host; the `deflate junk` fixture pins the
+  standard's result and compares with the JavaScript backend only where its
+  Node agrees. Paths are compared for duplicates in lower
   case: JavaScript's `toLowerCase` uses full case mapping (U+0130 to
   `i` + U+0307, a final sigma to ς) where `to_lower` is Go's simple
   mapping, so two names that differ only there are duplicates on one

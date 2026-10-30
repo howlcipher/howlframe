@@ -195,7 +195,6 @@ func TestZipLikeJavaScript(t *testing.T) {
 		"unicode name":             readZip(rawZip("dé/ñ ✓.txt", 0, 0, crcOf([]byte("abc")), 3, 3, []byte("abc")), `10 10`),
 		"duplicate names":          readZip(zipOf(t, zipFile{"A.txt", []byte("1"), zip.Store}, zipFile{"a.TXT", []byte("2"), zip.Store}), `10 10`),
 		"truncated deflate":        readZip(rawZip("t", 8, 0, crcOf(text), uint32(len(good)-5), uint32(len(text)), good[:len(good)-5]), `10 100000`),
-		"deflate junk":             readZip(rawZip("j", 8, 0, crcOf(text), uint32(len(good)+3), uint32(len(text)), append(append([]byte{}, good...), 1, 2, 3)), `10 100000`),
 		"expands past":             readZip(rawZip("p", 8, 0, crcOf(text), uint32(len(good)), 100, good), `10 100000`),
 		"shorter":                  readZip(rawZip("s", 8, 0, crcOf(text), uint32(len(good)), uint32(len(text)+1), good), `10 100000`),
 		"invalid block type":       readZip(rawZip("b", 8, 0, 0, 1, 1, []byte{0x07}), `10 10`),
@@ -212,6 +211,23 @@ func TestZipLikeJavaScript(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) { sameAsJS(t, "(cli_app "+body+")") })
 	}
+	// Data after the final deflate block: the Compression Streams standard
+	// has DecompressionStream reject it, and Node does from 22.23, but
+	// earlier Node accepts it, so the reference is the standard's result and
+	// the JavaScript backend is compared only where its Node agrees.
+	t.Run("deflate junk", func(t *testing.T) {
+		path := writeSource(t, "(cli_app "+readZip(rawZip("j", 8, 0, crcOf(text), uint32(len(good)+3), uint32(len(text)), append(append([]byte{}, good...), 1, 2, 3)), `10 100000`)+")")
+		want := outcome{failed: true, code: 1, errMsg: `{"code":"ZIP_CORRUPT","message":"j is not valid deflate data"}`}
+		if js := onJSAt(t, path); js.failed {
+			matchVM(t, "js", want, js)
+		} else {
+			t.Logf("this Node accepts data after a deflate stream; checking the standard's result only")
+		}
+		matchVM(t, "wasm", want, onWasmAt(t, path))
+		if _, err := exec.LookPath("wasmtime"); err == nil {
+			matchVM(t, "wasmtime", want, onWasmtimeAt(t, path))
+		}
+	})
 }
 
 // Every embedded standard-library module parses as one module form; text
