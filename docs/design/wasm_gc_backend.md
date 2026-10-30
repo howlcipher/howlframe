@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: design, milestone M1 in progress.
+Status: milestone M1 exit gate met (2026-10-30); Unicode case mapping and trim finish M1; M2 next.
 
 ## Goal
 
@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). `tools/difftest` has a `wasmgc` target and the corpus matches the VM wherever the backend builds it. Floats are formatted and parsed in HowlFrame, so the host provides only print, stderr and exit. Still open for the M1 gate: the corpus under wasmtime, through a WASI host. |
+| M1 core language | Exit gate met (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 353 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Left in M1: Unicode case mapping and trim. Byte values (`utf8_valid`, `bytes_to_string`, base64) move to M3, with the files and images that produce them. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -170,7 +170,13 @@ as the work it describes: tick tasks, move the status line, record findings.
       `read_line`) or an adaptive construct (`optimize_signature`), counted
       as not supported yet. Typed parameters (`((a int) (b int))`) were the
       one gap it found.
-- [ ] The same corpus under wasmtime.
+- [x] The same corpus under wasmtime: `build --target wasmgc --host wasi`
+      writes a WASI command (`_start`, imports `fd_write` and
+      `proc_exit`, a one-page memory for output); every differential
+      fixture, the corpus and the HowlScene gate also run in wasmtime when
+      it is installed. Its import signatures are standalone types: inside
+      the module's recursion group wasmtime refused them as a different
+      type.
 - [x] Literals and `print`; `let`, `set`, `do`, `if`, `while`;
       arithmetic and comparison; `and`, `or`; `defun`, `call`, `return` and
       recursion; `to_int`, `to_float`, `to_string`.
@@ -250,19 +256,19 @@ as the work it describes: tick tasks, move the status line, record findings.
       (`(?i)`, `\b`, `\p{..}`, `\x`, octal, `\Q..\E`, `[[:alpha:]]`,
       `\A`, `\z`) fails with `WASM_UNSUPPORTED` at run time
       (`TestDiffRegex`, `TestRegexUnsupportedFailsClosed`).
-- [ ] The rest of the standard library in HowlFrame (`std/`), on byte intrinsics:
-      `encode_json`, `parse_json`, `regex_match` (the regular expression
-      subset the corpus uses, documented), `html_escape`, `attr_escape`,
-      `utf8_valid`, `bytes_to_string`, base64.
+- [ ] Unicode case mapping and trim: `to_lower`, `to_upper` and
+      `str_trim` beyond ASCII, as Go's `unicode` tables give them.
+- [ ] Moved to M3: `utf8_valid`, `bytes_to_string` and base64, which work
+      on byte values (Go `[]byte` on the VM) that this backend has no
+      representation for yet; they arise with files, images and ZIP.
 - [x] Exit gate, rendering: HowlScene HF's registry, schema and renderer
       compile; rendering its fixture projects gives byte-identical output
       on the VM and on WebAssembly (21,872 bytes for the two neutral
       fixtures, rendered two ways and re-encoded). `TestHowlSceneGate` runs
       it when `HOWLSCENE_HF` names a checkout; evidence in
       `docs/journals/2026-10-29_howlscene_hf_wasmgc_m1_gate.md`.
-- [ ] Exit gate, engines: the corpus also under wasmtime, through a WASI
-      host (float digits and parsing are HowlFrame now, so print, stderr
-      and exit are all the host provides).
+- [x] Exit gate, engines: the corpus runs identically on the VM, in Node
+      and in wasmtime (2026-10-30).
 
 ### M2 tasks: tests
 

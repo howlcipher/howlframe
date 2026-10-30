@@ -114,14 +114,18 @@ func (e *UnsupportedError) Error() string {
 }
 
 // Compile turns a checked, desugared cli_app into a WebAssembly module whose
-// exported main runs the program. The module imports print and float
-// formatting from the host (see Loader).
-func Compile(root *ast.Node) ([]byte, error) {
+// exported main runs the program in Node (see Loader).
+func Compile(root *ast.Node) ([]byte, error) { return CompileFor(root, HostNode) }
+
+// CompileFor compiles for a host. A WASI module (HostWASI) is a command:
+// its exported _start runs the program, writes an uncaught error as the
+// VM's JSON report on standard error and exits 1.
+func CompileFor(root *ast.Node, host Host) ([]byte, error) {
 	if root == nil || root.Type != "List" || len(root.Children) == 0 || root.Children[0].Value != "cli_app" {
 		return nil, fmt.Errorf("WASM_UNSUPPORTED: the WebAssembly backend compiles cli_app programs so far")
 	}
 	m := NewModule()
-	c := &compiler{m: m, rt: newRuntime(m), funcs: map[string]int{}, arity: map[string]int{}}
+	c := &compiler{m: m, rt: newRuntime(m, host), funcs: map[string]int{}, arity: map[string]int{}}
 	body := root.Children[1:]
 	// Declare every defun first so calls can come before definitions.
 	var defuns []*ast.Node
@@ -203,6 +207,15 @@ func Compile(root *ast.Node) ([]byte, error) {
 	}
 	main := m.AddFunc(Func{Name: "main", Type: c.rt.FuncType(0), Locals: locals, Body: code})
 	m.Exports = append(m.Exports, Export{"main", main})
+	if host == HostWASI {
+		r := c.rt
+		start := NewCode().Call(main).Drop()
+		start.GlobalGet(r.gErr).RefIsNull().I32Eqz().If(NoResult)
+		start.GlobalGet(r.gErr).RefCast(r.tStr).Call(r.fCatchText).Call(r.iStderr)
+		r.StrLiteral(start, "\n").Call(r.iStderr)
+		start.I32Const(1).Call(r.iExit).End()
+		m.Exports = append(m.Exports, Export{"_start", m.AddFunc(Func{Name: "_start", Type: r.tVoid, Body: start})})
+	}
 	return m.Bytes()
 }
 

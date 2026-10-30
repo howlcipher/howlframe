@@ -21,6 +21,9 @@ const (
 	// TargetWasmGC is the WebAssembly GC backend (build --target wasmgc), run
 	// in Node through its generated loader.
 	TargetWasmGC Target = "wasmgc"
+	// TargetWasmGCWASI is the same backend built for a WASI host
+	// (--host wasi) and run in wasmtime.
+	TargetWasmGCWASI Target = "wasmgc_wasi"
 )
 
 type Status string
@@ -615,7 +618,9 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 		case TargetJavaScript:
 			candidate = executeJSBackend(filePath, opts)
 		case TargetWasmGC:
-			candidate = executeWasmGCBackend(filePath, opts)
+			candidate = executeWasmGCBackend(filePath, opts, TargetWasmGC)
+		case TargetWasmGCWASI:
+			candidate = executeWasmGCBackend(filePath, opts, TargetWasmGCWASI)
 		default:
 			return report, fmt.Errorf("unsupported target: %s", tgt)
 		}
@@ -631,40 +636,49 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 }
 
 // executeWasmGCBackend builds a cli_app with the WebAssembly GC backend and
-// runs it in Node. A construct the backend does not compile yet
+// runs it in Node (TargetWasmGC) or, as a WASI command, in wasmtime
+// (TargetWasmGCWASI). A construct the backend does not compile yet
 // (WASM_UNSUPPORTED) is BACKEND_UNSUPPORTED, as are command-line arguments
 // and standard input, which its loader does not pass yet; the backend has no
 // host capabilities, so programs that need one fail to build the same way.
-func executeWasmGCBackend(filePath string, opts RunOptions) ExecutionResult {
+func executeWasmGCBackend(filePath string, opts RunOptions, target Target) ExecutionResult {
 	unsupported := func(msg string) ExecutionResult {
-		return ExecutionResult{Target: TargetWasmGC, ErrorMessage: msg, Status: StatusBackendUnsupported}
+		return ExecutionResult{Target: target, ErrorMessage: msg, Status: StatusBackendUnsupported}
 	}
 	if len(opts.CLIArgs) > 0 || opts.Input != "" {
-		return unsupported("the wasmgc loader does not pass arguments or standard input yet")
+		return unsupported("the wasmgc hosts do not pass arguments or standard input yet")
 	}
-	if _, err := exec.LookPath("node"); err != nil {
-		return unsupported("node runtime not available")
+	engine, host := "node", "node"
+	if target == TargetWasmGCWASI {
+		engine, host = "wasmtime", "wasi"
+	}
+	if _, err := exec.LookPath(engine); err != nil {
+		return unsupported(engine + " runtime not available")
 	}
 	compiler, err := getCompiler()
 	if err != nil {
-		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		return ExecutionResult{Target: target, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 	tmpDir, err := os.MkdirTemp("", "howlframe-wasmgc-*")
 	if err != nil {
-		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+		return ExecutionResult{Target: target, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
 	}
 	defer os.RemoveAll(tmpDir)
 
-	buildOut, buildErr := exec.Command(compiler, "build", filePath, "--target", "wasmgc", "-o", tmpDir).CombinedOutput()
+	buildOut, buildErr := exec.Command(compiler, "build", filePath, "--target", "wasmgc", "--host", host, "-o", tmpDir).CombinedOutput()
 	if buildErr != nil {
 		errMsg := strings.TrimSpace(string(buildOut))
 		if strings.Contains(errMsg, "WASM_UNSUPPORTED") {
 			return unsupported(errMsg)
 		}
-		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: errMsg, ErrorClass: NormalizeError(errMsg), Status: StatusCompileFailure}
+		return ExecutionResult{Target: target, ExitCode: 1, ErrorMessage: errMsg, ErrorClass: NormalizeError(errMsg), Status: StatusCompileFailure}
 	}
-	exitCode, stdout, stderr, runErr := runCmdWithBuffers(exec.Command("node", filepath.Join(tmpDir, "app.mjs")), "")
-	res := ExecutionResult{Target: TargetWasmGC, ExitCode: exitCode, Stdout: stdout, Stderr: stderr, Status: StatusPass}
+	cmd := exec.Command("node", filepath.Join(tmpDir, "app.mjs"))
+	if target == TargetWasmGCWASI {
+		cmd = exec.Command("wasmtime", "run", "-W", "gc=y,function-references=y", filepath.Join(tmpDir, "app.wasm"))
+	}
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(cmd, "")
+	res := ExecutionResult{Target: target, ExitCode: exitCode, Stdout: stdout, Stderr: stderr, Status: StatusPass}
 	if runErr != nil && exitCode != 0 {
 		outAll := stderr + " " + stdout
 		res.ErrorMessage = strings.TrimSpace(outAll)

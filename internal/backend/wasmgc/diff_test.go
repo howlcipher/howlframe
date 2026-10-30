@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,7 @@ func TestMain(m *testing.M) {
 type outcome struct {
 	stdout string
 	failed bool
+	code   int // exit status
 	errMsg string
 }
 
@@ -44,12 +46,15 @@ func run(t *testing.T, name string, args ...string) outcome {
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
+	code := 0
 	if err != nil {
-		if _, ok := err.(*exec.ExitError); !ok {
+		exit, ok := err.(*exec.ExitError)
+		if !ok {
 			t.Fatal(err)
 		}
+		code = exit.ExitCode()
 	}
-	return outcome{stdout: out.String(), failed: err != nil, errMsg: errOut.String() + out.String()}
+	return outcome{stdout: out.String(), failed: err != nil, code: code, errMsg: errOut.String() + out.String()}
 }
 
 func writeSource(t *testing.T, src string) string {
@@ -125,9 +130,29 @@ func sameAsVM(t *testing.T, src string) {
 func sameAsVMAt(t *testing.T, path string) {
 	t.Helper()
 	want := onVMAt(t, path)
-	got := onWasmAt(t, path)
-	if got.failed != want.failed {
-		t.Fatalf("failure differs: vm failed=%v (%s), wasm failed=%v (%s)", want.failed, want.errMsg, got.failed, got.errMsg)
+	matchVM(t, "wasm", want, onWasmAt(t, path))
+	// The same program as a WASI command under wasmtime, when installed.
+	if _, err := exec.LookPath("wasmtime"); err == nil {
+		matchVM(t, "wasmtime", want, onWasmtimeAt(t, path))
+	}
+}
+
+// onWasmtimeAt builds a program for a WASI host and runs it in wasmtime.
+func onWasmtimeAt(t *testing.T, path string) outcome {
+	t.Helper()
+	dir := t.TempDir()
+	if out := run(t, compilerBin, "build", path, "--target", "wasmgc", "--host", "wasi", "-o", dir); out.failed {
+		t.Fatalf("build (wasi): %s", out.errMsg)
+	}
+	return run(t, "wasmtime", "run", "-W", "gc=y,function-references=y", filepath.Join(dir, "app.wasm"))
+}
+
+// matchVM requires identical output and, for a failing program, the same
+// error code and message.
+func matchVM(t *testing.T, engine string, want, got outcome) {
+	t.Helper()
+	if got.failed != want.failed || got.code != want.code {
+		t.Fatalf("failure differs: vm exit %d (%s), %s exit %d (%s)", want.code, want.errMsg, engine, got.code, got.errMsg)
 	}
 	if want.failed {
 		// Output before the error, then the message, compared decoded (the VM
@@ -135,12 +160,12 @@ func sameAsVMAt(t *testing.T, path string) {
 		vmCode, vmMsg := errorReport(want.errMsg)
 		gotCode, gotMsg := errorReport(got.errMsg)
 		if vmMsg == "" || vmCode != gotCode || !strings.Contains(gotMsg, vmMsg) {
-			t.Fatalf("error differs:\nvm   %s\nwasm %s", want.errMsg, got.errMsg)
+			t.Fatalf("error differs:\nvm   %s\n%s %s", want.errMsg, engine, got.errMsg)
 		}
 		return
 	}
 	if got.stdout != want.stdout {
-		t.Fatalf("output differs:\nvm   %q\nwasm %q", want.stdout, got.stdout)
+		t.Fatalf("output differs:\nvm   %q\n%s %q", want.stdout, engine, got.stdout)
 	}
 }
 
@@ -557,6 +582,35 @@ func TestDiffFloats(t *testing.T) {
 			sameAsVM(t, "(cli_app "+body+")")
 		})
 	}
+}
+
+// build --host takes node (the default: app.wasm and the app.mjs loader)
+// or wasi (a WASI command, app.wasm only); anything else is refused.
+func TestBuildHosts(t *testing.T) {
+	src := writeSource(t, `(cli_app (print "hi"))`)
+	for host, files := range map[string][]string{"node": {"app.wasm", "app.mjs"}, "wasi": {"app.wasm"}} {
+		dir := t.TempDir()
+		if out := run(t, compilerBin, "build", src, "--target", "wasmgc", "--host", host, "-o", dir); out.failed {
+			t.Fatalf("--host %s: %s", host, out.errMsg)
+		}
+		entries, _ := os.ReadDir(dir)
+		var got []string
+		for _, e := range entries {
+			got = append(got, e.Name())
+		}
+		if strings.Join(got, ",") != strings.Join(sortedCopy(files), ",") {
+			t.Fatalf("--host %s wrote %v, want %v", host, got, files)
+		}
+	}
+	if out := run(t, compilerBin, "build", src, "--target", "wasmgc", "--host", "browser", "-o", t.TempDir()); !out.failed || !strings.Contains(out.errMsg, "Unknown --host") {
+		t.Fatalf("--host browser: failed=%v %s", out.failed, out.errMsg)
+	}
+}
+
+func sortedCopy(xs []string) []string {
+	out := append([]string(nil), xs...)
+	sort.Strings(out)
+	return out
 }
 
 // The standard library's intrinsics and names are reserved for it.

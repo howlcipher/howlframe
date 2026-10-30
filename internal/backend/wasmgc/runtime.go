@@ -11,7 +11,8 @@ import "math"
 
 // rt holds the indices of runtime types, globals, imports and functions.
 type rt struct {
-	m *Module
+	m    *Module
+	host Host
 
 	// Types.
 	tBytes, tStr, tInt, tFloat, tBool, tItems, tList, tDict int
@@ -27,6 +28,8 @@ type rt struct {
 
 	// Imports.
 	iPrint, iStderr, iExit int
+	// WASI imports, and the function that writes a $Str to a descriptor.
+	wFdWrite, wProcExit, fWrite int
 
 	// Functions.
 	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail           int
@@ -48,8 +51,23 @@ type rt struct {
 	strings map[string]int // literal -> data segment
 }
 
-func newRuntime(m *Module) *rt {
-	r := &rt{m: m, fnTypes: map[int]int{}, strings: map[string]int{}}
+// Host names what runs the module: Node through the generated loader, or
+// a WASI engine such as wasmtime.
+type Host string
+
+const (
+	HostNode Host = "node"
+	HostWASI Host = "wasi"
+)
+
+func newRuntime(m *Module, host Host) *rt {
+	r := &rt{m: m, host: host, fnTypes: map[int]int{}, strings: map[string]int{}}
+	var wasiWrite, wasiExit int
+	if host == HostWASI {
+		// The WASI imports' signatures, standalone so they match the host's.
+		wasiWrite = m.AddType(TypeDef{Name: "fd_write", IsFunc: true, Standalone: true, Params: []ValType{I32, I32, I32, I32}, Results: []ValType{I32}})
+		wasiExit = m.AddType(TypeDef{Name: "proc_exit", IsFunc: true, Standalone: true, Params: []ValType{I32}})
+	}
 	r.tBytes = m.AddType(TypeDef{Name: "Bytes", Array: &Field{Type: PackedI8, Mutable: true}})
 	r.tStr = m.AddType(TypeDef{Name: "Str", Struct: []Field{{Type: Ref(r.tBytes)}}})
 	r.tInt = m.AddType(TypeDef{Name: "Int", Struct: []Field{{Type: I64}}})
@@ -84,13 +102,22 @@ func newRuntime(m *Module) *rt {
 	r.tEqI32ToI32 = fn([]ValType{EqRef, I32}, I32)
 	r.tI32ToEqRef = fn(nil, EqRef)
 
-	// Host imports. print receives a $Str; the host reads its bytes through
-	// the exported __hf_str_len and __hf_str_byte.
-	r.iPrint = m.AddImport("hf", "print", r.tEqToVoid)
-	// stderr writes a $Str without a newline; exit ends the program with a
-	// status (the host does not return).
-	r.iStderr = m.AddImport("hf", "stderr", r.tEqToVoid)
-	r.iExit = m.AddImport("hf", "exit", r.funcType([]ValType{I32}))
+	if host == HostWASI {
+		// WASI: print, stderr and exit are functions of the module (see
+		// emitWASI) over fd_write and proc_exit, and output passes through a
+		// one-page memory.
+		r.wFdWrite = m.AddImport("wasi_snapshot_preview1", "fd_write", wasiWrite)
+		r.wProcExit = m.AddImport("wasi_snapshot_preview1", "proc_exit", wasiExit)
+		m.MemoryPages, m.MemoryExport = 1, "memory"
+	} else {
+		// Host imports. print receives a $Str; the host reads its bytes
+		// through the exported __hf_str_len and __hf_str_byte.
+		r.iPrint = m.AddImport("hf", "print", r.tEqToVoid)
+		// stderr writes a $Str without a newline; exit ends the program with
+		// a status (the host does not return).
+		r.iStderr = m.AddImport("hf", "stderr", r.tEqToVoid)
+		r.iExit = m.AddImport("hf", "exit", r.funcType([]ValType{I32}))
+	}
 
 	r.gErr = m.AddGlobal(Global{Type: EqRef, Mutable: true, Init: []byte{0xD0, HeapNone}})
 	r.gTrue = m.AddGlobal(Global{Type: Ref(r.tBool), Init: append(append([]byte{0x41}, sleb(1)...), gcOp(0, r.tBool)...)})
@@ -217,6 +244,13 @@ func (r *rt) emitAll() {
 		{&r.fStdShortest, "float_shortest", r.funcType([]ValType{F64}, EqRef)},
 		{&r.fStdParse, "float_parse", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
 	}
+	if r.host == HostWASI {
+		plan = append(plan,
+			pending{&r.fWrite, "write", r.funcType([]ValType{I32, EqRef, I32})},
+			pending{&r.iPrint, "print", r.tEqToVoid},
+			pending{&r.iStderr, "stderr", r.tEqToVoid},
+			pending{&r.iExit, "exit", r.funcType([]ValType{I32})})
+	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
 		*p.idx = base + i
@@ -263,6 +297,56 @@ func (r *rt) emitAll() {
 	r.emitErrors()
 	r.emitBytes()
 	r.emitChar()
+	if r.host == HostWASI {
+		r.emitWASI()
+	}
+}
+
+// emitWASI writes print, stderr and exit for a WASI host. write(fd, s,
+// newline) copies s to memory in chunks and hands each to fd_write until it
+// is all written; memory holds an iovec at 0, the count written at 8 and
+// the bytes from 16.
+// locals: 0 fd, 1 s, 2 newline, 3 bytes, 4 n, 5 i, 6 chunk, 7 k, 8 done
+func (r *rt) emitWASI() {
+	const data, room = 16, 65536 - 16
+	// flush hands memory[16, 16+len) to fd_write, repeating after a short
+	// write. len is in local 6; 8 counts what is written.
+	flush := func(c *Code) {
+		c.I32Const(0).LocalSet(8)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(8).LocalGet(6).I32GeU().BrIf(1)
+		c.I32Const(0).LocalGet(8).I32Const(data).I32Add().I32Store(0)
+		c.I32Const(0).LocalGet(6).LocalGet(8).I32Sub().I32Store(4)
+		c.LocalGet(0).I32Const(0).I32Const(1).I32Const(8).Call(r.wFdWrite)
+		// An error, or no progress, ends the write.
+		c.If(NoResult).Br(2).End()
+		c.I32Const(0).I32Load(8).I32Eqz().BrIf(1)
+		c.LocalGet(8).I32Const(0).I32Load(8).I32Add().LocalSet(8).Br(0)
+		c.End().End()
+	}
+	r.body(r.fWrite, []ValType{RefNull(r.tBytes), I32, I32, I32, I32, I32}, func(c *Code) {
+		c.LocalGet(1).Call(r.fText).StructGet(r.tStr, 0).LocalTee(3).ArrayLen().LocalSet(4)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(5).LocalGet(4).I32GeU().BrIf(1)
+		c.LocalGet(4).LocalGet(5).I32Sub().LocalTee(6).I32Const(room).I32GtU().If(NoResult).I32Const(room).LocalSet(6).End()
+		c.I32Const(0).LocalSet(7)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(7).LocalGet(6).I32GeU().BrIf(1)
+		c.LocalGet(7).LocalGet(3).LocalGet(5).LocalGet(7).I32Add().ArrayGetU(r.tBytes).I32Store8(data)
+		c.LocalGet(7).I32Const(1).I32Add().LocalSet(7).Br(0)
+		c.End().End()
+		flush(c)
+		c.LocalGet(5).LocalGet(6).I32Add().LocalSet(5).Br(0)
+		c.End().End()
+		c.LocalGet(2).If(NoResult)
+		c.I32Const(0).I32Const('\n').I32Store8(data)
+		c.I32Const(1).LocalSet(6)
+		flush(c)
+		c.End()
+	})
+	r.body(r.iPrint, nil, func(c *Code) { c.I32Const(1).LocalGet(0).I32Const(1).Call(r.fWrite) })
+	r.body(r.iStderr, nil, func(c *Code) { c.I32Const(2).LocalGet(0).I32Const(0).Call(r.fWrite) })
+	r.body(r.iExit, nil, func(c *Code) { c.LocalGet(0).Call(r.wProcExit) })
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
