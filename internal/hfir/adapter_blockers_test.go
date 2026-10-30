@@ -66,6 +66,14 @@ func TestAdapterSharedDepth22Bounded(t *testing.T) {
 }
 
 func TestAdapterDepthCapRejects4095Chain(t *testing.T) {
+	// The bound catches a rejection that walks the chain exponentially,
+	// which would take far longer than any bound here. The race detector on
+	// a shared runner can take more than a second for the linear walk
+	// (bugs.md #61), so it gets more room.
+	bound := time.Second
+	if raceEnabled {
+		bound = 10 * time.Second
+	}
 	for _, depth := range []int{2048, 4092, 4093} {
 		data, _ := json.Marshal(blockerDAG(depth, false))
 		start := time.Now()
@@ -73,8 +81,8 @@ func TestAdapterDepthCapRejects4095Chain(t *testing.T) {
 		if c.Graph != nil || len(ds) != 1 || ds[0].Code != "HFIR_TRANSPORT_TOO_DEEP" {
 			t.Fatalf("depth %d: %#v", depth, ds)
 		}
-		if time.Since(start) > time.Second {
-			t.Fatal("depth rejection too slow")
+		if elapsed := time.Since(start); elapsed > bound {
+			t.Fatalf("depth %d rejection took %v, over %v", depth, elapsed, bound)
 		}
 	}
 }
