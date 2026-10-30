@@ -48,7 +48,11 @@ ex = instance.exports;
 ex.main();
 const err = ex.__hf_error();
 if (err !== null) {
-  process.stderr.write(JSON.stringify({ phase: "runtime", code: "RUNTIME_ERROR", function: "main", message: text(err) }) + "\n");
+  // The error is "CODE: message", with the VM's error code.
+  const t = text(err);
+  const at = t.indexOf(": ");
+  const [code, message] = at < 0 ? ["RUNTIME_ERROR", t] : [t.slice(0, at), t.slice(at + 2)];
+  process.stderr.write(JSON.stringify({ phase: "runtime", code, function: "main", message }) + "\n");
   process.exit(1);
 }
 `

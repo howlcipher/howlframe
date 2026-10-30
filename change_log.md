@@ -34,6 +34,10 @@
   semantics (keys are the text of any value, dicts are references, `map_keys` and printing in sorted key order).
   Lists and dicts print `<nil>` for a nil element, are never equal (even to themselves), and type errors name the
   value's Go type as the VM's messages do.
+* `try_let` and `catch` on `--target wasmgc`, as statements and values. A caught error is the VM's JSON report without its
+  VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
+  arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
+  condition as true).
 * `not` and the core-library, records and control-flow sugar (`cond`, `switch`, `filter`, `map_list`, `reduce`, `sort`,
   `rec`, `get`, `put`, `group_by`, `merge` and the rest) are covered by differential fixtures on `--target wasmgc`.
 

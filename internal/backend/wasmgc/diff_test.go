@@ -97,8 +97,9 @@ func sameAsVM(t *testing.T, src string) {
 	if want.failed {
 		// Output before the error, then the message, compared decoded (the VM
 		// escapes < and > in its JSON report; the loader does not).
-		vmMsg := errorMessage(want.errMsg)
-		if vmMsg == "" || !strings.Contains(errorMessage(got.errMsg), vmMsg) {
+		vmCode, vmMsg := errorReport(want.errMsg)
+		gotCode, gotMsg := errorReport(got.errMsg)
+		if vmMsg == "" || vmCode != gotCode || !strings.Contains(gotMsg, vmMsg) {
 			t.Fatalf("error differs:\nvm   %s\nwasm %s", want.errMsg, got.errMsg)
 		}
 		return
@@ -108,18 +109,19 @@ func sameAsVM(t *testing.T, src string) {
 	}
 }
 
-// errorMessage is the message of the JSON error report in a run's output,
-// or the whole output when there is none.
-func errorMessage(out string) string {
+// errorReport is the code and message of the JSON error report in a run's
+// output, or no code and the whole output when there is none.
+func errorReport(out string) (code, message string) {
 	for _, line := range strings.Split(out, "\n") {
 		var report struct {
+			Code    string `json:"code"`
 			Message string `json:"message"`
 		}
 		if json.Unmarshal([]byte(line), &report) == nil && report.Message != "" {
-			return report.Message
+			return report.Code, report.Message
 		}
 	}
-	return out
+	return "", out
 }
 
 func TestDiffValuesAndPrinting(t *testing.T) {
@@ -151,8 +153,78 @@ func TestDiffErrors(t *testing.T) {
 		"float div zero": `(print (/ 1.0 0.0))`,
 
 		"output first": `(do (print "before") (print (/ 1 0)) (print "after"))`,
+		// Float arithmetic whose result is not finite is an error on the VM.
+		"float overflow":    `(let (x 1.0 i 0) (do (while (< i 307) (do (set x (* x 10.0)) (set i (+ i 1)))) (print x) (print (* x 100))))`,
+		"float add":         `(let (x 1.0 i 0) (do (while (< i 308) (do (set x (* x 10.0)) (set i (+ i 1)))) (print (+ x (* x 0.9)))))`,
+		"float sub":         `(let (x 1.0 i 0) (do (while (< i 308) (do (set x (* x 10.0)) (set i (+ i 1)))) (print (- (- 0.0 x) (* x 0.9)))))`,
+		"division overflow": `(let (x 1.0 i 0) (do (while (< i 307) (do (set x (* x 10.0)) (set i (+ i 1)))) (print (/ x 0.01))))`,
+		"small floats":      `(print (* 0.000001 0.5) (* 1.5 -2) (/ 1 3))`,
+		// Operands of unknown type are checked at run time.
+		"add a list":          `(let (d ` + mixed + `) (print (+ (map_get d "a") (map_get d "c"))))`,
+		"subtract a string":   `(let (d ` + mixed + `) (print (- (map_get d "b") 1)))`,
+		"multiply a bool":     `(let (d ` + mixed + `) (print (* (map_get d "e") 2)))`,
+		"divide a string":     `(let (d ` + mixed + `) (print (/ (map_get d "b") 2)))`,
+		"compare mixed":       `(let (d ` + mixed + `) (print (< (map_get d "a") (map_get d "b"))))`,
+		"compare a list":      `(let (d ` + mixed + `) (print (>= (map_get d "c") 1)))`,
+		"modulo a string":     `(let (d ` + mixed + `) (print (% (map_get d "b") 2)))`,
+		"if of an int":        `(let (d ` + mixed + `) (if (map_get d "a") (print 1)))`,
+		"if of nil":           `(let (d ` + mixed + `) (if (map_get d "zz") (print 1)))`,
+		"while of a string":   `(let (d ` + mixed + `) (while (map_get d "b") (print 1)))`,
+		"and of an int":       `(let (d ` + mixed + `) (print (and true (map_get d "a"))))`,
+		"or of an int":        `(let (d ` + mixed + `) (print (or false (map_get d "a"))))`,
+		"not of an int":       `(let (d ` + mixed + `) (print (not (map_get d "a"))))`,
+		"logic of bools":      `(let (d ` + mixed + `) (print (and (map_get d "e") (map_get d "e")) (and false (= (/ 1 0) 1)) (or true (= (/ 1 0) 1))))`,
+		"split an int":        `(let (d ` + mixed + `) (print (str_split (map_get d "a") ",")))`,
+		"split by an int":     `(let (d ` + mixed + `) (print (str_split "a" (map_get d "a"))))`,
+		"join a string":       `(let (d ` + mixed + `) (print (str_join (map_get d "b") ",")))`,
+		"escape an int":       `(let (d ` + mixed + `) (print (html_escape (map_get d "a"))))`,
+		"attr_escape a float": `(let (d ` + mixed + `) (print (attr_escape (map_get d "d"))))`,
+		"to_int of a list":    `(let (d ` + mixed + `) (print (to_int (map_get d "c"))))`,
+		"to_float of a dict":  `(let (d ` + mixed + `) (print (to_float (map_get d "n"))))`,
+		"to_lower of a list":  `(let (d ` + mixed + `) (print (to_lower (map_get d "c")) (to_upper (map_get d "e"))))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+// try_let binds the value of an expression, or runs its catch body with
+// the error when the expression (or anything it calls) fails. The error is
+// the VM's JSON report; its "instruction" and "opcode" fields describe the
+// VM's own code, so fixtures read only its code and message.
+func TestDiffTryLet(t *testing.T) {
+	has := func(field string) string {
+		return `(print (str_contains e "\"code\":\"` + field + `\""))`
+	}
+	for name, body := range map[string]string{
+		"success":            `(try_let (v (+ 1 2)) (catch e (print "caught")) (print "ok" v))`,
+		"caught":             `(try_let (v (/ 1 0)) (catch e (do (print "caught") ` + has("RUNTIME_ERROR") + ` (print (str_contains e "\"message\":\"division by zero\"")))) (print "ok" v))`,
+		"type error":         `(let (d (dict)) (try_let (v (map_get (map_get d "z") "q")) (catch e (do ` + has("TYPE_ERROR") + ` (print (str_contains e "got \\u003cnil\\u003e")))) (print v)))`,
+		"conversion error":   `(try_let (v (to_int "x")) (catch e (do ` + has("CONVERSION_ERROR") + ` (print (str_contains e "cannot convert \\\"x\\\" to int")))) (print v))`,
+		"overflow":           `(try_let (v (* 4611686018427387904 2)) (catch e ` + has("RUNTIME_ERROR") + `) (print v))`,
+		"error report shape": `(try_let (v (/ 1 0)) (catch e (print (starts_with e "{\"phase\":\"runtime\",\"code\":\"RUNTIME_ERROR\",\"function\":\"main\",") (ends_with e "\"message\":\"division by zero\"}"))) (print v))`,
+		"from a function": `(defun f (n) (type_hint n "int") (type_hint return "float") (return (/ n 0)))
+  (try_let (v (call f 1)) (catch e (print "fn caught")) (print v))`,
+		"return from catch": `(defun g (n) (type_hint n "int") (type_hint return "string") (try_let (v (/ 1 n)) (catch e (return "from catch")) (return (+ "ok " (to_string v)))))
+  (print (call g 0) (call g 2))`,
+		"error in catch":     `(try_let (v (/ 1 0)) (catch e (print (/ 2 0))) (print v))`,
+		"error in success":   `(try_let (v 1) (catch e (print "never")) (print (/ v 0)))`,
+		"exit is not caught": `(try_let (v (min (list))) (catch e (print "never")) (print v))`,
+		"as a value":         `(print (try_let (v 1) (catch e 0) v) (try_let (v (/ 1 0)) (catch e "c") (+ "ok" (to_string v))))`,
+		"in sequence":        `(do (try_let (v (/ 1 0)) (catch e (print "c1")) (print "s")) (try_let (v (/ 1 1)) (catch e (print "c2")) (print "s2" v)))`,
+		"nested":             `(try_let (v (try_let (w (/ 1 0)) (catch e2 (/ 2 0)) w)) (catch e (print "outer")) (print v))`,
+		"inner handled":      `(try_let (v (try_let (w (/ 1 0)) (catch e2 7) w)) (catch e (print "outer")) (print "inner" v))`,
+		"in a loop":          `(let (n 0) (do (for x (list 1 0 2 0) (try_let (v (/ 10 x)) (catch e (set n (+ n 1))) (print v))) (print n)))`,
+		"partial output":     `(try_let (v (do (print "side effect") (/ 1 0))) (catch e (print "caught")) (print v))`,
+		"uncaught after try": `(do (try_let (v 1) (catch e (print "never")) (print v)) (print (/ 1 0)))`,
+		"message escaping":   `(try_let (v (to_int "<a&b>\"q\n\té✓")) (catch e (print (str_contains e "\\u003ca\\u0026b\\u003e\\\\\\\"q\\\\n\\\\té✓\\\" to int\"}"))) (print v))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			// The checks print true; a false on the VM is a wrong fixture.
+			if out := onVM(t, "(cli_app "+body+")"); strings.Contains(out.stdout, "false") {
+				t.Fatalf("fixture check is false on the VM: %q", out.stdout)
+			}
+			sameAsVM(t, "(cli_app "+body+")")
+		})
 	}
 }
 
@@ -175,14 +247,15 @@ func TestDiffControlFlowAndFunctions(t *testing.T) {
 
 func TestDiffConversions(t *testing.T) {
 	for name, body := range map[string]string{
-		"to_int":           `(print (to_int 3.7) (to_int -3.7) (to_int "42") (to_int " 42 ") (to_int "-17") (to_int "+5") (to_int 5) (to_int "-9223372036854775808"))`,
-		"to_float":         `(print (to_float 3) (to_float "2.5") (to_float "1e3") (to_float " -0.5 ") (to_float 1.5))`,
-		"to_int bad text":  `(print (to_int "4.5"))`,
-		"to_int word":      `(print (to_int "x"))`,
-		"to_int too big":   `(print (to_int "9223372036854775808"))`,
-		"to_int bool":      `(print (to_int true))`,
-		"to_int big float": `(print (to_int 9223372036854775807.0))`,
-		"to_float word":    `(print (to_float "abc"))`,
+		"to_int":            `(print (to_int 3.7) (to_int -3.7) (to_int "42") (to_int " 42 ") (to_int "-17") (to_int "+5") (to_int 5) (to_int "-9223372036854775808"))`,
+		"to_float":          `(print (to_float 3) (to_float "2.5") (to_float "1e3") (to_float " -0.5 ") (to_float 1.5))`,
+		"to_int bad text":   `(print (to_int "4.5"))`,
+		"to_int word":       `(print (to_int "x"))`,
+		"to_int too big":    `(print (to_int "9223372036854775808"))`,
+		"to_int bool":       `(print (to_int true))`,
+		"to_int big float":  `(print (to_int 9223372036854775807.0))`,
+		"to_float word":     `(print (to_float "abc"))`,
+		"quoted in message": `(print (to_int "a\"b\\c\nd\te"))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
 	}

@@ -34,12 +34,13 @@ type rt struct {
 	fAdd, fSub, fMul, fDiv, fMod, fCompare, fEq            int
 	fConcat, fText, fItoa, fFtoa, fStrEq, fStrCmp          int
 	fStrLen, fStrByte, fError                              int
-	fToInt, fToFloat, fQuote, fTrim, fTypeName             int
+	fToInt, fToFloat, fQuote, fTrim                        int
 	fListNew, fListAppend, fListGet, fListLen, fListText   int
 	fStrSplit, fStrJoin, fLower, fUpper, fStrTrim, fEscape int
 	fGoType, fElemText, fDictNew, fDictPut, fDictFind      int
 	fMapGet, fMapSet, fMapDelete, fMapKeys                 int
 	fSortedKeys, fDictText                                 int
+	fAttrEscape, fUTF8Len, fJSONQuote, fCatchText          int
 
 	strings map[string]int // literal -> data segment
 }
@@ -148,7 +149,8 @@ func (r *rt) failWithType(c *Code, msg string, local int) *Code {
 	return c.LocalGet(local).Call(r.fGoType).Call(r.fConcat).Call(r.fFail)
 }
 
-// Errors: fail sets $err to a message and returns null, so a caller can
+// Errors: fail sets $err to "CODE: message" (the VM's error code, such as
+// TYPE_ERROR, then its message) and returns null, so a caller can
 // "return (call fail msg)". Callers test $err after anything that can fail.
 func (r *rt) failWith(c *Code, msg string) *Code {
 	return r.StrLiteral(c, msg).Call(r.fFail)
@@ -190,7 +192,6 @@ func (r *rt) emitAll() {
 		{&r.fToFloat, "to_float", r.funcType([]ValType{EqRef}, EqRef)},
 		{&r.fQuote, "quote", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fTrim, "trim_space", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
-		{&r.fTypeName, "type_name", r.tEqToStr},
 		{&r.fListNew, "list_new", r.funcType([]ValType{Ref(r.tItems)}, EqRef)},
 		{&r.fListAppend, "list_append", r.tEqEqToEq},
 		{&r.fListGet, "list_get", r.tEqEqToEq},
@@ -213,6 +214,10 @@ func (r *rt) emitAll() {
 		{&r.fMapKeys, "map_keys", r.funcType([]ValType{EqRef}, EqRef)},
 		{&r.fSortedKeys, "sorted_keys", r.funcType([]ValType{Ref(r.tDict)}, Ref(r.tItems))},
 		{&r.fDictText, "dict_text", r.tEqToStr},
+		{&r.fAttrEscape, "attr_escape", r.funcType([]ValType{EqRef}, EqRef)},
+		{&r.fUTF8Len, "utf8_len", r.funcType([]ValType{Ref(r.tBytes), I32}, I32)},
+		{&r.fJSONQuote, "json_quote", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
+		{&r.fCatchText, "catch_text", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -233,11 +238,12 @@ func (r *rt) emitAll() {
 	set(r.fBoxBool, nil, func(c *Code) {
 		c.LocalGet(0).If(Result(EqRef)).GlobalGet(r.gTrue).Else().GlobalGet(r.gFalse).End()
 	})
-	// truthy: a bool's value; nil is false; anything else is true.
+	// truthy: a bool's value. A condition must be a bool on the VM;
+	// anything else fails ("expected boolean, got <type>").
 	set(r.fTruthy, nil, func(c *Code) {
-		c.LocalGet(0).RefTest(r.tBool).If(Result(I32)).
-			LocalGet(0).RefCast(r.tBool).StructGet(r.tBool, 0).
-			Else().LocalGet(0).RefIsNull().I32Eqz().End()
+		c.LocalGet(0).RefTest(r.tBool).If(NoResult).
+			LocalGet(0).RefCast(r.tBool).StructGet(r.tBool, 0).Return().End()
+		r.failWithType(c, "TYPE_ERROR: expected boolean, got ", 0).Drop().I32Const(0)
 	})
 	set(r.fFail, nil, func(c *Code) {
 		c.LocalGet(0).GlobalSet(r.gErr).RefNull(HeapNone)
@@ -256,6 +262,7 @@ func (r *rt) emitAll() {
 	r.emitLists()
 	r.emitStringOps()
 	r.emitDicts()
+	r.emitErrors()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -315,10 +322,30 @@ func (r *rt) emitArith() {
 		isFloat(c, 1)
 		return c.I32Or().I32And()
 	}
+	// typeErr: "<op> requires numeric operands, got <type> and <type>".
 	typeErr := func(c *Code, op string) *Code {
-		return r.failWith(c, "TYPE_ERROR: cannot apply "+op+" to these values").Return()
+		r.StrLiteral(c, "TYPE_ERROR: "+op+" requires numeric operands, got ")
+		c.LocalGet(0).Call(r.fGoType).Call(r.fConcat)
+		r.StrLiteral(c, " and ").Call(r.fConcat)
+		return c.LocalGet(1).Call(r.fGoType).Call(r.fConcat).Call(r.fFail).Return()
 	}
-	overflow := func(c *Code) *Code { return r.failWith(c, "integer overflow").Return() }
+	overflow := func(c *Code) *Code { return r.failWith(c, "RUNTIME_ERROR: integer overflow").Return() }
+	// floatResult boxes the f64 on the stack, or fails when it is not finite
+	// (|x| is infinite, or x is NaN): "floating-point overflow: a op b is not
+	// finite", the operands as strconv's 'g' shortest form, which is the
+	// text of a finite float.
+	floatResult := func(c *Code, op string) *Code {
+		c.LocalTee(5).F64Abs().F64Const(posInf).F64Eq().LocalGet(5).LocalGet(5).F64Ne().I32Or().If(NoResult)
+		r.StrLiteral(c, "RUNTIME_ERROR: floating-point overflow: ")
+		asFloat(c, 0)
+		c.Call(r.fFtoa).Call(r.fConcat)
+		r.StrLiteral(c, " "+op+" ").Call(r.fConcat)
+		asFloat(c, 1)
+		c.Call(r.fFtoa).Call(r.fConcat)
+		r.StrLiteral(c, " is not finite").Call(r.fConcat).Call(r.fFail).Return()
+		c.End()
+		return c.LocalGet(5).Call(r.fBoxFloat).Return()
+	}
 
 	r.body(r.fAdd, nums, func(c *Code) {
 		// Strings concatenate.
@@ -335,7 +362,8 @@ func (r *rt) emitArith() {
 		bothNum(c).If(NoResult)
 		asFloat(c, 0)
 		asFloat(c, 1)
-		c.F64Add().Call(r.fBoxFloat).Return().End()
+		c.F64Add()
+		floatResult(c, "+").End()
 		typeErr(c, "+")
 	})
 	r.body(r.fSub, nums, func(c *Code) {
@@ -351,7 +379,8 @@ func (r *rt) emitArith() {
 		bothNum(c).If(NoResult)
 		asFloat(c, 0)
 		asFloat(c, 1)
-		c.F64Sub().Call(r.fBoxFloat).Return().End()
+		c.F64Sub()
+		floatResult(c, "-").End()
 		typeErr(c, "-")
 	})
 	r.body(r.fMul, nums, func(c *Code) {
@@ -372,7 +401,8 @@ func (r *rt) emitArith() {
 		bothNum(c).If(NoResult)
 		asFloat(c, 0)
 		asFloat(c, 1)
-		c.F64Mul().Call(r.fBoxFloat).Return().End()
+		c.F64Mul()
+		floatResult(c, "*").End()
 		typeErr(c, "*")
 	})
 	// "/" always divides as floats, like the VM.
@@ -381,23 +411,27 @@ func (r *rt) emitArith() {
 		asFloat(c, 1)
 		c.LocalSet(6)
 		c.LocalGet(6).F64Const(0).F64Eq().If(NoResult)
-		r.failWith(c, "division by zero").Return().End()
+		r.failWith(c, "RUNTIME_ERROR: division by zero").Return().End()
 		asFloat(c, 0)
-		c.LocalGet(6).F64Div().Call(r.fBoxFloat).Return().End()
+		c.LocalGet(6).F64Div().LocalTee(5).F64Abs().F64Const(posInf).F64Eq().LocalGet(5).LocalGet(5).F64Ne().I32Or().If(NoResult)
+		r.failWith(c, "RUNTIME_ERROR: division produced an invalid floating-point result").Return().End()
+		c.LocalGet(5).Call(r.fBoxFloat).Return().End()
 		typeErr(c, "/")
 	})
 	r.body(r.fMod, nums, func(c *Code) {
 		bothInt(c).If(NoResult)
 		getInt(c, 1).LocalSet(3)
 		c.LocalGet(3).I64Eqz().If(NoResult)
-		r.failWith(c, "division by zero").Return().End()
+		r.failWith(c, "RUNTIME_ERROR: division by zero").Return().End()
 		// MIN % -1 traps in WebAssembly; its value is 0.
 		c.LocalGet(3).I64Const(-1).I64Eq().If(NoResult).I64Const(0).Call(r.fBoxInt).Return().End()
 		getInt(c, 0)
 		c.LocalGet(3).I64RemS().Call(r.fBoxInt).Return().End()
 		typeErr(c, "%")
 	})
-	// compare: -1, 0 or 1 for two numbers or two strings; sets $err otherwise.
+	// compare: -1, 0 or 1 for two numbers or two strings; 3 when a float is
+	// NaN (every ordering is false, as on the VM); 2 when the values cannot
+	// be ordered, for the caller to report with its operator.
 	r.body(r.fCompare, nums, func(c *Code) {
 		bothInt(c).If(NoResult)
 		getInt(c, 0).LocalSet(2)
@@ -408,10 +442,11 @@ func (r *rt) emitArith() {
 		c.LocalSet(5)
 		asFloat(c, 1)
 		c.LocalSet(6)
+		c.LocalGet(5).LocalGet(5).F64Ne().LocalGet(6).LocalGet(6).F64Ne().I32Or().If(NoResult).I32Const(3).Return().End()
 		c.LocalGet(5).LocalGet(6).F64Gt().LocalGet(5).LocalGet(6).F64Lt().I32Sub().Return().End()
 		c.LocalGet(0).RefTest(r.tStr).LocalGet(1).RefTest(r.tStr).I32And().If(NoResult).
 			LocalGet(0).RefCast(r.tStr).LocalGet(1).RefCast(r.tStr).Call(r.fStrCmp).Return().End()
-		r.failWith(c, "TYPE_ERROR: cannot compare these values").Drop().I32Const(0)
+		c.I32Const(2)
 	})
 	// eq: numbers by value (int and float compare numerically), strings by
 	// content, booleans by value, nil only to nil. Lists and dicts are never
@@ -632,17 +667,6 @@ var posInf = math.Inf(1)
 // parses trimmed decimal integers; to_float parses with Go's ParseFloat
 // syntax; anything else is "cannot convert <type> to int|float".
 func (r *rt) emitConversions() {
-	// type_name: the Go-ish type word the VM uses in messages.
-	r.body(r.fTypeName, nil, func(c *Code) {
-		for _, tn := range []struct {
-			t    int
-			name string
-		}{{r.tBool, "bool"}, {r.tList, "list"}, {r.tDict, "map"}} {
-			c.LocalGet(0).RefTest(tn.t).If(NoResult)
-			r.StrLiteral(c, tn.name).Return().End()
-		}
-		r.StrLiteral(c, "value")
-	})
 	// trim_space: ASCII whitespace off both ends.
 	// locals: 0 s, 1 b, 2 from, 3 to, 4 out
 	isSpace := func(c *Code) *Code {
@@ -685,7 +709,8 @@ func (r *rt) emitConversions() {
 			c.LocalGet(6).I32Const(int32(e.from)).I32Eq().If(NoResult)
 			put(c, lit('\\'))
 			put(c, lit(e.to))
-			c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(2).End()
+			// Continue the scan (depth 1 is the loop).
+			c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(1).End()
 		}
 		put(c, func(c *Code) { c.LocalGet(6) })
 		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
@@ -695,8 +720,8 @@ func (r *rt) emitConversions() {
 	})
 	cannot := func(c *Code, to string) {
 		// message: cannot convert <type> to <to>
-		r.StrLiteral(c, "cannot convert ")
-		c.LocalGet(0).Call(r.fTypeName).Call(r.fConcat)
+		r.StrLiteral(c, "CONVERSION_ERROR: cannot convert ")
+		c.LocalGet(0).Call(r.fGoType).Call(r.fConcat)
 		r.StrLiteral(c, " to "+to).Call(r.fConcat).Call(r.fFail).Return()
 	}
 	// to_int. locals: 0 v, 1 s (trimmed bytes), 2 i, 3 n, 4 neg, 5 acc (i64), 6 d, 7 f
@@ -707,14 +732,14 @@ func (r *rt) emitConversions() {
 		// In range when -2^63 <= f < 2^63 (NaN fails both).
 		c.F64Const(-9223372036854775808.0).F64Ge().LocalGet(7).F64Const(9223372036854775808.0).F64Lt().I32And().If(NoResult)
 		c.LocalGet(7).I64TruncSatF64S().Call(r.fBoxInt).Return().End()
-		r.StrLiteral(c, "cannot convert ")
+		r.StrLiteral(c, "CONVERSION_ERROR: cannot convert ")
 		c.LocalGet(7).Call(r.fFtoa).Call(r.fConcat)
 		r.StrLiteral(c, " to int").Call(r.fConcat).Call(r.fFail).Return()
 		c.End()
 		c.LocalGet(0).RefTest(r.tStr).If(NoResult)
 		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalSet(3)
 		bad := func(c *Code) {
-			r.StrLiteral(c, "cannot convert ")
+			r.StrLiteral(c, "CONVERSION_ERROR: cannot convert ")
 			c.LocalGet(0).RefCast(r.tStr).Call(r.fQuote).Call(r.fConcat)
 			r.StrLiteral(c, " to int").Call(r.fConcat).Call(r.fFail).Return()
 		}
@@ -758,7 +783,7 @@ func (r *rt) emitConversions() {
 		c.LocalGet(0).RefTest(r.tStr).If(NoResult)
 		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).Call(r.iParseFloatOK).If(NoResult)
 		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).Call(r.iParseFloat).Call(r.fBoxFloat).Return().End()
-		r.StrLiteral(c, "cannot convert ")
+		r.StrLiteral(c, "CONVERSION_ERROR: cannot convert ")
 		c.LocalGet(0).RefCast(r.tStr).Call(r.fQuote).Call(r.fConcat)
 		r.StrLiteral(c, " to float").Call(r.fConcat).Call(r.fFail).Return()
 		c.End()
@@ -859,8 +884,15 @@ func (r *rt) emitLists() {
 func (r *rt) emitStringOps() {
 	needStr := func(c *Code, local int, op string) {
 		c.LocalGet(local).RefTest(r.tStr).I32Eqz().If(NoResult)
-		r.failWith(c, "TYPE_ERROR: "+op+" expected string").Return()
+		r.failWithType(c, "TYPE_ERROR: "+op+" expected string, got ", local).Return()
 		c.End()
+	}
+	// failTwo: msg, then "<type> and <type>" of locals 0 and 1.
+	failTwo := func(c *Code, msg string) {
+		r.StrLiteral(c, msg)
+		c.LocalGet(0).Call(r.fGoType).Call(r.fConcat)
+		r.StrLiteral(c, " and ").Call(r.fConcat)
+		c.LocalGet(1).Call(r.fGoType).Call(r.fConcat).Call(r.fFail).Return()
 	}
 	bytesOf := func(c *Code, local int) *Code { return c.LocalGet(local).RefCast(r.tStr).StructGet(r.tStr, 0) }
 	// piece pushes a new $Str with src[from:to] (locals).
@@ -874,8 +906,9 @@ func (r *rt) emitStringOps() {
 	// string with a separator gives one empty piece.
 	// locals: 0 s, 1 sep, 2 sb, 3 pb, 4 n, 5 m, 6 i, 7 start, 8 out (list), 9 j, 10 scratch, 11 step
 	r.body(r.fStrSplit, []ValType{RefNull(r.tBytes), RefNull(r.tBytes), I32, I32, I32, I32, EqRef, I32, RefNull(r.tBytes), I32}, func(c *Code) {
-		needStr(c, 0, "str_split")
-		needStr(c, 1, "str_split")
+		c.LocalGet(0).RefTest(r.tStr).LocalGet(1).RefTest(r.tStr).I32And().I32Eqz().If(NoResult)
+		failTwo(c, "TYPE_ERROR: str_split expected string, got ")
+		c.End()
 		bytesOf(c, 0).LocalTee(2).ArrayLen().LocalSet(4)
 		bytesOf(c, 1).LocalTee(3).ArrayLen().LocalSet(5)
 		c.ArrayNewFixed(r.tItems, 0).Call(r.fListNew).LocalSet(8)
@@ -923,7 +956,7 @@ func (r *rt) emitStringOps() {
 	// locals: 0 l, 1 sep, 2 list, 3 i, 4 acc
 	r.body(r.fStrJoin, []ValType{RefNull(r.tList), I32, RefNull(r.tStr)}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tList).LocalGet(1).RefTest(r.tStr).I32And().I32Eqz().If(NoResult)
-		r.failWith(c, "TYPE_ERROR: str_join expected list and string").Return()
+		failTwo(c, "TYPE_ERROR: str_join expected list and string, got ")
 		c.End()
 		c.LocalGet(0).RefCast(r.tList).LocalSet(2)
 		r.StrLiteral(c, "").LocalSet(4)
@@ -984,6 +1017,10 @@ func (r *rt) emitStringOps() {
 		c.Br(0).End().End()
 		c.I32Const(0).LocalSet(3)
 		r.copyOut(c, 5, 3, 7, func(c *Code) { c.LocalGet(6) })
+	})
+	r.body(r.fAttrEscape, nil, func(c *Code) {
+		needStr(c, 0, "attr_escape")
+		c.LocalGet(0).Call(r.fEscape)
 	})
 }
 
@@ -1142,4 +1179,166 @@ func (r *rt) emitDicts() {
 		c.LocalGet(4).RefAsNonNull()
 		r.StrLiteral(c, "]").Call(r.fConcat)
 	})
+}
+
+// jsonEsc starts a JSON unicode escape (kept apart from its digits so the
+// source never holds a literal escape sequence).
+const jsonEsc = `\` + "u"
+
+// emitErrors writes what try_let needs to bind an error as the VM does: the
+// VM's JSON report of it. The report's "instruction" and "opcode" fields
+// describe the VM's own code and have no WebAssembly equivalent, so they
+// are left out; phase, code, function and message are the VM's.
+func (r *rt) emitErrors() {
+	// utf8_len(b, i): the length of the valid UTF-8 sequence at b[i], or 0
+	// when it is invalid (Go's rules: no overlong forms, no surrogates,
+	// nothing above U+10FFFF). locals: 0 b, 1 i, 2 n, 3 lead, 4 len, 5 lo,
+	// 6 hi, 7 k
+	r.body(r.fUTF8Len, []ValType{I32, I32, I32, I32, I32, I32}, func(c *Code) {
+		c.LocalGet(0).ArrayLen().LocalSet(2)
+		c.LocalGet(0).LocalGet(1).ArrayGetU(r.tBytes).LocalTee(3).I32Const(0x80).I32LtU().If(NoResult).I32Const(1).Return().End()
+		// The second byte's range depends on the lead byte; later bytes are
+		// always 80-BF.
+		c.I32Const(0x80).LocalSet(5)
+		c.I32Const(0xBF).LocalSet(6)
+		ranges := []struct {
+			from, to   int32
+			length     int32
+			low, high  int32
+			keepBounds bool
+		}{
+			{0xC2, 0xDF, 2, 0, 0, true},
+			{0xE0, 0xE0, 3, 0xA0, 0xBF, false},
+			{0xE1, 0xEC, 3, 0, 0, true},
+			{0xED, 0xED, 3, 0x80, 0x9F, false},
+			{0xEE, 0xEF, 3, 0, 0, true},
+			{0xF0, 0xF0, 4, 0x90, 0xBF, false},
+			{0xF1, 0xF3, 4, 0, 0, true},
+			{0xF4, 0xF4, 4, 0x80, 0x8F, false},
+		}
+		c.Block(NoResult)
+		for _, rg := range ranges {
+			c.LocalGet(3).I32Const(rg.from).I32GeU().LocalGet(3).I32Const(rg.to).I32LeU().I32And().If(NoResult)
+			c.I32Const(rg.length).LocalSet(4)
+			if !rg.keepBounds {
+				c.I32Const(rg.low).LocalSet(5)
+				c.I32Const(rg.high).LocalSet(6)
+			}
+			c.Br(1).End()
+		}
+		c.I32Const(0).Return()
+		c.End()
+		c.LocalGet(1).LocalGet(4).I32Add().LocalGet(2).I32GtU().If(NoResult).I32Const(0).Return().End()
+		c.I32Const(1).LocalSet(7)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(7).LocalGet(4).I32GeU().BrIf(1)
+		c.LocalGet(0).LocalGet(1).LocalGet(7).I32Add().ArrayGetU(r.tBytes).LocalTee(3)
+		c.LocalGet(5).I32LtU().LocalGet(3).LocalGet(6).I32GtU().I32Or().If(NoResult).I32Const(0).Return().End()
+		c.I32Const(0x80).LocalSet(5)
+		c.I32Const(0xBF).LocalSet(6)
+		c.LocalGet(7).I32Const(1).I32Add().LocalSet(7).Br(0).End().End()
+		c.LocalGet(4)
+	})
+	// json_quote(s): s as a JSON string the way Go's encoding/json writes
+	// it: \" \\ \b \f \n \r \t, other control bytes as \u00XX, <, > and &
+	// as <, > and &, U+2028 and U+2029 escaped, and each byte
+	// of invalid UTF-8 as �.
+	// locals: 0 s, 1 in, 2 n, 3 i, 4 b, 5 buf, 6 pos, 7 len, 8 out
+	r.body(r.fJSONQuote, []ValType{RefNull(r.tBytes), I32, I32, I32, RefNull(r.tBytes), I32, I32, RefNull(r.tBytes)}, func(c *Code) {
+		putByte := func(c *Code, b func(c *Code)) {
+			c.LocalGet(5).LocalGet(6)
+			b(c)
+			c.ArraySet(r.tBytes).LocalGet(6).I32Const(1).I32Add().LocalSet(6)
+		}
+		put := func(c *Code, text string) {
+			for _, b := range []byte(text) {
+				putByte(c, func(c *Code) { c.I32Const(int32(b)) })
+			}
+		}
+		hex := func(c *Code, shift int32) {
+			// One lowercase hex digit of b >> shift.
+			putByte(c, func(c *Code) {
+				c.LocalGet(4).I32Const(shift).I32ShrU().I32Const(15).I32And().LocalTee(7)
+				c.I32Const(10).I32LtU().If(Result(I32)).LocalGet(7).I32Const('0').I32Add().Else().LocalGet(7).I32Const('a' - 10).I32Add().End()
+			})
+		}
+		c.LocalGet(0).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalSet(2)
+		c.LocalGet(2).I32Const(6).I32Mul().I32Const(2).I32Add().ArrayNewDefault(r.tBytes).LocalSet(5)
+		put(c, `"`)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).I32GeU().BrIf(1)
+		c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).LocalSet(4)
+		c.Block(NoResult) // each case leaves through this block after advancing i
+		c.LocalGet(4).I32Const(0x80).I32GeU().If(NoResult)
+		c.LocalGet(1).RefAsNonNull().LocalGet(3).Call(r.fUTF8Len).LocalTee(7).I32Eqz().If(NoResult)
+		put(c, jsonEsc+"fffd")
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(2).End()
+		// U+2028 and U+2029 are E2 80 A8 and E2 80 A9.
+		c.LocalGet(7).I32Const(3).I32Eq().LocalGet(4).I32Const(0xE2).I32Eq().I32And().
+			LocalGet(1).LocalGet(3).I32Const(1).I32Add().ArrayGetU(r.tBytes).I32Const(0x80).I32Eq().I32And().
+			LocalGet(1).LocalGet(3).I32Const(2).I32Add().ArrayGetU(r.tBytes).I32Const(0xFE).I32And().I32Const(0xA8).I32Eq().I32And().If(NoResult)
+		put(c, jsonEsc+"202")
+		putByte(c, func(c *Code) {
+			c.LocalGet(1).LocalGet(3).I32Const(2).I32Add().ArrayGetU(r.tBytes).I32Const(0xA8).I32Eq().If(Result(I32)).I32Const('8').Else().I32Const('9').End()
+		})
+		c.LocalGet(3).I32Const(3).I32Add().LocalSet(3).Br(2).End()
+		// Any other valid sequence is copied.
+		c.LocalGet(5).LocalGet(6).LocalGet(1).LocalGet(3).LocalGet(7).ArrayCopy(r.tBytes, r.tBytes)
+		c.LocalGet(6).LocalGet(7).I32Add().LocalSet(6)
+		c.LocalGet(3).LocalGet(7).I32Add().LocalSet(3).Br(1).End()
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3)
+		for _, e := range []struct {
+			b   byte
+			out string
+		}{{'"', `\"`}, {'\\', `\\`}, {'\b', `\b`}, {'\f', `\f`}, {'\n', `\n`}, {'\r', `\r`}, {'\t', `\t`}, {'<', jsonEsc + "003c"}, {'>', jsonEsc + "003e"}, {'&', jsonEsc + "0026"}} {
+			c.LocalGet(4).I32Const(int32(e.b)).I32Eq().If(NoResult)
+			put(c, e.out)
+			c.Br(1).End()
+		}
+		c.LocalGet(4).I32Const(0x20).I32LtU().If(NoResult)
+		put(c, jsonEsc+"00")
+		hex(c, 4)
+		hex(c, 0)
+		c.Br(1).End()
+		putByte(c, func(c *Code) { c.LocalGet(4) })
+		c.End()
+		c.Br(0).End().End()
+		put(c, `"`)
+		c.I32Const(0).LocalSet(3)
+		r.copyOut(c, 5, 3, 8, func(c *Code) { c.LocalGet(6) })
+	})
+	// catch_text(err): the VM's report of an error held as "CODE: message".
+	// locals: 0 err, 1 b, 2 n, 3 i, 4 code, 5 msg, 6 scratch
+	r.body(r.fCatchText, []ValType{RefNull(r.tBytes), I32, I32, RefNull(r.tStr), RefNull(r.tStr), RefNull(r.tBytes)}, func(c *Code) {
+		c.LocalGet(0).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalSet(2)
+		// The code ends at the first ": "; an error without one is a
+		// RUNTIME_ERROR whose message is all of it.
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).I32Const(1).I32Add().LocalGet(2).I32GeU().If(NoResult)
+		r.StrLiteral(c, "RUNTIME_ERROR").LocalSet(4)
+		c.LocalGet(0).LocalSet(5).Br(2).End()
+		c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).I32Const(':').I32Eq().
+			LocalGet(1).LocalGet(3).I32Const(1).I32Add().ArrayGetU(r.tBytes).I32Const(' ').I32Eq().I32And().If(NoResult)
+		c.I32Const(0).LocalSet(2) // reuse n as the start of the code
+		r.sliceStr(c, 1, 2, 3, 6)
+		c.LocalSet(4)
+		c.LocalGet(3).I32Const(2).I32Add().LocalSet(3)
+		c.LocalGet(1).ArrayLen().LocalSet(2)
+		r.sliceStr(c, 1, 3, 2, 6)
+		c.LocalSet(5).Br(2).End()
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+		r.StrLiteral(c, `{"phase":"runtime","code":"`)
+		c.LocalGet(4).RefAsNonNull().Call(r.fConcat)
+		r.StrLiteral(c, `","function":"main","message":`).Call(r.fConcat)
+		c.LocalGet(5).RefAsNonNull().Call(r.fJSONQuote).Call(r.fConcat)
+		r.StrLiteral(c, `}`).Call(r.fConcat)
+	})
+}
+
+// sliceStr pushes a new $Str holding bytes[from:to] of the array in local
+// src, with scratch a (ref null $Bytes) local.
+func (r *rt) sliceStr(c *Code, src, from, to, scratch int) *Code {
+	c.LocalGet(to).LocalGet(from).I32Sub().ArrayNewDefault(r.tBytes).LocalSet(scratch)
+	c.LocalGet(scratch).I32Const(0).LocalGet(src).LocalGet(from).LocalGet(to).LocalGet(from).I32Sub().ArrayCopy(r.tBytes, r.tBytes)
+	return c.LocalGet(scratch).RefAsNonNull().StructNew(r.tStr)
 }
