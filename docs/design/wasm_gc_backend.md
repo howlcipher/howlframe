@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. 180 differential fixtures pass. HowlScene HF's registry and export modules compile; next is the standard library, in the order HowlScene's schema and renderer need it (`encode_json`, `regex_match`, then `parse_json`, `sniff_media_type`, `base64_text`). |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`) is HowlFrame compiled in when a program reaches it. 192 differential fixtures pass. HowlScene HF's registry and export modules compile; next is `regex_match` (schema, renderer), then `base64_text` (backups), `parse_json` and `sniff_media_type`. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -200,7 +200,17 @@ as the work it describes: tick tasks, move the status line, record findings.
       (exports, private helpers that share a name with the program's own
       functions, two modules, a subdirectory, errors raised and caught
       across modules).
-- [ ] Standard library in HowlFrame (`std/`), on byte intrinsics:
+- [x] Standard-library pipeline: `internal/backend/wasmgc/std/*.howl` are
+      embedded modules, parsed, linked as `__std_<module>` and desugared
+      when a program reaches one of their operations (`stdOps`). Only their
+      functions may use the byte intrinsics `__hf_type` (the VM's `%T`
+      name), `__hf_byte_len`, `__hf_byte_at`, `__hf_byte_slice`, and the
+      temporary `__hf_float_digits` and `__hf_float_point`; a program that
+      calls one, or defines a `__std_` function, fails with
+      `WASM_UNSUPPORTED` (`TestStdIsReserved`).
+- [x] `encode_json` in `std/json.howl`, as Go's `encoding/json` writes the
+      VM's values (`TestDiffEncodeJSON`).
+- [ ] The rest of the standard library in HowlFrame (`std/`), on byte intrinsics:
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
       `utf8_valid`, `bytes_to_string`, base64.
@@ -311,6 +321,10 @@ The order of M1 and M3 work follows what the application needs.
 - Building each HowlScene HF core module as a `cli_app` (2026-10-29):
   `registry.howl` and `export.howl` compile; `schema.howl` and
   `backup.howl` stop at `encode_json`, `render.howl` at `regex_match`.
+- Standard-library code needs to branch on a value's run-time type, which
+  HowlFrame source cannot do (the checker types values statically and
+  there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.
+  Whether programs should get such an operation is open.
 - Temporary host dependencies, to be replaced by standard-library
   HowlFrame: shortest float digits (`float_digits`, `float_point`) and
   float parsing (`parse_float`, `parse_float_ok`).

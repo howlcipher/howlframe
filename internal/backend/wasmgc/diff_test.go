@@ -300,6 +300,42 @@ func TestDiffModules(t *testing.T) {
 	}
 }
 
+// encode_json is standard-library HowlFrame (std/json.howl) on byte
+// intrinsics; the VM's is Go's encoding/json.
+func TestDiffEncodeJSON(t *testing.T) {
+	for name, body := range map[string]string{
+		"scalars":         `(print (encode_json 1) (encode_json -7) (encode_json 9223372036854775807) (encode_json "plain") (encode_json true) (encode_json false) (encode_json ""))`,
+		"nil":             `(let (m (dict ("a" 1) ("n" (dict)))) (print (encode_json (map_get m "zz")) (encode_json (list (map_get m "zz")))))`,
+		"collections":     `(print (encode_json (list)) (encode_json (dict)) (encode_json (list 1 2 3)) (encode_json (list (list "b") (list))) (encode_json (dict ("b" 2) ("a" (dict ("y" 1) ("x" (list)))))))`,
+		"mixed record":    `(let (m (dict ("a" 1) ("n" (dict)))) (print (encode_json (dict ("b" (list 1 2)) ("f" 2.5) ("t" true) ("nil" (map_get m "zz")) ("e" (list)) ("d" (dict)) ("" -0.0)))))`,
+		"key order":       `(print (encode_json (dict ("b" 1) ("a" 2) ("é" 3) ("" 4) ("A" 5) ("ab" 6))))`,
+		"escapes":         `(print (encode_json "q\"\\<>&\n\t\r") (encode_json (dict ("<k>" "v&"))))`,
+		"unicode":         `(print (encode_json "héllo ✓ 日本 🎉") (encode_json "LS` + " " + `PS` + " " + `."))`,
+		"floats":          `(print (encode_json 2.5) (encode_json -2.5) (encode_json 3.0) (encode_json 0.1) (encode_json (+ 0.1 0.2)) (encode_json 123456789.125) (encode_json 0.00001234) (encode_json -0.0) (encode_json 0.0))`,
+		"float layout":    `(print (encode_json 0.000001) (encode_json 0.0000001) (encode_json 0.00000123) (encode_json 100000000000000000000.0) (encode_json 1000000000000000000000.0) (encode_json 12345678901234567890123.0))`,
+		"float extremes":  `(let (x 1.0 i 0) (do (while (< i 120) (do (set x (* x 10.0)) (set i (+ i 1)))) (print (encode_json x) (encode_json (/ 1.0 x)) (encode_json (- 0.0 x)) (encode_json (list x (/ 3.0 x))))))`,
+		"in a function":   `(defun row (n) (type_hint n "int") (type_hint return "string") (return (encode_json (dict ("n" n) ("sq" (* n n)))))) (print (call row 3) (call row 4))`,
+		"round trip text": `(let (s (encode_json (list "a" "b"))) (print s (str_len s) (+ s s)))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+// The standard library's intrinsics and names are reserved for it.
+func TestStdIsReserved(t *testing.T) {
+	for name, src := range map[string]string{
+		"intrinsic":     `(cli_app (print (__hf_byte_len "abc")))`,
+		"reserved name": `(cli_app (defun __std_json_encode (v) (return "x")) (print (encode_json 1)))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
+			if !out.failed || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {
+				t.Fatalf("want a WASM_UNSUPPORTED build failure, got failed=%v: %s", out.failed, out.errMsg)
+			}
+		})
+	}
+}
+
 func TestDiffControlFlowAndFunctions(t *testing.T) {
 	for name, src := range map[string]string{
 		"let and set": `(cli_app (let (x 5 y 2) (do (set x (+ x y)) (print x y))))`,

@@ -41,6 +41,7 @@ type rt struct {
 	fMapGet, fMapSet, fMapDelete, fMapKeys                 int
 	fSortedKeys, fDictText                                 int
 	fAttrEscape, fUTF8Len, fJSONQuote, fCatchText          int
+	fByteSlice                                             int
 
 	strings map[string]int // literal -> data segment
 }
@@ -218,6 +219,7 @@ func (r *rt) emitAll() {
 		{&r.fUTF8Len, "utf8_len", r.funcType([]ValType{Ref(r.tBytes), I32}, I32)},
 		{&r.fJSONQuote, "json_quote", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fCatchText, "catch_text", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
+		{&r.fByteSlice, "byte_slice", r.funcType([]ValType{EqRef, EqRef, EqRef}, EqRef)},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -263,6 +265,7 @@ func (r *rt) emitAll() {
 	r.emitStringOps()
 	r.emitDicts()
 	r.emitErrors()
+	r.emitBytes()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -1332,6 +1335,18 @@ func (r *rt) emitErrors() {
 		r.StrLiteral(c, `","function":"main","message":`).Call(r.fConcat)
 		c.LocalGet(5).RefAsNonNull().Call(r.fJSONQuote).Call(r.fConcat)
 		r.StrLiteral(c, `}`).Call(r.fConcat)
+	})
+}
+
+// emitBytes writes the standard library's byte_slice(s, from, to): a new
+// string of bytes from..to of s (an intrinsic; callers pass valid bounds).
+// locals: 0 s, 1 from, 2 to, 3 bytes, 4 a, 5 b, 6 scratch
+func (r *rt) emitBytes() {
+	r.body(r.fByteSlice, []ValType{RefNull(r.tBytes), I32, I32, RefNull(r.tBytes)}, func(c *Code) {
+		c.LocalGet(0).RefCast(r.tStr).StructGet(r.tStr, 0).LocalSet(3)
+		c.LocalGet(1).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(4)
+		c.LocalGet(2).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(5)
+		r.sliceStr(c, 3, 4, 5, 6)
 	})
 }
 

@@ -1,11 +1,66 @@
 package wasmgc
 
 import (
+	"embed"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
+
+// The standard library: HowlFrame modules compiled into a program that
+// reaches one of their operations. Their functions are named
+// __std_<module>_<name>, and only they may use the byte intrinsics.
+//
+//go:embed std/*.howl
+var stdFiles embed.FS
+
+// stdOps maps an operation to the standard-library module and exported
+// function that implement it.
+var stdOps = map[string]struct{ module, fn string }{
+	"encode_json": {"json", "encode"},
+}
+
+const stdPrefix = "__std_"
+
+// stdDefuns parses, links and desugars a standard-library module and
+// returns its definitions, named __std_<module>_<name>.
+func stdDefuns(module string) ([]*ast.Node, error) {
+	src, err := stdFiles.ReadFile("std/" + module + ".howl")
+	if err != nil {
+		return nil, fmt.Errorf("WASM_UNSUPPORTED: standard library module %q is missing", module)
+	}
+	p := parser.NewParser(lexer.NewLexer(string(src)), "std/"+module+".howl")
+	mod := p.ParseExpression()
+	if mod.Type != "List" || len(mod.Children) == 0 || mod.Children[0].Value != "module" {
+		return nil, fmt.Errorf("WASM_UNSUPPORTED: standard library module %q is not a module", module)
+	}
+	// Link it as the program's linker would a (use ... as __std_<module>).
+	alias := &ast.Node{Type: "SYMBOL", Value: strings.TrimSuffix(stdPrefix, "_") + "_" + module}
+	linked := &ast.Node{Type: "List", Children: append([]*ast.Node{mod.Children[0], alias}, mod.Children[1:]...)}
+	root := &ast.Node{Type: "List", Children: []*ast.Node{{Type: "SYMBOL", Value: "cli_app"}, linked}}
+	ast.ResolveModules(root)
+	ast.Desugar(root)
+	return root.Children[1:], nil
+}
+
+// stdModulesUsed lists, in a stable order, the standard-library modules a
+// program reaches.
+func stdModulesUsed(n *ast.Node, seen map[string]bool, out *[]string) {
+	if n == nil {
+		return
+	}
+	if op, ok := stdOps[head(n)]; ok && !seen[op.module] {
+		seen[op.module] = true
+		*out = append(*out, op.module)
+	}
+	for _, k := range n.Children {
+		stdModulesUsed(k, seen, out)
+	}
+}
 
 // UnsupportedError reports a construct this backend cannot compile yet. The
 // build fails instead of emitting a module that would behave differently.
@@ -33,10 +88,22 @@ func Compile(root *ast.Node) ([]byte, error) {
 	var stmts []*ast.Node
 	for _, n := range body {
 		if head(n) == "defun" {
+			if strings.HasPrefix(n.Children[1].Value, stdPrefix) {
+				return nil, unsupported(n, "a function named "+n.Children[1].Value+" (the prefix is reserved)")
+			}
 			defuns = append(defuns, n)
 		} else {
 			stmts = append(stmts, n)
 		}
+	}
+	var modules []string
+	stdModulesUsed(root, map[string]bool{}, &modules)
+	for _, mod := range modules {
+		std, err := stdDefuns(mod)
+		if err != nil {
+			return nil, err
+		}
+		defuns = append(defuns, std...)
 	}
 	for _, d := range defuns {
 		if len(d.Children) < 3 || d.Children[1].Type != "SYMBOL" || d.Children[2].Type != "List" {
@@ -53,6 +120,7 @@ func Compile(root *ast.Node) ([]byte, error) {
 		for _, p := range d.Children[2].Children {
 			names = append(names, p.Value)
 		}
+		c.std = strings.HasPrefix(d.Children[1].Value, stdPrefix)
 		code, locals, err := c.function(names, ast.DefunBody(d), false)
 		if err != nil {
 			return nil, err
@@ -60,6 +128,7 @@ func Compile(root *ast.Node) ([]byte, error) {
 		f := &m.Funcs[c.funcs[d.Children[1].Value]-len(m.Imports)]
 		f.Body, f.Locals = code, locals
 	}
+	c.std = false
 	code, locals, err := c.function(nil, stmts, true)
 	if err != nil {
 		return nil, err
@@ -74,6 +143,9 @@ type compiler struct {
 	rt    *rt
 	funcs map[string]int
 	arity map[string]int
+	// std is set while compiling a standard-library function, the only
+	// code that may use the byte intrinsics.
+	std bool
 }
 
 // fn is the state of one function being compiled.
@@ -681,6 +753,15 @@ func (f *fn) expr(n *ast.Node) error {
 		c.Call(r.fText)
 		return nil
 	}
+	if op, ok := stdOps[h]; ok {
+		return f.call(n, stdPrefix+op.module+"_"+op.fn, args)
+	}
+	if strings.HasPrefix(h, "__hf_") {
+		if !f.c.std {
+			return unsupported(n, h+" (an intrinsic of the standard library)")
+		}
+		return f.intrinsic(n, h, args)
+	}
 	if _, ok := f.c.funcs[h]; ok {
 		return f.call(n, h, args)
 	}
@@ -811,6 +892,44 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	c.End()
 	if value {
 		c.LocalGet(result)
+	}
+	return nil
+}
+
+// intrinsic compiles a byte-level operation of the standard library:
+// (__hf_type v) the VM's type name of v (as %T), (__hf_byte_len s),
+// (__hf_byte_at s i), (__hf_byte_slice s from to), and, until floats are
+// formatted in HowlFrame, (__hf_float_digits f) and (__hf_float_point f).
+// Standard-library code passes them the types they need.
+func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
+	r := f.c.rt
+	c := f.code
+	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3, "__hf_float_digits": 1, "__hf_float_point": 1}
+	if k, ok := want[h]; !ok || k != len(args) {
+		return unsupported(n, h)
+	}
+	for _, a := range args {
+		if err := f.expr(a); err != nil {
+			return err
+		}
+	}
+	unboxInt := func() { c.RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64() }
+	switch h {
+	case "__hf_type":
+		c.Call(r.fGoType)
+	case "__hf_byte_len":
+		c.RefCast(r.tStr).StructGet(r.tStr, 0).ArrayLen().I64ExtendI32U().Call(r.fBoxInt)
+	case "__hf_byte_at":
+		i := f.local(EqRef)
+		c.LocalSet(i).RefCast(r.tStr).StructGet(r.tStr, 0).LocalGet(i)
+		unboxInt()
+		c.ArrayGetU(r.tBytes).I64ExtendI32U().Call(r.fBoxInt)
+	case "__hf_byte_slice":
+		c.Call(r.fByteSlice)
+	case "__hf_float_digits":
+		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatDigits).Call(r.fBoxInt)
+	case "__hf_float_point":
+		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatPoint).I64ExtendI32S().Call(r.fBoxInt)
 	}
 	return nil
 }
