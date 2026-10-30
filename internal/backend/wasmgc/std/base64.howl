@@ -1,0 +1,85 @@
+; Base64 for the WebAssembly backend's standard library: the browser host
+; operations base64_text and sniff_media_type as the JavaScript backend
+; gives them (they have no VM form), on byte values.
+(module
+  ; value: the 6-bit value of a base64 alphabet byte, or -1.
+  (defun value (c)
+    (do
+      (if (and (>= c 65) (<= c 90)) (return (- c 65)))
+      (if (and (>= c 97) (<= c 122)) (return (- c 71)))
+      (if (and (>= c 48) (<= c 57)) (return (+ c 4)))
+      (if (= c 43) (return 62))
+      (if (= c 47) (return 63))
+      (return -1)))
+
+  ; well_formed: the JavaScript backend's test: a string whose length is a
+  ; multiple of four, of the standard alphabet with at most two = at the end.
+  (defun well_formed (v)
+    (do
+      (if (not (= (__hf_type v) "string")) (return false))
+      (let (n (__hf_byte_len v) pad 0 i 0)
+        (do
+          (if (not (= (__hf_imod n 4) 0)) (return false))
+          (while (and (> (- n pad) 0) (and (< pad 3) (= (__hf_byte_at v (- (- n pad) 1)) 61))) (set pad (+ pad 1)))
+          (if (> pad 2) (return false))
+          (while (< i (- n pad))
+            (do
+              (if (< (call value (__hf_byte_at v i)) 0) (return false))
+              (set i (+ i 1))))
+          (return true)))))
+
+  ; bytes: the bytes of base64 text v (a list of byte values), as the
+  ; JavaScript backend's atob decodes it; code names the error otherwise.
+  (export (defun bytes (code v)
+    (do
+      (if (not (call well_formed v)) (__hf_fail (+ code ": expected standard base64 data")))
+      (let (n (__hf_byte_len v) out (list) acc 0 bits 0 i 0)
+        (do
+          (while (and (< i n) (not (= (__hf_byte_at v i) 61)))
+            (do
+              (set acc (__hf_or (__hf_shl acc 6) (call value (__hf_byte_at v i))))
+              (set bits (+ bits 6))
+              (if (>= bits 8)
+                (do
+                  (set bits (- bits 8))
+                  (append out (__hf_and (__hf_shr acc bits) 255))
+                  (set acc (__hf_and acc (- (__hf_shl 1 bits) 1)))))
+              (set i (+ i 1))))
+          (return out))))))
+
+  ; text: base64_text, the UTF-8 text in base64 v. A byte order mark at the
+  ; start is dropped, as TextDecoder does.
+  (export (defun text (v)
+    (let (b (call bytes "TEXT_INVALID_BASE64" v))
+      (do
+        (if (and (>= (list_len b) 3) (and (= (list_get b 0) 239) (and (= (list_get b 1) 187) (= (list_get b 2) 191))))
+          (set b (list_slice b 3)))
+        (let (s (bytes_to_string b))
+          (do
+            (if (not (call __std_utf8_valid s)) (__hf_fail "TEXT_INVALID_UTF8: data is not valid UTF-8 text"))
+            (return s)))))))
+
+  ; sniff: sniff_media_type, the image type the first bytes of base64 v
+  ; announce (PNG, JPEG, GIF or WebP), or "".
+  (export (defun sniff (v)
+    (do
+      (if (not (= (__hf_type v) "string")) (return ""))
+      (let (head (if (> (__hf_byte_len v) 16) (__hf_byte_slice v 0 16) v))
+        (do
+          (if (not (call well_formed head)) (return ""))
+          (let (b (call bytes "TYPE_ERROR" head))
+            (do
+              (if (call starts b (list 137 80 78 71 13 10 26 10)) (return "image/png"))
+              (if (call starts b (list 255 216 255)) (return "image/jpeg"))
+              (if (call starts b (list 71 73 70 56)) (return "image/gif"))
+              (if (and (call starts b (list 82 73 70 70)) (and (>= (list_len b) 12)
+                  (and (= (list_get b 8) 87) (and (= (list_get b 9) 69) (and (= (list_get b 10) 66) (= (list_get b 11) 80))))))
+                (return "image/webp"))
+              (return ""))))))))
+
+  (defun starts (b sig)
+    (let (i 0)
+      (do
+        (if (< (list_len b) (list_len sig)) (return false))
+        (for x sig (do (if (not (= (list_get b i) x)) (return false)) (set i (+ i 1))))
+        (return true)))))

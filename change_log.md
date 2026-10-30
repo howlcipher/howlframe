@@ -38,6 +38,8 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `base64_text` and `sniff_media_type` on `--target wasmgc`, written in HowlFrame (`std/base64.howl`) and compared with the
+  JavaScript backend; HowlScene HF's backup module compiles and runs as WebAssembly.
 * `to_float` on `--target wasmgc` reads hexadecimal floats (`0x1.8p1`) as Go's `ParseFloat` does.
 * `bytes_to_string` and `utf8_valid` on `--target wasmgc`. Text that is not valid UTF-8 is split, printed and written as the
   VM does: `str_split` with an empty separator no longer swallows the bytes after an invalid one, and the Node loader
