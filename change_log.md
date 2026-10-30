@@ -8,6 +8,9 @@
   UTF-8 as a raw U+FFFD and worded syntax errors differently (bugs.md #63).
 * `encode_json` on `--target js` writes what the VM writes: keys sorted (it kept insertion order), `<`, `>`, `&` and
   U+2028/U+2029 escaped, `-0` kept. A project file written in the browser is now byte-identical to the VM's (bugs.md #64).
+* `howlframe -max-instructions N prog.howl` (or another flag that only shapes a run) is refused with a message naming
+  `howlframe run --max-instructions N prog.howl`; it wrote `prog.hfbc` and exited 0 without running anything
+  (bugs.md #62).
 * A `try_let` used as a value (`(print (try_let (v ...) (catch e ...) v))`) runs on `--target js`; the generated file did
   not parse (bugs.md #65). `--target go` refuses it instead of emitting code that does not compile.
 * `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so

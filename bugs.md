@@ -19,7 +19,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
 | 64 | [The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`](#64-the-javascript-backends-encode_json-keeps-insertion-order-and-does-not-escape---) | Done (2026-10-30) | 6.0 (6×1÷1) | — | — | — | `(encode_json (dict ("b" 1) ("a" "<x>")))` is `{"b":1,"a":"<x>"}` from `--target js` and `{"a":"\u003cx\u003e","b":1}` on the VM (Go's `encoding/json`: sorted keys, HTML-safe escapes), so a project a browser app writes differs byte for byte from the one the VM or WebAssembly writes. |
 | 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
-| 62 | [A legacy flag before the input writes bytecode silently instead of running the program](#62-a-legacy-flag-before-the-input-writes-bytecode-silently-instead-of-running-the-program) | Pending | 3.0 (6×1÷2) | — | — | — | `howlframe -max-instructions 5000 prog.howl` writes `prog.hfbc` and exits 0 with no output, so a user who meant to run the program with a higher limit sees nothing happen. `howlframe run --max-instructions N prog.howl` runs it. Same class as #52. |
+| 62 | [A legacy flag before the input writes bytecode silently instead of running the program](#62-a-legacy-flag-before-the-input-writes-bytecode-silently-instead-of-running-the-program) | Done (2026-10-30) | 3.0 (6×1÷2) | — | — | — | `howlframe -max-instructions 5000 prog.howl` writes `prog.hfbc` and exits 0 with no output, so a user who meant to run the program with a higher limit sees nothing happen. `howlframe run --max-instructions N prog.howl` runs it. Same class as #52. |
 | 61 | [`TestAdapterDepthCapRejects4095Chain` fails intermittently under the race detector](#61-testadapterdepthcaprejects4095chain-fails-intermittently-under-the-race-detector) | Done (2026-10-30) | 3.0 (3×1÷1) | — | — | — | The test fails when one depth rejection takes more than one second of wall-clock time, which the race detector on a shared runner can exceed; it failed once on PR #257 (no `internal/hfir` change) and passed on rerun. |
 | 60 | [`sum` of a list of floats is rejected by the checker](#60-sum-of-a-list-of-floats-is-rejected-by-the-checker) | Done (2026-10-29) | 4.0 (4×1÷1) | — | — | — | `(sum (list 1.5 2.0))` fails with `cannot assign float64 to __clS.. of type int`: the desugared accumulator starts at the integer 0, so only integer lists can be summed. Found by the WebAssembly backend's sugar fixtures. |
 | 59 | [The JavaScript backend treats a list or dict as equal to itself](#59-the-javascript-backend-treats-a-list-or-dict-as-equal-to-itself) | Pending | 3.0 (6×1÷2) | — | — | — | `(= l l)` prints `false` on the VM and the interpreter (collections are never equal) but `true` from `--target js`, which compiles `=` to `===`. Found by the WebAssembly backend's differential tests. |
@@ -257,6 +257,15 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Scope:** Either run the program (the flag's evident intent) or refuse
   the combination with a message that names `run --max-instructions`; at the
   least, print `Built <path>` like every other artifact-writing mode.
+* **Done (2026-10-30):** A flag that only shapes a run
+  (`-max-instructions`, `-max-call-depth`, the other limits, `-deadline`,
+  the log flags, `-listen-host`, and `-allow-caps` outside `-run`) is
+  refused unless the command line runs a program, with a message that
+  names `howlframe run --<flag> <value> <file>`; nothing is written. A
+  compile-only flag such as `-o` still writes the artifact silently, a
+  tested contract (`TestLegacyCLIAppExitStatusAndFlaggedWriteOnly`).
+  `TestRunOnlyFlagsNeedARun` covers the refusals, and that plain runs,
+  `-run -allow-caps` and `run --max-instructions` still run.
 
 ### 61. `TestAdapterDepthCapRejects4095Chain` fails intermittently under the race detector
 

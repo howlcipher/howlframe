@@ -149,6 +149,24 @@ func main() {
 	}
 	outputDir := *outDir
 
+	// A flag that only shapes a run must not be given where nothing runs:
+	// with it, the bare path used to write the .hfbc and exit 0 silently,
+	// leaving the flag without effect (bugs.md #62).
+	given := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	for name := range setAfterInput {
+		given[name] = true
+	}
+	for _, name := range runOnlyFlags {
+		if given[name] && !*runBc && !(name == "allow-caps" && *runMode) {
+			modes := "-run-bc"
+			if name == "allow-caps" {
+				modes = "-run-bc or -run"
+			}
+			ast.ReportError(fmt.Sprintf("-%s applies only when a program runs (with %s); to run %s with it, use: howlframe run --%s <value> %s", name, modes, inputFile, name, inputFile), 0, 0)
+		}
+	}
+
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
 		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
@@ -1010,6 +1028,15 @@ func writeJSModule(root *ast.Node, analysis *checker.Analysis, outputDir string)
 		}
 	}
 	fmt.Printf("Built %s\n", filepath.Join(outputDir, "app.mjs"))
+}
+
+// runOnlyFlags shape how a program runs (limits, grants, logging), so they
+// are refused on a command line that runs nothing. -allow-caps also governs
+// -run.
+var runOnlyFlags = []string{
+	"max-instructions", "max-call-depth", "max-memory-bytes", "max-fetch-bytes",
+	"max-exec-output-bytes", "max-request-bytes", "access-log", "listen-host",
+	"timing-log", "deadline", "allow-caps",
 }
 
 // startupInstructionLimit resolves the startup ceiling for HTTP server programs:
