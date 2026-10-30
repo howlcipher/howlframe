@@ -22,6 +22,7 @@ var stdFiles embed.FS
 // function that implement it.
 var stdOps = map[string]struct{ module, fn string }{
 	"encode_json": {"json", "encode"},
+	"regex_match": {"regex", "match"},
 }
 
 const stdPrefix = "__std_"
@@ -45,6 +46,23 @@ func stdDefuns(module string) ([]*ast.Node, error) {
 	ast.ResolveModules(root)
 	ast.Desugar(root)
 	return root.Children[1:], nil
+}
+
+// stdCalls adds the standard-library modules that a std definition calls.
+func stdCalls(n *ast.Node, seen map[string]bool, out *[]string) {
+	if n == nil {
+		return
+	}
+	if n.Type == "SYMBOL" && strings.HasPrefix(n.Value, stdPrefix) {
+		mod, _, _ := strings.Cut(strings.TrimPrefix(n.Value, stdPrefix), "_")
+		if !seen[mod] {
+			seen[mod] = true
+			*out = append(*out, mod)
+		}
+	}
+	for _, k := range n.Children {
+		stdCalls(k, seen, out)
+	}
 }
 
 // stdModulesUsed lists, in a stable order, the standard-library modules a
@@ -96,12 +114,18 @@ func Compile(root *ast.Node) ([]byte, error) {
 			stmts = append(stmts, n)
 		}
 	}
+	// Standard-library modules the program reaches, and the ones they call
+	// (by their linked names, __std_<module>_<name>).
 	var modules []string
-	stdModulesUsed(root, map[string]bool{}, &modules)
-	for _, mod := range modules {
-		std, err := stdDefuns(mod)
+	seen := map[string]bool{}
+	stdModulesUsed(root, seen, &modules)
+	for i := 0; i < len(modules); i++ {
+		std, err := stdDefuns(modules[i])
 		if err != nil {
 			return nil, err
+		}
+		for _, d := range std {
+			stdCalls(d, seen, &modules)
 		}
 		defuns = append(defuns, std...)
 	}
@@ -900,11 +924,15 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 // (__hf_type v) the VM's type name of v (as %T), (__hf_byte_len s),
 // (__hf_byte_at s i), (__hf_byte_slice s from to), and, until floats are
 // formatted in HowlFrame, (__hf_float_digits f) and (__hf_float_point f).
+// (__hf_array n), (__hf_aget a i), (__hf_aset a i v) and (__hf_alen a) are
+// a mutable array of n values (nil at first) for std algorithms; arrays
+// never reach programs. (__hf_fail "CODE: message") raises an error.
 // Standard-library code passes them the types they need.
 func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 	r := f.c.rt
 	c := f.code
-	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3, "__hf_float_digits": 1, "__hf_float_point": 1}
+	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3, "__hf_float_digits": 1, "__hf_float_point": 1,
+		"__hf_array": 1, "__hf_aget": 2, "__hf_aset": 3, "__hf_alen": 1, "__hf_fail": 1}
 	if k, ok := want[h]; !ok || k != len(args) {
 		return unsupported(n, h)
 	}
@@ -930,6 +958,27 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatDigits).Call(r.fBoxInt)
 	case "__hf_float_point":
 		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatPoint).I64ExtendI32S().Call(r.fBoxInt)
+	case "__hf_array":
+		unboxInt()
+		c.ArrayNewDefault(r.tItems)
+	case "__hf_aget", "__hf_aset":
+		v := f.local(EqRef)
+		if h == "__hf_aset" {
+			c.LocalSet(v)
+		}
+		i := f.local(EqRef)
+		c.LocalSet(i).RefCast(r.tItems).LocalGet(i)
+		unboxInt()
+		if h == "__hf_aget" {
+			c.ArrayGet(r.tItems)
+		} else {
+			c.LocalGet(v).ArraySet(r.tItems).RefNull(HeapNone)
+		}
+	case "__hf_alen":
+		c.RefCast(r.tItems).ArrayLen().I64ExtendI32U().Call(r.fBoxInt)
+	case "__hf_fail":
+		c.RefCast(r.tStr).Call(r.fFail)
+		f.check()
 	}
 	return nil
 }

@@ -1,7 +1,8 @@
 ; JSON for the WebAssembly backend's standard library, written in HowlFrame
 ; on the byte intrinsics (__hf_type, __hf_byte_len, __hf_byte_at,
 ; __hf_byte_slice, and the temporary __hf_float_digits and
-; __hf_float_point) that only standard-library code may call.
+; __hf_float_point) that only standard-library code may call, and on
+; std/utf8.howl.
 ;
 ; encode writes a value as the VM's encode_json does (Go's encoding/json):
 ; object keys in sorted byte order, no spaces, integers exactly, floats in
@@ -31,7 +32,7 @@
     (let (n (__hf_byte_len s) i 0 start 0 parts (list "\""))
       (do
         (while (< i n)
-          (let (l (call seq_len s i))
+          (let (l (call __std_utf8_seq_len s i))
             (let (e (call escape s i l) step (if (= l 0) 1 l))
               (if (= e "")
                 (set i (+ i step))
@@ -69,33 +70,6 @@
           (let (digits (str_split "0123456789abcdef" ""))
             (return (+ "\\u00" (+ (if (< b 16) "0" "1") (list_get digits (if (< b 16) b (- b 16))))))))
         (return ""))))
-
-  ; seq_len: the length of the valid UTF-8 sequence at i, or 0 (Go's rules:
-  ; no overlong forms, no surrogates, nothing above U+10FFFF).
-  (export (defun seq_len (s i)
-    (let (n (__hf_byte_len s) b (__hf_byte_at s i) len 0 lo 128 hi 191)
-      (do
-        (if (< b 128) (return 1))
-        (cond
-          ((and (>= b 194) (<= b 223)) (set len 2))
-          ((= b 224) (do (set len 3) (set lo 160)))
-          ((and (>= b 225) (<= b 236)) (set len 3))
-          ((= b 237) (do (set len 3) (set hi 159)))
-          ((and (>= b 238) (<= b 239)) (set len 3))
-          ((= b 240) (do (set len 4) (set lo 144)))
-          ((and (>= b 241) (<= b 243)) (set len 4))
-          ((= b 244) (do (set len 4) (set hi 143)))
-          (else (return 0)))
-        (if (> (+ i len) n) (return 0))
-        (let (k 1)
-          (while (< k len)
-            (let (c (__hf_byte_at s (+ i k)))
-              (do
-                (if (or (< c lo) (> c hi)) (return 0))
-                (set lo 128)
-                (set hi 191)
-                (set k (+ k 1))))))
-        (return len)))))
 
   ; number: a float as encoding/json writes it: plain decimal with the
   ; shortest digits, or exponent form below 1e-6 and from 1e21, with

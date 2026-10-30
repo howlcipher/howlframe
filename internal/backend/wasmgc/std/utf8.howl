@@ -1,0 +1,46 @@
+; UTF-8 for the WebAssembly backend's standard library, on the byte
+; intrinsics. Go's rules: no overlong forms, no surrogates, nothing above
+; U+10FFFF; an invalid byte is one U+FFFD.
+(module
+  ; seq_len: the length of the valid UTF-8 sequence at byte i of s, or 0.
+  (export (defun seq_len (s i)
+    (let (n (__hf_byte_len s) b (__hf_byte_at s i) len 0 lo 128 hi 191)
+      (do
+        (if (< b 128) (return 1))
+        (cond
+          ((and (>= b 194) (<= b 223)) (set len 2))
+          ((= b 224) (do (set len 3) (set lo 160)))
+          ((and (>= b 225) (<= b 236)) (set len 3))
+          ((= b 237) (do (set len 3) (set hi 159)))
+          ((and (>= b 238) (<= b 239)) (set len 3))
+          ((= b 240) (do (set len 4) (set lo 144)))
+          ((and (>= b 241) (<= b 243)) (set len 4))
+          ((= b 244) (do (set len 4) (set hi 143)))
+          (else (return 0)))
+        (if (> (+ i len) n) (return 0))
+        (let (k 1)
+          (while (< k len)
+            (let (c (__hf_byte_at s (+ i k)))
+              (do
+                (if (or (< c lo) (> c hi)) (return 0))
+                (set lo 128)
+                (set hi 191)
+                (set k (+ k 1))))))
+        (return len)))))
+
+  ; rune: the code point of the sequence of length l at byte i (from
+  ; seq_len), U+FFFD when l is 0.
+  (export (defun rune (s i l)
+    (let (b (__hf_byte_at s i))
+      (do
+        (if (= l 0) (return 65533))
+        (if (= l 1) (return b))
+        (if (= l 2) (return (+ (* (- b 192) 64) (- (__hf_byte_at s (+ i 1)) 128))))
+        (if (= l 3)
+          (return (+ (* (- b 224) 4096) (+ (* (- (__hf_byte_at s (+ i 1)) 128) 64) (- (__hf_byte_at s (+ i 2)) 128)))))
+        (return (+ (* (- b 240) 262144) (+ (* (- (__hf_byte_at s (+ i 1)) 128) 4096) (+ (* (- (__hf_byte_at s (+ i 2)) 128) 64) (- (__hf_byte_at s (+ i 3)) 128)))))))))
+
+  ; width: how many bytes the character at i takes (an invalid byte is 1).
+  (export (defun width (s i)
+    (let (l (call seq_len s i))
+      (if (= l 0) (return 1) (return l))))))
