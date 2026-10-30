@@ -41,7 +41,7 @@ type rt struct {
 	fMapGet, fMapSet, fMapDelete, fMapKeys                 int
 	fSortedKeys, fDictText                                 int
 	fAttrEscape, fUTF8Len, fJSONQuote, fCatchText          int
-	fByteSlice                                             int
+	fByteSlice, fChar                                      int
 
 	strings map[string]int // literal -> data segment
 }
@@ -220,6 +220,7 @@ func (r *rt) emitAll() {
 		{&r.fJSONQuote, "json_quote", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fCatchText, "catch_text", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fByteSlice, "byte_slice", r.funcType([]ValType{EqRef, EqRef, EqRef}, EqRef)},
+		{&r.fChar, "char", r.funcType([]ValType{I32}, Ref(r.tStr))},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -266,6 +267,7 @@ func (r *rt) emitAll() {
 	r.emitDicts()
 	r.emitErrors()
 	r.emitBytes()
+	r.emitChar()
 }
 
 func (r *rt) body(idx int, locals []ValType, fill func(c *Code)) {
@@ -1347,6 +1349,46 @@ func (r *rt) emitBytes() {
 		c.LocalGet(1).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(4)
 		c.LocalGet(2).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(5)
 		r.sliceStr(c, 3, 4, 5, 6)
+	})
+}
+
+// emitChar writes char(cp): the UTF-8 text of a code point (callers pass
+// a valid one). locals: 0 cp, 1 bytes
+func (r *rt) emitChar() {
+	r.body(r.fChar, []ValType{RefNull(r.tBytes)}, func(c *Code) {
+		// put(i, v) stores byte v at index i.
+		put := func(i int32, v func(c *Code)) {
+			c.LocalGet(1).I32Const(i)
+			v(c)
+			c.ArraySet(r.tBytes)
+		}
+		cont := func(shift int32) func(c *Code) {
+			return func(c *Code) { c.LocalGet(0).I32Const(shift).I32ShrU().I32Const(0x3F).I32And().I32Const(0x80).I32Or() }
+		}
+		lead := func(shift, mark int32) func(c *Code) {
+			return func(c *Code) { c.LocalGet(0).I32Const(shift).I32ShrU().I32Const(mark).I32Or() }
+		}
+		c.LocalGet(0).I32Const(0x80).I32LtU().If(NoResult)
+		c.I32Const(1).ArrayNewDefault(r.tBytes).LocalSet(1)
+		put(0, func(c *Code) { c.LocalGet(0) })
+		c.LocalGet(1).RefAsNonNull().StructNew(r.tStr).Return().End()
+		c.LocalGet(0).I32Const(0x800).I32LtU().If(NoResult)
+		c.I32Const(2).ArrayNewDefault(r.tBytes).LocalSet(1)
+		put(0, lead(6, 0xC0))
+		put(1, cont(0))
+		c.LocalGet(1).RefAsNonNull().StructNew(r.tStr).Return().End()
+		c.LocalGet(0).I32Const(0x10000).I32LtU().If(NoResult)
+		c.I32Const(3).ArrayNewDefault(r.tBytes).LocalSet(1)
+		put(0, lead(12, 0xE0))
+		put(1, cont(6))
+		put(2, cont(0))
+		c.LocalGet(1).RefAsNonNull().StructNew(r.tStr).Return().End()
+		c.I32Const(4).ArrayNewDefault(r.tBytes).LocalSet(1)
+		put(0, lead(18, 0xF0))
+		put(1, cont(12))
+		put(2, cont(6))
+		put(3, cont(0))
+		c.LocalGet(1).RefAsNonNull().StructNew(r.tStr)
 	})
 }
 

@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 243 differential fixtures pass. HowlScene HF's registry, renderer and export modules compile; next is `parse_json` (schema), then `base64_text` (backups) and `sniff_media_type`. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile; next is `base64_text` (backups), then `sniff_media_type`. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -213,6 +213,15 @@ as the work it describes: tick tasks, move the status line, record findings.
       another by its linked name (`__std_utf8_seq_len`), which loads it.
 - [x] `encode_json` in `std/json.howl`, as Go's `encoding/json` writes the
       VM's values (`TestDiffEncodeJSON`).
+- [x] `parse_json` in `std/json.howl`, as the VM's (Go's `json.Decoder`
+      with `UseNumber`, then a check for a second value): ints when they fit
+      int64, otherwise floats; the last duplicate key wins; U+FFFD for
+      invalid UTF-8 and unpaired surrogates; Go's syntax messages with its
+      quoting of the offending byte, `unexpected EOF`, `EOF`, the
+      second-value messages, and float range errors reported after them
+      (`TestDiffParseJSON`). A byte list as the text fails with
+      `WASM_UNSUPPORTED`. The messages are those of Go 1.25, which releases
+      are built with; newer Go words some differently (bugs.md #63).
 - [x] `regex_match` in `std/regex.howl`: Go's `regexp.MatchString` for a
       documented RE2 subset (literals, `.`, classes with ranges and Perl
       escapes, `^`, `$`, groups including named and non-capturing ones,

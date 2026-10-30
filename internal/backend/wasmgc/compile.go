@@ -23,6 +23,7 @@ var stdFiles embed.FS
 var stdOps = map[string]struct{ module, fn string }{
 	"encode_json": {"json", "encode"},
 	"regex_match": {"regex", "match"},
+	"parse_json":  {"json", "parse"},
 }
 
 const stdPrefix = "__std_"
@@ -778,6 +779,14 @@ func (f *fn) expr(n *ast.Node) error {
 		return nil
 	}
 	if op, ok := stdOps[h]; ok {
+		if h == "parse_json" {
+			// (parse_json Type text): the type names what the program expects;
+			// the VM reads the text the same way whatever it is.
+			if len(args) != 2 {
+				return unsupported(n, h)
+			}
+			args = args[1:]
+		}
 		return f.call(n, stdPrefix+op.module+"_"+op.fn, args)
 	}
 	if strings.HasPrefix(h, "__hf_") {
@@ -924,6 +933,7 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 // (__hf_type v) the VM's type name of v (as %T), (__hf_byte_len s),
 // (__hf_byte_at s i), (__hf_byte_slice s from to), and, until floats are
 // formatted in HowlFrame, (__hf_float_digits f) and (__hf_float_point f).
+// (__hf_char cp) is the UTF-8 text of a code point and (__hf_nil) nil.
 // (__hf_array n), (__hf_aget a i), (__hf_aset a i v) and (__hf_alen a) are
 // a mutable array of n values (nil at first) for std algorithms; arrays
 // never reach programs. (__hf_fail "CODE: message") raises an error.
@@ -932,7 +942,7 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 	r := f.c.rt
 	c := f.code
 	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3, "__hf_float_digits": 1, "__hf_float_point": 1,
-		"__hf_array": 1, "__hf_aget": 2, "__hf_aset": 3, "__hf_alen": 1, "__hf_fail": 1}
+		"__hf_array": 1, "__hf_aget": 2, "__hf_aset": 3, "__hf_alen": 1, "__hf_fail": 1, "__hf_char": 1, "__hf_nil": 0}
 	if k, ok := want[h]; !ok || k != len(args) {
 		return unsupported(n, h)
 	}
@@ -979,6 +989,10 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 	case "__hf_fail":
 		c.RefCast(r.tStr).Call(r.fFail)
 		f.check()
+	case "__hf_char":
+		c.RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().Call(r.fChar)
+	case "__hf_nil":
+		c.RefNull(HeapNone)
 	}
 	return nil
 }
