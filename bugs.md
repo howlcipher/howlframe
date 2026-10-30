@@ -17,6 +17,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
 | 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
+| 66 | [The JavaScript backend computes with operands of the wrong type](#66-the-javascript-backend-computes-with-operands-of-the-wrong-type) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | When an operand's type is known only at run time (a dict of mixed values, `parse_json`), `--target js` lets JavaScript decide: `(+ 1 v)` with `v` = `"x"` prints `1x`, `(* v 2)` with `v` a one-element list prints `2`, nil + 1 is `1`, `(< 1 v)` is `false`. The VM fails each with `TYPE_ERROR: op requires numeric operands, got int64 and string`. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
 | 64 | [The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`](#64-the-javascript-backends-encode_json-keeps-insertion-order-and-does-not-escape---) | Done (2026-10-30) | 6.0 (6×1÷1) | — | — | — | `(encode_json (dict ("b" 1) ("a" "<x>")))` is `{"b":1,"a":"<x>"}` from `--target js` and `{"a":"\u003cx\u003e","b":1}` on the VM (Go's `encoding/json`: sorted keys, HTML-safe escapes), so a project a browser app writes differs byte for byte from the one the VM or WebAssembly writes. |
 | 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
@@ -197,6 +198,33 @@ latent, so it is recorded here rather than filed as a live bug.
   passing and failing asserts, an assert in a called function, a helper,
   a division by zero, `exit 3` and a repeated name; before the fix the
   package did not compile.
+
+### 66. The JavaScript backend computes with operands of the wrong type
+
+* **Problem:** `+`, `-`, `*`, `<`, `>`, `<=` and `>=` on a value whose type
+  the checker does not know are compiled to JavaScript's operators (through
+  `howlFrameArith` and `howlFrameFloatArith`, which only checked the
+  result, or as bare `<`), so JavaScript's coercions decide the result. The
+  VM's rule (`BcBinop`): `+` joins two strings, two numbers compute, and
+  any other pair is `TYPE_ERROR: op requires numeric operands, got A and B`
+  with the operands' Go type names.
+* **Evidence:** With `d` = `(dict ("s" "x") ("n" 1) ("l" (list 1)))`, on
+  `--target js` (2026-10-30): `(+ 1 (map_get d "s"))` prints `1x`,
+  `(+ "a" (map_get d "n"))` prints `a1`, `(* (map_get d "l") 2)` prints
+  `2`, `(+ (map_get d "zz") 1)` prints `1`, `(< 1 (map_get d "s"))` prints
+  `false`, and `(- (map_get d "s") 1)` fails with the wrong error,
+  `RUNTIME_ERROR: floating-point overflow: x - 1 is not finite`. The VM
+  fails each with a `TYPE_ERROR`. A HowlScene HF core test that passed on
+  the JavaScript backend could therefore fail on the VM or WebAssembly.
+* **Scope:** Check operand types at run time where the checker could not,
+  with the VM's message, and a test against the VM.
+* **Done (2026-10-30):** The arithmetic helpers check operands first
+  (`howlFrameOperands`), and an ordering with an operand that is not
+  statically a number or a string goes through `howlFrameCompare`; both
+  raise the VM's `TYPE_ERROR` with its type names (`howlFrameGoType`: a
+  JavaScript number cannot tell `2.0` from `2`, so a whole float is named
+  `int64`). `TestJSOperandTypesMatchBytecode` runs nine programs on both;
+  eight of them failed before the fix.
 
 ### 65. The JavaScript backend emits invalid JavaScript for `try_let` used as a value
 

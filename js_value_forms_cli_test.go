@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,6 +131,59 @@ func TestJSEncodeJSONMatchesBytecode(t *testing.T) {
 			}
 			if string(got) != string(want) {
 				t.Fatalf("javascript printed %q, bytecode printed %q", got, want)
+			}
+		})
+	}
+}
+
+// Arithmetic and ordering on a value of unknown type (from a dict of mixed
+// values) follow the VM's operand rule on the JavaScript backend (bugs.md
+// #66): + joins two strings, two numbers compute, and anything else is the
+// VM's TYPE_ERROR, where JavaScript used to concatenate, coerce or compare.
+func TestJSOperandTypesMatchBytecode(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	bin := buildHowlFrameBinaryForTest(t)
+	const mixed = `(dict ("s" "x") ("n" 1) ("f" 1.5) ("l" (list 1)))`
+	for name, body := range map[string]string{
+		"computes":         `(print (+ (map_get d "n") 1.5) (* (map_get d "f") 2) (- (map_get d "n") 3) (+ (map_get d "s") "!") (< (map_get d "s") "t") (> (map_get d "n") 0.5) (<= (map_get d "f") 1.5))`,
+		"int and string":   `(print (+ 1 (map_get d "s")))`,
+		"string and int":   `(print (+ "a" (map_get d "n")))`,
+		"nil operand":      `(print (+ (map_get d "zz") 1))`,
+		"string minus":     `(print (- (map_get d "s") 1))`,
+		"list times":       `(print (* (map_get d "l") 2))`,
+		"float and string": `(print (* (map_get d "f") (map_get d "s")))`,
+		"order mixed":      `(print (< 1 (map_get d "s")))`,
+		"order list":       `(print (>= (map_get d "l") (map_get d "l")))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			src := "(let (d " + mixed + ") " + body + ")"
+			cli := filepath.Join(dir, "cli.howl")
+			os.WriteFile(cli, []byte("(cli_app\n"+src+")\n"), 0o600)
+			cmd := exec.Command(bin, "run", cli)
+			cmd.Dir = dir
+			want, vmErr := cmd.CombinedOutput()
+			web := filepath.Join(dir, "web.howl")
+			os.WriteFile(web, []byte("(web_app\n"+src+")\n"), 0o600)
+			outDir := filepath.Join(dir, "js")
+			if out, err := exec.Command(bin, "build", web, "--target", "js", "-o", outDir).CombinedOutput(); err != nil {
+				t.Fatalf("js build rejected: %v %s", err, out)
+			}
+			got, jsErr := exec.Command("node", filepath.Join(outDir, "app.js")).CombinedOutput()
+			if vmErr == nil {
+				if jsErr != nil || string(got) != string(want) {
+					t.Fatalf("javascript printed %q (%v), bytecode printed %q", got, jsErr, want)
+				}
+				return
+			}
+			var report struct{ Code, Message string }
+			if err := json.Unmarshal(want, &report); err != nil || report.Code != "TYPE_ERROR" {
+				t.Fatalf("bytecode should fail with a TYPE_ERROR report, got %v %s", vmErr, want)
+			}
+			if jsErr == nil || !strings.Contains(string(got), "Error: TYPE_ERROR: "+report.Message+"\n") {
+				t.Fatalf("javascript should fail with %q, got %v %s", report.Message, jsErr, got)
 			}
 		})
 	}
