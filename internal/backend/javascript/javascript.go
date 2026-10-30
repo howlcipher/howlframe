@@ -836,15 +836,42 @@ function howlFrameSafeInt(v) {
   }
   return v;
 }
+// howlFrameOperands applies the VM's operand rule (bugs.md #66): + joins two
+// strings, and otherwise both operands must be numbers. A value of unknown
+// type (from a dict of mixed values or parse_json) reaches here unchecked.
+// The type names are the VM's (%T); JavaScript cannot tell 2.0 from 2, so a
+// whole float is named int64.
+function howlFrameGoType(v) {
+  if (v === null || v === undefined) return "<nil>";
+  if (typeof v === "number") return Number.isInteger(v) ? "int64" : "float64";
+  if (typeof v === "string") return "string";
+  if (typeof v === "boolean") return "bool";
+  if (Array.isArray(v)) return "[]interface {}";
+  return "map[string]interface {}";
+}
+function howlFrameOperands(op, a, b) {
+  if (typeof a === "number" && typeof b === "number") return true;
+  if (op === "+" && typeof a === "string" && typeof b === "string") return false;
+  throw new Error("TYPE_ERROR: " + op + " requires numeric operands, got " + howlFrameGoType(a) + " and " + howlFrameGoType(b));
+}
 function howlFrameArith(op, a, b) {
+  if (!howlFrameOperands(op, a, b)) return a + b;
   var v = op === "+" ? a + b : op === "-" ? a - b : a * b;
   if (typeof v === "number" && !Number.isSafeInteger(v) && Number.isInteger(a) && Number.isInteger(b)) {
     throw new Error("RUNTIME_ERROR: integer result is outside the exact JavaScript integer range");
   }
   return howlFrameFinite(op, a, b, v);
 }
+function howlFrameCompare(op, a, b) {
+  var numbers = typeof a === "number" && typeof b === "number";
+  if (!numbers && !(typeof a === "string" && typeof b === "string")) {
+    throw new Error("TYPE_ERROR: " + op + " requires numeric operands, got " + howlFrameGoType(a) + " and " + howlFrameGoType(b));
+  }
+  return op === "<" ? a < b : op === ">" ? a > b : op === "<=" ? a <= b : a >= b;
+}
 // NUMERIC_CONTRACT section 7: float overflow is an error, not Infinity or NaN.
 function howlFrameFloatArith(op, a, b) {
+  if (!howlFrameOperands(op, a, b)) return a + b;
   return howlFrameFinite(op, a, b, op === "+" ? a + b : op === "-" ? a - b : a * b);
 }
 function howlFrameFinite(op, a, b, v) {
@@ -1024,6 +1051,16 @@ func sanitizeJSName(name string) string {
 	return res
 }
 
+// jsKnownOrdered reports whether a node is statically a number or a
+// string, which the checker has already paired for a comparison.
+func jsKnownOrdered(node *ast.Node) bool {
+	switch node.Inferred.Kind {
+	case ast.Int, ast.Float, ast.String:
+		return true
+	}
+	return false
+}
+
 // jsMayBeInt reports whether a node could hold an integer: it is not
 // statically known to be a float, string, or other non-numeric value.
 func jsMayBeInt(node *ast.Node) bool {
@@ -1066,6 +1103,13 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 				return fmt.Sprintf("(!howlFrameEq(%s, %s))", arg1, arg2)
 			}
 			return fmt.Sprintf("howlFrameEq(%s, %s)", arg1, arg2)
+		}
+		if (ir.Op == "<" || ir.Op == ">" || ir.Op == "<=" || ir.Op == ">=") &&
+			(!jsKnownOrdered(ir.Kids[0]) || !jsKnownOrdered(ir.Kids[1])) {
+			// An operand of unknown type: the VM orders two numbers or two
+			// strings and fails on anything else (bugs.md #66).
+			jsNumeric = true
+			return fmt.Sprintf("howlFrameCompare(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 	case "let":
