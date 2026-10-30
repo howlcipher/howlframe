@@ -1202,7 +1202,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		catchBodyCode := generateJSStatement(catchNode.Children[2], reqVar, depth+1)
 		successBodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
 
-		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (__howlFrameCaught) {\n\t\t%s = __howlFrameCaught;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
+		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (__howlFrameCaught) {\n\t\tif (__howlFrameCaught && __howlFrameCaught.howlFrameExit) throw __howlFrameCaught;\n\t\t%s = __howlFrameCaught;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
 	case "for":
 		itemNode := ir.Kids[0].Value
 		// The iterable may be any expression, not only a bound symbol. Reading
