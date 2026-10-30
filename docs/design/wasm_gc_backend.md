@@ -370,8 +370,9 @@ The order of M1 and M3 work follows what the application needs.
 - The checker rejected `(sum (list 1.5 2.0))`: the desugared accumulator
   started at the integer 0 (bugs.md #60, fixed; the accumulator now takes
   the element type).
-- The JavaScript backend compiles `=` to `===`, so a list or dict equals
-  itself there while the VM and the interpreter say false (bugs.md #59).
+- The JavaScript backend compiled `=` to `===`, so a list or dict equalled
+  itself there while the VM and the interpreter say false (bugs.md #59,
+  fixed: it follows the VM's rule now).
 - The VM's JSON error report escapes `<` and `>` (`\u003cnil\u003e`), so the
   differential harness compares decoded messages.
 - Errors on the VM (probed): every failure in a `try_let` binding is caught,
