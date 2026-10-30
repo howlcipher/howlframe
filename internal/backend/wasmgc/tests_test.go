@@ -177,6 +177,11 @@ func TestTestsLikeJavaScript(t *testing.T) {
   (test "bad conversion" (print (to_int "x1")))
   (test "after errors" (assert (= (+ 1 1) 2))))`},
 			[]string{"✖ divides by zero", "✖ bad conversion", "✔ after errors"}},
+		"type error in a test": {map[string]string{"main.howl": `(web_app
+  (test "adds a string" (let (d (dict ("s" "x") ("n" 1))) (print (+ 1 (map_get d "s")))))
+  (test "compares a list" (let (d (dict ("l" (list 1)) ("n" 1))) (print (< (map_get d "l") 2))))
+  (test "adds numbers" (let (d (dict ("s" "x") ("n" 1))) (assert (= (+ 1 (map_get d "n")) 2)))))`},
+			[]string{"✖ adds a string", "✖ compares a list", "✔ adds numbers"}},
 		"assert in a function": {map[string]string{"main.howl": `(web_app
   (defun check ((x int)) (type_hint return "int") (do (assert (= x 3)) (return x)))
   (test "deep pass" (print (call check 3)))
