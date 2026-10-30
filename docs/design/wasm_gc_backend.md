@@ -316,7 +316,7 @@ as the work it describes: tick tasks, move the status line, record findings.
       wasmtime: passing and failing tests, errors in a test, an assert in a
       called function, `exit`, `exit` through `try_let`, an empty file,
       top-level statements, a `cli_app` root, tests in used modules, equal
-      names and a Unicode name. `TestTestsFailClosed` covers the build
+      names, a Unicode name and type errors on values of run-time type. `TestTestsFailClosed` covers the build
       errors.
 - [ ] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly: render
       (5) and schema (8) do; backup (6) needs `zip_build` and `zip_read`.
@@ -496,8 +496,9 @@ The order of M1 and M3 work follows what the application needs.
   backend a failing assert calls `os.Exit(1)` in the `go test` binary, so
   the remaining tests never run, and `server_test.go` redeclares the
   helpers `server.go` already defines in the same package, so a test file
-  that uses `map_get`, `/` or other helpers does not compile (bugs.md
-  #68, #69).
+  that uses `map_get`, `/` or other helpers does not compile; tests whose
+  names differ only in punctuation became one function (bugs.md #68,
+  fixed: each failure fails its own test now).
 - The host no longer computes anything for a program: float digits and
   float parsing moved from the loader (`float_digits`, `float_point`,
   `parse_float`) to `std/float.howl`, so the only imports are `print`,
