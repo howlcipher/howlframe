@@ -15,7 +15,8 @@ package ast
 //   (map_list x lst expr)  list of expr for each x.
 //   (filter x lst pred)    elements x where pred holds.
 //   (reduce acc init x lst expr)  fold: acc starts at init, set to expr per x.
-//   (sum lst)              numeric sum (0 for empty).
+//   (sum lst)              numeric sum (0 for empty); a list of floats
+//                          sums to a float.
 //   (min lst) / (max lst)  smallest / largest element (first on ties). An
 //                          empty list is a runtime error: stderr
 //                          "VALUE_ERROR: min of empty list" and exit 1, the
@@ -47,8 +48,11 @@ var corelibTemplates = map[string]struct {
 		"(let ($L $lst $R (list)) (do (for $x $L (when $pred (append $R $x))) $R))", 0},
 	"reduce": {5, []string{"acc", "init", "x", "lst", "expr"}, []string{"L"},
 		"(let ($acc $init $L $lst) (do (for $x $L (set $acc $expr)) $acc))", 2},
+	// The accumulator starts as nil (a map_get the checker cannot type) and
+	// takes the first element, so it has the element type: a list of floats
+	// sums to a float. An empty list sums to 0.
 	"sum": {1, []string{"lst"}, []string{"L", "S", "X"},
-		"(let ($L $lst $S 0) (do (for $X $L (set $S (+ $S $X))) $S))", -1},
+		"(let ($L $lst $S (map_get (dict) \"\")) (do (for $X $L (set $S (if (is_nil $S) $X (+ $S $X)))) (nz $S 0)))", -1},
 	"min": {1, []string{"lst"}, []string{"L", "M", "X"},
 		"(let ($L $lst $M (list_get $L 0)) (do (when (= (list_len $L) 0) (do (stderr $msg) (exit 1))) (for $X $L (when (< $X $M) (set $M $X))) $M))", -1},
 	"max": {1, []string{"lst"}, []string{"L", "M", "X"},

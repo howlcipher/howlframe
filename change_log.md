@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Correctness
+* `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so
+  the checker rejected every float list with `cannot assign float64 to ... of type int` (bugs.md #60).
 * The bytecode VM scopes `let`, `for` and `try_let` bindings like the interpreter and the other backends: an inner
   binding with the name of an outer variable no longer overwrites it (`(let (x 1) (do (let (x 2) (print x)) (print x)))`
   printed `2 2` on the VM and `2 1` elsewhere). Shadowing bindings are renamed at compile time; no opcode or artifact

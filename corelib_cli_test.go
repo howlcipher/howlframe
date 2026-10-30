@@ -15,6 +15,7 @@ const corelibProgram = `(do
   (do
    (print (str_join (list_slice ws 1 3) ",") (str_join (list_slice ws (- 0 2) (list_len ws)) ",") (str_slice "hello" 1 4) (str_slice "hello" (- 0 3) 5) (str_len "hello"))
    (print (index_of ws "fig") (index_of ws "kiwi") (sum xs) (min xs) (max xs) (min ws) (sum (list)))
+   (print (sum (list 1.5 2.25)) (sum (filter f (list 0.5) (> f 9.0))))
    (print (encode_json (map_list x xs (* x 2))) (encode_json (filter x xs (> x 3))) (reduce a 1 x xs (* a x)))
    (print (encode_json (reverse ws)) (encode_json (sort xs)) (encode_json (sort ws)) (encode_json (sort (list))))
    (print (encode_json (count_by w ws w)) (< "Apple" "apple") (>= "b" "a"))
@@ -22,6 +23,7 @@ const corelibProgram = `(do
 
 const corelibWant = "Apple,fig fig,pear ell llo 5\n" +
 	"2 -1 21 1 9 Apple 0\n" +
+	"3.75 0\n" +
 	"[10,6,18,2,6] [5,9] 405\n" +
 	"[\"pear\",\"fig\",\"Apple\",\"pear\"] [1,3,3,5,9] [\"Apple\",\"fig\",\"pear\",\"pear\"] []\n" +
 	"{\"Apple\":1,\"fig\":1,\"pear\":2} true true\n" +
