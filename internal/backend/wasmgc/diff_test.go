@@ -61,20 +61,47 @@ func writeSource(t *testing.T, src string) string {
 	return path
 }
 
+// writeFiles writes a program of several files (name -> source) into one
+// directory and returns the path of main.
+func writeFiles(t *testing.T, files map[string]string, main string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, src := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return filepath.Join(dir, main)
+}
+
 // onVM runs a program on the bytecode VM, the reference semantics.
 func onVM(t *testing.T, src string) outcome {
 	t.Helper()
-	return run(t, compilerBin, writeSource(t, src))
+	return onVMAt(t, writeSource(t, src))
+}
+
+func onVMAt(t *testing.T, path string) outcome {
+	t.Helper()
+	return run(t, compilerBin, path)
 }
 
 // onWasm builds a program with this backend and runs it under Node.
 func onWasm(t *testing.T, src string) outcome {
 	t.Helper()
+	return onWasmAt(t, writeSource(t, src))
+}
+
+func onWasmAt(t *testing.T, path string) outcome {
+	t.Helper()
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not installed")
 	}
 	dir := t.TempDir()
-	if out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", dir); out.failed {
+	if out := run(t, compilerBin, "build", path, "--target", "wasmgc", "-o", dir); out.failed {
 		t.Fatalf("build: %s", out.errMsg)
 	}
 	if tools, err := exec.LookPath("wasm-tools"); err == nil {
@@ -89,8 +116,16 @@ func onWasm(t *testing.T, src string) outcome {
 // error message.
 func sameAsVM(t *testing.T, src string) {
 	t.Helper()
-	want := onVM(t, src)
-	got := onWasm(t, src)
+	path := writeSource(t, src)
+	sameAsVMAt(t, path)
+}
+
+// sameAsVMAt is sameAsVM for a program already on disk (for example one
+// that uses modules).
+func sameAsVMAt(t *testing.T, path string) {
+	t.Helper()
+	want := onVMAt(t, path)
+	got := onWasmAt(t, path)
 	if got.failed != want.failed {
 		t.Fatalf("failure differs: vm failed=%v (%s), wasm failed=%v (%s)", want.failed, want.errMsg, got.failed, got.errMsg)
 	}
@@ -225,6 +260,43 @@ func TestDiffTryLet(t *testing.T) {
 			}
 			sameAsVM(t, "(cli_app "+body+")")
 		})
+	}
+}
+
+// Modules are linked before any backend runs: each used module's
+// definitions join the program under alias_name (exports) and
+// alias_private_name (the rest), so one WebAssembly module holds them all.
+func TestDiffModules(t *testing.T) {
+	geo := `(module
+  (defun square (n) (type_hint n "int") (type_hint return "int") (return (* n n)))
+  (export (defun area (w h) (type_hint w "int") (type_hint h "int") (type_hint return "int") (return (call square (+ w h)))))
+  (export (defun label (n) (type_hint n "int") (type_hint return "string") (return (+ "n=" (to_string (call square n)))))))`
+	text := `(module
+  (export (defun wrap (s) (type_hint s "string") (type_hint return "string") (return (+ "[" (+ s "]")))))
+  (export (defun tally (words) (type_hint words "list") (type_hint return "dict")
+    (let (d (dict)) (do (for w words (map_set d w (+ (nz (map_get d w) 0) 1))) (return d)))))
+  (export (defun safe_int (s) (type_hint s "string") (type_hint return "int")
+    (try_let (n (to_int s)) (catch e (return -1)) (return n))))
+  (export (defun boom () (type_hint return "float") (return (/ 1 0)))))`
+	for name, tc := range map[string]struct {
+		files map[string]string
+	}{
+		"exports and a private helper": {map[string]string{"geo.howl": geo,
+			"main.howl": `(cli_app (use "geo.howl" as geo) (print (call geo/area 2 3) (call geo/label 4)))`}},
+		"a main function shares a private name": {map[string]string{"geo.howl": geo,
+			"main.howl": `(cli_app (use "geo.howl" as geo) (defun square (n) (type_hint n "int") (type_hint return "int") (return (+ n 1000))) (print (call geo/area 1 1) (call square 1)))`}},
+		"another alias": {map[string]string{"geo.howl": geo,
+			"main.howl": `(cli_app (use "geo.howl" as g) (print (call g/area 1 1)))`}},
+		"two modules": {map[string]string{"geo.howl": geo, "text.howl": text,
+			"main.howl": `(cli_app (use "geo.howl" as geo) (use "text.howl" as text) (print (call text/wrap (call geo/label 3)) (call text/tally (list "a" "b" "a"))))`}},
+		"a subdirectory": {map[string]string{"lib/text.howl": text,
+			"main.howl": `(cli_app (use "lib/text.howl" as text) (print (call text/safe_int "42") (call text/safe_int "x")))`}},
+		"an error inside a module": {map[string]string{"text.howl": text,
+			"main.howl": `(cli_app (use "text.howl" as text) (print "before") (print (call text/boom)))`}},
+		"caught from a module": {map[string]string{"text.howl": text,
+			"main.howl": `(cli_app (use "text.howl" as text) (print (try_let (v (call text/boom)) (catch e "caught") (to_string v))))`}},
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVMAt(t, writeFiles(t, tc.files, "main.howl")) })
 	}
 }
 

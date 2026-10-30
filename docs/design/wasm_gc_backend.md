@@ -53,9 +53,10 @@ list or dict), lists as `[a b]`, dicts as `map[k:v ...]` with sorted keys.
 ## Functions and calls
 
 Each `defun` becomes a WebAssembly function taking and returning `eqref`;
-arity is checked at compile time. Modules (`use`) are compiled into the same
-WebAssembly module with their names prefixed, so cross-module calls are
-direct calls. Lambdas are lifted to functions with an environment array;
+arity is checked at compile time. Modules (`use`) are linked before any
+backend runs (`ast.ResolveModules`): a used module's exports become
+`alias_name` and its other definitions `alias_private_name`, so they compile
+into the same WebAssembly module and cross-module calls are direct calls. Lambdas are lifted to functions with an environment array;
 captured variables that are assigned (`set`) are boxed in a one-slot cell.
 
 ## Error propagation
@@ -113,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. 173 differential fixtures pass. Next: modules. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. 180 differential fixtures pass. HowlScene HF's registry and export modules compile; next is the standard library, in the order HowlScene's schema and renderer need it (`encode_json`, `regex_match`, then `parse_json`, `sniff_media_type`, `base64_text`). |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -194,7 +195,11 @@ as the work it describes: tick tasks, move the status line, record findings.
       conditions (`if`, `while`, `and`, `or`, `not`) must be booleans,
       float `+`, `-`, `*` and `/` fail when the result is not finite, and
       operands of unknown type fail with the VM's messages.
-- [ ] Modules (`use`, `export`), with fixtures.
+- [x] Modules (`use`, `export`): linked before the backend, so no backend
+      code was needed; `TestDiffModules` runs programs of several files
+      (exports, private helpers that share a name with the program's own
+      functions, two modules, a subdirectory, errors raised and caught
+      across modules).
 - [ ] Standard library in HowlFrame (`std/`), on byte intrinsics:
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
@@ -298,6 +303,14 @@ The order of M1 and M3 work follows what the application needs.
   quote, backslash, newline, tab and return, so such a rune differs. Its
   loop also stopped at the first escaped character, cutting the message
   short; fixed with a fixture (`quoted in message`).
+- Modules: a used file may not itself `use` another ("real transitive
+  module linking is not yet supported"), on every target; HowlScene HF
+  imports only from its top-level files, so this does not block it. A
+  `use` path is joined to the using file's directory, so an absolute path
+  loses its leading slash and fails as a missing file.
+- Building each HowlScene HF core module as a `cli_app` (2026-10-29):
+  `registry.howl` and `export.howl` compile; `schema.howl` and
+  `backup.howl` stop at `encode_json`, `render.howl` at `regex_match`.
 - Temporary host dependencies, to be replaced by standard-library
   HowlFrame: shortest float digits (`float_digits`, `float_point`) and
   float parsing (`parse_float`, `parse_float_ok`).
