@@ -852,3 +852,37 @@ func TestCLIPathScopedFilesystemGrants(t *testing.T) {
 		})
 	}
 }
+
+// A flag that shapes a run is refused where nothing runs: the bare path
+// wrote the .hfbc and exited 0 silently, so the flag had no effect
+// (bugs.md #62). A compile-only flag still writes the artifact silently
+// (TestLegacyCLIAppExitStatusAndFlaggedWriteOnly holds that contract).
+func TestRunOnlyFlagsNeedARun(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := filepath.Join(dir, "p.howl")
+	if err := os.WriteFile(src, []byte(`(cli_app (print "hi"))`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"-max-instructions", "5000", src},
+		{"-deadline", "5s", src},
+		{"-allow-caps", "network", src},
+		{"-compile-bc", "-max-memory-bytes", "100", src},
+		{src, "-max-instructions", "5000"},
+	} {
+		out, err := exec.Command(bin, args...).CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "applies only when a program runs") || !strings.Contains(string(out), "howlframe run --") {
+			t.Errorf("%v: want a refusal naming howlframe run, got %v %s", args, err, out)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "p.hfbc")); statErr == nil {
+			t.Fatalf("%v wrote p.hfbc", args)
+		}
+	}
+	for _, args := range [][]string{{src}, {"-run", "-allow-caps", "network", src}, {"run", "--max-instructions", "5000", src}} {
+		out, err := exec.Command(bin, args...).CombinedOutput()
+		if err != nil || strings.TrimSpace(string(out)) != "hi" {
+			t.Errorf("%v: want the program's output, got %v %s", args, err, out)
+		}
+	}
+}
