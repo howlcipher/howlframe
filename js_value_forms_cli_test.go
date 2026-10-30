@@ -35,6 +35,7 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		{"filter", `(let (xs (list 1 2 3 4)) (print (list_len (filter x xs (> x 2)))))`},
 		{"reduce", `(let (xs (list 1 2 3 4)) (print (reduce acc 0 x xs (+ acc x))))`},
 		{"sum", `(print (sum (list 1 2 3)))`},
+		{"sum of floats", `(print (sum (list 1.5 2.25)) (sum (list)))`},
 		{"reverse", `(print (str_join (reverse (list "a" "b" "c")) ""))`},
 		{"sort", `(do (print (str_join (sort (list "b" "c" "a")) "")) (print (encode_json (sort (list 3 1 2)))))`},
 		{"count_by", `(let (xs (list "a" "b" "a")) (print (encode_json (count_by x xs x))))`},

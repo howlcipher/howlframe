@@ -265,9 +265,9 @@ The order of M1 and M3 work follows what the application needs.
   dicts landed. The I/O and host sugar (`lines`, `read_text`, `read_json`,
   `write_json`, `sget`, `sput`, `sinc`, `unix_now`, `http_*`) waits for the
   host imports it reaches.
-- The checker rejects `(sum (list 1.5 2.0))`: the desugared accumulator
-  starts at the integer 0, so adding a float is "cannot assign float64 to
-  ... of type int" (bugs.md #60).
+- The checker rejected `(sum (list 1.5 2.0))`: the desugared accumulator
+  started at the integer 0 (bugs.md #60, fixed; the accumulator now takes
+  the element type).
 - The JavaScript backend compiles `=` to `===`, so a list or dict equals
   itself there while the VM and the interpreter say false (bugs.md #59).
 - The VM's JSON error report escapes `<` and `>` (`\u003cnil\u003e`), so the
