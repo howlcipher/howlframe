@@ -50,6 +50,45 @@ func TestJSTestBlockAssertFailsTheTest(t *testing.T) {
 	}
 }
 
+// A try_let does not catch exit, so an assert that fails inside a try_let
+// binding still fails its test (bugs.md #67): on the VM exit ends the
+// program whatever handler encloses it, and app.test.js throws it instead.
+func TestJSTestExitPassesTryLet(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := mustWriteFile(t, dir, "a.howl", `(web_app
+  (defun checked ((x int))
+    (type_hint return "int")
+    (do (assert (= x 1)) (return x)))
+  (test "assert in a binding" (try_let (v (call checked 2)) (catch e (print "handler ran")) (print "body ran" v)))
+  (test "assert in a value" (print (try_let (v (call checked 2)) (catch e "handler value") v)))
+  (test "errors are still caught" (try_let (v (to_int "x")) (catch e (print "caught conversion")) (print v))))`)
+	out := filepath.Join(dir, "js")
+	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, b)
+	}
+	cmd := exec.Command("node", "--test", "--test-reporter=tap", "app.test.js")
+	cmd.Dir = out
+	b, err := cmd.CombinedOutput()
+	report := string(b)
+	if err == nil {
+		t.Fatalf("an assert failing inside try_let must fail node --test:\n%s", report)
+	}
+	for _, want := range []string{"not ok 1 - assert in a binding", "not ok 2 - assert in a value", "ok 3 - errors are still caught", "caught conversion"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report lacks %q:\n%s", want, report)
+		}
+	}
+	for _, unwanted := range []string{"handler ran", "body ran", "handler value"} {
+		if strings.Contains(report, unwanted) {
+			t.Fatalf("a try_let handled an exit (%q):\n%s", unwanted, report)
+		}
+	}
+}
+
 func TestJSStderrAndExitInNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not installed")
