@@ -21,8 +21,8 @@ last. Times are America/Detroit.
 | 0. Harness runs the VM in a temp dir | `chore/harness-vm-tempdir` | #273 | Merged |
 | bugs.md #66: JS arithmetic and ordering on run-time types | `fix/js-arith-operand-types` | #274 | Merged |
 | bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
-| bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Open |
-| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Open |
+| bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Merged (`2bcdde48`) |
+| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Open; trailing-data fix after a CI failure |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | none yet | Committed locally (WIP) |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | none yet | Gate test written; backup needs ZIP |
 
@@ -66,3 +66,15 @@ Findings:
   HowlScene gates in Node and wasmtime).
 - #67 merged main; only bugs.md conflicted (both sides added rows), resolved as #68, #67, #66 in descending order.
   Full gate under Go 1.26 and 1.27.2 passed on the merged tree. Opened as #278.
+
+### 2026-10-30 18:05: ZIP CI failure, data after a deflate stream
+
+- #277 failed CI (build, race, latest-go) on one fixture, `deflate junk`: a deflated entry with three bytes after
+  its final block. The JavaScript reference rejected it on CI (`ZIP_CORRUPT: j is not valid deflate data`) and
+  accepted it locally, so the WebAssembly build, written to match the local run, accepted it.
+- Cause: Node's `DecompressionStream` rejects trailing data from 22.23 (CI's ubuntu-24.04 runner has 22.23.4) and
+  accepts it in 22.22.1 (this machine). The Compression Streams standard requires the rejection, as browsers do.
+- Fix: `inflate` in `std/zip.howl` rejects bytes left after the final block; the fixture pins the standard's
+  result and compares with the JavaScript backend only where its Node rejects too. Shown to fail without the fix.
+- Lesson for the harness: a JavaScript reference can depend on the Node version. A fixture that passes locally can
+  fail on CI's newer Node; check the runner's Node (`gh api repos/actions/runner-images/...`) when they disagree.
