@@ -1,8 +1,7 @@
 ; JSON for the WebAssembly backend's standard library, written in HowlFrame
 ; on the byte intrinsics (__hf_type, __hf_byte_len, __hf_byte_at,
-; __hf_byte_slice, and the temporary __hf_float_digits and
-; __hf_float_point) that only standard-library code may call, and on
-; std/utf8.howl.
+; __hf_byte_slice) that only standard-library code may call, and on
+; std/utf8.howl and std/float.howl.
 ;
 ; encode writes a value as the VM's encode_json does (Go's encoding/json):
 ; object keys in sorted byte order, no spaces, integers exactly, floats in
@@ -78,7 +77,7 @@
     (do
       (if (= f 0.0) (if (= (to_string f) "-0") (return "-0") (return "0")))
       (let (a (if (< f 0.0) (- 0.0 f) f) sign (if (< f 0.0) "-" ""))
-        (let (d (to_string (__hf_float_digits a)) p (__hf_float_point a))
+        (let (d (to_string (list_get (call __std_float_shortest a) 0)) p (list_get (call __std_float_shortest a) 1))
           (let (nd (__hf_byte_len d))
             (do
               (if (or (< a 0.000001) (>= a 1000000000000000000000.0))

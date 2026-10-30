@@ -1,0 +1,339 @@
+; Floats for the WebAssembly backend's standard library: the shortest
+; decimal digits that read back as a float, and the float nearest to a
+; decimal text, both exactly as Go's strconv gives them (the VM's text of a
+; float is fmt.Sprint, its to_float strconv.ParseFloat). This is Go's
+; arbitrary-precision decimal (strconv/decimal.go): roundShortest for
+; formatting, floatBits for parsing.
+;
+; A decimal is an array: 0 digits (an array of 800 values 0..9), 1 count of
+; digits, 2 decimal point (value = 0.digits * 10^point), 3 negative,
+; 4 truncated (nonzero digits were dropped past the 800th).
+(module
+  (defun dec_new ()
+    (let (d (__hf_array 5))
+      (do
+        (__hf_aset d 0 (__hf_array 800))
+        (__hf_aset d 1 0)
+        (__hf_aset d 2 0)
+        (__hf_aset d 3 false)
+        (__hf_aset d 4 false)
+        (return d))))
+
+  (defun digit (d i) (return (__hf_aget (__hf_aget d 0) i)))
+  (defun set_digit (d i v) (__hf_aset (__hf_aget d 0) i v))
+  (defun nd (d) (return (__hf_aget d 1)))
+  (defun dp (d) (return (__hf_aget d 2)))
+
+  (defun trim (d)
+    (do
+      (while (and (> (call nd d) 0) (= (call digit d (- (call nd d) 1)) 0))
+        (__hf_aset d 1 (- (call nd d) 1)))
+      (if (= (call nd d) 0) (__hf_aset d 2 0))))
+
+  ; assign: d holds the non-negative integer v.
+  (defun assign (d v)
+    (let (buf (__hf_array 24) n 0 x v)
+      (do
+        (while (> x 0)
+          (do
+            (__hf_aset buf n (__hf_imod x 10))
+            (set n (+ n 1))
+            (set x (__hf_idiv x 10))))
+        (__hf_aset d 1 0)
+        (while (> n 0)
+          (do
+            (set n (- n 1))
+            (call set_digit d (call nd d) (__hf_aget buf n))
+            (__hf_aset d 1 (+ (call nd d) 1))))
+        (__hf_aset d 2 (call nd d))
+        (call trim d))))
+
+  ; right_shift: d / 2^k, for k up to 50.
+  (defun right_shift (d k)
+    (let (r 0 w 0 n 0 going true mask (- (__hf_shl 1 k) 1))
+      (do
+        (while (and going (= (__hf_shr n k) 0))
+          (if (>= r (call nd d))
+            (do
+              (if (= n 0) (do (__hf_aset d 1 0) (return 0)))
+              (while (= (__hf_shr n k) 0) (do (set n (* n 10)) (set r (+ r 1))))
+              (set going false))
+            (do
+              (set n (+ (* n 10) (call digit d r)))
+              (set r (+ r 1)))))
+        (__hf_aset d 2 (- (call dp d) (- r 1)))
+        (while (< r (call nd d))
+          (let (c (call digit d r))
+            (do
+              (call set_digit d w (__hf_shr n k))
+              (set w (+ w 1))
+              (set n (+ (* (__hf_and n mask) 10) c))
+              (set r (+ r 1)))))
+        (while (> n 0)
+          (let (dig (__hf_shr n k))
+            (do
+              (set n (__hf_and n mask))
+              (if (< w 800)
+                (do (call set_digit d w dig) (set w (+ w 1)))
+                (if (> dig 0) (__hf_aset d 4 true)))
+              (set n (* n 10)))))
+        (__hf_aset d 1 w)
+        (call trim d))))
+
+  ; left_shift: d * 2^k, for k up to 50. The new digits are made from the
+  ; right into a scratch array, then written back.
+  (defun left_shift (d k)
+    (let (count (call nd d) tmp (__hf_array (+ (call nd d) 20)) t 0 n 0 r (- (call nd d) 1))
+      (do
+        (while (>= r 0)
+          (do
+            (set n (+ n (__hf_shl (call digit d r) k)))
+            (__hf_aset tmp t (__hf_imod n 10))
+            (set t (+ t 1))
+            (set n (__hf_idiv n 10))
+            (set r (- r 1))))
+        (while (> n 0)
+          (do
+            (__hf_aset tmp t (__hf_imod n 10))
+            (set t (+ t 1))
+            (set n (__hf_idiv n 10))))
+        ; tmp holds t digits, lowest first.
+        (let (w 0 i (- t 1))
+          (while (>= i 0)
+            (do
+              (if (< w 800)
+                (call set_digit d w (__hf_aget tmp i))
+                (if (> (__hf_aget tmp i) 0) (__hf_aset d 4 true)))
+              (set w (+ w 1))
+              (set i (- i 1)))))
+        (__hf_aset d 2 (+ (call dp d) (- t count)))
+        (__hf_aset d 1 (if (> t 800) 800 t))
+        (call trim d))))
+
+  (defun shift (d k)
+    (let (x k)
+      (do
+        (if (= (call nd d) 0) (return 0))
+        (while (> x 50) (do (call left_shift d 50) (set x (- x 50))))
+        (while (< x -50) (do (call right_shift d 50) (set x (+ x 50))))
+        (if (> x 0) (call left_shift d x))
+        (if (< x 0) (call right_shift d (- 0 x))))))
+
+  (defun should_round_up (d n)
+    (do
+      (if (or (< n 0) (>= n (call nd d))) (return false))
+      (if (and (= (call digit d n) 5) (= (+ n 1) (call nd d)))
+        (do
+          (if (__hf_aget d 4) (return true))
+          (return (and (> n 0) (= (__hf_imod (call digit d (- n 1)) 2) 1)))))
+      (return (>= (call digit d n) 5))))
+
+  (defun round_down (d n)
+    (if (and (>= n 0) (< n (call nd d)))
+      (do (__hf_aset d 1 n) (call trim d))))
+
+  (defun round_up (d n)
+    (do
+      (if (or (< n 0) (>= n (call nd d))) (return 0))
+      (let (i (- n 1))
+        (while (>= i 0)
+          (do
+            (if (< (call digit d i) 9)
+              (do
+                (call set_digit d i (+ (call digit d i) 1))
+                (__hf_aset d 1 (+ i 1))
+                (return 0)))
+            (set i (- i 1)))))
+      (call set_digit d 0 1)
+      (__hf_aset d 1 1)
+      (__hf_aset d 2 (+ (call dp d) 1))))
+
+  (defun round (d n)
+    (if (and (>= n 0) (< n (call nd d)))
+      (if (call should_round_up d n) (call round_up d n) (call round_down d n))))
+
+  (defun rounded_integer (d)
+    (let (i 0 n 0)
+      (do
+        (while (and (< i (call dp d)) (< i (call nd d)))
+          (do (set n (+ (* n 10) (call digit d i))) (set i (+ i 1))))
+        (while (< i (call dp d)) (do (set n (* n 10)) (set i (+ i 1))))
+        (if (call should_round_up d (call dp d)) (set n (+ n 1)))
+        (return n))))
+
+  ; shortest: (digits point) of a positive finite float f, its shortest
+  ; round-trip digits as an integer and the position of the decimal point
+  ; (f = 0.digits * 10^point), as Go's FormatFloat(f, 'g', -1, 64) has them.
+  (export (defun shortest (f)
+    (let (bits (__hf_f64_bits f))
+      (let (exp (__hf_and (__hf_shr bits 52) 2047) mant (__hf_and bits 4503599627370495))
+        (do
+          (if (= exp 0) (set exp 1) (set mant (__hf_or mant 4503599627370496)))
+          (set exp (- exp 1023))
+          (let (d (call dec_new))
+            (do
+              (call assign d mant)
+              (call shift d (- exp 52))
+              (call round_shortest d mant exp)
+              (let (v 0 i 0)
+                (do
+                  (while (< i (call nd d)) (do (set v (+ (* v 10) (call digit d i))) (set i (+ i 1))))
+                  (return (list v (call dp d))))))))))))
+
+  ; round_shortest: Go's roundShortest for a float64 (52 mantissa bits,
+  ; bias -1023): round d to the fewest digits that still read back as the
+  ; float whose mantissa and exponent are mant and exp.
+  (defun round_shortest (d mant exp)
+    (do
+      (if (= mant 0) (do (__hf_aset d 1 0) (return 0)))
+      (if (and (> exp -1022) (>= (* 332 (- (call dp d) (call nd d))) (* 100 (- exp 52)))) (return 0))
+      (let (upper (call dec_new) lower (call dec_new) mantlo 0 explo 0)
+        (do
+          (call assign upper (+ (* mant 2) 1))
+          (call shift upper (- exp 53))
+          (if (or (> mant 4503599627370496) (= exp -1022))
+            (do (set mantlo (- mant 1)) (set explo exp))
+            (do (set mantlo (- (* mant 2) 1)) (set explo (- exp 1))))
+          (call assign lower (+ (* mantlo 2) 1))
+          (call shift lower (- explo 53))
+          (let (inclusive (= (__hf_imod mant 2) 0) upperdelta 0 ui 0)
+            (while true
+              (let (mi (+ (- ui (call dp upper)) (call dp d)) li (+ (- ui (call dp upper)) (call dp lower)))
+                (do
+                  (if (>= mi (call nd d)) (return 0))
+                  (let (l (if (and (>= li 0) (< li (call nd lower))) (call digit lower li) 0)
+                        m (if (>= mi 0) (call digit d mi) 0)
+                        u (if (< ui (call nd upper)) (call digit upper ui) 0))
+                    (let (okdown (or (not (= l m)) (and inclusive (= (+ li 1) (call nd lower)))))
+                      (do
+                        (cond
+                          ((and (= upperdelta 0) (< (+ m 1) u)) (set upperdelta 2))
+                          ((and (= upperdelta 0) (not (= m u))) (set upperdelta 1))
+                          ((and (= upperdelta 1) (or (not (= m 9)) (not (= u 0)))) (set upperdelta 2)))
+                        (let (okup (and (> upperdelta 0) (or inclusive (or (> upperdelta 1) (< (+ ui 1) (call nd upper))))))
+                          (do
+                            (if (and okdown okup) (do (call round d (+ mi 1)) (return 0)))
+                            (if okdown (do (call round_down d (+ mi 1)) (return 0)))
+                            (if okup (do (call round_up d (+ mi 1)) (return 0)))))
+                        (set ui (+ ui 1)))))))))))))
+
+  ; parse: the float nearest to a decimal text in Go's ParseFloat syntax
+  ; (optional sign, digits with an optional point, optional exponent,
+  ; underscores only between digits), or nil when the text is not one or
+  ; the value is out of range. Hexadecimal floats are not supported yet.
+  (export (defun parse (s)
+    (do
+      (if (not (call syntax_ok s)) (return (__hf_nil)))
+      (let (d (call dec_new))
+        (do
+          (call set_text d s)
+          (return (call float_bits d)))))))
+
+  (defun is_digit (c) (return (and (>= c 48) (<= c 57))))
+
+  ; syntax_ok: is s a whole decimal float literal of ParseFloat's syntax?
+  (defun syntax_ok (s)
+    (let (n (__hf_byte_len s) i 0 digits false saw 94)
+      (do
+        (if (= n 0) (return false))
+        (if (or (= (__hf_byte_at s 0) 43) (= (__hf_byte_at s 0) 45)) (set i 1))
+        (if (and (< (+ i 1) n) (and (= (__hf_byte_at s i) 48) (or (= (__hf_byte_at s (+ i 1)) 120) (= (__hf_byte_at s (+ i 1)) 88))))
+          (__hf_fail "WASM_UNSUPPORTED: to_float of a hexadecimal float is not supported in the WebAssembly backend yet"))
+        ; Mantissa: digits and underscores, at most one point.
+        (let (dot false going true)
+          (while (and going (< i n))
+            (let (c (__hf_byte_at s i))
+              (cond
+                ((call is_digit c) (do (set digits true) (set saw 48) (set i (+ i 1))))
+                ((= c 95) (do (if (not (= saw 48)) (return false)) (set saw 95) (set i (+ i 1))))
+                ((and (= c 46) (not dot)) (do (if (= saw 95) (return false)) (set dot true) (set saw 33) (set i (+ i 1))))
+                (else (set going false))))))
+        (if (not digits) (return false))
+        (if (= saw 95) (return false))
+        (if (= i n) (return true))
+        (if (not (or (= (__hf_byte_at s i) 101) (= (__hf_byte_at s i) 69))) (return false))
+        (set i (+ i 1))
+        (set saw 33)
+        (if (and (< i n) (or (= (__hf_byte_at s i) 43) (= (__hf_byte_at s i) 45))) (set i (+ i 1)))
+        (if (or (>= i n) (not (call is_digit (__hf_byte_at s i)))) (return false))
+        (while (< i n)
+          (let (c (__hf_byte_at s i))
+            (cond
+              ((call is_digit c) (do (set saw 48) (set i (+ i 1))))
+              ((= c 95) (do (if (not (= saw 48)) (return false)) (set saw 95) (set i (+ i 1))))
+              (else (return false)))))
+        (return (not (= saw 95))))))
+
+  ; set_text: Go's decimal.set, for text syntax_ok accepted.
+  (defun set_text (d s)
+    (let (n (__hf_byte_len s) i 0 sawdot false going true)
+      (do
+        (if (= (__hf_byte_at s 0) 43) (set i 1))
+        (if (= (__hf_byte_at s 0) 45) (do (set i 1) (__hf_aset d 3 true)))
+        (while (and going (< i n))
+          (let (c (__hf_byte_at s i))
+            (cond
+              ((= c 95) (set i (+ i 1)))
+              ((= c 46) (do (set sawdot true) (__hf_aset d 2 (call nd d)) (set i (+ i 1))))
+              ((call is_digit c)
+                (do
+                  (if (and (= c 48) (= (call nd d) 0))
+                    (__hf_aset d 2 (- (call dp d) 1))
+                    (if (< (call nd d) 800)
+                      (do (call set_digit d (call nd d) (- c 48)) (__hf_aset d 1 (+ (call nd d) 1)))
+                      (if (not (= c 48)) (__hf_aset d 4 true))))
+                  (set i (+ i 1))))
+              (else (set going false)))))
+        (if (not sawdot) (__hf_aset d 2 (call nd d)))
+        (if (< i n)
+          (let (esign 1 e 0)
+            (do
+              (set i (+ i 1))
+              (if (= (__hf_byte_at s i) 43) (set i (+ i 1)))
+              (if (= (__hf_byte_at s i) 45) (do (set esign -1) (set i (+ i 1))))
+              (while (< i n)
+                (let (c (__hf_byte_at s i))
+                  (do
+                    (if (and (call is_digit c) (< e 10000)) (set e (+ (* e 10) (- c 48))))
+                    (set i (+ i 1)))))
+              (__hf_aset d 2 (+ (call dp d) (* e esign)))))))))
+
+  ; float_bits: Go's decimal.floatBits for a float64: the nearest float, or
+  ; nil on overflow.
+  (defun float_bits (d)
+    (let (exp 0 mant 0 powtab (call pow_table))
+      (do
+        (if (= (call nd d) 0) (return (call make d 0 -1023)))
+        (if (> (call dp d) 310) (return (__hf_nil)))
+        (if (< (call dp d) -330) (return (call make d 0 -1023)))
+        (while (> (call dp d) 0)
+          (let (k (if (>= (call dp d) 9) 27 (__hf_aget powtab (call dp d))))
+            (do (call shift d (- 0 k)) (set exp (+ exp k)))))
+        (while (or (< (call dp d) 0) (and (= (call dp d) 0) (< (call digit d 0) 5)))
+          (let (k (if (>= (- 0 (call dp d)) 9) 27 (__hf_aget powtab (- 0 (call dp d)))))
+            (do (call shift d k) (set exp (- exp k)))))
+        (set exp (- exp 1))
+        (if (< exp -1022)
+          (let (k (- -1022 exp)) (do (call shift d (- 0 k)) (set exp (+ exp k)))))
+        (if (>= (+ exp 1023) 2047) (return (__hf_nil)))
+        (call shift d 53)
+        (set mant (call rounded_integer d))
+        (if (= mant 9007199254740992)
+          (do
+            (set mant (__hf_shr mant 1))
+            (set exp (+ exp 1))
+            (if (>= (+ exp 1023) 2047) (return (__hf_nil)))))
+        (if (= (__hf_and mant 4503599627370496) 0) (set exp -1023))
+        (return (call make d mant exp)))))
+
+  (defun pow_table ()
+    (let (t (__hf_array 9) i 0)
+      (do
+        (for v (list 1 3 6 9 13 16 19 23 26) (do (__hf_aset t i v) (set i (+ i 1))))
+        (return t))))
+
+  (defun make (d mant exp)
+    (let (bits (__hf_or (__hf_and mant 4503599627370495) (__hf_shl (__hf_and (+ exp 1023) 2047) 52)))
+      (do
+        (if (__hf_aget d 3) (set bits (__hf_or bits (__hf_shl 1 63))))
+        (return (__hf_f64_from_bits bits))))))

@@ -26,8 +26,7 @@ type rt struct {
 	gErr, gTrue, gFalse int
 
 	// Imports.
-	iPrint, iFloatDigits, iFloatPoint, iParseFloat, iParseFloatOK int
-	iStderr, iExit                                                int
+	iPrint, iStderr, iExit int
 
 	// Functions.
 	fBoxInt, fBoxFloat, fBoxBool, fTruthy, fFail           int
@@ -42,6 +41,9 @@ type rt struct {
 	fSortedKeys, fDictText                                 int
 	fAttrEscape, fUTF8Len, fJSONQuote, fCatchText          int
 	fByteSlice, fChar                                      int
+	// Bridges to the standard library's float module (std/float.howl),
+	// whose bodies Compile writes once the module's functions have indices.
+	fStdShortest, fStdParse int
 
 	strings map[string]int // literal -> data segment
 }
@@ -83,17 +85,8 @@ func newRuntime(m *Module) *rt {
 	r.tI32ToEqRef = fn(nil, EqRef)
 
 	// Host imports. print receives a $Str; the host reads its bytes through
-	// the exported __hf_str_len and __hf_str_byte. float_digits and
-	// float_point give the shortest round-trip decimal digits of a finite,
-	// positive float and the position of its decimal point (temporary: to
-	// be replaced by a HowlFrame implementation, see the design plan).
+	// the exported __hf_str_len and __hf_str_byte.
 	r.iPrint = m.AddImport("hf", "print", r.tEqToVoid)
-	r.iFloatDigits = m.AddImport("hf", "float_digits", r.tF64ToI64)
-	r.iFloatPoint = m.AddImport("hf", "float_point", r.tF64ToI32)
-	// parse_float and parse_float_ok read a $Str with Go's ParseFloat
-	// syntax (temporary, like float_digits).
-	r.iParseFloat = m.AddImport("hf", "parse_float", r.funcType([]ValType{EqRef}, F64))
-	r.iParseFloatOK = m.AddImport("hf", "parse_float_ok", r.tEqToI32)
 	// stderr writes a $Str without a newline; exit ends the program with a
 	// status (the host does not return).
 	r.iStderr = m.AddImport("hf", "stderr", r.tEqToVoid)
@@ -221,6 +214,8 @@ func (r *rt) emitAll() {
 		{&r.fCatchText, "catch_text", r.funcType([]ValType{Ref(r.tStr)}, Ref(r.tStr))},
 		{&r.fByteSlice, "byte_slice", r.funcType([]ValType{EqRef, EqRef, EqRef}, EqRef)},
 		{&r.fChar, "char", r.funcType([]ValType{I32}, Ref(r.tStr))},
+		{&r.fStdShortest, "float_shortest", r.funcType([]ValType{F64}, EqRef)},
+		{&r.fStdParse, "float_parse", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
 	}
 	base := len(m.Imports) + len(m.Funcs)
 	for i, p := range plan {
@@ -563,15 +558,15 @@ func (r *rt) copyOut(c *Code, buf, from, out int, toFn func(c *Code)) *Code {
 }
 
 // emitFtoa writes ftoa: a float as Go's fmt.Sprint shows it. The shortest
-// round-trip digits and the decimal point position come from the host
-// (exact in every JavaScript engine); the layout is Go's %v rule: exponent
+// round-trip digits and the decimal point position come from the standard
+// library (std/float.howl, Go's own algorithm); the layout is Go's %v rule: exponent
 // form when the exponent is below -4 or at least 6, with at least two
 // exponent digits; otherwise plain decimal.
 //
 // locals: 0 f, 1 buf, 2 pos, 3 neg, 4 digits, 5 dp, 6 nd, 7 dbuf, 8 i,
-// 9 exp, 10 out
+// 9 exp, 10 out, 11 (digits point) items
 func (r *rt) emitFtoa() {
-	locals := []ValType{RefNull(r.tBytes), I32, I32, I64, I32, I32, RefNull(r.tBytes), I32, I32, RefNull(r.tBytes)}
+	locals := []ValType{RefNull(r.tBytes), I32, I32, I64, I32, I32, RefNull(r.tBytes), I32, I32, RefNull(r.tBytes), RefNull(r.tItems)}
 	put := func(c *Code, b byte) {
 		c.LocalGet(1).LocalGet(2).I32Const(int32(b)).ArraySet(r.tBytes)
 		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2)
@@ -615,8 +610,9 @@ func (r *rt) emitFtoa() {
 		c.LocalGet(3).If(NoResult).LocalGet(0).F64Neg().LocalSet(0)
 		put(c, '-')
 		c.End()
-		c.LocalGet(0).Call(r.iFloatDigits).LocalSet(4)
-		c.LocalGet(0).Call(r.iFloatPoint).LocalSet(5)
+		c.LocalGet(0).Call(r.fStdShortest).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalSet(11)
+		c.LocalGet(11).I32Const(0).ArrayGet(r.tItems).RefCast(r.tInt).StructGet(r.tInt, 0).LocalSet(4)
+		c.LocalGet(11).I32Const(1).ArrayGet(r.tItems).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(5)
 		c.LocalGet(4).Call(r.fItoa).StructGet(r.tStr, 0).LocalTee(7).ArrayLen().LocalSet(6)
 		c.LocalGet(5).I32Const(1).I32Sub().LocalSet(9)
 
@@ -782,12 +778,17 @@ func (r *rt) emitConversions() {
 		c.End()
 		cannot(c, "int")
 	})
-	r.body(r.fToFloat, nil, func(c *Code) {
+	// to_float. locals: 0 v, 1 parsed
+	r.body(r.fToFloat, []ValType{EqRef}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tFloat).If(NoResult).LocalGet(0).Return().End()
 		c.LocalGet(0).RefTest(r.tInt).If(NoResult).LocalGet(0).RefCast(r.tInt).StructGet(r.tInt, 0).F64ConvertI64S().Call(r.fBoxFloat).Return().End()
 		c.LocalGet(0).RefTest(r.tStr).If(NoResult)
-		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).Call(r.iParseFloatOK).If(NoResult)
-		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).Call(r.iParseFloat).Call(r.fBoxFloat).Return().End()
+		// The standard library gives the float, or nil when the text is not
+		// a finite float in ParseFloat's syntax (or fails, for a syntax it
+		// does not support yet).
+		c.LocalGet(0).RefCast(r.tStr).Call(r.fTrim).Call(r.fStdParse).LocalTee(1)
+		c.GlobalGet(r.gErr).RefIsNull().I32Eqz().If(NoResult).RefNull(HeapNone).Return().End()
+		c.RefIsNull().I32Eqz().If(NoResult).LocalGet(1).Return().End()
 		r.StrLiteral(c, "CONVERSION_ERROR: cannot convert ")
 		c.LocalGet(0).RefCast(r.tStr).Call(r.fQuote).Call(r.fConcat)
 		r.StrLiteral(c, " to float").Call(r.fConcat).Call(r.fFail).Return()

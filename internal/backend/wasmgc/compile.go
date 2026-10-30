@@ -49,6 +49,27 @@ func stdDefuns(module string) ([]*ast.Node, error) {
 	return root.Children[1:], nil
 }
 
+// makesFloats reports whether a program can produce a float: a float
+// literal, "/" (always a float division), to_float or parse_json.
+func makesFloats(n *ast.Node) bool {
+	if n == nil {
+		return false
+	}
+	if n.Type == "FLOAT" {
+		return true
+	}
+	switch head(n) {
+	case "/", "to_float", "parse_json":
+		return true
+	}
+	for _, k := range n.Children {
+		if makesFloats(k) {
+			return true
+		}
+	}
+	return false
+}
+
 // stdCalls adds the standard-library modules that a std definition calls.
 func stdCalls(n *ast.Node, seen map[string]bool, out *[]string) {
 	if n == nil {
@@ -117,8 +138,15 @@ func Compile(root *ast.Node) ([]byte, error) {
 	}
 	// Standard-library modules the program reaches, and the ones they call
 	// (by their linked names, __std_<module>_<name>).
+	// The float module formats and parses floats through the runtime's
+	// bridges. A program without a float literal, "/", to_float or
+	// parse_json can never hold a float, so it goes without the module
+	// (about 19 KB) and the bridges trap if ever reached.
 	var modules []string
 	seen := map[string]bool{}
+	if makesFloats(root) {
+		modules, seen["float"] = []string{"float"}, true
+	}
 	stdModulesUsed(root, seen, &modules)
 	for i := 0; i < len(modules); i++ {
 		std, err := stdDefuns(modules[i])
@@ -159,6 +187,14 @@ func Compile(root *ast.Node) ([]byte, error) {
 		}
 		f := &m.Funcs[c.funcs[d.Children[1].Value]-len(m.Imports)]
 		f.Body, f.Locals = code, locals
+	}
+	// The runtime's float bridges call the float module.
+	if seen["float"] {
+		c.m.Funcs[c.rt.fStdShortest-len(m.Imports)].Body = NewCode().LocalGet(0).Call(c.rt.fBoxFloat).Call(c.funcs[stdPrefix+"float_shortest"])
+		c.m.Funcs[c.rt.fStdParse-len(m.Imports)].Body = NewCode().LocalGet(0).Call(c.funcs[stdPrefix+"float_parse"])
+	} else {
+		c.m.Funcs[c.rt.fStdShortest-len(m.Imports)].Body = NewCode().Unreachable()
+		c.m.Funcs[c.rt.fStdParse-len(m.Imports)].Body = NewCode().Unreachable()
 	}
 	c.std = false
 	code, locals, err := c.function(nil, stmts, true)
@@ -938,8 +974,10 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 
 // intrinsic compiles a byte-level operation of the standard library:
 // (__hf_type v) the VM's type name of v (as %T), (__hf_byte_len s),
-// (__hf_byte_at s i), (__hf_byte_slice s from to), and, until floats are
-// formatted in HowlFrame, (__hf_float_digits f) and (__hf_float_point f).
+// (__hf_byte_at s i), (__hf_byte_slice s from to); on 64-bit integers
+// (__hf_idiv a b), (__hf_imod a b), (__hf_shl a k), (__hf_shr a k)
+// (unsigned), (__hf_and a b), (__hf_or a b), and (__hf_f64_bits f),
+// (__hf_f64_from_bits n) between a float and its IEEE 754 bits.
 // (__hf_char cp) is the UTF-8 text of a code point and (__hf_nil) nil.
 // (__hf_array n), (__hf_aget a i), (__hf_aset a i v) and (__hf_alen a) are
 // a mutable array of n values (nil at first) for std algorithms; arrays
@@ -948,7 +986,8 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 	r := f.c.rt
 	c := f.code
-	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3, "__hf_float_digits": 1, "__hf_float_point": 1,
+	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3,
+		"__hf_idiv": 2, "__hf_imod": 2, "__hf_shl": 2, "__hf_shr": 2, "__hf_and": 2, "__hf_or": 2, "__hf_f64_bits": 1, "__hf_f64_from_bits": 1,
 		"__hf_array": 1, "__hf_aget": 2, "__hf_aset": 3, "__hf_alen": 1, "__hf_fail": 1, "__hf_char": 1, "__hf_nil": 0}
 	if k, ok := want[h]; !ok || k != len(args) {
 		return unsupported(n, h)
@@ -971,10 +1010,29 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 		c.ArrayGetU(r.tBytes).I64ExtendI32U().Call(r.fBoxInt)
 	case "__hf_byte_slice":
 		c.Call(r.fByteSlice)
-	case "__hf_float_digits":
-		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatDigits).Call(r.fBoxInt)
-	case "__hf_float_point":
-		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).Call(r.iFloatPoint).I64ExtendI32S().Call(r.fBoxInt)
+	case "__hf_idiv", "__hf_imod", "__hf_shl", "__hf_shr", "__hf_and", "__hf_or":
+		b := f.local(EqRef)
+		c.LocalSet(b).RefCast(r.tInt).StructGet(r.tInt, 0)
+		c.LocalGet(b).RefCast(r.tInt).StructGet(r.tInt, 0)
+		switch h {
+		case "__hf_idiv":
+			c.I64DivS()
+		case "__hf_imod":
+			c.I64RemS()
+		case "__hf_shl":
+			c.I64Shl()
+		case "__hf_shr":
+			c.I64ShrU()
+		case "__hf_and":
+			c.I64And()
+		case "__hf_or":
+			c.I64Or()
+		}
+		c.Call(r.fBoxInt)
+	case "__hf_f64_bits":
+		c.RefCast(r.tFloat).StructGet(r.tFloat, 0).I64ReinterpretF64().Call(r.fBoxInt)
+	case "__hf_f64_from_bits":
+		c.RefCast(r.tInt).StructGet(r.tInt, 0).F64ReinterpretI64().Call(r.fBoxFloat)
 	case "__hf_array":
 		unboxInt()
 		c.ArrayNewDefault(r.tItems)

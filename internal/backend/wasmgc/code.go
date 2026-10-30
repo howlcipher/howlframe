@@ -112,6 +112,8 @@ func (c *Code) I64RemU() *Code { return c.op(0x82) }
 func (c *Code) I64And() *Code  { return c.op(0x83) }
 func (c *Code) I64Or() *Code   { return c.op(0x84) }
 func (c *Code) I64Xor() *Code  { return c.op(0x85) }
+func (c *Code) I64Shl() *Code  { return c.op(0x86) }
+func (c *Code) I64ShrU() *Code { return c.op(0x88) }
 
 // f64 arithmetic and comparison.
 
@@ -138,6 +140,7 @@ func (c *Code) I64ExtendI32U() *Code     { return c.op(0xAD) }
 func (c *Code) F64ConvertI64S() *Code    { return c.op(0xB9) }
 func (c *Code) I64TruncSatF64S() *Code   { return c.op(0xFC).u(6) }
 func (c *Code) I64ReinterpretF64() *Code { return c.op(0xBD) }
+func (c *Code) F64ReinterpretI64() *Code { return c.op(0xBF) }
 
 // References.
 
