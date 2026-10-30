@@ -21,8 +21,8 @@ last. Times are America/Detroit.
 | 0. Harness runs the VM in a temp dir | `chore/harness-vm-tempdir` | #273 | Merged |
 | bugs.md #66: JS arithmetic and ordering on run-time types | `fix/js-arith-operand-types` | #274 | Merged |
 | bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
-| bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | none yet | Committed locally (`e02c84d9`) |
-| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | none yet | Committed locally (`efe12fa0`) |
+| bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Open |
+| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Open |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | none yet | Committed locally (WIP) |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | none yet | Gate test written; backup needs ZIP |
 
@@ -58,3 +58,11 @@ Findings:
 
 - The merged tree passed `go test ./...` under Go 1.26 and 1.27.2 locally and all four CI checks; merged as
   `7e14bf92`. Next: #67 (only bugs.md conflicts with main), then ZIP, then the test-blocks PR.
+
+### 2026-10-30 17:45: journal, ZIP and #67 up as PRs
+
+- The journal and prompt copy merged as #276 (`6893ff4b`).
+- ZIP opened as #277 after the full gate on its merged tree (Go 1.26 `./...`, Go 1.27.2 wasmgc and difftest, both
+  HowlScene gates in Node and wasmtime).
+- #67 merged main; only bugs.md conflicted (both sides added rows), resolved as #68, #67, #66 in descending order.
+  Full gate under Go 1.26 and 1.27.2 passed on the merged tree. Opened as #278.
