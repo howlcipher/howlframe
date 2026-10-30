@@ -1,0 +1,601 @@
+; ZIP for the WebAssembly backend's standard library: the browser host
+; operations zip_build and zip_read as the JavaScript backend gives them
+; (they have no VM form), on base64 text. Bytes are lists of byte values.
+; zip_read inflates deflated entries as Node's DecompressionStream
+; ("deflate-raw", zlib) does; the decoder follows zlib's reference decoder
+; (puff.c), with zlib's rules for incomplete and over-subscribed codes.
+(module
+  (defun u16 (b at)
+    (return (__hf_or (list_get b at) (__hf_shl (list_get b (+ at 1)) 8))))
+
+  (defun u32 (b at)
+    (return (__hf_or (call u16 b at) (__hf_shl (call u16 b (+ at 2)) 16))))
+
+  ; put16 and put32 append little-endian values to the byte list out.
+  (defun put16 (out v)
+    (do
+      (append out (__hf_and v 255))
+      (append out (__hf_and (__hf_shr v 8) 255))
+      (return out)))
+
+  (defun put32 (out v)
+    (return (call put16 (call put16 out (__hf_and v 65535)) (__hf_shr v 16))))
+
+  ; crc32: the CRC-32 (IEEE) of bytes b.
+  (defun crc32 (b)
+    (let (tab (__hf_array 256) n 0 crc 4294967295)
+      (do
+        (while (< n 256)
+          (let (c n k 0)
+            (do
+              (while (< k 8)
+                (do
+                  (if (= (__hf_and c 1) 1)
+                    (set c (__hf_xor 3988292384 (__hf_shr c 1)))
+                    (set c (__hf_shr c 1)))
+                  (set k (+ k 1))))
+              (__hf_aset tab n c)
+              (set n (+ n 1)))))
+        (for x b
+          (set crc (__hf_xor (__hf_aget tab (__hf_and (__hf_xor crc x) 255)) (__hf_shr crc 8))))
+        (return (__hf_xor crc 4294967295)))))
+
+  ; text_bytes: the UTF-8 bytes of s.
+  (defun text_bytes (s)
+    (let (out (list) i 0 n (__hf_byte_len s))
+      (do
+        (while (< i n)
+          (do
+            (append out (__hf_byte_at s i))
+            (set i (+ i 1))))
+        (return out))))
+
+  ; base64: standard base64 with padding of bytes b, as btoa writes it.
+  (defun base64 (b)
+    (let (abc "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" out (list) i 0 n (list_len b))
+      (do
+        (while (< i n)
+          (let (b0 (list_get b i) b1 (if (< (+ i 1) n) (list_get b (+ i 1)) 0) b2 (if (< (+ i 2) n) (list_get b (+ i 2)) 0))
+            (let (v (__hf_or (__hf_or (__hf_shl b0 16) (__hf_shl b1 8)) b2))
+              (do
+                (append out (__hf_byte_at abc (__hf_shr v 18)))
+                (append out (__hf_byte_at abc (__hf_and (__hf_shr v 12) 63)))
+                (if (< (+ i 1) n) (append out (__hf_byte_at abc (__hf_and (__hf_shr v 6) 63))) (append out 61))
+                (if (< (+ i 2) n) (append out (__hf_byte_at abc (__hf_and v 63))) (append out 61))
+                (set i (+ i 3))))))
+        (return (bytes_to_string out)))))
+
+  ; js_type: JavaScript's typeof for a value, "null" for nil.
+  (defun js_type (v)
+    (let (t (__hf_type v))
+      (do
+        (if (= t "<nil>") (return "null"))
+        (if (= t "string") (return "string"))
+        (if (or (= t "int64") (= t "float64")) (return "number"))
+        (if (= t "bool") (return "boolean"))
+        (return "object"))))
+
+  ; build_path_ok: zip_build's paths: relative, "/"-separated segments of
+  ; [A-Za-z0-9._~@+-], none "." or "..", at most 255 characters.
+  (defun build_path_ok (p)
+    (do
+      (if (not (= (__hf_type p) "string")) (return false))
+      (let (n (__hf_byte_len p) i 0 seg 0 dots 0)
+        (do
+          (if (or (= n 0) (> n 255)) (return false))
+          (while (<= i n)
+            (let (c (if (< i n) (__hf_byte_at p i) 47))
+              (do
+                (if (= c 47)
+                  (do
+                    (if (or (= seg 0) (and (= seg dots) (<= dots 2))) (return false))
+                    (set seg 0)
+                    (set dots 0))
+                  (do
+                    (if (not (or (and (>= c 65) (<= c 90)) (or (and (>= c 97) (<= c 122)) (or (and (>= c 48) (<= c 57))
+                        (or (= c 46) (or (= c 95) (or (= c 126) (or (= c 64) (or (= c 43) (= c 45)))))))))) (return false))
+                    (set seg (+ seg 1))
+                    (if (= c 46) (set dots (+ dots 1)))))
+                (set i (+ i 1)))))
+          (return true)))))
+
+  ; ascii_lower: s with A-Z lowered (zip_build's paths are ASCII).
+  (defun ascii_lower (s)
+    (let (out (list) i 0 n (__hf_byte_len s))
+      (do
+        (while (< i n)
+          (let (c (__hf_byte_at s i))
+            (do
+              (append out (if (and (>= c 65) (<= c 90)) (+ c 32) c))
+              (set i (+ i 1)))))
+        (return (bytes_to_string out)))))
+
+  ; header: a local (central false) or central directory header.
+  (defun header (out f central local)
+    (let (name (map_get f "name") data (map_get f "data"))
+      (do
+        (set out (call put32 out (if central 33639248 67324752)))
+        (if central (set out (call put16 out 20)))
+        (set out (call put16 out 20))
+        (set out (call put16 out 2048))
+        (set out (call put16 out 0))
+        (set out (call put16 out 0))
+        (set out (call put16 out 33))
+        (set out (call put32 out (map_get f "crc")))
+        (set out (call put32 out (list_len data)))
+        (set out (call put32 out (list_len data)))
+        (set out (call put16 out (list_len name)))
+        (set out (call put16 out 0))
+        (if central
+          (do
+            (set out (call put16 out 0))
+            (set out (call put16 out 0))
+            (set out (call put16 out 0))
+            (set out (call put32 out 0))
+            (set out (call put32 out local))))
+        (for x name (append out x))
+        (return out))))
+
+  ; build: zip_build, a ZIP of stored entries as base64.
+  (export (defun build (entries)
+    (do
+      (if (not (= (__hf_type entries) "[]interface {}"))
+        (__hf_fail (+ "TYPE_ERROR: zip_build expected list, got " (call js_type entries))))
+      (if (> (list_len entries) 10000) (__hf_fail "ZIP_LIMIT: more than 10000 entries"))
+      (let (files (list) seen (dict) total 0 i 0)
+        (do
+          (for e entries
+            (do
+              (if (not (= (__hf_type e) "map[string]interface {}"))
+                (__hf_fail (+ "ZIP_INVALID_ENTRY: entry " (+ (to_string i) " is not a dict"))))
+              (let (path (map_get e "path"))
+                (do
+                  (if (not (call build_path_ok path))
+                    (__hf_fail (+ "ZIP_INVALID_PATH: entry " (+ (to_string i) " has an unsafe path"))))
+                  (let (key (call ascii_lower path))
+                    (do
+                      (if (map_has seen key) (__hf_fail (+ "ZIP_DUPLICATE_PATH: " path)))
+                      (map_set seen key true)))
+                  (let (has_text (map_has e "text") has_b64 (map_has e "base64") data (list))
+                    (do
+                      (if (= has_text has_b64)
+                        (__hf_fail (+ "ZIP_INVALID_ENTRY: " (+ path " needs exactly one of text or base64"))))
+                      (if has_text
+                        (do
+                          (if (not (= (__hf_type (map_get e "text")) "string"))
+                            (__hf_fail (+ "ZIP_INVALID_ENTRY: " (+ path " text must be a string"))))
+                          (set data (call text_bytes (map_get e "text"))))
+                        (set data (call __std_base64_bytes "ZIP_INVALID_ENTRY" (map_get e "base64"))))
+                      (set total (+ total (list_len data)))
+                      (if (> total 536870912) (__hf_fail "ZIP_LIMIT: archive exceeds 536870912 bytes"))
+                      (append files (dict ("name" (call text_bytes path)) ("data" data) ("crc" (call crc32 data))))))))
+              (set i (+ i 1))))
+          (let (out (list) offsets (list))
+            (do
+              (for f files
+                (do
+                  (append offsets (list_len out))
+                  (set out (call header out f false 0))
+                  (for x (map_get f "data") (append out x))))
+              (let (cd_start (list_len out) k 0)
+                (do
+                  (for f files
+                    (do
+                      (set out (call header out f true (list_get offsets k)))
+                      (set k (+ k 1))))
+                  (let (cd_size (- (list_len out) cd_start))
+                    (do
+                      (set out (call put32 out 101010256))
+                      (set out (call put16 out 0))
+                      (set out (call put16 out 0))
+                      (set out (call put16 out (list_len files)))
+                      (set out (call put16 out (list_len files)))
+                      (set out (call put32 out cd_size))
+                      (set out (call put32 out cd_start))
+                      (set out (call put16 out 0))
+                      (return (call base64 out)))))))))))))
+
+  ; read_limit: a zip_read limit, a positive whole number, at most cap.
+  (defun read_limit (kind v cap)
+    (let (t (__hf_type v) whole false)
+      (do
+        (if (= t "int64") (set whole (>= v 1)))
+        (if (= t "float64")
+          (if (>= v 1)
+            (if (>= v 9007199254740992.0)
+              (set whole true)
+              (set whole (= v (to_float (to_int v)))))))
+        (if (not whole) (__hf_fail (+ "TYPE_ERROR: zip_read " (+ kind " must be a positive whole number"))))
+        (if (< v cap) (return v))
+        (return cap))))
+
+  ; utf16_len: the length of UTF-8 text s in UTF-16 code units.
+  (defun utf16_len (s)
+    (let (n 0 i 0 len (__hf_byte_len s))
+      (do
+        (while (< i len)
+          (let (c (__hf_byte_at s i))
+            (do
+              (if (< c 128) (do (set n (+ n 1)) (set i (+ i 1)))
+                (if (< c 224) (do (set n (+ n 1)) (set i (+ i 2)))
+                  (if (< c 240) (do (set n (+ n 1)) (set i (+ i 3)))
+                    (do (set n (+ n 2)) (set i (+ i 4)))))))))
+        (return n))))
+
+  ; read_path_ok: zip_read's check of an entry path.
+  (defun read_path_ok (p)
+    (let (n (__hf_byte_len p) i 0 seg 0 dots 0 units (call utf16_len p))
+      (do
+        (if (or (= units 0) (> units 1024)) (return false))
+        (while (<= i n)
+          (let (c (if (< i n) (__hf_byte_at p i) 47))
+            (do
+              (if (or (< c 32) (or (= c 127) (or (= c 92) (= c 58)))) (return false))
+              (if (= c 47)
+                (do
+                  (if (or (= seg 0) (and (= seg dots) (<= dots 2))) (return false))
+                  (set seg 0)
+                  (set dots 0))
+                (do
+                  (set seg (+ seg 1))
+                  (if (= c 46) (set dots (+ dots 1)))))
+              (set i (+ i 1)))))
+        (return true))))
+
+  (defun hex4 (v)
+    (let (digits "0123456789abcdef" out (list) k 12)
+      (do
+        (while (>= k 0)
+          (do
+            (append out (__hf_byte_at digits (__hf_and (__hf_shr v k) 15)))
+            (set k (- k 4))))
+        (return (bytes_to_string out)))))
+
+  ; js_quote: JSON.stringify of the first 80 UTF-16 code units of name, as
+  ; zip_read's error message shows it (a surrogate pair cut in half leaves
+  ; its high surrogate, escaped).
+  (defun js_quote (name)
+    (let (out "\"" i 0 n (__hf_byte_len name) units 0)
+      (do
+        (while (and (< i n) (< units 80))
+          (let (c (__hf_byte_at name i))
+            (do
+              (if (< c 128)
+                (do
+                  (if (= c 34) (set out (+ out "\\\""))
+                    (if (= c 92) (set out (+ out "\\\\"))
+                      (if (= c 8) (set out (+ out "\\b"))
+                        (if (= c 12) (set out (+ out "\\f"))
+                          (if (= c 10) (set out (+ out "\\n"))
+                            (if (= c 13) (set out (+ out "\\r"))
+                              (if (= c 9) (set out (+ out "\\t"))
+                                (if (< c 32) (set out (+ out (+ "\\u" (call hex4 c))))
+                                  (set out (+ out (__hf_byte_slice name i (+ i 1))))))))))))
+                  (set units (+ units 1))
+                  (set i (+ i 1)))
+                (let (len (if (< c 224) 2 (if (< c 240) 3 4)))
+                  (do
+                    (if (and (= len 4) (= units 79))
+                      (do
+                        ; Only the high surrogate fits.
+                        (let (cp (__hf_or (__hf_or (__hf_shl (__hf_and c 7) 18) (__hf_shl (__hf_and (__hf_byte_at name (+ i 1)) 63) 12))
+                                   (__hf_or (__hf_shl (__hf_and (__hf_byte_at name (+ i 2)) 63) 6) (__hf_and (__hf_byte_at name (+ i 3)) 63))))
+                          (set out (+ out (+ "\\u" (call hex4 (+ 55296 (__hf_shr (- cp 65536) 10)))))))
+                        (set units 80))
+                      (do
+                        (set out (+ out (__hf_byte_slice name i (+ i len))))
+                        (set units (+ units (if (= len 4) 2 1)))))
+                    (set i (+ i len))))))))
+        (return (+ out "\"")))))
+
+  ; slice: bytes b[from:to] as a new list.
+  (defun slice (b from to)
+    (let (out (list) i from)
+      (do
+        (while (< i to)
+          (do
+            (append out (list_get b i))
+            (set i (+ i 1))))
+        (return out))))
+
+  (defun invalid (msg)
+    (__hf_fail (+ "ZIP_INVALID: " msg)))
+
+  ; read: zip_read, the entries of a ZIP (base64) as (path, base64) dicts.
+  (export (defun read (data max_entries max_bytes)
+    (let (max_entries (call read_limit "max_entries" max_entries 10000)
+          max_bytes (call read_limit "max_bytes" max_bytes 536870912))
+      (let (buf (call __std_base64_bytes "ZIP_INVALID" data))
+        (let (len (list_len buf) eocd -1 i (- (list_len buf) 22))
+          (do
+            (while (and (>= i 0) (and (>= i (- (- len 22) 65535)) (< eocd 0)))
+              (do
+                (if (and (= (call u32 buf i) 101010256) (= (+ (+ i 22) (call u16 buf (+ i 20))) len)) (set eocd i))
+                (set i (- i 1))))
+            (if (< eocd 0) (call invalid "not a ZIP archive"))
+            (let (count (call u16 buf (+ eocd 10)) cd_size (call u32 buf (+ eocd 12)) cd_start (call u32 buf (+ eocd 16)))
+              (do
+                (if (or (= count 65535) (or (= cd_size 4294967295) (= cd_start 4294967295)))
+                  (__hf_fail "ZIP_UNSUPPORTED: ZIP64 archives are not supported"))
+                (if (or (not (= (call u16 buf (+ eocd 4)) 0)) (or (not (= (call u16 buf (+ eocd 6)) 0)) (not (= (call u16 buf (+ eocd 8)) count))))
+                  (__hf_fail "ZIP_UNSUPPORTED: multi-part archives are not supported"))
+                (let (cd_end (+ cd_start cd_size))
+                  (do
+                    (if (> cd_end eocd) (call invalid "the central directory is out of range"))
+                    (if (> count max_entries) (__hf_fail (+ "ZIP_LIMIT: more than " (+ (to_string max_entries) " entries"))))
+                    (let (entries (list) seen (dict) total 0 off cd_start k 0)
+                      (do
+                        (while (< k count)
+                          (do
+                            (if (or (> (+ off 46) cd_end) (not (= (call u32 buf off) 33639248))) (call invalid "the central directory is damaged"))
+                            (let (flags (call u16 buf (+ off 8)) method (call u16 buf (+ off 10)) crc (call u32 buf (+ off 16))
+                                  csize (call u32 buf (+ off 20)) usize (call u32 buf (+ off 24)) local (call u32 buf (+ off 42))
+                                  name_end (+ (+ off 46) (call u16 buf (+ off 28))))
+                              (let (next (+ (+ name_end (call u16 buf (+ off 30))) (call u16 buf (+ off 32))))
+                                (do
+                                  (if (> next cd_end) (call invalid "the central directory is damaged"))
+                                  (let (name (call name_text buf (+ off 46) name_end k))
+                                    (do
+                                      (set off next)
+                                      (if (= (__hf_and flags 1) 1) (__hf_fail "ZIP_UNSUPPORTED: encrypted entries are not supported"))
+                                      (if (and (not (= method 0)) (not (= method 8))) (__hf_fail (+ "ZIP_UNSUPPORTED: compression method " (to_string method))))
+                                      (if (or (= csize 4294967295) (or (= usize 4294967295) (= local 4294967295)))
+                                        (__hf_fail "ZIP_UNSUPPORTED: ZIP64 archives are not supported"))
+                                      (let (nlen (__hf_byte_len name))
+                                        (let (is_dir (and (> nlen 0) (= (__hf_byte_at name (- nlen 1)) 47)))
+                                          (let (path (if is_dir (__hf_byte_slice name 0 (- nlen 1)) name))
+                                            (do
+                                              (if (not (call read_path_ok path)) (__hf_fail (+ "ZIP_INVALID_PATH: " (call js_quote name))))
+                                              (if (not is_dir)
+                                                (let (key (to_lower path))
+                                                  (do
+                                                    (if (map_has seen key) (__hf_fail (+ "ZIP_DUPLICATE_PATH: " path)))
+                                                    (map_set seen key true)
+                                                    (set total (+ total usize))
+                                                    (if (> total max_bytes) (__hf_fail (+ "ZIP_LIMIT: archive expands past " (+ (to_string max_bytes) " bytes"))))
+                                                    (append entries (dict ("path" path) ("method" method) ("crc" crc) ("csize" csize) ("usize" usize) ("local" local)))))))))))))))
+                            (set k (+ k 1))))
+                        (let (out (list))
+                          (do
+                            (for e entries
+                              (let (path (map_get e "path") local (map_get e "local") csize (map_get e "csize") usize (map_get e "usize"))
+                                (do
+                                  (if (or (> (+ local 30) cd_start) (not (= (call u32 buf local) 67324752))) (call invalid (+ path " has a damaged header")))
+                                  (if (= (__hf_and (call u16 buf (+ local 6)) 1) 1) (__hf_fail "ZIP_UNSUPPORTED: encrypted entries are not supported"))
+                                  (let (start (+ (+ (+ local 30) (call u16 buf (+ local 26))) (call u16 buf (+ local 28))))
+                                    (do
+                                      (if (> (+ start csize) cd_start) (call invalid (+ path " has data out of range")))
+                                      (let (bytes (list))
+                                        (do
+                                          (if (= (map_get e "method") 0)
+                                            (do
+                                              (if (not (= csize usize)) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " has inconsistent sizes"))))
+                                              (set bytes (call slice buf start (+ start csize))))
+                                            (set bytes (call inflate buf start (+ start csize) usize path)))
+                                          (if (not (= (call crc32 bytes) (map_get e "crc"))) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " fails its checksum"))))
+                                          (append out (dict ("path" path) ("base64" (call base64 bytes)))))))))))
+                            (return out)))))))))))))))
+
+  ; name_text: an entry name as strict UTF-8 text (TextDecoder with fatal
+  ; set, which drops a leading byte order mark).
+  (defun name_text (buf from to k)
+    (let (bytes (call slice buf from to))
+      (do
+        (if (and (>= (list_len bytes) 3) (and (= (list_get bytes 0) 239) (and (= (list_get bytes 1) 187) (= (list_get bytes 2) 191))))
+          (set bytes (list_slice bytes 3)))
+        (let (s (bytes_to_string bytes))
+          (do
+            (if (not (call __std_utf8_valid s))
+              (__hf_fail (+ "ZIP_INVALID_PATH: entry " (+ (to_string k) " has a name that is not UTF-8"))))
+            (return s))))))
+
+  ; Inflate. State s: 0 input position, 1 end, 2 bit buffer, 3 bit count,
+  ; and the output list grows in the caller, passed back by return.
+  (defun corrupt (path)
+    (__hf_fail (+ "ZIP_CORRUPT: " (+ path " is not valid deflate data"))))
+
+  (defun bits (s buf need path)
+    (let (val (__hf_aget s 2) cnt (__hf_aget s 3))
+      (do
+        (while (< cnt need)
+          (do
+            (if (>= (__hf_aget s 0) (__hf_aget s 1)) (call corrupt path))
+            (set val (__hf_or val (__hf_shl (list_get buf (__hf_aget s 0)) cnt)))
+            (__hf_aset s 0 (+ (__hf_aget s 0) 1))
+            (set cnt (+ cnt 8))))
+        (__hf_aset s 2 (__hf_shr val need))
+        (__hf_aset s 3 (- cnt need))
+        (return (__hf_and val (- (__hf_shl 1 need) 1))))))
+
+  ; A Huffman code: (count, symbol) arrays, counts by length 0..15.
+  ; construct returns the code and how far it is from complete: negative
+  ; when over-subscribed, positive when incomplete.
+  (defun construct (lengths from n)
+    (let (count (__hf_array 16) offs (__hf_array 16) symbol (__hf_array n) len 0 sym 0 left 1)
+      (do
+        (while (< len 16) (do (__hf_aset count len 0) (set len (+ len 1))))
+        (while (< sym n)
+          (do
+            (let (l (__hf_aget lengths (+ from sym))) (__hf_aset count l (+ (__hf_aget count l) 1)))
+            (set sym (+ sym 1))))
+        (if (= (__hf_aget count 0) n) (return (list count symbol 0)))
+        (set len 1)
+        (while (< len 16)
+          (do
+            (set left (- (* left 2) (__hf_aget count len)))
+            (if (< left 0) (return (list count symbol left)))
+            (set len (+ len 1))))
+        (__hf_aset offs 1 0)
+        (set len 1)
+        (while (< len 15)
+          (do
+            (__hf_aset offs (+ len 1) (+ (__hf_aget offs len) (__hf_aget count len)))
+            (set len (+ len 1))))
+        (set sym 0)
+        (while (< sym n)
+          (do
+            (let (l (__hf_aget lengths (+ from sym)))
+              (if (not (= l 0))
+                (do
+                  (__hf_aset symbol (__hf_aget offs l) sym)
+                  (__hf_aset offs l (+ (__hf_aget offs l) 1)))))
+            (set sym (+ sym 1))))
+        (return (list count symbol left)))))
+
+  (defun decode (s buf h path)
+    (let (count (list_get h 0) symbol (list_get h 1) code 0 first 0 index 0 len 1)
+      (do
+        (while (< len 16)
+          (do
+            (set code (__hf_or code (call bits s buf 1 path)))
+            (let (c (__hf_aget count len))
+              (do
+                (if (< (- code c) first) (return (__hf_aget symbol (+ index (- code first)))))
+                (set index (+ index c))
+                (set first (* (+ first c) 2))
+                (set code (* code 2))))
+            (set len (+ len 1))))
+        (return (call corrupt path)))))
+
+  (defun table (values)
+    (let (a (__hf_array (list_len values)) i 0)
+      (do
+        (for v values (do (__hf_aset a i v) (set i (+ i 1))))
+        (return a))))
+
+  ; codes: decode one block's literals and matches into out.
+  (defun codes (s buf out size lencode distcode path)
+    (let (lbase (call table (list 3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59 67 83 99 115 131 163 195 227 258))
+          lext (call table (list 0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0))
+          dbase (call table (list 1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537 2049 3073 4097 6145 8193 12289 16385 24577))
+          dext (call table (list 0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
+          symbol 0)
+      (do
+        (while (not (= symbol 256))
+          (do
+            (set symbol (call decode s buf lencode path))
+            (if (< symbol 256)
+              (do
+                (if (>= (list_len out) size) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " expands past its declared size"))))
+                (append out symbol))
+              (if (> symbol 256)
+                (let (sym (- symbol 257))
+                  (do
+                    (if (>= sym 29) (call corrupt path))
+                    (let (len (+ (__hf_aget lbase sym) (call bits s buf (__hf_aget lext sym) path))
+                          dsym (call decode s buf distcode path))
+                      (do
+                        (if (>= dsym 30) (call corrupt path))
+                        (let (dist (+ (__hf_aget dbase dsym) (call bits s buf (__hf_aget dext dsym) path)))
+                          (do
+                            (if (> dist (list_len out)) (call corrupt path))
+                            (let (k 0)
+                              (while (< k len)
+                                (do
+                                  (if (>= (list_len out) size) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " expands past its declared size"))))
+                                  (append out (list_get out (- (list_len out) dist)))
+                                  (set k (+ k 1)))))))))))))))
+        (return out))))
+
+  (defun fixed_codes ()
+    (let (lengths (__hf_array 320) i 0)
+      (do
+        (while (< i 288)
+          (do
+            (__hf_aset lengths i (if (< i 144) 8 (if (< i 256) 9 (if (< i 280) 7 8))))
+            (set i (+ i 1))))
+        (while (< i 318) (do (__hf_aset lengths i 5) (set i (+ i 1))))
+        (return (list (call construct lengths 0 288) (call construct lengths 288 30))))))
+
+  (defun dynamic_codes (s buf path)
+    (let (nlen (+ (call bits s buf 5 path) 257) ndist (+ (call bits s buf 5 path) 1) ncode (+ (call bits s buf 4 path) 4)
+          order (list 16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15) lengths (__hf_array 320) index 0)
+      (do
+        (if (or (> nlen 286) (> ndist 30)) (call corrupt path))
+        (while (< index 19) (do (__hf_aset lengths index 0) (set index (+ index 1))))
+        (set index 0)
+        (while (< index ncode)
+          (do
+            (__hf_aset lengths (list_get order index) (call bits s buf 3 path))
+            (set index (+ index 1))))
+        (let (lencode (call construct lengths 0 19))
+          (do
+            (if (not (= (list_get lencode 2) 0)) (call corrupt path))
+            (set index 0)
+            (while (< index (+ nlen ndist))
+              (let (symbol (call decode s buf lencode path))
+                (if (< symbol 16)
+                  (do (__hf_aset lengths index symbol) (set index (+ index 1)))
+                  (let (len 0 rep 0)
+                    (do
+                      (if (= symbol 16)
+                        (do
+                          (if (= index 0) (call corrupt path))
+                          (set len (__hf_aget lengths (- index 1)))
+                          (set rep (+ 3 (call bits s buf 2 path))))
+                        (if (= symbol 17)
+                          (set rep (+ 3 (call bits s buf 3 path)))
+                          (set rep (+ 11 (call bits s buf 7 path)))))
+                      (if (> (+ index rep) (+ nlen ndist)) (call corrupt path))
+                      (while (> rep 0)
+                        (do
+                          (__hf_aset lengths index len)
+                          (set index (+ index 1))
+                          (set rep (- rep 1)))))))))
+            (if (= (__hf_aget lengths 256) 0) (call corrupt path))
+            (let (lc (call construct lengths 0 nlen) dc (call construct lengths nlen ndist))
+              (do
+                (if (call bad_code lc nlen) (call corrupt path))
+                (if (call bad_code dc ndist) (call corrupt path))
+                (return (list lc dc)))))))))
+
+  ; bad_code: over-subscribed, or incomplete with more than one code.
+  (defun bad_code (h n)
+    (let (left (list_get h 2) count (list_get h 0))
+      (return (and (not (= left 0)) (or (< left 0) (not (= n (+ (__hf_aget count 0) (__hf_aget count 1)))))))))
+
+  ; inflate: the raw deflate data buf[from:to], which must expand to
+  ; exactly size bytes.
+  (defun inflate (buf from to size path)
+    (let (s (__hf_array 4) out (list) last 0)
+      (do
+        (__hf_aset s 0 from)
+        (__hf_aset s 1 to)
+        (__hf_aset s 2 0)
+        (__hf_aset s 3 0)
+        (while (= last 0)
+          (do
+            (set last (call bits s buf 1 path))
+            (let (btype (call bits s buf 2 path))
+              (if (= btype 0)
+                (do
+                  ; A stored block starts at the next byte.
+                  (__hf_aset s 2 0)
+                  (__hf_aset s 3 0)
+                  (let (at (__hf_aget s 0))
+                    (do
+                      (if (> (+ at 4) to) (call corrupt path))
+                      (let (n (call u16 buf at) nc (call u16 buf (+ at 2)))
+                        (do
+                          (if (not (= n (__hf_xor nc 65535))) (call corrupt path))
+                          (let (k 0)
+                            (while (< k n)
+                              (do
+                                ; zlib copies what input there is first.
+                                (if (>= (+ (+ at 4) k) to) (call corrupt path))
+                                (if (>= (list_len out) size) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " expands past its declared size"))))
+                                (append out (list_get buf (+ (+ at 4) k)))
+                                (set k (+ k 1)))))
+                          (__hf_aset s 0 (+ (+ at 4) n)))))))
+                (if (= btype 1)
+                  (let (c (call fixed_codes))
+                    (set out (call codes s buf out size (list_get c 0) (list_get c 1) path)))
+                  (if (= btype 2)
+                    (let (c (call dynamic_codes s buf path))
+                      (set out (call codes s buf out size (list_get c 0) (list_get c 1) path)))
+                    (call corrupt path)))))))
+        ; Bytes after the final block are an error, as the Compression
+        ; Streams standard has DecompressionStream reject them.
+        (if (< (__hf_aget s 0) to) (call corrupt path))
+        (if (< (list_len out) size) (__hf_fail (+ "ZIP_CORRUPT: " (+ path " is shorter than its declared size"))))
+        (return out)))))
