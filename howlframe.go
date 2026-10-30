@@ -1608,7 +1608,7 @@ var interopCommands = []interopCommand{
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
 	{Path: []string{"check"}, Flags: []string{"--profile"}},
-	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--module"}},
+	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
 		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",

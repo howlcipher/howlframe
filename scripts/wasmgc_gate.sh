@@ -55,6 +55,31 @@ print("\n".join(skipped))
 EOF
 }
 
+# failures FILE: each failing test of a go test -json run with its own output (the assertion lines), and any
+# output that is not JSON (build errors).
+failures() {
+  python3 - "$1" <<'EOF'
+import json, sys
+output, failed = {}, []
+for line in open(sys.argv[1]):
+    try:
+        e = json.loads(line)
+    except ValueError:
+        print(line, end="")
+        continue
+    key = (e.get("Package"), e.get("Test"))
+    if e.get("Action") == "output":
+        output.setdefault(key, []).append(e["Output"])
+    elif e.get("Action") == "fail" and key[1]:
+        failed.append(key)
+for key in failed:
+    print("FAIL", key[0], key[1])
+    for l in output.get(key, [])[-12:]:
+        if not l.lstrip().startswith(("=== ", "--- ")):
+            print("   ", l.rstrip())
+EOF
+}
+
 status=0
 runs=0
 run() { # run LABEL COMMAND...: a go test command, run with -json
@@ -63,13 +88,7 @@ run() { # run LABEL COMMAND...: a go test command, run with -json
   local log="$work/run$runs.json"
   echo "== $label"
   if ! env "$@" -json >"$log" 2>&1; then
-    grep -h '"Action":"fail"' "$log" | python3 -c 'import json,sys
-for l in sys.stdin:
-    e=json.loads(l); print("FAIL", e.get("Package"), e.get("Test") or "")' || true
-    grep -h '"Output"' "$log" | python3 -c 'import json,sys
-for l in sys.stdin:
-    o=json.loads(l).get("Output","")
-    if "build failed" in o or "cannot" in o or "panic:" in o: print(o, end="")' | head -20 || true
+    failures "$log"
     status=1
   fi
   local s

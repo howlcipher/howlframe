@@ -107,3 +107,7 @@ Findings:
   Node and wasmtime, each report equal to the JavaScript backend's; `scripts/test_core.sh` with its pinned compiler
   (`8e16f799`) also passes 19 of 19.
 - Next after #280: show the evidence, then write the M3 prompt (browser host) in the form of the M2 prompt.
+- The first gate run on #280's final tree failed: `TestInteropDescriptorMatchesFlagSets`. The WIP commit had added
+  the `--tests` build flag without listing it in `interopCommands` (the CLI's machine-readable descriptor). Fixed;
+  the gate caught it before a push. Its failure report also printed unrelated lines; it now prints each failing
+  test with its own output.
