@@ -49,6 +49,24 @@ func stdDefuns(module string) ([]*ast.Node, error) {
 	return root.Children[1:], nil
 }
 
+// usesHead reports whether any form in n has one of the heads.
+func usesHead(n *ast.Node, heads ...string) bool {
+	if n == nil {
+		return false
+	}
+	for _, h := range heads {
+		if head(n) == h {
+			return true
+		}
+	}
+	for _, k := range n.Children {
+		if usesHead(k, heads...) {
+			return true
+		}
+	}
+	return false
+}
+
 // makesFloats reports whether a program can produce a float: a float
 // literal, "/" (always a float division), to_float or parse_json.
 func makesFloats(n *ast.Node) bool {
@@ -151,6 +169,11 @@ func CompileFor(root *ast.Node, host Host) ([]byte, error) {
 	if makesFloats(root) {
 		modules, seen["float"] = []string{"float"}, true
 	}
+	// The unicode module maps case for to_lower and to_upper of text that
+	// is not all ASCII.
+	if usesHead(root, "to_lower", "to_upper") {
+		modules, seen["unicode"] = append(modules, "unicode"), true
+	}
 	stdModulesUsed(root, seen, &modules)
 	for i := 0; i < len(modules); i++ {
 		std, err := stdDefuns(modules[i])
@@ -199,6 +222,16 @@ func CompileFor(root *ast.Node, host Host) ([]byte, error) {
 	} else {
 		c.m.Funcs[c.rt.fStdShortest-len(m.Imports)].Body = NewCode().Unreachable()
 		c.m.Funcs[c.rt.fStdParse-len(m.Imports)].Body = NewCode().Unreachable()
+	}
+	for _, b := range []struct {
+		bridge int
+		fn     string
+	}{{c.rt.fStdLower, "unicode_lower"}, {c.rt.fStdUpper, "unicode_upper"}} {
+		body := NewCode().Unreachable()
+		if seen["unicode"] {
+			body = NewCode().LocalGet(0).Call(c.funcs[stdPrefix+b.fn])
+		}
+		c.m.Funcs[b.bridge-len(m.Imports)].Body = body
 	}
 	c.std = false
 	code, locals, err := c.function(nil, stmts, true)

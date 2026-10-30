@@ -38,6 +38,9 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `to_lower`, `to_upper` and `str_trim` on `--target wasmgc` handle all of Unicode as the VM does (Go's case tables,
+  generated into `std/unicode.howl`, and `unicode.IsSpace`); `to_int` and `to_float` trim Unicode spaces; nil text is
+  `<nil>`, as on the VM.
 * `build --target wasmgc --host wasi` writes a WASI command module that runs in wasmtime
   (`wasmtime run -W gc=y,function-references=y app.wasm`); the differential tests, the corpus and the HowlScene HF gate run
   in wasmtime as well as Node when it is installed.

@@ -47,6 +47,9 @@ type rt struct {
 	// Bridges to the standard library's float module (std/float.howl),
 	// whose bodies Compile writes once the module's functions have indices.
 	fStdShortest, fStdParse int
+	// Bridges to std/unicode.howl, for text that is not all ASCII, and the
+	// length of a white-space character at a byte position.
+	fStdLower, fStdUpper, fSpaceAt int
 
 	strings map[string]int // literal -> data segment
 }
@@ -243,6 +246,9 @@ func (r *rt) emitAll() {
 		{&r.fChar, "char", r.funcType([]ValType{I32}, Ref(r.tStr))},
 		{&r.fStdShortest, "float_shortest", r.funcType([]ValType{F64}, EqRef)},
 		{&r.fStdParse, "float_parse", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
+		{&r.fStdLower, "unicode_lower", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
+		{&r.fStdUpper, "unicode_upper", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
+		{&r.fSpaceAt, "space_at", r.funcType([]ValType{Ref(r.tBytes), I32, I32}, I32)},
 	}
 	if r.host == HostWASI {
 		plan = append(plan,
@@ -752,26 +758,78 @@ var posInf = math.Inf(1)
 // parses trimmed decimal integers; to_float parses with Go's ParseFloat
 // syntax; anything else is "cannot convert <type> to int|float".
 func (r *rt) emitConversions() {
-	// trim_space: ASCII whitespace off both ends.
-	// locals: 0 s, 1 b, 2 from, 3 to, 4 out
-	isSpace := func(c *Code) *Code {
-		// stack: byte -> i32 (1 if space, tab, newline, vertical tab, form feed or return)
-		t := 5
-		c.LocalSet(t)
-		return c.LocalGet(t).I32Const(' ').I32Eq().LocalGet(t).I32Const(9).I32GeU().LocalGet(t).I32Const(13).I32LeU().I32And().I32Or()
-	}
+	// space_at(b, i, n): the length of the white-space character (Go's
+	// unicode.IsSpace) at byte i of b[:n], or 0. ASCII: tab to return and
+	// space; U+0085 and U+00A0; U+1680; U+2000-U+200A, U+2028, U+2029,
+	// U+202F; U+205F; U+3000.
+	// locals: 0 b, 1 i, 2 n, 3 b0, 4 b1, 5 b2
+	r.body(r.fSpaceAt, []ValType{I32, I32, I32}, func(c *Code) {
+		at := func(k int32, local int) {
+			c.LocalGet(1).I32Const(k).I32Add().LocalGet(2).I32LtU().If(Result(I32))
+			c.LocalGet(0).LocalGet(1).I32Const(k).I32Add().ArrayGetU(r.tBytes).Else().I32Const(-1).End().LocalSet(local)
+		}
+		at(0, 3)
+		at(1, 4)
+		at(2, 5)
+		is := func(local int, v int32) { c.LocalGet(local).I32Const(v).I32Eq() }
+		between := func(local int, lo, hi int32) {
+			c.LocalGet(local).I32Const(lo).I32GeU().LocalGet(local).I32Const(hi).I32LeU().I32And()
+		}
+		is(3, ' ')
+		between(3, 9, 13)
+		c.I32Or().If(NoResult).I32Const(1).Return().End()
+		is(3, 0xC2)
+		is(4, 0x85)
+		is(4, 0xA0)
+		c.I32Or().I32And().If(NoResult).I32Const(2).Return().End()
+		// Three-byte spaces.
+		is(3, 0xE1)
+		is(4, 0x9A)
+		c.I32And()
+		is(5, 0x80)
+		c.I32And()
+		is(3, 0xE2)
+		is(4, 0x80)
+		c.I32And()
+		between(5, 0x80, 0x8A)
+		is(5, 0xA8)
+		c.I32Or()
+		is(5, 0xA9)
+		c.I32Or()
+		is(5, 0xAF)
+		c.I32Or().I32And().I32Or()
+		is(3, 0xE2)
+		is(4, 0x81)
+		c.I32And()
+		is(5, 0x9F)
+		c.I32And().I32Or()
+		is(3, 0xE3)
+		is(4, 0x80)
+		c.I32And()
+		is(5, 0x80)
+		c.I32And().I32Or()
+		c.If(Result(I32)).I32Const(3).Else().I32Const(0).End()
+	})
+	// trim_space: white space (Go's strings.TrimSpace) off both ends.
+	// locals: 0 s, 1 b, 2 from, 3 to, 4 out, 5 k
 	r.body(r.fTrim, []ValType{RefNull(r.tBytes), I32, I32, RefNull(r.tBytes), I32}, func(c *Code) {
 		c.LocalGet(0).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalSet(3)
 		c.Block(NoResult).Loop(NoResult)
 		c.LocalGet(2).LocalGet(3).I32GeU().BrIf(1)
-		c.LocalGet(1).LocalGet(2).ArrayGetU(r.tBytes)
-		isSpace(c).I32Eqz().BrIf(1)
-		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0).End().End()
+		c.LocalGet(1).RefAsNonNull().LocalGet(2).LocalGet(3).Call(r.fSpaceAt).LocalTee(5).I32Eqz().BrIf(1)
+		c.LocalGet(2).LocalGet(5).I32Add().LocalSet(2).Br(0).End().End()
+		// From the end: a white-space character of 1, 2 or 3 bytes that ends
+		// exactly at to (a lead byte decides a character's length).
 		c.Block(NoResult).Loop(NoResult)
 		c.LocalGet(3).LocalGet(2).I32LeU().BrIf(1)
-		c.LocalGet(1).LocalGet(3).I32Const(1).I32Sub().ArrayGetU(r.tBytes)
-		isSpace(c).I32Eqz().BrIf(1)
-		c.LocalGet(3).I32Const(1).I32Sub().LocalSet(3).Br(0).End().End()
+		c.I32Const(0).LocalSet(5)
+		for _, k := range []int32{1, 2, 3} {
+			c.LocalGet(5).I32Eqz().LocalGet(3).LocalGet(2).I32Sub().I32Const(k).I32GeU().I32And().If(NoResult)
+			c.LocalGet(1).RefAsNonNull().LocalGet(3).I32Const(k).I32Sub().LocalGet(3).Call(r.fSpaceAt).I32Const(k).I32Eq().If(NoResult)
+			c.I32Const(k).LocalSet(5).End().End()
+		}
+		c.LocalGet(5).I32Eqz().BrIf(1)
+		c.LocalGet(3).LocalGet(5).I32Sub().LocalSet(3).Br(0).End().End()
 		r.copyOut(c, 1, 2, 4, func(c *Code) { c.LocalGet(3) })
 	})
 	// quote: Go %q for the characters messages meet: backslash, quote and
@@ -1058,12 +1116,20 @@ func (r *rt) emitStringOps() {
 		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
 		c.LocalGet(4)
 	})
-	// to_lower and to_upper of any value's text. ASCII letters only for
-	// now; the VM maps all of Unicode (recorded in the design plan).
-	// locals: 0 v, 1 in, 2 out, 3 i, 4 n, 5 b
-	caseMap := func(idx int, from, to byte) {
-		r.body(idx, []ValType{RefNull(r.tBytes), RefNull(r.tBytes), I32, I32, I32}, func(c *Code) {
-			c.LocalGet(0).Call(r.fText).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalTee(4).ArrayNewDefault(r.tBytes).LocalSet(2)
+	// to_lower and to_upper of any value's text (fmt.Sprint, so nil is
+	// "<nil>"), as Go's strings.ToLower and ToUpper: ASCII here, any other
+	// text through std/unicode.howl.
+	// locals: 0 v, 1 in, 2 out, 3 i, 4 n, 5 b, 6 text
+	caseMap := func(idx, std int, from, to byte) {
+		r.body(idx, []ValType{RefNull(r.tBytes), RefNull(r.tBytes), I32, I32, I32, RefNull(r.tStr)}, func(c *Code) {
+			c.LocalGet(0).Call(r.fElemText).LocalTee(6).StructGet(r.tStr, 0).LocalTee(1).ArrayLen().LocalSet(4)
+			c.Block(NoResult).Loop(NoResult)
+			c.LocalGet(3).LocalGet(4).I32GeU().BrIf(1)
+			c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).I32Const(0x80).I32GeU().If(NoResult)
+			c.LocalGet(6).RefAsNonNull().Call(std).Return().End()
+			c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+			c.I32Const(0).LocalSet(3)
+			c.LocalGet(4).ArrayNewDefault(r.tBytes).LocalSet(2)
 			c.Block(NoResult).Loop(NoResult)
 			c.LocalGet(3).LocalGet(4).I32GeU().BrIf(1)
 			c.LocalGet(1).LocalGet(3).ArrayGetU(r.tBytes).LocalSet(5)
@@ -1075,10 +1141,10 @@ func (r *rt) emitStringOps() {
 			c.LocalGet(2).RefAsNonNull().StructNew(r.tStr)
 		})
 	}
-	caseMap(r.fLower, 'A', 'a')
-	caseMap(r.fUpper, 'a', 'A')
+	caseMap(r.fLower, r.fStdLower, 'A', 'a')
+	caseMap(r.fUpper, r.fStdUpper, 'a', 'A')
 	r.body(r.fStrTrim, nil, func(c *Code) {
-		c.LocalGet(0).Call(r.fText).Call(r.fTrim)
+		c.LocalGet(0).Call(r.fElemText).Call(r.fTrim)
 	})
 	// html_escape and attr_escape: Go's html.EscapeString.
 	// locals: 0 v, 1 in, 2 n, 3 i, 4 b, 5 buf, 6 pos, 7 out

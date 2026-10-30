@@ -806,6 +806,29 @@ func TestDiffStrings(t *testing.T) {
 	}
 }
 
+// to_lower, to_upper and str_trim follow Go's strings.ToLower, ToUpper
+// and TrimSpace beyond ASCII (std/unicode.howl, generated from Go's case
+// tables). The sweeps cover whole blocks that have been fully assigned
+// for a long time, so a newer Unicode version maps them the same.
+func TestDiffUnicodeText(t *testing.T) {
+	for name, body := range map[string]string{
+		"sweep latin-1":                   "(let (s \"ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ\") (print (to_lower s) (to_upper s)))",
+		"sweep latin extended-a":          "(let (s \"ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĲĳĴĵĶķĸĹĺĻļĽľĿŀŁłŃńŅņŇňŉŊŋŌōŎŏŐőŒœŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽžſ\") (print (to_lower s) (to_upper s)))",
+		"sweep latin extended additional": "(let (s \"ḀḁḂḃḄḅḆḇḈḉḊḋḌḍḎḏḐḑḒḓḔḕḖḗḘḙḚḛḜḝḞḟḠḡḢḣḤḥḦḧḨḩḪḫḬḭḮḯḰḱḲḳḴḵḶḷḸḹḺḻḼḽḾḿṀṁṂṃṄṅṆṇṈṉṊṋṌṍṎṏṐṑṒṓṔṕṖṗṘṙṚṛṜṝṞṟṠṡṢṣṤṥṦṧṨṩṪṫṬṭṮṯṰṱṲṳṴṵṶṷṸṹṺṻṼṽṾṿẀẁẂẃẄẅẆẇẈẉẊẋẌẍẎẏẐẑẒẓẔẕẖẗẘẙẚẛẜẝẞẟẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹỺỻỼỽỾỿ\") (print (to_lower s) (to_upper s)))",
+		"sweep greek":                     "(let (s \"ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩΪΫάέήίΰαβγδεζηθικλμνξοπρςστυφχψω\") (print (to_lower s) (to_upper s)))",
+		"sweep cyrillic":                  "(let (s \"ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяѐёђѓєѕіїјљњћќѝўџѠѡѢѣѤѥѦѧѨѩѪѫѬѭѮѯѰѱѲѳѴѵѶѷѸѹѺѻѼѽѾѿҀҁ҂҃҄҅҆҇҈҉ҊҋҌҍҎҏҐґҒғҔҕҖҗҘҙҚқҜҝҞҟҠҡҢңҤҥҦҧҨҩҪҫҬҭҮүҰұҲҳҴҵҶҷҸҹҺһҼҽҾҿӀӁӂӃӄӅӆӇӈӉӊӋӌӍӎӏӐӑӒӓӔӕӖӗӘәӚӛӜӝӞӟӠӡӢӣӤӥӦӧӨөӪӫӬӭӮӯӰӱӲӳӴӵӶӷӸӹӺӻӼӽӾӿ\") (print (to_lower s) (to_upper s)))",
+		"sweep armenian":                  "(let (s \"ԱԲԳԴԵԶԷԸԹԺԻԼԽԾԿՀՁՂՃՄՅՆՇՈՉՊՋՌՍՎՏՐՑՒՓՔՕՖաբգդեզէըթժիլխծկհձղճմյնշոչպջռսվտրցւփքօֆ\") (print (to_lower s) (to_upper s)))",
+		"sweep deseret":                   "(let (s \"𐐀𐐁𐐂𐐃𐐄𐐅𐐆𐐇𐐈𐐉𐐊𐐋𐐌𐐍𐐎𐐏𐐐𐐑𐐒𐐓𐐔𐐕𐐖𐐗𐐘𐐙𐐚𐐛𐐜𐐝𐐞𐐟𐐠𐐡𐐢𐐣𐐤𐐥𐐦𐐧𐐨𐐩𐐪𐐫𐐬𐐭𐐮𐐯𐐰𐐱𐐲𐐳𐐴𐐵𐐶𐐷𐐸𐐹𐐺𐐻𐐼𐐽𐐾𐐿𐑀𐑁𐑂𐑃𐑄𐑅𐑆𐑇𐑈𐑉𐑊𐑋𐑌𐑍𐑎𐑏\") (print (to_lower s) (to_upper s)))",
+		"sweep fullwidth":                 "(let (s \"ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ［＼］＾＿｀ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ\") (print (to_lower s) (to_upper s)))",
+		"unicode case":                    "(print (to_lower \"ÀÉÎÕÜ ΑΒΓ ДЖЯ İ ẞ Ǆǅǆ ⅠⅫ Ａ ΣΑΣ\") (to_upper \"àéîõü αβγ джя ı ß ǆ ⅰ ａ ſ ﬀ\") (str_len (to_lower \"İ\")) (str_len (to_upper \"ſ\")))",
+		"nil text":                        "(let (d (dict (\"a\" 1) (\"n\" (dict)))) (print (+ \"[\" (+ (to_lower (map_get d \"zz\")) \"]\")) (+ \"[\" (+ (to_upper (map_get d \"zz\")) \"]\")) (+ \"[\" (+ (str_trim (map_get d \"zz\")) \"]\"))))",
+		"unicode trim":                    "(print (+ \"[\" (+ (str_trim \"   x y　 \") \"]\")) (+ \"[\" (+ (str_trim \"​ x ​\") \"]\")) (+ \"[\" (+ (str_trim \"      \") \"]\")) (+ \"[\" (+ (str_trim \"é \") \"]\")))",
+		"conversions trim unicode":        "(print (to_int \" 42　\") (to_float \"  2.5 \"))",
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
 func TestDiffStderrAndExit(t *testing.T) {
 	for name, body := range map[string]string{
 		"exit status":     `(do (print "a") (exit 3) (print "never"))`,
