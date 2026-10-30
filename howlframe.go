@@ -1312,14 +1312,14 @@ var targetStatementForms = map[string]bool{
 	"http_server": true, "test": true, "spawn": true, "task": true,
 }
 
-// rejectUnsupportedTargetValueForms fails closed when a let, do, if, for or
-// while is used as a value (an operand, a let binding or a call argument) on
+// rejectUnsupportedTargetValueForms fails closed when a let, do, if, try_let,
+// for or while is used as a value (an operand, a let binding or a call argument) on
 // --target=go|js. Those backends emit these forms as statements, so the
 // output would not compile; desugared sugar (all/any, ver_gt/ver_ge,
 // starts_with, list_contains, map_has, not, list_get/parse_json operand
 // binding, ...) reaches the backend in exactly this shape (#141).
 //
-// On --target=js a let, do or if in value position is accepted instead and
+// On --target=js a let, do, if or try_let in value position is accepted instead and
 // returned, so the build can wrap it as a value block once checking is done
 // (javascript.WrapValueForms). A return inside such a form is refused: it
 // would return from the generated arrow, not from the enclosing function.
@@ -1335,7 +1335,7 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) []*ast.Nod
 			return ""
 		}
 		switch h := n.Children[0].Value; h {
-		case "let", "do", "if", "for", "while":
+		case "let", "do", "if", "try_let", "for", "while":
 			return h
 		}
 		return ""
@@ -1346,7 +1346,7 @@ func rejectUnsupportedTargetValueForms(root *ast.Node, target string) []*ast.Nod
 			return
 		}
 		if value {
-			if h := isForm(n); h != "" && js && (h == "let" || h == "do" || h == "if") {
+			if h := isForm(n); h != "" && js && (h == "let" || h == "do" || h == "if" || h == "try_let") {
 				rejectReturnInsideValueForm(n, h)
 				valueForms = append(valueForms, n)
 			} else if h != "" {

@@ -6,11 +6,11 @@ import (
 	"github.com/howlcipher/howlframe/internal/ast"
 )
 
-// valueBlockHead marks a let, do or if that the build found in value
+// valueBlockHead marks a let, do, if or try_let that the build found in value
 // position. It is internal: WrapValueForms inserts it after checking.
 const valueBlockHead = "__js_value"
 
-// WrapValueForms marks each value-position let, do or if so the backend emits
+// WrapValueForms marks each value-position let, do, if or try_let so the backend emits
 // it as a value block. The nodes come from the build's value-position walk; an
 // outer form is wrapped in place and keeps its children, so nested forms in the
 // list are still reached.
@@ -33,8 +33,9 @@ func jsValueBlock(node *ast.Node, reqVar string, depth int) string {
 }
 
 // jsReturning rewrites a form so its value is returned: the body of a let,
-// the last form of a do, and both branches of an if. A do with no forms and an
-// if with no else branch yield no value, as on the other targets.
+// the last form of a do, both branches of an if, and the handler and body of
+// a try_let. A do with no forms and an if with no else branch yield no value,
+// as on the other targets.
 func jsReturning(node *ast.Node) *ast.Node {
 	if node.Type == "List" && len(node.Children) > 0 && node.Children[0].Type == "SYMBOL" {
 		switch node.Children[0].Value {
@@ -55,6 +56,19 @@ func jsReturning(node *ast.Node) *ast.Node {
 			for i := 2; i < len(out.Children) && i <= 3; i++ {
 				out.Children[i] = jsReturning(out.Children[i])
 			}
+			return &out
+		case "try_let":
+			// (try_let (v expr) (catch e handler) body)
+			if len(node.Children) != 4 || len(node.Children[2].Children) != 3 {
+				return node
+			}
+			out := *node
+			out.Children = append([]*ast.Node(nil), node.Children...)
+			catch := *node.Children[2]
+			catch.Children = append([]*ast.Node(nil), catch.Children...)
+			catch.Children[2] = jsReturning(catch.Children[2])
+			out.Children[2] = &catch
+			out.Children[3] = jsReturning(out.Children[3])
 			return &out
 		}
 	}

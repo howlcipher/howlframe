@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Correctness
+* A `try_let` used as a value (`(print (try_let (v ...) (catch e ...) v))`) runs on `--target js`; the generated file did
+  not parse (bugs.md #65). `--target go` refuses it instead of emitting code that does not compile.
 * `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so
   the checker rejected every float list with `cannot assign float64 to ... of type int` (bugs.md #60).
 * The bytecode VM scopes `let`, `for` and `try_let` bindings like the interpreter and the other backends: an inner

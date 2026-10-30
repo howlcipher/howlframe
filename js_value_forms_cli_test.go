@@ -36,6 +36,7 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		{"reduce", `(let (xs (list 1 2 3 4)) (print (reduce acc 0 x xs (+ acc x))))`},
 		{"sum", `(print (sum (list 1 2 3)))`},
 		{"sum of floats", `(print (sum (list 1.5 2.25)) (sum (list)))`},
+		{"try_let value", `(do (print (try_let (v (to_int "x")) (catch e "caught") (to_string v))) (print (try_let (v (to_int "7")) (catch e 0) (+ v 1))) (let (s (try_let (v (to_int "2")) (catch e 0) (* v 10))) (print s)))`},
 		{"reverse", `(print (str_join (reverse (list "a" "b" "c")) ""))`},
 		{"sort", `(do (print (str_join (sort (list "b" "c" "a")) "")) (print (encode_json (sort (list 3 1 2)))))`},
 		{"count_by", `(let (xs (list "a" "b" "a")) (print (encode_json (count_by x xs x))))`},
@@ -90,6 +91,18 @@ func TestJSValueFormRejectsReturnInside(t *testing.T) {
 	out, err := exec.Command(bin, "build", src, "--target", "js", "-o", filepath.Join(dir, "out")).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "return inside") {
 		t.Fatalf("return inside a value form must be rejected, got %v %s", err, out)
+	}
+}
+
+// A try_let used as a value has no value form on the Go target, which
+// emits it as a statement; the build refuses it (bugs.md #65).
+func TestGoTryLetAsValueRejected(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	src := mustWriteFile(t, dir, "t.howl", `(cli_app (print (try_let (v (to_int "1")) (catch e 0) v)))`)
+	out, err := exec.Command(bin, "build", src, "--target", "go", "-o", filepath.Join(dir, "out")).CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "UNSUPPORTED_ON_TARGET: try_let used as a value") {
+		t.Fatalf("try_let as a value must be rejected on Go, got %v %s", err, out)
 	}
 }
 
