@@ -242,8 +242,8 @@ as the work it describes: tick tasks, move the status line, record findings.
       quoting of the offending byte, `unexpected EOF`, `EOF`, the
       second-value messages, and float range errors reported after them
       (`TestDiffParseJSON`). A byte list as the text fails with
-      `WASM_UNSUPPORTED`. The messages are those of Go 1.25, which releases
-      are built with; newer Go words some differently (bugs.md #63).
+      `WASM_UNSUPPORTED`. The messages are Go 1.25's, which the VM now
+      gives whatever the toolchain (bugs.md #63, fixed).
 - [x] `regex_match` in `std/regex.howl`: Go's `regexp.MatchString` for a
       documented RE2 subset (literals, `.`, classes with ranges and Perl
       escapes, `^`, `$`, groups including named and non-capturing ones,
