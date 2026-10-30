@@ -144,22 +144,57 @@ func Compile(root *ast.Node) ([]byte, error) { return CompileFor(root, HostNode)
 // its exported _start runs the program, writes an uncaught error as the
 // VM's JSON report on standard error and exits 1.
 func CompileFor(root *ast.Node, host Host) ([]byte, error) {
-	if root == nil || root.Type != "List" || len(root.Children) == 0 || root.Children[0].Value != "cli_app" {
-		return nil, fmt.Errorf("WASM_UNSUPPORTED: the WebAssembly backend compiles cli_app programs so far")
+	if rootHead(root) != "cli_app" {
+		return nil, fmt.Errorf("WASM_UNSUPPORTED: the WebAssembly backend compiles cli_app programs so far (the test blocks of a web_app build with --tests)")
 	}
+	return compile(root, host, false)
+}
+
+// CompileTests compiles a program's test blocks, whatever its root, into a
+// test module: the program's functions, one exported function per test
+// (test_0, test_1, ... in source order, a used module's tests where its use
+// is), and a main that runs them all and reports like node:test's spec
+// reporter. The program's top-level statements are not part of it, as on
+// the JavaScript backend's app.test.js. A failing assert, an exit or an
+// uncaught error fails its test only; the run exits 1 when any test failed.
+func CompileTests(root *ast.Node, host Host) ([]byte, error) {
+	if h := rootHead(root); h != "cli_app" && h != "web_app" {
+		return nil, fmt.Errorf("WASM_UNSUPPORTED: test blocks compile from a cli_app or web_app, not %q", h)
+	}
+	return compile(root, host, true)
+}
+
+func rootHead(root *ast.Node) string {
+	if root == nil || root.Type != "List" || len(root.Children) == 0 {
+		return ""
+	}
+	return root.Children[0].Value
+}
+
+func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 	m := NewModule()
-	c := &compiler{m: m, rt: newRuntime(m, host), funcs: map[string]int{}, arity: map[string]int{}}
+	c := &compiler{m: m, rt: newRuntime(m, host), funcs: map[string]int{}, arity: map[string]int{}, tests: tests}
+	if tests {
+		c.gExiting = m.AddGlobal(Global{Type: I32, Mutable: true, Init: []byte{0x41, 0x00}})
+	}
 	body := root.Children[1:]
 	// Declare every defun first so calls can come before definitions.
-	var defuns []*ast.Node
-	var stmts []*ast.Node
+	var defuns, stmts, testBlocks []*ast.Node
 	for _, n := range body {
-		if head(n) == "defun" {
+		switch {
+		case head(n) == "defun":
 			if strings.HasPrefix(n.Children[1].Value, stdPrefix) {
 				return nil, unsupported(n, "a function named "+n.Children[1].Value+" (the prefix is reserved)")
 			}
 			defuns = append(defuns, n)
-		} else {
+		case tests && head(n) == "test":
+			if len(n.Children) < 3 || n.Children[1].Type != "STRING" {
+				return nil, unsupported(n, "test (expects (test \"name\" body...))")
+			}
+			testBlocks = append(testBlocks, n)
+		case tests:
+			// Top-level statements are the application's, not the tests'.
+		default:
 			stmts = append(stmts, n)
 		}
 	}
@@ -239,9 +274,18 @@ func CompileFor(root *ast.Node, host Host) ([]byte, error) {
 		c.m.Funcs[b.bridge-len(m.Imports)].Body = body
 	}
 	c.std = false
-	code, locals, err := c.function(nil, stmts, true)
-	if err != nil {
-		return nil, err
+	var code *Code
+	var locals []ValType
+	if tests {
+		var err error
+		if code, locals, err = c.testRunner(testBlocks); err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		if code, locals, err = c.function(nil, stmts, true); err != nil {
+			return nil, err
+		}
 	}
 	main := m.AddFunc(Func{Name: "main", Type: c.rt.FuncType(0), Locals: locals, Body: code})
 	m.Exports = append(m.Exports, Export{"main", main})
@@ -265,6 +309,69 @@ type compiler struct {
 	// std is set while compiling a standard-library function, the only
 	// code that may use the byte intrinsics.
 	std bool
+	// tests is set when compiling a test module. There exit ends the
+	// running test, not the process: it raises "HowlFrame exit N at
+	// file:line" (the JavaScript backend's text) and sets gExiting, which
+	// no try_let catches.
+	tests    bool
+	gExiting int
+}
+
+// testRunner compiles each test block into its own exported function and
+// returns main's body, which runs them in order. A test passes when it
+// returns with no pending error. The report follows node:test's spec
+// reporter without durations: "✔ name" or "✖ name" and the error, then
+// the counts. main exits 1 when a test failed.
+func (c *compiler) testRunner(blocks []*ast.Node) (*Code, []ValType, error) {
+	r := c.rt
+	var tests []int
+	for i, b := range blocks {
+		code, locals, err := c.function(nil, b.Children[2:], true)
+		if err != nil {
+			return nil, nil, err
+		}
+		name := fmt.Sprintf("test_%d", i)
+		idx := c.m.AddFunc(Func{Name: name, Type: r.FuncType(0), Locals: locals, Body: code})
+		c.m.Exports = append(c.m.Exports, Export{name, idx})
+		tests = append(tests, idx)
+	}
+	// locals: 0 passed, 1 failed, 2 the error
+	run := NewCode()
+	for i, b := range blocks {
+		name := b.Children[1].Value
+		run.Call(tests[i]).Drop()
+		run.GlobalGet(r.gErr).RefIsNull().If(NoResult)
+		run.LocalGet(0).I32Const(1).I32Add().LocalSet(0)
+		r.StrLiteral(run, "✔ "+name).Call(r.iPrint)
+		run.Else()
+		run.LocalGet(1).I32Const(1).I32Add().LocalSet(1)
+		run.GlobalGet(r.gErr).LocalSet(2)
+		run.RefNull(HeapNone).GlobalSet(r.gErr)
+		run.I32Const(0).GlobalSet(c.gExiting)
+		r.StrLiteral(run, "✖ "+name).Call(r.iPrint)
+		r.StrLiteral(run, "  Error: ")
+		run.LocalGet(2).RefCast(r.tStr).Call(r.fConcat).Call(r.iPrint)
+		run.End()
+	}
+	count := func(label string, local int) {
+		r.StrLiteral(run, "ℹ "+label+" ")
+		if local < 0 {
+			run.I64Const(0)
+		} else {
+			run.LocalGet(local).I64ExtendI32U()
+		}
+		run.Call(r.fItoa).Call(r.fConcat).Call(r.iPrint)
+	}
+	r.StrLiteral(run, fmt.Sprintf("ℹ tests %d", len(blocks))).Call(r.iPrint)
+	count("suites", -1)
+	count("pass", 0)
+	count("fail", 1)
+	count("cancelled", -1)
+	count("skipped", -1)
+	count("todo", -1)
+	run.LocalGet(1).If(NoResult).I32Const(1).Call(r.iExit).End()
+	run.RefNull(HeapNone)
+	return run, []ValType{I32, I32, EqRef}, nil
 }
 
 // fn is the state of one function being compiled.
@@ -354,8 +461,15 @@ func unsupported(n *ast.Node, what string) error {
 // check propagates a pending error: to the innermost try_let handler, or
 // out of the function.
 func (f *fn) check() {
+	f.code.GlobalGet(f.c.rt.gErr).RefIsNull().I32Eqz()
+	f.propagateIf()
+}
+
+// propagateIf passes the pending error on, to the innermost try_let
+// handler or out of the function, when the i32 on the stack is set.
+func (f *fn) propagateIf() {
 	c := f.code
-	c.GlobalGet(f.c.rt.gErr).RefIsNull().I32Eqz().If(NoResult)
+	c.If(NoResult)
 	f.labels++
 	if len(f.handlers) > 0 {
 		c.Br(f.labels - f.handlers[len(f.handlers)-1] - 1)
@@ -505,6 +619,19 @@ func (f *fn) stmt(n *ast.Node) error {
 		}
 		c.Call(f.c.rt.fToInt)
 		f.check()
+		if f.c.tests {
+			// In a test, exit fails the test: an error no try_let catches.
+			r := f.c.rt
+			code := f.local(EqRef)
+			c.LocalSet(code)
+			r.StrLiteral(c, "HowlFrame exit ")
+			c.LocalGet(code).Call(r.fText).Call(r.fConcat)
+			r.StrLiteral(c, fmt.Sprintf(" at %s:%d", n.Filename, n.Line)).Call(r.fConcat)
+			c.GlobalSet(r.gErr)
+			c.I32Const(1).GlobalSet(f.c.gExiting)
+			f.check()
+			return nil
+		}
 		c.RefCast(f.c.rt.tInt).StructGet(f.c.rt.tInt, 0).I32WrapI64().Call(f.c.rt.iExit)
 		return nil
 	case "type_hint", "type_hints", "type_param":
@@ -1018,7 +1145,12 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	c.Br(f.labels - done - 1)
 	f.labels--
 	c.End()
-	// The handler: take the pending error.
+	// The handler: take the pending error, unless it is a test's exit,
+	// which passes every handler.
+	if f.c.tests {
+		c.GlobalGet(f.c.gExiting)
+		f.propagateIf()
+	}
 	e := f.local(EqRef)
 	c.GlobalGet(r.gErr).RefCast(r.tStr).Call(r.fCatchText).LocalSet(e)
 	c.RefNull(HeapNone).GlobalSet(r.gErr)

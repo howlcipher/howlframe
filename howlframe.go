@@ -764,6 +764,7 @@ func buildSource() {
 	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
 	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm, wasmgc (in development)")
 	wasmHost := buildFlags.String("host", "node", "with --target wasmgc: node (app.wasm and an app.mjs loader) or wasi (a WASI command module, app.wasm only)")
+	wasmTests := buildFlags.Bool("tests", false, "with --target wasmgc: compile the program's test blocks, whatever its root, into app.test.wasm (and an app.test.mjs runner for --host node) instead of the program")
 	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
 
 	buildFlags.Usage = func() {
@@ -855,6 +856,10 @@ func buildSource() {
 	hfirModule := filepath.Base(inputFile)
 
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
+	if *wasmTests && targetVal != "wasmgc" {
+		fmt.Fprintln(os.Stderr, "--tests requires --target wasmgc")
+		os.Exit(1)
+	}
 	if *jsModule && targetVal != "js" && targetVal != "javascript" {
 		fmt.Fprintln(os.Stderr, "--module requires --target js")
 		os.Exit(1)
@@ -968,7 +973,11 @@ func buildSource() {
 			fmt.Fprintf(os.Stderr, "Unknown --host %q: valid hosts are node and wasi\n", *wasmHost)
 			os.Exit(1)
 		}
-		wasmBytes, err := wasmgc.CompileFor(root, host)
+		compileWasm, wasmName, loaderName, loader := wasmgc.CompileFor, "app.wasm", "app.mjs", wasmgc.Loader
+		if *wasmTests {
+			compileWasm, wasmName, loaderName, loader = wasmgc.CompileTests, "app.test.wasm", "app.test.mjs", wasmgc.TestLoader
+		}
+		wasmBytes, err := compileWasm(root, host)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -980,12 +989,12 @@ func buildSource() {
 		files := []struct {
 			name string
 			body []byte
-		}{{"app.wasm", wasmBytes}}
+		}{{wasmName, wasmBytes}}
 		if host == wasmgc.HostNode {
 			files = append(files, struct {
 				name string
 				body []byte
-			}{"app.mjs", []byte(wasmgc.Loader())})
+			}{loaderName, []byte(loader())})
 		}
 		for _, f := range files {
 			path := filepath.Join(outputDir, f.name)
@@ -994,7 +1003,7 @@ func buildSource() {
 				os.Exit(1)
 			}
 		}
-		fmt.Printf("Built %s\n", filepath.Join(outputDir, "app.wasm"))
+		fmt.Printf("Built %s\n", filepath.Join(outputDir, wasmName))
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm, wasmgc\n", *target)
