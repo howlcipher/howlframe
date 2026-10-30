@@ -5,6 +5,8 @@
 ### Correctness
 * `encode_json` on `--target js` writes what the VM writes: keys sorted (it kept insertion order), `<`, `>`, `&` and
   U+2028/U+2029 escaped, `-0` kept. A project file written in the browser is now byte-identical to the VM's (bugs.md #64).
+* A `try_let` used as a value (`(print (try_let (v ...) (catch e ...) v))`) runs on `--target js`; the generated file did
+  not parse (bugs.md #65). `--target go` refuses it instead of emitting code that does not compile.
 * `(sum lst)` of a list of floats type-checks and gives a float. Its desugared accumulator started at the integer 0, so
   the checker rejected every float list with `cannot assign float64 to ... of type int` (bugs.md #60).
 * The bytecode VM scopes `let`, `for` and `try_let` bindings like the interpreter and the other backends: an inner
