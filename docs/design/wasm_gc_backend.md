@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile; next is `base64_text` (backups), then `sniff_media_type`. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). Still open for the M1 gate: the corpus under wasmtime (float digits and parsing in HowlFrame, then a WASI host) and the `tools/difftest` target. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -235,9 +235,14 @@ as the work it describes: tick tasks, move the status line, record findings.
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
       `utf8_valid`, `bytes_to_string`, base64.
-- [ ] Exit gate: HowlScene HF's registry, schema and renderer compile;
-      rendering a fixture project gives byte-identical HTML on the VM and
-      on WebAssembly.
+- [x] Exit gate, rendering: HowlScene HF's registry, schema and renderer
+      compile; rendering its fixture projects gives byte-identical output
+      on the VM and on WebAssembly (21,872 bytes for the two neutral
+      fixtures, rendered two ways and re-encoded). `TestHowlSceneGate` runs
+      it when `HOWLSCENE_HF` names a checkout; evidence in
+      `docs/journals/2026-10-29_howlscene_hf_wasmgc_m1_gate.md`.
+- [ ] Exit gate, engines: the corpus also under wasmtime, through a WASI
+      host, once float digits and parsing are HowlFrame.
 
 ### M2 tasks: tests
 
@@ -340,8 +345,14 @@ The order of M1 and M3 work follows what the application needs.
   `use` path is joined to the using file's directory, so an absolute path
   loses its leading slash and fails as a missing file.
 - Building each HowlScene HF core module as a `cli_app` (2026-10-29):
-  `registry.howl` and `export.howl` compile; `schema.howl` and
-  `backup.howl` stop at `encode_json`, `render.howl` at `regex_match`.
+  `registry.howl` and `export.howl` compiled first; `schema.howl` and
+  `backup.howl` stopped at `encode_json`, `render.howl` at `regex_match`.
+  With the standard library all but `backup.howl` compile; it needs
+  `base64_text`, which with `sniff_media_type` is a browser host operation
+  of the JavaScript backend with no VM reference, so both move to M3.
+- The renderer needs a few million VM instructions for one fixture
+  project, far past the VM's default 100,000; the gate runs the VM with
+  `run --max-instructions 500000000`.
 - Lists are values, so an algorithm that updates a table in place (the
   regular-expression simulation's thread lists and marks) cannot be
   written efficiently with HowlFrame's collections: `append` to a list
