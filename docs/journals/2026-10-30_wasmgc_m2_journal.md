@@ -22,8 +22,9 @@ last. Times are America/Detroit.
 | bugs.md #66: JS arithmetic and ordering on run-time types | `fix/js-arith-operand-types` | #274 | Merged |
 | bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
 | bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Merged (`2bcdde48`) |
-| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Open; trailing-data fix after a CI failure |
+| ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Merged (`d38ce70a`) |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | none yet | Committed locally (WIP) |
+| Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Open |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | none yet | Gate test written; backup needs ZIP |
 
 ## Entries
@@ -78,3 +79,19 @@ Findings:
   result and compares with the JavaScript backend only where its Node rejects too. Shown to fail without the fix.
 - Lesson for the harness: a JavaScript reference can depend on the Node version. A fixture that passes locally can
   fail on CI's newer Node; check the runner's Node (`gh api repos/actions/runner-images/...`) when they disagree.
+
+### 2026-10-30 18:40: regression gate
+
+- Asked to make sure each change is regression tested. Gaps found: CI had no wasmtime or wasm-tools, so every
+  wasmtime leg and every module validation skipped there; the HowlScene HF gates skip without `HOWLSCENE_HF`
+  (private repository, not in CI); and a skipped leg reads as a pass.
+- CI's `build` job now installs wasmtime 47.0.3 and wasm-tools 1.254.0, pinned by SHA-256.
+- `scripts/wasmgc_gate.sh` is the local gate before every merge: `go test ./...` on Go 1.26 and 1.27.2 and the
+  HowlScene HF gates. It refuses to run without node, wasmtime, wasm-tools and the checkout, and fails when a
+  WebAssembly test skips for one of them (both checked by removing wasmtime from PATH and unsetting the variable).
+  Its summary goes in each PR's Test Impact Assessment. Plan: "Verification".
+- First full run (this branch, `74b4c258`): passed; 4204 tests on Go 1.26, 4203 on Go 1.27.2, both HowlScene
+  gates. Finding: on Go 1.27.2 `TestUnicodeTableIsCurrent` skips because Go 1.27 moved to Unicode 17.0.0 and
+  `std/unicode.howl` was generated from Go 1.26's tables, so WebAssembly case mapping can differ from a VM built
+  with newer Go for characters added since. Not a failure today (CI builds releases with Go 1.25); regenerate the
+  tables when the minimum Go moves.
