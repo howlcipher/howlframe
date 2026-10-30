@@ -3,7 +3,6 @@ package wasmgc
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -101,11 +100,8 @@ func firstDifference(a, b string) int {
 // base64 with base64_text and sniff_media_type, browser host operations
 // with no VM form) as WebAssembly and on the JavaScript backend, its
 // reference: backup files for the portfolio fixture, then reading a good
-// backup and broken ones back. Like TestHowlSceneGate it needs HOWLSCENE_HF.
-//
-// The JavaScript backend's encode_json keeps insertion order and does not
-// escape < > & (bugs.md #64), so each printed line is compared as decoded
-// JSON, with JSON nested in strings decoded too.
+// backup and broken ones back, byte for byte. Like TestHowlSceneGate it
+// needs HOWLSCENE_HF.
 func TestHowlSceneBackupGate(t *testing.T) {
 	hs := os.Getenv("HOWLSCENE_HF")
 	if hs == "" {
@@ -163,49 +159,10 @@ func TestHowlSceneBackupGate(t *testing.T) {
 	}
 	for engine, runOn := range engines {
 		got := runOn(t, driver)
-		if got.failed || jsonLines(t, got.stdout) != jsonLines(t, want.stdout) {
+		if got.failed || got.stdout != want.stdout {
 			t.Fatalf("%s differs from the JavaScript backend (failed=%v %s); first difference at byte %d\njs   %.300q\nwasm %.300q",
 				engine, got.failed, got.errMsg, firstDifference(want.stdout, got.stdout), want.stdout, got.stdout)
 		}
-		t.Logf("%s: %d lines of JSON equal to the JavaScript backend's", engine, strings.Count(want.stdout, "\n"))
+		t.Logf("%s: %d bytes identical to the JavaScript backend's", engine, len(want.stdout))
 	}
-}
-
-// jsonLines decodes each line of out as JSON (and JSON inside its strings)
-// and encodes it again with sorted keys, so outputs that differ only in key
-// order or escaping compare equal.
-func jsonLines(t *testing.T, out string) string {
-	t.Helper()
-	var norm func(v any) any
-	norm = func(v any) any {
-		switch x := v.(type) {
-		case map[string]any:
-			for k, e := range x {
-				x[k] = norm(e)
-			}
-		case []any:
-			for i, e := range x {
-				x[i] = norm(e)
-			}
-		case string:
-			var inner any
-			if strings.HasPrefix(x, "{") || strings.HasPrefix(x, "[") {
-				if json.Unmarshal([]byte(x), &inner) == nil {
-					return norm(inner)
-				}
-			}
-		}
-		return v
-	}
-	var b strings.Builder
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		var v any
-		if err := json.Unmarshal([]byte(line), &v); err != nil {
-			t.Fatalf("not JSON: %q", line)
-		}
-		enc, _ := json.Marshal(norm(v))
-		b.Write(enc)
-		b.WriteByte('\n')
-	}
-	return b.String()
 }
