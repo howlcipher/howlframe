@@ -20,7 +20,7 @@ last. Times are America/Detroit.
 | --- | --- | --- | --- |
 | 0. Harness runs the VM in a temp dir | `chore/harness-vm-tempdir` | #273 | Merged |
 | bugs.md #66: JS arithmetic and ordering on run-time types | `fix/js-arith-operand-types` | #274 | Merged |
-| bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Open, CI green before merging main |
+| bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
 | bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | none yet | Committed locally (`e02c84d9`) |
 | ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | none yet | Committed locally (`efe12fa0`) |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | none yet | Committed locally (WIP) |
@@ -53,3 +53,8 @@ Findings:
   The stale worktree entries were removed.
 - The merge of main into `fix/go-test-blocks` (`5497c38e`) was local and unverified; the full gate is rerunning on
   it before the push.
+
+### 2026-10-30 17:20: #275 merged
+
+- The merged tree passed `go test ./...` under Go 1.26 and 1.27.2 locally and all four CI checks; merged as
+  `7e14bf92`. Next: #67 (only bugs.md conflicts with main), then ZIP, then the test-blocks PR.
