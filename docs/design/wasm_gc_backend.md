@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestone M1 done (2026-10-30); M2 in progress.
+Status: milestones M1 and M2 done (2026-10-30); M3 next.
 
 ## Goal
 
@@ -115,7 +115,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | Milestone | State | Notes |
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
-| M2 tests | In progress | |
+| M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
@@ -318,10 +318,17 @@ as the work it describes: tick tasks, move the status line, record findings.
       top-level statements, a `cli_app` root, tests in used modules, equal
       names, a Unicode name and type errors on values of run-time type. `TestTestsFailClosed` covers the build
       errors.
-- [ ] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly: render
-      (5) and schema (8) do; backup (6) needs `zip_build` and `zip_read`.
-- [ ] Exit gate: an opt-in gate test runs HowlScene HF's core tests in
-      Node and wasmtime against `scripts/test_core.sh`'s results.
+- [x] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly: backup
+      (6), render (5) and schema (8), with ZIP in `std/zip.howl` (#277).
+- [x] Exit gate: `TestHowlSceneTestsGate` builds each core test file with
+      `--tests` and runs it in Node and wasmtime; each report (results in
+      order, errors, counts, exit status) must equal the JavaScript
+      backend's `app.test.js` under `node --test`, which is what
+      `scripts/test_core.sh` runs, and that run must pass. Evidence
+      (2026-10-30, HowlScene HF `247365e`): 19 of 19 pass in both engines;
+      `scripts/test_core.sh` with its pinned compiler (`8e16f799`) also
+      passes 19 of 19. Runs with `HOWLSCENE_HF` set (and in
+      `scripts/wasmgc_gate.sh`).
 
 ### Test blocks
 
