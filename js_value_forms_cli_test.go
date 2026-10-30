@@ -36,6 +36,9 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		{"reduce", `(let (xs (list 1 2 3 4)) (print (reduce acc 0 x xs (+ acc x))))`},
 		{"sum", `(print (sum (list 1 2 3)))`},
 		{"sum of floats", `(print (sum (list 1.5 2.25)) (sum (list)))`},
+		// Lists and dicts are never equal on the VM, not even to themselves
+		// (bugs.md #59); nil equals nil; numbers compare by value.
+		{"equality", `(let (l (list 1) d (dict) m (dict ("a" 1) ("n" (dict)))) (do (print (= l l) (= d d) (= (list 1) (list 1)) (!= l l)) (print (= 1 1.0) (= "a" "a") (= (map_get m "zz") (map_get m "yy")) (= true false)) (print (list_contains (list l) l) (map_has m "a"))))`},
 		{"try_let value", `(do (print (try_let (v (to_int "x")) (catch e "caught") (to_string v))) (print (try_let (v (to_int "7")) (catch e 0) (+ v 1))) (let (s (try_let (v (to_int "2")) (catch e 0) (* v 10))) (print s)))`},
 		{"reverse", `(print (str_join (reverse (list "a" "b" "c")) ""))`},
 		{"sort", `(do (print (str_join (sort (list "b" "c" "a")) "")) (print (encode_json (sort (list 3 1 2)))))`},
