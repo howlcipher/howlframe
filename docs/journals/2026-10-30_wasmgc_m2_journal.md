@@ -23,9 +23,9 @@ last. Times are America/Detroit.
 | bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
 | bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Merged (`2bcdde48`) |
 | ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Merged (`d38ce70a`) |
-| 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | none yet | Committed locally (WIP) |
-| Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Open |
-| 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | none yet | Gate test written; backup needs ZIP |
+| 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Open |
+| Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Merged (`993d008e`) |
+| 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Open; passes 19 of 19 |
 
 ## Entries
 
@@ -95,3 +95,15 @@ Findings:
   `std/unicode.howl` was generated from Go 1.26's tables, so WebAssembly case mapping can differ from a VM built
   with newer Go for characters added since. Not a failure today (CI builds releases with Go 1.25); regenerate the
   tables when the minimum Go moves.
+
+### 2026-10-30 19:00: #279 merged; M2 exit gate
+
+- #279 merged (`993d008e`). Its CI run installed both tools (checksums OK) and ran the wasmtime legs: the wasmgc
+  package took 122 s in `build` against 52-55 s in the jobs without wasmtime; the only WebAssembly skips there are
+  the HowlScene HF gates, which run locally.
+- Test blocks (#280): with #67 in main the `exit passes try_let` fixture matches; 13 report fixtures in
+  `TestTestsLikeJavaScript` and 5 build errors in `TestTestsFailClosed` pass in Node and wasmtime.
+- Exit gate, HowlScene HF `247365e`: `TestHowlSceneTestsGate` passes 19 of 19 (backup 6, render 5, schema 8) in
+  Node and wasmtime, each report equal to the JavaScript backend's; `scripts/test_core.sh` with its pinned compiler
+  (`8e16f799`) also passes 19 of 19.
+- Next after #280: show the evidence, then write the M3 prompt (browser host) in the form of the M2 prompt.
