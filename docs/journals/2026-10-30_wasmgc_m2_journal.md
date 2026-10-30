@@ -23,9 +23,9 @@ last. Times are America/Detroit.
 | bugs.md #68: Go backend test blocks as `go test` tests | `fix/go-test-blocks` | #275 | Merged (`7e14bf92`) |
 | bugs.md #67: JS `try_let` caught a test's `exit` | `fix/js-test-exit-caught` | #278 | Merged (`2bcdde48`) |
 | ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Merged (`d38ce70a`) |
-| 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Open |
+| 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Merged (`e46839ff`) |
 | Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Merged (`993d008e`) |
-| 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Open; passes 19 of 19 |
+| 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Merged; 19 of 19 |
 
 ## Entries
 
@@ -111,3 +111,10 @@ Findings:
   the `--tests` build flag without listing it in `interopCommands` (the CLI's machine-readable descriptor). Fixed;
   the gate caught it before a push. Its failure report also printed unrelated lines; it now prints each failing
   test with its own output.
+
+### 2026-10-30 19:40: M2 done
+
+- #280 merged (`e46839ff`) after the regression gate passed on its final tree (4304 tests on Go 1.26, 4303 on Go
+  1.27.2, HowlScene HF gates) and all four CI checks. M2 is complete: #273-#280.
+- The M3 prompt is `2026-10-30_wasmgc_m3_prompt.md`. Note for it: the M2 prompt's `documentation/TESTING.md`
+  does not exist, so the M3 prompt drops it.
