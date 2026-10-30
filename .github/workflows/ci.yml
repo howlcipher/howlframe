@@ -31,6 +31,27 @@ jobs:
     - name: Vet
       run: go vet ./...
 
+    # The WebAssembly GC backend's tests run every program in wasmtime as well as Node and
+    # validate every module with wasm-tools; without them those legs skip. Pinned by version
+    # and SHA-256; a failed install fails the job rather than skipping the legs.
+    - name: Install wasmtime and wasm-tools
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/wasm" && cd "$RUNNER_TEMP/wasm"
+        curl -fsSLO https://github.com/bytecodealliance/wasmtime/releases/download/v47.0.3/wasmtime-v47.0.3-x86_64-linux.tar.xz
+        curl -fsSLO https://github.com/bytecodealliance/wasm-tools/releases/download/v1.254.0/wasm-tools-1.254.0-x86_64-linux.tar.gz
+        sha256sum -c - <<'EOF'
+        ca1fc56d1afc40c8782e96c297fd182a0da162f9a8f52a1e7b094e1dd648e178  wasmtime-v47.0.3-x86_64-linux.tar.xz
+        d0efb16c9c859137b7ab3e99151c299cd47caee106ed4594561002f7a04945bd  wasm-tools-1.254.0-x86_64-linux.tar.gz
+        EOF
+        tar -xJf wasmtime-v47.0.3-x86_64-linux.tar.xz
+        tar -xzf wasm-tools-1.254.0-x86_64-linux.tar.gz
+        mkdir -p bin
+        mv wasmtime-v47.0.3-x86_64-linux/wasmtime wasm-tools-1.254.0-x86_64-linux/wasm-tools bin/
+        echo "$RUNNER_TEMP/wasm/bin" >> "$GITHUB_PATH"
+        bin/wasmtime --version
+        bin/wasm-tools --version
+
     - name: Test
       run: go test -v ./...
 
