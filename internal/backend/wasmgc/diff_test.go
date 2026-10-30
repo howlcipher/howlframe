@@ -520,6 +520,7 @@ func TestDiffControlFlowAndFunctions(t *testing.T) {
 		"several body forms": `(cli_app (defun f (m) (type_hint return "string") (if (= m "a") (return "A")) (return "Z")) (print (call f "a") (call f "b")))`,
 		"error in function":  `(cli_app (defun boom (n) (type_hint n "int") (type_hint return "float") (return (/ n 0))) (print "start") (print (call boom 3)))`,
 		"let as value":       `(cli_app (print (let (a 2) (* a 10))))`,
+		"typed parameters":   `(cli_app (defun add ((a int) (b int)) int (return (+ a b))) (defun mul (a b) (type_hints (a int) (b int) (return int)) (return (* a b))) (print (call add 2 1) (call mul 2 3)))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, src) })
 	}
