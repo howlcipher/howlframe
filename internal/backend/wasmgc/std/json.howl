@@ -1,0 +1,123 @@
+; JSON for the WebAssembly backend's standard library, written in HowlFrame
+; on the byte intrinsics (__hf_type, __hf_byte_len, __hf_byte_at,
+; __hf_byte_slice, and the temporary __hf_float_digits and
+; __hf_float_point) that only standard-library code may call.
+;
+; encode writes a value as the VM's encode_json does (Go's encoding/json):
+; object keys in sorted byte order, no spaces, integers exactly, floats in
+; Go's layout, strings escaped HTML-safely, invalid UTF-8 as U+FFFD.
+(module
+  (export (defun encode (v)
+    (let (t (__hf_type v))
+      (do
+        (if (= t "<nil>") (return "null"))
+        (if (= t "bool") (if v (return "true") (return "false")))
+        (if (= t "int64") (return (to_string v)))
+        (if (= t "float64") (return (call number v)))
+        (if (= t "string") (return (call quote v)))
+        (if (= t "[]interface {}")
+          (let (parts (list))
+            (do
+              (for x v (append parts (call encode x)))
+              (return (+ "[" (+ (str_join parts ",") "]"))))))
+        (let (parts (list))
+          (do
+            (for k (map_keys v) (append parts (+ (call quote k) (+ ":" (call encode (map_get v k))))))
+            (return (+ "{" (+ (str_join parts ",") "}")))))))))
+
+  ; quote: s as a JSON string. Runs of bytes that need no escape are copied
+  ; whole; each escape is appended between them.
+  (export (defun quote (s)
+    (let (n (__hf_byte_len s) i 0 start 0 parts (list "\""))
+      (do
+        (while (< i n)
+          (let (l (call seq_len s i))
+            (let (e (call escape s i l) step (if (= l 0) 1 l))
+              (if (= e "")
+                (set i (+ i step))
+                (do
+                  (append parts (__hf_byte_slice s start i))
+                  (append parts e)
+                  (set i (+ i step))
+                  (set start i))))))
+        (append parts (__hf_byte_slice s start n))
+        (append parts "\"")
+        (return (str_join parts ""))))))
+
+  ; escape: the escape for the character at i of length l (0 when the byte
+  ; there is not valid UTF-8), or "" when it is written as it is.
+  (defun escape (s i l)
+    (let (b (__hf_byte_at s i))
+      (do
+        (if (= l 0) (return "\\ufffd"))
+        (if (= l 3)
+          (if (and (= b 226) (and (= (__hf_byte_at s (+ i 1)) 128) (= (__hf_byte_at s (+ i 2)) 168))) (return "\\u2028")))
+        (if (= l 3)
+          (if (and (= b 226) (and (= (__hf_byte_at s (+ i 1)) 128) (= (__hf_byte_at s (+ i 2)) 169))) (return "\\u2029")))
+        (if (> l 1) (return ""))
+        (if (= b 34) (return "\\\""))
+        (if (= b 92) (return "\\\\"))
+        (if (= b 8) (return "\\b"))
+        (if (= b 12) (return "\\f"))
+        (if (= b 10) (return "\\n"))
+        (if (= b 13) (return "\\r"))
+        (if (= b 9) (return "\\t"))
+        (if (= b 60) (return "\\u003c"))
+        (if (= b 62) (return "\\u003e"))
+        (if (= b 38) (return "\\u0026"))
+        (if (< b 32)
+          (let (digits (str_split "0123456789abcdef" ""))
+            (return (+ "\\u00" (+ (if (< b 16) "0" "1") (list_get digits (if (< b 16) b (- b 16))))))))
+        (return ""))))
+
+  ; seq_len: the length of the valid UTF-8 sequence at i, or 0 (Go's rules:
+  ; no overlong forms, no surrogates, nothing above U+10FFFF).
+  (export (defun seq_len (s i)
+    (let (n (__hf_byte_len s) b (__hf_byte_at s i) len 0 lo 128 hi 191)
+      (do
+        (if (< b 128) (return 1))
+        (cond
+          ((and (>= b 194) (<= b 223)) (set len 2))
+          ((= b 224) (do (set len 3) (set lo 160)))
+          ((and (>= b 225) (<= b 236)) (set len 3))
+          ((= b 237) (do (set len 3) (set hi 159)))
+          ((and (>= b 238) (<= b 239)) (set len 3))
+          ((= b 240) (do (set len 4) (set lo 144)))
+          ((and (>= b 241) (<= b 243)) (set len 4))
+          ((= b 244) (do (set len 4) (set hi 143)))
+          (else (return 0)))
+        (if (> (+ i len) n) (return 0))
+        (let (k 1)
+          (while (< k len)
+            (let (c (__hf_byte_at s (+ i k)))
+              (do
+                (if (or (< c lo) (> c hi)) (return 0))
+                (set lo 128)
+                (set hi 191)
+                (set k (+ k 1))))))
+        (return len)))))
+
+  ; number: a float as encoding/json writes it: plain decimal with the
+  ; shortest digits, or exponent form below 1e-6 and from 1e21, with
+  ; "e-7" (not "e-07") for small negative exponents.
+  (defun number (f)
+    (do
+      (if (= f 0.0) (if (= (to_string f) "-0") (return "-0") (return "0")))
+      (let (a (if (< f 0.0) (- 0.0 f) f) sign (if (< f 0.0) "-" ""))
+        (let (d (to_string (__hf_float_digits a)) p (__hf_float_point a))
+          (let (nd (__hf_byte_len d))
+            (do
+              (if (or (< a 0.000001) (>= a 1000000000000000000000.0))
+                (let (e (- p 1) mant (if (> nd 1) (+ (__hf_byte_slice d 0 1) (+ "." (__hf_byte_slice d 1 nd))) d))
+                  (if (< e 0)
+                    (return (+ sign (+ mant (+ "e-" (to_string (- 0 e))))))
+                    (return (+ sign (+ mant (+ "e+" (+ (if (< e 10) "0" "") (to_string e)))))))))
+              (if (<= p 0) (return (+ sign (+ "0." (+ (call zeros (- 0 p)) d)))))
+              (if (>= p nd) (return (+ sign (+ d (call zeros (- p nd))))))
+              (return (+ sign (+ (__hf_byte_slice d 0 p) (+ "." (__hf_byte_slice d p nd)))))))))))
+
+  (defun zeros (k)
+    (let (out "" i 0)
+      (do
+        (while (< i k) (do (set out (+ out "0")) (set i (+ i 1))))
+        (return out)))))

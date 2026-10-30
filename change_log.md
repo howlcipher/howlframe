@@ -38,6 +38,9 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `encode_json` on `--target wasmgc`, written in HowlFrame: the first standard-library module
+  (`internal/backend/wasmgc/std/json.howl`), compiled into a program that reaches it. Its byte intrinsics are reserved
+  for standard-library code.
 * Programs that `use` modules build with `--target wasmgc`; differential fixtures cover programs of several files.
 * `not` and the core-library, records and control-flow sugar (`cond`, `switch`, `filter`, `map_list`, `reduce`, `sort`,
   `rec`, `get`, `put`, `group_by`, `merge` and the rest) are covered by differential fixtures on `--target wasmgc`.
