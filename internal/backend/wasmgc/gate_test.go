@@ -166,3 +166,30 @@ func TestHowlSceneBackupGate(t *testing.T) {
 		t.Logf("%s: %d bytes identical to the JavaScript backend's", engine, len(want.stdout))
 	}
 }
+
+// TestHowlSceneTestsGate is the M2 exit gate (docs/design/wasm_gc_backend.md):
+// HowlScene HF's core tests (tests/core/*_test.howl, web_app roots), built
+// with --tests, pass in Node and in wasmtime with the same report as the
+// JavaScript backend's app.test.js under node --test, which is what
+// HowlScene HF's scripts/test_core.sh runs. Like TestHowlSceneGate it
+// needs HOWLSCENE_HF.
+func TestHowlSceneTestsGate(t *testing.T) {
+	hs := os.Getenv("HOWLSCENE_HF")
+	if hs == "" {
+		t.Skip("set HOWLSCENE_HF to a HowlScene HF checkout to run the M2 exit gate")
+	}
+	files, err := filepath.Glob(filepath.Join(hs, "tests", "core", "*_test.howl"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no core tests under %s: %v", hs, err)
+	}
+	sort.Strings(files)
+	for _, path := range files {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			js := sameTestsAsJS(t, path)
+			if js.code != 0 || len(js.results) == 0 || strings.Contains(strings.Join(js.results, "\n"), "✖") {
+				t.Fatalf("the JavaScript backend's run is not all passing (exit %d): %q", js.code, js.results)
+			}
+			t.Logf("%d tests pass on the JavaScript backend and as WebAssembly in Node and wasmtime: %q", len(js.results), js.counts)
+		})
+	}
+}

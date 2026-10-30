@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestone M1 done (2026-10-30); M2 in progress.
+Status: milestones M1 and M2 done (2026-10-30); M3 next.
 
 ## Goal
 
@@ -115,7 +115,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | Milestone | State | Notes |
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
-| M2 tests | In progress | |
+| M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
@@ -299,9 +299,73 @@ as the work it describes: tick tasks, move the status line, record findings.
       temporary directory, so the VM's bare `howlframe prog.howl` no longer
       writes `prog.hfbc` into the package; `TestMain` fails a run that
       leaves one there.
-- [ ] `test` blocks and `assert` compile into a test module with one export
-      per test; a generated Node runner reports results like `node:test`.
-- [ ] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly.
+- [x] Reference probe (2026-10-30): `test` and `assert` on the JavaScript
+      backend (the reference: `app.test.js` under `node --test`) and on the
+      Go backend (`server_test.go` under `go test`). See "Test blocks"
+      below and the findings.
+- [x] Roots: a test mode, `build --target wasmgc --tests`, compiles a
+      file's test blocks whatever its root (`cli_app` or `web_app`); see
+      "Test blocks" for the choice.
+- [x] `test` blocks and `assert` compile into a test module
+      (`app.test.wasm`) with one export per test (`test_0`, `test_1`,
+      ...) and a `main` that runs them and reports like `node:test`'s spec
+      reporter; `app.test.mjs` runs it in Node, and with `--host wasi` it is
+      a WASI command for wasmtime. `TestTestsLikeJavaScript` compares every
+      fixture's report with the JavaScript backend's (results in order,
+      each failing test's error, counts, output, exit status) in Node and
+      wasmtime: passing and failing tests, errors in a test, an assert in a
+      called function, `exit`, `exit` through `try_let`, an empty file,
+      top-level statements, a `cli_app` root, tests in used modules, equal
+      names, a Unicode name and type errors on values of run-time type. `TestTestsFailClosed` covers the build
+      errors.
+- [x] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly: backup
+      (6), render (5) and schema (8), with ZIP in `std/zip.howl` (#277).
+- [x] Exit gate: `TestHowlSceneTestsGate` builds each core test file with
+      `--tests` and runs it in Node and wasmtime; each report (results in
+      order, errors, counts, exit status) must equal the JavaScript
+      backend's `app.test.js` under `node --test`, which is what
+      `scripts/test_core.sh` runs, and that run must pass. Evidence
+      (2026-10-30, HowlScene HF `247365e`): 19 of 19 pass in both engines;
+      `scripts/test_core.sh` with its pinned compiler (`8e16f799`) also
+      passes 19 of 19. Runs with `HOWLSCENE_HF` set (and in
+      `scripts/wasmgc_gate.sh`).
+
+### Test blocks
+
+A test file's tests run like the JavaScript backend's `app.test.js`, which
+is the reference (the VM has no test runner; improvements.md #96):
+
+- The test module holds the program's functions and its test blocks, in
+  source order; a used module's tests come where its `use` is (modules are
+  linked in place). Top-level statements are the application's and are
+  not run, as `app.test.js` leaves them out.
+- A test passes when it returns with no error. An uncaught error fails it
+  with `CODE: message`; `exit` (and so a failing `assert`, which writes
+  `assertion failed` to standard error and exits 1) fails it with
+  `HowlFrame exit N at file:line`, the JavaScript backend's text. No
+  `try_let` catches an exit (a `$exiting` flag makes every handler pass the
+  error on), as the VM's exit ends the program whatever encloses it. The
+  next test then runs.
+- The report is the spec reporter's without durations: `✔ name` or
+  `✖ name` with `  Error: ...` under it, then `ℹ tests`, `suites`,
+  `pass`, `fail`, `cancelled`, `skipped`, `todo`. Exit status 1 when a
+  test failed. Prints and standard error go where they go in a program.
+- The runner is part of the module (its `main`), so Node and wasmtime run
+  the same code and report the same text; the Node runner is the ordinary
+  generated loader pointed at `app.test.wasm`.
+
+Roots. HowlScene HF's test files are `web_app` roots, and a `web_app`
+program needs the browser host (M3). Two ways were weighed:
+
+| Option | For | Against |
+| --- | --- | --- |
+| Accept a `web_app` that uses no browser host operation | No new flag; the same command builds programs and tests | A `web_app`'s top level is browser bootstrap code: running it as a command-line program gives it a meaning it does not have, and a test file whose top level touches the DOM could not have its tests built. Settles M3's `web_app` design early. |
+| A test mode that compiles a file's test blocks whatever its root (chosen) | Matches `app.test.js` exactly (functions and tests, no top level); independent of the browser host; explicit about what is built | One more flag (`--tests`); a program and its tests are two builds |
+
+`--tests` writes `app.test.wasm` (and `app.test.mjs` for Node) instead of
+the program. Without it, a `web_app` still fails with
+`WASM_UNSUPPORTED` (naming `--tests`), and a `cli_app` with test blocks
+fails on its first `test`, as the VM's bytecode target refuses them.
 
 ### M3 tasks: browser host
 
@@ -441,6 +505,20 @@ The order of M1 and M3 work follows what the application needs.
   swallowed the next three bytes (Go splits each invalid byte alone), and
   the Node loader decoded output as UTF-8 before writing it, turning
   invalid bytes into U+FFFD where the VM writes them as they are.
+- `test` blocks (M2 probe, 2026-10-30). On the JavaScript backend each
+  test is a `node:test` test; an uncaught error or exit fails that test
+  and the rest still run; a used module's tests run where the `use` is; the
+  top level is not run; exit status 1 on a failure. Two divergences from
+  the VM were found and fixed first: arithmetic and ordering on a value of
+  run-time type let JavaScript coerce (`(+ 1 v)` with `v` = `"x"` is
+  `1x`; bugs.md #66), and a `try_let` caught a test's `exit`, so an assert
+  failing inside a `try_let` binding passed (bugs.md #67). On the Go
+  backend a failing assert calls `os.Exit(1)` in the `go test` binary, so
+  the remaining tests never run, and `server_test.go` redeclares the
+  helpers `server.go` already defines in the same package, so a test file
+  that uses `map_get`, `/` or other helpers does not compile; tests whose
+  names differ only in punctuation became one function (bugs.md #68,
+  fixed: each failure fails its own test now).
 - The host no longer computes anything for a program: float digits and
   float parsing moved from the loader (`float_digits`, `float_point`,
   `parse_float`) to `std/float.howl`, so the only imports are `print`,
