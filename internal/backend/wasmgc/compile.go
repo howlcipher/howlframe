@@ -29,6 +29,8 @@ var stdOps = map[string]struct{ module, fn string }{
 	// on base64 data.
 	"base64_text":      {"base64", "text"},
 	"sniff_media_type": {"base64", "sniff"},
+	"zip_build":        {"zip", "build"},
+	"zip_read":         {"zip", "read"},
 }
 
 const stdPrefix = "__std_"
@@ -40,8 +42,18 @@ func stdDefuns(module string) ([]*ast.Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("WASM_UNSUPPORTED: standard library module %q is missing", module)
 	}
+	return stdModule(module, src)
+}
+
+// stdModule parses, links and desugars a standard-library module's
+// source. Text after the module form is an error: a stray parenthesis
+// would otherwise end the module early and drop what follows.
+func stdModule(module string, src []byte) ([]*ast.Node, error) {
 	p := parser.NewParser(lexer.NewLexer(string(src)), "std/"+module+".howl")
 	mod := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		return nil, fmt.Errorf("WASM_UNSUPPORTED: standard library module %q has text after its module form (line %d)", module, p.Cur.Line)
+	}
 	if mod.Type != "List" || len(mod.Children) == 0 || mod.Children[0].Value != "module" {
 		return nil, fmt.Errorf("WASM_UNSUPPORTED: standard library module %q is not a module", module)
 	}
@@ -222,6 +234,13 @@ func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 		}
 		for _, d := range std {
 			stdCalls(d, seen, &modules)
+			// Std code that makes floats or maps case needs those modules too.
+			if !seen["float"] && makesFloats(d) {
+				modules, seen["float"] = append(modules, "float"), true
+			}
+			if !seen["unicode"] && usesHead(d, "to_lower", "to_upper") {
+				modules, seen["unicode"] = append(modules, "unicode"), true
+			}
 		}
 		defuns = append(defuns, std...)
 	}
@@ -1169,7 +1188,7 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 // (__hf_type v) the VM's type name of v (as %T), (__hf_byte_len s),
 // (__hf_byte_at s i), (__hf_byte_slice s from to); on 64-bit integers
 // (__hf_idiv a b), (__hf_imod a b), (__hf_shl a k), (__hf_shr a k)
-// (unsigned), (__hf_and a b), (__hf_or a b), and (__hf_f64_bits f),
+// (unsigned), (__hf_and a b), (__hf_or a b), (__hf_xor a b), and (__hf_f64_bits f),
 // (__hf_f64_from_bits n) between a float and its IEEE 754 bits.
 // (__hf_char cp) is the UTF-8 text of a code point and (__hf_nil) nil.
 // (__hf_array n), (__hf_aget a i), (__hf_aset a i v) and (__hf_alen a) are
@@ -1180,7 +1199,7 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 	r := f.c.rt
 	c := f.code
 	want := map[string]int{"__hf_type": 1, "__hf_byte_len": 1, "__hf_byte_at": 2, "__hf_byte_slice": 3,
-		"__hf_idiv": 2, "__hf_imod": 2, "__hf_shl": 2, "__hf_shr": 2, "__hf_and": 2, "__hf_or": 2, "__hf_f64_bits": 1, "__hf_f64_from_bits": 1,
+		"__hf_idiv": 2, "__hf_imod": 2, "__hf_shl": 2, "__hf_shr": 2, "__hf_and": 2, "__hf_or": 2, "__hf_xor": 2, "__hf_f64_bits": 1, "__hf_f64_from_bits": 1,
 		"__hf_array": 1, "__hf_aget": 2, "__hf_aset": 3, "__hf_alen": 1, "__hf_fail": 1, "__hf_char": 1, "__hf_nil": 0}
 	if k, ok := want[h]; !ok || k != len(args) {
 		return unsupported(n, h)
@@ -1203,7 +1222,7 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 		c.ArrayGetU(r.tBytes).I64ExtendI32U().Call(r.fBoxInt)
 	case "__hf_byte_slice":
 		c.Call(r.fByteSlice)
-	case "__hf_idiv", "__hf_imod", "__hf_shl", "__hf_shr", "__hf_and", "__hf_or":
+	case "__hf_idiv", "__hf_imod", "__hf_shl", "__hf_shr", "__hf_and", "__hf_or", "__hf_xor":
 		b := f.local(EqRef)
 		c.LocalSet(b).RefCast(r.tInt).StructGet(r.tInt, 0)
 		c.LocalGet(b).RefCast(r.tInt).StructGet(r.tInt, 0)
@@ -1220,6 +1239,8 @@ func (f *fn) intrinsic(n *ast.Node, h string, args []*ast.Node) error {
 			c.I64And()
 		case "__hf_or":
 			c.I64Or()
+		case "__hf_xor":
+			c.I64Xor()
 		}
 		c.Call(r.fBoxInt)
 	case "__hf_f64_bits":

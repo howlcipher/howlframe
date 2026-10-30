@@ -373,6 +373,19 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       available is the alternative.
 - [ ] Every DOM, storage, file, image, archive and rich text operation the
       JavaScript backend supports, with the same errors.
+- [x] ZIP, done early for M2's exit gate (HowlScene HF's backup tests read
+      and write ZIPs): `zip_build` and `zip_read` in `std/zip.howl`, on
+      base64 text as on the JavaScript backend, with CRC-32, base64
+      encoding and an inflate for deflated entries ported from zlib's
+      reference decoder (puff), with zlib's rules for incomplete and
+      over-subscribed codes. `TestZipLikeJavaScript` runs 74 programs
+      against the JavaScript backend in Node and wasmtime: every
+      `zip_build` check and message, archives from Go's `archive/zip`
+      (stored, fixed and dynamic Huffman, stored blocks, level 0, empty and
+      directory entries) and hand-made damaged ones (every `ZIP_INVALID`,
+      `ZIP_INVALID_PATH`, `ZIP_DUPLICATE_PATH`, `ZIP_LIMIT`,
+      `ZIP_UNSUPPORTED` and `ZIP_CORRUPT` case, names quoted as
+      `JSON.stringify` quotes them, a cut surrogate pair included).
 - [ ] HowlFrame's browser tests (`internal/backend/javascript/browser_*`)
       ported to run against both backends.
 
@@ -507,6 +520,30 @@ The order of M1 and M3 work follows what the application needs.
 - HowlFrame's `//` and `%` desugar into list and string code, and it has
   no bit operations, so integer-heavy std code (the float module's
   arbitrary-precision decimal) uses integer intrinsics.
+- ZIP (2026-10-30). The JavaScript backend's `zip_read` is asynchronous
+  (it inflates through `DecompressionStream`); in this backend it is an
+  ordinary call, since the inflate is HowlFrame code. Data after a deflate
+  stream's final block is `ZIP_CORRUPT`, as the Compression Streams
+  standard has `DecompressionStream` reject it. Node rejects it from
+  22.23 (CI's runner) and accepts it before (22.22 here), so the JavaScript
+  backend's result depends on the host; the `deflate junk` fixture pins the
+  standard's result and compares with the JavaScript backend only where its
+  Node agrees. Paths are compared for duplicates in lower
+  case: JavaScript's `toLowerCase` uses full case mapping (U+0130 to
+  `i` + U+0307, a final sigma to ς) where `to_lower` is Go's simple
+  mapping, so two names that differ only there are duplicates on one
+  backend and not the other; not matched yet. The standard library gained
+  `__hf_xor` (CRC-32 and stored block lengths); a std module that maps
+  case or makes floats now loads the unicode or float module itself
+  (before, only the program's own use did, and a non-ASCII entry name
+  reached an `unreachable` bridge); and a std module with text after its
+  module form is refused (`TestStdModulesParse`): a stray parenthesis had
+  ended `zip.howl` early and silently dropped the functions after it.
+  Speed: reading a 1 MB deflated entry or building a 550 KB archive takes
+  about 1.3 s in Node, where every byte is a boxed integer in a list.
+  Building a long string by repeated concatenation is quadratic
+  (`str_repeat` of 550 KB takes 36 s; the VM stops it at its memory
+  limit).
 
 ### Open questions
 
