@@ -397,7 +397,15 @@ func TestRegexUnsupportedFailsClosed(t *testing.T) {
 
 // parse_json is standard-library HowlFrame (std/json.howl); the VM's is
 // Go's json.Decoder with UseNumber and a check for a second value.
+//
+// The VM's syntax messages are encoding/json's, which newer Go releases
+// word differently (bugs.md #63). std/json.howl gives the messages of the
+// toolchain releases are built with; when the test's toolchain words them
+// otherwise, a failing fixture is compared by error code and the
+// "parse_json failed: " prefix only.
 func TestDiffParseJSON(t *testing.T) {
+	var v any
+	classic := json.Unmarshal([]byte(`"\q"`), &v).Error() == "invalid character 'q' in string escape code"
 	for name, body := range map[string]string{
 		"object":                       "(let (t \"{\\\"a\\\":1,\\\"b\\\":[true,null,2.5,\\\"x\\\"],\\\"a\\\":3}\") (print (parse_json Any t)))",
 		"nested":                       "(let (t \"{\\\"k\\\":{\\\"n\\\":[]},\\\"m\\\":[[1,[2]],{}],\\\"e\\\":{}}\") (print (parse_json Any t)))",
@@ -465,7 +473,23 @@ func TestDiffParseJSON(t *testing.T) {
 		"caught":       `(let (t "{") (print (try_let (v (parse_json Any t)) (catch e (str_contains e "unexpected EOF")) v)))`,
 		"expression":   `(print (parse_json Any (+ "[1," "2]")))`,
 	} {
-		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+		t.Run(name, func(t *testing.T) {
+			if classic {
+				sameAsVM(t, "(cli_app "+body+")")
+				return
+			}
+			want, got := onVM(t, "(cli_app "+body+")"), onWasm(t, "(cli_app "+body+")")
+			if !want.failed {
+				sameAsVM(t, "(cli_app "+body+")")
+				return
+			}
+			wantCode, wantMsg := errorReport(want.errMsg)
+			gotCode, gotMsg := errorReport(got.errMsg)
+			const prefix = "parse_json failed: "
+			if !got.failed || wantCode != gotCode || strings.HasPrefix(wantMsg, prefix) != strings.HasPrefix(gotMsg, prefix) {
+				t.Fatalf("error differs:\nvm   %s\nwasm %s", want.errMsg, got.errMsg)
+			}
+		})
 	}
 }
 
