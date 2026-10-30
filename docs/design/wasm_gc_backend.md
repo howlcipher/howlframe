@@ -106,7 +106,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. 92 differential fixtures pass. Next: `not` and the core-library sugar, then `try_let` and modules. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. 126 differential fixtures pass. Next: `try_let` and `catch`, then modules. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -173,9 +173,16 @@ as the work it describes: tick tasks, move the status line, record findings.
       `map_has` through its desugaring; type errors name the value's Go type
       (`%T`) as the VM's do, also for `for`, `append`, `list_get` and
       `list_len` (which gives a string's byte length).
-- [ ] Constructs, in this order, each with fixtures: the core-library sugar after desugaring (`filter`,
-      `map_list`, `reduce`, `sort` and the rest); `try_let`, `catch`, `exit`,
-      `stderr`; `is_nil`; modules (`use`, `export`).
+- [x] `not` and the sugar, after desugaring, each with a fixture
+      (`TestDiffSugar`): `cond`, `switch`, n-ary `if`, `and` and `or`,
+      `when`, `unless`, `inc`, `dec`, `str`, `nz`, `blank`, `all`, `any`,
+      `ver_gt`, `ver_ge`, `index_of`, `map_list`, `filter`, `reduce`, `sum`,
+      `min`, `max`, `reverse`, `count_by`, `sort`, `range`, `sort_by`,
+      `max_by`, `min_by`, `pad_left`, `pad_right`, `str_repeat`, `ltrim`,
+      `rtrim`, `to_base`, and the records forms `rec`, `get`, `put`, `pluck`,
+      `select`, `group_by`, `merge`. None needed new runtime code.
+- [ ] Constructs, in this order, each with fixtures: `try_let`, `catch`;
+      modules (`use`, `export`).
 - [ ] Standard library in HowlFrame (`std/`), on byte intrinsics:
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
@@ -254,6 +261,13 @@ The order of M1 and M3 work follows what the application needs.
   `[]interface {}`, `<nil>`, ...). Dicts are references (a function's
   `map_set` is seen by its caller) while lists stay values. `for` over a
   dict is an error. `map_has` is desugared to a scan of `map_keys` with `=`.
+- Every sugar form reduces to primitives this backend already had once
+  dicts landed. The I/O and host sugar (`lines`, `read_text`, `read_json`,
+  `write_json`, `sget`, `sput`, `sinc`, `unix_now`, `http_*`) waits for the
+  host imports it reaches.
+- The checker rejects `(sum (list 1.5 2.0))`: the desugared accumulator
+  starts at the integer 0, so adding a float is "cannot assign float64 to
+  ... of type int" (bugs.md #60).
 - The JavaScript backend compiles `=` to `===`, so a list or dict equals
   itself there while the VM and the interpreter say false (bugs.md #59).
 - The VM's JSON error report escapes `<` and `>` (`\u003cnil\u003e`), so the

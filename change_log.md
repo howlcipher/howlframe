@@ -32,6 +32,8 @@
   semantics (keys are the text of any value, dicts are references, `map_keys` and printing in sorted key order).
   Lists and dicts print `<nil>` for a nil element, are never equal (even to themselves), and type errors name the
   value's Go type as the VM's messages do.
+* `not` and the core-library, records and control-flow sugar (`cond`, `switch`, `filter`, `map_list`, `reduce`, `sort`,
+  `rec`, `get`, `put`, `group_by`, `merge` and the rest) are covered by differential fixtures on `--target wasmgc`.
 
 ### JavaScript backend
 * `(scroll_into_view el)` brings an element to the top of the document's own viewport at once (no smooth scrolling),
