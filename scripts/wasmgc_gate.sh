@@ -74,15 +74,20 @@ for l in sys.stdin:
   fi
   local s
   s=$(skips "$log")
-  if [[ -n $s ]]; then
-    echo "skipped:"
-    sed 's/^/  /' <<<"$s"
-    if grep -E '/(internal/backend/wasmgc|tools/difftest) ' <<<"$s" | grep -qE 'not installed|HOWLSCENE_HF'; then
-      echo "a test was skipped for a missing tool or checkout" >&2
+  # The WebAssembly packages' skips are listed in full; the rest of the module skips by design (constructs
+  # other targets refuse, tools this backend does not use) and is only counted.
+  local wasm others
+  wasm=$(grep -E '/(internal/backend/wasmgc|tools/difftest) ' <<<"$s" || true)
+  others=$(grep -cvE '/(internal/backend/wasmgc|tools/difftest) |^$' <<<"$s" || true)
+  if [[ -n $wasm ]]; then
+    echo "   skipped in the WebAssembly packages:"
+    sed 's/^/     /' <<<"$wasm"
+    if grep -qE 'not installed|HOWLSCENE_HF' <<<"$wasm"; then
+      echo "a WebAssembly test was skipped for a missing tool or checkout" >&2
       status=1
     fi
   fi
-  echo "   $(grep -c '"Action":"pass","Package":"[^"]*","Test"' "$log") tests passed"
+  echo "   $(grep -c '"Action":"pass","Package":"[^"]*","Test"' "$log") tests passed, ${others:-0} skipped elsewhere by design"
 }
 
 run "go test ./... ($(go version | cut -d' ' -f3))" go test ./...

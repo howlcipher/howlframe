@@ -77,3 +77,8 @@ Findings:
   HowlScene HF gates. It refuses to run without node, wasmtime, wasm-tools and the checkout, and fails when a
   WebAssembly test skips for one of them (both checked by removing wasmtime from PATH and unsetting the variable).
   Its summary goes in each PR's Test Impact Assessment. Plan: "Verification".
+- First full run (this branch, `74b4c258`): passed; 4204 tests on Go 1.26, 4203 on Go 1.27.2, both HowlScene
+  gates. Finding: on Go 1.27.2 `TestUnicodeTableIsCurrent` skips because Go 1.27 moved to Unicode 17.0.0 and
+  `std/unicode.howl` was generated from Go 1.26's tables, so WebAssembly case mapping can differ from a VM built
+  with newer Go for characters added since. Not a failure today (CI builds releases with Go 1.25); regenerate the
+  tables when the minimum Go moves.
