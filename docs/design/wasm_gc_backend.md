@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`) is HowlFrame compiled in when a program reaches it. 192 differential fixtures pass. HowlScene HF's registry and export modules compile; next is `regex_match` (schema, renderer), then `base64_text` (backups), `parse_json` and `sniff_media_type`. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 243 differential fixtures pass. HowlScene HF's registry, renderer and export modules compile; next is `parse_json` (schema), then `base64_text` (backups) and `sniff_media_type`. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -205,11 +205,23 @@ as the work it describes: tick tasks, move the status line, record findings.
       when a program reaches one of their operations (`stdOps`). Only their
       functions may use the byte intrinsics `__hf_type` (the VM's `%T`
       name), `__hf_byte_len`, `__hf_byte_at`, `__hf_byte_slice`, and the
-      temporary `__hf_float_digits` and `__hf_float_point`; a program that
-      calls one, or defines a `__std_` function, fails with
-      `WASM_UNSUPPORTED` (`TestStdIsReserved`).
+      temporary `__hf_float_digits` and `__hf_float_point`, a mutable array
+      (`__hf_array`, `__hf_aget`, `__hf_aset`, `__hf_alen`) for std
+      algorithms, and `__hf_fail` to raise an error with a code; a program
+      that calls one, or defines a `__std_` function, fails with
+      `WASM_UNSUPPORTED` (`TestStdIsReserved`). A std module may call
+      another by its linked name (`__std_utf8_seq_len`), which loads it.
 - [x] `encode_json` in `std/json.howl`, as Go's `encoding/json` writes the
       VM's values (`TestDiffEncodeJSON`).
+- [x] `regex_match` in `std/regex.howl`: Go's `regexp.MatchString` for a
+      documented RE2 subset (literals, `.`, classes with ranges and Perl
+      escapes, `^`, `$`, groups including named and non-capturing ones,
+      `|`, `* + ? {n} {n,} {n,m}` and their lazy forms), by Thompson NFA
+      simulation over code points, linear in the text. Invalid patterns
+      fail with the VM's `INVALID_REGEX` messages; syntax outside the subset
+      (`(?i)`, `\b`, `\p{..}`, `\x`, octal, `\Q..\E`, `[[:alpha:]]`,
+      `\A`, `\z`) fails with `WASM_UNSUPPORTED` at run time
+      (`TestDiffRegex`, `TestRegexUnsupportedFailsClosed`).
 - [ ] The rest of the standard library in HowlFrame (`std/`), on byte intrinsics:
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
@@ -321,6 +333,12 @@ The order of M1 and M3 work follows what the application needs.
 - Building each HowlScene HF core module as a `cli_app` (2026-10-29):
   `registry.howl` and `export.howl` compile; `schema.howl` and
   `backup.howl` stop at `encode_json`, `render.howl` at `regex_match`.
+- Lists are values, so an algorithm that updates a table in place (the
+  regular-expression simulation's thread lists and marks) cannot be
+  written efficiently with HowlFrame's collections: `append` to a list
+  held elsewhere copies it, and there is no list update by index. Std
+  code uses the `__hf_array` intrinsics; whether programs need a mutable
+  array is open.
 - Standard-library code needs to branch on a value's run-time type, which
   HowlFrame source cannot do (the checker types values statically and
   there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.

@@ -321,6 +321,80 @@ func TestDiffEncodeJSON(t *testing.T) {
 	}
 }
 
+// regex_match is standard-library HowlFrame (std/regex.howl): a Thompson
+// NFA over the RE2 subset HowlScene HF and the corpus use. The VM's is Go's
+// regexp.MatchString.
+func TestDiffRegex(t *testing.T) {
+	for name, body := range map[string]string{
+		"literals":                   "(print (regex_match \"abc\" \"abc\") (regex_match \"abc\" \"xabcx\") (regex_match \"abc\" \"ab\") (regex_match \"abc\" \"\") (regex_match \"abc\" \"ABC\"))",
+		"empty pattern":              "(print (regex_match \"\" \"\") (regex_match \"\" \"x\"))",
+		"anchors":                    "(print (regex_match \"^ab$\" \"ab\") (regex_match \"^ab$\" \"abc\") (regex_match \"^ab$\" \"cab\") (regex_match \"^ab$\" \"a\\nb\"))",
+		"start anchor":               "(print (regex_match \"^https?://\" \"http://x\") (regex_match \"^https?://\" \"https://x\") (regex_match \"^https?://\" \"xhttp://\") (regex_match \"^https?://\" \"ftp://\"))",
+		"dot":                        "(print (regex_match \"a.c\" \"abc\") (regex_match \"a.c\" \"a\\nc\") (regex_match \"a.c\" \"aéc\") (regex_match \"a.c\" \"ac\"))",
+		"classes":                    "(print (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"hello-1\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"-x\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"Hello\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"a\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\") (regex_match \"^[a-z0-9][a-z0-9-]{0,39}$\" \"é\"))",
+		"hex colour":                 "(print (regex_match \"^#[0-9a-fA-F]{6}$\" \"#00ff0a\") (regex_match \"^#[0-9a-fA-F]{6}$\" \"#00FF0G\") (regex_match \"^#[0-9a-fA-F]{6}$\" \"#abc\") (regex_match \"^#[0-9a-fA-F]{6}$\" \"#abcdef0\"))",
+		"negated class":              "(print (regex_match \"^[^a-c]+$\" \"xyz\") (regex_match \"^[^a-c]+$\" \"xaz\") (regex_match \"^[^a-c]+$\" \"é✓\") (regex_match \"^[^a-c]+$\" \"\\n\"))",
+		"class edge chars":           "(print (regex_match \"^[]a-]+$\" \"]a-\") (regex_match \"^[]a-]+$\" \"b\"))",
+		"perl classes":               "(print (regex_match \"\\\\d+\\\\s\\\\w\" \"12 a\") (regex_match \"\\\\d+\\\\s\\\\w\" \"12a\") (regex_match \"\\\\d+\\\\s\\\\w\" \" 1 _\"))",
+		"negated perl":               "(print (regex_match \"^\\\\D\\\\S\\\\W$\" \"a!.\") (regex_match \"^\\\\D\\\\S\\\\W$\" \"1!.\") (regex_match \"^\\\\D\\\\S\\\\W$\" \"a .\") (regex_match \"^\\\\D\\\\S\\\\W$\" \"aé.\"))",
+		"class with perl":            "(print (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"plain/path?q=1\") (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"has space\") (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"a<b\") (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"back\\\\slash\") (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"quo\\\"te\") (regex_match \"^[^\\\\s<>\\\"'`\\\\\\\\]*$\" \"tick`\"))",
+		"alternation":                "(print (regex_match \"^(cat|dog|)$\" \"cat\") (regex_match \"^(cat|dog|)$\" \"dog\") (regex_match \"^(cat|dog|)$\" \"\") (regex_match \"^(cat|dog|)$\" \"cow\") (regex_match \"^(cat|dog|)$\" \"catdog\"))",
+		"nested groups":              "(print (regex_match \"^(a(b|c)*d)+$\" \"ad\") (regex_match \"^(a(b|c)*d)+$\" \"abcd\") (regex_match \"^(a(b|c)*d)+$\" \"abdacd\") (regex_match \"^(a(b|c)*d)+$\" \"abc\") (regex_match \"^(a(b|c)*d)+$\" \"\"))",
+		"non-capturing":              "(print (regex_match \"^(?:ab)+$\" \"abab\") (regex_match \"^(?:ab)+$\" \"aba\"))",
+		"named group":                "(print (regex_match \"^(?P<y>[0-9]{4})-(?<m>[0-9]{2})$\" \"2026-10\") (regex_match \"^(?P<y>[0-9]{4})-(?<m>[0-9]{2})$\" \"26-10\"))",
+		"repetition":                 "(print (regex_match \"^a{2}b{2,}c{1,3}$\" \"aabbc\") (regex_match \"^a{2}b{2,}c{1,3}$\" \"aabbbbccc\") (regex_match \"^a{2}b{2,}c{1,3}$\" \"abbc\") (regex_match \"^a{2}b{2,}c{1,3}$\" \"aabbcccc\") (regex_match \"^a{2}b{2,}c{1,3}$\" \"aab\"))",
+		"optional":                   "(print (regex_match \"^colou?r$\" \"color\") (regex_match \"^colou?r$\" \"colour\") (regex_match \"^colou?r$\" \"colouur\"))",
+		"lazy":                       "(print (regex_match \"^a+?b*?$\" \"aab\") (regex_match \"^a+?b*?$\" \"a\") (regex_match \"^a+?b*?$\" \"b\"))",
+		"literal brace":              "(print (regex_match \"a{,2}x{y}\" \"a{,2}x{y}\") (regex_match \"a{,2}x{y}\" \"aa\"))",
+		"escaped metas":              "(print (regex_match \"^\\\\.\\\\*\\\\+\\\\?\\\\(\\\\)\\\\[\\\\]\\\\{\\\\}\\\\|\\\\^\\\\$\\\\\\\\$\" \".*+?()[]{}|^$\\\\\") (regex_match \"^\\\\.\\\\*\\\\+\\\\?\\\\(\\\\)\\\\[\\\\]\\\\{\\\\}\\\\|\\\\^\\\\$\\\\\\\\$\" \"x\"))",
+		"control escapes":            "(print (regex_match \"^\\\\t\\\\n\\\\r$\" \"\\t\\n\\r\") (regex_match \"^\\\\t\\\\n\\\\r$\" \"tnr\"))",
+		"empty loops":                "(print (regex_match \"^(a*)*$\" \"\") (regex_match \"^(a*)*$\" \"aaa\") (regex_match \"^(a*)*$\" \"b\"))",
+		"versions":                   "(print (regex_match \"^[0-9]+[.][0-9]+[.][0-9]+$\" \"1.2.3\") (regex_match \"^[0-9]+[.][0-9]+[.][0-9]+$\" \"10.20.30\") (regex_match \"^[0-9]+[.][0-9]+[.][0-9]+$\" \"1.2\") (regex_match \"^[0-9]+[.][0-9]+[.][0-9]+$\" \"1.2.3.4\") (regex_match \"^[0-9]+[.][0-9]+[.][0-9]+$\" \"a.b.c\"))",
+		"language tags":              "(print (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"en\") (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"en-GB\") (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"zh-Hant\") (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"e\") (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"en-\") (regex_match \"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?$\" \"english\"))",
+		"script hash":                "(print (regex_match \"^[A-Za-z0-9+/]{43}=$\" \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\") (regex_match \"^[A-Za-z0-9+/]{43}=$\" \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\") (regex_match \"^[A-Za-z0-9+/]{43}=$\" \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"))",
+		"http url":                   "(print (regex_match \"^https?://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][^\\\\s<>\\\"'`\\\\\\\\]*)?$\" \"https://example.com\") (regex_match \"^https?://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][^\\\\s<>\\\"'`\\\\\\\\]*)?$\" \"http://a.b:8080/x?y=1#z\") (regex_match \"^https?://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][^\\\\s<>\\\"'`\\\\\\\\]*)?$\" \"https://bad host\") (regex_match \"^https?://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][^\\\\s<>\\\"'`\\\\\\\\]*)?$\" \"https://x.org/<b>\") (regex_match \"^https?://[a-z0-9.-]+(:[0-9]{1,5})?([/?#][^\\\\s<>\\\"'`\\\\\\\\]*)?$\" \"https://x.org:123456\"))",
+		"mailto":                     "(print (regex_match \"^mailto:[^\\\\s<>\\\"'`\\\\\\\\@]+@[^\\\\s<>\\\"'`\\\\\\\\@]+$\" \"mailto:a@b.c\") (regex_match \"^mailto:[^\\\\s<>\\\"'`\\\\\\\\@]+@[^\\\\s<>\\\"'`\\\\\\\\@]+$\" \"mailto:a@b@c\") (regex_match \"^mailto:[^\\\\s<>\\\"'`\\\\\\\\@]+@[^\\\\s<>\\\"'`\\\\\\\\@]+$\" \"mailto:@b\"))",
+		"tel":                        "(print (regex_match \"^tel:\\\\+?[0-9 ().-]{3,30}$\" \"tel:+1 (555) 010-0000\") (regex_match \"^tel:\\\\+?[0-9 ().-]{3,30}$\" \"tel:12\") (regex_match \"^tel:\\\\+?[0-9 ().-]{3,30}$\" \"tel:abc\"))",
+		"relative path":              "(print (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"../img/a.png#top\") (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"./a\") (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"a/b/\") (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"/abs\") (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"a//b\") (regex_match \"^(\\\\./|(\\\\.\\\\./)+)?[A-Za-z0-9_~-][A-Za-z0-9._~-]*(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?(#[a-z0-9][a-z0-9-]{0,39})?$\" \"../../x.css\"))",
+		"unicode":                    "(print (regex_match \"^[é✓]+日$\" \"é✓é日\") (regex_match \"^[é✓]+日$\" \"e日\") (regex_match \"^[é✓]+日$\" \"✓\"))",
+		"search inside":              "(print (regex_match \"[0-9]{3}\" \"ab123cd\") (regex_match \"[0-9]{3}\" \"ab12cd\"))",
+		"missing paren":              "(print (regex_match \"(abc\" \"abc\"))",
+		"unexpected paren":           "(print (regex_match \"ab)\" \"abc\"))",
+		"missing bracket":            "(print (regex_match \"[abc\" \"abc\"))",
+		"missing argument":           "(print (regex_match \"*a\" \"abc\"))",
+		"missing argument after bar": "(print (regex_match \"x|+\" \"abc\"))",
+		"missing argument brace":     "(print (regex_match \"{2}a\" \"abc\"))",
+		"nested repetition":          "(print (regex_match \"a**\" \"abc\"))",
+		"nested brace":               "(print (regex_match \"a{2}{3}\" \"abc\"))",
+		"trailing backslash":         "(print (regex_match \"a\\\\\" \"abc\"))",
+		"invalid escape":             "(print (regex_match \"a\\\\q\" \"abc\"))",
+		"invalid range":              "(print (regex_match \"[z-a]\" \"abc\"))",
+		"range to a class":           "(print (regex_match \"[a-\\\\d]\" \"abc\"))",
+		"repeat too big":             "(print (regex_match \"a{1001}\" \"abc\"))",
+		"repeat reversed":            "(print (regex_match \"a{3,2}\" \"abc\"))",
+		"in a function":              `(defun valid (id) (type_hint id "string") (type_hint return "bool") (return (regex_match "^img-[a-z0-9]{6,32}$" id))) (print (call valid "img-abc123") (call valid "img-ab"))`,
+		"long text":                  `(let (s "") (do (for i (range 0 200) (set s (+ s "ab"))) (print (regex_match "^(ab)*$" s) (regex_match "^(a|b)*c" s) (regex_match "(ab){200}" s))))`,
+		"dynamic pattern":            `(let (parts (list "^[a-z]" "+$")) (print (regex_match (str_join parts "") "abc") (regex_match (str_join parts "") "ab1")))`,
+		"caught":                     `(print (try_let (v (regex_match "(" "x")) (catch e (str_contains e "INVALID_REGEX")) v))`,
+		"wrong type":                 `(let (d ` + mixed + `) (print (regex_match "a" (map_get d "a"))))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+// Syntax outside the supported subset fails closed instead of matching
+// differently from the VM.
+func TestRegexUnsupportedFailsClosed(t *testing.T) {
+	for _, pattern := range []string{"\"(?i)a\"", "\"\\\\bx\"", "\"\\\\pL\"", "\"\\\\x41\"", "\"[[:alpha:]]\"", "\"\\\\101\"", "\"\\\\Qa\\\\E\"", "\"\\\\Az\""} {
+		t.Run(pattern, func(t *testing.T) {
+			got := onWasm(t, "(cli_app (print (regex_match "+pattern+" \"abc\")))")
+			if code, msg := errorReport(got.errMsg); !got.failed || code != "WASM_UNSUPPORTED" {
+				t.Fatalf("want WASM_UNSUPPORTED, got failed=%v %s %s", got.failed, code, msg)
+			}
+		})
+	}
+}
+
 // The standard library's intrinsics and names are reserved for it.
 func TestStdIsReserved(t *testing.T) {
 	for name, src := range map[string]string{

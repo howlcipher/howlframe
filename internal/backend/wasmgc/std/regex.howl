@@ -1,0 +1,412 @@
+; Regular expressions for the WebAssembly backend's standard library:
+; regex_match as the VM's (Go's regexp.MatchString: RE2 syntax with Perl
+; flags, an unanchored search) for the subset below, by Thompson NFA
+; simulation, so time is linear in the text. Syntax outside the subset
+; fails with WASM_UNSUPPORTED rather than matching differently; invalid
+; patterns fail with the VM's INVALID_REGEX messages.
+;
+; Supported: literals; . (any character but newline); [...] and [^...]
+; with ranges and the escapes below; ^ and $ (start and end of the text);
+; groups (...), (?:...), (?P<name>...) and (?<name>...); |; * + ? {n}
+; {n,} {n,m}, each optionally lazy, which cannot change whether a match
+; exists; escapes \d \D \s \S \w \W \a \f \t \n \r \v and escaped ASCII
+; punctuation. Not yet: flags such as (?i), \b \B \A \z, \p{...},
+; \Q...\E, \x and octal escapes, [[:alpha:]] classes.
+;
+; A pattern is parsed into a tree of nodes, arrays [kind a b c]: 0 a set
+; of characters (a: array of inclusive ranges lo, hi, ...; b: negated),
+; 1 start of text, 2 end of text, 3 empty, 4 a sequence (a: list of
+; nodes), 5 alternatives (a: list of nodes), 6 a repetition (a: node, b:
+; min, c: max or -1). The tree compiles to instructions, arrays [op ...]:
+; 0 set (ranges, negated), 1 split (x, y), 2 jump (x), 3 start, 4 end,
+; 5 match.
+(module
+  (export (defun match (pattern s)
+    (do
+      (if (not (and (= (__hf_type pattern) "string") (= (__hf_type s) "string")))
+        (__hf_fail (+ "TYPE_ERROR: regex_match expected string pattern and string, got " (+ (__hf_type pattern) (+ " and " (__hf_type s))))))
+      (return (call run (call compile pattern) s)))))
+
+  (defun arr (xs)
+    (let (a (__hf_array (list_len xs)) i 0)
+      (do
+        (for x xs (do (__hf_aset a i x) (set i (+ i 1))))
+        (return a))))
+
+  (defun node (k a b c)
+    (let (n (__hf_array 4))
+      (do (__hf_aset n 0 k) (__hf_aset n 1 a) (__hf_aset n 2 b) (__hf_aset n 3 c) (return n))))
+
+  (defun chars (ranges neg) (return (call node 0 (call arr ranges) neg 0)))
+
+  ; The parser's state, an array: 0 code points, 1 their byte offsets (and
+  ; the length at the end), 2 count, 3 position, 4 the pattern.
+  (defun decode (s)
+    (let (n (__hf_byte_len s) runes (__hf_array (+ (__hf_byte_len s) 1)) offs (__hf_array (+ (__hf_byte_len s) 1)) i 0 k 0)
+      (do
+        (while (< i n)
+          (let (l (call __std_utf8_seq_len s i))
+            (do
+              (__hf_aset runes k (call __std_utf8_rune s i l))
+              (__hf_aset offs k i)
+              (set k (+ k 1))
+              (set i (+ i (if (= l 0) 1 l))))))
+        (__hf_aset offs k n)
+        (let (st (__hf_array 5))
+          (do
+            (__hf_aset st 0 runes)
+            (__hf_aset st 1 offs)
+            (__hf_aset st 2 k)
+            (__hf_aset st 3 0)
+            (__hf_aset st 4 s)
+            (return st))))))
+
+  (defun pos (st) (return (__hf_aget st 3)))
+  (defun adv (st) (__hf_aset st 3 (+ (__hf_aget st 3) 1)))
+  (defun peek_at (st d)
+    (let (j (+ (__hf_aget st 3) d))
+      (if (< j (__hf_aget st 2)) (return (__hf_aget (__hf_aget st 0) j)) (return -1))))
+  (defun peek (st) (return (call peek_at st 0)))
+  (defun text (st from to)
+    (return (__hf_byte_slice (__hf_aget st 4) (__hf_aget (__hf_aget st 1) from) (__hf_aget (__hf_aget st 1) to))))
+  (defun fail (kind expr)
+    (__hf_fail (+ "INVALID_REGEX: invalid regex: error parsing regexp: " (+ kind (+ ": `" (+ expr "`"))))))
+  (defun unsupported (what)
+    (__hf_fail (+ "WASM_UNSUPPORTED: regex_match does not support " (+ what " in the WebAssembly backend yet"))))
+
+  (defun compile (pattern)
+    (let (st (call decode pattern))
+      (let (tree (call parse_alt st))
+        (do
+          (if (< (call pos st) (__hf_aget st 2)) (call fail "unexpected )" pattern))
+          (let (prog (__hf_array (+ (call size tree) 1)))
+            (do
+              (__hf_aset prog (call emit tree prog 0) (call arr (list 5)))
+              (return prog)))))))
+
+  (defun parse_alt (st)
+    (let (items (list (call parse_cat st)))
+      (do
+        (while (= (call peek st) 124)
+          (do (call adv st) (append items (call parse_cat st))))
+        (if (= (list_len items) 1) (return (list_get items 0)))
+        (return (call node 5 items 0 0)))))
+
+  (defun parse_cat (st)
+    (let (items (list) going true)
+      (do
+        (while going
+          (let (c (call peek st))
+            (if (or (= c -1) (or (= c 124) (= c 41)))
+              (set going false)
+              (append items (call parse_repeat st)))))
+        (return (call node 4 items 0 0)))))
+
+  ; parse_repeat: an atom and its repetition operators; a second operator
+  ; on the same atom is invalid, as in Go.
+  (defun parse_repeat (st)
+    (let (atom (call parse_atom st) last -1 going true)
+      (do
+        (while going
+          (let (opstart (call pos st))
+            (let (q (call quant st))
+              (if (= (list_len q) 0)
+                (set going false)
+                (do
+                  (if (>= last 0) (call fail "invalid nested repetition operator" (call text st last (call pos st))))
+                  (set last opstart)
+                  (set atom (call node 6 atom (list_get q 0) (list_get q 1))))))))
+        (return atom))))
+
+  ; quant: (min max) of a repetition operator here, consuming it and a
+  ; lazy ?, or an empty list.
+  (defun quant (st)
+    (let (c (call peek st) q (list))
+      (do
+        (cond
+          ((= c 42) (do (call adv st) (set q (list 0 -1))))
+          ((= c 43) (do (call adv st) (set q (list 1 -1))))
+          ((= c 63) (do (call adv st) (set q (list 0 1))))
+          ((= c 123) (set q (call brace st)))
+          (else (set q (list))))
+        (if (and (> (list_len q) 0) (= (call peek st) 63)) (call adv st))
+        (return q))))
+
+  ; brace: (min max) of {n}, {n,} or {n,m} here, or an empty list (and the
+  ; position unchanged) when the brace is a literal.
+  (defun brace (st)
+    (let (i0 (call pos st) lo 0 hi 0)
+      (do
+        (call adv st)
+        (set lo (call number_at st))
+        (if (< lo 0) (do (__hf_aset st 3 i0) (return (list))))
+        (set hi lo)
+        (if (= (call peek st) 44)
+          (do
+            (call adv st)
+            (if (= (call peek st) 125)
+              (set hi -1)
+              (do
+                (set hi (call number_at st))
+                (if (< hi 0) (do (__hf_aset st 3 i0) (return (list))))))))
+        (if (not (= (call peek st) 125)) (do (__hf_aset st 3 i0) (return (list))))
+        (call adv st)
+        (if (or (> lo 1000) (or (> hi 1000) (and (>= hi 0) (< hi lo))))
+          (call fail "invalid repeat count" (call text st i0 (call pos st))))
+        (return (list lo hi)))))
+
+  (defun number_at (st)
+    (let (n -1 going true)
+      (do
+        (while going
+          (let (c (call peek st))
+            (if (and (>= c 48) (<= c 57))
+              (do
+                (if (< n 0) (set n 0))
+                (if (< n 100000) (set n (+ (* n 10) (- c 48))))
+                (call adv st))
+              (set going false))))
+        (return n))))
+
+  (defun parse_atom (st)
+    (let (c (call peek st) i0 (call pos st))
+      (do
+        (if (= c 40) (return (call group st)))
+        (if (= c 91) (return (call class st)))
+        (if (= c 46) (do (call adv st) (return (call chars (list 0 9 11 1114111) false))))
+        (if (= c 94) (do (call adv st) (return (call node 1 0 0 0))))
+        (if (= c 36) (do (call adv st) (return (call node 2 0 0 0))))
+        (if (= c 92)
+          (let (it (call escape st))
+            (if (= (list_get it 0) -1)
+              (return (call chars (list_get it 1) false))
+              (return (call chars (list (list_get it 0) (list_get it 0)) false)))))
+        (if (or (= c 42) (or (= c 43) (= c 63)))
+          (do (call adv st) (call fail "missing argument to repetition operator" (call text st i0 (call pos st)))))
+        (if (= c 123)
+          (if (> (list_len (call brace st)) 0)
+            (call fail "missing argument to repetition operator" (call text st i0 (call pos st)))))
+        (call adv st)
+        (return (call chars (list c c) false)))))
+
+  (defun group (st)
+    (do
+      (call adv st)
+      (if (= (call peek st) 63)
+        (do
+          (call adv st)
+          (let (c (call peek st))
+            (cond
+              ((= c 58) (call adv st))
+              ((and (= c 80) (= (call peek_at st 1) 60)) (do (call adv st) (call skip_name st)))
+              ((= c 60) (call skip_name st))
+              (else (call unsupported "flags such as (?i)"))))))
+      (let (sub (call parse_alt st))
+        (do
+          (if (not (= (call peek st) 41)) (call fail "missing closing )" (__hf_aget st 4)))
+          (call adv st)
+          (return sub)))))
+
+  ; skip_name: past <name> of a named group.
+  (defun skip_name (st)
+    (do
+      (call adv st)
+      (while (and (>= (call peek st) 0) (not (= (call peek st) 62))) (call adv st))
+      (if (< (call peek st) 0) (call unsupported "this named group"))
+      (call adv st)))
+
+  ; class: [...] or [^...]. A ] first in the class is a literal, and so is
+  ; a - first or last.
+  (defun class (st)
+    (let (i0 (call pos st) neg false ranges (list) first true going true)
+      (do
+        (call adv st)
+        (if (= (call peek st) 94) (do (call adv st) (set neg true)))
+        (while going
+          (let (c (call peek st))
+            (do
+              (if (= c -1) (call fail "missing closing ]" (call text st i0 (__hf_aget st 2))))
+              (if (and (= c 93) (not first))
+                (do (call adv st) (set going false))
+                (let (start (call pos st))
+                  (do
+                    (set first false)
+                    (if (and (= c 91) (= (call peek_at st 1) 58)) (call unsupported "[:name:] classes"))
+                    (let (it (call class_item st))
+                      (if (= (list_get it 0) -1)
+                        (for x (list_get it 1) (append ranges x))
+                        (let (lo (list_get it 0))
+                          (if (and (= (call peek st) 45) (and (>= (call peek_at st 1) 0) (not (= (call peek_at st 1) 93))))
+                            (do
+                              (call adv st)
+                              (let (hstart (call pos st) it2 (call class_item st))
+                                (do
+                                  ; A class such as \d cannot end a range; Go names the escape.
+                                  (if (= (list_get it2 0) -1)
+                                    (call fail "invalid escape sequence" (call text st hstart (call pos st))))
+                                  (if (< (list_get it2 0) lo)
+                                    (call fail "invalid character class range" (call text st start (call pos st))))
+                                  (append ranges lo)
+                                  (append ranges (list_get it2 0)))))
+                            (do (append ranges lo) (append ranges lo))))))))))))
+        (return (call chars ranges neg)))))
+
+  ; class_item: (c) for a character of a class, or (-1 ranges) for \d and
+  ; the like.
+  (defun class_item (st)
+    (let (c (call peek st))
+      (do
+        (if (= c 92) (return (call escape st)))
+        (call adv st)
+        (return (list c)))))
+
+  ; escape: after a backslash, (c) for a character or (-1 ranges) for a
+  ; Perl class.
+  (defun escape (st)
+    (let (i0 (call pos st))
+      (do
+        (call adv st)
+        (let (c (call peek st))
+          (do
+            (if (= c -1) (call fail "trailing backslash at end of expression" ""))
+            (call adv st)
+            (if (and (< c 128) (not (or (and (>= c 48) (<= c 57)) (or (and (>= c 65) (<= c 90)) (and (>= c 97) (<= c 122))))))
+              (return (list c)))
+            (if (= c 97) (return (list 7)))
+            (if (= c 102) (return (list 12)))
+            (if (= c 116) (return (list 9)))
+            (if (= c 110) (return (list 10)))
+            (if (= c 114) (return (list 13)))
+            (if (= c 118) (return (list 11)))
+            (if (= c 100) (return (list -1 (list 48 57))))
+            (if (= c 68) (return (list -1 (list 0 47 58 1114111))))
+            (if (= c 115) (return (list -1 (list 9 10 12 13 32 32))))
+            (if (= c 83) (return (list -1 (list 0 8 11 11 14 31 33 1114111))))
+            (if (= c 119) (return (list -1 (list 48 57 65 90 95 95 97 122))))
+            (if (= c 87) (return (list -1 (list 0 47 58 64 91 94 96 96 123 1114111))))
+            (if (or (= c 98) (or (= c 66) (or (= c 65) (= c 122)))) (call unsupported (+ "\\" (call text st (+ i0 1) (call pos st)))))
+            (if (or (= c 112) (or (= c 80) (or (= c 81) (= c 120)))) (call unsupported (+ "\\" (call text st (+ i0 1) (call pos st)))))
+            (if (and (>= c 48) (<= c 55)) (call unsupported "octal escapes"))
+            (call fail "invalid escape sequence" (call text st i0 (call pos st)))
+            (return (list c)))))))
+
+  ; size: how many instructions a node compiles to.
+  (defun size (n)
+    (let (k (__hf_aget n 0))
+      (do
+        (if (< k 3) (return 1))
+        (if (= k 3) (return 0))
+        (if (= k 4) (let (t 0) (do (for x (__hf_aget n 1) (set t (+ t (call size x)))) (return t))))
+        (if (= k 5) (let (t 0) (do (for x (__hf_aget n 1) (set t (+ t (+ (call size x) 2)))) (return (- t 2)))))
+        (let (s (call size (__hf_aget n 1)) lo (__hf_aget n 2) hi (__hf_aget n 3))
+          (if (= hi -1)
+            (return (+ (* lo s) (+ s 2)))
+            (return (+ (* lo s) (* (- hi lo) (+ s 1)))))))))
+
+  ; emit: write node n's instructions from pc; the next pc.
+  (defun emit (n prog pc)
+    (let (k (__hf_aget n 0))
+      (do
+        (if (= k 0) (do (__hf_aset prog pc (call arr (list 0 (__hf_aget n 1) (__hf_aget n 2)))) (return (+ pc 1))))
+        (if (= k 1) (do (__hf_aset prog pc (call arr (list 3))) (return (+ pc 1))))
+        (if (= k 2) (do (__hf_aset prog pc (call arr (list 4))) (return (+ pc 1))))
+        (if (= k 3) (return pc))
+        (if (= k 4) (let (p pc) (do (for x (__hf_aget n 1) (set p (call emit x prog p))) (return p))))
+        (if (= k 5)
+          (let (end (+ pc (call size n)) p pc i 0 last (- (list_len (__hf_aget n 1)) 1))
+            (do
+              (for x (__hf_aget n 1)
+                (if (< i last)
+                  (let (sz (call size x))
+                    (do
+                      (__hf_aset prog p (call arr (list 1 (+ p 1) (+ p (+ sz 2)))))
+                      (let (q (call emit x prog (+ p 1)))
+                        (do (__hf_aset prog q (call arr (list 2 end))) (set p (+ q 1))))
+                      (set i (+ i 1))))
+                  (set p (call emit x prog p))))
+              (return p))))
+        (let (sub (__hf_aget n 1) lo (__hf_aget n 2) hi (__hf_aget n 3) p pc c 0 sz (call size (__hf_aget n 1)))
+          (do
+            (while (< c lo) (do (set p (call emit sub prog p)) (set c (+ c 1))))
+            (if (= hi -1)
+              (do
+                (__hf_aset prog p (call arr (list 1 (+ p 1) (+ p (+ sz 2)))))
+                (let (q (call emit sub prog (+ p 1)))
+                  (do (__hf_aset prog q (call arr (list 2 p))) (return (+ q 1)))))
+              (let (end (+ p (* (- hi lo) (+ sz 1))))
+                (do
+                  (while (< c hi)
+                    (do
+                      (__hf_aset prog p (call arr (list 1 (+ p 1) end)))
+                      (set p (call emit sub prog (+ p 1)))
+                      (set c (+ c 1))))
+                  (return p)))))))))
+
+  ; run: does prog match anywhere in s? The threads of one position are a
+  ; list of set instructions; marks[pc] holds the generation that last
+  ; added pc, so each is added once per position.
+  ; The state array: 0 threads, 1 count, 2 marks, 3 generation, 4 found,
+  ; 5 the text's length.
+  (defun run (prog s)
+    (let (n (__hf_byte_len s) a (__hf_array (__hf_alen prog)) b (__hf_array (__hf_alen prog)) st (__hf_array 6) i 0 gen 1 phase 0)
+      (do
+        (__hf_aset st 0 a)
+        (__hf_aset st 1 0)
+        (__hf_aset st 2 (__hf_array (__hf_alen prog)))
+        (__hf_aset st 3 gen)
+        (__hf_aset st 4 false)
+        (__hf_aset st 5 n)
+        (while true
+          (do
+            (call add prog st 0 i)
+            (if (__hf_aget st 4) (return true))
+            (if (>= i n) (return false))
+            (let (l (call __std_utf8_seq_len s i))
+              (let (r (call __std_utf8_rune s i l) w (if (= l 0) 1 l) count (__hf_aget st 1) threads (__hf_aget st 0) k 0)
+                (do
+                  (set gen (+ gen 1))
+                  (__hf_aset st 0 (if (= phase 0) b a))
+                  (__hf_aset st 1 0)
+                  (__hf_aset st 3 gen)
+                  (while (< k count)
+                    (let (pc (__hf_aget threads k))
+                      (do
+                        (let (ins (__hf_aget prog pc))
+                          (if (call accepts (__hf_aget ins 1) (__hf_aget ins 2) r)
+                            (call add prog st (+ pc 1) (+ i w))))
+                        (set k (+ k 1)))))
+                  (set phase (- 1 phase))
+                  (set i (+ i w)))))))
+        (return false))))
+
+  ; add: the thread at pc and, through jumps, splits and satisfied anchors,
+  ; every instruction it reaches at byte position pos.
+  (defun add (prog st pc pos)
+    (let (marks (__hf_aget st 2))
+      (if (= (__hf_aget marks pc) (__hf_aget st 3))
+        (return 0)
+        (do
+          (__hf_aset marks pc (__hf_aget st 3))
+          (let (ins (__hf_aget prog pc))
+            (let (op (__hf_aget ins 0))
+              (do
+                (if (= op 0)
+                  (do
+                    (__hf_aset (__hf_aget st 0) (__hf_aget st 1) pc)
+                    (__hf_aset st 1 (+ (__hf_aget st 1) 1))
+                    (return 0)))
+                (if (= op 1) (do (call add prog st (__hf_aget ins 1) pos) (call add prog st (__hf_aget ins 2) pos) (return 0)))
+                (if (= op 2) (do (call add prog st (__hf_aget ins 1) pos) (return 0)))
+                (if (= op 3) (do (if (= pos 0) (call add prog st (+ pc 1) pos)) (return 0)))
+                (if (= op 4) (do (if (= pos (__hf_aget st 5)) (call add prog st (+ pc 1) pos)) (return 0)))
+                (__hf_aset st 4 true)
+                (return 0))))))))
+
+  (defun accepts (ranges neg r)
+    (let (inside false k 0 m (__hf_alen ranges))
+      (do
+        (while (and (< k m) (not inside))
+          (do
+            (if (and (>= r (__hf_aget ranges k)) (<= r (__hf_aget ranges (+ k 1)))) (set inside true))
+            (set k (+ k 2))))
+        (return (!= inside neg))))))
