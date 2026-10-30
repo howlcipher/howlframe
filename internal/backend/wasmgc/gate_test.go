@@ -3,6 +3,7 @@ package wasmgc
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,15 +63,21 @@ func TestHowlSceneGate(t *testing.T) {
 	if want.failed {
 		t.Fatalf("VM: %s", want.errMsg)
 	}
-	got := onWasmAt(t, driver)
-	if got.failed {
-		t.Fatalf("WebAssembly: %s", got.errMsg)
+	engines := map[string]func(*testing.T, string) outcome{"node": onWasmAt}
+	if _, err := exec.LookPath("wasmtime"); err == nil {
+		engines["wasmtime"] = onWasmtimeAt
 	}
-	if !bytes.Equal([]byte(got.stdout), []byte(want.stdout)) {
-		t.Fatalf("output differs (vm %d bytes, wasm %d bytes); first difference at byte %d",
-			len(want.stdout), len(got.stdout), firstDifference(want.stdout, got.stdout))
+	for engine, runOn := range engines {
+		got := runOn(t, driver)
+		if got.failed {
+			t.Fatalf("WebAssembly (%s): %s", engine, got.errMsg)
+		}
+		if !bytes.Equal([]byte(got.stdout), []byte(want.stdout)) {
+			t.Fatalf("output differs (vm %d bytes, %s %d bytes); first difference at byte %d",
+				len(want.stdout), engine, len(got.stdout), firstDifference(want.stdout, got.stdout))
+		}
+		t.Logf("%s: %d fixture projects, %d bytes of identical output", engine, len(fixtures), len(want.stdout))
 	}
-	t.Logf("%d fixture projects, %d bytes of identical output", len(fixtures), len(want.stdout))
 }
 
 // howlString is s as a HowlFrame string literal.

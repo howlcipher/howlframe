@@ -76,6 +76,11 @@ type TypeDef struct {
 	Params  []ValType
 	Results []ValType
 	IsFunc  bool
+	// Standalone types come first and are each their own recursion group,
+	// so they are the same type as an identical one in another module (a
+	// WASI import's signature must match the host's exactly). They may use
+	// only value types, not the module's own types.
+	Standalone bool
 }
 
 // Import is a function imported from the host.
@@ -114,6 +119,11 @@ type Module struct {
 	Exports []Export
 	Datas   [][]byte // passive data segments (string literal bytes)
 	Start   int      // function index, or -1
+	// MemoryPages, when above zero, gives the module one linear memory of
+	// that many 64 KiB pages, exported as MemoryExport (if named). Values
+	// never live there; a WASI host reads output from it.
+	MemoryPages  int
+	MemoryExport string
 }
 
 // NewModule returns an empty module with no start function.
@@ -149,15 +159,36 @@ func (m *Module) Bytes() ([]byte, error) {
 	var out bytes.Buffer
 	out.Write([]byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00})
 
-	// Type section: one recursion group, so every type can refer to any other.
+	// Type section: the standalone types, then one recursion group, so every
+	// other type can refer to any other.
 	if len(m.Types) > 0 {
+		lead := 0
+		for lead < len(m.Types) && m.Types[lead].Standalone {
+			lead++
+		}
+		for i, t := range m.Types[lead:] {
+			if t.Standalone {
+				return nil, fmt.Errorf("type %d (%s): standalone types must come first", lead+i, t.Name)
+			}
+		}
 		var s bytes.Buffer
-		s.Write(uleb(1))
-		s.WriteByte(0x4E)
-		s.Write(uleb(uint64(len(m.Types))))
-		for i, t := range m.Types {
+		groups := lead
+		if lead < len(m.Types) {
+			groups++
+		}
+		s.Write(uleb(uint64(groups)))
+		for i, t := range m.Types[:lead] {
 			if err := encodeType(&s, t); err != nil {
 				return nil, fmt.Errorf("type %d (%s): %w", i, t.Name, err)
+			}
+		}
+		if lead < len(m.Types) {
+			s.WriteByte(0x4E)
+			s.Write(uleb(uint64(len(m.Types) - lead)))
+			for i, t := range m.Types[lead:] {
+				if err := encodeType(&s, t); err != nil {
+					return nil, fmt.Errorf("type %d (%s): %w", lead+i, t.Name, err)
+				}
 			}
 		}
 		section(&out, 1, s.Bytes())
@@ -181,6 +212,13 @@ func (m *Module) Bytes() ([]byte, error) {
 		}
 		section(&out, 3, s.Bytes())
 	}
+	if m.MemoryPages > 0 {
+		var s bytes.Buffer
+		s.Write(uleb(1))
+		s.WriteByte(0x00) // minimum only
+		s.Write(uleb(uint64(m.MemoryPages)))
+		section(&out, 5, s.Bytes())
+	}
 	if len(m.Globals) > 0 {
 		var s bytes.Buffer
 		s.Write(uleb(uint64(len(m.Globals))))
@@ -196,13 +234,22 @@ func (m *Module) Bytes() ([]byte, error) {
 		}
 		section(&out, 6, s.Bytes())
 	}
-	if len(m.Exports) > 0 {
+	if len(m.Exports) > 0 || m.MemoryExport != "" {
 		var s bytes.Buffer
-		s.Write(uleb(uint64(len(m.Exports))))
+		n := len(m.Exports)
+		if m.MemoryExport != "" {
+			n++
+		}
+		s.Write(uleb(uint64(n)))
 		for _, e := range m.Exports {
 			name(&s, e.Name)
 			s.WriteByte(0x00)
 			s.Write(uleb(uint64(e.Func)))
+		}
+		if m.MemoryExport != "" {
+			name(&s, m.MemoryExport)
+			s.WriteByte(0x02)
+			s.Write(uleb(0))
 		}
 		section(&out, 7, s.Bytes())
 	}

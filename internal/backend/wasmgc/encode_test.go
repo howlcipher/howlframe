@@ -131,3 +131,37 @@ func hex(b byte) string {
 	const digits = "0123456789abcdef"
 	return string([]byte{digits[b>>4], digits[b&15]})
 }
+
+// A WASI import's signature must be the very type the host defines, so the
+// encoder writes standalone types as their own recursion groups ahead of the
+// module's one group: wasmtime refuses fd_write's type inside the group.
+func TestStandaloneTypesComeBeforeTheRecursionGroup(t *testing.T) {
+	m := NewModule()
+	m.AddType(TypeDef{Name: "fd_write", IsFunc: true, Standalone: true, Params: []ValType{I32, I32, I32, I32}, Results: []ValType{I32}})
+	str := m.AddType(TypeDef{Name: "Bytes", Array: &Field{Type: PackedI8, Mutable: true}})
+	m.AddType(TypeDef{Name: "Str", Struct: []Field{{Type: Ref(str)}}})
+	wasm, err := m.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Header, then section 1: size, two entries (the standalone function
+	// type, then a recursion group of the other two).
+	types := wasm[8:]
+	if types[0] != 1 {
+		t.Fatalf("first section is %d, want the type section", types[0])
+	}
+	body := types[2:]
+	if body[0] != 2 || body[1] != 0x60 {
+		t.Fatalf("type section starts % x, want two entries, the first a plain func type", body[:2])
+	}
+	if !strings.Contains(string(body), "\x4e\x02") {
+		t.Fatalf("no recursion group of two types in % x", body)
+	}
+
+	bad := NewModule()
+	bad.AddType(TypeDef{Name: "Bytes", Array: &Field{Type: PackedI8, Mutable: true}})
+	bad.AddType(TypeDef{Name: "late", IsFunc: true, Standalone: true})
+	if _, err := bad.Bytes(); err == nil || !strings.Contains(err.Error(), "standalone types must come first") {
+		t.Fatalf("a standalone type after the group: got %v", err)
+	}
+}

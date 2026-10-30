@@ -38,6 +38,9 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `build --target wasmgc --host wasi` writes a WASI command module that runs in wasmtime
+  (`wasmtime run -W gc=y,function-references=y app.wasm`); the differential tests, the corpus and the HowlScene HF gate run
+  in wasmtime as well as Node when it is installed.
 * Floats on `--target wasmgc` are printed and parsed by HowlFrame (`std/float.howl`, a port of Go's `strconv` decimal), not
   by the Node loader, which now provides only print, stderr and exit. `to_float` reads `1_000` as the VM does; hexadecimal
   floats fail with `WASM_UNSUPPORTED`.
