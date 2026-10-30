@@ -395,6 +395,80 @@ func TestRegexUnsupportedFailsClosed(t *testing.T) {
 	}
 }
 
+// parse_json is standard-library HowlFrame (std/json.howl); the VM's is
+// Go's json.Decoder with UseNumber and a check for a second value.
+func TestDiffParseJSON(t *testing.T) {
+	for name, body := range map[string]string{
+		"object":                       "(let (t \"{\\\"a\\\":1,\\\"b\\\":[true,null,2.5,\\\"x\\\"],\\\"a\\\":3}\") (print (parse_json Any t)))",
+		"nested":                       "(let (t \"{\\\"k\\\":{\\\"n\\\":[]},\\\"m\\\":[[1,[2]],{}],\\\"e\\\":{}}\") (print (parse_json Any t)))",
+		"whitespace":                   "(let (t \" \\t\\n\\r {\\\"a\\\" : [ 1 , 2 ] } \\n\") (print (parse_json Any t)))",
+		"scalars":                      "(let (t \"[true,false,null,0,-0,7,-12,\\\"\\\",\\\"\\\"]\") (print (parse_json Any t)))",
+		"numbers":                      "(let (t \"[1e2,2E-3,-0.0,0.5,1.25e+3,123456789012,9223372036854775807,-9223372036854775808]\") (print (parse_json Any t)))",
+		"big numbers":                  "(let (t \"[9223372036854775808,12345678901234567890.5,1e300]\") (print (parse_json Any t)))",
+		"escapes":                      "(let (t \"\\\"q\\\\\\\"\\\\\\\\\\\\/\\\\b\\\\f\\\\n\\\\r\\\\t\\\"\") (print (parse_json Any t)))",
+		"unicode escapes":              "(let (t \"[\\\"\\\\u00e9\\\\u00E9\\\",\\\"\\\\u263a\\\",\\\"\\\\u0041\\\"]\") (print (parse_json Any t)))",
+		"surrogate pair":               "(let (t \"\\\"\\\\ud83d\\\\ude00\\\"\") (print (parse_json Any t)))",
+		"lone surrogates":              "(let (t \"[\\\"\\\\ud800x\\\",\\\"\\\\udc00\\\",\\\"\\\\ud800\\\\u0041\\\"]\") (print (parse_json Any t)))",
+		"raw unicode":                  "(let (t \"\\\"héllo ✓ 日本 🎉\\\"\") (print (parse_json Any t)))",
+		"top-level string":             "(let (t \"\\\"plain\\\"\") (print (parse_json Any t)))",
+		"top-level number":             "(let (t \"  7  \") (print (parse_json Any t)))",
+		"empty":                        "(let (t \"\") (print (parse_json Any t)))",
+		"only spaces":                  "(let (t \"   \") (print (parse_json Any t)))",
+		"open object":                  "(let (t \"{\") (print (parse_json Any t)))",
+		"open array":                   "(let (t \"[1,\") (print (parse_json Any t)))",
+		"trailing comma array":         "(let (t \"[1,]\") (print (parse_json Any t)))",
+		"trailing comma object":        "(let (t \"{\\\"a\\\":1,}\") (print (parse_json Any t)))",
+		"missing colon":                "(let (t \"{\\\"a\\\" 1}\") (print (parse_json Any t)))",
+		"bad pair end":                 "(let (t \"{\\\"a\\\":1 \\\"b\\\":2}\") (print (parse_json Any t)))",
+		"bad array end":                "(let (t \"[1 2]\") (print (parse_json Any t)))",
+		"number then letters in array": "(let (t \"[12abc]\") (print (parse_json Any t)))",
+		"non-string key":               "(let (t \"{1:2}\") (print (parse_json Any t)))",
+		"truncated literal":            "(let (t \"nul\") (print (parse_json Any t)))",
+		"wrong literal":                "(let (t \"nulx\") (print (parse_json Any t)))",
+		"wrong true":                   "(let (t \"trux\") (print (parse_json Any t)))",
+		"wrong false":                  "(let (t \"fax\") (print (parse_json Any t)))",
+		"leading zero":                 "(let (t \"01\") (print (parse_json Any t)))",
+		"lone minus":                   "(let (t \"-\") (print (parse_json Any t)))",
+		"minus letter":                 "(let (t \"-x\") (print (parse_json Any t)))",
+		"dot end":                      "(let (t \"1.\") (print (parse_json Any t)))",
+		"dot letter":                   "(let (t \"1.x\") (print (parse_json Any t)))",
+		"exponent end":                 "(let (t \"1e\") (print (parse_json Any t)))",
+		"exponent letter":              "(let (t \"1e+x\") (print (parse_json Any t)))",
+		"plus sign":                    "(let (t \"+1\") (print (parse_json Any t)))",
+		"open string":                  "(let (t \"\\\"abc\") (print (parse_json Any t)))",
+		"bad escape":                   "(let (t \"\\\"\\\\q\\\"\") (print (parse_json Any t)))",
+		"bad unicode escape":           "(let (t \"\\\"\\\\u12g4\\\"\") (print (parse_json Any t)))",
+		"short unicode escape":         "(let (t \"\\\"\\\\u12\") (print (parse_json Any t)))",
+		"control in string":            "(let (t \"\\\"a\\tb\\\"\") (print (parse_json Any t)))",
+		"newline in string":            "(let (t \"\\\"a\\nb\\\"\") (print (parse_json Any t)))",
+		"two numbers":                  "(let (t \"1 2\") (print (parse_json Any t)))",
+		"number then word":             "(let (t \"12x\") (print (parse_json Any t)))",
+		"two objects":                  "(let (t \"{}{}\") (print (parse_json Any t)))",
+		"number then null":             "(let (t \"1 null\") (print (parse_json Any t)))",
+		"two arrays":                   "(let (t \"[1][2]\") (print (parse_json Any t)))",
+		"number then bool":             "(let (t \"1true\") (print (parse_json Any t)))",
+		"number then string":           "(let (t \"1 \\\"s\\\"\") (print (parse_json Any t)))",
+		"object then junk":             "(let (t \"{} x\") (print (parse_json Any t)))",
+		"second truncated":             "(let (t \"1 [\") (print (parse_json Any t)))",
+		"out of range":                 "(let (t \"1e400\") (print (parse_json Any t)))",
+		"out of range nested":          "(let (t \"[1, {\\\"a\\\": 1e400}]\") (print (parse_json Any t)))",
+		"range then second value":      "(let (t \"1e400 x\") (print (parse_json Any t)))",
+		"word":                         "(let (t \"x\") (print (parse_json Any t)))",
+		"non-ascii":                    "(let (t \"é\") (print (parse_json Any t)))",
+		"quote char":                   "(let (t \"'\") (print (parse_json Any t)))",
+		"control char":                 "(let (t \"\u0001\") (print (parse_json Any t)))",
+		"tab then junk":                "(let (t \"\\t)\") (print (parse_json Any t)))",
+		// Only an int overflows, which tells ints from floats.
+		"number kinds": `(let (t "[1, 1.0, 1e0, 5, -5.0, 9223372036854775808]") (for v (parse_json Any t) (print (try_let (s (+ v 9223372036854775807)) (catch e "int") "float"))))`,
+		"round trip":   `(let (v (dict ("a" (list 1 2)) ("f" 2.5) ("s" "x<y>") ("b" (dict ("c" true)))) t (encode_json v)) (print (= (encode_json (parse_json Any t)) t)))`,
+		"read fields":  `(let (t "{\"name\":\"Ann\",\"tags\":[\"a\",\"b\"]}") (let (v (parse_json Any t)) (print (map_get v "name") (list_len (map_get v "tags")) (map_has v "x"))))`,
+		"caught":       `(let (t "{") (print (try_let (v (parse_json Any t)) (catch e (str_contains e "unexpected EOF")) v)))`,
+		"expression":   `(print (parse_json Any (+ "[1," "2]")))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
 // The standard library's intrinsics and names are reserved for it.
 func TestStdIsReserved(t *testing.T) {
 	for name, src := range map[string]string{

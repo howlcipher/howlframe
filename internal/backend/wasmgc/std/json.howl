@@ -94,4 +94,280 @@
     (let (out "" i 0)
       (do
         (while (< i k) (do (set out (+ out "0")) (set i (+ i 1))))
-        (return out)))))
+        (return out))))
+  ; parse: a JSON text as the VM's parse_json reads it (Go's json.Decoder
+  ; with UseNumber, then a check for a second value): integers that fit
+  ; int64 are ints and other numbers floats, the last of duplicate keys
+  ; wins, invalid UTF-8 in strings and unpaired surrogates become U+FFFD,
+  ; and errors are Go's messages after "parse_json failed: ".
+  ; The state array: 0 text, 1 position, 2 length, 3 a pending number
+  ; range error (Go reports it after the check for a second value).
+  (export (defun parse (text)
+    (do
+      (if (not (= (__hf_type text) "string"))
+        (if (= (__hf_type text) "[]interface {}")
+          (__hf_fail "WASM_UNSUPPORTED: parse_json of a byte list is not supported in the WebAssembly backend yet")
+          (call perr "EOF")))
+      (let (st (__hf_array 4))
+        (do
+          (__hf_aset st 0 text)
+          (__hf_aset st 1 0)
+          (__hf_aset st 2 (__hf_byte_len text))
+          (__hf_aset st 3 "")
+          (call skip_ws st)
+          (if (call at_end st) (call perr "EOF"))
+          (let (v (call value st))
+            (do
+              (call skip_ws st)
+              (if (not (call at_end st))
+                (let (kind (call peek st))
+                  (do
+                    (call value st)
+                    (if (or (= kind 123) (= kind 110)) (call perr "multiple JSON values"))
+                    (call perr (+ "json: cannot unmarshal " (+ (call kind_name kind) " into Go value of type struct {}"))))))
+              (if (not (= (__hf_aget st 3) "")) (call perr (__hf_aget st 3)))
+              (return v))))))))
+
+  (defun perr (msg) (__hf_fail (+ "RUNTIME_ERROR: parse_json failed: " msg)))
+  (defun syntax (b context) (call perr (+ "invalid character " (+ (call qchar b) (+ " " context)))))
+  (defun eof () (call perr "unexpected EOF"))
+
+  (defun kind_name (c)
+    (do
+      (if (= c 91) (return "array"))
+      (if (= c 34) (return "string"))
+      (if (or (= c 116) (= c 102)) (return "bool"))
+      (return "number")))
+
+  ; qchar: a byte quoted as Go's JSON scanner quotes it in messages.
+  (defun qchar (b)
+    (do
+      (if (= b 39) (return "'\\''"))
+      (if (= b 34) (return "'\"'"))
+      (if (and (>= b 32) (< b 127)) (return (+ "'" (+ (__hf_char b) "'"))))
+      (if (= b 7) (return "'\\a'"))
+      (if (= b 8) (return "'\\b'"))
+      (if (= b 12) (return "'\\f'"))
+      (if (= b 10) (return "'\\n'"))
+      (if (= b 13) (return "'\\r'"))
+      (if (= b 9) (return "'\\t'"))
+      (if (= b 11) (return "'\\v'"))
+      (if (or (< b 32) (= b 127)) (return (+ "'\\x" (+ (call hex2 b) "'"))))
+      (if (or (< b 161) (= b 173)) (return (+ "'\\u00" (+ (call hex2 b) "'"))))
+      (return (+ "'" (+ (__hf_char b) "'")))))
+
+  (defun hex2 (b)
+    (let (digits (str_split "0123456789abcdef" "") hi 0 lo b)
+      (do
+        (while (>= lo 16) (do (set lo (- lo 16)) (set hi (+ hi 1))))
+        (return (+ (list_get digits hi) (list_get digits lo))))))
+
+  (defun at_end (st) (return (>= (__hf_aget st 1) (__hf_aget st 2))))
+  (defun peek (st) (return (__hf_byte_at (__hf_aget st 0) (__hf_aget st 1))))
+  (defun adv (st) (__hf_aset st 1 (+ (__hf_aget st 1) 1)))
+  ; need: the byte here, or unexpected EOF.
+  (defun need (st)
+    (do
+      (if (call at_end st) (call eof))
+      (return (call peek st))))
+
+  (defun skip_ws (st)
+    (let (going true)
+      (while (and going (not (call at_end st)))
+        (let (c (call peek st))
+          (if (or (= c 32) (or (= c 9) (or (= c 10) (= c 13))))
+            (call adv st)
+            (set going false))))))
+
+  (defun value (st)
+    (do
+      (call skip_ws st)
+      (let (c (call need st))
+        (do
+          (if (= c 123) (return (call object st)))
+          (if (= c 91) (return (call array st)))
+          (if (= c 34) (return (call jstring st)))
+          (if (or (= c 45) (and (>= c 48) (<= c 57))) (return (call jnumber st)))
+          (if (= c 116) (do (call literal st "true") (return true)))
+          (if (= c 102) (do (call literal st "false") (return false)))
+          (if (= c 110) (do (call literal st "null") (return (__hf_nil))))
+          (call syntax c "looking for beginning of value")))))
+
+  (defun literal (st word)
+    (let (k 0 n (__hf_byte_len word))
+      (while (< k n)
+        (let (c (call need st) want (__hf_byte_at word k))
+          (do
+            (if (not (= c want))
+              (call syntax c (+ "in literal " (+ word (+ " (expecting " (+ (call qchar want) ")"))))))
+            (call adv st)
+            (set k (+ k 1)))))))
+
+  (defun object (st)
+    (let (d (dict) going true)
+      (do
+        (call adv st)
+        (call skip_ws st)
+        (if (= (call need st) 125) (do (call adv st) (return d)))
+        (while going
+          (do
+            (call skip_ws st)
+            (let (c (call need st))
+              (if (not (= c 34)) (call syntax c "looking for beginning of object key string")))
+            (let (k (call jstring st))
+              (do
+                (call skip_ws st)
+                (let (c (call need st))
+                  (if (not (= c 58)) (call syntax c "after object key")))
+                (call adv st)
+                (map_set d k (call value st))))
+            (call skip_ws st)
+            (let (c (call need st))
+              (cond
+                ((= c 44) (call adv st))
+                ((= c 125) (do (call adv st) (set going false)))
+                (else (call syntax c "after object key:value pair"))))))
+        (return d))))
+
+  (defun array (st)
+    (let (out (list) going true)
+      (do
+        (call adv st)
+        (call skip_ws st)
+        (if (= (call need st) 93) (do (call adv st) (return out)))
+        (while going
+          (do
+            (append out (call value st))
+            (call skip_ws st)
+            (let (c (call need st))
+              (cond
+                ((= c 44) (call adv st))
+                ((= c 93) (do (call adv st) (set going false)))
+                (else (call syntax c "after array element"))))))
+        (return out))))
+
+  ; jstring: a string from its opening quote. Runs without escapes are
+  ; copied whole.
+  (defun jstring (st)
+    (let (s (__hf_aget st 0) parts (list) start 0 going true)
+      (do
+        (call adv st)
+        (set start (__hf_aget st 1))
+        (while going
+          (let (i (__hf_aget st 1) c (call need st))
+            (cond
+              ((= c 34)
+                (do (append parts (__hf_byte_slice s start i)) (call adv st) (set going false)))
+              ((= c 92)
+                (do
+                  (append parts (__hf_byte_slice s start i))
+                  (call adv st)
+                  (append parts (call unescape st))
+                  (set start (__hf_aget st 1))))
+              ((< c 32) (call syntax c "in string literal"))
+              ((< c 128) (call adv st))
+              (else
+                (let (l (call __std_utf8_seq_len s i))
+                  (if (= l 0)
+                    (do
+                      (append parts (__hf_byte_slice s start i))
+                      (append parts (__hf_char 65533))
+                      (call adv st)
+                      (set start (__hf_aget st 1)))
+                    (__hf_aset st 1 (+ i l))))))))
+        (return (str_join parts "")))))
+
+  ; unescape: the text of the escape after a backslash.
+  (defun unescape (st)
+    (let (c (call need st))
+      (do
+        (call adv st)
+        (if (= c 34) (return "\""))
+        (if (= c 92) (return "\\"))
+        (if (= c 47) (return "/"))
+        (if (= c 98) (return (__hf_char 8)))
+        (if (= c 102) (return (__hf_char 12)))
+        (if (= c 110) (return (__hf_char 10)))
+        (if (= c 114) (return (__hf_char 13)))
+        (if (= c 116) (return (__hf_char 9)))
+        (if (not (= c 117)) (call syntax c "in string escape code"))
+        (let (cp (call hex4 st))
+          (do
+            (if (and (>= cp 56320) (<= cp 57343)) (return (__hf_char 65533)))
+            (if (and (>= cp 55296) (<= cp 56319))
+              ; A high surrogate pairs only with a following low one.
+              (let (i (__hf_aget st 1) s (__hf_aget st 0) n (__hf_aget st 2))
+                (do
+                  (if (and (<= (+ i 6) n) (and (= (__hf_byte_at s i) 92) (= (__hf_byte_at s (+ i 1)) 117)))
+                    (let (save i)
+                      (do
+                        (call adv st)
+                        (call adv st)
+                        (let (lo (call hex4 st))
+                          (do
+                            (if (and (>= lo 56320) (<= lo 57343))
+                              (return (__hf_char (+ 65536 (+ (* (- cp 55296) 1024) (- lo 56320))))))
+                            (__hf_aset st 1 save))))))
+                  (return (__hf_char 65533)))))
+            (return (__hf_char cp)))))))
+
+  (defun hex4 (st)
+    (let (v 0 k 0)
+      (do
+        (while (< k 4)
+          (let (c (call need st))
+            (do
+              (cond
+                ((and (>= c 48) (<= c 57)) (set v (+ (* v 16) (- c 48))))
+                ((and (>= c 97) (<= c 102)) (set v (+ (* v 16) (- c 87))))
+                ((and (>= c 65) (<= c 70)) (set v (+ (* v 16) (- c 55))))
+                (else (call syntax c "in \\u hexadecimal character escape")))
+              (call adv st)
+              (set k (+ k 1)))))
+        (return v))))
+
+  (defun digits (st)
+    (let (going true)
+      (while (and going (not (call at_end st)))
+        (let (c (call peek st))
+          (if (and (>= c 48) (<= c 57)) (call adv st) (set going false))))))
+
+  (defun is_digit (c) (return (and (>= c 48) (<= c 57))))
+
+  ; jnumber: -?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?
+  (defun jnumber (st)
+    (let (s (__hf_aget st 0) start (__hf_aget st 1) whole true)
+      (do
+        (if (= (call peek st) 45) (call adv st))
+        (let (c (call need st))
+          (cond
+            ((= c 48) (call adv st))
+            ((call is_digit c) (call digits st))
+            (else (call syntax c "in numeric literal"))))
+        (if (and (not (call at_end st)) (= (call peek st) 46))
+          (do
+            (set whole false)
+            (call adv st)
+            (let (c (call need st))
+              (if (not (call is_digit c)) (call syntax c "after decimal point in numeric literal")))
+            (call digits st)))
+        (if (and (not (call at_end st)) (or (= (call peek st) 101) (= (call peek st) 69)))
+          (do
+            (set whole false)
+            (call adv st)
+            (let (c (call need st))
+              (if (or (= c 43) (= c 45)) (call adv st)))
+            (let (c (call need st))
+              (if (not (call is_digit c)) (call syntax c "in exponent of numeric literal")))
+            (call digits st)))
+        (let (t (__hf_byte_slice s start (__hf_aget st 1)))
+          (do
+            (if whole (try_let (v (to_int t)) (catch e 0) (return v)))
+            (try_let (f (to_float t))
+              (catch e
+                (do
+                  (if (= (__hf_aget st 3) "")
+                    (__hf_aset st 3 (+ "strconv.ParseFloat: parsing \"" (+ t "\": value out of range"))))
+                  (return 0.0)))
+              (return f)))))))
+)
