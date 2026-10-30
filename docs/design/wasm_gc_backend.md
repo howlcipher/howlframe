@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestone M1 done (2026-10-30); M2 next.
+Status: milestone M1 done (2026-10-30); M2 in progress.
 
 ## Goal
 
@@ -115,7 +115,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | Milestone | State | Notes |
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
-| M2 tests | Not started | |
+| M2 tests | In progress | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
@@ -295,6 +295,10 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 ### M2 tasks: tests
 
+- [x] Harness hygiene: the differential harness runs every command in a
+      temporary directory, so the VM's bare `howlframe prog.howl` no longer
+      writes `prog.hfbc` into the package; `TestMain` fails a run that
+      leaves one there.
 - [ ] `test` blocks and `assert` compile into a test module with one export
       per test; a generated Node runner reports results like `node:test`.
 - [ ] HowlScene HF's `tests/core/*_test.howl` pass on WebAssembly.

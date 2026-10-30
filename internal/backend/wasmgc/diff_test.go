@@ -3,6 +3,7 @@ package wasmgc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,8 +29,14 @@ func TestMain(m *testing.M) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		panic(string(out))
 	}
+	before, _ := filepath.Glob("*.hfbc")
 	code := m.Run()
 	os.RemoveAll(dir)
+	// Runs happen in temporary directories; none may leave bytecode here.
+	if after, _ := filepath.Glob("*.hfbc"); len(after) > len(before) && code == 0 {
+		fmt.Fprintf(os.Stderr, "tests left bytecode in the package directory: %v\n", after)
+		code = 1
+	}
 	os.Exit(code)
 }
 
@@ -40,9 +47,13 @@ type outcome struct {
 	errMsg string
 }
 
+// run runs a command in a fresh temporary directory: the bare
+// `howlframe prog.howl` path writes prog.hfbc into the working directory,
+// which must not be the package. Every path passed in is absolute.
 func run(t *testing.T, name string, args ...string) outcome {
 	t.Helper()
 	cmd := exec.Command(name, args...)
+	cmd.Dir = t.TempDir()
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
