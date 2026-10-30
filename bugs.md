@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 67 | [A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass](#67-a-try_let-catches-exit-in-the-javascript-backends-tests-so-a-failing-assert-can-pass) | Done (2026-10-30) | 8.0 (8×1÷1) | Opus 5.5 | — | — | In `app.test.js`, `exit` (and so `assert`) throws an `Error` to fail the running test, and a `try_let` caught it like any error: a test whose failing assert sits in a function called from a `try_let` binding passed, and the handler ran. On the VM, exit ends the program whatever handler encloses it. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
 | 64 | [The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`](#64-the-javascript-backends-encode_json-keeps-insertion-order-and-does-not-escape---) | Done (2026-10-30) | 6.0 (6×1÷1) | — | — | — | `(encode_json (dict ("b" 1) ("a" "<x>")))` is `{"b":1,"a":"<x>"}` from `--target js` and `{"a":"\u003cx\u003e","b":1}` on the VM (Go's `encoding/json`: sorted keys, HTML-safe escapes), so a project a browser app writes differs byte for byte from the one the VM or WebAssembly writes. |
 | 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
@@ -164,6 +165,30 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 67. A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass
+
+* **Problem:** `assert` lowers to `stderr` and `exit`. In `app.test.js`,
+  `exit` throws an `Error` (`HowlFrame exit N at file:line`) so that it
+  fails the running node:test test and the rest still run. The `try_let`
+  the JavaScript backend emits catches every thrown value, so it caught
+  that one too: the failing assert was swallowed, the handler ran, and the
+  test passed. The browser `exit` (which throws to stop a handler) had the
+  same flaw. On the VM, `exit` ends the program whatever handler encloses
+  it.
+* **Evidence:** `(test "t" (try_let (v (call checked 2)) (catch e (print
+  "handler ran")) (print v)))`, where `checked` asserts its argument is 1,
+  is `ok` under `node --test` and prints `handler ran` (2026-10-30). The
+  same program built as WebAssembly tests (M2) fails the test, as the VM
+  would end the program.
+* **Scope:** Mark the thrown exit and rethrow it from every `try_let`
+  handler, with a test of a failing assert inside a `try_let` binding and
+  value.
+* **Done (2026-10-30):** `howlFrameExit` marks its error `howlFrameExit`
+  in tests and in the browser, and the generated `try_let` rethrows a
+  marked error before binding it. `TestJSTestExitPassesTryLet` covers an
+  assert failing in a binding and in a value-position `try_let`, and an
+  ordinary conversion error still caught; it failed before the fix.
 
 ### 65. The JavaScript backend emits invalid JavaScript for `try_let` used as a value
 

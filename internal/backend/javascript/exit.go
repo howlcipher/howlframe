@@ -6,19 +6,25 @@ package javascript
 // In app.js, exit ends a Node process with the given status; a browser has no
 // process to end, so there it throws and stops the current handler. In
 // app.test.js (forTests) exit always throws, so a failed assert fails the
-// running node:test test and the remaining tests still run. Each file gets
+// running node:test test and the remaining tests still run. The thrown
+// error is marked howlFrameExit so no try_let catches it: on the VM, exit
+// ends the program whatever handler encloses it (bugs.md #67). Each file gets
 // exactly one declaration, which keeps it valid in strict and module code.
 func exitJSHelper(forTests bool) string {
 	exit := `function howlFrameExit(code, where) {
   if (typeof process !== "undefined" && typeof process.exit === "function") {
     process.exit(code);
   }
-  throw new Error("EXIT " + code + " at " + where);
+  var e = new Error("EXIT " + code + " at " + where);
+  e.howlFrameExit = true;
+  throw e;
 }
 `
 	if forTests {
 		exit = `function howlFrameExit(code, where) {
-  throw new Error("HowlFrame exit " + code + " at " + where);
+  var e = new Error("HowlFrame exit " + code + " at " + where);
+  e.howlFrameExit = true;
+  throw e;
 }
 `
 	}
