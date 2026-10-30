@@ -272,6 +272,49 @@ func TestDiffDicts(t *testing.T) {
 	}
 }
 
+// The core-library and control-flow sugar desugars into the primitives
+// above, so these fixtures pin that each form keeps matching the VM.
+func TestDiffSugar(t *testing.T) {
+	for name, body := range map[string]string{
+		"not":             `(print (not true) (not false) (not (= 1 2)))`,
+		"cond":            `(let (x 5) (print (cond ((< x 3) "small") ((< x 10) "mid") (else "big")) (cond ((> x 9) "no") (else "fallback"))))`,
+		"switch":          `(let (x "b") (do (switch x ("a" (print "A")) ("b" (print "B")) (else (print "other"))) (switch "q" ("a" (print "A")) (else (print "other")))))`,
+		"n-ary if":        `(let (x 5) (print (if (< x 3) "small" (< x 10) "mid" "big") (if (< x 0) "neg" (< x 1) "zero" "pos")))`,
+		"inc and dec":     `(let (x 1) (do (inc x) (inc x) (dec x) (print x)))`,
+		"str":             `(print (str "a" 1 2.5 true) (str ""))`,
+		"nz":              `(let (d (dict ("a" 1))) (print (nz (map_get d "a") 0) (nz (map_get d "z") 9)))`,
+		"when and unless": `(let (x 1) (do (when (= x 1) (print "w1") (print "w2")) (unless (= x 1) (print "never")) (unless false (print "u"))))`,
+		"n-ary and, or":   `(print (and true true false) (or false false true) (and true true true) (or false false false))`,
+		"blank":           `(print (blank "") (blank "x"))`,
+		"all and any":     `(print (all x (list 1 2 3) (> x 0)) (any x (list 1 2 3) (> x 2)) (all x (list) false) (any x (list) true))`,
+		"versions":        `(print (ver_gt "1.2.3" "1.2.0") (ver_ge "1.0.0" "1.0.0") (ver_gt "1.10.0" "1.9.9") (ver_gt "1.0.0" "1.0.0"))`,
+		"index_of":        `(print (index_of (list 3 4 5) 5) (index_of (list 3) 9) (index_of (list "a" "b") "b"))`,
+		"map_list":        `(print (map_list x (list 1 2 3) (* x 2)) (map_list x (list) x))`,
+		"filter":          `(print (filter x (list 1 2 3 4) (> x 2)) (filter s (list "a" "" "b") (not (blank s))))`,
+		"reduce":          `(print (reduce acc 0 x (list 1 2 3) (+ acc x)) (reduce acc "" s (list "a" "b") (+ acc s)))`,
+		"sum":             `(print (sum (list 1 2 3)) (sum (list)) (sum (list -4 4)))`,
+		"min and max":     `(print (min (list 3 1 2)) (max (list 3 1 2)) (min (list "b" "a")) (max (list 2.5 1.0)))`,
+		"min of empty":    `(do (print "before") (print (min (list))))`,
+		"reverse":         `(print (reverse (list 1 2 3)) (reverse (list)))`,
+		"count_by":        `(print (count_by x (list "a" "b" "a") x))`,
+		"sort":            `(print (sort (list 3 1 2 1)) (sort (list "b" "a" "c" "B")) (sort (list)))`,
+		"range":           `(print (range 0 5) (range 3 3))`,
+		"sort_by":         `(print (sort_by x (list (dict ("n" 2)) (dict ("n" 1)) (dict ("n" 3))) (map_get x "n")))`,
+		"max_by, min_by":  `(print (max_by x (list 3 1 2) x) (min_by x (list 3 1 2) x))`,
+		"padding":         `(print (pad_left "5" 3 "0") (pad_right "ab" 4 ".") (str_repeat "ab" 3) (pad_left "long" 2 "0"))`,
+		"ltrim, rtrim":    `(print (+ "[" (+ (rtrim "  a  ") "]")) (+ "[" (+ (ltrim "  a  ") "]")))`,
+		"to_base":         `(print (to_base 255 16) (to_base 5 2) (to_base 0 10))`,
+		"records":         `(let (m (rec a (rec b (list 10 20)) name "x")) (print m (get m "a" "b" 1) (is_nil (get m "z"))))`,
+		"get through nil": `(let (m ` + mixed + `) (print (get m "zz" "y")))`,
+		"put":             `(let (m (dict)) (do (put m "a" "b" 5) (put m "a" "c" 6) (print m)))`,
+		"pluck, select":   `(print (pluck (list (rec a 1) (rec a 2)) "a") (select (list (rec a 1 b 2)) a))`,
+		"group_by":        `(print (group_by x (list 1 2 3 4) (% x 2)))`,
+		"merge":           `(let (a (rec a 1 b 2)) (print (merge a (rec b 3 c 4)) a))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
 func TestDiffStrings(t *testing.T) {
 	for name, body := range map[string]string{
 		"split":         `(print (str_split "a,b,,c" ",") (str_split "" ",") (str_split "abc" "") (str_split "héllo✓" "") (str_split "a--b--" "--") (str_split "abc" "x"))`,
