@@ -16,7 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
-| 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Pending | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), so the same program's error, including what a `try_let` catches, depends on the toolchain the VM was built with. |
+| 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Pending | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
 | 62 | [A legacy flag before the input writes bytecode silently instead of running the program](#62-a-legacy-flag-before-the-input-writes-bytecode-silently-instead-of-running-the-program) | Pending | 3.0 (6×1÷2) | — | — | — | `howlframe -max-instructions 5000 prog.howl` writes `prog.hfbc` and exits 0 with no output, so a user who meant to run the program with a higher limit sees nothing happen. `howlframe run --max-instructions N prog.howl` runs it. Same class as #52. |
 | 61 | [`TestAdapterDepthCapRejects4095Chain` fails intermittently under the race detector](#61-testadapterdepthcaprejects4095chain-fails-intermittently-under-the-race-detector) | Done (2026-10-30) | 3.0 (3×1÷1) | — | — | — | The test fails when one depth rejection takes more than one second of wall-clock time, which the race detector on a shared runner can exceed; it failed once on PR #257 (no `internal/hfir` change) and passed on rerun. |
 | 60 | [`sum` of a list of floats is rejected by the checker](#60-sum-of-a-list-of-floats-is-rejected-by-the-checker) | Done (2026-10-29) | 4.0 (4×1÷1) | — | — | — | `(sum (list 1.5 2.0))` fails with `cannot assign float64 to __clS.. of type int`: the desugared accumulator starts at the integer 0, so only integer lists can be summed. Found by the WebAssembly backend's sugar fixtures. |
@@ -176,9 +176,13 @@ latent, so it is recorded here rather than filed as a live bug.
   `invalid character 'x' in numeric literal`, `invalid character 'é' ...`,
   ``invalid escape sequence `\q` in string`` and so on, where Go 1.25 says
   `after decimal point in numeric literal`, `'Ã'`, `in string escape code`.
-* **Scope:** Give the VM its own syntax-error wording (for example its own
-  scanner, as the WebAssembly backend's `std/json.howl` has), or document
-  the message as unstable and give programs a stable code. Until then
+* **Also:** `encode_json` of text that is not valid UTF-8: Go 1.25 writes
+  each invalid byte as `\ufffd`, the current release as a raw U+FFFD
+  character (`latest-go` job of PR #265, `TestDiffBytes`).
+* **Scope:** Give the VM its own syntax-error wording and string encoding
+  (for example its own scanner and encoder, as the WebAssembly backend's
+  `std/json.howl` has), or document the message as unstable and give
+  programs a stable code. Until then
   `TestDiffParseJSON` compares only the code and prefix when the test's
   toolchain words them differently.
 ### 62. A legacy flag before the input writes bytecode silently instead of running the program

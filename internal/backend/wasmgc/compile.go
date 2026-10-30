@@ -24,6 +24,7 @@ var stdOps = map[string]struct{ module, fn string }{
 	"encode_json": {"json", "encode"},
 	"regex_match": {"regex", "match"},
 	"parse_json":  {"json", "parse"},
+	"utf8_valid":  {"utf8", "valid"},
 }
 
 const stdPrefix = "__std_"
@@ -841,6 +842,16 @@ func (f *fn) expr(n *ast.Node) error {
 		} else {
 			c.Call(unary[h])
 		}
+		f.check()
+		return nil
+	case "bytes_to_string":
+		if len(args) != 1 {
+			return unsupported(n, h)
+		}
+		if err := f.expr(args[0]); err != nil {
+			return err
+		}
+		c.Call(r.fBytesToString)
 		f.check()
 		return nil
 	case "to_int", "to_float":

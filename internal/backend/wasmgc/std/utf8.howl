@@ -40,6 +40,19 @@
           (return (+ (* (- b 224) 4096) (+ (* (- (__hf_byte_at s (+ i 1)) 128) 64) (- (__hf_byte_at s (+ i 2)) 128)))))
         (return (+ (* (- b 240) 262144) (+ (* (- (__hf_byte_at s (+ i 1)) 128) 4096) (+ (* (- (__hf_byte_at s (+ i 2)) 128) 64) (- (__hf_byte_at s (+ i 3)) 128)))))))))
 
+  ; valid: is s all valid UTF-8 (Go's utf8.ValidString)?
+  (export (defun valid (s)
+    (do
+      (if (not (= (__hf_type s) "string")) (__hf_fail "TYPE_ERROR: utf8_valid expected string"))
+      (let (n (__hf_byte_len s) i 0)
+        (do
+          (while (< i n)
+            (let (l (call seq_len s i))
+              (do
+                (if (= l 0) (return false))
+                (set i (+ i l)))))
+          (return true))))))
+
   ; width: how many bytes the character at i takes (an invalid byte is 1).
   (export (defun width (s i)
     (let (l (call seq_len s i))

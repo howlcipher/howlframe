@@ -38,6 +38,9 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `bytes_to_string` and `utf8_valid` on `--target wasmgc`. Text that is not valid UTF-8 is split, printed and written as the
+  VM does: `str_split` with an empty separator no longer swallows the bytes after an invalid one, and the Node loader
+  writes output bytes as they are instead of decoding them.
 * `to_lower`, `to_upper` and `str_trim` on `--target wasmgc` handle all of Unicode as the VM does (Go's case tables,
   generated into `std/unicode.howl`, and `unicode.IsSpace`); `to_int` and `to_float` trim Unicode spaces; nil text is
   `<nil>`, as on the VM.

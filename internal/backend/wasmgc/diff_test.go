@@ -829,6 +829,49 @@ func TestDiffUnicodeText(t *testing.T) {
 	}
 }
 
+// bytes_to_string builds a string from a list of byte values (Go's
+// byte(float64(n)) for each), which is also how a program makes text that
+// is not valid UTF-8; the operations after it must treat such text as the
+// VM's Go code does.
+//
+// Go releases after 1.25 write an invalid byte in encode_json as a raw
+// U+FFFD rather than the escape \ufffd (bugs.md #63). std/json.howl writes
+// the escape, as releases built with Go 1.25 do; under a toolchain that
+// does not, the fixtures that encode invalid text are skipped.
+func TestDiffBytes(t *testing.T) {
+	escapes, _ := json.Marshal("\xff")
+	classic := string(escapes) == `"\ufffd"`
+	// b is (bytes_to_string (list ...)).
+	b := func(bytes string) string { return "(bytes_to_string (list " + bytes + "))" }
+	valid := func(bytes string) string { return "(utf8_valid " + b(bytes) + ")" }
+	for name, body := range map[string]string{
+		"text":             `(print ` + b("104 105 195 169") + ` (str_len ` + b("104 105 195 169") + `) "[" ` + b("") + ` "]")`,
+		"byte values":      `(print (encode_json (str_split ` + b("-1 256 300 511 1000 65") + ` "")) (encode_json (str_split ` + b("2.7 -3.5 66.9 1000000000000000000000000000000.0 -0.9") + ` "")))`,
+		"raw output":       `(do (print ` + b("97 255 98 0 99") + `) (stderr ` + b("99 128 100") + `))`,
+		"valid utf-8":      `(print (utf8_valid "") (utf8_valid "ok") (utf8_valid "héllo ✓ 🎉") ` + valid("244 143 191 191") + ` ` + valid("194 128") + ` ` + valid("237 159 191") + `)`,
+		"invalid utf-8":    `(print ` + valid("255") + ` ` + valid("128") + ` ` + valid("192 128") + ` ` + valid("224 128 128") + ` ` + valid("237 160 128") + ` ` + valid("244 144 128 128") + ` ` + valid("248 136 128 128 128") + ` ` + valid("226 130") + ` ` + valid("97 226") + `)`,
+		"json of invalid":  `(print (encode_json ` + b("97 255 98 226 130 99 237 160 128 100") + `))`,
+		"split invalid":    `(print (list_len (str_split ` + b("97 255 226 130 240 159 152 128 98") + ` "")) (encode_json (str_split ` + b("97 255 226 130 240 159 152 128 98") + ` "")))`,
+		"case of invalid":  `(print (encode_json (to_lower ` + b("65 255 66 195") + `)) (encode_json (to_upper ` + b("97 128 98") + `)) (encode_json (to_lower ` + b("65 66") + `)))`,
+		"regex on invalid": `(print (regex_match "^a.b$" ` + b("97 255 98") + `) (regex_match "^a..b$" ` + b("97 226 130 98") + `) (regex_match "^[^x]+$" ` + b("255 254") + `))`,
+		"parse invalid":    `(let (t ` + b("34 97 255 98 34") + `) (print (encode_json (parse_json Any t))))`,
+		"escape invalid":   `(print (encode_json (html_escape ` + b("60 255 62") + `)) (str_contains ` + b("97 255 98") + ` ` + b("255") + `))`,
+		"not a list":       `(let (d ` + mixed + `) (print (bytes_to_string (map_get d "b"))))`,
+		"of nil":           `(let (d ` + mixed + `) (print (bytes_to_string (map_get d "zz"))))`,
+		"of a dict":        `(let (d ` + mixed + `) (print (bytes_to_string (map_get d "n"))))`,
+		"bad element":      `(let (d ` + mixed + `) (print (bytes_to_string (list (map_get d "b")))))`,
+		"bool element":     `(let (d ` + mixed + `) (print (bytes_to_string (list (map_get d "e")))))`,
+		"utf8_valid type":  `(let (d ` + mixed + `) (print (utf8_valid (map_get d "a"))))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !classic && strings.Contains(body, "encode_json") && strings.Contains(body, "bytes_to_string") {
+				t.Skip("this toolchain's encode_json writes invalid UTF-8 as a raw U+FFFD (bugs.md #63)")
+			}
+			sameAsVM(t, "(cli_app "+body+")")
+		})
+	}
+}
+
 func TestDiffStderrAndExit(t *testing.T) {
 	for name, body := range map[string]string{
 		"exit status":     `(do (print "a") (exit 3) (print "never"))`,
