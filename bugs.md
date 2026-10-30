@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
 | 64 | [The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`](#64-the-javascript-backends-encode_json-keeps-insertion-order-and-does-not-escape---) | Done (2026-10-30) | 6.0 (6×1÷1) | — | — | — | `(encode_json (dict ("b" 1) ("a" "<x>")))` is `{"b":1,"a":"<x>"}` from `--target js` and `{"a":"\u003cx\u003e","b":1}` on the VM (Go's `encoding/json`: sorted keys, HTML-safe escapes), so a project a browser app writes differs byte for byte from the one the VM or WebAssembly writes. |
 | 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
@@ -164,6 +165,38 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 68. The Go backend's test blocks do not run as tests
+
+* **Problem:** `--target go` writes each `test` block as a `Test_<name>`
+  function in `server_test.go`, beside `server.go` in package `main`.
+  Three things kept those from working as `go test` tests: `exit` (and so
+  a failing `assert`) was `os.Exit`, and a run-time error a panic, either
+  of which ends the whole test binary; the file appended the same helper
+  sources (`howlFrameMapGet`, `howlFrameDiv`, ...) that `server.go`
+  already holds, so any test that needed one failed to compile with
+  `redeclared in this block`; and names were derived by replacing
+  punctuation, so `"a b"`, `"a-b"` or a repeated name produced the same
+  function twice.
+* **Evidence:** A `cli_app` with tests `b passes`, `a fails` (assert), and
+  `module call` runs `--- PASS: Test_b_passes`, then prints `assertion
+  failed` and ends with `FAIL probe` without running `module call`
+  (2026-10-30). Adding a test that reads `(map_get d "a")` makes the
+  package fail to build. The JavaScript backend (`node:test`) runs every
+  test and fails only the failing ones.
+* **Scope:** Make each failure fail its own test, compile tests that use
+  helpers, give every test its own function, and test it with `go test`.
+* **Done (2026-10-30):** `exit` calls `howlFrameExit(code, "file:line")`,
+  a variable `server.go` sets to `os.Exit`; `server_test.go` replaces it in
+  `init` with a panic carrying `HowlFrame exit N at file:line` (the
+  JavaScript backend's text), and every test defers
+  `howlFrameTestRecover`, which turns any panic into `t.Fatal`. The test
+  file no longer repeats the helpers (it keeps its imports referenced), and
+  a repeated function name gets a `_2`, `_3` suffix.
+  `TestGoTestBlocksRunAsTests` runs `go test` on a generated package with
+  passing and failing asserts, an assert in a called function, a helper,
+  a division by zero, `exit 3` and a repeated name; before the fix the
+  package did not compile.
 
 ### 65. The JavaScript backend emits invalid JavaScript for `try_let` used as a value
 
