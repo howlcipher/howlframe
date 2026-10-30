@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestone M1 done (2026-10-30); M2 next.
+Status: milestone M1 exit gate met (2026-10-30); finishing its last tasks (base64, hexadecimal floats); M2 next.
 
 ## Goal
 
@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim done. Byte values (`utf8_valid`, `bytes_to_string`, base64) move to M3, with the files and images that produce them. |
+| M1 core language | Exit gate met (2026-10-30); last tasks in progress | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string` and `utf8_valid` done; base64 and hexadecimal floats remain. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -263,9 +263,16 @@ as the work it describes: tick tasks, move the status line, record findings.
       case), as `fmt.Sprint` gives it; this backend gave "" before.
       `TestDiffUnicodeText` sweeps eight long-assigned blocks, which match
       under Go 1.25 (Unicode 15.0) and 1.27 (Unicode 17.0) alike.
-- [ ] Moved to M3: `utf8_valid`, `bytes_to_string` and base64, which work
-      on byte values (Go `[]byte` on the VM) that this backend has no
-      representation for yet; they arise with files, images and ZIP.
+- [x] `bytes_to_string` (a list of byte values to a string, each as Go's
+      `byte(float64(n))` on amd64) and `utf8_valid` (`std/utf8.howl`,
+      Go's `utf8.ValidString`). `bytes_to_string` is how a program makes
+      text that is not valid UTF-8, so `TestDiffBytes` also runs such text
+      through printing, JSON, splitting, case mapping, regular expressions
+      and escaping. The VM's `[]byte` values (from files and the network)
+      arrive with M3's host operations.
+- [ ] base64: `base64_text` and `sniff_media_type`, JavaScript-backend
+      host operations with no VM form, compared with the JavaScript backend.
+- [ ] Hexadecimal floats in `to_float` (Go's `atofHex`).
 - [x] Exit gate, rendering: HowlScene HF's registry, schema and renderer
       compile; rendering its fixture projects gives byte-identical output
       on the VM and on WebAssembly (21,872 bytes for the two neutral
@@ -394,6 +401,12 @@ The order of M1 and M3 work follows what the application needs.
   HowlFrame source cannot do (the checker types values statically and
   there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.
   Whether programs should get such an operation is open.
+- Text that is not valid UTF-8 (made with `bytes_to_string`) exposed two
+  divergences that were unreachable before: `str_split` with an empty
+  separator took a character's length from its lead byte, so `0xFF`
+  swallowed the next three bytes (Go splits each invalid byte alone), and
+  the Node loader decoded output as UTF-8 before writing it, turning
+  invalid bytes into U+FFFD where the VM writes them as they are.
 - The host no longer computes anything for a program: float digits and
   float parsing moved from the loader (`float_digits`, `float_point`,
   `parse_float`) to `std/float.howl`, so the only imports are `print`,

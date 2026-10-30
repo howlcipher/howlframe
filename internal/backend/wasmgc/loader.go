@@ -11,16 +11,20 @@ import { readFileSync } from "node:fs";
 const wasm = readFileSync(new URL("./app.wasm", import.meta.url));
 let ex;
 const decoder = new TextDecoder();
-const text = (s) => {
+// A string's bytes as they are: output is written byte for byte, like the
+// VM's, even where they are not valid UTF-8.
+const bytesOf = (s) => {
   const n = ex.__hf_str_len(s);
   const bytes = new Uint8Array(n);
   for (let i = 0; i < n; i++) bytes[i] = ex.__hf_str_byte(s, i);
-  return decoder.decode(bytes);
+  return bytes;
 };
+const text = (s) => decoder.decode(bytesOf(s));
+const newline = new Uint8Array([10]);
 const imports = {
   hf: {
-    print: (s) => { process.stdout.write(text(s) + "\n"); },
-    stderr: (s) => { process.stderr.write(text(s)); },
+    print: (s) => { process.stdout.write(bytesOf(s)); process.stdout.write(newline); },
+    stderr: (s) => { process.stderr.write(bytesOf(s)); },
     exit: (code) => { process.exit(code); },
   },
 };

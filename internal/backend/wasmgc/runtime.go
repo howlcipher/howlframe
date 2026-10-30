@@ -50,6 +50,7 @@ type rt struct {
 	// Bridges to std/unicode.howl, for text that is not all ASCII, and the
 	// length of a white-space character at a byte position.
 	fStdLower, fStdUpper, fSpaceAt int
+	fBytesToString                 int
 
 	strings map[string]int // literal -> data segment
 }
@@ -249,6 +250,7 @@ func (r *rt) emitAll() {
 		{&r.fStdLower, "unicode_lower", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
 		{&r.fStdUpper, "unicode_upper", r.funcType([]ValType{Ref(r.tStr)}, EqRef)},
 		{&r.fSpaceAt, "space_at", r.funcType([]ValType{Ref(r.tBytes), I32, I32}, I32)},
+		{&r.fBytesToString, "bytes_to_string", r.funcType([]ValType{EqRef}, EqRef)},
 	}
 	if r.host == HostWASI {
 		plan = append(plan,
@@ -303,6 +305,7 @@ func (r *rt) emitAll() {
 	r.emitErrors()
 	r.emitBytes()
 	r.emitChar()
+	r.emitBytesToString()
 	if r.host == HostWASI {
 		r.emitWASI()
 	}
@@ -1061,16 +1064,11 @@ func (r *rt) emitStringOps() {
 		bytesOf(c, 1).LocalTee(3).ArrayLen().LocalSet(5)
 		c.ArrayNewFixed(r.tItems, 0).Call(r.fListNew).LocalSet(8)
 		c.LocalGet(5).I32Eqz().If(NoResult)
-		// Characters: the length of each UTF-8 sequence from its lead byte.
+		// Characters, as Go decodes them: a valid UTF-8 sequence, or one
+		// byte that is not part of one.
 		c.Block(NoResult).Loop(NoResult)
 		c.LocalGet(6).LocalGet(4).I32GeU().BrIf(1)
-		c.LocalGet(2).LocalGet(6).ArrayGetU(r.tBytes).LocalTee(9)
-		c.I32Const(0xF0).I32GeU().If(Result(I32)).I32Const(4).Else()
-		c.LocalGet(9).I32Const(0xE0).I32GeU().If(Result(I32)).I32Const(3).Else()
-		c.LocalGet(9).I32Const(0xC0).I32GeU().If(Result(I32)).I32Const(2).Else().I32Const(1).End().End().End()
-		c.LocalSet(11)
-		// Clamp at the end and fall back to one byte for a truncated sequence.
-		c.LocalGet(6).LocalGet(11).I32Add().LocalGet(4).I32GtU().If(NoResult).I32Const(1).LocalSet(11).End()
+		c.LocalGet(2).RefAsNonNull().LocalGet(6).Call(r.fUTF8Len).LocalTee(11).I32Eqz().If(NoResult).I32Const(1).LocalSet(11).End()
 		c.LocalGet(6).LocalGet(11).I32Add().LocalSet(7)
 		c.LocalGet(8)
 		piece(c, 2, 6, 7, 10)
@@ -1500,6 +1498,38 @@ func (r *rt) emitBytes() {
 		c.LocalGet(1).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(4)
 		c.LocalGet(2).RefCast(r.tInt).StructGet(r.tInt, 0).I32WrapI64().LocalSet(5)
 		r.sliceStr(c, 3, 4, 5, 6)
+	})
+}
+
+// emitBytesToString writes bytes_to_string(l): the string whose bytes are
+// the numbers of list l, each as Go's byte(float64(n)) gives it on the VM:
+// truncated toward zero, then its low eight bits (a float outside int64's
+// range gives 0, as amd64 does).
+// locals: 0 l, 1 list, 2 n, 3 i, 4 out, 5 item, 6 f
+func (r *rt) emitBytesToString() {
+	r.body(r.fBytesToString, []ValType{RefNull(r.tList), I32, I32, RefNull(r.tBytes), EqRef, F64}, func(c *Code) {
+		c.LocalGet(0).RefTest(r.tList).I32Eqz().If(NoResult)
+		r.failWithType(c, "TYPE_ERROR: bytes_to_string expected []any, got ", 0).Return()
+		c.End()
+		c.LocalGet(0).RefCast(r.tList).LocalTee(1).StructGet(r.tList, 0).LocalTee(2).ArrayNewDefault(r.tBytes).LocalSet(4)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(2).I32GeU().BrIf(1)
+		c.LocalGet(1).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(3).ArrayGet(r.tItems).LocalSet(5)
+		c.LocalGet(5).RefTest(r.tInt).If(NoResult)
+		c.LocalGet(5).RefCast(r.tInt).StructGet(r.tInt, 0).F64ConvertI64S().LocalSet(6)
+		c.Else()
+		c.LocalGet(5).RefTest(r.tFloat).If(NoResult)
+		c.LocalGet(5).RefCast(r.tFloat).StructGet(r.tFloat, 0).LocalSet(6)
+		c.Else()
+		r.failWithType(c, "TYPE_ERROR: bytes_to_string byte list element expected number, got ", 5).Return()
+		c.End().End()
+		c.LocalGet(4).LocalGet(3)
+		c.LocalGet(6).F64Const(-9223372036854775808.0).F64Ge().LocalGet(6).F64Const(9223372036854775808.0).F64Lt().I32And()
+		c.If(Result(I64)).LocalGet(6).I64TruncSatF64S().Else().I64Const(0).End()
+		c.I32WrapI64().ArraySet(r.tBytes)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0)
+		c.End().End()
+		c.LocalGet(4).RefAsNonNull().StructNew(r.tStr)
 	})
 }
 
