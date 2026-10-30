@@ -125,7 +125,7 @@ func (f *fn) tail(n *ast.Node) error {
 		}
 		f.code.RefNull(HeapNone)
 		return nil
-	case "print", "set", "while", "for", "let", "do", "if", "stderr", "exit", "append", "map_set", "map_delete":
+	case "print", "set", "while", "for", "let", "do", "if", "stderr", "exit", "append", "map_set", "map_delete", "try_let":
 		if err := f.stmt(n); err != nil {
 			return err
 		}
@@ -269,6 +269,8 @@ func (f *fn) stmt(n *ast.Node) error {
 		return nil
 	case "for":
 		return f.forLoop(n)
+	case "try_let":
+		return f.tryLet(n, false)
 	case "map_set", "map_delete":
 		// (map_set d k v) and (map_delete d k) change the dict d names in
 		// place; dicts are references.
@@ -368,6 +370,10 @@ func (f *fn) cond(n *ast.Node) error {
 		return err
 	}
 	f.code.Call(f.c.rt.fTruthy)
+	tmp := f.local(I32)
+	f.code.LocalSet(tmp)
+	f.check()
+	f.code.LocalGet(tmp)
 	return nil
 }
 
@@ -467,26 +473,37 @@ func (f *fn) expr(n *ast.Node) error {
 		if len(args) != 2 {
 			return unsupported(n, h)
 		}
-		if err := f.expr(args[0]); err != nil {
-			return err
+		var operands [2]int
+		for i, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
+			operands[i] = f.local(EqRef)
+			c.LocalSet(operands[i])
 		}
-		if err := f.expr(args[1]); err != nil {
-			return err
-		}
-		c.Call(r.fCompare)
+		// compare gives -1, 0 or 1; 3 for NaN (no ordering holds); 2 when the
+		// operands cannot be ordered, reported here with the operator.
+		c.LocalGet(operands[0]).LocalGet(operands[1]).Call(r.fCompare)
 		tmp := f.local(I32)
-		c.LocalSet(tmp)
+		c.LocalTee(tmp).I32Const(2).I32Eq().If(NoResult)
+		f.labels++
+		r.StrLiteral(c, "TYPE_ERROR: "+h+" requires numeric operands, got ")
+		c.LocalGet(operands[0]).Call(r.fGoType).Call(r.fConcat)
+		r.StrLiteral(c, " and ").Call(r.fConcat)
+		c.LocalGet(operands[1]).Call(r.fGoType).Call(r.fConcat).Call(r.fFail).Drop()
 		f.check()
+		f.labels--
+		c.End()
 		c.LocalGet(tmp)
 		switch h {
 		case "<":
 			c.I32Const(0).I32LtS()
 		case ">":
-			c.I32Const(0).I32GtS()
+			c.I32Const(1).I32Eq()
 		case "<=":
 			c.I32Const(0).I32LeS()
 		case ">=":
-			c.I32Const(0).I32GeS()
+			c.I32Const(1).I32LeU()
 		}
 		c.Call(r.fBoxBool)
 		return nil
@@ -551,6 +568,8 @@ func (f *fn) expr(n *ast.Node) error {
 		return f.expr(args[len(args)-1])
 	case "let":
 		return f.let(n, true)
+	case "try_let":
+		return f.tryLet(n, true)
 	case "call":
 		if len(args) == 0 || args[0].Type != "SYMBOL" {
 			return unsupported(n, "call")
@@ -613,7 +632,7 @@ func (f *fn) expr(n *ast.Node) error {
 		f.check()
 		return nil
 	case "str_split", "str_join", "to_lower", "to_upper", "str_trim", "html_escape", "attr_escape", "is_nil":
-		unary := map[string]int{"to_lower": r.fLower, "to_upper": r.fUpper, "str_trim": r.fStrTrim, "html_escape": r.fEscape, "attr_escape": r.fEscape, "is_nil": -1}
+		unary := map[string]int{"to_lower": r.fLower, "to_upper": r.fUpper, "str_trim": r.fStrTrim, "html_escape": r.fEscape, "attr_escape": r.fAttrEscape, "is_nil": -1}
 		binaryOps := map[string]int{"str_split": r.fStrSplit, "str_join": r.fStrJoin}
 		want := 1
 		if _, ok := binaryOps[h]; ok {
@@ -727,5 +746,71 @@ func (f *fn) forLoop(n *ast.Node) error {
 	f.labels -= 2
 	c.End().End()
 	f.scopes = f.scopes[:len(f.scopes)-1]
+	return nil
+}
+
+// tryLet compiles (try_let (name expr) (catch err handler) body). When expr
+// (or anything it calls) fails, the error is cleared, err is bound to the
+// VM's JSON report of it and handler runs; otherwise name is bound to the
+// value and body runs. Failures in handler or body are not caught. As a
+// value, the form is the value of whichever of handler and body ran.
+func (f *fn) tryLet(n *ast.Node, value bool) error {
+	r := f.c.rt
+	c := f.code
+	if len(n.Children) != 4 {
+		return unsupported(n, "try_let")
+	}
+	binding, catch, body := n.Children[1], n.Children[2], n.Children[3]
+	if binding.Type != "List" || len(binding.Children) != 2 || binding.Children[0].Type != "SYMBOL" ||
+		head(catch) != "catch" || len(catch.Children) != 3 || catch.Children[1].Type != "SYMBOL" {
+		return unsupported(n, "try_let")
+	}
+	branch := func(k *ast.Node, name string, idx int, result int) error {
+		f.scopes = append(f.scopes, map[string]int{name: idx})
+		defer func() { f.scopes = f.scopes[:len(f.scopes)-1] }()
+		if !value {
+			return f.stmt(k)
+		}
+		if err := f.expr(k); err != nil {
+			return err
+		}
+		c.LocalSet(result)
+		return nil
+	}
+	result := -1
+	if value {
+		result = f.local(EqRef)
+	}
+	done := f.labels
+	c.Block(NoResult)
+	f.labels++
+	handler := f.labels
+	c.Block(NoResult)
+	f.labels++
+	f.handlers = append(f.handlers, handler)
+	if err := f.expr(binding.Children[1]); err != nil {
+		return err
+	}
+	f.handlers = f.handlers[:len(f.handlers)-1]
+	v := f.local(EqRef)
+	c.LocalSet(v)
+	if err := branch(body, binding.Children[0].Value, v, result); err != nil {
+		return err
+	}
+	c.Br(f.labels - done - 1)
+	f.labels--
+	c.End()
+	// The handler: take the pending error.
+	e := f.local(EqRef)
+	c.GlobalGet(r.gErr).RefCast(r.tStr).Call(r.fCatchText).LocalSet(e)
+	c.RefNull(HeapNone).GlobalSet(r.gErr)
+	if err := branch(catch.Children[2], catch.Children[1].Value, e, result); err != nil {
+		return err
+	}
+	f.labels--
+	c.End()
+	if value {
+		c.LocalGet(result)
+	}
 	return nil
 }

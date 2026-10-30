@@ -63,8 +63,15 @@ captured variables that are assigned (`set`) are boxed in a one-slot cell.
 Each function returns its value and leaves a global `$err` null on success.
 After any call or operation that can fail, the caller tests `$err`; if set,
 it returns at once (or jumps to its `try_let` handler, which clears `$err`
-and binds the message). The top level reports an uncaught error on standard
-error with the VM's message and exits 1.
+and binds the error). `$err` holds `CODE: message`, with the VM's error code
+(`TYPE_ERROR`, `RUNTIME_ERROR`, `CONVERSION_ERROR`) and message. The top
+level reports an uncaught error on standard error as the VM's JSON report
+and exits 1. A `try_let` binds the VM's report too:
+`{"phase":"runtime","code":...,"function":"main","message":...}`, with the
+message escaped as Go's `encoding/json` does. The VM's report also has
+`instruction` (and usually `opcode`) fields naming the VM's own bytecode
+position; they have no WebAssembly meaning and are left out, so a program
+that prints a caught error whole prints different text on the two engines.
 
 ## Asynchronous host operations
 
@@ -106,7 +113,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. 126 differential fixtures pass. Next: `try_let` and `catch`, then modules. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. 173 differential fixtures pass. Next: modules. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -181,8 +188,13 @@ as the work it describes: tick tasks, move the status line, record findings.
       `max_by`, `min_by`, `pad_left`, `pad_right`, `str_repeat`, `ltrim`,
       `rtrim`, `to_base`, and the records forms `rec`, `get`, `put`, `pluck`,
       `select`, `group_by`, `merge`. None needed new runtime code.
-- [ ] Constructs, in this order, each with fixtures: `try_let`, `catch`;
-      modules (`use`, `export`).
+- [x] `try_let` and `catch`, as statements and values, nested, in loops
+      and across calls; `exit` and failures in either body are not caught.
+      Errors carry the VM's codes, and the VM's run-time rules hold:
+      conditions (`if`, `while`, `and`, `or`, `not`) must be booleans,
+      float `+`, `-`, `*` and `/` fail when the result is not finite, and
+      operands of unknown type fail with the VM's messages.
+- [ ] Modules (`use`, `export`), with fixtures.
 - [ ] Standard library in HowlFrame (`std/`), on byte intrinsics:
       `encode_json`, `parse_json`, `regex_match` (the regular expression
       subset the corpus uses, documented), `html_escape`, `attr_escape`,
@@ -272,6 +284,20 @@ The order of M1 and M3 work follows what the application needs.
   itself there while the VM and the interpreter say false (bugs.md #59).
 - The VM's JSON error report escapes `<` and `>` (`\u003cnil\u003e`), so the
   differential harness compares decoded messages.
+- Errors on the VM (probed): every failure in a `try_let` binding is caught,
+  including in called functions, but not `exit` (so not `min` of an empty
+  list, which prints and exits) and not failures in the handler or body. A
+  condition that is not a boolean is `TYPE_ERROR: expected boolean, got
+  <type>` (nil included); this backend treated nil as false and other
+  values as true. Float `+`, `-`, `*` whose result is infinite or NaN is
+  `RUNTIME_ERROR: floating-point overflow: a op b is not finite` and such a
+  `/` is `division produced an invalid floating-point result`; this backend
+  printed `+Inf`. Comparisons involving NaN are false.
+- The VM's `%q` (in conversion messages) escapes non-printable runes, such
+  as U+2028, with `strconv.IsPrint`; this backend's `quote` escapes only
+  quote, backslash, newline, tab and return, so such a rune differs. Its
+  loop also stopped at the first escaped character, cutting the message
+  short; fixed with a fixture (`quoted in message`).
 - Temporary host dependencies, to be replaced by standard-library
   HowlFrame: shortest float digits (`float_digits`, `float_point`) and
   float parsing (`parse_float`, `parse_float_ok`).
@@ -283,6 +309,10 @@ The order of M1 and M3 work follows what the application needs.
 - Asynchronous operations: resumable frames or JSPI (M3).
 - Size: measure each milestone's output; the published-site runtime has a
   250 KiB budget.
+- Caught error text: should `try_let` expose the error's code and message
+  apart from the VM's JSON report (for example `catch` binding a dict), so
+  programs can read them on every engine without parsing JSON? Until then
+  the report minus its VM-only fields is the contract.
 - Resource limits: the VM stops a program at an instruction limit (100,000
   by default; `--max-instructions`). This backend has no limit yet. Decide
   whether WebAssembly programs get fuel (a counter on loops and calls) or
