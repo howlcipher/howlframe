@@ -52,6 +52,10 @@ var jsNeedsRequestRead bool
 // attr_escape. Both share one helper. It is reset on every call.
 var jsNeedsHTMLEscape bool
 
+// jsNeedsEncodeJSON is set when GenerateJSCode emits encode_json, which
+// writes JSON as the VM's Go encoding/json does.
+var jsNeedsEncodeJSON bool
+
 // jsNeedsArchive is set when GenerateJSCode emits dom_text, zip_build, or
 // download_file, so the browser archive helpers are prepended.
 var jsNeedsArchive bool
@@ -197,6 +201,69 @@ function howlFrameCompareUTF8(a, b) {
     if (ab[i] !== bb[i]) return ab[i] - bb[i];
   }
   return ab.length - bb.length;
+}
+`
+}
+
+// encodeJSONJSHelper writes encode_json as the VM does (Go's encoding/json,
+// as Go 1.25 writes it): object keys in UTF-8 byte order (code point order,
+// which JavaScript's default sort of UTF-16 units is not), no spaces,
+// < > & U+2028 U+2029 escaped as \u003c and so on, other control
+// characters as \u00XX, a lone surrogate (text that was not UTF-8) as
+// \ufffd, -0 kept, and a number that is not finite an ENCODE_JSON_ERROR.
+// Byte arrays are their number lists, as on the VM.
+func encodeJSONJSHelper() string {
+	return `function howlFrameJSONCompareKeys(a, b) {
+  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+    const x = a.codePointAt(i), y = b.codePointAt(j);
+    if (x !== y) return x < y ? -1 : 1;
+    i += x > 0xffff ? 2 : 1;
+    j += y > 0xffff ? 2 : 1;
+  }
+  return a.length - b.length;
+}
+function howlFrameJSONString(s) {
+  let out = "\"";
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+      const d = s.charCodeAt(i + 1);
+      if (d >= 0xdc00 && d <= 0xdfff) { out += s[i] + s[i + 1]; i++; continue; }
+    }
+    if (c >= 0xd800 && c <= 0xdfff) { out += "\\ufffd"; continue; }
+    switch (c) {
+      case 0x22: out += "\\\""; continue;
+      case 0x5c: out += "\\\\"; continue;
+      case 0x08: out += "\\b"; continue;
+      case 0x0c: out += "\\f"; continue;
+      case 0x0a: out += "\\n"; continue;
+      case 0x0d: out += "\\r"; continue;
+      case 0x09: out += "\\t"; continue;
+    }
+    if (c < 0x20 || c === 0x3c || c === 0x3e || c === 0x26 || c === 0x2028 || c === 0x2029) {
+      out += "\\u" + c.toString(16).padStart(4, "0");
+      continue;
+    }
+    out += s[i];
+  }
+  return out + "\"";
+}
+function howlFrameEncodeJSON(v) {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "bigint") return v.toString();
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new Error("ENCODE_JSON_ERROR: json: unsupported value: " + (Number.isNaN(v) ? "NaN" : v > 0 ? "+Inf" : "-Inf"));
+    return Object.is(v, -0) ? "-0" : JSON.stringify(v);
+  }
+  if (typeof v === "string") return howlFrameJSONString(v);
+  if (ArrayBuffer.isView(v)) return "[" + Array.from(v).join(",") + "]";
+  if (Array.isArray(v)) return "[" + v.map(howlFrameEncodeJSON).join(",") + "]";
+  if (typeof v === "object") {
+    const keys = Object.keys(v).sort(howlFrameJSONCompareKeys);
+    return "{" + keys.map((k) => howlFrameJSONString(k) + ":" + howlFrameEncodeJSON(v[k])).join(",") + "}";
+  }
+  return JSON.stringify(v);
 }
 `
 }
@@ -1135,8 +1202,9 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("((_v) => _v == null ? \"\" : String(_v))(%s)", valStr)
 	case "encode_json":
+		jsNeedsEncodeJSON = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		return fmt.Sprintf("JSON.stringify(%s)", valStr)
+		return fmt.Sprintf("howlFrameEncodeJSON(%s)", valStr)
 	case "html_escape", "attr_escape":
 		jsNeedsHTMLEscape = true
 		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
@@ -1249,6 +1317,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
 	jsNeedsRequestRead = false
 	jsNeedsHTMLEscape = false
+	jsNeedsEncodeJSON = false
 	jsNeedsArchive = false
 	jsNeedsExit = false
 	jsNeedsDOM = false
@@ -1353,6 +1422,13 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 	if jsNeedsRequestRead {
 		helper := requestReadJSHelper()
+		code = helper + code
+		if testCode != "" {
+			testCode = helper + testCode
+		}
+	}
+	if jsNeedsEncodeJSON {
+		helper := encodeJSONJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode

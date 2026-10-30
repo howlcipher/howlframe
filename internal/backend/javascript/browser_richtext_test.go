@@ -79,10 +79,11 @@ ed.appendChild(new Text_("loose text"));
 ed.appendChild(h("p", "  "));`
 	code := compileWebApp(t, `(web_app (print (encode_json (richtext_get (dom_query "#ed")))))`)
 	got := richtextHarness(t, code, setup)
-	want := `[{\"type\":\"p\",\"content\":[{\"text\":\"Hello \"},{\"text\":\"big\",\"bold\":true},{\"text\":\" worldalert(1)\"}]},` +
-		`{\"type\":\"h2\",\"content\":[{\"text\":\"Title\"}]},` +
-		`{\"type\":\"p\",\"content\":[{\"text\":\"both\",\"bold\":true,\"italic\":true},{\"text\":\"\\nnext \"},{\"text\":\"link\",\"link\":\"javascript:alert(1)\"}]},` +
-		`{\"type\":\"p\",\"content\":[{\"text\":\"loose text\"}]}]`
+	// encode_json writes keys in sorted order, as the VM does (bugs.md #64).
+	want := `[{\"content\":[{\"text\":\"Hello \"},{\"bold\":true,\"text\":\"big\"},{\"text\":\" worldalert(1)\"}],\"type\":\"p\"},` +
+		`{\"content\":[{\"text\":\"Title\"}],\"type\":\"h2\"},` +
+		`{\"content\":[{\"bold\":true,\"italic\":true,\"text\":\"both\"},{\"text\":\"\\nnext \"},{\"link\":\"javascript:alert(1)\",\"text\":\"link\"}],\"type\":\"p\"},` +
+		`{\"content\":[{\"text\":\"loose text\"}],\"type\":\"p\"}]`
 	if !strings.Contains(got, want) {
 		t.Fatalf("got %s\nwant out containing %s", got, want)
 	}
@@ -132,8 +133,8 @@ func TestRichtextGetReadsBlocksNestedInParagraphs(t *testing.T) {
 ed.appendChild(h("div", "lead ", h("h2", "Inner title"), "tail"));`
 	code := compileWebApp(t, `(web_app (print (encode_json (richtext_get (dom_query "#ed")))))`)
 	got := richtextHarness(t, code, setup)
-	want := `[{\"type\":\"ul\",\"items\":[[{\"text\":\"Analyst\",\"bold\":true}],[{\"text\":\"Two\"}]]},` +
-		`{\"type\":\"p\",\"content\":[{\"text\":\"lead \"}]},{\"type\":\"h2\",\"content\":[{\"text\":\"Inner title\"}]},{\"type\":\"p\",\"content\":[{\"text\":\"tail\"}]}]`
+	want := `[{\"items\":[[{\"bold\":true,\"text\":\"Analyst\"}],[{\"text\":\"Two\"}]],\"type\":\"ul\"},` +
+		`{\"content\":[{\"text\":\"lead \"}],\"type\":\"p\"},{\"content\":[{\"text\":\"Inner title\"}],\"type\":\"h2\"},{\"content\":[{\"text\":\"tail\"}],\"type\":\"p\"}]`
 	if !strings.Contains(got, want) {
 		t.Fatalf("got %s\nwant out containing %s", got, want)
 	}
