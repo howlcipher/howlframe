@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Correctness
+* The VM's JSON text (`encode_json`, `res_json`, `parse_json` values and errors) no longer depends on the Go toolchain
+  that built it: the VM writes and reads it itself, as Go 1.25's `encoding/json` does. Built with Go 1.27 it wrote invalid
+  UTF-8 as a raw U+FFFD and worded syntax errors differently (bugs.md #63).
 * `encode_json` on `--target js` writes what the VM writes: keys sorted (it kept insertion order), `<`, `>`, `&` and
   U+2028/U+2029 escaped, `-0` kept. A project file written in the browser is now byte-identical to the VM's (bugs.md #64).
 * `=` and `!=` on `--target js` follow the VM: a list or dict is never equal, not even to itself (it compared identity),

@@ -748,7 +748,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			InterpErr("encode_json expects (encode_json val)", node)
 		}
 		val := interp.eval(node.Children[1], env)
-		b, err := json.Marshal(normalizeForJSON(val))
+		b, err := encodeJSONText(normalizeForJSON(val))
 		if err != nil {
 			InterpErr(fmt.Sprintf("encode_json: %v", err), node)
 		}
@@ -2982,7 +2982,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(normalizeForJSON(data))
+			// As json.Encoder.Encode wrote it: the value and a newline, or
+			// nothing for a value that cannot be encoded.
+			if b, err := encodeJSONText(normalizeForJSON(data)); err == nil {
+				w.Write(append(b, '\n'))
+			}
 		case bytecode.OpHttpServerStart:
 			port := inst.StringOperand
 			if inst.IntOperand&1 != 0 {
@@ -3947,7 +3951,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			vm.push(int64(time.Now().Unix()))
 		case bytecode.OpEncodeJson:
 			val := vm.pop(inst.Op)
-			b, err := json.Marshal(normalizeForJSON(val))
+			b, err := encodeJSONText(normalizeForJSON(val))
 			if err != nil {
 				panic(NewRuntimeError("ENCODE_JSON_ERROR", "main", ip, inst.Op, "%v", err))
 			}
@@ -4297,20 +4301,10 @@ func BcSliceToAny(strs []string) []any {
 	return out
 }
 
+// decodeJSONValue reads parse_json's text (decodeJSONText: Go 1.25's
+// encoding/json behavior, whatever the toolchain).
 func decodeJSONValue(data []byte) (any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("multiple JSON values")
-		}
-		return nil, err
-	}
-	return normalizeJSONNumbers(value)
+	return decodeJSONText(data)
 }
 
 func normalizeJSONNumbers(value any) (any, error) {
