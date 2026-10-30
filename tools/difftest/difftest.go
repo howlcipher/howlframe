@@ -18,6 +18,9 @@ const (
 	TargetInterpreter  Target = "interpreter"
 	TargetGo           Target = "go"
 	TargetJavaScript   Target = "javascript"
+	// TargetWasmGC is the WebAssembly GC backend (build --target wasmgc), run
+	// in Node through its generated loader.
+	TargetWasmGC Target = "wasmgc"
 )
 
 type Status string
@@ -611,6 +614,8 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 			candidate = executeGoBackend(filePath, opts)
 		case TargetJavaScript:
 			candidate = executeJSBackend(filePath, opts)
+		case TargetWasmGC:
+			candidate = executeWasmGCBackend(filePath, opts)
 		default:
 			return report, fmt.Errorf("unsupported target: %s", tgt)
 		}
@@ -623,4 +628,50 @@ func VerifyParityWithOptions(filePath string, targets []Target, opts RunOptions)
 	}
 
 	return report, nil
+}
+
+// executeWasmGCBackend builds a cli_app with the WebAssembly GC backend and
+// runs it in Node. A construct the backend does not compile yet
+// (WASM_UNSUPPORTED) is BACKEND_UNSUPPORTED, as are command-line arguments
+// and standard input, which its loader does not pass yet; the backend has no
+// host capabilities, so programs that need one fail to build the same way.
+func executeWasmGCBackend(filePath string, opts RunOptions) ExecutionResult {
+	unsupported := func(msg string) ExecutionResult {
+		return ExecutionResult{Target: TargetWasmGC, ErrorMessage: msg, Status: StatusBackendUnsupported}
+	}
+	if len(opts.CLIArgs) > 0 || opts.Input != "" {
+		return unsupported("the wasmgc loader does not pass arguments or standard input yet")
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		return unsupported("node runtime not available")
+	}
+	compiler, err := getCompiler()
+	if err != nil {
+		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+	}
+	tmpDir, err := os.MkdirTemp("", "howlframe-wasmgc-*")
+	if err != nil {
+		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: err.Error(), Status: StatusCompileFailure}
+	}
+	defer os.RemoveAll(tmpDir)
+
+	buildOut, buildErr := exec.Command(compiler, "build", filePath, "--target", "wasmgc", "-o", tmpDir).CombinedOutput()
+	if buildErr != nil {
+		errMsg := strings.TrimSpace(string(buildOut))
+		if strings.Contains(errMsg, "WASM_UNSUPPORTED") {
+			return unsupported(errMsg)
+		}
+		return ExecutionResult{Target: TargetWasmGC, ExitCode: 1, ErrorMessage: errMsg, ErrorClass: NormalizeError(errMsg), Status: StatusCompileFailure}
+	}
+	exitCode, stdout, stderr, runErr := runCmdWithBuffers(exec.Command("node", filepath.Join(tmpDir, "app.mjs")), "")
+	res := ExecutionResult{Target: TargetWasmGC, ExitCode: exitCode, Stdout: stdout, Stderr: stderr, Status: StatusPass}
+	if runErr != nil && exitCode != 0 {
+		outAll := stderr + " " + stdout
+		res.ErrorMessage = strings.TrimSpace(outAll)
+		res.ErrorClass = NormalizeError(outAll)
+		if strings.Contains(outAll, `"phase":"runtime"`) {
+			res.Status = StatusRuntimeFailure
+		}
+	}
+	return res
 }

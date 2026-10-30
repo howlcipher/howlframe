@@ -143,6 +143,13 @@ func Compile(root *ast.Node) ([]byte, error) {
 	for _, d := range defuns {
 		var names []string
 		for _, p := range d.Children[2].Children {
+			// A parameter is a name or a typed (name type) pair.
+			if p.Type == "List" && len(p.Children) > 0 {
+				p = p.Children[0]
+			}
+			if p.Type != "SYMBOL" {
+				return nil, unsupported(d, "defun parameter")
+			}
 			names = append(names, p.Value)
 		}
 		c.std = strings.HasPrefix(d.Children[1].Value, stdPrefix)

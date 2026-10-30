@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). Still open for the M1 gate: the corpus under wasmtime (float digits and parsing in HowlFrame, then a WASI host) and the `tools/difftest` target. |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). `tools/difftest` has a `wasmgc` target and the corpus matches the VM wherever the backend builds it. Still open for the M1 gate: the corpus under wasmtime (float digits and parsing in HowlFrame, then a WASI host). |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -163,7 +163,14 @@ as the work it describes: tick tasks, move the status line, record findings.
       target): writes `app.wasm` and a generated loader (`app.mjs`) that
       runs a `cli_app` in Node with print as a host import. Arguments and
       exit to follow.
-- [ ] `tools/difftest` target `wasm`, run in Node and in wasmtime.
+- [x] `tools/difftest` target `wasmgc`, run in Node: `TestWasmGCCorpusParity`
+      builds every `cli_app` of the corpus (`tests/*.howl` less the
+      manifest's exemptions, and `examples/*.howl`) and compares it with
+      the VM. 17 match; 4 stop at host operations (`cli_args`, `env`,
+      `read_line`) or an adaptive construct (`optimize_signature`), counted
+      as not supported yet. Typed parameters (`((a int) (b int))`) were the
+      one gap it found.
+- [ ] The same corpus under wasmtime.
 - [x] Literals and `print`; `let`, `set`, `do`, `if`, `while`;
       arithmetic and comparison; `and`, `or`; `defun`, `call`, `return` and
       recursion; `to_int`, `to_float`, `to_string`.

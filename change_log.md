@@ -38,6 +38,8 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* `tools/difftest` has a `wasmgc` target; `TestWasmGCCorpusParity` runs the corpus's `cli_app` fixtures and examples on the
+  VM and as WebAssembly. Typed parameters (`(defun add ((a int) (b int)) int ...)`) build with `--target wasmgc`.
 * HowlScene HF's schema and renderer compile with `--target wasmgc` and render its fixture projects byte-identically to
   the VM (`TestHowlSceneGate`, run when `HOWLSCENE_HF` names a checkout).
 * `parse_json` on `--target wasmgc`, written in HowlFrame (`std/json.howl`), with the VM's number kinds and Go's error
