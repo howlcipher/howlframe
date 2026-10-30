@@ -38,6 +38,9 @@
   VM-only `instruction` and `opcode` fields. Errors carry the VM's codes, conditions must be booleans, and float
   arithmetic whose result is not finite fails, as on the VM (WebAssembly builds printed `+Inf` and treated any non-nil
   condition as true).
+* Floats on `--target wasmgc` are printed and parsed by HowlFrame (`std/float.howl`, a port of Go's `strconv` decimal), not
+  by the Node loader, which now provides only print, stderr and exit. `to_float` reads `1_000` as the VM does; hexadecimal
+  floats fail with `WASM_UNSUPPORTED`.
 * `tools/difftest` has a `wasmgc` target; `TestWasmGCCorpusParity` runs the corpus's `cli_app` fixtures and examples on the
   VM and as WebAssembly. Typed parameters (`(defun add ((a int) (b int)) int ...)`) build with `--target wasmgc`.
 * HowlScene HF's schema and renderer compile with `--target wasmgc` and render its fixture projects byte-identically to

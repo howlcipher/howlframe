@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). `tools/difftest` has a `wasmgc` target and the corpus matches the VM wherever the backend builds it. Still open for the M1 gate: the corpus under wasmtime (float digits and parsing in HowlFrame, then a WASI host). |
+| M1 core language | In progress | Encoder and builder done; runtime values, errors, numbers, strings (literals, concatenation, comparison), printing, conversions, control flow and functions done; `build --target wasmgc` writes `app.wasm` and `app.mjs`. Differential tests run both sides through the compiler binary. Lists and string primitives done; `%`, `//`, `stderr` and `exit` work. Dicts done, with list and dict printing and the VM's type error messages. `not` and the core-library, records and control-flow sugar match the VM through their desugaring. `try_let` and `catch` done, with the VM's error codes and its rules for conditions and float results. Modules work through the shared linker. The standard library has started: `std/json.howl` (`encode_json`, `parse_json`), `std/regex.howl` (`regex_match`) and `std/utf8.howl` are HowlFrame compiled in when a program reaches them. 307 differential fixtures pass. HowlScene HF's registry, schema, renderer and export modules compile, and its two fixture projects render to byte-identical output on the VM and on WebAssembly (`TestHowlSceneGate`, 2026-10-29). `tools/difftest` has a `wasmgc` target and the corpus matches the VM wherever the backend builds it. Floats are formatted and parsed in HowlFrame, so the host provides only print, stderr and exit. Still open for the M1 gate: the corpus under wasmtime, through a WASI host. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -155,7 +155,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 - [x] Core runtime functions: boxing, truthiness, equality, comparison,
       arithmetic with the VM's integer and float rules and division errors,
       string concatenation and comparison, printing of scalars as
-      `fmt.Sprint` (float digits from the host for now), `to_int`,
+      `fmt.Sprint` (float digits from `std/float.howl`), `to_int`,
       `to_float`, `to_string`.
 - [x] Printing of lists and dicts (`[a b]`, `map[k:v]` with sorted keys,
       `<nil>` for a nil element).
@@ -211,8 +211,10 @@ as the work it describes: tick tasks, move the status line, record findings.
       embedded modules, parsed, linked as `__std_<module>` and desugared
       when a program reaches one of their operations (`stdOps`). Only their
       functions may use the byte intrinsics `__hf_type` (the VM's `%T`
-      name), `__hf_byte_len`, `__hf_byte_at`, `__hf_byte_slice`, and the
-      temporary `__hf_float_digits` and `__hf_float_point`, a mutable array
+      name), `__hf_byte_len`, `__hf_byte_at`, `__hf_byte_slice`, integer
+      operations (`__hf_idiv`, `__hf_imod`, `__hf_shl`, `__hf_shr`,
+      `__hf_and`, `__hf_or`) and a float's bits (`__hf_f64_bits`,
+      `__hf_f64_from_bits`), a mutable array
       (`__hf_array`, `__hf_aget`, `__hf_aset`, `__hf_alen`) for std
       algorithms, and `__hf_fail` to raise an error with a code; a program
       that calls one, or defines a `__std_` function, fails with
@@ -220,6 +222,16 @@ as the work it describes: tick tasks, move the status line, record findings.
       another by its linked name (`__std_utf8_seq_len`), which loads it.
 - [x] `encode_json` in `std/json.howl`, as Go's `encoding/json` writes the
       VM's values (`TestDiffEncodeJSON`).
+- [x] Floats in `std/float.howl`: Go's arbitrary-precision decimal
+      (`strconv/decimal.go`) ported to HowlFrame. `roundShortest` gives the
+      shortest round-trip digits for printing, and `floatBits` the nearest
+      float for `to_float`, in `ParseFloat`'s decimal syntax with its
+      underscore rule. The runtime calls it through two bridges, and a
+      program that cannot make a float leaves the module out (19 KB).
+      `TestDiffFloats` compares 729 values: powers of ten, subnormal
+      halvings, ratio sequences, 300 random texts from a fixed seed and
+      hard cases (halfway, boundaries, 800+ digits). Hexadecimal floats
+      (`0x1p-2`) fail with `WASM_UNSUPPORTED`.
 - [x] `parse_json` in `std/json.howl`, as the VM's (Go's `json.Decoder`
       with `UseNumber`, then a check for a second value): ints when they fit
       int64, otherwise floats; the last duplicate key wins; U+FFFD for
@@ -249,7 +261,8 @@ as the work it describes: tick tasks, move the status line, record findings.
       it when `HOWLSCENE_HF` names a checkout; evidence in
       `docs/journals/2026-10-29_howlscene_hf_wasmgc_m1_gate.md`.
 - [ ] Exit gate, engines: the corpus also under wasmtime, through a WASI
-      host, once float digits and parsing are HowlFrame.
+      host (float digits and parsing are HowlFrame now, so print, stderr
+      and exit are all the host provides).
 
 ### M2 tasks: tests
 
@@ -370,9 +383,14 @@ The order of M1 and M3 work follows what the application needs.
   HowlFrame source cannot do (the checker types values statically and
   there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.
   Whether programs should get such an operation is open.
-- Temporary host dependencies, to be replaced by standard-library
-  HowlFrame: shortest float digits (`float_digits`, `float_point`) and
-  float parsing (`parse_float`, `parse_float_ok`).
+- The host no longer computes anything for a program: float digits and
+  float parsing moved from the loader (`float_digits`, `float_point`,
+  `parse_float`) to `std/float.howl`, so the only imports are `print`,
+  `stderr` and `exit`. The loader's float syntax had diverged already: it
+  refused `1_000`, which `strconv.ParseFloat` (and so the VM) reads.
+- HowlFrame's `//` and `%` desugar into list and string code, and it has
+  no bit operations, so integer-heavy std code (the float module's
+  arbitrary-precision decimal) uses integer intrinsics.
 
 ### Open questions
 
