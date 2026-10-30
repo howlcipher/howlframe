@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestone M1 exit gate met (2026-10-30); finishing its last task (base64); M2 next.
+Status: milestone M1 done (2026-10-30); M2 next.
 
 ## Goal
 
@@ -114,7 +114,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 
 | Milestone | State | Notes |
 | --- | --- | --- |
-| M1 core language | Exit gate met (2026-10-30); last tasks in progress | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid` and hexadecimal floats done; base64 remains. |
+| M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Not started | |
 | M3 browser host | Not started | |
 | M4 site runtime | Not started | |
@@ -269,8 +269,16 @@ as the work it describes: tick tasks, move the status line, record findings.
       through printing, JSON, splitting, case mapping, regular expressions
       and escaping. The VM's `[]byte` values (from files and the network)
       arrive with M3's host operations.
-- [ ] base64: `base64_text` and `sniff_media_type`, JavaScript-backend
-      host operations with no VM form, compared with the JavaScript backend.
+- [x] base64: `base64_text` and `sniff_media_type` in `std/base64.howl`.
+      They are JavaScript-backend host operations with no VM form, so the
+      JavaScript backend is their reference (`TestBase64LikeJavaScript`
+      runs each program as a `web_app` there): its validation (length a
+      multiple of four, the standard alphabet, at most two `=`), `atob`'s
+      decoding, `TextDecoder`'s strict UTF-8 with a leading BOM dropped,
+      and the four image signatures. With them HowlScene HF's backup
+      module compiles, and `TestHowlSceneBackupGate` runs it (writing a
+      backup, reading good and broken ones) on both WebAssembly engines
+      against the JavaScript backend.
 - [x] Hexadecimal floats in `to_float`: Go's `readFloat` for base 16 and
       `atofHex` in `std/float.howl` (16 mantissa digits with a sticky bit,
       the binary exponent required, rounding half to even, subnormals and
@@ -404,6 +412,11 @@ The order of M1 and M3 work follows what the application needs.
   HowlFrame source cannot do (the checker types values statically and
   there is no `type_of`); `__hf_type` gives std code the VM's `%T` name.
   Whether programs should get such an operation is open.
+- Running programs on the JavaScript backend as the reference for base64
+  found two divergences of that backend from the VM: `encode_json` keeps
+  insertion order and does not escape `<`, `>`, `&` (bugs.md #64), and a
+  `try_let` used as a value generates JavaScript that does not parse
+  (bugs.md #65).
 - Text that is not valid UTF-8 (made with `bytes_to_string`) exposed two
   divergences that were unreachable before: `str_split` with an empty
   separator took a character's length from its lead byte, so `0xFF`

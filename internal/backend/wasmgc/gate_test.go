@@ -2,6 +2,8 @@ package wasmgc
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -93,4 +95,117 @@ func firstDifference(a, b string) int {
 		}
 	}
 	return min(len(a), len(b))
+}
+
+// TestHowlSceneBackupGate runs HowlScene HF's backup module (which reads
+// base64 with base64_text and sniff_media_type, browser host operations
+// with no VM form) as WebAssembly and on the JavaScript backend, its
+// reference: backup files for the portfolio fixture, then reading a good
+// backup and broken ones back. Like TestHowlSceneGate it needs HOWLSCENE_HF.
+//
+// The JavaScript backend's encode_json keeps insertion order and does not
+// escape < > & (bugs.md #64), so each printed line is compared as decoded
+// JSON, with JSON nested in strings decoded too.
+func TestHowlSceneBackupGate(t *testing.T) {
+	hs := os.Getenv("HOWLSCENE_HF")
+	if hs == "" {
+		t.Skip("set HOWLSCENE_HF to a HowlScene HF checkout to run the backup gate")
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	project, err := os.ReadFile(filepath.Join(hs, "tests", "fixtures", "neutral", "portfolio.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	image, err := os.ReadFile(filepath.Join(hs, "tests", "fixtures", "neutral", "img-sample01.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b64 := func(b []byte) string { return howlString(base64.StdEncoding.EncodeToString(b)) }
+	dir := t.TempDir()
+	core, err := filepath.Rel(dir, filepath.Join(hs, "src", "core"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := func(path, data string) string { return `(dict ("path" "` + path + `") ("base64" ` + data + `))` }
+	good := `(list ` + entry("howlscene-project.json", b64(project)) + ` ` + entry("assets/img-sample01.png", b64(image)) + `)`
+	src := `(cli_app
+  (use "` + core + `/registry.howl" as registry)
+  (use "` + core + `/schema.howl" as schema)
+  (use "` + core + `/backup.howl" as backup)
+  (let (reg (call registry/registry) paths (dict ("img-sample01" "assets/img-sample01.png")))
+    (let (r (call schema/parse_project ` + howlString(string(project)) + ` reg))
+      (let (config (map_get r "config"))
+        (do
+          (print (encode_json (call backup/backup_files config (dict ("img-sample01" ` + b64(image) + `)) paths)))
+          (print (encode_json (call backup/backup_project_text ` + good + `)))
+          (print (encode_json (call backup/backup_asset_data config ` + good + ` paths)))
+          (print (encode_json (call backup/backup_project_text (list ` + entry("howlscene-project.json", `"/w=="`) + `))))
+          (print (encode_json (call backup/backup_project_text (list ` + entry("other.json", `"e30="`) + `))))
+          (print (encode_json (call backup/backup_asset_data config (list ` + entry("assets/img-sample01.png", `"R0lGODlhAQABAAAAACw="`) + `) paths)))
+          (print (encode_json (call backup/backup_asset_data config (list) paths))))))))
+`
+	driver := filepath.Join(dir, "backup.howl")
+	if err := os.WriteFile(driver, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := onJSAt(t, driver)
+	if want.failed {
+		t.Fatalf("JavaScript: %s", want.errMsg)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(want.stdout), "\n") {
+		t.Logf("line %d: %.110s", i+1, line)
+	}
+	engines := map[string]func(*testing.T, string) outcome{"node": onWasmAt}
+	if _, err := exec.LookPath("wasmtime"); err == nil {
+		engines["wasmtime"] = onWasmtimeAt
+	}
+	for engine, runOn := range engines {
+		got := runOn(t, driver)
+		if got.failed || jsonLines(t, got.stdout) != jsonLines(t, want.stdout) {
+			t.Fatalf("%s differs from the JavaScript backend (failed=%v %s); first difference at byte %d\njs   %.300q\nwasm %.300q",
+				engine, got.failed, got.errMsg, firstDifference(want.stdout, got.stdout), want.stdout, got.stdout)
+		}
+		t.Logf("%s: %d lines of JSON equal to the JavaScript backend's", engine, strings.Count(want.stdout, "\n"))
+	}
+}
+
+// jsonLines decodes each line of out as JSON (and JSON inside its strings)
+// and encodes it again with sorted keys, so outputs that differ only in key
+// order or escaping compare equal.
+func jsonLines(t *testing.T, out string) string {
+	t.Helper()
+	var norm func(v any) any
+	norm = func(v any) any {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, e := range x {
+				x[k] = norm(e)
+			}
+		case []any:
+			for i, e := range x {
+				x[i] = norm(e)
+			}
+		case string:
+			var inner any
+			if strings.HasPrefix(x, "{") || strings.HasPrefix(x, "[") {
+				if json.Unmarshal([]byte(x), &inner) == nil {
+					return norm(inner)
+				}
+			}
+		}
+		return v
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		var v any
+		if err := json.Unmarshal([]byte(line), &v); err != nil {
+			t.Fatalf("not JSON: %q", line)
+		}
+		enc, _ := json.Marshal(norm(v))
+		b.Write(enc)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }

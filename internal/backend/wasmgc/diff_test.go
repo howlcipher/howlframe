@@ -633,6 +633,81 @@ func TestDiffHexFloats(t *testing.T) {
 	}
 }
 
+// onJSAt runs a cli_app on the JavaScript backend as a web_app in Node:
+// the reference for browser host operations that have no VM form. An
+// uncaught error is reported as the VM's would be, with its code and
+// message, so matchVM can compare it.
+func onJSAt(t *testing.T, path string) outcome {
+	t.Helper()
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Next to the original, so relative (use ...) paths still resolve.
+	web := filepath.Join(filepath.Dir(path), "web_"+filepath.Base(path))
+	if err := os.WriteFile(web, []byte(strings.Replace(string(src), "(cli_app", "(web_app", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if out := run(t, compilerBin, "build", web, "--target", "js", "-o", dir); out.failed {
+		t.Fatalf("build (js): %s", out.errMsg)
+	}
+	got := run(t, "node", filepath.Join(dir, "app.js"))
+	if got.failed {
+		// Node prints "Error: CODE: message" for an uncaught error.
+		for _, line := range strings.Split(got.errMsg, "\n") {
+			if rest, ok := strings.CutPrefix(line, "Error: "); ok {
+				code, msg, _ := strings.Cut(rest, ": ")
+				report, _ := json.Marshal(map[string]string{"code": code, "message": msg})
+				got.errMsg = string(report)
+				got.code = 1
+				break
+			}
+		}
+	}
+	return got
+}
+
+// sameAsJS compares the WebAssembly builds with the JavaScript backend.
+func sameAsJS(t *testing.T, src string) {
+	t.Helper()
+	path := writeSource(t, src)
+	want := onJSAt(t, path)
+	matchVM(t, "wasm", want, onWasmAt(t, path))
+	if _, err := exec.LookPath("wasmtime"); err == nil {
+		matchVM(t, "wasmtime", want, onWasmtimeAt(t, path))
+	}
+}
+
+// base64_text and sniff_media_type are browser host operations of the
+// JavaScript backend with no VM form, so it is their reference; this
+// backend has them in std/base64.howl.
+func TestBase64LikeJavaScript(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	for name, body := range map[string]string{
+		"text":            `(print (base64_text "aGVsbG8g4pyT") (base64_text "") (base64_text "YQ==") (base64_text "YWI=") (base64_text "YWJj"))`,
+		"bom dropped":     `(print (+ "[" (+ (base64_text "77u/aGk=") "]")) (+ "[" (+ (base64_text "77u/") "]")) (+ "[" (+ (base64_text "aO+7vw==") "]")))`,
+		"spare bits":      `(print (base64_text "YR==") (base64_text "YWJ="))`,
+		"bad length":      `(print (base64_text "abc"))`,
+		"bad character":   `(print (base64_text "ab*d"))`,
+		"inner padding":   `(print (base64_text "ab=d"))`,
+		"three pads":      `(print (base64_text "a==="))`,
+		"not utf-8":       `(print (base64_text "/w=="))`,
+		"surrogate":       `(print (base64_text "7aCA"))`,
+		"not a string":    `(let (d (dict ("n" 1))) (print (base64_text (map_get d "n"))))`,
+		"sniff types":     `(print (sniff_media_type "iVBORw0KGgoAAAANSUhEUg==") (sniff_media_type "/9j/4AAQSkZJRg==") (sniff_media_type "R0lGODlhAQABAAAAACw=") (sniff_media_type "UklGRiQAAABXRUJQVlA4"))`,
+		"sniff unknown":   `(print (+ "[" (+ (sniff_media_type "aGVsbG8=") (+ (sniff_media_type "x") (+ (sniff_media_type "") "]")))))`,
+		"sniff long data": `(print (sniff_media_type "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB***not base64***"))`,
+		"sniff short":     `(print (+ "[" (+ (sniff_media_type "iVBO") (+ (sniff_media_type "UklGRiQAAAA=") "]"))))`,
+		"sniff not text":  `(let (d (dict ("n" 1))) (print (+ "[" (+ (sniff_media_type (map_get d "n")) "]"))))`,
+		"caught":          `(try_let (t (base64_text "abc")) (catch e (print "caught")) (print t))`,
+	} {
+		t.Run(name, func(t *testing.T) { sameAsJS(t, "(cli_app "+body+")") })
+	}
+}
+
 // The standard library's intrinsics and names are reserved for it.
 func TestStdIsReserved(t *testing.T) {
 	for name, src := range map[string]string{

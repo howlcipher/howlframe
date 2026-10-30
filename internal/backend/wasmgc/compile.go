@@ -25,6 +25,10 @@ var stdOps = map[string]struct{ module, fn string }{
 	"regex_match": {"regex", "match"},
 	"parse_json":  {"json", "parse"},
 	"utf8_valid":  {"utf8", "valid"},
+	// Browser host operations of the JavaScript backend with no VM form,
+	// on base64 data.
+	"base64_text":      {"base64", "text"},
+	"sniff_media_type": {"base64", "sniff"},
 }
 
 const stdPrefix = "__std_"

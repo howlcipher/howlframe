@@ -16,6 +16,8 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Pending | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
+| 64 | [The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`](#64-the-javascript-backends-encode_json-keeps-insertion-order-and-does-not-escape---) | Pending | 6.0 (6×1÷1) | — | — | — | `(encode_json (dict ("b" 1) ("a" "<x>")))` is `{"b":1,"a":"<x>"}` from `--target js` and `{"a":"\u003cx\u003e","b":1}` on the VM (Go's `encoding/json`: sorted keys, HTML-safe escapes), so a project a browser app writes differs byte for byte from the one the VM or WebAssembly writes. |
 | 63 | [The VM's `parse_json` error messages change with the Go toolchain](#63-the-vms-parse_json-error-messages-change-with-the-go-toolchain) | Pending | 4.0 (8×1÷2) | — | — | — | The VM reports `parse_json failed:` followed by encoding/json's error text, which the current Go release words differently from Go 1.25 (5 of 40 malformed inputs in `TestDiffParseJSON`), and its `encode_json` writes invalid UTF-8 as a raw U+FFFD instead of `\ufffd`, so the same program's output, including what a `try_let` catches, depends on the toolchain the VM was built with. |
 | 62 | [A legacy flag before the input writes bytecode silently instead of running the program](#62-a-legacy-flag-before-the-input-writes-bytecode-silently-instead-of-running-the-program) | Pending | 3.0 (6×1÷2) | — | — | — | `howlframe -max-instructions 5000 prog.howl` writes `prog.hfbc` and exits 0 with no output, so a user who meant to run the program with a higher limit sees nothing happen. `howlframe run --max-instructions N prog.howl` runs it. Same class as #52. |
 | 61 | [`TestAdapterDepthCapRejects4095Chain` fails intermittently under the race detector](#61-testadapterdepthcaprejects4095chain-fails-intermittently-under-the-race-detector) | Done (2026-10-30) | 3.0 (3×1÷1) | — | — | — | The test fails when one depth rejection takes more than one second of wall-clock time, which the race detector on a shared runner can exceed; it failed once on PR #257 (no `internal/hfir` change) and passed on rerun. |
@@ -162,6 +164,35 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 65. The JavaScript backend emits invalid JavaScript for `try_let` used as a value
+
+* **Problem:** A `try_let` in value position, such as an argument of
+  `print`, is emitted as a statement block whose `let` declaration lands in
+  an expression, so the generated file does not parse.
+* **Evidence:** `(web_app (print (try_let (t (base64_text "abc")) (catch e e) t)))`
+  builds with `--target js`; `node app.js` fails with
+  `SyntaxError: Unexpected identifier 't'` at `let t;` (2026-10-30). The VM
+  and the WebAssembly backend run the same form as a value
+  (`TestDiffTryLet/as a value`).
+* **Scope:** Emit a value-position `try_let` as an expression (for example
+  an immediately called function), with a test that runs the generated
+  file.
+
+### 64. The JavaScript backend's `encode_json` keeps insertion order and does not escape `<`, `>`, `&`
+
+* **Problem:** `--target js` writes `encode_json` with `JSON.stringify`,
+  which keeps a dict's insertion order and leaves `<`, `>`, `&`, U+2028 and
+  U+2029 as they are. The VM uses Go's `encoding/json`: keys in sorted byte
+  order and those characters escaped.
+* **Evidence:** `(encode_json (dict ("b" 1) ("a" (dict ("z" 1) ("y" "<x>")))))`
+  is `{"b":1,"a":{"z":1,"y":"<x>"}}` on the JavaScript backend and
+  `{"a":{"y":"\u003cx\u003e","z":1},"b":1}` on the VM and the WebAssembly
+  backend (2026-10-30). HowlScene HF's backup writes its project file with
+  `encode_json`, so the file a browser writes differs from the VM's
+  (`TestHowlSceneBackupGate` compares decoded JSON for this reason).
+* **Scope:** Give the JavaScript backend Go's encoding (sorted keys,
+  HTML-safe escapes, invalid UTF-8 as U+FFFD) and a test against the VM.
 
 ### 63. The VM's `parse_json` error messages change with the Go toolchain
 
