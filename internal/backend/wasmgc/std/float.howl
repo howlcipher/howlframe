@@ -217,12 +217,13 @@
                             (if okup (do (call round_up d (+ mi 1)) (return 0)))))
                         (set ui (+ ui 1)))))))))))))
 
-  ; parse: the float nearest to a decimal text in Go's ParseFloat syntax
-  ; (optional sign, digits with an optional point, optional exponent,
-  ; underscores only between digits), or nil when the text is not one or
-  ; the value is out of range. Hexadecimal floats are not supported yet.
+  ; parse: the float nearest to a text in Go's ParseFloat syntax (optional
+  ; sign, digits with an optional point, optional exponent, underscores only
+  ; between digits; or a hexadecimal float 0x...p...), or nil when the text
+  ; is not one or the value is out of range.
   (export (defun parse (s)
     (do
+      (if (call is_hex s) (return (call parse_hex s)))
       (if (not (call syntax_ok s)) (return (__hf_nil)))
       (let (d (call dec_new))
         (do
@@ -237,8 +238,6 @@
       (do
         (if (= n 0) (return false))
         (if (or (= (__hf_byte_at s 0) 43) (= (__hf_byte_at s 0) 45)) (set i 1))
-        (if (and (< (+ i 1) n) (and (= (__hf_byte_at s i) 48) (or (= (__hf_byte_at s (+ i 1)) 120) (= (__hf_byte_at s (+ i 1)) 88))))
-          (__hf_fail "WASM_UNSUPPORTED: to_float of a hexadecimal float is not supported in the WebAssembly backend yet"))
         ; Mantissa: digits and underscores, at most one point.
         (let (dot false going true)
           (while (and going (< i n))
@@ -325,6 +324,106 @@
             (if (>= (+ exp 1023) 2047) (return (__hf_nil)))))
         (if (= (__hf_and mant 4503599627370496) 0) (set exp -1023))
         (return (call make d mant exp)))))
+
+  ; is_hex: does s start, after an optional sign, with 0x and at least one
+  ; more character (Go's readFloat test for base 16)?
+  (defun is_hex (s)
+    (let (n (__hf_byte_len s) i 0)
+      (do
+        (if (and (> n 0) (or (= (__hf_byte_at s 0) 43) (= (__hf_byte_at s 0) 45))) (set i 1))
+        (return (and (< (+ i 2) n) (and (= (__hf_byte_at s i) 48) (or (= (__hf_byte_at s (+ i 1)) 120) (= (__hf_byte_at s (+ i 1)) 88))))))))
+
+  (defun hex_digit (c)
+    (do
+      (if (call is_digit c) (return (- c 48)))
+      (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+      (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+      (return -1)))
+
+  ; parse_hex: Go's readFloat for base 16, then atofHex: at most 16 hex
+  ; digits of mantissa (more set the sticky bit), a required binary
+  ; exponent after p, underscores between digits or after the prefix, and
+  ; rounding half to even. nil when the text is not one or out of range.
+  (defun parse_hex (s)
+    (let (n (__hf_byte_len s) i 0 neg false mant 0 nd 0 ndmant 0 dp 0 sawdot false sawdigits false trunc false going true saw 48)
+      (do
+        (if (= (__hf_byte_at s 0) 43) (set i 1))
+        (if (= (__hf_byte_at s 0) 45) (do (set i 1) (set neg true)))
+        (set i (+ i 2))
+        ; saw tracks underscores: 48 a digit or the prefix, 95 an underscore,
+        ; 33 anything else (Go's underscoreOK).
+        (while (and going (< i n))
+          (let (c (__hf_byte_at s i))
+            (cond
+              ((= c 95) (do (if (not (= saw 48)) (return (__hf_nil))) (set saw 95) (set i (+ i 1))))
+              ((= c 46)
+                (do
+                  (if (or sawdot (= saw 95)) (return (__hf_nil)))
+                  (set sawdot true)
+                  (set dp nd)
+                  (set saw 33)
+                  (set i (+ i 1))))
+              ((>= (call hex_digit c) 0)
+                (do
+                  (set sawdigits true)
+                  (set saw 48)
+                  (if (and (= c 48) (= nd 0))
+                    (set dp (- dp 1))
+                    (do
+                      (set nd (+ nd 1))
+                      (if (< ndmant 16)
+                        (do (set mant (__hf_or (__hf_shl mant 4) (call hex_digit c))) (set ndmant (+ ndmant 1)))
+                        (if (not (= c 48)) (set trunc true)))))
+                  (set i (+ i 1))))
+              (else (set going false)))))
+        (if (not sawdigits) (return (__hf_nil)))
+        (if (= saw 95) (return (__hf_nil)))
+        (if (not sawdot) (set dp nd))
+        (set dp (* dp 4))
+        (set ndmant (* ndmant 4))
+        ; The exponent is required.
+        (if (or (>= i n) (not (or (= (__hf_byte_at s i) 112) (= (__hf_byte_at s i) 80)))) (return (__hf_nil)))
+        (set i (+ i 1))
+        (if (>= i n) (return (__hf_nil)))
+        (let (esign 1 e 0)
+          (do
+            (if (= (__hf_byte_at s i) 43) (set i (+ i 1)))
+            (if (and (< i n) (= (__hf_byte_at s i) 45)) (do (set esign -1) (set i (+ i 1))))
+            (if (or (>= i n) (not (call is_digit (__hf_byte_at s i)))) (return (__hf_nil)))
+            (set saw 33)
+            (while (< i n)
+              (let (c (__hf_byte_at s i))
+                (cond
+                  ((call is_digit c) (do (if (< e 10000) (set e (+ (* e 10) (- c 48)))) (set saw 48) (set i (+ i 1))))
+                  ((= c 95) (do (if (not (= saw 48)) (return (__hf_nil))) (set saw 95) (set i (+ i 1))))
+                  (else (return (__hf_nil))))))
+            (if (= saw 95) (return (__hf_nil)))
+            (set dp (+ dp (* e esign)))))
+        (let (exp (if (= mant 0) 0 (- dp ndmant)))
+          (return (call atof_hex mant exp neg trunc))))))
+
+  ; atof_hex: Go's atofHex for a float64.
+  (defun atof_hex (mantissa exp neg trunc)
+    (let (m mantissa x (+ exp 52) round 0)
+      (do
+        (while (and (not (= m 0)) (= (__hf_shr m 54) 0)) (do (set m (__hf_shl m 1)) (set x (- x 1))))
+        (if trunc (set m (__hf_or m 1)))
+        (while (not (= (__hf_shr m 55) 0)) (do (set m (__hf_or (__hf_shr m 1) (__hf_and m 1))) (set x (+ x 1))))
+        (while (and (> (__hf_shr m 1) 0) (< x -1024)) (do (set m (__hf_or (__hf_shr m 1) (__hf_and m 1))) (set x (+ x 1))))
+        (set round (__hf_and m 3))
+        (set m (__hf_shr m 2))
+        (set round (__hf_or round (__hf_and m 1)))
+        (set x (+ x 2))
+        (if (= round 3)
+          (do
+            (set m (+ m 1))
+            (if (= m 9007199254740992) (do (set m (__hf_shr m 1)) (set x (+ x 1))))))
+        (if (= (__hf_shr m 52) 0) (set x -1023))
+        (if (> x 1023) (return (__hf_nil)))
+        (let (bits (__hf_or (__hf_and m 4503599627370495) (__hf_shl (__hf_and (+ x 1023) 2047) 52)))
+          (do
+            (if neg (set bits (__hf_or bits (__hf_shl 1 63))))
+            (return (__hf_f64_from_bits bits)))))))
 
   (defun pow_table ()
     (let (t (__hf_array 9) i 0)
