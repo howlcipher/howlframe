@@ -7,7 +7,8 @@
 # 1. gofmt, go vet and go build over the module.
 # 2. go test ./... on the default toolchain, and again on GOTOOLCHAIN=${HF_LATEST_GO:-go1.27.2} (CI's latest-go job
 #    uses Go "stable"; the VM must own any text newer Go changes).
-# 3. The HowlScene HF gates (TestHowlScene*: the M1 rendering gate, the backup gate and the M2 core-tests gate),
+# 3. The HowlScene HF gates (TestHowlScene*: the M1 rendering gate, the backup gate, the M2 core-tests gate and the M3
+#    site runtime gate),
 #    which CI cannot run because HowlScene HF is a private repository.
 #
 # The WebAssembly tests skip a leg when node, wasmtime or wasm-tools is missing, and the gates skip without

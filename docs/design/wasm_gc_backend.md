@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestones M1 and M2 done (2026-10-30); M3 in progress.
+Status: milestones M1, M2 (2026-10-30) and M3 (2026-10-31) done; M4 next.
 
 ## Goal
 
@@ -116,7 +116,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
-| M3 browser host | In progress (2026-10-31) | Probe done: "Browser host operations" lists every operation with its parameters, result, errors, capability and whether it is asynchronous. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
+| M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
@@ -413,8 +413,20 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       `exit` after a suspension, handlers and tasks that suspend, and
       closures that keep their cells across suspensions.
       `TestBrowserAsyncFailsClosed` covers what the rewrite refuses.
-- [ ] Every DOM, storage, file, image, archive and rich text operation the
-      JavaScript backend supports, with the same errors.
+- [x] Every DOM, storage, file, image, archive and rich text operation the
+      JavaScript backend supports, with the same errors (by construction:
+      the loader calls the JavaScript backend's runtime function for each),
+      and `fetch`: in the table with the `network` capability and two
+      optional parameters (`Optional`), it resolves to the VM's bytes (a list
+      of byte values, which `bytes_to_string` turns into its text) where the
+      JavaScript backend gives the text itself. A program that calls it and
+      is not granted `network` does not link: the loader refuses it before
+      instantiating, with the JavaScript backend's `CAPABILITY_DENIED:
+      capability denied: network` (that backend denies at the call, after
+      the program's earlier output); a host-scoped grant is checked at the
+      call by the shared runtime. The VM's `[]byte` values reach no other
+      browser operation (decided: base64 text, as the JavaScript backend).
+      Every operation in the table runs on WebAssembly in some test.
 - [x] ZIP, done early for M2's exit gate (HowlScene HF's backup tests read
       and write ZIPs): `zip_build` and `zip_read` in `std/zip.howl`, on
       base64 text as on the JavaScript backend, with CRC-32, base64
@@ -428,8 +440,17 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       `ZIP_INVALID_PATH`, `ZIP_DUPLICATE_PATH`, `ZIP_LIMIT`,
       `ZIP_UNSUPPORTED` and `ZIP_CORRUPT` case, names quoted as
       `JSON.stringify` quotes them, a cut surrogate pair included).
-- [ ] HowlFrame's browser tests (`internal/backend/javascript/browser_*`)
-      ported to run against both backends.
+- [x] HowlFrame's browser tests (`internal/backend/javascript/browser_*`)
+      ported to run against both backends: they are now an external test
+      package (`javascript_test`, which may import both backends), and
+      every test builds its program with `--target js` and `--target
+      wasmgc` semantics (`build`) and runs it in the same fake-DOM harness
+      (`browser_backends_test.go`); caught errors compare by code and
+      message (`howlNorm`). Exit gate (2026-10-31): 53 tests, 53 pass on
+      each backend, none skipped. `TestHowlSceneSiteGate` (opt-in, with
+      `HOWLSCENE_HF`) runs HowlScene HF's published-site runtime on a
+      stand-in published page through load, scroll, pause, resume and
+      reduced motion and requires the same page on both backends.
 
 ### Browser host operations (M3 probe, 2026-10-31)
 
