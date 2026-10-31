@@ -117,7 +117,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
-| M4 site runtime | Not started | |
+| M4 site runtime | In progress | Probe done ("Site delivery"): the module goes inline in the loader; pages add `'wasm-unsafe-eval'`. |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
 
@@ -670,10 +670,127 @@ reference for the language): a caught error is bound to the VM's report
 `console.log` of an array prints `a,b`. The test page compares caught
 errors by code and message.
 
+### M4 tasks: site runtime
+
+The M4 prompt is `docs/journals/2026-10-31_wasmgc_m4_prompt.md`, its
+journal `docs/journals/2026-10-31_wasmgc_m4_journal.md`.
+
+- [x] Probe: how a published page gets the site runtime, which browser
+      specs cover motion and the story, and what a page downloads ("Site
+      delivery" below).
+- [ ] Delivery: the module's bytes inline in the loader (decided below);
+      a build option that writes one `app.js`, and tests.
+- [ ] Size: dead code removed in the compiler (unused runtime functions
+      and exports), and a test that fails when the site's download exceeds
+      250 KiB.
+- [ ] Speed: text conversion measured in performance.spec.mjs's terms on
+      every scroll frame, and made faster if it matters.
+- [ ] HowlScene HF: its build makes the site runtime with `--target
+      wasmgc` behind a switch, its pages carry the decided policy, and its
+      motion and story specs run against it.
+- [ ] Exit gate: every motion and story spec passes on WebAssembly in each
+      Playwright browser that runs here; the initial download measured;
+      `TestHowlSceneSiteGate` and the browser tests pass on both backends.
+
+### Site delivery (M4 probe, 2026-10-31)
+
+How a page gets the site runtime today (HowlScene HF `247365e`, built with
+its pinned compiler, `--target js`): `scripts/build.sh` compiles
+`src/site/site.howl` to one classic script, `site.js`, which reaches pages
+three ways, always as text:
+
+| Page | How the runtime arrives | Policy (`render.howl`) |
+| --- | --- | --- |
+| Exported site (the editor's ZIP, `site_files` in `export.howl`, the engine package's `site_files`) | `assets/site.js`, `<script src defer>` | `default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'` |
+| Editor preview (a `srcdoc` frame, `sandbox="allow-scripts"`) | inline `<script>`; `assemble_editor.py` embeds `site.js` in the editor page as `hs-asset-site-js` with its SHA-256 | `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'sha256-…'; base-uri 'none'; form-action 'none'`, and the editor page's own policy (`script-src 'self' 'sha256-…'`), which binds the frame too |
+| Examples and Pages (`examples/*/build.mjs`, `pages/build.mjs`) | as the exported site, through the engine package | as the exported site |
+
+`site_files` takes the runtime as one text, and the editor's export, the
+engine package and every example pass it through unchanged; anything
+other than one text file changes all of them.
+
+Specs that run the site runtime (Playwright, Chromium only in
+`playwright.config.mjs`):
+
+- `motion.spec.mjs`, a cinematic site: MOT-001 reveal on scroll, scenery
+  follows scroll (`--hs-scroll`) and stops off screen; A11Y-004/MOT-005
+  the motion toggle stops everything (subscriptions 4 → 1, no running
+  animations) and is remembered across a reload; MOT-002 reduced motion,
+  at load and changed while open; MOT-004 rapid navigation; A11Y-002
+  keyboard. Then MOT-003 preset None (subscriptions 0, toggle hidden),
+  MOT-007 a long section, A11Y-007 reflow in every theme. The story
+  (`examples/story`): MOT-001 chapters (rail, `aria-current`, mist, push-in,
+  `--hs-page`), MOT-004 wheel scrolling never moves a visible scene,
+  A11Y-002 the chapter rail, MOT-002/MOT-007 reduced motion, EXP-006 without
+  JavaScript, A11Y-005 axe. Each asserts no console or page errors.
+- `editor.spec.mjs` MOT-006 (preview animates, theme switching
+  mid-transition) and SEC-001 (only the runtime runs in the preview).
+- `engine-site.spec.mjs`, `pages.spec.mjs`, `example.spec.mjs`,
+  `journey.spec.mjs` and `phase0.spec.mjs` load published pages (and
+  EXP-001 checks that `site.js` holds no editor code, by name).
+- `performance.spec.mjs`: the runtime's gzipped size under 250 KiB and at
+  most a quarter of the editor's `app.js`; Core Web Vitals; scroll frame
+  time with motion against the same page held still (median at most
+  1.5 × still + 4 ms).
+
+What a published page downloads (the William Elias example, ink-wash;
+images aside):
+
+| File | Today (`--target js`) | gzipped | WebAssembly, module inline | gzipped |
+| --- | --- | --- | --- | --- |
+| `index.html` | 15,308 B | 5,094 B | the same | |
+| `assets/site.css` | 15,855 B | 4,591 B | the same | |
+| `assets/site.js` | 21,947 B | 5,143 B | 80,044 B (loader 18,749 + module 45,872 as base64) | 23,583 B |
+| Total | 53,110 B | 14,828 B | 111,207 B (108.6 KiB) | 33,268 B (32.5 KiB) |
+
+Built with HowlFrame `9266ee56`: module 45,872 B (12,965 B gzipped) and
+loader 18,749 B (5,614 B). Inline, the module costs 4.9 KB more gzipped
+than as a file (17,886 B as base64 against 12,965 B). The budget holds
+either way, raw or gzipped; the editor's `app.js` is 226,861 B (40,907 B
+gzipped), so the quarter rule of `performance.spec.mjs` needs the runtime
+under 10,226 B gzipped while the editor stays JavaScript (M5 builds the
+editor with this backend: 272,072 + 39,984 B, 76,501 B gzipped).
+
+Where the module's size goes: 131 functions; the program's own functions
+are 72% of the code, the runtime the rest, and 18 runtime functions (2,045
+of 21,094 lines of text format) are reachable from no export. In the
+program's code the most frequent sequence is the error check after a call
+(`global.get`, `ref.is_null`, `i32.eqz`, `if`, `ref.null`, `return`, 816
+times), then boxing an integer constant (669) and making a string literal
+from a data segment (286).
+
+Policies, probed in Playwright 1.64.1's Chromium 156 and Firefox 157 with
+the real runtime and page (`probe.mjs`, recorded in the M4 journal):
+
+| Page and policy | Chromium | Firefox |
+| --- | --- | --- |
+| Module inline, `script-src 'self'` | blocked (`'unsafe-eval'` or `'wasm-unsafe-eval'` needed) | blocked |
+| Module inline, `script-src 'self' 'wasm-unsafe-eval'` | runs | runs |
+| `app.wasm` beside the loader, `'wasm-unsafe-eval'`, `default-src 'self'` | runs | runs |
+| The same with `connect-src 'none'` | blocked (fetch) | blocked |
+| Preview form, everything inline, `script-src 'sha256-…'` | blocked | blocked |
+| Preview form with `'wasm-unsafe-eval'` added | runs | runs |
+
+WebKit 27.2 is installed but does not start on this machine (missing
+system libraries); Safari has `'wasm-unsafe-eval'` since 16 and WasmGC
+since 18.2, so every engine that runs the module has the keyword.
+
+Decision: the module's bytes go inline in the loader, as base64 decoded
+before `WebAssembly.compile`. The runtime stays one text file, so
+`site_files`, the editor's export, the preview's hash and the engine
+package need no new kind of file; the preview, whose `default-src 'none'`
+leaves nothing to fetch from, works; the policy adds only
+`'wasm-unsafe-eval'` (no `connect-src`, and no dependence on a host
+serving `application/wasm` for streaming compilation). A sibling file is
+no stricter (it needs the same keyword and a `connect-src`) and saves 4.9
+KB gzipped. Both page policies and the editor page's policy gain
+`'wasm-unsafe-eval'` in `script-src`.
+
 ### M4 to M6 tasks: the application
 
 - [ ] M4: HowlScene HF's published-site runtime built with this backend;
-      motion and story tests pass; size measured against 250 KiB.
+      motion and story tests pass; size measured against 250 KiB (tasks
+      below, "M4 tasks: site runtime").
 - [ ] M5: the editor built with this backend; the full browser suite and
       the beginner journey pass; HowlScene HF drops `--target js`.
 - [ ] M6: styles and the editor page shell generated from `.howl`; source
