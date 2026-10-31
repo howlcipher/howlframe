@@ -20,7 +20,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | --- | --- | --- | --- |
 | 0. Probe: every browser host operation | `docs/wasmgc-m3-probe` | #286 | Merged (`13362363`) |
 | 1. Typed host operation table | `feat/host-operation-registry` | #287 | Merged (`b2093457`) |
-| bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | | Open |
+| bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
+| bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | | Open |
 
 ## Entries
 
@@ -71,3 +72,9 @@ Plan of slices (each its own branch and PR):
   `TypeError: Cannot set/read properties of null (...)`, and `(dom_query 5)` ran. They now go through DOM runtime
   helpers that check the element (and the selector), so both backends report `TYPE_ERROR: op expected an element`.
   `TestRawDomOperationsRejectMissingElements` failed for all seven before the fix.
+### 2026-10-31 13:00: bugs.md #71, conversion error type names
+
+- Comparing the browser host's asynchronous fixtures with the JavaScript backend: a storage read that comes back nil,
+  then `to_int`, fails with `cannot convert object to int` there and `cannot convert <nil> to int` on the VM and on
+  WebAssembly. `howlFrameToInt` and `howlFrameToFloat` named `typeof v`; they now use `howlFrameGoType` (the operand
+  errors' helper, bugs.md #66). `TestConversionErrorsNameVMTypes` failed before the fix.
