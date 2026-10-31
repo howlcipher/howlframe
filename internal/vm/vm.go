@@ -20,6 +20,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ir"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
+	"github.com/howlcipher/howlframe/internal/textcase"
 	"io"
 	"io/fs"
 	"math"
@@ -691,9 +692,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		s := fmt.Sprint(interp.eval(node.Children[1], env))
 		switch node.Children[0].Value {
 		case "to_lower":
-			return strings.ToLower(s)
+			return textcase.ToLower(s)
 		case "to_upper":
-			return strings.ToUpper(s)
+			return textcase.ToUpper(s)
 		default:
 			return strings.TrimSpace(s)
 		}
@@ -4272,9 +4273,9 @@ func BcConvert(target string, a any) any {
 		}
 		return string(bytesFromNumberList(items, 0, bytecode.BCInstruction{Op: bytecode.OpConvert}, "bytes_to_string"))
 	case "to_lower":
-		return strings.ToLower(fmt.Sprint(a))
+		return textcase.ToLower(fmt.Sprint(a))
 	case "to_upper":
-		return strings.ToUpper(fmt.Sprint(a))
+		return textcase.ToUpper(fmt.Sprint(a))
 	case "str_trim":
 		return strings.TrimSpace(fmt.Sprint(a))
 	}

@@ -25,6 +25,7 @@ last. Times are America/Detroit.
 | ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Merged (`d38ce70a`) |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Merged (`e46839ff`) |
 | Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Merged (`993d008e`) |
+| Follow-up: bugs.md #69, VM case mapping pinned to Unicode 15 | `fix/vm-unicode-case` | #282 | Open |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Merged; 19 of 19 |
 
 ## Entries
@@ -118,3 +119,18 @@ Findings:
   1.27.2, HowlScene HF gates) and all four CI checks. M2 is complete: #273-#280.
 - The M3 prompt is `2026-10-30_wasmgc_m3_prompt.md`. Note for it: the M2 prompt's `documentation/TESTING.md`
   does not exist, so the M3 prompt drops it.
+
+### 2026-10-30 20:10: follow-ups to M2's findings
+
+Asked to fix the problems found along the way as part of M2. Already fixed: the ZIP trailing-data mismatch (#277)
+and the missing `--tests` interop entry (#280). Three remain, one branch each:
+
+1. Unicode (bugs.md #69, `fix/vm-unicode-case`). Not only the WebAssembly table: the VM itself mapped case by the
+   toolchain's Unicode version. howlframe built with Go 1.25 prints `ɤ ꟛ ꟛ Ɤ` for
+   `(print (to_upper "ɤ ꟛ") (to_lower "ꟛ Ɤ"))`, with Go 1.27.2 `Ɤ Ꟛ ꟛ ɤ`; 110 code points differ, none of them
+   cased in Unicode 15, and `unicode.IsSpace` is unchanged. Fix: `internal/textcase` owns a Unicode 15.0.0 table
+   (generated, checked against Go's on Go 1.25/1.26) used by the interpreter, the bytecode VM and the
+   `std/unicode.howl` generator. The VM test and the differential fixture fail on Go 1.27.2 without the fix.
+2. `str_repeat` quadratic on WebAssembly (`perf/wasmgc-str-repeat`).
+3. ZIP duplicate paths lowercased by Go's simple case mapping where the JavaScript reference uses `toLowerCase`
+   (`fix/wasmgc-zip-lowercase`).

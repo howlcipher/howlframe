@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 69 | [The VM's `to_lower` and `to_upper` change with the Go toolchain](#69-the-vms-to_lower-and-to_upper-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | Opus 5.5 | — | — | The VM maps case with Go's `strings.ToLower` and `ToUpper`, whose tables are the toolchain's Unicode version: Go 1.25 and 1.26 have Unicode 15.0.0, Go 1.27 has 17.0.0, which cases 110 more code points. `(print (to_upper "ɤ"))` prints `ɤ` from a release (Go 1.25) and `Ɤ` (U+A7CB) from a VM built with Go 1.27. Same class as #63. Found by the WebAssembly backend's regression gate (M2). |
 | 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 67 | [A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass](#67-a-try_let-catches-exit-in-the-javascript-backends-tests-so-a-failing-assert-can-pass) | Done (2026-10-30) | 8.0 (8×1÷1) | Opus 5.5 | — | — | In `app.test.js`, `exit` (and so `assert`) throws an `Error` to fail the running test, and a `try_let` caught it like any error: a test whose failing assert sits in a function called from a `try_let` binding passed, and the handler ran. On the VM, exit ends the program whatever handler encloses it. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 66 | [The JavaScript backend computes with operands of the wrong type](#66-the-javascript-backend-computes-with-operands-of-the-wrong-type) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | When an operand's type is known only at run time (a dict of mixed values, `parse_json`), `--target js` lets JavaScript decide: `(+ 1 v)` with `v` = `"x"` prints `1x`, `(* v 2)` with `v` a one-element list prints `2`, nil + 1 is `1`, `(< 1 v)` is `false`. The VM fails each with `TYPE_ERROR: op requires numeric operands, got int64 and string`. Found probing `test` blocks for the WebAssembly backend's M2. |
@@ -167,6 +168,37 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 69. The VM's `to_lower` and `to_upper` change with the Go toolchain
+
+* **Problem:** `to_lower` and `to_upper` call Go's `strings.ToLower` and
+  `ToUpper`, which map by `unicode.CaseRanges`, the Unicode version of the
+  toolchain that built the VM. Go 1.25 (which releases are built with) and
+  1.26 have Unicode 15.0.0 (328 case ranges); Go 1.27, which CI's
+  `latest-go` job uses, has 17.0.0 (336), which gives a case to 110 code
+  points that have none in Unicode 15 (U+019B, U+0264, U+1C89, U+1C8A,
+  U+A7CB to U+A7DC in part, U+10D50 to U+10D85 and U+16EA0 to U+16ED3).
+  A program's output therefore depended on the toolchain. `str_trim` is not affected: `unicode.IsSpace` is the same in
+  both versions.
+* **Evidence:** `(cli_app (print (to_upper "ɤ ꟛ") (to_lower "ꟛ Ɤ")))`
+  prints `ɤ ꟛ ꟛ Ɤ` from howlframe built with Go 1.25 and `Ɤ Ꟛ ꟛ ɤ` with
+  Go 1.27.2. The WebAssembly backend's `std/unicode.howl`, generated from
+  Go 1.26's tables, prints the Go 1.25 result, and its generator test
+  skipped on Go 1.27 (2026-10-30, `scripts/wasmgc_gate.sh`).
+* **Done (2026-10-30):** The VM maps case by its own table, pinned to
+  Unicode 15.0.0: `internal/textcase` holds Go's case table generated from
+  a Unicode 15 toolchain (`TestTableIsCurrent`) and `ToLower` and
+  `ToUpper` as `strings.Map` over a port of Go's `unicode.to`;
+  `TestSameAsGoOnPinnedVersion` checks every code point and invalid UTF-8
+  against Go's functions on such a toolchain. The interpreter and the
+  bytecode VM call it, and `std/unicode.howl` is generated from the same
+  table, so `TestUnicodeTableIsCurrent` runs on every toolchain.
+  `TestCaseMappingDoesNotDependOnTheToolchain` (interpreter and bytecode,
+  all 110 code points) and the `unicode 17 cased` differential fixture
+  fail on Go 1.27.2 without the fix. Moving to a newer Unicode is now a
+  deliberate change: regenerate the table on a toolchain of that version.
+  The Go backend's generated programs still call `strings.ToLower`, which
+  their own toolchain compiles.
 
 ### 68. The Go backend's test blocks do not run as tests
 
