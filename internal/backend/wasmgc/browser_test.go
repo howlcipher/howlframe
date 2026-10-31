@@ -12,39 +12,61 @@ import (
 
 // pageJS runs a built web_app in node:vm against a stand-in page: elements
 // #a, #b, #field, #box, #dlg and #none (absent), with attributes, value,
-// checked, text, HTML, classes, custom properties, a box, focus and dialog
-// state; matchMedia, scroll position, viewport and localStorage. The page
-// prints what the program printed, its uncaught error, and every element's
-// state, as JSON. argv: the script, then app.wasm for the WebAssembly build.
+// checked, text, HTML, classes, custom properties, a box, focus, dialog
+// state and event listeners; matchMedia with change listeners,
+// IntersectionObserver, window scroll listeners, animation frames, scroll
+// position, viewport and localStorage. After the program it clicks every
+// element with a click listener (awaiting each handler), scrolls twice,
+// flips the reduced-motion query, makes #a visible and runs the pending
+// frames. It prints, as JSON, what the program printed, handler rejections
+// and unhandled rejections in order, the uncaught error, every element's
+// state and the listeners still live. argv: the script, then app.wasm for
+// the WebAssembly build.
 const pageJS = `const vm = require("node:vm");
 const fs = require("node:fs");
 const code = fs.readFileSync(process.argv[2], "utf8");
 const out = [];
+process.on("unhandledRejection", (e) => out.push("unhandled:" + String(e && e.message)));
 function el(id, attrs) {
   const classes = new Set();
-  const e = { id, attrs: Object.assign({}, attrs), value: "", checked: false, open: false, textContent: "", innerHTML: "", props: {},
+  const e = { id, attrs: Object.assign({}, attrs), value: "", checked: false, open: false, textContent: "", innerHTML: "", props: {}, listeners: {},
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     hasAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n); },
     setAttribute(n, v) { this.attrs[n] = String(v); },
     removeAttribute(n) { delete this.attrs[n]; },
+    addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
     focus() { out.push("focus:" + id); },
     showModal() { this.open = true; out.push("showModal:" + id); },
     close() { this.open = false; out.push("close:" + id); },
     getBoundingClientRect() { return { top: 120.5, height: 300, left: 0, width: 10 }; },
-    closest(sel) { return null; },
+    closest(sel) { const m = /^\[([a-z0-9-]+)\]$/.exec(sel); return m && this.hasAttribute(m[1]) ? this : null; },
     classList: { toggle(n, on) { if (on === undefined) on = !classes.has(n); if (on) classes.add(n); else classes.delete(n); return on; }, get list() { return [...classes].sort(); } },
   };
   e.style = { setProperty(n, v) { e.props[n] = v; } };
   return e;
 }
-const els = { a: el("a"), b: el("b"), field: el("field"), box: el("box"), dlg: el("dlg") };
+const els = { a: el("a", { "data-id": "a-1" }), b: el("b"), field: el("field"), box: el("box"), dlg: el("dlg") };
 const store = new Map();
+const mediaListeners = [];
+let reduced = false;
+const observers = [];
+const windowListeners = [];
+const frames = new Map();
+let nextFrame = 1;
 const browser = {
   console: { log: (v) => out.push(String(v)), error: (v) => out.push("stderr:" + String(v)) },
   TextEncoder, TextDecoder, atob, btoa, setTimeout, Promise,
   scrollY: 250, scrollX: 0, innerHeight: 800,
   scrollTo(opts) { out.push("scrollTo:" + JSON.stringify(opts)); },
-  matchMedia: (q) => ({ matches: q === "(prefers-reduced-motion: reduce)", addEventListener() {}, removeEventListener() {} }),
+  matchMedia: (q) => ({ get matches() { return q === "(prefers-reduced-motion: reduce)" ? reduced : false; },
+    addEventListener(type, fn) { mediaListeners.push(fn); },
+    removeEventListener(type, fn) { const i = mediaListeners.indexOf(fn); if (i >= 0) mediaListeners.splice(i, 1); } }),
+  IntersectionObserver: class { constructor(fn) { this.fn = fn; this.targets = []; observers.push(this); }
+    observe(t) { this.targets.push(t); } disconnect() { this.targets = []; observers.splice(observers.indexOf(this), 1); } },
+  addEventListener(type, fn, opts) { windowListeners.push({ type, fn, passive: !!(opts && opts.passive) }); },
+  removeEventListener(type, fn) { const i = windowListeners.findIndex((l) => l.type === type && l.fn === fn); if (i >= 0) windowListeners.splice(i, 1); },
+  requestAnimationFrame(fn) { const id = nextFrame++; frames.set(id, fn); return id; },
+  cancelAnimationFrame(id) { frames.delete(id); },
   localStorage: { getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => { if (String(v).length > 500) throw new Error("QuotaExceededError"); store.set(k, String(v)); } },
   document: {
     querySelector: (s) => els[s.replace(/^#/, "")] || null,
@@ -52,12 +74,32 @@ const browser = {
   },
 };
 if (process.argv[3]) browser.howlFrameWasm = fs.readFileSync(process.argv[3]);
+const settle = () => new Promise((r) => setTimeout(r, 5));
 const state = () => Object.fromEntries(Object.entries(els).map(([k, e]) => [k,
   { attrs: e.attrs, value: e.value, checked: e.checked, open: e.open, text: e.textContent, html: e.innerHTML, classes: e.classList.list, props: e.props }]));
-Promise.resolve(vm.runInNewContext(code, browser))
-  .then(() => new Promise((r) => setTimeout(r, 5)))
-  .then(() => console.log(JSON.stringify({ out, els: state(), store: Object.fromEntries(store) })),
-    (err) => console.log(JSON.stringify({ error: String(err && err.message), out, els: state() })));
+const live = () => ({ media: mediaListeners.length, observers: observers.length, window: windowListeners.map((l) => l.type + (l.passive ? ":passive" : "")).sort(), frames: frames.size });
+(async () => {
+  let error;
+  try { await vm.runInNewContext(code, browser); } catch (e) { error = String(e && e.message); }
+  await settle();
+  for (const e of Object.values(els)) {
+    for (const fn of e.listeners.click || []) {
+      const event = { target: e, key: "Enter", preventDefault() { out.push("prevented:" + e.id); } };
+      try { await fn(event); } catch (err) { out.push("rejected:" + String(err && err.message)); }
+    }
+  }
+  windowListeners.filter((l) => l.type === "scroll").forEach((l) => { l.fn(); l.fn(); });
+  reduced = true;
+  mediaListeners.slice().forEach((fn) => fn({ matches: true }));
+  await settle();
+  observers.slice().forEach((o) => o.fn(o.targets.filter((x) => x === els.a).map((x) => ({ target: x, isIntersecting: true }))));
+  await settle();
+  const run = [...frames.values()]; frames.clear(); run.forEach((f) => f());
+  await settle();
+  const result = { out, els: state(), live: live(), store: Object.fromEntries(store) };
+  if (error !== undefined) result.error = error;
+  console.log(JSON.stringify(result));
+})();
 `
 
 // caughtError matches a caught error as each backend prints it: the
@@ -262,11 +304,11 @@ func TestBrowserPageRecordsEffects(t *testing.T) {
 // operation, and browser operations need a web_app.
 func TestBrowserFailsClosed(t *testing.T) {
 	for src, want := range map[string]string{
-		`(web_app (on_event (dom_query "#a") "click" (lambda (e) (print 1))))`: `"on_event (a handler (lambda))" is not supported`,
-		`(web_app (on_scroll (lambda () (print 1))))`:                          `"on_scroll (a handler (lambda))" is not supported`,
-		`(web_app (storage_get "ns" "k"))`:                                     `"storage_get (an asynchronous operation)" is not supported`,
-		`(web_app (image_decode "x" "image/png"))`:                             `"image_decode (an asynchronous operation)" is not supported`,
-		`(cli_app (print (dom_query "#a")))`:                                   `"dom_query (a browser host operation; it needs a web_app)" is not supported`,
+		`(web_app (on_media "(x)" (lambda (a b c) (print 1))))`: `"a lambda of more than two parameters" is not supported`,
+		`(cli_app (spawn (lambda () (print 1))))`:               `"spawn" is not supported`,
+		`(web_app (storage_get "ns" "k"))`:                      `"storage_get (an asynchronous operation)" is not supported`,
+		`(web_app (image_decode "x" "image/png"))`:              `"image_decode (an asynchronous operation)" is not supported`,
+		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation; it needs a web_app)" is not supported`,
 	} {
 		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
 		if !out.failed || !strings.Contains(out.errMsg, want) || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {
@@ -278,5 +320,93 @@ func TestBrowserFailsClosed(t *testing.T) {
 		if !out.failed || !strings.Contains(out.errMsg, "web_app builds only for the browser") {
 			t.Errorf("web_app %v: want a host error, got %s", args, out.errMsg)
 		}
+	}
+}
+
+// Handlers: closures share the variables they capture with the code around
+// them (a handler's set is seen outside, and later events see earlier
+// ones), a variable bound in a loop is that iteration's, and handlers nest.
+// A handler's uncaught error or exit rejects its own promise and nothing
+// else; a spawned task runs at once. Subscriptions run their handlers and
+// off stops them.
+func TestBrowserHandlersLikeJavaScript(t *testing.T) {
+	for name, src := range map[string]string{
+		"shared variables": `(web_app (let (count 0) (do
+  (on_event (dom_query "#a") "click" (lambda (e) (do
+    (set count (+ count 1))
+    (print (+ "a " (to_string count))))))
+  (on_event (dom_query "#a") "click" (lambda (e) (do
+    (set count (* count 10))
+    (print (+ "a again " (to_string count))))))
+  (set count 5)
+  (print "registered"))))`,
+		"event": `(web_app (on_event (dom_query "#a") "click" (lambda (e) (do
+  (print (event_attr e "data-id"))
+  (print (+ "[" (+ (event_attr e "data-none") "]")))
+  (print (event_key e))
+  (event_prevent e)))))`,
+		"loop iterations": `(web_app (do
+  (for el (list "#a" "#b") (on_event (dom_query el) "click" (lambda (e) (print el))))
+  (let (i 0) (while (< i 2) (do
+    (let (n i) (on_event (dom_query "#field") "click" (lambda (e) (print (+ "n " (to_string n))))))
+    (set i (+ i 1)))))))`,
+		"captured list and dict": `(web_app (let (seen (list) tally (dict)) (do
+  (on_event (dom_query "#a") "click" (lambda (e) (do
+    (append seen "a")
+    (map_set tally "a" (list_len seen))
+    (print (str_join seen ","))
+    (print (map_get tally "a")))))
+  (on_event (dom_query "#b") "click" (lambda (e) (do
+    (append seen "b")
+    (print (str_join seen ","))))))))`,
+		"nested handlers": `(web_app (let (outer "o") (on_event (dom_query "#a") "click" (lambda (e) (let (inner "i") (do
+  (print (+ outer inner))
+  (on_event (dom_query "#b") "click" (lambda (e2) (do
+    (set outer "O")
+    (print (+ outer (+ inner (event_key e2)))))))))))))`,
+		"handler in a function": `(web_app (do
+  (call wire "#a" "first")
+  (call wire "#b" "second"))
+(defun wire (sel label) (do
+  (on_event (dom_query sel) "click" (lambda (e) (do (set label (+ label "!")) (print label))))
+  (return label))))`,
+		"handler errors": `(web_app (do
+  (on_event (dom_query "#a") "click" (lambda (e) (do (print "a runs") (print (+ 1 (to_int "x"))) (print "not reached"))))
+  (on_event (dom_query "#b") "click" (lambda (e) (do (print "b runs") (set_text (dom_query "#none") "x"))))
+  (on_event (dom_query "#field") "click" (lambda (e) (try_let (v (dom_text (dom_query "#none"))) (catch err (print (to_string err))) (print v))))
+  (on_event (dom_query "#box") "click" (lambda (e) (do (print "box runs") (call quit))))
+  (print "main done"))
+(defun quit () (do (exit 4) (return "never"))))`,
+		"missing element": `(web_app (do
+  (try_let (v (on_event (dom_query "#none") "click" (lambda (e) (print 1)))) (catch err (print (to_string err))) (print "registered"))
+  (print "continues")))`,
+		"spawn": `(web_app (let (n 1) (do
+  (spawn (lambda () (do (set n (+ n 1)) (print (+ "task " (to_string n))))))
+  (print (+ "main " (to_string n)))
+  (spawn (lambda () (print (+ 1 (to_int "x")))))
+  (print "after a failing task"))))`,
+		"subscriptions": `(web_app (let (subs (list)) (do
+  (append subs (on_media "(prefers-reduced-motion: reduce)" (lambda (m) (print (+ "media " (to_string m))))))
+  (append subs (on_visible (dom_query_all ".scene") (lambda (el v) (do (set_class el "seen" v) (print (+ "visible " (to_string v)))))))
+  (append subs (on_scroll (lambda () (print (+ "scroll " (to_string (scroll_y)))))))
+  (print (subscription_count))
+  (on_event (dom_query "#a") "click" (lambda (e) (do
+    (off (list_get subs 2))
+    (off (list_get subs 2))
+    (print (subscription_count))))))))`,
+		"off everything": `(web_app (let (subs (list)) (do
+  (append subs (on_media "(prefers-reduced-motion: reduce)" (lambda (m) (print "media"))))
+  (append subs (on_visible (dom_query_all ".scene") (lambda (el v) (print "visible"))))
+  (append subs (on_scroll (lambda () (print "scroll"))))
+  (for s subs (off s))
+  (print (subscription_count))
+  (try_let (v (off "nope")) (catch err (print (to_string err))) (print v)))))`,
+		"subscription handler error": `(web_app (do
+  (on_media "(prefers-reduced-motion: reduce)" (lambda (m) (print (+ 1 (to_int "m")))))
+  (print "subscribed")))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			samePageAsJS(t, src)
+		})
 	}
 }

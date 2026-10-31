@@ -68,19 +68,14 @@ var browserUnsupported = map[string]string{}
 
 func init() {
 	for _, op := range capability.HostOperations() {
-		switch {
-		case op.LambdaLast():
-			browserUnsupported[op.Name] = "a handler (lambda)"
-		case op.Async:
-			if _, std := stdOps[op.Name]; !std {
-				browserUnsupported[op.Name] = "an asynchronous operation"
-			}
+		if _, std := stdOps[op.Name]; op.Async && !std {
+			browserUnsupported[op.Name] = "an asynchronous operation"
 		}
 	}
 }
 
-// addBrowserImports declares the browser host's imports: print, stderr and
-// exit_at, then one per host operation the program calls.
+// addBrowserImports declares the browser host's imports: print, stderr,
+// exit_at and spawn, then one per host operation the program calls.
 func (r *rt) addBrowserImports(ops []string) {
 	m := r.m
 	r.iPrint = m.AddImport("hf", "print", r.tEqToVoid)
@@ -88,6 +83,9 @@ func (r *rt) addBrowserImports(ops []string) {
 	// exit_at(code, where) ends the program: the host throws the exit, as
 	// the JavaScript backend's howlFrameExit does, naming file:line.
 	r.iExitAt = m.AddImport("hf", "exit_at", r.funcType([]ValType{I32, EqRef}))
+	// spawn(closure) runs a task: the host calls the closure at once, and
+	// its failure is the task's alone.
+	r.iSpawn = m.AddImport("hf", "spawn", r.tEqToVoid)
 	r.iHost = map[string]int{}
 	for _, name := range ops {
 		op, _ := capability.LookupHostOperation(name)
@@ -185,8 +183,9 @@ func (r *rt) emitBrowser() {
 	export("__hf_host_of", eq, []ValType{ExternRef}, nil, func(c *Code) {
 		c.LocalGet(0).RefCast(r.tHost).StructGet(r.tHost, 0)
 	})
-	// __hf_fail(message): the pending error, "CODE: message".
+	// __hf_fail(message): the pending error, "CODE: message"; nil clears it.
 	export("__hf_fail", eq, nil, nil, func(c *Code) { c.LocalGet(0).GlobalSet(r.gErr) })
+	r.emitInvoke()
 }
 
 // reserve grows memory, when needed, to hold as many bytes as the i32 in
@@ -211,13 +210,32 @@ func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
 	if len(args) != len(op.Params) {
 		return unsupported(n, h)
 	}
-	for _, a := range args {
+	for i, a := range args {
+		if op.Params[i].Kind == capability.HostLambda {
+			if err := f.closure(a); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := f.expr(a); err != nil {
 			return err
 		}
 	}
 	f.code.Call(idx)
 	f.check()
+	return nil
+}
+
+// spawn compiles (spawn (lambda () body)): the host runs the closure as a
+// task.
+func (f *fn) spawn(n *ast.Node) error {
+	if f.c.rt.host != HostBrowser || len(n.Children) != 2 {
+		return unsupported(n, "spawn")
+	}
+	if err := f.closure(n.Children[1]); err != nil {
+		return err
+	}
+	f.code.Call(f.c.rt.iSpawn)
 	return nil
 }
 
@@ -255,7 +273,19 @@ func BrowserLoader(ops []string) (string, error) {
 	for _, name := range ops {
 		op, _ := capability.LookupHostOperation(name)
 		mod := hostImportModule(op)
-		modules[mod] = append(modules[mod], fmt.Sprintf("    %s: hostOp(%s, %q),", name, helpers[name], string(op.Result)))
+		var lambdas []string
+		for _, p := range op.Params {
+			if p.Kind != capability.HostLambda {
+				lambdas = append(lambdas, "null")
+				continue
+			}
+			kinds := make([]string, len(p.Lambda))
+			for i, q := range p.Lambda {
+				kinds[i] = fmt.Sprintf("%q", string(q.Kind))
+			}
+			lambdas = append(lambdas, "["+strings.Join(kinds, ", ")+"]")
+		}
+		modules[mod] = append(modules[mod], fmt.Sprintf("    %s: hostOp(%s, %q, [%s]),", name, helpers[name], string(op.Result), strings.Join(lambdas, ", ")))
 	}
 	mods := make([]string, 0, len(modules))
 	for mod := range modules {
@@ -356,9 +386,41 @@ function uncaught(err) {
   const t = fromStr(err);
   return hostError !== null && hostError.text === t ? hostError.error : new Error(t);
 }
-function hostOp(fn, kind) {
+// A HowlFrame value passed to the page, by its kind: a page object, or any
+// value.
+function argOf(kind, v) {
+  if (kind === "event" || kind === "element") return v === null || v === undefined ? null : ex.__hf_host(v);
+  return toWasm(v);
+}
+// run calls a closure with JavaScript arguments as a task of its own, like
+// a JavaScript backend handler (an async function): its promise rejects
+// with the task's uncaught error or exit, and the caller carries on.
+function run(closure, args) {
+  try {
+    ex.__hf_invoke(closure, args.length > 0 ? args[0] : null, args.length > 1 ? args[1] : null);
+  } catch (e) {
+    return Promise.reject(e);
+  }
+  const err = ex.__hf_error();
+  if (err === null) return Promise.resolve();
+  ex.__hf_fail(null);
+  return Promise.reject(uncaught(err));
+}
+// handler makes a closure a JavaScript function for the page to call.
+function handler(closure, kinds) {
   return function () {
-    const args = Array.prototype.map.call(arguments, toJS);
+    const args = [];
+    for (let i = 0; i < kinds.length; i++) args.push(argOf(kinds[i], arguments[i]));
+    return run(closure, args);
+  };
+}
+// hostOp is the import of a host operation: its arguments as JavaScript
+// (a lambda as a handler), the JavaScript backend's runtime function, and
+// its result or error back as HowlFrame.
+function hostOp(fn, kind, lambdas) {
+  return function () {
+    const args = [];
+    for (let i = 0; i < arguments.length; i++) args.push(lambdas[i] ? handler(arguments[i], lambdas[i]) : toJS(arguments[i]));
     try { return resultOf(kind, fn.apply(null, args)); } catch (e) { fail(e); return null; }
   };
 }
@@ -371,6 +433,7 @@ const imports = {
     print: (s) => { console.log(fromStr(s)); },
     stderr: (s) => { howlFrameStderr(fromStr(s)); },
     exit_at: (code, where) => { howlFrameExit(code, fromStr(where)); },
+    spawn: (closure) => { run(closure, []); },
   },
 };
 `

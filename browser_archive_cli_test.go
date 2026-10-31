@@ -66,7 +66,7 @@ func TestEveryBrowserHostOperationArity(t *testing.T) {
 		args := []string{op.Name}
 		for _, p := range op.Params {
 			if p.Kind == capability.HostLambda {
-				args = append(args, "(lambda ("+strings.Join(p.Lambda, " ")+") (print 1))")
+				args = append(args, "(lambda ("+strings.Join(p.LambdaNames(), " ")+") (print 1))")
 			} else {
 				args = append(args, `"x"`)
 			}

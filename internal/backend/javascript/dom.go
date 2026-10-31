@@ -121,6 +121,9 @@ function howlFrameSetAttr(el, name, v) {
 function howlFrameToggleClass(el, name) {
   return howlFrameElement("toggle_class", el).classList.toggle(name);
 }
+function howlFrameOnEvent(el, type, fn) {
+  howlFrameElement("on_event", el).addEventListener(type, fn);
+}
 function howlFrameDomValue(el) {
   return howlFrameElement("dom_value", el).value;
 }

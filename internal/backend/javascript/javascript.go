@@ -1683,7 +1683,7 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		// that begins with "(" is parsed as a call of this expression's result
 		// rather than as its own statement.
 		jsNeedsDOM = true
-		return fmt.Sprintf("howlFrameElement(\"on_event\", %s).addEventListener(%s, async (%s) => {\n%s\n});", el, event, argName, body)
+		return fmt.Sprintf("howlFrameOnEvent(%s, %s, async (%s) => {\n%s\n});", el, event, argName, body)
 	} else if head == "url_encode" {
 		value := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("(function(v){%s})(%s)", urlEncodeJS, value)

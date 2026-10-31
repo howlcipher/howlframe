@@ -13,8 +13,8 @@ const urlEncodeJS = `if(typeof v !== "string"){throw new Error("TYPE_ERROR: url_
 // and the runtime source that defines them and what they depend on. The
 // WebAssembly backend's generated browser loader calls these functions, so
 // both backends run the same host code and report the same errors. An
-// operation without a runtime function of its own (on_event, whose
-// listener this backend emits inline) is an error.
+// operation with a lambda argument is called with a JavaScript function in
+// its place.
 func HostRuntime(ops []string) (map[string]string, string, error) {
 	helpers := map[string]string{}
 	var dom, richtext, io, motion, archive, urlEncode bool
@@ -37,6 +37,9 @@ func HostRuntime(ops []string) (map[string]string, string, error) {
 			name, archive = "howlFrameDownloadFile", true
 		case op == "zip_build":
 			name, archive = "howlFrameZipBuild", true
+		case op == "on_event":
+			// Called with the element, the event type and a handler.
+			name, dom = "howlFrameOnEvent", true
 		case op == "url_encode":
 			name, urlEncode = "howlFrameUrlEncode", true
 		default:

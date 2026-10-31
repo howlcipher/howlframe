@@ -413,7 +413,10 @@ type fn struct {
 	code   *Code
 	nparam int
 	locals []ValType
-	scopes []map[string]int
+	scopes []map[string]binding
+	// boxed names the variables that lambdas in this function capture
+	// (closure.go): they live in cells.
+	boxed map[string]bool
 	// labels counts open blocks, so a break can compute its depth.
 	labels int
 	// handlers holds the label depth of each enclosing try_let handler.
@@ -423,9 +426,12 @@ type fn struct {
 }
 
 func (c *compiler) function(params []string, body []*ast.Node, isMain bool) (*Code, []ValType, error) {
-	f := &fn{c: c, code: NewCode(), nparam: len(params), scopes: []map[string]int{{}}}
+	f := &fn{c: c, code: NewCode(), nparam: len(params), scopes: []map[string]binding{{}}, boxed: map[string]bool{}}
+	for _, n := range body {
+		lambdaSymbols(n, false, f.boxed)
+	}
 	for i, p := range params {
-		f.scopes[0][p] = i
+		f.param(p, i)
 	}
 	for i, n := range body {
 		last := i == len(body)-1
@@ -471,13 +477,13 @@ func (f *fn) local(t ValType) int {
 	return f.nparam + len(f.locals) - 1
 }
 
-func (f *fn) lookup(name string) (int, bool) {
+func (f *fn) lookup(name string) (binding, bool) {
 	for i := len(f.scopes) - 1; i >= 0; i-- {
-		if idx, ok := f.scopes[i][name]; ok {
-			return idx, true
+		if b, ok := f.scopes[i][name]; ok {
+			return b, true
 		}
 	}
-	return 0, false
+	return binding{}, false
 }
 
 func head(n *ast.Node) string {
@@ -532,14 +538,14 @@ func (f *fn) stmt(n *ast.Node) error {
 		if len(n.Children) != 3 || n.Children[1].Type != "SYMBOL" {
 			return unsupported(n, "set")
 		}
-		idx, ok := f.lookup(n.Children[1].Value)
+		b, ok := f.lookup(n.Children[1].Value)
 		if !ok {
 			return unsupported(n, "set of an unknown variable")
 		}
 		if err := f.expr(n.Children[2]); err != nil {
 			return err
 		}
-		c.LocalSet(idx)
+		f.store(b)
 		return nil
 	case "if":
 		if len(n.Children) < 3 {
@@ -593,17 +599,17 @@ func (f *fn) stmt(n *ast.Node) error {
 		if len(n.Children) != 3 || n.Children[1].Type != "SYMBOL" {
 			return unsupported(n, "append")
 		}
-		idx, ok := f.lookup(n.Children[1].Value)
+		b, ok := f.lookup(n.Children[1].Value)
 		if !ok {
 			return unsupported(n, "append to an unknown variable")
 		}
-		c.LocalGet(idx)
+		f.load(b)
 		if err := f.expr(n.Children[2]); err != nil {
 			return err
 		}
 		c.Call(f.c.rt.fListAppend)
 		f.check()
-		c.LocalSet(idx)
+		f.store(b)
 		return nil
 	case "for":
 		return f.forLoop(n)
@@ -616,11 +622,11 @@ func (f *fn) stmt(n *ast.Node) error {
 		if len(n.Children) != want || n.Children[1].Type != "SYMBOL" {
 			return unsupported(n, head(n))
 		}
-		idx, ok := f.lookup(n.Children[1].Value)
+		b, ok := f.lookup(n.Children[1].Value)
 		if !ok {
 			return unsupported(n, head(n)+" of an unknown variable")
 		}
-		c.LocalGet(idx)
+		f.load(b)
 		for _, a := range n.Children[2:] {
 			if err := f.expr(a); err != nil {
 				return err
@@ -692,7 +698,7 @@ func (f *fn) let(n *ast.Node, value bool) error {
 	if len(binds)%2 != 0 {
 		return unsupported(n, "let bindings")
 	}
-	f.scopes = append(f.scopes, map[string]int{})
+	f.scopes = append(f.scopes, map[string]binding{})
 	defer func() { f.scopes = f.scopes[:len(f.scopes)-1] }()
 	for i := 0; i < len(binds); i += 2 {
 		if binds[i].Type != "SYMBOL" {
@@ -701,9 +707,7 @@ func (f *fn) let(n *ast.Node, value bool) error {
 		if err := f.expr(binds[i+1]); err != nil {
 			return err
 		}
-		idx := f.local(EqRef)
-		f.code.LocalSet(idx)
-		f.scopes[len(f.scopes)-1][binds[i].Value] = idx
+		f.init(f.declare(binds[i].Value))
 	}
 	body := n.Children[2:]
 	for i, k := range body {
@@ -787,11 +791,11 @@ func (f *fn) expr(n *ast.Node) error {
 			c.GlobalGet(r.gFalse)
 			return nil
 		}
-		idx, ok := f.lookup(n.Value)
+		b, ok := f.lookup(n.Value)
 		if !ok {
 			return unsupported(n, "reference to "+n.Value)
 		}
-		c.LocalGet(idx)
+		f.load(b)
 		return nil
 	}
 	h := head(n)
@@ -1052,6 +1056,13 @@ func (f *fn) expr(n *ast.Node) error {
 			return f.hostCall(n, h, args)
 		}
 	}
+	if h == "spawn" {
+		if err := f.spawn(n); err != nil {
+			return err
+		}
+		c.RefNull(HeapNone)
+		return nil
+	}
 	if op, ok := stdOps[h]; ok {
 		if h == "parse_json" {
 			// (parse_json Type text): the type names what the program expects;
@@ -1118,13 +1129,13 @@ func (f *fn) forLoop(n *ast.Node) error {
 	i := f.local(I32)
 	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 0).LocalSet(length)
 	c.I32Const(0).LocalSet(i)
-	f.scopes = append(f.scopes, map[string]int{})
-	item := f.local(EqRef)
-	f.scopes[len(f.scopes)-1][n.Children[1].Value] = item
+	f.scopes = append(f.scopes, map[string]binding{})
+	item := f.declare(n.Children[1].Value)
 	c.Block(NoResult).Loop(NoResult)
 	f.labels += 2
 	c.LocalGet(i).LocalGet(length).I32GeU().BrIf(1)
-	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(i).ArrayGet(r.tItems).LocalSet(item)
+	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(i).ArrayGet(r.tItems)
+	f.init(item)
 	for _, k := range n.Children[3:] {
 		if err := f.stmt(k); err != nil {
 			return err
@@ -1148,14 +1159,16 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	if len(n.Children) != 4 {
 		return unsupported(n, "try_let")
 	}
-	binding, catch, body := n.Children[1], n.Children[2], n.Children[3]
-	if binding.Type != "List" || len(binding.Children) != 2 || binding.Children[0].Type != "SYMBOL" ||
+	bound, catch, body := n.Children[1], n.Children[2], n.Children[3]
+	if bound.Type != "List" || len(bound.Children) != 2 || bound.Children[0].Type != "SYMBOL" ||
 		head(catch) != "catch" || len(catch.Children) != 3 || catch.Children[1].Type != "SYMBOL" {
 		return unsupported(n, "try_let")
 	}
 	branch := func(k *ast.Node, name string, idx int, result int) error {
-		f.scopes = append(f.scopes, map[string]int{name: idx})
+		f.scopes = append(f.scopes, map[string]binding{})
 		defer func() { f.scopes = f.scopes[:len(f.scopes)-1] }()
+		c.LocalGet(idx)
+		f.init(f.declare(name))
 		if !value {
 			return f.stmt(k)
 		}
@@ -1176,13 +1189,13 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	c.Block(NoResult)
 	f.labels++
 	f.handlers = append(f.handlers, handler)
-	if err := f.expr(binding.Children[1]); err != nil {
+	if err := f.expr(bound.Children[1]); err != nil {
 		return err
 	}
 	f.handlers = f.handlers[:len(f.handlers)-1]
 	v := f.local(EqRef)
 	c.LocalSet(v)
-	if err := branch(body, binding.Children[0].Value, v, result); err != nil {
+	if err := branch(body, bound.Children[0].Value, v, result); err != nil {
 		return err
 	}
 	c.Br(f.labels - done - 1)
