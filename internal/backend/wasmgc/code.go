@@ -118,6 +118,9 @@ func (c *Code) I64Shl() *Code  { return c.op(0x86) }
 func (c *Code) I32Load(offset uint64) *Code   { return c.op(0x28).u(2).u(offset) }
 func (c *Code) I32Store(offset uint64) *Code  { return c.op(0x36).u(2).u(offset) }
 func (c *Code) I32Store8(offset uint64) *Code { return c.op(0x3A).u(0).u(offset) }
+func (c *Code) I32Load8U(offset uint64) *Code { return c.op(0x2D).u(0).u(offset) }
+func (c *Code) MemorySize() *Code             { return c.op(0x3F, 0x00) }
+func (c *Code) MemoryGrow() *Code             { return c.op(0x40, 0x00) }
 func (c *Code) I64ShrU() *Code                { return c.op(0x88) }
 
 // f64 arithmetic and comparison.
