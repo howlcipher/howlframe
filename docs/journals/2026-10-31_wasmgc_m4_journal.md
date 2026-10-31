@@ -18,7 +18,8 @@ decisions. Newest entry last. Times are America/Detroit.
 
 | Slice | Branch | PR | State |
 | --- | --- | --- | --- |
-| 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | | Open |
+| 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | #295 | Open |
+| 1. Delivery: `--inline-module` | `feat/wasmgc-inline-module` | | Open (stacked on #295) |
 
 ## Entries
 
@@ -122,3 +123,20 @@ Plan of slices (each its own branch and PR):
 4. HowlScene HF: a build switch for `--target wasmgc --inline`, `'wasm-unsafe-eval'` in its three policies, its specs
    on WebAssembly (and Firefox), then the toolchain pin.
 5. Exit gate.
+
+### 2026-10-31 19:00: delivery
+
+- `build --target wasmgc --inline-module` writes one `app.js`: the browser loader with the module's bytes as base64
+  (`CompileBrowserInline`). The loader's source of bytes is now its own part (`browserFileSource`, which fetches
+  `app.wasm` or takes `howlFrameWasm`, and `inlineSource`), so the inline loader has no `fetch` and no file name.
+  The option fails closed for anything but a `web_app` for the browser, and without `--target wasmgc`.
+- Tests: `TestBrowserInlineModule` (same page as with `app.wasm`, handlers and scroll included; no `</script`, no
+  `fetch(`), `TestBrowserInlineModuleFailsClosed`, and `TestHowlSceneSiteGate` now runs three builds of the site
+  runtime (JavaScript, WebAssembly with `app.wasm`, inline) and requires one page.
+- Found on the way: the site gate's stand-in page had no `atob`, which every browser page and Node have; the inline
+  build failed there with "atob is not defined" until the stand-in got it.
+- The site runtime built inline: 79,765 B, 24,084 B gzipped. The probe script, with its inline case reading this
+  build, ran it in Chromium 156 and Firefox 157 under the exported page's policy and the preview's, each with
+  `'wasm-unsafe-eval'`: it runs in all four (`hs-motion` set, no runtime errors).
+- Not merged by this session: `gh pr merge` was refused by the session's permission check (also for #294), so this
+  branch carries #295's commit and its PR is stacked on it.

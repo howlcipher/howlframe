@@ -186,16 +186,25 @@ func normalizePage(t *testing.T, page string) string {
 	return string(b)
 }
 
-// onPage builds a web_app for target (js or wasmgc) and runs it on the
-// stand-in page.
+// onPage builds a web_app for target (js, wasmgc, or wasmgc-inline for
+// --inline-module) and runs it on the stand-in page.
 func onPage(t *testing.T, path, target string) string {
 	t.Helper()
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not installed")
 	}
 	dir := t.TempDir()
-	if out := run(t, compilerBin, "build", path, "--target", target, "-o", dir); out.failed {
+	build := []string{"build", path, "--target", target, "-o", dir}
+	if target == "wasmgc-inline" {
+		build = []string{"build", path, "--target", "wasmgc", "--inline-module", "-o", dir}
+	}
+	if out := run(t, compilerBin, build...); out.failed {
 		t.Fatalf("build (%s): %s", target, out.errMsg)
+	}
+	if target == "wasmgc-inline" {
+		if _, err := os.Stat(filepath.Join(dir, "app.wasm")); err == nil {
+			t.Fatal("--inline-module wrote app.wasm")
+		}
 	}
 	page := filepath.Join(dir, "page.js")
 	if err := os.WriteFile(page, []byte(pageJS), 0o644); err != nil {
@@ -332,6 +341,62 @@ func TestBrowserLikeJavaScript(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			samePageAsJS(t, "(web_app (do\n  "+body+"))")
 		})
+	}
+}
+
+// --inline-module: one app.js holding the module runs the page as the
+// loader with app.wasm beside it does, handlers included, and can be
+// embedded in a script element.
+func TestBrowserInlineModule(t *testing.T) {
+	path := writeSource(t, `(web_app (do
+  (set_text (dom_query "#a") "héllo 𝄞")
+  (set_class (dom_query "#a") "on" true)
+  (let (n 0) (do
+    (on_event (dom_query "#a") "click" (lambda (e) (do (set n (+ n 1)) (set_attr (dom_query "#b") "data-n" n))))
+    (on_scroll (lambda () (set_style_var (dom_query "#b") "--y" (scroll_y))))))
+  (try_let (v (dom_attr (dom_query "#a") "x],y")) (catch err (print (to_string err))) (print v))
+  (print (map_get (element_box (dom_query "#a")) "top"))))`)
+	want := onPage(t, path, "wasmgc")
+	got := onPage(t, path, "wasmgc-inline")
+	if got != want {
+		t.Fatalf("inline page differs from the page with app.wasm\n got %s\nwant %s", got, want)
+	}
+	for _, effect := range []string{`"data-n":"1"`, `"--y":"250"`, `"text":"héllo 𝄞"`, `"INVALID_ATTRIBUTE_NAME: x],y"`} {
+		if !strings.Contains(got, effect) {
+			t.Errorf("page lacks %s: %s", effect, got)
+		}
+	}
+	dir := t.TempDir()
+	if out := run(t, compilerBin, "build", path, "--target", "wasmgc", "--inline-module", "-o", dir); out.failed {
+		t.Fatal(out.errMsg)
+	}
+	script, err := os.ReadFile(filepath.Join(dir, "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(string(script)), "</script") {
+		t.Error("the inline loader contains </script and cannot be embedded in a page")
+	}
+	if strings.Contains(string(script), "app.wasm") || strings.Contains(string(script), "fetch(") {
+		t.Error("the inline loader still refers to a module file")
+	}
+}
+
+// --inline-module needs a web_app built for the browser.
+func TestBrowserInlineModuleFailsClosed(t *testing.T) {
+	for _, c := range []struct {
+		src  string
+		args []string
+		want string
+	}{
+		{`(cli_app (print 1))`, []string{"--target", "wasmgc", "--inline-module"}, "--inline-module builds a web_app for the browser"},
+		{`(web_app (print 1))`, []string{"--target", "wasmgc", "--inline-module", "--tests"}, "--inline-module builds a web_app for the browser"},
+		{`(web_app (print 1))`, []string{"--target", "js", "--inline-module"}, "--inline-module requires --target wasmgc"},
+	} {
+		out := run(t, compilerBin, append([]string{"build", writeSource(t, c.src), "-o", t.TempDir()}, c.args...)...)
+		if !out.failed || !strings.Contains(out.errMsg, c.want) {
+			t.Errorf("%s %v: want %q, got %s", c.src, c.args, c.want, out.errMsg)
+		}
 	}
 }
 
