@@ -394,8 +394,14 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       every kind, missing elements, caught and uncaught errors, `exit`,
       `stderr`, refused downloads, test blocks left out) on both backends
       against a stand-in page and requires the same page.
-- [ ] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
+- [x] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
       subscription operations (`on_media`, `on_visible`, `on_scroll`, `off`).
+      See "Handlers" below. `TestBrowserHandlersLikeJavaScript` runs 12
+      programs (shared and per-iteration captures, lists and dicts, nested
+      handlers, handlers made in a function, handler errors and exits,
+      a missing element, `spawn`, the subscriptions and `off`) on both
+      backends, clicking, scrolling, flipping a media query and making an
+      element visible on the stand-in page.
 - [ ] Asynchronous operations (storage, files, image decode and encode, ZIP,
       `sleep`): resumable frames, decided with measurements; JSPI where
       available is the alternative.
@@ -556,6 +562,28 @@ page and runs its top level. Decided in M3:
 - The module's bytes come from `howlFrameWasm` when the page (or a test)
   defines it, otherwise from `app.wasm` beside the script. The script's
   value is a promise that settles when the top level has run.
+
+### Handlers
+
+A lambda (only ever the last argument of `on_event`, a subscription or
+`spawn`) is lifted to a function of the module taking `(env, a0, a1)`; a
+closure is a `$Closure` of a function reference and its environment, an
+array of `$Cell`s. As in JavaScript, a handler shares the variables it
+captures: a variable any lambda in a function names lives in a cell, made
+afresh at each binding, so a handler made in a loop sees that iteration's
+variable and a `set` anywhere is seen everywhere. The host calls a handler
+with `__hf_invoke`. The loader turns a closure into a JavaScript function
+that runs it as a task of its own and returns a promise, as the JavaScript
+backend's `async` handlers do: the task's uncaught error or exit rejects
+that promise and nothing else (an unhandled rejection, as there).
+`on_event` uses the JavaScript backend's `howlFrameOnEvent`, the
+subscriptions its `howlFrameOnMedia`, `howlFrameOnVisible` and
+`howlFrameOnScroll`, and a lambda's parameters convert by their kinds in the
+table (an event and an element are page objects, `matches` and `visible`
+bools). `spawn` is a browser import that runs the closure at once; it needs
+no capability (it is a task, not a process; `capability.ForConstruct` names
+`process` for the VM's goroutine). A lambda of more than two parameters, and
+`spawn` outside the browser, fail closed.
 
 Differences from the JavaScript backend, by design (the VM is the
 reference for the language): a caught error is bound to the VM's report
