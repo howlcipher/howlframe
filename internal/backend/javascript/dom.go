@@ -10,6 +10,12 @@ import (
 // jsDOMHelpers maps the DOM and event host operations to their runtime
 // helpers. Each argument is emitted as an expression, in order.
 var jsDOMHelpers = map[string]string{
+	"dom_query":     "howlFrameDomQuery",
+	"set_text":      "howlFrameSetText",
+	"set_html":      "howlFrameSetHTML",
+	"set_attr":      "howlFrameSetAttr",
+	"toggle_class":  "howlFrameToggleClass",
+	"dom_value":     "howlFrameDomValue",
 	"event_attr":    "howlFrameEventAttr",
 	"event_key":     "howlFrameEventKey",
 	"event_prevent": "howlFrameEventPrevent",
@@ -84,7 +90,8 @@ func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, b
 // attribute from the event target or its nearest ancestor that has it, which
 // is what delegated handlers need; the name must be a plain attribute name,
 // so it cannot alter the selector. Operations on a missing element fail with
-// TYPE_ERROR instead of doing nothing.
+// TYPE_ERROR instead of doing nothing, or failing with the engine's own
+// TypeError (bugs.md #70).
 func domJSHelper() string {
 	return `function howlFrameElement(kind, el) {
   if (el === null || el === undefined || typeof el !== "object") {
@@ -97,6 +104,25 @@ function howlFrameAttrName(name) {
     throw new Error("INVALID_ATTRIBUTE_NAME: " + String(name));
   }
   return name;
+}
+function howlFrameDomQuery(selector) {
+  if (typeof selector !== "string") throw new Error("TYPE_ERROR: dom_query expected a selector string");
+  return document.querySelector(selector);
+}
+function howlFrameSetText(el, v) {
+  howlFrameElement("set_text", el).textContent = v;
+}
+function howlFrameSetHTML(el, v) {
+  howlFrameElement("set_html", el).innerHTML = v;
+}
+function howlFrameSetAttr(el, name, v) {
+  howlFrameElement("set_attr", el).setAttribute(name, v);
+}
+function howlFrameToggleClass(el, name) {
+  return howlFrameElement("toggle_class", el).classList.toggle(name);
+}
+function howlFrameDomValue(el) {
+  return howlFrameElement("dom_value", el).value;
 }
 function howlFrameEventAttr(e, name) {
   name = howlFrameAttrName(name);

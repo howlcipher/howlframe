@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 70 | [Seven JavaScript DOM operations fail with the engine's `TypeError` instead of `TYPE_ERROR`](#70-seven-javascript-dom-operations-fail-with-the-engines-typeerror-instead-of-type_error) | Done (2026-10-31) | 4.0 (4×1÷1) | Opus 5.5 | — | — | `(set_text (dom_query "#none") "x")` throws `TypeError: Cannot set properties of null` where every other element operation reports `TYPE_ERROR: op expected an element`; the WebAssembly backend (M3) needs one error to match. |
 | 69 | [The VM's `to_lower` and `to_upper` change with the Go toolchain](#69-the-vms-to_lower-and-to_upper-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | Opus 5.5 | — | — | The VM maps case with Go's `strings.ToLower` and `ToUpper`, whose tables are the toolchain's Unicode version: Go 1.25 and 1.26 have Unicode 15.0.0, Go 1.27 has 17.0.0, which cases 110 more code points. `(print (to_upper "ɤ"))` prints `ɤ` from a release (Go 1.25) and `Ɤ` (U+A7CB) from a VM built with Go 1.27. Same class as #63. Found by the WebAssembly backend's regression gate (M2). |
 | 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 67 | [A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass](#67-a-try_let-catches-exit-in-the-javascript-backends-tests-so-a-failing-assert-can-pass) | Done (2026-10-30) | 8.0 (8×1÷1) | Opus 5.5 | — | — | In `app.test.js`, `exit` (and so `assert`) throws an `Error` to fail the running test, and a `try_let` caught it like any error: a test whose failing assert sits in a function called from a `try_let` binding passed, and the handler ran. On the VM, exit ends the program whatever handler encloses it. Found probing `test` blocks for the WebAssembly backend's M2. |
@@ -168,6 +169,33 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 70. Seven JavaScript DOM operations fail with the engine's `TypeError` instead of `TYPE_ERROR`
+
+* **Problem:** The JavaScript backend emitted `dom_query`, `set_text`,
+  `set_html`, `set_attr`, `toggle_class`, `dom_value` and `on_event`
+  inline (`el.textContent = v`, `document.querySelector(s)`). On a missing
+  element (`dom_query` gives nil when nothing matches) they threw the
+  engine's own `TypeError`, whose text names JavaScript properties and
+  varies by engine, where every other element operation reports
+  `TYPE_ERROR: op expected an element`. `dom_query` passed a non-string
+  selector to `querySelector`, which turned it into text.
+* **Evidence:** `(try_let (v (set_text (dom_query "#none") "x")) (catch
+  err (print (to_string err))) (print "ran"))` printed `TypeError: Cannot
+  set properties of null (setting 'textContent')`; `set_attr`,
+  `toggle_class`, `dom_value` and `on_event` printed `Cannot read
+  properties of null (reading ...)`; `(dom_query 5)` ran (2026-10-31, Node
+  22.22). Found by the WebAssembly backend's M3 probe, which needs the same
+  error on both backends.
+* **Scope:** Route the seven operations through runtime helpers that check
+  the element (and the selector) like the others, keeping their behavior on
+  elements.
+* **Done (2026-10-31):** `howlFrameDomQuery`, `howlFrameSetText`,
+  `howlFrameSetHTML`, `howlFrameSetAttr`, `howlFrameToggleClass` and
+  `howlFrameDomValue` in the DOM runtime, and `on_event` checks its element
+  with `howlFrameElement`. `TestRawDomOperationsRejectMissingElements`
+  failed for all seven before the fix; `TestRawDomOperationsOnElements`
+  keeps their behavior on elements.
 
 ### 69. The VM's `to_lower` and `to_upper` change with the Go toolchain
 
