@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestones M1 and M2 done (2026-10-30); M3 next.
+Status: milestones M1 and M2 done (2026-10-30); M3 in progress.
 
 ## Goal
 
@@ -82,8 +82,8 @@ them). Without relying on JavaScript Promise Integration, which is not
 available in every engine, the compiler turns a function that reaches an
 asynchronous operation into a resumable state machine: its locals live in a
 frame struct, the asynchronous import receives a continuation, and the host
-resumes the frame with the result. This is decided in M3, with measurements;
-JSPI remains an option where available.
+resumes the frame with the result. Decided in M3 with measurements
+("Asynchronous operations" under the M3 tasks): resumable frames.
 
 ## Milestones and exit gates
 
@@ -116,7 +116,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
-| M3 browser host | Not started | |
+| M3 browser host | In progress (2026-10-31) | Probe done: "Browser host operations" lists every operation with its parameters, result, errors, capability and whether it is asynchronous. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
@@ -371,15 +371,48 @@ fails on its first `test`, as the VM's bytecode target refuses them.
 
 ### M3 tasks: browser host
 
-- [ ] Typed host operation table (name, parameter and result kinds,
+- [x] Probe (2026-10-31): every browser host operation of the JavaScript
+      backend and HowlScene HF's use of each; see "Browser host operations".
+- [x] Typed host operation table (name, parameter and result kinds,
       capability, synchronous or asynchronous) shared by the checker and the
-      backends; the browser loader is generated from it.
-- [ ] Host object handles (`$Host` with `externref`).
-- [ ] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
+      backends: `capability.HostOperations` (`internal/capability/host.go`).
+      The checker takes arity, usage and lambda arguments from it (its two
+      maps and eleven inline branches are gone); the desugarer's set of
+      browser operations is held equal to it
+      (`TestEveryJSHostOperationExpandsNestedSugar`), the JavaScript
+      backend's awaits to its asynchronous flags
+      (`TestHostOperationsMatchRegistry`), and every operation's arity is
+      checked from it (`TestEveryBrowserHostOperationArity`). It lives in
+      `internal/capability`, which every consumer may import (`ast` may not
+      import it without a cycle through `construct`, hence the held-equal
+      set). The browser loader is generated from it with the browser host.
+- [x] Host object handles (`$Host` with `externref`) and a `web_app` root
+      that builds for the browser (`--host browser`, the default for a
+      `web_app`): `app.wasm` and a generated loader, `app.js`. See "Browser
+      host" below. `TestBrowserLikeJavaScript` runs 18 programs (every
+      synchronous DOM, layout, preference and style operation, values of
+      every kind, missing elements, caught and uncaught errors, `exit`,
+      `stderr`, refused downloads, test blocks left out) on both backends
+      against a stand-in page and requires the same page.
+- [x] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
       subscription operations (`on_media`, `on_visible`, `on_scroll`, `off`).
-- [ ] Asynchronous operations (storage, files, image decode and encode, ZIP,
-      `sleep`): resumable frames, decided with measurements; JSPI where
-      available is the alternative.
+      See "Handlers" below. `TestBrowserHandlersLikeJavaScript` runs 12
+      programs (shared and per-iteration captures, lists and dicts, nested
+      handlers, handlers made in a function, handler errors and exits,
+      a missing element, `spawn`, the subscriptions and `off`) on both
+      backends, clicking, scrolling, flipping a media query and making an
+      element visible on the stand-in page.
+- [x] Asynchronous operations (storage, files, image decode and encode,
+      `sleep`; ZIP is ordinary code here): resumable frames, decided with
+      the measurements below. `TestBrowserAsyncLikeJavaScript` runs 10
+      programs on both backends against stand-ins for IndexedDB, file
+      inputs and image decoding: storage (round trip, invalid names,
+      quota), files (too large, missing element), images (decode, encode,
+      invalid data and options), asynchronous functions in loops,
+      conditions, arguments (in order), `set` and recursion, errors and
+      `exit` after a suspension, handlers and tasks that suspend, and
+      closures that keep their cells across suspensions.
+      `TestBrowserAsyncFailsClosed` covers what the rewrite refuses.
 - [ ] Every DOM, storage, file, image, archive and rich text operation the
       JavaScript backend supports, with the same errors.
 - [x] ZIP, done early for M2's exit gate (HowlScene HF's backup tests read
@@ -397,6 +430,224 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       `JSON.stringify` quotes them, a cut surrogate pair included).
 - [ ] HowlFrame's browser tests (`internal/backend/javascript/browser_*`)
       ported to run against both backends.
+
+### Browser host operations (M3 probe, 2026-10-31)
+
+Every browser host operation of the JavaScript backend (the reference), read
+from `dom.go`, `browser_io.go`, `motion.go`, `richtext.go`, `archive.go`,
+`exit.go` and `javascript.go`, and from the checker's `jsHostOperations` and
+`jsSubscriptionOperations`. "Async" means the JavaScript backend awaits it.
+"Raw" operations are emitted inline (`el.textContent = v`) with no helper:
+on a missing element they throw the engine's own `TypeError`, with no
+HowlFrame code. Columns HF site and HF editor count uses in HowlScene HF's
+`src/site/site.howl` and `src/editor/editor.howl` (`247365e`); its core
+modules use none, and `src/sdk` and the editor's `ui.howl` and
+`templates.howl` none either.
+
+| Operation | Parameters | Result | Errors | Cap. | Async | HF site | HF editor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `dom_query` | selector | element or nil | raw (`querySelector`) | – | no | 5 | 1 |
+| `dom_query_all` | selector | list of elements | `TYPE_ERROR` | – | no | 4 | – |
+| `set_text` | el, value | – | raw | – | no | – | 4 |
+| `set_html` | el, html | – | raw | – | no | – | 6 |
+| `set_attr` | el, name, value | – | raw | – | no | 4 | 7 |
+| `toggle_class` | el, class | bool | raw | – | no | – | – |
+| `dom_value` | el | text | raw | – | no | – | 5 |
+| `dom_text` | el | text | `TYPE_ERROR` | – | no | – | 6 |
+| `set_value` | el, value (nil is "") | – | `TYPE_ERROR` | – | no | – | 3 |
+| `dom_checked` | el | bool | `TYPE_ERROR` | – | no | – | – |
+| `set_checked` | el, bool | – | `TYPE_ERROR` | – | no | – | – |
+| `dom_focus` | el | – | `TYPE_ERROR` | – | no | – | 3 |
+| `dom_attr` | el, name | text ("" when absent) | `TYPE_ERROR`, `INVALID_ATTRIBUTE_NAME` | – | no | 2 | – |
+| `remove_attr` | el, name | – | `TYPE_ERROR`, `INVALID_ATTRIBUTE_NAME` | – | no | 2 | 2 |
+| `dialog_open`, `dialog_close` | el | – | `TYPE_ERROR` | – | no | – | 6, 8 |
+| `on_event` | el, type, `(lambda (e) ...)` | – | raw | – | no | 1 | 4 |
+| `event_attr` | event, name | text (closest ancestor with it) | `INVALID_ATTRIBUTE_NAME` | – | no | – | 17 |
+| `event_key` | event | text | – | – | no | – | – |
+| `event_prevent` | event | – | – | – | no | – | – |
+| `set_class` | el, name, on | – | `TYPE_ERROR`, `INVALID_CLASS_NAME` | – | no | 9 | – |
+| `set_style_var` | el, `--name`, value | – | `TYPE_ERROR`, `INVALID_STYLE_VAR`, `INVALID_STYLE_VALUE` | – | no | 3 | – |
+| `scroll_y`, `viewport_height` | – | number | – | – | no | 1, 1 | – |
+| `element_box` | el | dict `top`, `height` | `TYPE_ERROR` | – | no | 3 | – |
+| `scroll_into_view` | el | – | `TYPE_ERROR` | – | no | 1 | – |
+| `media_matches` | query | bool | `TYPE_ERROR` | – | no | 1 | – |
+| `pref_get` | key | text ("" when absent or unavailable) | `PREF_INVALID_KEY` | – | no | 1 | – |
+| `pref_put` | key, value | bool (false when unavailable) | `PREF_INVALID_KEY`, `TYPE_ERROR` | – | no | 1 | – |
+| `on_media` | query, `(lambda (matches) ...)` | subscription | `TYPE_ERROR` | – | no | 1 | – |
+| `on_visible` | elements, `(lambda (el visible) ...)` | subscription | `TYPE_ERROR` | – | no | 2 | – |
+| `on_scroll` | `(lambda () ...)` | subscription | – | – | no | 1 | – |
+| `off` | subscription | – | `TYPE_ERROR` | – | no | 1 | – |
+| `subscription_count` | – | int | – | – | no | 1 | – |
+| `storage_get` | namespace, key | text or nil | `STORAGE_INVALID_NAME`, `STORAGE_UNAVAILABLE`, `TYPE_ERROR` | – | yes | – | 3 |
+| `storage_put` | namespace, key, value | – | as `storage_get`, `STORAGE_QUOTA` | – | yes | – | 4 |
+| `storage_delete` | namespace, key | – | as `storage_get` | – | yes | – | – |
+| `storage_keys` | namespace | sorted list of text | as `storage_get` | – | yes | – | – |
+| `file_read_input` | el, max_bytes | list of dicts `name`, `type`, `size`, `base64` | `TYPE_ERROR`, `FILE_TOO_LARGE` | – | yes | – | 2 |
+| `image_decode` | base64, mime | dict `width`, `height` | `UNSUPPORTED_HOST`, `IMAGE_INVALID` | – | yes | – | 1 |
+| `image_encode` | base64, mime, max_side, out_mime, quality | dict `base64`, `width`, `height`, `type` | as `image_decode`, `IMAGE_INVALID_OPTIONS` | – | yes | – | 1 |
+| `download_file` | name, mime, base64 | – | `DOWNLOAD_INVALID_NAME`, `_TYPE`, `_DATA`, `UNSUPPORTED_HOST` | – | no | – | 2 |
+| `richtext_attach` | el, label | – | `TYPE_ERROR` | – | no | – | 1 |
+| `richtext_set` | el, blocks | – | `TYPE_ERROR`, `RICHTEXT_INVALID` | – | no | – | 1 |
+| `richtext_get` | el | blocks | `TYPE_ERROR` | – | no | – | 2 |
+| `richtext_command` | el, command, value | – | `TYPE_ERROR`, `RICHTEXT_UNKNOWN_COMMAND`, `RICHTEXT_INVALID` | – | no | – | 2 |
+| `zip_build`, `zip_read`, `base64_text`, `sniff_media_type` | (see ZIP, base64) | | | – | `zip_read` only | – | 2, 1, 1, 1 |
+| `url_encode` | text | text (`encodeURIComponent`) | `TYPE_ERROR` | – | no | – | – |
+| `fetch` | url, method[, body[, headers]] | text | `CAPABILITY_DENIED` and network errors | network (host-scoped `network:fetch=`) | yes | – | – |
+| `sleep` | ms | – | – | – | yes | – | 1 |
+| `spawn` | `(lambda () ...)` | – (runs detached) | – | – | starts a task | – | 1 |
+| `print`, `stderr`, `exit` | value | – | – | – | no | – | – |
+
+Notes from the probe:
+
+- A lambda appears only as the last argument of `on_event`, `on_media`,
+  `on_visible`, `on_scroll` and `spawn` (the checker requires it). It is
+  never a value a program can call, store or compare, so closures need an
+  invoke path from the host only. JavaScript closures share the enclosing
+  variables: a handler's `set` is seen by the code around it and by later
+  events. The VM's `spawn` copies the environment and runs a goroutine; in
+  the browser the JavaScript backend is the reference.
+- Storage needs no capability (origin-scoped browser state, never the file
+  system or network); only `fetch` does, through the host-scoped grant
+  read at run time (`HOWLFRAME_ALLOW_CAPS`). `capability.ForConstruct`
+  classes `spawn` as `process`, but neither the JavaScript backend nor this
+  one gates it: in the browser it is a task, not a process.
+- No browser operation yields bytes: files, images and ZIP pass base64
+  text, and the JavaScript backend's `fetch` resolves to text
+  (`Response.text()`). So the VM's `[]byte` values do not reach M3's
+  browser host; decided: base64 text at the boundary, as the JavaScript
+  backend, and no byte value type in this milestone.
+- The raw operations (`dom_query`, `set_text`, `set_html`, `set_attr`,
+  `toggle_class`, `dom_value`, `on_event`) fail on a missing element with
+  the engine's `TypeError` ("Cannot set properties of null"), not a
+  HowlFrame error; every other element operation reports `TYPE_ERROR: op
+  expected an element`. "The same errors" for these needs the JavaScript
+  backend fixed first (a bugs.md entry).
+- Every JavaScript backend function is `async` and every call is awaited,
+  so the reference interleaves tasks at every call. Programs that do not
+  race tasks against each other see no difference from a backend that only
+  yields at asynchronous operations.
+- Host text operations: operations HowlFrame implements in its standard
+  library (`to_lower`, ZIP's duplicate check) follow HowlFrame's Unicode
+  15.0.0 table, as the VM; operations the host performs (selector matching,
+  attribute and class names, `encodeURIComponent`) follow the engine, since
+  they are the browser's own behavior. ZIP duplicate paths therefore stay as
+  M2 left them, documented.
+
+### Browser host
+
+A `web_app` builds with `--target wasmgc` (host `browser`) into `app.wasm`
+and `app.js`, a classic script that instantiates the module against the
+page and runs its top level. Decided in M3:
+
+- Imports. Each browser host operation the program calls is one import,
+  named for the operation, from a module named for its capability
+  (`hf_host` for none, `hf_cap_<capability>` otherwise; the loader supplies
+  a capability's module only when `HOWLFRAME_ALLOW_CAPS` grants it, so an
+  ungranted program fails to instantiate; no operation in the table needs
+  one yet: `fetch`, which does, comes later). Every import takes and returns
+  HowlFrame values (`eqref`); `print`, `stderr`, `exit_at` come from `hf`.
+- One implementation. The loader calls the JavaScript backend's own runtime
+  function for each operation (`javascript.HostRuntime`), so the two
+  backends share the host code and its errors. The loader includes only the
+  runtimes the program's operations need (17 KB for HowlScene HF's site).
+- Values. A page object (element, event, subscription) is a `$Host` holding
+  an `externref`. Text crosses through the module's exported memory as
+  UTF-8 (`__hf_str_out`, `__hf_str_in`). To JavaScript: nil is `null`,
+  lists arrays, dicts plain objects. From JavaScript: a whole number that
+  is a safe integer is an int and any other number a float; arrays are
+  lists; plain objects dicts; anything else a page object; the table's
+  result kind decides where it matters (elements, events, subscriptions).
+  A program that can receive a number from the page includes the float
+  module (`makesFloats`).
+- Errors. A host function that throws sets the pending error, its message
+  as `CODE: message` (a message without a code is `RUNTIME_ERROR` naming
+  the engine's error), so `try_let` catches it as any error. Uncaught, the
+  loader rethrows the host's own error object, so the page sees what the
+  JavaScript backend's page sees. `exit` throws the JavaScript backend's
+  exit error (`EXIT n at file:line`), which no `try_let` catches.
+- Test blocks are left out of a page, as from the JavaScript backend's
+  `app.js`; they build with `--tests`.
+- The module's bytes come from `howlFrameWasm` when the page (or a test)
+  defines it, otherwise from `app.wasm` beside the script. The script's
+  value is a promise that settles when the top level has run.
+
+### Handlers
+
+A lambda (only ever the last argument of `on_event`, a subscription or
+`spawn`) is lifted to a function of the module taking `(env, a0, a1)`; a
+closure is a `$Closure` of a function reference and its environment, an
+array of `$Cell`s. As in JavaScript, a handler shares the variables it
+captures: a variable any lambda in a function names lives in a cell, made
+afresh at each binding, so a handler made in a loop sees that iteration's
+variable and a `set` anywhere is seen everywhere. The host calls a handler
+with `__hf_invoke`. The loader turns a closure into a JavaScript function
+that runs it as a task of its own and returns a promise, as the JavaScript
+backend's `async` handlers do: the task's uncaught error or exit rejects
+that promise and nothing else (an unhandled rejection, as there).
+`on_event` uses the JavaScript backend's `howlFrameOnEvent`, the
+subscriptions its `howlFrameOnMedia`, `howlFrameOnVisible` and
+`howlFrameOnScroll`, and a lambda's parameters convert by their kinds in the
+table (an event and an element are page objects, `matches` and `visible`
+bools). `spawn` is a browser import that runs the closure at once; it needs
+no capability (it is a task, not a process; `capability.ForConstruct` names
+`process` for the VM's goroutine). A lambda of more than two parameters, and
+`spawn` outside the browser, fail closed.
+
+### Asynchronous operations
+
+Resumable frames (async.go). A function is asynchronous when it reaches
+an asynchronous operation, directly or through the defuns it calls (a
+fixed point; a lambda is its own function). It is first rewritten into
+A-normal form: each asynchronous call becomes a statement or the whole
+value of a `let`, `try_let`, `set` or `return`, with plain arguments;
+arguments before it move into temporaries ahead of it, in order, and a
+`let` in a value position (which the sugar makes, `list_get` among them)
+moves ahead with its variable renamed. A `while` whose condition is
+asynchronous becomes `(let (t c) (while t body (set t c)))`. An
+asynchronous call in a branch of `if`, `and` or `or` used as a value, in a
+dict literal or nested inside a `try_let`'s value fails closed.
+
+At a suspension the import starts the operation and the function saves
+its locals (ints boxed) and the suspension's number in a frame on the
+fiber's frame stack and returns; each asynchronous caller does the same up
+to the entry (the top level, a handler, a task), which returns to the
+loader. The loader waits for the operation and calls the entry again; each
+function pops its frame, restores its locals, and every statement, branch
+and loop is entered only if it holds the suspension being resumed, down to
+the suspension, where the result (or the operation's error) is taken. A
+synchronous function is compiled as before.
+
+Measurements (2026-10-31, Node 22.22.1):
+
+| | Resumable frames | JSPI |
+| --- | --- | --- |
+| Engines | every engine with WasmGC: Chrome 119, Firefox 120, Safari 18.2, Node 22 without flags | Chrome 137 (the standard `WebAssembly.Suspending`/`promising`); Node 22 only an earlier, incompatible API behind `--experimental-wasm-stack-switching`; no Safari |
+| Size, HowlScene HF editor | 272,072 B (65,403 B gzipped) | 255,200 B (62,630 B): the same module with its asynchronous calls left synchronous, as JSPI needs; frames add 16,872 B (6.6%), 2,773 B gzipped (4.4%) |
+| Size, HowlScene HF site runtime | 45,774 B: it has no asynchronous function, so nothing is added | the same |
+| 20,000 suspensions, call depth 1 / 4 / 21 | 725–752 / 792–825 / 1,046–1,048 ms (JavaScript backend: 360 / 482–492 / 1,084 ms) | not measurable for the same program on this Node; a trivial import suspended 100,000 times: 52 ms |
+
+Each frame between the suspension and the entry costs about 0.8 µs per
+suspension (the JavaScript backend's awaited calls 1.8 µs). The fixed cost
+per suspension is mostly converting values: a synchronous host call that
+takes and returns text costs 5.7 µs against 2.7 µs on the JavaScript
+backend (each string crosses through TextEncoder and TextDecoder);
+converting text faster is a follow-up. Frames won: they run everywhere the
+backend runs, CI's Node included, cost nothing in programs without
+asynchronous code, and the size and speed are close to JSPI's.
+
+Order between tasks follows the operations' completion, as on the
+JavaScript backend, except that the JavaScript backend also yields at every
+call (each call is awaited): two tasks racing timers of nearly equal length
+can finish in a different order. Programs and fixtures must not depend on
+such races.
+
+Differences from the JavaScript backend, by design (the VM is the
+reference for the language): a caught error is bound to the VM's report
+(`{"phase":"runtime","code":...}`) where the JavaScript backend binds an
+`Error` (so `(to_string err)` reads `Error: CODE: message` there), and
+`print` of a list or dict prints the VM's text (`[a b]`) where
+`console.log` of an array prints `a,b`. The test page compares caught
+errors by code and message.
 
 ### M4 to M6 tasks: the application
 
