@@ -22,7 +22,7 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | 1. Typed host operation table | `feat/host-operation-registry` | #287 | Merged (`b2093457`) |
 | bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
 | bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
-| 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | | Open |
+| 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
 | 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | | Open |
 
 ## Entries
