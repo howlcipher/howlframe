@@ -745,7 +745,10 @@ func (f *fn) let(n *ast.Node, value bool) error {
 		if binds[i].Type != "SYMBOL" {
 			return unsupported(n, "let binding name")
 		}
-		b := f.declare(binds[i].Value)
+		// The value is compiled before the name is in scope: it sees the
+		// variable the binding shadows.
+		name := binds[i].Value
+		b := binding{local: f.local(EqRef), cell: f.boxed[name], env: -1}
 		if err := f.entered(binds[i+1], func() error {
 			if err := f.expr(binds[i+1]); err != nil {
 				return err
@@ -755,6 +758,7 @@ func (f *fn) let(n *ast.Node, value bool) error {
 		}); err != nil {
 			return err
 		}
+		f.scopes[len(f.scopes)-1][name] = b
 	}
 	body := n.Children[2:]
 	for i, k := range body {
