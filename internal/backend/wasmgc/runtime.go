@@ -1098,21 +1098,40 @@ func (r *rt) emitStringOps() {
 		piece(c, 2, 7, 6, 10)
 		c.Call(r.fListAppend)
 	})
-	// str_join(list, sep): each element's text, separated by sep.
-	// locals: 0 l, 1 sep, 2 list, 3 i, 4 acc
-	r.body(r.fStrJoin, []ValType{RefNull(r.tList), I32, RefNull(r.tStr)}, func(c *Code) {
+	// str_join(list, sep): each element's text, separated by sep. The texts
+	// are measured first and copied once into one array, so the time is
+	// linear in the result (appending each to the result so far was
+	// quadratic, and std code joins long lists of parts).
+	// locals: 0 l, 1 sep, 2 list, 3 i, 4 n, 5 texts, 6 total, 7 out, 8 pos, 9 t, 10 seplen
+	r.body(r.fStrJoin, []ValType{RefNull(r.tList), I32, I32, RefNull(r.tItems), I32, RefNull(r.tBytes), I32, RefNull(r.tBytes), I32}, func(c *Code) {
 		c.LocalGet(0).RefTest(r.tList).LocalGet(1).RefTest(r.tStr).I32And().I32Eqz().If(NoResult)
 		failTwo(c, "TYPE_ERROR: str_join expected list and string, got ")
 		c.End()
-		c.LocalGet(0).RefCast(r.tList).LocalSet(2)
-		r.StrLiteral(c, "").LocalSet(4)
+		c.LocalGet(0).RefCast(r.tList).LocalTee(2).StructGet(r.tList, 0).LocalTee(4).ArrayNewDefault(r.tItems).LocalSet(5)
+		c.LocalGet(1).RefCast(r.tStr).StructGet(r.tStr, 0).ArrayLen().LocalSet(10)
 		c.Block(NoResult).Loop(NoResult)
-		c.LocalGet(3).LocalGet(2).StructGet(r.tList, 0).I32GeU().BrIf(1)
-		c.LocalGet(3).If(NoResult).LocalGet(4).RefAsNonNull().LocalGet(1).RefCast(r.tStr).Call(r.fConcat).LocalSet(4).End()
-		c.LocalGet(4).RefAsNonNull()
-		c.LocalGet(2).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(3).ArrayGet(r.tItems).Call(r.fText).Call(r.fConcat).LocalSet(4)
+		c.LocalGet(3).LocalGet(4).I32GeU().BrIf(1)
+		c.LocalGet(5).LocalGet(3)
+		c.LocalGet(2).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(3).ArrayGet(r.tItems).Call(r.fText)
+		c.ArraySet(r.tItems)
+		c.LocalGet(6).LocalGet(5).LocalGet(3).ArrayGet(r.tItems).RefCast(r.tStr).StructGet(r.tStr, 0).ArrayLen().I32Add().LocalSet(6)
 		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
-		c.LocalGet(4)
+		c.LocalGet(4).If(NoResult)
+		c.LocalGet(6).LocalGet(10).LocalGet(4).I32Const(1).I32Sub().I32Mul().I32Add().LocalSet(6)
+		c.End()
+		c.LocalGet(6).ArrayNewDefault(r.tBytes).LocalSet(7)
+		c.I32Const(0).LocalSet(3)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(3).LocalGet(4).I32GeU().BrIf(1)
+		c.LocalGet(3).If(NoResult)
+		c.LocalGet(7).RefAsNonNull().LocalGet(8).LocalGet(1).RefCast(r.tStr).StructGet(r.tStr, 0).I32Const(0).LocalGet(10).ArrayCopy(r.tBytes, r.tBytes)
+		c.LocalGet(8).LocalGet(10).I32Add().LocalSet(8)
+		c.End()
+		c.LocalGet(5).LocalGet(3).ArrayGet(r.tItems).RefCast(r.tStr).StructGet(r.tStr, 0).LocalSet(9)
+		c.LocalGet(7).RefAsNonNull().LocalGet(8).LocalGet(9).RefAsNonNull().I32Const(0).LocalGet(9).ArrayLen().ArrayCopy(r.tBytes, r.tBytes)
+		c.LocalGet(8).LocalGet(9).ArrayLen().I32Add().LocalSet(8)
+		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
+		c.LocalGet(7).RefAsNonNull().StructNew(r.tStr)
 	})
 	// to_lower and to_upper of any value's text (fmt.Sprint, so nil is
 	// "<nil>"), as Go's strings.ToLower and ToUpper: ASCII here, any other

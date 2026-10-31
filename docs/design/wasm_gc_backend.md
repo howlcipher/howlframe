@@ -548,9 +548,21 @@ The order of M1 and M3 work follows what the application needs.
   ended `zip.howl` early and silently dropped the functions after it.
   Speed: reading a 1 MB deflated entry or building a 550 KB archive takes
   about 1.3 s in Node, where every byte is a boxed integer in a list.
-  Building a long string by repeated concatenation is quadratic
-  (`str_repeat` of 550 KB takes 36 s; the VM stops it at its memory
-  limit).
+  Building a long string by repeated concatenation is quadratic, and two
+  built-ins did it: `str_repeat`'s sugar appended one copy at a time
+  (550 KB took 39 s), and the runtime's `str_join` appended each part to
+  the result so far, which made every std module that joins parts
+  quadratic too (`to_lower` of 200 KB of accented text took 59 s). Fixed
+  (2026-10-30): `str_join` measures the parts and copies each once, and
+  `str_repeat` counts its copies as before and builds them by doubling
+  (O(log n) concatenations, about 4n bytes), so both runs take under a
+  second (`TestLongTextIsLinear`, which takes 37 to 61 s per case without
+  the fix). The sugar is shared, so the VM gains too: under its default
+  limits `str_repeat` of `"x"` now runs to 7,654 copies (5,881 before) and
+  of a 10-character piece to 7,654 (2,111 before, when its 64 MB budget,
+  which counts every allocation, ran out); its output is unchanged. The
+  VM's `append` still copies the list, so long lists built one item at a
+  time stay quadratic against that budget there.
 
 ### Open questions
 

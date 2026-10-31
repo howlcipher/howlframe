@@ -152,8 +152,15 @@ var controlflowTemplates = map[string]struct {
 		"(let ($S (str $s) $N $n $C $ch $P $E) (do (while (< (+ (str_len $P) (str_len $S)) $N) (set $P (str $P $C))) (str $P $S)))", -1},
 	"pad_right": {3, []string{"s", "n", "ch"}, []string{"S", "N", "C"},
 		"(let ($S (str $s) $N $n $C $ch) (do (while (< (str_len $S) $N) (set $S (str $S $C))) $S))", -1},
-	"str_repeat": {2, []string{"s", "n"}, []string{"S", "N", "R"},
-		"(let ($S $s $N $n $R $E) (do (while (> $N 0) (do (set $R (str $R $S)) (set $N (- $N 1)))) $R))", -1},
+	// str_repeat counts the copies the loop below would make (n while n > 0,
+	// decreasing by one, so a fractional n rounds up), then builds them by
+	// doubling: the piece doubles each step and joins the result on the
+	// count's set bits, O(log n) concatenations and about 4n bytes in all.
+	// Appending one copy at a time copied the result each step, quadratic
+	// in its length, which made long strings take seconds on WebAssembly
+	// and exceed the VM's memory budget.
+	"str_repeat": {2, []string{"s", "n"}, []string{"S", "N", "K", "R", "P", "H"},
+		"(let ($S $s $N $n $K 0 $R $E) (do (while (> $N 0) (do (set $K (+ $K 1)) (set $N (- $N 1)))) (let ($P (str $E $S) $H 0) (do (while (> $K 0) (do (set $H (to_int (/ $K 2))) (when (> $K (* $H 2)) (set $R (str $R $P))) (set $K $H) (when (> $K 0) (set $P (str $P $P))))) $R))))", -1},
 	"rtrim": {1, []string{"s"}, []string{"C", "N"},
 		"(let ($C (str_split $s $E) $N (list_len $C)) (do (while (and (> $N 0) (list_contains $WS (list_get $C (- $N 1)))) (set $N (- $N 1))) (str_join (list_slice $C 0 $N) $E)))", -1},
 	"ltrim": {1, []string{"s"}, []string{"C", "N", "I"},

@@ -118,3 +118,17 @@ Findings:
   1.27.2, HowlScene HF gates) and all four CI checks. M2 is complete: #273-#280.
 - The M3 prompt is `2026-10-30_wasmgc_m3_prompt.md`. Note for it: the M2 prompt's `documentation/TESTING.md`
   does not exist, so the M3 prompt drops it.
+
+### 2026-10-30 20:50: `str_repeat` and `str_join` (`perf/wasmgc-str-repeat`)
+
+- Cause was in two places. `str_repeat`'s shared sugar appended one copy at a time, and the WebAssembly runtime's
+  `str_join` appended each part to the result so far, so every std module that joins parts (case mapping, JSON)
+  was quadratic too: `to_lower` of 200 KB of accented text took 59 s.
+- `str_join` now measures and copies each part once. The first template rewrite (a list plus `str_join`) was linear
+  on WebAssembly but worse on the VM, whose `append` copies the list and whose 64 MB budget counts every allocation:
+  `(str_repeat "x" 5000)` would have failed where it ran before. Rejected before commit. The final template counts
+  the copies as before and builds them by doubling; old and new VM output are identical for every case tried (0,
+  negative and fractional counts, numbers, lists, nil, counts 0 to 39), and under the default limits the VM now runs
+  more than it did (`"x"` to 7,654 copies, was 5,881; a 10-character piece to 7,654, was 2,111).
+- `TestLongTextIsLinear` (550 KB repeat, 200 KB case mapping, a 100,000-part split and join) takes under a second
+  per case and 37 to 61 s without the fix. New `str_repeat` differential fixtures cover the edge cases.
