@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/howlcipher/howlframe/internal/capability"
 )
 
 // The web_app archive and download primitives are browser host operations:
@@ -51,6 +53,36 @@ func TestBrowserDomHostOperationArity(t *testing.T) {
 		out, err := exec.Command(bin, "check", path).CombinedOutput()
 		if err == nil || !strings.Contains(string(out), " expects (") {
 			t.Fatalf("%s: want an arity diagnostic, got %v %s", src, err, out)
+		}
+	}
+}
+
+// Every browser host operation in capability.HostOperations has its arity
+// checked against the table, and a lambda parameter must be a lambda form.
+func TestEveryBrowserHostOperationArity(t *testing.T) {
+	bin := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	for _, op := range capability.HostOperations() {
+		args := []string{op.Name}
+		for _, p := range op.Params {
+			if p.Kind == capability.HostLambda {
+				args = append(args, "(lambda ("+strings.Join(p.Lambda, " ")+") (print 1))")
+			} else {
+				args = append(args, `"x"`)
+			}
+		}
+		cases := map[string]string{
+			"(web_app (" + strings.Join(append(args, `"extra"`), " ") + "))": op.Name + " expects " + op.Usage(),
+		}
+		if op.LambdaLast() {
+			cases["(web_app ("+strings.Join(append(args[:len(args)-1:len(args)-1], "5"), " ")+"))"] = op.Name + " expects a lambda as its last argument"
+		}
+		for src, want := range cases {
+			path := mustWriteFile(t, dir, "a.howl", src)
+			out, err := exec.Command(bin, "check", path).CombinedOutput()
+			if err == nil || !strings.Contains(string(out), want) {
+				t.Errorf("%s: want %q, got %v %s", src, want, err, out)
+			}
 		}
 	}
 }
