@@ -18,7 +18,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 
 | Slice | Branch | PR | State |
 | --- | --- | --- | --- |
-| 0. Probe: every browser host operation | `docs/wasmgc-m3-probe` | | Open |
+| 0. Probe: every browser host operation | `docs/wasmgc-m3-probe` | #286 | Merged (`13362363`) |
+| 1. Typed host operation table | `feat/host-operation-registry` | | Open |
 
 ## Entries
 
@@ -47,3 +48,17 @@ Plan of slices (each its own branch and PR):
 4. Closures, `on_event`, the subscriptions and `spawn`.
 5. Asynchronous operations (resumable frames or JSPI, measured), storage, files, images, `sleep`, `fetch`.
 6. The remaining operations (rich text, downloads, motion), then the exit gate: the browser tests on both backends.
+
+### 2026-10-31 10:30: typed host operation table
+
+- `capability.HostOperations`: 51 operations, each with parameters (name and kind: text, number, bool, value, list,
+  element, elements, event, subscription, lambda with its parameters), result kind, capability and the asynchronous
+  flag. The checker's `jsHostOperations`, `jsSubscriptionOperations` and eleven inline arity branches are replaced by
+  one lookup; the usage texts are generated and equal the old ones (`TestHostOperationUsage`).
+- One wording change: `on_event` with a non-lambda last argument now reports "on_event expects a lambda as its last
+  argument", as the subscriptions did ("on_event expects a lambda" before), and requires the lambda's parameter
+  list, as they did.
+- Placement: `internal/construct` imports `ast`, and the desugarer (in `ast`) needs the set of browser operations, so
+  a table in `construct` could not feed it. `internal/capability` imports no HowlFrame package; `ast` still keeps
+  its own set, which a checker test holds equal to the table.
+- Checked not vacuous: dropping `storage_keys`'s asynchronous flag fails `TestHostOperationsMatchRegistry`.
