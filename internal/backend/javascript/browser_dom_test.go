@@ -127,3 +127,40 @@ func TestDomOperationsDoNotShipRichText(t *testing.T) {
 		t.Fatalf("rich text output must hold both runtimes")
 	}
 }
+
+// The operations emitted inline before bugs.md #70 (dom_query, set_text,
+// set_html, set_attr, toggle_class, dom_value, on_event) fail on a missing
+// element with HowlFrame's TYPE_ERROR, as every other element operation
+// does, not with the engine's own TypeError text.
+func TestRawDomOperationsRejectMissingElements(t *testing.T) {
+	for form, want := range map[string]string{
+		`(set_text (dom_query "#none") "x")`:                            "TYPE_ERROR: set_text expected an element",
+		`(set_html (dom_query "#none") "x")`:                            "TYPE_ERROR: set_html expected an element",
+		`(set_attr (dom_query "#none") "a" "x")`:                        "TYPE_ERROR: set_attr expected an element",
+		`(toggle_class (dom_query "#none") "c")`:                        "TYPE_ERROR: toggle_class expected an element",
+		`(dom_value (dom_query "#none"))`:                               "TYPE_ERROR: dom_value expected an element",
+		`(on_event (dom_query "#none") "click" (lambda (e) (print 1)))`: "TYPE_ERROR: on_event expected an element",
+		`(dom_query 5)`: "TYPE_ERROR: dom_query expected a selector string",
+	} {
+		code := compileWebApp(t, `(web_app (try_let (v `+form+`) (catch err (print (to_string err))) (print "ran")))`)
+		got := domHarness(t, code)
+		if !strings.Contains(got, `"out":["Error: `+want+`"]`) {
+			t.Errorf("%s: want %s, got %s", form, want, got)
+		}
+	}
+}
+
+// On an element they behave as they did inline.
+func TestRawDomOperationsOnElements(t *testing.T) {
+	code := compileWebApp(t, `(web_app (do
+  (set_attr (dom_query "#field") "data-x" "1")
+  (print (dom_attr (dom_query "#field") "data-x"))
+  (set_value (dom_query "#field") "typed")
+  (print (dom_value (dom_query "#field")))
+  (on_event (dom_query "#button") "click" (lambda (e) (print (event_key e))))))`)
+	got := domHarness(t, code)
+	want := `{"out":["1","typed","Escape"],"prevented":false,"field":{"value":"typed","attrs":{"data-x":"1"}},"box":false}`
+	if got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}
