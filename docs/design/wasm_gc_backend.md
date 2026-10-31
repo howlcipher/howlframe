@@ -1,6 +1,6 @@
 # WebAssembly GC backend
 
-Status: milestones M1 and M2 done (2026-10-30); M3 next.
+Status: milestones M1 and M2 done (2026-10-30); M3 in progress.
 
 ## Goal
 
@@ -116,7 +116,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | --- | --- | --- |
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
-| M3 browser host | Not started | |
+| M3 browser host | In progress (2026-10-31) | Probe done: "Browser host operations" lists every operation with its parameters, result, errors, capability and whether it is asynchronous. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
 | M4 site runtime | Not started | |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
@@ -371,6 +371,8 @@ fails on its first `test`, as the VM's bytecode target refuses them.
 
 ### M3 tasks: browser host
 
+- [x] Probe (2026-10-31): every browser host operation of the JavaScript
+      backend and HowlScene HF's use of each; see "Browser host operations".
 - [ ] Typed host operation table (name, parameter and result kinds,
       capability, synchronous or asynchronous) shared by the checker and the
       backends; the browser loader is generated from it.
@@ -397,6 +399,108 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       `JSON.stringify` quotes them, a cut surrogate pair included).
 - [ ] HowlFrame's browser tests (`internal/backend/javascript/browser_*`)
       ported to run against both backends.
+
+### Browser host operations (M3 probe, 2026-10-31)
+
+Every browser host operation of the JavaScript backend (the reference), read
+from `dom.go`, `browser_io.go`, `motion.go`, `richtext.go`, `archive.go`,
+`exit.go` and `javascript.go`, and from the checker's `jsHostOperations` and
+`jsSubscriptionOperations`. "Async" means the JavaScript backend awaits it.
+"Raw" operations are emitted inline (`el.textContent = v`) with no helper:
+on a missing element they throw the engine's own `TypeError`, with no
+HowlFrame code. Columns HF site and HF editor count uses in HowlScene HF's
+`src/site/site.howl` and `src/editor/editor.howl` (`247365e`); its core
+modules use none, and `src/sdk` and the editor's `ui.howl` and
+`templates.howl` none either.
+
+| Operation | Parameters | Result | Errors | Cap. | Async | HF site | HF editor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `dom_query` | selector | element or nil | raw (`querySelector`) | – | no | 5 | 1 |
+| `dom_query_all` | selector | list of elements | `TYPE_ERROR` | – | no | 4 | – |
+| `set_text` | el, value | – | raw | – | no | – | 4 |
+| `set_html` | el, html | – | raw | – | no | – | 6 |
+| `set_attr` | el, name, value | – | raw | – | no | 4 | 7 |
+| `toggle_class` | el, class | bool | raw | – | no | – | – |
+| `dom_value` | el | text | raw | – | no | – | 5 |
+| `dom_text` | el | text | `TYPE_ERROR` | – | no | – | 6 |
+| `set_value` | el, value (nil is "") | – | `TYPE_ERROR` | – | no | – | 3 |
+| `dom_checked` | el | bool | `TYPE_ERROR` | – | no | – | – |
+| `set_checked` | el, bool | – | `TYPE_ERROR` | – | no | – | – |
+| `dom_focus` | el | – | `TYPE_ERROR` | – | no | – | 3 |
+| `dom_attr` | el, name | text ("" when absent) | `TYPE_ERROR`, `INVALID_ATTRIBUTE_NAME` | – | no | 2 | – |
+| `remove_attr` | el, name | – | `TYPE_ERROR`, `INVALID_ATTRIBUTE_NAME` | – | no | 2 | 2 |
+| `dialog_open`, `dialog_close` | el | – | `TYPE_ERROR` | – | no | – | 6, 8 |
+| `on_event` | el, type, `(lambda (e) ...)` | – | raw | – | no | 1 | 4 |
+| `event_attr` | event, name | text (closest ancestor with it) | `INVALID_ATTRIBUTE_NAME` | – | no | – | 17 |
+| `event_key` | event | text | – | – | no | – | – |
+| `event_prevent` | event | – | – | – | no | – | – |
+| `set_class` | el, name, on | – | `TYPE_ERROR`, `INVALID_CLASS_NAME` | – | no | 9 | – |
+| `set_style_var` | el, `--name`, value | – | `TYPE_ERROR`, `INVALID_STYLE_VAR`, `INVALID_STYLE_VALUE` | – | no | 3 | – |
+| `scroll_y`, `viewport_height` | – | number | – | – | no | 1, 1 | – |
+| `element_box` | el | dict `top`, `height` | `TYPE_ERROR` | – | no | 3 | – |
+| `scroll_into_view` | el | – | `TYPE_ERROR` | – | no | 1 | – |
+| `media_matches` | query | bool | `TYPE_ERROR` | – | no | 1 | – |
+| `pref_get` | key | text ("" when absent or unavailable) | `PREF_INVALID_KEY` | – | no | 1 | – |
+| `pref_put` | key, value | bool (false when unavailable) | `PREF_INVALID_KEY`, `TYPE_ERROR` | – | no | 1 | – |
+| `on_media` | query, `(lambda (matches) ...)` | subscription | `TYPE_ERROR` | – | no | 1 | – |
+| `on_visible` | elements, `(lambda (el visible) ...)` | subscription | `TYPE_ERROR` | – | no | 2 | – |
+| `on_scroll` | `(lambda () ...)` | subscription | – | – | no | 1 | – |
+| `off` | subscription | – | `TYPE_ERROR` | – | no | 1 | – |
+| `subscription_count` | – | int | – | – | no | 1 | – |
+| `storage_get` | namespace, key | text or nil | `STORAGE_INVALID_NAME`, `STORAGE_UNAVAILABLE`, `TYPE_ERROR` | – | yes | – | 3 |
+| `storage_put` | namespace, key, value | – | as `storage_get`, `STORAGE_QUOTA` | – | yes | – | 4 |
+| `storage_delete` | namespace, key | – | as `storage_get` | – | yes | – | – |
+| `storage_keys` | namespace | sorted list of text | as `storage_get` | – | yes | – | – |
+| `file_read_input` | el, max_bytes | list of dicts `name`, `type`, `size`, `base64` | `TYPE_ERROR`, `FILE_TOO_LARGE` | – | yes | – | 2 |
+| `image_decode` | base64, mime | dict `width`, `height` | `UNSUPPORTED_HOST`, `IMAGE_INVALID` | – | yes | – | 1 |
+| `image_encode` | base64, mime, max_side, out_mime, quality | dict `base64`, `width`, `height`, `type` | as `image_decode`, `IMAGE_INVALID_OPTIONS` | – | yes | – | 1 |
+| `download_file` | name, mime, base64 | – | `DOWNLOAD_INVALID_NAME`, `_TYPE`, `_DATA`, `UNSUPPORTED_HOST` | – | no | – | 2 |
+| `richtext_attach` | el, label | – | `TYPE_ERROR` | – | no | – | 1 |
+| `richtext_set` | el, blocks | – | `TYPE_ERROR`, `RICHTEXT_INVALID` | – | no | – | 1 |
+| `richtext_get` | el | blocks | `TYPE_ERROR` | – | no | – | 2 |
+| `richtext_command` | el, command, value | – | `TYPE_ERROR`, `RICHTEXT_UNKNOWN_COMMAND`, `RICHTEXT_INVALID` | – | no | – | 2 |
+| `zip_build`, `zip_read`, `base64_text`, `sniff_media_type` | (see ZIP, base64) | | | – | `zip_read` only | – | 2, 1, 1, 1 |
+| `url_encode` | text | text (`encodeURIComponent`) | `TYPE_ERROR` | – | no | – | – |
+| `fetch` | url, method[, body[, headers]] | text | `CAPABILITY_DENIED` and network errors | network (host-scoped `network:fetch=`) | yes | – | – |
+| `sleep` | ms | – | – | – | yes | – | 1 |
+| `spawn` | `(lambda () ...)` | – (runs detached) | – | – | starts a task | – | 1 |
+| `print`, `stderr`, `exit` | value | – | – | – | no | – | – |
+
+Notes from the probe:
+
+- A lambda appears only as the last argument of `on_event`, `on_media`,
+  `on_visible`, `on_scroll` and `spawn` (the checker requires it). It is
+  never a value a program can call, store or compare, so closures need an
+  invoke path from the host only. JavaScript closures share the enclosing
+  variables: a handler's `set` is seen by the code around it and by later
+  events. The VM's `spawn` copies the environment and runs a goroutine; in
+  the browser the JavaScript backend is the reference.
+- Storage needs no capability (origin-scoped browser state, never the file
+  system or network); only `fetch` does, through the host-scoped grant
+  read at run time (`HOWLFRAME_ALLOW_CAPS`). `capability.ForConstruct`
+  classes `spawn` as `process`, but neither the JavaScript backend nor this
+  one gates it: in the browser it is a task, not a process.
+- No browser operation yields bytes: files, images and ZIP pass base64
+  text, and the JavaScript backend's `fetch` resolves to text
+  (`Response.text()`). So the VM's `[]byte` values do not reach M3's
+  browser host; decided: base64 text at the boundary, as the JavaScript
+  backend, and no byte value type in this milestone.
+- The raw operations (`dom_query`, `set_text`, `set_html`, `set_attr`,
+  `toggle_class`, `dom_value`, `on_event`) fail on a missing element with
+  the engine's `TypeError` ("Cannot set properties of null"), not a
+  HowlFrame error; every other element operation reports `TYPE_ERROR: op
+  expected an element`. "The same errors" for these needs the JavaScript
+  backend fixed first (a bugs.md entry).
+- Every JavaScript backend function is `async` and every call is awaited,
+  so the reference interleaves tasks at every call. Programs that do not
+  race tasks against each other see no difference from a backend that only
+  yields at asynchronous operations.
+- Host text operations: operations HowlFrame implements in its standard
+  library (`to_lower`, ZIP's duplicate check) follow HowlFrame's Unicode
+  15.0.0 table, as the VM; operations the host performs (selector matching,
+  attribute and class names, `encodeURIComponent`) follow the engine, since
+  they are the browser's own behavior. ZIP duplicate paths therefore stay as
+  M2 left them, documented.
 
 ### M4 to M6 tasks: the application
 
