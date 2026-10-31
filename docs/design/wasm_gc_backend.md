@@ -571,7 +571,7 @@ The order of M1 and M3 work follows what the application needs.
   of a 10-character piece to 7,654 (2,111 before, when its 64 MB budget,
   which counts every allocation, ran out); its output is unchanged. The
   VM's `append` still copies the list, so long lists built one item at a
-  time stay quadratic against that budget there.
+  time stay quadratic against that budget there (improvements.md #111).
 
 ### Open questions
 
