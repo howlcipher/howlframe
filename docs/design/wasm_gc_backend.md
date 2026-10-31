@@ -82,8 +82,8 @@ them). Without relying on JavaScript Promise Integration, which is not
 available in every engine, the compiler turns a function that reaches an
 asynchronous operation into a resumable state machine: its locals live in a
 frame struct, the asynchronous import receives a continuation, and the host
-resumes the frame with the result. This is decided in M3, with measurements;
-JSPI remains an option where available.
+resumes the frame with the result. Decided in M3 with measurements
+("Asynchronous operations" under the M3 tasks): resumable frames.
 
 ## Milestones and exit gates
 
@@ -402,9 +402,17 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       a missing element, `spawn`, the subscriptions and `off`) on both
       backends, clicking, scrolling, flipping a media query and making an
       element visible on the stand-in page.
-- [ ] Asynchronous operations (storage, files, image decode and encode, ZIP,
-      `sleep`): resumable frames, decided with measurements; JSPI where
-      available is the alternative.
+- [x] Asynchronous operations (storage, files, image decode and encode,
+      `sleep`; ZIP is ordinary code here): resumable frames, decided with
+      the measurements below. `TestBrowserAsyncLikeJavaScript` runs 10
+      programs on both backends against stand-ins for IndexedDB, file
+      inputs and image decoding: storage (round trip, invalid names,
+      quota), files (too large, missing element), images (decode, encode,
+      invalid data and options), asynchronous functions in loops,
+      conditions, arguments (in order), `set` and recursion, errors and
+      `exit` after a suspension, handlers and tasks that suspend, and
+      closures that keep their cells across suspensions.
+      `TestBrowserAsyncFailsClosed` covers what the rewrite refuses.
 - [ ] Every DOM, storage, file, image, archive and rich text operation the
       JavaScript backend supports, with the same errors.
 - [x] ZIP, done early for M2's exit gate (HowlScene HF's backup tests read
@@ -584,6 +592,54 @@ bools). `spawn` is a browser import that runs the closure at once; it needs
 no capability (it is a task, not a process; `capability.ForConstruct` names
 `process` for the VM's goroutine). A lambda of more than two parameters, and
 `spawn` outside the browser, fail closed.
+
+### Asynchronous operations
+
+Resumable frames (async.go). A function is asynchronous when it reaches
+an asynchronous operation, directly or through the defuns it calls (a
+fixed point; a lambda is its own function). It is first rewritten into
+A-normal form: each asynchronous call becomes a statement or the whole
+value of a `let`, `try_let`, `set` or `return`, with plain arguments;
+arguments before it move into temporaries ahead of it, in order, and a
+`let` in a value position (which the sugar makes, `list_get` among them)
+moves ahead with its variable renamed. A `while` whose condition is
+asynchronous becomes `(let (t c) (while t body (set t c)))`. An
+asynchronous call in a branch of `if`, `and` or `or` used as a value, in a
+dict literal or nested inside a `try_let`'s value fails closed.
+
+At a suspension the import starts the operation and the function saves
+its locals (ints boxed) and the suspension's number in a frame on the
+fiber's frame stack and returns; each asynchronous caller does the same up
+to the entry (the top level, a handler, a task), which returns to the
+loader. The loader waits for the operation and calls the entry again; each
+function pops its frame, restores its locals, and every statement, branch
+and loop is entered only if it holds the suspension being resumed, down to
+the suspension, where the result (or the operation's error) is taken. A
+synchronous function is compiled as before.
+
+Measurements (2026-10-31, Node 22.22.1):
+
+| | Resumable frames | JSPI |
+| --- | --- | --- |
+| Engines | every engine with WasmGC: Chrome 119, Firefox 120, Safari 18.2, Node 22 without flags | Chrome 137 (the standard `WebAssembly.Suspending`/`promising`); Node 22 only an earlier, incompatible API behind `--experimental-wasm-stack-switching`; no Safari |
+| Size, HowlScene HF editor | 272,072 B (65,403 B gzipped) | 255,200 B (62,630 B): the same module with its asynchronous calls left synchronous, as JSPI needs; frames add 16,872 B (6.6%), 2,773 B gzipped (4.4%) |
+| Size, HowlScene HF site runtime | 45,774 B: it has no asynchronous function, so nothing is added | the same |
+| 20,000 suspensions, call depth 1 / 4 / 21 | 725–752 / 792–825 / 1,046–1,048 ms (JavaScript backend: 360 / 482–492 / 1,084 ms) | not measurable for the same program on this Node; a trivial import suspended 100,000 times: 52 ms |
+
+Each frame between the suspension and the entry costs about 0.8 µs per
+suspension (the JavaScript backend's awaited calls 1.8 µs). The fixed cost
+per suspension is mostly converting values: a synchronous host call that
+takes and returns text costs 5.7 µs against 2.7 µs on the JavaScript
+backend (each string crosses through TextEncoder and TextDecoder);
+converting text faster is a follow-up. Frames won: they run everywhere the
+backend runs, CI's Node included, cost nothing in programs without
+asynchronous code, and the size and speed are close to JSPI's.
+
+Order between tasks follows the operations' completion, as on the
+JavaScript backend, except that the JavaScript backend also yields at every
+call (each call is awaited): two tasks racing timers of nearly equal length
+can finish in a different order. Programs and fixtures must not depend on
+such races.
 
 Differences from the JavaScript backend, by design (the VM is the
 reference for the language): a caught error is bound to the VM's report
