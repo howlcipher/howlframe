@@ -18,7 +18,10 @@ import (
 // position, viewport and localStorage. After the program it clicks every
 // element with a click listener (awaiting each handler), scrolls twice,
 // flips the reduced-motion query, makes #a visible and runs the pending
-// frames. It prints, as JSON, what the program printed, handler rejections
+// frames, then waits 100 ms for tasks. Storage is an in-memory IndexedDB (a put to the namespace "full"
+// fails with a quota error), #files and #big are file inputs, and images
+// decode and re-encode through createImageBitmap and OffscreenCanvas
+// stand-ins. It prints, as JSON, what the program printed, handler rejections
 // and unhandled rejections in order, the uncaught error, every element's
 // state and the listeners still live. argv: the script, then app.wasm for
 // the WebAssembly build.
@@ -47,6 +50,50 @@ function el(id, attrs) {
 }
 const els = { a: el("a", { "data-id": "a-1" }), b: el("b"), field: el("field"), box: el("box"), dlg: el("dlg") };
 const store = new Map();
+const dbs = {};
+function req(fn) { const r = {}; setTimeout(() => { try { r.result = fn(); r.onsuccess && r.onsuccess({ target: r }); } catch (e) { r.error = e; r.onerror && r.onerror({ target: r }); } }, 0); return r; }
+const indexedDB = {
+  open(name, version) {
+    const r = {};
+    setTimeout(() => {
+      const fresh = !dbs[name];
+      const db = dbs[name] || (dbs[name] = { stores: {}, objectStoreNames: { contains(n) { return !!db.stores[n]; } } });
+      db.createObjectStore = (n) => { db.stores[n] = new Map(); };
+      db.close = () => {};
+      db.transaction = (n, mode) => {
+        const tx = { error: null };
+        const st = db.stores[n];
+        tx.objectStore = () => ({
+          get: (k) => req(() => st.has(k) ? st.get(k) : undefined),
+          put: (v, k) => { if (name === "howlframe:full") { const e = new Error("full"); e.name = "QuotaExceededError"; setTimeout(() => { tx.error = e; tx.onerror && tx.onerror({ target: tx }); }, 0); return {}; }
+                           st.set(k, v); setTimeout(() => tx.oncomplete && tx.oncomplete(), 0); return {}; },
+          delete: (k) => { st.delete(k); setTimeout(() => tx.oncomplete && tx.oncomplete(), 0); return {}; },
+          getAllKeys: () => req(() => [...st.keys()]),
+        });
+        return tx;
+      };
+      r.result = db;
+      if (fresh) r.onupgradeneeded && r.onupgradeneeded({ target: r });
+      r.onsuccess && r.onsuccess({ target: r });
+    }, 0);
+    return r;
+  },
+};
+const inputs = {
+  files: { files: [new File([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2])], "photo.png", { type: "image/png" }),
+    new File([Buffer.from("hello")], "notes.txt", { type: "text/plain" })] },
+  big: { files: [new File([Buffer.alloc(2048)], "big.png", { type: "image/png" })] },
+};
+async function createImageBitmap(blob) {
+  const b = Buffer.from(await blob.arrayBuffer());
+  if (b[0] !== 0x89) throw new Error("bad image");
+  return { width: 4000, height: 3000, close() {} };
+}
+class OffscreenCanvas {
+  constructor(w, h) { this.width = w; this.height = h; }
+  getContext() { const c = this; return { drawImage(img, x, y, w, h) { c.drew = [w, h]; } }; }
+  async convertToBlob(opts) { return new Blob([Buffer.from("re-encoded:" + this.width + "x" + this.height + ":" + opts.type)], { type: opts.type }); }
+}
 const mediaListeners = [];
 let reduced = false;
 const observers = [];
@@ -55,7 +102,7 @@ const frames = new Map();
 let nextFrame = 1;
 const browser = {
   console: { log: (v) => out.push(String(v)), error: (v) => out.push("stderr:" + String(v)) },
-  TextEncoder, TextDecoder, atob, btoa, setTimeout, Promise,
+  TextEncoder, TextDecoder, atob, btoa, setTimeout, Promise, indexedDB, Blob, createImageBitmap, OffscreenCanvas,
   scrollY: 250, scrollX: 0, innerHeight: 800,
   scrollTo(opts) { out.push("scrollTo:" + JSON.stringify(opts)); },
   matchMedia: (q) => ({ get matches() { return q === "(prefers-reduced-motion: reduce)" ? reduced : false; },
@@ -69,7 +116,7 @@ const browser = {
   cancelAnimationFrame(id) { frames.delete(id); },
   localStorage: { getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => { if (String(v).length > 500) throw new Error("QuotaExceededError"); store.set(k, String(v)); } },
   document: {
-    querySelector: (s) => els[s.replace(/^#/, "")] || null,
+    querySelector: (s) => els[s.replace(/^#/, "")] || inputs[s.replace(/^#/, "")] || null,
     querySelectorAll: (s) => s === ".scene" ? [els.a, els.b] : [],
   },
 };
@@ -95,7 +142,7 @@ const live = () => ({ media: mediaListeners.length, observers: observers.length,
   observers.slice().forEach((o) => o.fn(o.targets.filter((x) => x === els.a).map((x) => ({ target: x, isIntersecting: true }))));
   await settle();
   const run = [...frames.values()]; frames.clear(); run.forEach((f) => f());
-  await settle();
+  await new Promise((r) => setTimeout(r, 100));
   const result = { out, els: state(), live: live(), store: Object.fromEntries(store) };
   if (error !== undefined) result.error = error;
   console.log(JSON.stringify(result));
@@ -308,8 +355,6 @@ func TestBrowserFailsClosed(t *testing.T) {
 	for src, want := range map[string]string{
 		`(web_app (on_media "(x)" (lambda (a b c) (print 1))))`: `"a lambda of more than two parameters" is not supported`,
 		`(cli_app (spawn (lambda () (print 1))))`:               `"spawn" is not supported`,
-		`(web_app (storage_get "ns" "k"))`:                      `"storage_get (an asynchronous operation)" is not supported`,
-		`(web_app (image_decode "x" "image/png"))`:              `"image_decode (an asynchronous operation)" is not supported`,
 		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation: it runs in a web_app built for the browser)" is not supported`,
 	} {
 		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
@@ -410,5 +455,125 @@ func TestBrowserHandlersLikeJavaScript(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			samePageAsJS(t, src)
 		})
+	}
+}
+
+// Asynchronous operations against the JavaScript backend, which awaits
+// them: storage, files and images through their stand-ins, sleep, and
+// asynchronous functions suspending inside loops, conditions, arguments,
+// try_let, handlers and tasks, with errors raised after a suspension.
+func TestBrowserAsyncLikeJavaScript(t *testing.T) {
+	for name, src := range map[string]string{
+		"storage": `(web_app (do
+  (storage_put "notes" "b" "two")
+  (storage_put "notes" "a" "one")
+  (print (storage_get "notes" "a"))
+  (print (+ "[" (+ (to_string (storage_get "notes" "missing")) "]")))
+  (print (is_nil (storage_get "notes" "missing")))
+  (print (str_join (storage_keys "notes") ","))
+  (storage_delete "notes" "a")
+  (print (str_join (storage_keys "notes") ","))
+  (print (list_len (storage_keys "empty")))
+  (try_let (v (storage_get "Bad Name" "k")) (catch err (print (to_string err))) (print v))
+  (try_let (v (storage_put "notes" "" "x")) (catch err (print (to_string err))) (print "stored"))
+  (try_let (v (storage_put "full" "k" "x")) (catch err (print (to_string err))) (print "stored"))
+  (print "done")))`,
+		"files": `(web_app (do
+  (for f (file_read_input (dom_query "#files") 1000) (do
+    (print (map_get f "name"))
+    (print (map_get f "type"))
+    (print (map_get f "size"))
+    (print (map_get f "base64"))
+    (print (sniff_media_type (map_get f "base64")))))
+  (try_let (v (file_read_input (dom_query "#big") 1000)) (catch err (print (to_string err))) (print "read"))
+  (try_let (v (file_read_input (dom_query "#none") 1000)) (catch err (print (to_string err))) (print "read"))))`,
+		"images": `(web_app (let (png (map_get (list_get (file_read_input (dom_query "#files") 1000) 0) "base64")) (do
+  (let (info (image_decode png "image/png")) (print (+ (to_string (map_get info "width")) (+ "x" (to_string (map_get info "height"))))))
+  (let (out (image_encode png "image/png" 1000 "image/webp" 0.8)) (do
+    (print (map_get out "width"))
+    (print (map_get out "height"))
+    (print (map_get out "type"))
+    (print (base64_text (map_get out "base64")))))
+  (try_let (v (image_decode "aGVsbG8=" "image/png")) (catch err (print (to_string err))) (print "decoded"))
+  (try_let (v (image_encode png "image/png" 0 "image/webp" 0.8)) (catch err (print (to_string err))) (print "encoded")))))`,
+		"async functions": `(web_app (do
+  (storage_put "n" "x" "5")
+  (print (call twice (call fetch_n)))
+  (print (+ (call fetch_n) (call fetch_n)))
+  (if (= (call fetch_n) 5) (print "five") (print "not five"))
+  (let (i 0) (do (while (< i (call fetch_n)) (set i (+ i 2))) (print i)))
+  (for k (call names) (print k))
+  (print (call depth 3))
+  (let (total 0) (do (set total (call fetch_n)) (print total))))
+(defun fetch_n () int (return (to_int (storage_get "n" "x"))))
+(defun twice ((v int)) int (return (* v 2)))
+(defun names () (do (storage_put "n" "y" "6") (return (storage_keys "n"))))
+(defun depth ((k int)) int (do
+  (if (= k 0) (return (call fetch_n)))
+  (sleep 1)
+  (return (+ 1 (call depth (- k 1)))))))`,
+		"order of arguments": `(web_app (do
+  (storage_put "o" "a" "1")
+  (print (str_join (list (call note "first") (storage_get "o" "a") (call note "third")) " ")))
+(defun note (s) (do (print (+ "eval " s)) (return s))))`,
+		"errors after a suspension": `(web_app (do
+  (try_let (v (call risky)) (catch err (print (to_string err))) (print v))
+  (try_let (v (call deep 2)) (catch err (print (to_string err))) (print v))
+  (sleep 1)
+  (print "then fails")
+  (print (+ 1 (to_int (+ "y" (storage_get "e" "k"))))))
+(defun risky () int (do (storage_put "e" "k" "v") (return (to_int (storage_get "e" "k")))))
+(defun deep ((k int)) int (do (sleep 1) (if (= k 0) (return (to_int "x"))) (return (call deep (- k 1))))))`,
+		"exit after a suspension": `(web_app (do
+  (sleep 1)
+  (print "before exit")
+  (call quit)
+  (print "after"))
+(defun quit () (do (exit 2) (return "never"))))`,
+		"handlers": `(web_app (let (count 0) (do
+  (on_event (dom_query "#a") "click" (lambda (e) (do
+    (set count (+ count 1))
+    (storage_put "h" "count" (to_string count))
+    (set count (+ count 10))
+    (print (+ "a stored " (storage_get "h" "count")))
+    (print (+ "a count " (to_string count))))))
+  (on_event (dom_query "#b") "click" (lambda (e) (do
+    (sleep 1)
+    (print (+ "b sees " (to_string count)))
+    (print (+ 1 (to_int (storage_get "h" "count")))))))
+  (sleep 1)
+  (set count 100)
+  (print "main done"))))`,
+		"captured across a suspension": `(web_app (let (x 1) (do
+  (for el (list "#a" "#b") (do
+    (sleep 1)
+    (on_event (dom_query el) "click" (lambda (e) (print (+ el (+ " " (to_string x))))))))
+  (sleep 1)
+  (set x 2))))`,
+		"tasks": `(web_app (do
+  (spawn (lambda () (do (sleep 1) (print "task 1 woke") (storage_put "t" "k" "from task"))))
+  (spawn (lambda () (do (sleep 60) (print (+ "task 2 reads " (storage_get "t" "k"))))))
+  (spawn (lambda () (do (sleep 1) (print (+ 1 (to_int "x"))))))
+  (print "main goes on")))`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			samePageAsJS(t, src)
+		})
+	}
+}
+
+// An asynchronous call where it cannot be moved ahead of its form, in a
+// conditionally evaluated operand, fails the build.
+func TestBrowserAsyncFailsClosed(t *testing.T) {
+	for src, want := range map[string]string{
+		`(web_app (print (and true (is_nil (storage_get "a" "b")))))`:                             "an asynchronous call in a branch of and",
+		`(web_app (print (if true (storage_get "a" "b") "x")))`:                                   "an asynchronous call in a branch of if",
+		`(web_app (try_let (v (+ "x" (storage_get "a" "b"))) (catch err (print err)) (print v)))`: "an asynchronous call inside the value of a try_let",
+		`(web_app (print (dict ("a" (storage_get "a" "b")))))`:                                    "an asynchronous call inside a dict literal",
+	} {
+		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
+		if !out.failed || !strings.Contains(out.errMsg, want) || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {
+			t.Errorf("%s: want WASM_UNSUPPORTED %s, got %s", src, want, out.errMsg)
+		}
 	}
 }

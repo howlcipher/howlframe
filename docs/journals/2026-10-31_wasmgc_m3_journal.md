@@ -23,7 +23,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
 | bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
-| 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | | Open |
+| 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | #291 | Merged (`bd868833`) |
+| 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | | Open |
 
 ## Entries
 
@@ -107,3 +108,21 @@ Plan of slices (each its own branch and PR):
   (awaiting each handler), drives scroll, media and visibility, and reports unhandled rejections.
 - `on_event` now calls one runtime function in both backends (`howlFrameOnEvent`); the table gives a lambda's
   parameters kinds, which the loader converts by.
+
+### 2026-10-31 14:00: asynchronous operations (`feat/wasmgc-async`)
+
+- Resumable frames, A-normal form first (plan: "Asynchronous operations"). First run of an asynchronous defun with a
+  `while`, `sleep` in a `for` and a spawned task matched the JavaScript backend except the order of two timer races
+  (5 ms against three 1 ms sleeps), which depends on wall time; fixtures avoid near races.
+- Bugs found on the way, all before any commit was pushed: a `drop` inside an `if` (blocks do not see the outer
+  operand stack); frames that could not save a `(ref null $Str)` local (print's accumulator); the frame local needing
+  its own type; and, caught only by the full suite (ZIP fixtures), a `let` that put its name in scope before compiling
+  its value, so `(let (x (+ x 10)) ...)` read the new, unset `x`. The last has a differential fixture (`let shadows
+  its own value`), shown to fail without the fix.
+- The desugarer makes `let` in value positions (`list_get` becomes `(let (__lgN xs) (list_get __lgN i))`), so the
+  rewrite lifts a value-position `let`, renaming its variable.
+- JSPI: V8 12.4 has only the pre-standard API (`WebAssembly.Function` with `suspending`/`promising`, behind
+  `--experimental-wasm-stack-switching`); a micro-benchmark ran 100,000 suspensions in 52 ms.
+- With handlers, frames and `time_now`, HowlScene HF's editor builds to WebAssembly (272 KB, 40 KB loader; 76 KB
+  gzipped) and its site runtime too (46 KB and 17 KB; 18 KB gzipped). Both validate.
+- The JavaScript backend's `to_int` of nil read "cannot convert object to int": bugs.md #71, its own PR.

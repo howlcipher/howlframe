@@ -265,6 +265,11 @@ func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 		if len(d.Children) < 3 || d.Children[1].Type != "SYMBOL" || d.Children[2].Type != "List" {
 			return nil, &UnsupportedError{"defun", d.Line, d.Column}
 		}
+	}
+	if host == HostBrowser {
+		c.async = newAsyncInfo(defuns)
+	}
+	for _, d := range defuns {
 		name := d.Children[1].Value
 		params := d.Children[2].Children
 		idx := m.AddFunc(Func{Name: name, Type: c.rt.FuncType(len(params))})
@@ -351,6 +356,8 @@ type compiler struct {
 	// no try_let catches.
 	tests    bool
 	gExiting int
+	// async knows the asynchronous defuns (browser host only).
+	async *asyncInfo
 }
 
 // testRunner compiles each test block into its own exported function and
@@ -420,6 +427,15 @@ type fn struct {
 	// boxed names the variables that lambdas in this function capture
 	// (closure.go): they live in cells.
 	boxed map[string]bool
+	// An asynchronous function (async.go): its suspensions by form and the
+	// range of them each form holds, the locals of the suspension being
+	// resumed and of the popped frame, and the statement being entered.
+	async        *asyncInfo
+	sites        map[*ast.Node]int
+	ranges       map[*ast.Node][2]int
+	nsites       int
+	state, frame int
+	guarded      *ast.Node
 	// labels counts open blocks, so a break can compute its depth.
 	labels int
 	// handlers holds the label depth of each enclosing try_let handler.
@@ -430,6 +446,10 @@ type fn struct {
 
 func (c *compiler) function(params []string, body []*ast.Node, isMain bool) (*Code, []ValType, error) {
 	f := &fn{c: c, code: NewCode(), nparam: len(params), scopes: []map[string]binding{{}}, boxed: map[string]bool{}}
+	body, err := f.beginAsync(body)
+	if err != nil {
+		return nil, nil, err
+	}
 	for _, n := range body {
 		lambdaSymbols(n, false, f.boxed)
 	}
@@ -452,12 +472,16 @@ func (c *compiler) function(params []string, body []*ast.Node, isMain bool) (*Co
 	if isMain || len(body) == 0 {
 		f.code.RefNull(HeapNone)
 	}
-	return f.code, f.locals, nil
+	code, err := f.endAsync()
+	return code, f.locals, err
 }
 
 // tail compiles a function's final form: return statements and
 // expressions leave the function's value; other statements yield nil.
 func (f *fn) tail(n *ast.Node) error {
+	if _, ok := f.ranges[n]; ok && f.async != nil && !statementHeads[head(n)] {
+		return f.stmt(listNode(n, symbolNode("return", n), n))
+	}
 	switch head(n) {
 	case "return":
 		if err := f.stmt(n); err != nil {
@@ -522,8 +546,21 @@ func (f *fn) propagateIf() {
 	c.End()
 }
 
-// stmt compiles a form for its effect.
+// stmt compiles a form for its effect. In an asynchronous function each
+// statement runs only if the function is not resuming or the statement
+// holds the suspension being resumed.
 func (f *fn) stmt(n *ast.Node) error {
+	if f.async != nil && f.guarded != n {
+		f.enter(n)
+		f.code.If(NoResult)
+		f.labels++
+		f.guarded = n
+		err := f.stmt(n)
+		f.labels--
+		f.code.End()
+		return err
+	}
+	f.guarded = nil
 	c := f.code
 	switch head(n) {
 	case "print":
@@ -554,7 +591,7 @@ func (f *fn) stmt(n *ast.Node) error {
 		if len(n.Children) < 3 {
 			return unsupported(n, "if")
 		}
-		if err := f.cond(n.Children[1]); err != nil {
+		if err := f.steer(n.Children[2], func() error { return f.cond(n.Children[1]) }); err != nil {
 			return err
 		}
 		c.If(NoResult)
@@ -574,7 +611,8 @@ func (f *fn) stmt(n *ast.Node) error {
 	case "while":
 		c.Block(NoResult).Loop(NoResult)
 		f.labels += 2
-		if err := f.cond(n.Children[1]); err != nil {
+		// Resuming goes straight into the body, which holds the suspension.
+		if err := f.steer(n, func() error { return f.cond(n.Children[1]) }); err != nil {
 			return err
 		}
 		c.I32Eqz().BrIf(1)
@@ -707,10 +745,20 @@ func (f *fn) let(n *ast.Node, value bool) error {
 		if binds[i].Type != "SYMBOL" {
 			return unsupported(n, "let binding name")
 		}
-		if err := f.expr(binds[i+1]); err != nil {
+		// The value is compiled before the name is in scope: it sees the
+		// variable the binding shadows.
+		name := binds[i].Value
+		b := binding{local: f.local(EqRef), cell: f.boxed[name], env: -1}
+		if err := f.entered(binds[i+1], func() error {
+			if err := f.expr(binds[i+1]); err != nil {
+				return err
+			}
+			f.init(b)
+			return nil
+		}); err != nil {
 			return err
 		}
-		f.init(f.declare(binds[i].Value))
+		f.scopes[len(f.scopes)-1][name] = b
 	}
 	body := n.Children[2:]
 	for i, k := range body {
@@ -1059,6 +1107,13 @@ func (f *fn) expr(n *ast.Node) error {
 			return f.hostCall(n, h, args)
 		}
 	}
+	if h == "sleep" {
+		return f.sleep(n)
+	}
+	if h == "time_now" && f.c.rt.host == HostBrowser && len(args) == 0 {
+		c.Call(f.c.rt.iTimeNow)
+		return nil
+	}
 	if h == "spawn" {
 		if err := f.spawn(n); err != nil {
 			return err
@@ -1100,10 +1155,19 @@ func (f *fn) call(n *ast.Node, name string, args []*ast.Node) error {
 	if f.c.arity[name] != len(args) {
 		return unsupported(n, fmt.Sprintf("call to %s with %d arguments", name, len(args)))
 	}
-	for _, a := range args {
-		if err := f.expr(a); err != nil {
-			return err
+	push := func() error {
+		for _, a := range args {
+			if err := f.expr(a); err != nil {
+				return err
+			}
 		}
+		return nil
+	}
+	if k := f.sites[n]; k > 0 {
+		return f.asyncCall(k, idx, len(args), push)
+	}
+	if err := push(); err != nil {
+		return err
 	}
 	f.code.Call(idx)
 	f.check()
@@ -1118,27 +1182,39 @@ func (f *fn) forLoop(n *ast.Node) error {
 	if len(n.Children) < 4 || n.Children[1].Type != "SYMBOL" {
 		return unsupported(n, "for")
 	}
-	if err := f.expr(n.Children[2]); err != nil {
-		return err
-	}
 	list := f.local(EqRef)
-	c.LocalTee(list).RefTest(r.tList).I32Eqz().If(NoResult)
-	f.labels++
-	r.failWithType(c, "TYPE_ERROR: for requires a list, got ", list).Drop()
-	f.check()
-	f.labels--
-	c.End()
 	length := f.local(I32)
 	i := f.local(I32)
-	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 0).LocalSet(length)
-	c.I32Const(0).LocalSet(i)
+	// Resuming, the list, its length and the position are restored.
+	if err := f.unlessResuming(func() error {
+		if err := f.expr(n.Children[2]); err != nil {
+			return err
+		}
+		c.LocalTee(list).RefTest(r.tList).I32Eqz().If(NoResult)
+		f.labels++
+		r.failWithType(c, "TYPE_ERROR: for requires a list, got ", list).Drop()
+		f.check()
+		f.labels--
+		c.End()
+		c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 0).LocalSet(length)
+		c.I32Const(0).LocalSet(i)
+		return nil
+	}); err != nil {
+		return err
+	}
 	f.scopes = append(f.scopes, map[string]binding{})
 	item := f.declare(n.Children[1].Value)
 	c.Block(NoResult).Loop(NoResult)
 	f.labels += 2
-	c.LocalGet(i).LocalGet(length).I32GeU().BrIf(1)
-	c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(i).ArrayGet(r.tItems)
-	f.init(item)
+	exit := f.labels - 2 // the block around the loop
+	if err := f.unlessResuming(func() error {
+		c.LocalGet(i).LocalGet(length).I32GeU().BrIf(f.labels - exit - 1)
+		c.LocalGet(list).RefCast(r.tList).StructGet(r.tList, 1).StructGet(r.tBuf, 1).LocalGet(i).ArrayGet(r.tItems)
+		f.init(item)
+		return nil
+	}); err != nil {
+		return err
+	}
 	for _, k := range n.Children[3:] {
 		if err := f.stmt(k); err != nil {
 			return err
@@ -1170,8 +1246,10 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	branch := func(k *ast.Node, name string, idx int, result int) error {
 		f.scopes = append(f.scopes, map[string]binding{})
 		defer func() { f.scopes = f.scopes[:len(f.scopes)-1] }()
-		c.LocalGet(idx)
-		f.init(f.declare(name))
+		b := f.declare(name)
+		if err := f.unlessResuming(func() error { c.LocalGet(idx); f.init(b); return nil }); err != nil {
+			return err
+		}
 		if !value {
 			return f.stmt(k)
 		}
@@ -1191,13 +1269,24 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 	handler := f.labels
 	c.Block(NoResult)
 	f.labels++
+	if f.async != nil {
+		// Resuming in the handler: go there.
+		c.GlobalGet(r.gRewinding).If(Result(I32))
+		f.resuming(catch.Children[2])
+		c.Else().I32Const(0).End().BrIf(0)
+	}
 	f.handlers = append(f.handlers, handler)
-	if err := f.expr(bound.Children[1]); err != nil {
+	v := f.local(EqRef)
+	if err := f.entered(bound.Children[1], func() error {
+		if err := f.expr(bound.Children[1]); err != nil {
+			return err
+		}
+		c.LocalSet(v)
+		return nil
+	}); err != nil {
 		return err
 	}
 	f.handlers = f.handlers[:len(f.handlers)-1]
-	v := f.local(EqRef)
-	c.LocalSet(v)
 	if err := branch(body, bound.Children[0].Value, v, result); err != nil {
 		return err
 	}
@@ -1211,8 +1300,13 @@ func (f *fn) tryLet(n *ast.Node, value bool) error {
 		f.propagateIf()
 	}
 	e := f.local(EqRef)
-	c.GlobalGet(r.gErr).RefCast(r.tStr).Call(r.fCatchText).LocalSet(e)
-	c.RefNull(HeapNone).GlobalSet(r.gErr)
+	if err := f.unlessResuming(func() error {
+		c.GlobalGet(r.gErr).RefCast(r.tStr).Call(r.fCatchText).LocalSet(e)
+		c.RefNull(HeapNone).GlobalSet(r.gErr)
+		return nil
+	}); err != nil {
+		return err
+	}
 	if err := branch(catch.Children[2], catch.Children[1].Value, e, result); err != nil {
 		return err
 	}

@@ -198,19 +198,20 @@ func errorReport(out string) (code, message string) {
 
 func TestDiffValuesAndPrinting(t *testing.T) {
 	for name, body := range map[string]string{
-		"literals":       `(print 1 "two" 3.5 true false -4)`,
-		"empty print":    `(print)`,
-		"utf8":           `(print "héllo ✓")`,
-		"floats":         `(print 100000.0 1000000.0 123456789.0 0.0001 0.00001 (* 1.0 0.1) (+ 0.1 0.2) 2.0 0.5 -2.5 1.0)`,
-		"float extremes": `(print 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0 0.000000000000000000000000001)`,
-		"to_string":      `(print (to_string 3.0) (to_string 2.5) (to_string true) (to_string 12))`,
-		"concat":         `(print (+ "a" "b") (+ "x" (to_string 7)))`,
-		"int arithmetic": `(print (+ 2 3) (- 2 3) (* -4 5) (/ 7 2) (/ -7 2))`,
-		"mixed":          `(print (+ 1 2.5) (- 1.5 1) (* 2 0.25) (/ 1 4))`,
-		"comparison":     `(print (< 1 2) (> 1 2) (<= 2 2) (>= 1 2) (< 1.5 2) (< "a" "b") (> "b" "ab"))`,
-		"equality":       `(print (= 1 1) (= 1 1.0) (= "a" "a") (= "a" "b") (!= 1 2) (= true true) (= true false))`,
-		"logic":          `(print (and true false) (or false true) (and true true) (or false false))`,
-		"max int":        `(print 9223372036854775807 -9223372036854775807)`,
+		"literals":                  `(print 1 "two" 3.5 true false -4)`,
+		"let shadows its own value": `(let (x 1) (do (let (x (+ x 10)) (print x)) (let (y 2 y (* y 3)) (print y)) (print x)))`,
+		"empty print":               `(print)`,
+		"utf8":                      `(print "héllo ✓")`,
+		"floats":                    `(print 100000.0 1000000.0 123456789.0 0.0001 0.00001 (* 1.0 0.1) (+ 0.1 0.2) 2.0 0.5 -2.5 1.0)`,
+		"float extremes":            `(print 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0 0.000000000000000000000000001)`,
+		"to_string":                 `(print (to_string 3.0) (to_string 2.5) (to_string true) (to_string 12))`,
+		"concat":                    `(print (+ "a" "b") (+ "x" (to_string 7)))`,
+		"int arithmetic":            `(print (+ 2 3) (- 2 3) (* -4 5) (/ 7 2) (/ -7 2))`,
+		"mixed":                     `(print (+ 1 2.5) (- 1.5 1) (* 2 0.25) (/ 1 4))`,
+		"comparison":                `(print (< 1 2) (> 1 2) (<= 2 2) (>= 1 2) (< 1.5 2) (< "a" "b") (> "b" "ab"))`,
+		"equality":                  `(print (= 1 1) (= 1 1.0) (= "a" "a") (= "a" "b") (!= 1 2) (= true true) (= true false))`,
+		"logic":                     `(print (and true false) (or false true) (and true true) (or false false))`,
+		"max int":                   `(print 9223372036854775807 -9223372036854775807)`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
 	}
