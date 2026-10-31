@@ -255,13 +255,15 @@ as the work it describes: tick tasks, move the status line, record findings.
       (`TestDiffRegex`, `TestRegexUnsupportedFailsClosed`).
 - [x] Unicode case mapping and trim: `to_lower` and `to_upper` as Go's
       `strings.ToLower` and `ToUpper` through `std/unicode.howl`, generated
-      from Go's `unicode.CaseRanges` (`TestUnicodeTableIsCurrent` keeps it
-      in step; a toolchain of another Unicode version skips it), with the
+      from `internal/textcase`'s table, which the VM uses too (Unicode
+      15.0.0 whatever the toolchain, bugs.md #69;
+      `TestUnicodeTableIsCurrent` keeps it in step on every toolchain), with the
       ASCII fast path in the runtime; `str_trim`, `to_int` and `to_float`
       trim Go's `unicode.IsSpace` set. Nil text is `<nil>` (`<NIL>` upper
       case), as `fmt.Sprint` gives it; this backend gave "" before.
-      `TestDiffUnicodeText` sweeps eight long-assigned blocks, which match
-      under Go 1.25 (Unicode 15.0) and 1.27 (Unicode 17.0) alike.
+      `TestDiffUnicodeText` sweeps eight long-assigned blocks, and its
+      `unicode 17 cased` fixture the code points Unicode 17 cased, which
+      both engines leave alone.
 - [x] `bytes_to_string` (a list of byte values to a string, each as Go's
       `byte(float64(n))` on amd64) and `utf8_valid` (`std/utf8.howl`,
       Go's `utf8.ValidString`). `bytes_to_string` is how a program makes

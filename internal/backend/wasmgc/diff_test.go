@@ -907,6 +907,9 @@ func TestDiffUnicodeText(t *testing.T) {
 		"nil text":                        "(let (d (dict (\"a\" 1) (\"n\" (dict)))) (print (+ \"[\" (+ (to_lower (map_get d \"zz\")) \"]\")) (+ \"[\" (+ (to_upper (map_get d \"zz\")) \"]\")) (+ \"[\" (+ (str_trim (map_get d \"zz\")) \"]\"))))",
 		"unicode trim":                    "(print (+ \"[\" (+ (str_trim \"   x y　 \") \"]\")) (+ \"[\" (+ (str_trim \"​ x ​\") \"]\")) (+ \"[\" (+ (str_trim \"      \") \"]\")) (+ \"[\" (+ (str_trim \"é \") \"]\")))",
 		"conversions trim unicode":        "(print (to_int \" 42　\") (to_float \"  2.5 \"))",
+		// Code points Unicode 17 (Go 1.27) gives a case that Unicode 15 does
+		// not; both engines use Unicode 15 whatever the toolchain (bugs.md #69).
+		"unicode 17 cased": "(let (s \"" + string([]rune{0x019B, 0x0264, 0x1C89, 0x1C8A, 0xA7CB, 0xA7CC, 0xA7DA, 0xA7DB, 0x10D50, 0x10D70, 0x16EA0, 0x16EBB}) + "\") (print (to_lower s) (to_upper s)))",
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
 	}
