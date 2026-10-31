@@ -20,6 +20,7 @@ type rt struct {
 	tStrNull                                                int
 	tHost                                                   int         // a page object (browser host)
 	tCell, tClosure                                         int         // a captured variable; a lambda and its environment
+	tFrame                                                  int         // a suspended function's locals (async.go)
 	fnTypes                                                 map[int]int // HowlFrame function arity -> type
 	tEqToI32, tEqEqToI32, tEqEqToEq, tEqToStr, tStrStrToStr int
 	tI64ToEq, tF64ToEq, tI32ToEq, tEqToVoid, tVoid          int
@@ -27,13 +28,16 @@ type rt struct {
 
 	// Globals.
 	gErr, gTrue, gFalse int
+	// Fibers (browser host): unwinding to the host, rewinding a resumed
+	// fiber, its frame stack and the resumed operation's result.
+	gUnwinding, gRewinding, gStack, gResume int
 
 	// Imports.
 	iPrint, iStderr, iExit int
 	// Browser host: exit with its source position, and one import per host
 	// operation the program calls.
-	iExitAt, iSpawn int
-	iHost           map[string]int
+	iExitAt, iSpawn, iSleep, iTimeNow int
+	iHost                             map[string]int
 	// WASI imports, and the function that writes a $Str to a descriptor.
 	wFdWrite, wProcExit, fWrite int
 
@@ -99,6 +103,9 @@ func newRuntime(m *Module, host Host, ops []string) *rt {
 	r.tStrNull = -1
 	if host == HostBrowser {
 		r.tHost = m.AddType(TypeDef{Name: "Host", Struct: []Field{{Type: ExternRef}}})
+		// Frame: suspension number, locals, and the frame below.
+		r.tFrame = m.AddType(TypeDef{Name: "Frame", Struct: []Field{{Type: I32}, {Type: Ref(r.tItems)}, {Type: I32}}})
+		m.Types[r.tFrame].Struct[2].Type = RefNull(r.tFrame)
 	}
 	r.tCell = m.AddType(TypeDef{Name: "Cell", Struct: []Field{{Type: EqRef, Mutable: true}}})
 	r.tClosure = m.AddType(TypeDef{Name: "Closure", Struct: []Field{{Type: Ref(r.FuncType(1 + lambdaArgs))}, {Type: Ref(r.tItems)}}})
@@ -143,6 +150,12 @@ func newRuntime(m *Module, host Host, ops []string) *rt {
 	r.gErr = m.AddGlobal(Global{Type: EqRef, Mutable: true, Init: []byte{0xD0, HeapNone}})
 	r.gTrue = m.AddGlobal(Global{Type: Ref(r.tBool), Init: append(append([]byte{0x41}, sleb(1)...), gcOp(0, r.tBool)...)})
 	r.gFalse = m.AddGlobal(Global{Type: Ref(r.tBool), Init: append(append([]byte{0x41}, sleb(0)...), gcOp(0, r.tBool)...)})
+	if host == HostBrowser {
+		r.gUnwinding = m.AddGlobal(Global{Type: I32, Mutable: true, Init: []byte{0x41, 0x00}})
+		r.gRewinding = m.AddGlobal(Global{Type: I32, Mutable: true, Init: []byte{0x41, 0x00}})
+		r.gStack = m.AddGlobal(Global{Type: RefNull(r.tFrame), Mutable: true, Init: []byte{0xD0, HeapNone}})
+		r.gResume = m.AddGlobal(Global{Type: EqRef, Mutable: true, Init: []byte{0xD0, HeapNone}})
+	}
 
 	r.emitAll()
 	return r

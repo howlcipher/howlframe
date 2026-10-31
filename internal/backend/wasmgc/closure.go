@@ -143,6 +143,11 @@ func (f *fn) closure(n *ast.Node) error {
 	}
 	sort.Strings(captured)
 	g := &fn{c: f.c, code: NewCode(), nparam: 1 + lambdaArgs, scopes: []map[string]binding{{}}, boxed: map[string]bool{}}
+	bodies, err := g.beginAsync([]*ast.Node{body})
+	if err != nil {
+		return err
+	}
+	body = bodies[0]
 	lambdaSymbols(body, false, g.boxed)
 	for i, name := range captured {
 		g.scopes[0][name] = binding{env: i}
@@ -154,7 +159,11 @@ func (f *fn) closure(n *ast.Node) error {
 		return err
 	}
 	g.code.RefNull(HeapNone)
-	idx := f.c.m.AddFunc(Func{Name: "lambda", Type: r.FuncType(1 + lambdaArgs), Locals: g.locals, Body: g.code})
+	code, err := g.endAsync()
+	if err != nil {
+		return err
+	}
+	idx := f.c.m.AddFunc(Func{Name: "lambda", Type: r.FuncType(1 + lambdaArgs), Locals: g.locals, Body: code})
 	f.code.RefFunc(idx)
 	for _, name := range captured {
 		b, _ := f.lookup(name)
@@ -168,14 +177,14 @@ func (f *fn) closure(n *ast.Node) error {
 }
 
 // param binds parameter name, in local i, boxing it when a lambda captures
-// it.
+// it (unless resuming, when the cell is restored).
 func (f *fn) param(name string, i int) {
 	if !f.boxed[name] {
 		f.scopes[0][name] = binding{local: i, env: -1}
 		return
 	}
-	f.code.LocalGet(i)
-	f.init(f.declare(name))
+	b := f.declare(name)
+	_ = f.unlessResuming(func() error { f.code.LocalGet(i); f.init(b); return nil })
 }
 
 // emitInvoke writes __hf_invoke(closure, a0, a1), which the host calls to

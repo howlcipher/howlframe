@@ -62,18 +62,6 @@ func browserOps(root *ast.Node) []string {
 	return ops
 }
 
-// browserUnsupported names host operations the browser host does not
-// implement yet; they fail closed at build time.
-var browserUnsupported = map[string]string{}
-
-func init() {
-	for _, op := range capability.HostOperations() {
-		if _, std := stdOps[op.Name]; op.Async && !std {
-			browserUnsupported[op.Name] = "an asynchronous operation"
-		}
-	}
-}
-
 // addBrowserImports declares the browser host's imports: print, stderr,
 // exit_at and spawn, then one per host operation the program calls.
 func (r *rt) addBrowserImports(ops []string) {
@@ -86,6 +74,10 @@ func (r *rt) addBrowserImports(ops []string) {
 	// spawn(closure) runs a task: the host calls the closure at once, and
 	// its failure is the task's alone.
 	r.iSpawn = m.AddImport("hf", "spawn", r.tEqToVoid)
+	// sleep(ms) waits, asynchronously.
+	r.iSleep = m.AddImport("hf", "sleep", r.FuncType(1))
+	// time_now() is the time in Unix seconds, as the JavaScript backend's.
+	r.iTimeNow = m.AddImport("hf", "time_now", r.FuncType(0))
 	r.iHost = map[string]int{}
 	for _, name := range ops {
 		op, _ := capability.LookupHostOperation(name)
@@ -186,6 +178,7 @@ func (r *rt) emitBrowser() {
 	// __hf_fail(message): the pending error, "CODE: message"; nil clears it.
 	export("__hf_fail", eq, nil, nil, func(c *Code) { c.LocalGet(0).GlobalSet(r.gErr) })
 	r.emitInvoke()
+	r.emitAsync()
 }
 
 // reserve grows memory, when needed, to hold as many bytes as the i32 in
@@ -199,9 +192,6 @@ func (r *rt) reserve(c *Code, n int) {
 // hostCall compiles a call of a browser host operation: its arguments as
 // values, the import, and the error check.
 func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
-	if why, ok := browserUnsupported[h]; ok {
-		return unsupported(n, h+" ("+why+")")
-	}
 	idx, ok := f.c.rt.iHost[h]
 	if !ok {
 		return unsupported(n, h+" (a browser host operation: it runs in a web_app built for the browser)")
@@ -210,20 +200,37 @@ func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
 	if len(args) != len(op.Params) {
 		return unsupported(n, h)
 	}
-	for i, a := range args {
-		if op.Params[i].Kind == capability.HostLambda {
-			if err := f.closure(a); err != nil {
+	push := func() error {
+		for i, a := range args {
+			if op.Params[i].Kind == capability.HostLambda {
+				if err := f.closure(a); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := f.expr(a); err != nil {
 				return err
 			}
-			continue
 		}
-		if err := f.expr(a); err != nil {
-			return err
-		}
+		return nil
+	}
+	if op.Async {
+		return f.asyncHostCall(n, f.sites[n], idx, push)
+	}
+	if err := push(); err != nil {
+		return err
 	}
 	f.code.Call(idx)
 	f.check()
 	return nil
+}
+
+// sleep compiles (sleep ms), an asynchronous operation of the host.
+func (f *fn) sleep(n *ast.Node) error {
+	if f.c.rt.host != HostBrowser || len(n.Children) != 2 {
+		return unsupported(n, "sleep")
+	}
+	return f.asyncHostCall(n, f.sites[n], f.c.rt.iSleep, func() error { return f.expr(n.Children[1]) })
 }
 
 // spawn compiles (spawn (lambda () body)): the host runs the closure as a
@@ -285,7 +292,11 @@ func BrowserLoader(ops []string) (string, error) {
 			}
 			lambdas = append(lambdas, "["+strings.Join(kinds, ", ")+"]")
 		}
-		modules[mod] = append(modules[mod], fmt.Sprintf("    %s: hostOp(%s, %q, [%s]),", name, helpers[name], string(op.Result), strings.Join(lambdas, ", ")))
+		wrapper := "hostOp"
+		if op.Async {
+			wrapper = "asyncOp"
+		}
+		modules[mod] = append(modules[mod], fmt.Sprintf("    %s: %s(%s, %q, [%s]),", name, wrapper, helpers[name], string(op.Result), strings.Join(lambdas, ", ")))
 	}
 	mods := make([]string, 0, len(modules))
 	for mod := range modules {
@@ -392,19 +403,36 @@ function argOf(kind, v) {
   if (kind === "event" || kind === "element") return v === null || v === undefined ? null : ex.__hf_host(v);
   return toWasm(v);
 }
+// The asynchronous operation the running fiber is suspended on.
+let pending = null;
+// task runs an entry of the module (main, or a handler) as a task, as the
+// JavaScript backend runs an async function: each time it suspends on an
+// asynchronous operation, task waits for the operation and calls the entry
+// again to resume it. Its promise settles when the entry finishes, rejected
+// with its uncaught error or exit; meanwhile other tasks run.
+async function task(enter) {
+  for (;;) {
+    enter();
+    if (!ex.__hf_unwinding()) {
+      const err = ex.__hf_error();
+      if (err === null) return;
+      ex.__hf_fail(null);
+      throw uncaught(err);
+    }
+    const fiber = ex.__hf_take_fiber();
+    const op = pending;
+    pending = null;
+    let value = null;
+    try { value = resultOf(op.kind, await op.promise); } catch (e) { fail(e); }
+    ex.__hf_resume(fiber, value);
+  }
+}
 // run calls a closure with JavaScript arguments as a task of its own, like
 // a JavaScript backend handler (an async function): its promise rejects
 // with the task's uncaught error or exit, and the caller carries on.
 function run(closure, args) {
-  try {
-    ex.__hf_invoke(closure, args.length > 0 ? args[0] : null, args.length > 1 ? args[1] : null);
-  } catch (e) {
-    return Promise.reject(e);
-  }
-  const err = ex.__hf_error();
-  if (err === null) return Promise.resolve();
-  ex.__hf_fail(null);
-  return Promise.reject(uncaught(err));
+  const a0 = args.length > 0 ? args[0] : null, a1 = args.length > 1 ? args[1] : null;
+  return task(() => { ex.__hf_invoke(closure, a0, a1); });
 }
 // handler makes a closure a JavaScript function for the page to call.
 function handler(closure, kinds) {
@@ -412,6 +440,18 @@ function handler(closure, kinds) {
     const args = [];
     for (let i = 0; i < kinds.length; i++) args.push(argOf(kinds[i], arguments[i]));
     return run(closure, args);
+  };
+}
+// asyncOp is the import of an asynchronous host operation: it starts the
+// operation (a failure to start is the module's pending error) and leaves
+// it for task to wait on while the fiber suspends.
+function asyncOp(fn, kind, lambdas) {
+  return function () {
+    const args = Array.prototype.map.call(arguments, toJS);
+    let p;
+    try { p = fn.apply(null, args); } catch (e) { fail(e); return null; }
+    pending = { promise: Promise.resolve(p), kind };
+    return null;
   };
 }
 // hostOp is the import of a host operation: its arguments as JavaScript
@@ -434,6 +474,8 @@ const imports = {
     stderr: (s) => { howlFrameStderr(fromStr(s)); },
     exit_at: (code, where) => { howlFrameExit(code, fromStr(where)); },
     spawn: (closure) => { run(closure, []); },
+    sleep: asyncOp((ms) => new Promise((r) => setTimeout(r, ms)), "", [null]),
+    time_now: () => toWasm(Math.floor(Date.now() / 1000)),
   },
 };
 `
@@ -446,9 +488,7 @@ const browserLoaderRun = `async function howlFrameBytes(source) {
 return (async () => {
   const { instance } = await WebAssembly.instantiate(await howlFrameBytes(howlFrameSource), imports);
   ex = instance.exports;
-  ex.main();
-  const err = ex.__hf_error();
-  if (err !== null) throw uncaught(err);
+  await task(() => { ex.main(); });
 })();
 })();
 `
