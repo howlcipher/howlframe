@@ -246,9 +246,8 @@ func TestTestsFailClosed(t *testing.T) {
 		want string
 	}{
 		"http_server root":   {`(http_server (port 8080) (test "t" (assert true)))`, []string{"--tests"}, "WASM_UNSUPPORTED: test blocks compile from a cli_app or web_app"},
-		"unsupported body":   {"(web_app\n  (test \"dom\"\n    (dom_query \"#x\")))", []string{"--tests"}, `WASM_UNSUPPORTED: "dom_query" is not supported by the WebAssembly backend yet (line 3, column 5)`},
+		"unsupported body":   {"(web_app\n  (test \"dom\"\n    (dom_query \"#x\")))", []string{"--tests"}, `WASM_UNSUPPORTED: "dom_query (a browser host operation: it runs in a web_app built for the browser)" is not supported by the WebAssembly backend yet (line 3, column 5)`},
 		"unnamed test":       {`(web_app (test (assert true) (assert true)))`, []string{"--tests"}, "test description must be a string"},
-		"web_app as program": {`(web_app (test "t" (assert true)))`, nil, "the test blocks of a web_app build with --tests"},
 		"cli_app as program": {`(cli_app (print "x") (test "t" (assert true)))`, nil, `WASM_UNSUPPORTED: "test"`},
 	} {
 		t.Run(name, func(t *testing.T) {

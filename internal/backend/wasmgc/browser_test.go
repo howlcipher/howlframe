@@ -273,6 +273,8 @@ func TestBrowserLikeJavaScript(t *testing.T) {
   (try_let (v (call quit)) (catch err (print "caught")) (print v))
   (print "after"))
 (defun quit () (do (exit 3) (return "never"))`,
+		"test blocks left out": `(print "page"))
+  (test "t" (do (print "test ran") (assert false))`,
 		"stderr": `(stderr "warn")
   (print "done")`,
 		"download refused": `(try_let (v (download_file "../x" "text/plain" "aGk=")) (catch err (print (to_string err))) (print v))
@@ -308,7 +310,7 @@ func TestBrowserFailsClosed(t *testing.T) {
 		`(cli_app (spawn (lambda () (print 1))))`:               `"spawn" is not supported`,
 		`(web_app (storage_get "ns" "k"))`:                      `"storage_get (an asynchronous operation)" is not supported`,
 		`(web_app (image_decode "x" "image/png"))`:              `"image_decode (an asynchronous operation)" is not supported`,
-		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation; it needs a web_app)" is not supported`,
+		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation: it runs in a web_app built for the browser)" is not supported`,
 	} {
 		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
 		if !out.failed || !strings.Contains(out.errMsg, want) || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {

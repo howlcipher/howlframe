@@ -204,7 +204,7 @@ func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
 	}
 	idx, ok := f.c.rt.iHost[h]
 	if !ok {
-		return unsupported(n, h+" (a browser host operation; it needs a web_app)")
+		return unsupported(n, h+" (a browser host operation: it runs in a web_app built for the browser)")
 	}
 	op, _ := capability.LookupHostOperation(h)
 	if len(args) != len(op.Params) {

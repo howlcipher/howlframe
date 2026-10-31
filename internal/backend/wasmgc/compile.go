@@ -220,6 +220,9 @@ func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 			testBlocks = append(testBlocks, n)
 		case tests:
 			// Top-level statements are the application's, not the tests'.
+		case host == HostBrowser && head(n) == "test":
+			// A page leaves its tests out, as the JavaScript backend's
+			// app.js does; they build with --tests.
 		default:
 			stmts = append(stmts, n)
 		}

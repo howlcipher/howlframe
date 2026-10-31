@@ -564,8 +564,9 @@ func TestDiffFloats(t *testing.T) {
 	}
 }
 
-// build --host takes node (the default: app.wasm and the app.mjs loader)
-// or wasi (a WASI command, app.wasm only); anything else is refused.
+// build --host takes node (a cli_app's default: app.wasm and the app.mjs
+// loader), wasi (a WASI command, app.wasm only) or browser (a web_app's:
+// app.wasm and the app.js loader); anything else is refused.
 func TestBuildHosts(t *testing.T) {
 	src := writeSource(t, `(cli_app (print "hi"))`)
 	for host, files := range map[string][]string{"node": {"app.wasm", "app.mjs"}, "wasi": {"app.wasm"}} {
@@ -582,8 +583,29 @@ func TestBuildHosts(t *testing.T) {
 			t.Fatalf("--host %s wrote %v, want %v", host, got, files)
 		}
 	}
-	if out := run(t, compilerBin, "build", src, "--target", "wasmgc", "--host", "browser", "-o", t.TempDir()); !out.failed || !strings.Contains(out.errMsg, "Unknown --host") {
-		t.Fatalf("--host browser: failed=%v %s", out.failed, out.errMsg)
+	if out := run(t, compilerBin, "build", src, "--target", "wasmgc", "--host", "browser", "-o", t.TempDir()); !out.failed || !strings.Contains(out.errMsg, "--host browser builds a web_app") {
+		t.Fatalf("--host browser of a cli_app: failed=%v %s", out.failed, out.errMsg)
+	}
+	if out := run(t, compilerBin, "build", src, "--target", "wasmgc", "--host", "moon", "-o", t.TempDir()); !out.failed || !strings.Contains(out.errMsg, "Unknown --host") {
+		t.Fatalf("--host moon: failed=%v %s", out.failed, out.errMsg)
+	}
+	// A web_app builds for the browser, with or without --host browser,
+	// and leaves its test blocks out, as the JavaScript backend's app.js
+	// does.
+	web := writeSource(t, `(web_app (print "page") (test "t" (assert false)))`)
+	for _, args := range [][]string{nil, {"--host", "browser"}} {
+		dir := t.TempDir()
+		if out := run(t, compilerBin, append([]string{"build", web, "--target", "wasmgc", "-o", dir}, args...)...); out.failed {
+			t.Fatalf("web_app %v: %s", args, out.errMsg)
+		}
+		entries, _ := os.ReadDir(dir)
+		var got []string
+		for _, e := range entries {
+			got = append(got, e.Name())
+		}
+		if strings.Join(got, ",") != "app.js,app.wasm" {
+			t.Fatalf("web_app %v wrote %v, want app.js and app.wasm", args, got)
+		}
 	}
 }
 
