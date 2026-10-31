@@ -529,7 +529,8 @@ page and runs its top level. Decided in M3:
   named for the operation, from a module named for its capability
   (`hf_host` for none, `hf_cap_<capability>` otherwise; the loader supplies
   a capability's module only when `HOWLFRAME_ALLOW_CAPS` grants it, so an
-  ungranted program fails to instantiate). Every import takes and returns
+  ungranted program fails to instantiate; no operation in the table needs
+  one yet: `fetch`, which does, comes later). Every import takes and returns
   HowlFrame values (`eqref`); `print`, `stderr`, `exit_at` come from `hf`.
 - One implementation. The loader calls the JavaScript backend's own runtime
   function for each operation (`javascript.HostRuntime`), so the two
