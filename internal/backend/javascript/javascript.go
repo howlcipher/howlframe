@@ -1663,12 +1663,6 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if head == "time_now" {
 		// Unix seconds, matching the bytecode VM and the Go backend.
 		return "Math.floor(Date.now() / 1000)"
-	} else if head == "dom_query" {
-		if len(node.Children) != 2 {
-			// ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)
-		}
-		selector := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		return fmt.Sprintf("document.querySelector(%s)", selector)
 	} else if head == "on_event" {
 		if len(node.Children) != 4 {
 			// ast.ReportError("on_event expects (on_event el event lambda)", node.Line, node.Column)
@@ -1688,45 +1682,11 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		// The trailing semicolon is required: without it a following statement
 		// that begins with "(" is parsed as a call of this expression's result
 		// rather than as its own statement.
-		return fmt.Sprintf("%s.addEventListener(%s, async (%s) => {\n%s\n});", el, event, argName, body)
-	} else if head == "set_html" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("set_html expects (set_html el val)", node.Line, node.Column)
-		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		val := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("%s.innerHTML = %s", el, val)
-	} else if head == "toggle_class" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("toggle_class expects (toggle_class el class)", node.Line, node.Column)
-		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		cls := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("%s.classList.toggle(%s)", el, cls)
-	} else if head == "set_text" {
-		if len(node.Children) != 3 {
-			// ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)
-		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		val := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		return fmt.Sprintf("%s.textContent = %s", el, val)
-	} else if head == "set_attr" {
-		if len(node.Children) != 4 {
-			// ast.ReportError("set_attr expects (set_attr el name val)", node.Line, node.Column)
-		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		attr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		val := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
-		return fmt.Sprintf("%s.setAttribute(%s, %s)", el, attr, val)
+		jsNeedsDOM = true
+		return fmt.Sprintf("howlFrameElement(\"on_event\", %s).addEventListener(%s, async (%s) => {\n%s\n});", el, event, argName, body)
 	} else if head == "url_encode" {
 		value := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("(function(v){if(typeof v !== \"string\"){throw new Error(\"TYPE_ERROR: url_encode expected string\");}return encodeURIComponent(v);})(%s)", value)
-	} else if head == "dom_value" {
-		if len(node.Children) != 2 {
-			// ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
-		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		return fmt.Sprintf("%s.value", el)
 	} else if head == "dom_text" {
 		jsNeedsArchive = true
 		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
