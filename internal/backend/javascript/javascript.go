@@ -828,7 +828,7 @@ func numericJSHelper() string {
     }
     return n;
   }
-  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to int");
+  throw new Error("CONVERSION_ERROR: cannot convert " + howlFrameGoType(v) + " to int");
 }
 function howlFrameSafeInt(v) {
   if (!Number.isSafeInteger(v)) {
@@ -913,7 +913,7 @@ function howlFrameToFloat(v) {
     }
     return n;
   }
-  throw new Error("CONVERSION_ERROR: cannot convert " + (typeof v) + " to float");
+  throw new Error("CONVERSION_ERROR: cannot convert " + howlFrameGoType(v) + " to float");
 }
 function howlFrameDiv(a, b) {
   var af = howlFrameToFloat(a);

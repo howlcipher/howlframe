@@ -16,6 +16,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 55 | [Remaining VM raw string panics lack structured errors](#55-remaining-vm-raw-string-panics-lack-structured-errors) | Done (2026-09-06) | 1.5 (6×1÷4) | Sonnet 5 | — | gpt-5.6-terra | Database, file/network I/O, command execution, `parse_json` request-body handling, missing HTTP context/response-writer, and undefined-variable sites in the VM still raised raw Go panics or bare strings, surfacing as uncatchable `VM_INTERNAL` failures instead of the structured `*VMError` codes the runtime documents. |
 | 56 | [`BCInstruction.UnmarshalJSON` silently discards unknown opcode errors](#56-bcinstructionunmarshaljson-silently-discards-unknown-opcode-errors) | Done (2026-09-06) | 1.0 (4×1÷4) | Sonnet 5 | — | — | `NameToOpcode` returns `false` for an unrecognized opcode string, but `UnmarshalJSON` discards this signal with `_ = ok`, silently setting `Op` to zero (`OpUnknown`). If the JSON bytecode path is ever exposed to external input, a malformed program would load without error and execute with a corrupted instruction. |
 | 57 | [Model-call opcodes and interpreter `lazy_synthesize` reach the model host with no network grant](#57-model-call-opcodes-and-interpreter-lazy_synthesize-reach-the-model-host-with-no-network-grant) | Done (2026-10-05) | 8.0 (8×1÷1) | — | — | — | `CONFIDENCE`, `NEURAL_CIRCUIT`, and `EPHEMERAL_CIRCUIT` had an empty registry capability, so `-run-bc` sent HTTP to `127.0.0.1:11434` under an empty grant; `-run` did the same for `confidence` and `lazy_synthesize`. Same class as #44 (`ACHIEVE`). |
+| 71 | [The JavaScript backend's `to_int` and `to_float` name a value's JavaScript type, not the VM's](#71-the-javascript-backends-to_int-and-to_float-name-a-values-javascript-type-not-the-vms) | Done (2026-10-31) | 3.0 (3×1÷1) | Opus 5.5 | — | — | `(to_int nil)` fails with `cannot convert object to int` where the VM says `cannot convert <nil> to int`; found comparing the WebAssembly browser host with the JavaScript backend (M3). |
 | 69 | [The VM's `to_lower` and `to_upper` change with the Go toolchain](#69-the-vms-to_lower-and-to_upper-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | Opus 5.5 | — | — | The VM maps case with Go's `strings.ToLower` and `ToUpper`, whose tables are the toolchain's Unicode version: Go 1.25 and 1.26 have Unicode 15.0.0, Go 1.27 has 17.0.0, which cases 110 more code points. `(print (to_upper "ɤ"))` prints `ɤ` from a release (Go 1.25) and `Ɤ` (U+A7CB) from a VM built with Go 1.27. Same class as #63. Found by the WebAssembly backend's regression gate (M2). |
 | 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 67 | [A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass](#67-a-try_let-catches-exit-in-the-javascript-backends-tests-so-a-failing-assert-can-pass) | Done (2026-10-30) | 8.0 (8×1÷1) | Opus 5.5 | — | — | In `app.test.js`, `exit` (and so `assert`) throws an `Error` to fail the running test, and a `try_let` caught it like any error: a test whose failing assert sits in a function called from a `try_let` binding passed, and the handler ran. On the VM, exit ends the program whatever handler encloses it. Found probing `test` blocks for the WebAssembly backend's M2. |
@@ -168,6 +169,25 @@ latent, so it is recorded here rather than filed as a live bug.
 * **Risk:** Latent. The JSON deserialization path is not reachable from the normal `.hfbc` gob-encoded bytecode pipeline, but if the JSON path were ever exposed to external input (e.g., orchestrator-generated JSON bytecode, debug tooling), a malformed program would load without error and execute with a corrupted instruction stream.
 * **Fix:** Changed `UnmarshalJSON` to check the `ok` return from `NameToOpcode`; when `ok` is `false` and `OpString` is non-empty, it returns `fmt.Errorf("unknown opcode: %q", inst.OpString)`. Empty `OpString` (the zero-value default) continues to decode cleanly for backwards compatibility.
 * **Test:** `TestUnmarshalJSONRejectsUnknownOpcode`, `TestUnmarshalJSONAcceptsKnownOpcode`, and `TestUnmarshalJSONAcceptsEmptyOpcode` in `internal/bytecode/bytecode_test.go`.
+
+### 71. The JavaScript backend's `to_int` and `to_float` name a value's JavaScript type, not the VM's
+
+* **Problem:** A `to_int` or `to_float` of a value that is neither a number
+  nor text failed with `CONVERSION_ERROR: cannot convert <typeof> to int`,
+  naming JavaScript's `typeof`: `object` for nil, a list and a dict,
+  `boolean` for a bool. The VM names the value's Go type (`<nil>`, `bool`,
+  `[]interface {}`, `map[string]interface {}`), as this backend's
+  arithmetic errors already did (bugs.md #66).
+* **Evidence:** `(to_int (map_get (dict) "x"))`, a nil from a missing key,
+  prints `cannot convert object to int` on the JavaScript backend and
+  `cannot convert <nil> to int` on the VM (2026-10-31). Found while
+  comparing the WebAssembly browser host (M3), which follows the VM, with
+  the JavaScript backend on a storage read that came back nil.
+* **Scope:** Name the type with `howlFrameGoType`, the helper the operand
+  errors use.
+* **Done (2026-10-31):** both helpers use it.
+  `TestConversionErrorsNameVMTypes` covers nil, bools, a list and a dict
+  for both conversions; it failed before the fix.
 
 ### 69. The VM's `to_lower` and `to_upper` change with the Go toolchain
 

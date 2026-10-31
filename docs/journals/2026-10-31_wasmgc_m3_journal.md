@@ -62,3 +62,10 @@ Plan of slices (each its own branch and PR):
   a table in `construct` could not feed it. `internal/capability` imports no HowlFrame package; `ast` still keeps
   its own set, which a checker test holds equal to the table.
 - Checked not vacuous: dropping `storage_keys`'s asynchronous flag fails `TestHostOperationsMatchRegistry`.
+
+### 2026-10-31 13:00: bugs.md #71, conversion error type names
+
+- Comparing the browser host's asynchronous fixtures with the JavaScript backend: a storage read that comes back nil,
+  then `to_int`, fails with `cannot convert object to int` there and `cannot convert <nil> to int` on the VM and on
+  WebAssembly. `howlFrameToInt` and `howlFrameToFloat` named `typeof v`; they now use `howlFrameGoType` (the operand
+  errors' helper, bugs.md #66). `TestConversionErrorsNameVMTypes` failed before the fix.
