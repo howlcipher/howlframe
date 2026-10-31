@@ -29,7 +29,16 @@ const (
 type HostParam struct {
 	Name   string
 	Kind   HostKind
-	Lambda []string
+	Lambda []HostParam
+}
+
+// LambdaNames returns the names of a lambda parameter's own parameters.
+func (p HostParam) LambdaNames() []string {
+	names := make([]string, len(p.Lambda))
+	for i, q := range p.Lambda {
+		names[i] = q.Name
+	}
+	return names
 }
 
 // HostOperation is one browser host operation: an effect a web_app asks of
@@ -71,7 +80,7 @@ func hText(name string) HostParam { return hp(name, HostText) }
 
 func hNum(name string) HostParam { return hp(name, HostNumber) }
 
-func hlambda(params ...string) HostParam {
+func hlambda(params ...HostParam) HostParam {
 	return HostParam{Name: "lambda", Kind: HostLambda, Lambda: params}
 }
 
@@ -102,10 +111,10 @@ var hostOperations = []HostOperation{
 	{Name: "image_encode", Params: []HostParam{hText("base64"), hText("mime"), hNum("max_side"), hText("out_mime"), hNum("quality")}, Result: HostDict, Async: true},
 	{Name: "media_matches", Params: []HostParam{hText("query")}, Result: HostBool},
 	{Name: "off", Params: []HostParam{hp("subscription", HostSubscription)}},
-	{Name: "on_event", Params: []HostParam{hEl, hText("event"), hlambda("event")}},
-	{Name: "on_media", Params: []HostParam{hText("query"), hlambda("matches")}, Result: HostSubscription},
+	{Name: "on_event", Params: []HostParam{hEl, hText("event"), hlambda(hEvent)}},
+	{Name: "on_media", Params: []HostParam{hText("query"), hlambda(hp("matches", HostBool))}, Result: HostSubscription},
 	{Name: "on_scroll", Params: []HostParam{hlambda()}, Result: HostSubscription},
-	{Name: "on_visible", Params: []HostParam{hp("elements", HostElements), hlambda("el", "visible")}, Result: HostSubscription},
+	{Name: "on_visible", Params: []HostParam{hp("elements", HostElements), hlambda(hEl, hp("visible", HostBool))}, Result: HostSubscription},
 	{Name: "pref_get", Params: []HostParam{hText("key")}, Result: HostText},
 	{Name: "pref_put", Params: []HostParam{hText("key"), hText("value")}, Result: HostBool},
 	{Name: "remove_attr", Params: []HostParam{hEl, hText("name")}},

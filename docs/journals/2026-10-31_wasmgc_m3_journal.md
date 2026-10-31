@@ -22,7 +22,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | 1. Typed host operation table | `feat/host-operation-registry` | #287 | Merged (`b2093457`) |
 | bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
 | bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
-| 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | | Open |
+| 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
+| 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | | Open |
 
 ## Entries
 
@@ -95,3 +96,14 @@ Plan of slices (each its own branch and PR):
   the test page is given them).
 - Trap for the next session: a wide test run piped through `grep | tail` reported success while two tests failed (the
   pipeline's status was `tail`'s). Check `${PIPESTATUS[0]}` or write the log and grep it.
+
+### 2026-10-31 12:30: handlers (`feat/wasmgc-handlers`)
+
+- Closures: variables become bindings (a local, a local holding a cell, or a cell in the environment); any variable a
+  lambda in the function names is boxed. The refactor touches every binding site (`let`, `for`, `try_let`, `set`,
+  `append`, `map_set`, parameters); the differential corpus still passes.
+- First run of a click handler that sets a captured counter matched the JavaScript backend exactly (`11` after the
+  top level set it to 10). The test page now records listeners, clicks every element with a click listener
+  (awaiting each handler), drives scroll, media and visibility, and reports unhandled rejections.
+- `on_event` now calls one runtime function in both backends (`howlFrameOnEvent`); the table gives a lambda's
+  parameters kinds, which the loader converts by.

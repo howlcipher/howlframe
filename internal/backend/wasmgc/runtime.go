@@ -19,6 +19,7 @@ type rt struct {
 	tBuf                                                    int
 	tStrNull                                                int
 	tHost                                                   int         // a page object (browser host)
+	tCell, tClosure                                         int         // a captured variable; a lambda and its environment
 	fnTypes                                                 map[int]int // HowlFrame function arity -> type
 	tEqToI32, tEqEqToI32, tEqEqToEq, tEqToStr, tStrStrToStr int
 	tI64ToEq, tF64ToEq, tI32ToEq, tEqToVoid, tVoid          int
@@ -31,8 +32,8 @@ type rt struct {
 	iPrint, iStderr, iExit int
 	// Browser host: exit with its source position, and one import per host
 	// operation the program calls.
-	iExitAt int
-	iHost   map[string]int
+	iExitAt, iSpawn int
+	iHost           map[string]int
 	// WASI imports, and the function that writes a $Str to a descriptor.
 	wFdWrite, wProcExit, fWrite int
 
@@ -99,6 +100,8 @@ func newRuntime(m *Module, host Host, ops []string) *rt {
 	if host == HostBrowser {
 		r.tHost = m.AddType(TypeDef{Name: "Host", Struct: []Field{{Type: ExternRef}}})
 	}
+	r.tCell = m.AddType(TypeDef{Name: "Cell", Struct: []Field{{Type: EqRef, Mutable: true}}})
+	r.tClosure = m.AddType(TypeDef{Name: "Closure", Struct: []Field{{Type: Ref(r.FuncType(1 + lambdaArgs))}, {Type: Ref(r.tItems)}}})
 
 	fn := func(params []ValType, results ...ValType) int {
 		return m.AddType(TypeDef{IsFunc: true, Params: params, Results: results})
