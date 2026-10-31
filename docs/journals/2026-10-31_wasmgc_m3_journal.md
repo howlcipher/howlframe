@@ -19,7 +19,9 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | Slice | Branch | PR | State |
 | --- | --- | --- | --- |
 | 0. Probe: every browser host operation | `docs/wasmgc-m3-probe` | #286 | Merged (`13362363`) |
-| 1. Typed host operation table | `feat/host-operation-registry` | | Open |
+| 1. Typed host operation table | `feat/host-operation-registry` | #287 | Merged (`b2093457`) |
+| bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | | Open |
+| 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | | Open |
 
 ## Entries
 
@@ -62,3 +64,20 @@ Plan of slices (each its own branch and PR):
   a table in `construct` could not feed it. `internal/capability` imports no HowlFrame package; `ast` still keeps
   its own set, which a checker test holds equal to the table.
 - Checked not vacuous: dropping `storage_keys`'s asynchronous flag fails `TestHostOperationsMatchRegistry`.
+
+### 2026-10-31 12:00: browser host (`feat/wasmgc-browser-host`)
+
+- `build --target wasmgc` of a `web_app` writes `app.wasm` and `app.js`. Imports come from the table; the loader runs
+  the JavaScript backend's runtime functions (`javascript.HostRuntime`), so "the same errors" holds by construction,
+  and converts values. First end-to-end run matched the JavaScript backend's page exactly apart from the caught error
+  text (VM report against `Error: ...`), which is by design.
+- The test page (`pageJS` in `browser_test.go`) is a superset of the JavaScript backend's DOM and motion stand-ins;
+  each fixture builds with `--target js` and `--target wasmgc`, runs on the page and must print the same JSON (caught
+  errors compared by code and message). 18 fixtures.
+- Findings: a host number can be a float, and a program whose only floats come from the page trapped `unreachable`
+  in the float bridge: host operations whose results can hold numbers now load the float module. An uncaught host
+  error first surfaced as `RUNTIME_ERROR: TypeError: ...`; the loader now rethrows the host's own error, as the
+  JavaScript backend's page sees it. A page needs `atob` and `TextEncoder` (every browser has them; the vm context of
+  the test page is given them).
+- Trap for the next session: a wide test run piped through `grep | tail` reported success while two tests failed (the
+  pipeline's status was `tail`'s). Check `${PIPESTATUS[0]}` or write the log and grep it.

@@ -386,7 +386,14 @@ fails on its first `test`, as the VM's bytecode target refuses them.
       `internal/capability`, which every consumer may import (`ast` may not
       import it without a cycle through `construct`, hence the held-equal
       set). The browser loader is generated from it with the browser host.
-- [ ] Host object handles (`$Host` with `externref`).
+- [x] Host object handles (`$Host` with `externref`) and a `web_app` root
+      that builds for the browser (`--host browser`, the default for a
+      `web_app`): `app.wasm` and a generated loader, `app.js`. See "Browser
+      host" below. `TestBrowserLikeJavaScript` runs 18 programs (every
+      synchronous DOM, layout, preference and style operation, values of
+      every kind, missing elements, caught and uncaught errors, `exit`,
+      `stderr`, refused downloads, test blocks left out) on both backends
+      against a stand-in page and requires the same page.
 - [ ] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
       subscription operations (`on_media`, `on_visible`, `on_scroll`, `off`).
 - [ ] Asynchronous operations (storage, files, image decode and encode, ZIP,
@@ -511,6 +518,51 @@ Notes from the probe:
   attribute and class names, `encodeURIComponent`) follow the engine, since
   they are the browser's own behavior. ZIP duplicate paths therefore stay as
   M2 left them, documented.
+
+### Browser host
+
+A `web_app` builds with `--target wasmgc` (host `browser`) into `app.wasm`
+and `app.js`, a classic script that instantiates the module against the
+page and runs its top level. Decided in M3:
+
+- Imports. Each browser host operation the program calls is one import,
+  named for the operation, from a module named for its capability
+  (`hf_host` for none, `hf_cap_<capability>` otherwise; the loader supplies
+  a capability's module only when `HOWLFRAME_ALLOW_CAPS` grants it, so an
+  ungranted program fails to instantiate). Every import takes and returns
+  HowlFrame values (`eqref`); `print`, `stderr`, `exit_at` come from `hf`.
+- One implementation. The loader calls the JavaScript backend's own runtime
+  function for each operation (`javascript.HostRuntime`), so the two
+  backends share the host code and its errors. The loader includes only the
+  runtimes the program's operations need (17 KB for HowlScene HF's site).
+- Values. A page object (element, event, subscription) is a `$Host` holding
+  an `externref`. Text crosses through the module's exported memory as
+  UTF-8 (`__hf_str_out`, `__hf_str_in`). To JavaScript: nil is `null`,
+  lists arrays, dicts plain objects. From JavaScript: a whole number that
+  is a safe integer is an int and any other number a float; arrays are
+  lists; plain objects dicts; anything else a page object; the table's
+  result kind decides where it matters (elements, events, subscriptions).
+  A program that can receive a number from the page includes the float
+  module (`makesFloats`).
+- Errors. A host function that throws sets the pending error, its message
+  as `CODE: message` (a message without a code is `RUNTIME_ERROR` naming
+  the engine's error), so `try_let` catches it as any error. Uncaught, the
+  loader rethrows the host's own error object, so the page sees what the
+  JavaScript backend's page sees. `exit` throws the JavaScript backend's
+  exit error (`EXIT n at file:line`), which no `try_let` catches.
+- Test blocks are left out of a page, as from the JavaScript backend's
+  `app.js`; they build with `--tests`.
+- The module's bytes come from `howlFrameWasm` when the page (or a test)
+  defines it, otherwise from `app.wasm` beside the script. The script's
+  value is a promise that settles when the top level has run.
+
+Differences from the JavaScript backend, by design (the VM is the
+reference for the language): a caught error is bound to the VM's report
+(`{"phase":"runtime","code":...}`) where the JavaScript backend binds an
+`Error` (so `(to_string err)` reads `Error: CODE: message` there), and
+`print` of a list or dict prints the VM's text (`[a b]`) where
+`console.log` of an array prints `a,b`. The test page compares caught
+errors by code and message.
 
 ### M4 to M6 tasks: the application
 
