@@ -18,6 +18,7 @@ type rt struct {
 	tBytes, tStr, tInt, tFloat, tBool, tItems, tList, tDict int
 	tBuf                                                    int
 	tStrNull                                                int
+	tHost                                                   int         // a page object (browser host)
 	fnTypes                                                 map[int]int // HowlFrame function arity -> type
 	tEqToI32, tEqEqToI32, tEqEqToEq, tEqToStr, tStrStrToStr int
 	tI64ToEq, tF64ToEq, tI32ToEq, tEqToVoid, tVoid          int
@@ -28,6 +29,10 @@ type rt struct {
 
 	// Imports.
 	iPrint, iStderr, iExit int
+	// Browser host: exit with its source position, and one import per host
+	// operation the program calls.
+	iExitAt int
+	iHost   map[string]int
 	// WASI imports, and the function that writes a $Str to a descriptor.
 	wFdWrite, wProcExit, fWrite int
 
@@ -62,9 +67,13 @@ type Host string
 const (
 	HostNode Host = "node"
 	HostWASI Host = "wasi"
+	// HostBrowser runs a web_app in a page (browser.go).
+	HostBrowser Host = "browser"
 )
 
-func newRuntime(m *Module, host Host) *rt {
+// newRuntime declares the runtime's types, imports and functions. A browser
+// module imports the host operations in ops.
+func newRuntime(m *Module, host Host, ops []string) *rt {
 	r := &rt{m: m, host: host, fnTypes: map[int]int{}, strings: map[string]int{}}
 	var wasiWrite, wasiExit int
 	if host == HostWASI {
@@ -87,6 +96,9 @@ func newRuntime(m *Module, host Host) *rt {
 	// Dict: length, keys ($Str values in an Items array), values.
 	r.tDict = m.AddType(TypeDef{Name: "Dict", Struct: []Field{{Type: I32, Mutable: true}, {Type: Ref(r.tItems), Mutable: true}, {Type: Ref(r.tItems), Mutable: true}}})
 	r.tStrNull = -1
+	if host == HostBrowser {
+		r.tHost = m.AddType(TypeDef{Name: "Host", Struct: []Field{{Type: ExternRef}}})
+	}
 
 	fn := func(params []ValType, results ...ValType) int {
 		return m.AddType(TypeDef{IsFunc: true, Params: params, Results: results})
@@ -113,6 +125,8 @@ func newRuntime(m *Module, host Host) *rt {
 		r.wFdWrite = m.AddImport("wasi_snapshot_preview1", "fd_write", wasiWrite)
 		r.wProcExit = m.AddImport("wasi_snapshot_preview1", "proc_exit", wasiExit)
 		m.MemoryPages, m.MemoryExport = 1, "memory"
+	} else if host == HostBrowser {
+		r.addBrowserImports(ops)
 	} else {
 		// Host imports. print receives a $Str; the host reads its bytes
 		// through the exported __hf_str_len and __hf_str_byte.
@@ -308,6 +322,9 @@ func (r *rt) emitAll() {
 	r.emitBytesToString()
 	if r.host == HostWASI {
 		r.emitWASI()
+	}
+	if r.host == HostBrowser {
+		r.emitBrowser()
 	}
 }
 

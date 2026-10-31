@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
 )
@@ -85,7 +86,8 @@ func usesHead(n *ast.Node, heads ...string) bool {
 }
 
 // makesFloats reports whether a program can produce a float: a float
-// literal, "/" (always a float division), to_float or parse_json.
+// literal, "/" (always a float division), to_float, parse_json, or a
+// browser host operation whose result can hold a number from the page.
 func makesFloats(n *ast.Node) bool {
 	if n == nil {
 		return false
@@ -96,6 +98,14 @@ func makesFloats(n *ast.Node) bool {
 	switch head(n) {
 	case "/", "to_float", "parse_json":
 		return true
+	}
+	if op, ok := capability.LookupHostOperation(head(n)); ok {
+		switch op.Result {
+		case capability.HostNumber, capability.HostDict, capability.HostList, capability.HostValue:
+			if _, std := stdOps[op.Name]; !std {
+				return true
+			}
+		}
 	}
 	for _, k := range n.Children {
 		if makesFloats(k) {
@@ -185,7 +195,11 @@ func rootHead(root *ast.Node) string {
 
 func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 	m := NewModule()
-	c := &compiler{m: m, rt: newRuntime(m, host), funcs: map[string]int{}, arity: map[string]int{}, tests: tests}
+	var ops []string
+	if host == HostBrowser {
+		ops = browserOps(root)
+	}
+	c := &compiler{m: m, rt: newRuntime(m, host, ops), funcs: map[string]int{}, arity: map[string]int{}, tests: tests}
 	if tests {
 		c.gExiting = m.AddGlobal(Global{Type: I32, Mutable: true, Init: []byte{0x41, 0x00}})
 	}
@@ -651,7 +665,12 @@ func (f *fn) stmt(n *ast.Node) error {
 			f.check()
 			return nil
 		}
-		c.RefCast(f.c.rt.tInt).StructGet(f.c.rt.tInt, 0).I32WrapI64().Call(f.c.rt.iExit)
+		c.RefCast(f.c.rt.tInt).StructGet(f.c.rt.tInt, 0).I32WrapI64()
+		if f.c.rt.host == HostBrowser {
+			f.c.rt.StrLiteral(c, fmt.Sprintf("%s:%d", n.Filename, n.Line)).Call(f.c.rt.iExitAt)
+			return nil
+		}
+		c.Call(f.c.rt.iExit)
 		return nil
 	case "type_hint", "type_hints", "type_param":
 		return nil
@@ -1027,6 +1046,11 @@ func (f *fn) expr(n *ast.Node) error {
 		}
 		c.Call(r.fText)
 		return nil
+	}
+	if _, ok := capability.LookupHostOperation(h); ok {
+		if _, std := stdOps[h]; !std {
+			return f.hostCall(n, h, args)
+		}
 	}
 	if op, ok := stdOps[h]; ok {
 		if h == "parse_json" {

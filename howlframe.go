@@ -763,7 +763,7 @@ func buildSource() {
 	outPath := buildFlags.String("o", "", "output artifact file path")
 	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
 	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm, wasmgc (in development)")
-	wasmHost := buildFlags.String("host", "node", "with --target wasmgc: node (app.wasm and an app.mjs loader) or wasi (a WASI command module, app.wasm only)")
+	wasmHost := buildFlags.String("host", "", "with --target wasmgc: node (app.wasm and an app.mjs loader), wasi (a WASI command module, app.wasm only) or browser (a web_app: app.wasm and an app.js loader); default node for a cli_app and browser for a web_app")
 	wasmTests := buildFlags.Bool("tests", false, "with --target wasmgc: compile the program's test blocks, whatever its root, into app.test.wasm (and an app.test.mjs runner for --host node) instead of the program")
 	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
 
@@ -969,13 +969,34 @@ func buildSource() {
 		// The WebAssembly GC backend (docs/design/wasm_gc_backend.md), in
 		// development; it becomes the wasm target once it covers it.
 		host := wasmgc.Host(*wasmHost)
-		if host != wasmgc.HostNode && host != wasmgc.HostWASI {
-			fmt.Fprintf(os.Stderr, "Unknown --host %q: valid hosts are node and wasi\n", *wasmHost)
+		webApp := len(root.Children) > 0 && root.Children[0].Value == "web_app" && !*wasmTests
+		if host == "" {
+			host = wasmgc.HostNode
+			if webApp {
+				host = wasmgc.HostBrowser
+			}
+		}
+		if host != wasmgc.HostNode && host != wasmgc.HostWASI && host != wasmgc.HostBrowser {
+			fmt.Fprintf(os.Stderr, "Unknown --host %q: valid hosts are node, wasi and browser\n", *wasmHost)
+			os.Exit(1)
+		}
+		if (host == wasmgc.HostBrowser) != webApp {
+			fmt.Fprintln(os.Stderr, "--host browser builds a web_app, and a web_app builds only for the browser (its tests build with --tests for node or wasi)")
 			os.Exit(1)
 		}
 		compileWasm, wasmName, loaderName, loader := wasmgc.CompileFor, "app.wasm", "app.mjs", wasmgc.Loader
 		if *wasmTests {
 			compileWasm, wasmName, loaderName, loader = wasmgc.CompileTests, "app.test.wasm", "app.test.mjs", wasmgc.TestLoader
+		}
+		var browserLoader string
+		if host == wasmgc.HostBrowser {
+			loaderName = "app.js"
+			compileWasm = func(root *ast.Node, _ wasmgc.Host) ([]byte, error) {
+				wasm, l, err := wasmgc.CompileBrowser(root)
+				browserLoader = l
+				return wasm, err
+			}
+			loader = func() string { return browserLoader }
 		}
 		wasmBytes, err := compileWasm(root, host)
 		if err != nil {
@@ -990,7 +1011,7 @@ func buildSource() {
 			name string
 			body []byte
 		}{{wasmName, wasmBytes}}
-		if host == wasmgc.HostNode {
+		if host != wasmgc.HostWASI {
 			files = append(files, struct {
 				name string
 				body []byte
