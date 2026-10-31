@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 var compilerBin string
@@ -859,6 +860,8 @@ func TestDiffSugar(t *testing.T) {
 		"sort_by":         `(print (sort_by x (list (dict ("n" 2)) (dict ("n" 1)) (dict ("n" 3))) (map_get x "n")))`,
 		"max_by, min_by":  `(print (max_by x (list 3 1 2) x) (min_by x (list 3 1 2) x))`,
 		"padding":         `(print (pad_left "5" 3 "0") (pad_right "ab" 4 ".") (str_repeat "ab" 3) (pad_left "long" 2 "0"))`,
+		"str_repeat":      `(let (d (dict ("l" (list 1)) ("f" 2.5))) (do (print (str_repeat "ab" 0) (str_repeat "ab" -3) (str_repeat 5 3) (str_repeat 1.5 2) (str_repeat "x" (map_get d "f")) (str_repeat (map_get d "l") 2) (str_repeat (map_get d "zz") 2) (str_repeat "é✓" 5)) (let (i 0) (while (< i 40) (do (print (str_len (str_repeat "ab" i))) (set i (+ i 1)))))))`,
+		"str_repeat long": `(let (s (str_repeat "abcdefghij" 7000)) (print (str_len s) (str_len (str_join (str_split s "e") "E"))))`,
 		"ltrim, rtrim":    `(print (+ "[" (+ (rtrim "  a  ") "]")) (+ "[" (+ (ltrim "  a  ") "]")))`,
 		"to_base":         `(print (to_base 255 16) (to_base 5 2) (to_base 0 10))`,
 		"records":         `(let (m (rec a (rec b (list 10 20)) name "x")) (print m (get m "a" "b" 1) (is_nil (get m "z"))))`,
@@ -953,5 +956,29 @@ func TestDiffStderrAndExit(t *testing.T) {
 		"stderr and exit": `(do (stderr "problem") (exit 2))`,
 	} {
 		t.Run(name, func(t *testing.T) { sameAsVM(t, "(cli_app "+body+")") })
+	}
+}
+
+// Building and transforming long text takes time linear in its length:
+// str_repeat appended one copy at a time and str_join appended each part
+// to the result so far, both quadratic (550 KB of str_repeat took 39 s,
+// to_lower of 200 KB of accented text 59 s). Each run here takes well under
+// a second when linear.
+func TestLongTextIsLinear(t *testing.T) {
+	for name, c := range map[string]struct{ body, want string }{
+		"str_repeat":     {`(print (str_len (str_repeat "abcdefghij" 55000)))`, "550000\n"},
+		"case mapping":   {`(let (s (str_repeat "AbCdÉfGhIj" 20000)) (print (str_len (to_lower s)) (str_len (to_upper s))))`, "200000 200000\n"},
+		"split and join": {`(print (str_len (str_join (str_split (str_repeat "ab," 100000) ",") "--")))`, "400000\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			start := time.Now()
+			out := onWasm(t, "(cli_app "+c.body+")")
+			if took := time.Since(start); took > 15*time.Second {
+				t.Fatalf("took %v", took)
+			}
+			if out.failed || out.stdout != c.want {
+				t.Fatalf("got %q (%s), want %q", out.stdout, out.errMsg, c.want)
+			}
+		})
 	}
 }

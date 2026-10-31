@@ -25,7 +25,8 @@ last. Times are America/Detroit.
 | ZIP: `zip_build`, `zip_read`, inflate in `std/zip.howl` | `feat/wasmgc-zip` | #277 | Merged (`d38ce70a`) |
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Merged (`e46839ff`) |
 | Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Merged (`993d008e`) |
-| Follow-up: bugs.md #69, VM case mapping pinned to Unicode 15 | `fix/vm-unicode-case` | #282 | Open |
+| Follow-up: bugs.md #69, VM case mapping pinned to Unicode 15 | `fix/vm-unicode-case` | #282 | Merged (`2301b434`) |
+| Follow-up: linear `str_repeat` and `str_join` | `perf/wasmgc-str-repeat` | #283 | Open |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Merged; 19 of 19 |
 
 ## Entries
@@ -134,3 +135,17 @@ and the missing `--tests` interop entry (#280). Three remain, one branch each:
 2. `str_repeat` quadratic on WebAssembly (`perf/wasmgc-str-repeat`).
 3. ZIP duplicate paths lowercased by Go's simple case mapping where the JavaScript reference uses `toLowerCase`
    (`fix/wasmgc-zip-lowercase`).
+
+### 2026-10-30 20:50: `str_repeat` and `str_join` (`perf/wasmgc-str-repeat`)
+
+- Cause was in two places. `str_repeat`'s shared sugar appended one copy at a time, and the WebAssembly runtime's
+  `str_join` appended each part to the result so far, so every std module that joins parts (case mapping, JSON)
+  was quadratic too: `to_lower` of 200 KB of accented text took 59 s.
+- `str_join` now measures and copies each part once. The first template rewrite (a list plus `str_join`) was linear
+  on WebAssembly but worse on the VM, whose `append` copies the list and whose 64 MB budget counts every allocation:
+  `(str_repeat "x" 5000)` would have failed where it ran before. Rejected before commit. The final template counts
+  the copies as before and builds them by doubling; old and new VM output are identical for every case tried (0,
+  negative and fractional counts, numbers, lists, nil, counts 0 to 39), and under the default limits the VM now runs
+  more than it did (`"x"` to 7,654 copies, was 5,881; a 10-character piece to 7,654, was 2,111).
+- `TestLongTextIsLinear` (550 KB repeat, 200 KB case mapping, a 100,000-part split and join) takes under a second
+  per case and 37 to 61 s without the fix. New `str_repeat` differential fixtures cover the edge cases.
