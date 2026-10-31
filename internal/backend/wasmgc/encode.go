@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"sort"
 )
 
 // ValType is an encoded value type: a single byte for numeric types and
@@ -154,8 +155,25 @@ func (m *Module) AddGlobal(g Global) int { m.Globals = append(m.Globals, g); ret
 // AddData appends a passive data segment and returns its index.
 func (m *Module) AddData(b []byte) int { m.Datas = append(m.Datas, b); return len(m.Datas) - 1 }
 
-// Bytes encodes the module in the binary format.
+// Bytes encodes the module in the binary format. Defined functions that no
+// export, start function or reachable function calls or references are
+// left out, and the rest renumbered; imports all stay, so a module links
+// against the same imports whatever it reaches.
 func (m *Module) Bytes() ([]byte, error) {
+	// Every body must be well formed, reached or not: a bad one is the
+	// compiler's bug wherever it is.
+	for i, f := range m.Funcs {
+		if f.Body == nil {
+			return nil, fmt.Errorf("function %d (%s): no body", len(m.Imports)+i, f.Name)
+		}
+		if f.Body.depth != 0 {
+			return nil, fmt.Errorf("function %d (%s): unbalanced blocks (%d open)", len(m.Imports)+i, f.Name, f.Body.depth)
+		}
+	}
+	m, err := m.live()
+	if err != nil {
+		return nil, err
+	}
 	var out bytes.Buffer
 	out.Write([]byte{0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00})
 
@@ -257,15 +275,15 @@ func (m *Module) Bytes() ([]byte, error) {
 		section(&out, 8, uleb(uint64(m.Start)))
 	}
 	// Functions referenced by ref.func must be declared in an element
-	// segment; one declarative segment lists every defined function.
-	if len(m.Funcs) > 0 {
+	// segment; one declarative segment lists them.
+	if refs := m.refFuncs(); len(refs) > 0 {
 		var s bytes.Buffer
 		s.Write(uleb(1))
 		s.Write(uleb(3)) // declarative, function indices
 		s.WriteByte(0x00)
-		s.Write(uleb(uint64(len(m.Funcs))))
-		for i := range m.Funcs {
-			s.Write(uleb(uint64(len(m.Imports) + i)))
+		s.Write(uleb(uint64(len(refs))))
+		for _, f := range refs {
+			s.Write(uleb(uint64(f)))
 		}
 		section(&out, 9, s.Bytes())
 	}
@@ -342,15 +360,148 @@ func (f Func) encode() ([]byte, error) {
 		return nil, fmt.Errorf("unbalanced blocks (%d open)", f.Body.depth)
 	}
 	var s bytes.Buffer
-	// Locals, one entry per local (runs are not merged; simple and valid).
-	s.Write(uleb(uint64(len(f.Locals))))
+	// Locals, one entry per run of locals of the same type.
+	var runs [][]ValType
 	for _, l := range f.Locals {
-		s.Write(uleb(1))
-		s.Write(l)
+		if n := len(runs); n > 0 && bytes.Equal(runs[n-1][0], l) {
+			runs[n-1] = append(runs[n-1], l)
+		} else {
+			runs = append(runs, []ValType{l})
+		}
+	}
+	s.Write(uleb(uint64(len(runs))))
+	for _, r := range runs {
+		s.Write(uleb(uint64(len(r))))
+		s.Write(r[0])
 	}
 	s.Write(f.Body.buf.Bytes())
 	s.WriteByte(0x0B)
 	return s.Bytes(), nil
+}
+
+// live returns the module without the defined functions nothing reaches:
+// the roots are the exports and the start function, and a function reaches
+// what its body calls or references (ref.func). Function indices in bodies,
+// exports and the start function are renumbered; m is not changed.
+func (m *Module) live() (*Module, error) {
+	imports := len(m.Imports)
+	reached := make([]bool, len(m.Funcs))
+	var work []int
+	reach := func(index int) error {
+		if index < 0 || index >= imports+len(m.Funcs) {
+			return fmt.Errorf("function index %d out of range", index)
+		}
+		if index >= imports && !reached[index-imports] {
+			reached[index-imports] = true
+			work = append(work, index-imports)
+		}
+		return nil
+	}
+	for _, e := range m.Exports {
+		if err := reach(e.Func); err != nil {
+			return nil, fmt.Errorf("export %s: %w", e.Name, err)
+		}
+	}
+	if m.Start >= 0 {
+		if err := reach(m.Start); err != nil {
+			return nil, fmt.Errorf("start: %w", err)
+		}
+	}
+	for len(work) > 0 {
+		f := m.Funcs[work[len(work)-1]]
+		work = work[:len(work)-1]
+		if f.Body == nil {
+			continue
+		}
+		code := f.Body.buf.Bytes()
+		for _, at := range f.Body.funcs {
+			index, _ := readUleb(code[at:])
+			if err := reach(int(index)); err != nil {
+				return nil, fmt.Errorf("function %s: %w", f.Name, err)
+			}
+		}
+	}
+	renumber := make([]int, imports+len(m.Funcs))
+	for i := 0; i < imports; i++ {
+		renumber[i] = i
+	}
+	out := *m
+	out.Funcs = nil
+	for i, f := range m.Funcs {
+		if !reached[i] {
+			renumber[imports+i] = -1
+			continue
+		}
+		renumber[imports+i] = imports + len(out.Funcs)
+		out.Funcs = append(out.Funcs, f)
+	}
+	for i, f := range out.Funcs {
+		if f.Body != nil {
+			out.Funcs[i].Body = f.Body.renumbered(renumber)
+		}
+	}
+	out.Exports = make([]Export, len(m.Exports))
+	for i, e := range m.Exports {
+		out.Exports[i] = Export{e.Name, renumber[e.Func]}
+	}
+	if m.Start >= 0 {
+		out.Start = renumber[m.Start]
+	}
+	return &out, nil
+}
+
+// renumbered returns the code with every function index i replaced by
+// renumber[i].
+func (c *Code) renumbered(renumber []int) *Code {
+	code := c.buf.Bytes()
+	out := &Code{depth: c.depth}
+	last := 0
+	for _, at := range c.funcs {
+		index, n := readUleb(code[at:])
+		out.buf.Write(code[last:at])
+		out.funcs = append(out.funcs, out.buf.Len())
+		out.buf.Write(uleb(uint64(renumber[index])))
+		last = at + n
+	}
+	out.buf.Write(code[last:])
+	return out
+}
+
+// refFuncs lists, in order and once each, the functions a body references
+// with ref.func.
+func (m *Module) refFuncs() []int {
+	seen := map[int]bool{}
+	var refs []int
+	for _, f := range m.Funcs {
+		if f.Body == nil {
+			continue
+		}
+		code := f.Body.buf.Bytes()
+		for _, at := range f.Body.funcs {
+			if at == 0 || code[at-1] != 0xD2 {
+				continue
+			}
+			index, _ := readUleb(code[at:])
+			if !seen[int(index)] {
+				seen[int(index)] = true
+				refs = append(refs, int(index))
+			}
+		}
+	}
+	sort.Ints(refs)
+	return refs
+}
+
+// readUleb decodes an unsigned LEB128 number, returning it and its length.
+func readUleb(b []byte) (uint64, int) {
+	var v uint64
+	for i, c := range b {
+		v |= uint64(c&0x7F) << (7 * i)
+		if c&0x80 == 0 {
+			return v, i + 1
+		}
+	}
+	return v, len(b)
 }
 
 func section(out *bytes.Buffer, id byte, payload []byte) {

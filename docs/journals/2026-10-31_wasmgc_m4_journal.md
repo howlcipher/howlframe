@@ -20,6 +20,7 @@ decisions. Newest entry last. Times are America/Detroit.
 | --- | --- | --- | --- |
 | 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | #295 | Open |
 | 1. Delivery: `--inline-module` | `feat/wasmgc-inline-module` | | Open (stacked on #295) |
+| 2. Size: dead functions, locals, budget test | `feat/wasmgc-dead-code` | | Open (stacked on slice 1) |
 
 ## Entries
 
@@ -140,3 +141,17 @@ Plan of slices (each its own branch and PR):
   `'wasm-unsafe-eval'`: it runs in all four (`hs-motion` set, no runtime errors).
 - Not merged by this session: `gh pr merge` was refused by the session's permission check (also for #294), so this
   branch carries #295's commit and its PR is stacked on it.
+
+### 2026-10-31 20:00: size
+
+- #294 (the M4 prompt) merged at `faf9bd90` on the owner's request; main now has the prompt.
+- Where the bytes were (site module, text format): 131 functions, 18 reachable from no export; the program's own
+  functions are 72% of the code. Dead-code removal in the encoder (`Module.live`) and merged local runs: numbers in the
+  plan's M4 task list. Unbalanced or missing bodies are still reported for functions nothing reaches (the existing
+  `TestEncoderReportsUnbalancedBlocks` caught that the first version dropped them silently).
+- Measured and dropped: a fail block with `br_if` per error check (smaller raw, larger gzipped).
+- `TestHowlSceneSiteBudget` (opt-in, `HOWLSCENE_HF`, so the gate runs it): 94,623 B / 28,801 B gzipped for the
+  portfolio fixture's page. With the budget set to 90 KiB it failed naming the page, then was restored.
+- Still open, for the owner: `performance.spec.mjs`'s "runtime at most a quarter of the editor's app.js" needs the
+  runtime under 10,226 B gzipped while the editor is JavaScript; the inline runtime is 21,893 B.
+- Tests: `go test ./internal/backend/wasmgc/ ./internal/backend/javascript/ ./tools/difftest/` pass.

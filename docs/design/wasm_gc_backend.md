@@ -690,9 +690,24 @@ journal `docs/journals/2026-10-31_wasmgc_m4_journal.md`.
       site runtime built so is 79,765 B (24,084 B gzipped), and runs in
       Chromium and Firefox under both page policies with
       `'wasm-unsafe-eval'` (journal, 2026-10-31 "delivery").
-- [ ] Size: dead code removed in the compiler (unused runtime functions
-      and exports), and a test that fails when the site's download exceeds
-      250 KiB.
+- [x] Size: the encoder leaves out every defined function that no
+      export, start function or reached function calls or references
+      (`Module.live`; `Code` records where each function index is, so
+      bodies are renumbered), declares only `ref.func` targets in the
+      element segment, and merges runs of same-type locals. Imports all
+      stay, so linking (and `CAPABILITY_DENIED`) is unchanged. Site module
+      45,872 → 40,227 B (12,965 → 11,534 B gzipped); inline `app.js`
+      79,765 → 72,237 B (24,084 → 21,893 B); editor module 272,072 →
+      261,440 B. `TestEncoderLeavesOutUnreachedFunctions`;
+      `TestHowlSceneSiteBudget` renders each fixture project's published
+      page on the VM and requires HTML + `site.css` + the inline runtime
+      within 250 KiB raw and gzipped (portfolio: 94,623 B, 28,801 B
+      gzipped; checked to fail with the budget set to 90 KiB). Tried and
+      dropped: one `br_if` to a fail block per error check instead of
+      `if … return … end` saves 3.0 KB raw but adds 350 B gzipped (the
+      varying depths compress worse than one repeated sequence), and pages
+      download it gzipped. Left: 1.5 KB of unused DOM helpers and 2.7 KB of
+      comments in the loader (about 1.4 KB gzipped together).
 - [ ] Speed: text conversion measured in performance.spec.mjs's terms on
       every scroll frame, and made faster if it matters.
 - [ ] HowlScene HF: its build makes the site runtime with `--target
