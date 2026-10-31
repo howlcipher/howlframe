@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/construct"
 )
 
 // The web_app archive and download primitives are browser host operations:
@@ -80,6 +82,11 @@ func TestEveryBrowserHostOperationArity(t *testing.T) {
 		for src, want := range cases {
 			path := mustWriteFile(t, dir, "a.howl", src)
 			out, err := exec.Command(bin, "check", path).CombinedOutput()
+			// fetch, also a construct of other targets, has its arity checked
+			// first by construct.EnforceArity, with that table's message.
+			if ar, ok := construct.LookupArity(op.Name); ok && strings.Contains(want, " expects (") {
+				want = fmt.Sprintf("ARITY_ERROR: %s expects %d to %d args", op.Name, ar.Min, ar.Max)
+			}
 			if err == nil || !strings.Contains(string(out), want) {
 				t.Errorf("%s: want %q, got %v %s", src, want, err, out)
 			}
