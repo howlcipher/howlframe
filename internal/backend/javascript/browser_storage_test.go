@@ -1,7 +1,6 @@
-package javascript
+package javascript_test
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -9,17 +8,13 @@ import (
 // hostHarness runs code with browser stand-ins: an in-memory IndexedDB with
 // the subset the storage helpers use (optionally failing puts with a quota
 // error), a file input holding two files, and image decode and encode.
-func hostHarness(t *testing.T, code string, quotaFull bool) string {
+func hostHarness(t *testing.T, code program, quotaFull bool) string {
 	t.Helper()
-	encoded, err := json.Marshal(code)
-	if err != nil {
-		t.Fatal(err)
-	}
 	quota := "false"
 	if quotaFull {
 		quota = "true"
 	}
-	wrapper := `const vm = require("node:vm");
+	wrapper := howlNormJS + `const vm = require("node:vm");
 const out = [];
 const dbs = {};
 const quotaFull = ` + quota + `;
@@ -65,12 +60,12 @@ class OffscreenCanvas {
   getContext() { const c = this; return { drawImage(img, x, y, w, h) { c.drew = [w, h]; } }; }
   async convertToBlob(opts) { return new Blob([Buffer.from("re-encoded:" + this.width + "x" + this.height + ":" + opts.type)], { type: opts.type }); }
 }
-const browser = { console: { log: (v) => out.push(String(v)), error: () => {} }, indexedDB, Blob, createImageBitmap, OffscreenCanvas, atob, btoa,
+const browser = { console: { log: (v) => out.push(howlNorm(v)), error: () => {} }, indexedDB, Blob, createImageBitmap, OffscreenCanvas, atob, btoa,
   document: { querySelector: (s) => s === "#files" ? input : s === "#big" ? bigInput : null } };
-Promise.resolve(vm.runInNewContext(` + string(encoded) + `, browser)).then(
+Promise.resolve(` + code.inContext("browser") + `).then(
   () => setTimeout(() => console.log(JSON.stringify(out)), 20),
   (err) => console.log(JSON.stringify({ error: String(err.message), out })));`
-	stdout, stderr, exit := runJS(t, wrapper)
+	stdout, stderr, exit := runNode(t, wrapper)
 	if exit != 0 {
 		t.Fatalf("harness: %s %s", stdout, stderr)
 	}
@@ -78,7 +73,8 @@ Promise.resolve(vm.runInNewContext(` + string(encoded) + `, browser)).then(
 }
 
 func TestBrowserStorageRoundTrip(t *testing.T) {
-	code := compileWebApp(t, `(web_app (do
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (do
   (print (is_nil (storage_get "drafts" "site")))
   (storage_put "drafts" "site" "{\"title\":\"é\"}")
   (storage_put "drafts" "other" "x")
@@ -87,38 +83,44 @@ func TestBrowserStorageRoundTrip(t *testing.T) {
   (storage_delete "drafts" "other")
   (print (encode_json (storage_keys "drafts")))
   (print (encode_json (storage_keys "elsewhere")))))`)
-	want := `["true","{\"title\":\"é\"}","[\"other\",\"site\"]","[\"site\"]","[]"]`
-	if got := hostHarness(t, code, false); got != want {
-		t.Fatalf("got %s\nwant %s", got, want)
-	}
+		want := `["true","{\"title\":\"é\"}","[\"other\",\"site\"]","[\"site\"]","[]"]`
+		if got := hostHarness(t, code, false); got != want {
+			t.Fatalf("got %s\nwant %s", got, want)
+		}
+	})
 }
 
 func TestBrowserStorageFailuresAreReported(t *testing.T) {
-	code := compileWebApp(t, `(web_app (do
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (do
   (try_let (r (storage_put "drafts" "site" "x")) (catch err (print (to_string err))) (print "stored"))
   (try_let (r (storage_put "Bad NS" "k" "x")) (catch err (print (to_string err))) (print "stored"))
   (try_let (r (storage_put "drafts" "k" 5)) (catch err (print (to_string err))) (print "stored"))))`)
-	got := hostHarness(t, code, true)
-	for _, want := range []string{"STORAGE_QUOTA", "STORAGE_INVALID_NAME", "TYPE_ERROR"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("want %s in %s", want, got)
+		got := hostHarness(t, code, true)
+		for _, want := range []string{"STORAGE_QUOTA", "STORAGE_INVALID_NAME", "TYPE_ERROR"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("want %s in %s", want, got)
+			}
 		}
-	}
-	if strings.Contains(got, "stored") {
-		t.Fatalf("a failed put must not report success: %s", got)
-	}
+		if strings.Contains(got, "stored") {
+			t.Fatalf("a failed put must not report success: %s", got)
+		}
+	})
 }
 
 func TestBrowserStorageWithoutIndexedDBFailsClosed(t *testing.T) {
-	code := compileWebApp(t, `(web_app (try_let (v (storage_get "drafts" "k")) (catch err (print (to_string err))) (print "read")))`)
-	stdout, _, _ := runJS(t, code)
-	if !strings.Contains(stdout, "STORAGE_UNAVAILABLE") {
-		t.Fatalf("want STORAGE_UNAVAILABLE without indexedDB, got %q", stdout)
-	}
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (try_let (v (storage_get "drafts" "k")) (catch err (print (to_string err))) (print "read")))`)
+		stdout, _, _ := runNode(t, code.script())
+		if !strings.Contains(stdout, "STORAGE_UNAVAILABLE") {
+			t.Fatalf("want STORAGE_UNAVAILABLE without indexedDB, got %q", stdout)
+		}
+	})
 }
 
 func TestFileReadInputAndSniffing(t *testing.T) {
-	code := compileWebApp(t, `(web_app (do
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (do
   (for f (file_read_input (dom_query "#files") 1024)
     (print (str_join (list (map_get f "name") (map_get f "type") (to_string (map_get f "size")) (sniff_media_type (map_get f "base64"))) "|")))
   (try_let (r (file_read_input (dom_query "#big") 1024)) (catch err (print (to_string err))) (print "read big"))
@@ -126,15 +128,17 @@ func TestFileReadInputAndSniffing(t *testing.T) {
   (print (sniff_media_type "R0lGODlh"))
   (print (sniff_media_type "UklGRiQAAABXRUJQVlA4"))
   (print (sniff_media_type "PHN2Zz4="))))`)
-	got := hostHarness(t, code, false)
-	want := `["photo.png|image/png|10|image/png","notes.txt|text/plain|5|","Error: FILE_TOO_LARGE: big.png is larger than 1024 bytes","image/jpeg","image/gif","image/webp",""]`
-	if got != want {
-		t.Fatalf("got %s\nwant %s", got, want)
-	}
+		got := hostHarness(t, code, false)
+		want := `["photo.png|image/png|10|image/png","notes.txt|text/plain|5|","FILE_TOO_LARGE: big.png is larger than 1024 bytes","image/jpeg","image/gif","image/webp",""]`
+		if got != want {
+			t.Fatalf("got %s\nwant %s", got, want)
+		}
+	})
 }
 
 func TestImageDecodeAndReencode(t *testing.T) {
-	code := compileWebApp(t, `(web_app (let (png "iVBORw0KGgoBAg==") (do
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (let (png "iVBORw0KGgoBAg==") (do
   (let (info (image_decode png "image/png"))
     (print (str_join (list (to_string (map_get info "width")) (to_string (map_get info "height"))) "x")))
   (let (out (image_encode png "image/png" 1600 "image/webp" 0.82))
@@ -142,10 +146,11 @@ func TestImageDecodeAndReencode(t *testing.T) {
       (print (str_join (list (to_string (map_get out "width")) (to_string (map_get out "height")) (map_get out "type")) " "))))
   (try_let (r (image_decode "aGVsbG8=" "image/png")) (catch err (print (to_string err))) (print "decoded"))
   (try_let (r (image_encode png "image/png" 0 "image/webp" 0.8)) (catch err (print (to_string err))) (print "encoded")))))`)
-	got := hostHarness(t, code, false)
-	for _, want := range []string{`"4000x3000"`, `"1600 1200 image/webp"`, "IMAGE_INVALID", "IMAGE_INVALID_OPTIONS"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("want %s in %s", want, got)
+		got := hostHarness(t, code, false)
+		for _, want := range []string{`"4000x3000"`, `"1600 1200 image/webp"`, "IMAGE_INVALID", "IMAGE_INVALID_OPTIONS"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("want %s in %s", want, got)
+			}
 		}
-	}
+	})
 }

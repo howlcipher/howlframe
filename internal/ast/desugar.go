@@ -273,6 +273,7 @@ var jsHostSugarParents = map[string]bool{
 	"download_file":      true,
 	"element_box":        true,
 	"event_attr":         true,
+	"fetch":              true,
 	"event_key":          true,
 	"event_prevent":      true,
 	"file_read_input":    true,

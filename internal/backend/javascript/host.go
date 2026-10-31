@@ -17,7 +17,7 @@ const urlEncodeJS = `if(typeof v !== "string"){throw new Error("TYPE_ERROR: url_
 // its place.
 func HostRuntime(ops []string) (map[string]string, string, error) {
 	helpers := map[string]string{}
-	var dom, richtext, io, motion, archive, urlEncode bool
+	var dom, richtext, io, motion, archive, urlEncode, fetch bool
 	for _, op := range ops {
 		var name string
 		switch {
@@ -40,6 +40,8 @@ func HostRuntime(ops []string) (map[string]string, string, error) {
 		case op == "on_event":
 			// Called with the element, the event type and a handler.
 			name, dom = "howlFrameOnEvent", true
+		case op == "fetch":
+			name, fetch = "howlFrameFetch", true
 		case op == "url_encode":
 			name, urlEncode = "howlFrameUrlEncode", true
 		default:
@@ -62,6 +64,9 @@ func HostRuntime(ops []string) (map[string]string, string, error) {
 	}
 	if io {
 		b.WriteString(browserIOJSHelper())
+	}
+	if fetch {
+		b.WriteString(fetchJSHelper())
 	}
 	if urlEncode {
 		b.WriteString("function howlFrameUrlEncode(v) {" + urlEncodeJS + "}\n")

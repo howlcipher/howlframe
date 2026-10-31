@@ -5,7 +5,18 @@ import (
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/capability"
+	"github.com/howlcipher/howlframe/internal/checker"
+	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/parser"
 )
+
+func compileWebApp(t *testing.T, src string) string {
+	t.Helper()
+	root := parser.NewParser(lexer.NewLexer(src), "app.howl").ParseExpression()
+	checker.Check(root)
+	code, _ := GenerateJSCode(root)
+	return code
+}
 
 // Every browser host operation in capability.HostOperations compiles to
 // code, and is awaited exactly when the table calls it asynchronous.

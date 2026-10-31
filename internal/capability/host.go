@@ -16,6 +16,7 @@ const (
 	HostValue        HostKind = "value"        // any HowlFrame value
 	HostList         HostKind = "list"         // a list of values
 	HostDict         HostKind = "dict"         // a dict
+	HostBytes        HostKind = "bytes"        // bytes, as the VM's []byte: a list of byte values
 	HostElement      HostKind = "element"      // a page element
 	HostElementOrNil HostKind = "element?"     // a page element, or nil when none matches
 	HostElements     HostKind = "elements"     // a list of page elements
@@ -58,15 +59,32 @@ type HostOperation struct {
 	Result     HostKind
 	Capability Capability
 	Async      bool
+	// Optional is how many of the last parameters may be left out.
+	Optional int
 }
 
-// Usage is the operation's usage text, as checker errors show it.
+// Usage is the operation's usage text, as checker errors show it: optional
+// parameters in brackets, each inside the one before.
 func (op HostOperation) Usage() string {
 	s := "(" + op.Name
-	for _, p := range op.Params {
-		s += " " + p.Name
+	first := len(op.Params) - op.Optional
+	for i, p := range op.Params {
+		if i >= first {
+			s += " ["
+		} else {
+			s += " "
+		}
+		s += p.Name
+	}
+	for i := 0; i < op.Optional; i++ {
+		s += "]"
 	}
 	return s + ")"
+}
+
+// Arity reports whether a call with n arguments has a valid count.
+func (op HostOperation) Arity(n int) bool {
+	return n <= len(op.Params) && n >= len(op.Params)-op.Optional
 }
 
 // LambdaLast reports whether the operation's last argument is a lambda.
@@ -106,6 +124,9 @@ var hostOperations = []HostOperation{
 	{Name: "event_attr", Params: []HostParam{hEvent, hText("name")}, Result: HostText},
 	{Name: "event_key", Params: []HostParam{hEvent}, Result: HostText},
 	{Name: "event_prevent", Params: []HostParam{hEvent}},
+	// fetch reaches the network: a host-scoped network:fetch= grant names
+	// each host it may reach.
+	{Name: "fetch", Params: []HostParam{hText("url"), hText("method"), hp("body", HostValue), hp("headers", HostDict)}, Result: HostBytes, Capability: Network, Async: true, Optional: 2},
 	{Name: "file_read_input", Params: []HostParam{hEl, hNum("max_bytes")}, Result: HostList, Async: true},
 	{Name: "image_decode", Params: []HostParam{hText("base64"), hText("mime")}, Result: HostDict, Async: true},
 	{Name: "image_encode", Params: []HostParam{hText("base64"), hText("mime"), hNum("max_side"), hText("out_mime"), hNum("quality")}, Result: HostDict, Async: true},

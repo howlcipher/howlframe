@@ -81,7 +81,13 @@ func (r *rt) addBrowserImports(ops []string) {
 	r.iHost = map[string]int{}
 	for _, name := range ops {
 		op, _ := capability.LookupHostOperation(name)
-		r.iHost[name] = m.AddImport(hostImportModule(op), name, r.FuncType(len(op.Params)))
+		// An operation with optional parameters also receives how many
+		// arguments the call gave.
+		arity := len(op.Params)
+		if op.Optional > 0 {
+			arity++
+		}
+		r.iHost[name] = m.AddImport(hostImportModule(op), name, r.FuncType(arity))
 	}
 	m.MemoryPages, m.MemoryExport = 1, "memory"
 }
@@ -141,6 +147,17 @@ func (r *rt) emitBrowser() {
 		c.End().End()
 		c.LocalGet(1).RefAsNonNull().StructNew(r.tStr)
 	})
+	// __hf_bytes_in(n): the n bytes at 0 as a list of byte values.
+	// locals: 0 n, 1 items, 2 i
+	export("__hf_bytes_in", []ValType{I32}, eq, []ValType{RefNull(r.tItems), I32}, func(c *Code) {
+		c.LocalGet(0).ArrayNewDefault(r.tItems).LocalSet(1)
+		c.Block(NoResult).Loop(NoResult)
+		c.LocalGet(2).LocalGet(0).I32GeU().BrIf(1)
+		c.LocalGet(1).LocalGet(2).LocalGet(2).I32Load8U(0).I64ExtendI32U().Call(r.fBoxInt).ArraySet(r.tItems)
+		c.LocalGet(2).I32Const(1).I32Add().LocalSet(2).Br(0)
+		c.End().End()
+		c.LocalGet(1).RefAsNonNull().Call(r.fListNew)
+	})
 	export("__hf_list_size", eq, []ValType{I32}, nil, func(c *Code) {
 		c.LocalGet(0).RefCast(r.tList).StructGet(r.tList, 0)
 	})
@@ -197,7 +214,7 @@ func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
 		return unsupported(n, h+" (a browser host operation: it runs in a web_app built for the browser)")
 	}
 	op, _ := capability.LookupHostOperation(h)
-	if len(args) != len(op.Params) {
+	if !op.Arity(len(args)) {
 		return unsupported(n, h)
 	}
 	push := func() error {
@@ -211,6 +228,12 @@ func (f *fn) hostCall(n *ast.Node, h string, args []*ast.Node) error {
 			if err := f.expr(a); err != nil {
 				return err
 			}
+		}
+		if op.Optional > 0 {
+			for range op.Params[len(args):] {
+				f.code.RefNull(HeapNone)
+			}
+			f.code.I64Const(int64(len(args))).Call(f.c.rt.fBoxInt)
 		}
 		return nil
 	}
@@ -296,6 +319,9 @@ func BrowserLoader(ops []string) (string, error) {
 		if op.Async {
 			wrapper = "asyncOp"
 		}
+		if op.Optional > 0 {
+			lambdas = append(lambdas, "\"count\"")
+		}
 		modules[mod] = append(modules[mod], fmt.Sprintf("    %s: %s(%s, %q, [%s]),", name, wrapper, helpers[name], string(op.Result), strings.Join(lambdas, ", ")))
 	}
 	mods := make([]string, 0, len(modules))
@@ -377,6 +403,14 @@ function resultOf(kind, x) {
     case "": return null;
     case "element?": case "event": case "subscription": return x === null || x === undefined ? null : ex.__hf_host(x);
     case "elements": { let l = ex.__hf_list_new(); for (const e of x) l = ex.__hf_list_push(l, ex.__hf_host(e)); return l; }
+    case "bytes": {
+      // The VM's bytes: a list of byte values. Text is its UTF-8.
+      const bytes = typeof x === "string" ? encoder.encode(x) : new Uint8Array(x);
+      const need = bytes.length - ex.memory.buffer.byteLength;
+      if (need > 0) ex.memory.grow(Math.ceil(need / 65536));
+      new Uint8Array(ex.memory.buffer, 0, bytes.length).set(bytes);
+      return ex.__hf_bytes_in(bytes.length);
+    }
   }
   return toWasm(x);
 }
@@ -442,12 +476,23 @@ function handler(closure, kinds) {
     return run(closure, args);
   };
 }
+// argsOf converts an import's arguments: a lambda to a handler, and for an
+// operation with optional parameters the last argument, how many the call
+// gave, to the length of the argument list.
+function argsOf(raw, lambdas) {
+  let args = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (lambdas[i] === "count") { args = args.slice(0, toJS(raw[i])); break; }
+    args.push(lambdas[i] ? handler(raw[i], lambdas[i]) : toJS(raw[i]));
+  }
+  return args;
+}
 // asyncOp is the import of an asynchronous host operation: it starts the
 // operation (a failure to start is the module's pending error) and leaves
 // it for task to wait on while the fiber suspends.
 function asyncOp(fn, kind, lambdas) {
   return function () {
-    const args = Array.prototype.map.call(arguments, toJS);
+    const args = argsOf(arguments, lambdas);
     let p;
     try { p = fn.apply(null, args); } catch (e) { fail(e); return null; }
     pending = { promise: Promise.resolve(p), kind };
@@ -459,13 +504,19 @@ function asyncOp(fn, kind, lambdas) {
 // its result or error back as HowlFrame.
 function hostOp(fn, kind, lambdas) {
   return function () {
-    const args = [];
-    for (let i = 0; i < arguments.length; i++) args.push(lambdas[i] ? handler(arguments[i], lambdas[i]) : toJS(arguments[i]));
+    const args = argsOf(arguments, lambdas);
     try { return resultOf(kind, fn.apply(null, args)); } catch (e) { fail(e); return null; }
   };
 }
+// howlFrameGranted reports whether the runner granted a capability, read as
+// the JavaScript backend reads grants: HOWLFRAME_ALLOW_CAPS from the
+// environment in Node, otherwise the page's global. A narrower grant
+// (network:fetch=host) grants the capability; the operation checks the rest.
 function howlFrameGranted(name) {
-  const raw = typeof HOWLFRAME_ALLOW_CAPS === "string" ? HOWLFRAME_ALLOW_CAPS : "";
+  let raw = "";
+  if (typeof process !== "undefined" && process.env) raw = process.env.HOWLFRAME_ALLOW_CAPS || "";
+  else if (typeof globalThis !== "undefined") raw = globalThis.HOWLFRAME_ALLOW_CAPS;
+  if (typeof raw !== "string") return false;
   return raw.split(",").some((g) => g.trim() === name || g.trim().startsWith(name + ":"));
 }
 const imports = {
@@ -482,11 +533,17 @@ const imports = {
 
 // browserLoaderRun instantiates the module and runs the program.
 const browserLoaderRun = `async function howlFrameBytes(source) {
-  if (typeof URL !== "undefined" && source instanceof URL) return (await fetch(source)).arrayBuffer();
+  if (typeof URL === "function" && source instanceof URL) return (await fetch(source)).arrayBuffer();
   return source;
 }
 return (async () => {
-  const { instance } = await WebAssembly.instantiate(await howlFrameBytes(howlFrameSource), imports);
+  const module = await WebAssembly.compile(await howlFrameBytes(howlFrameSource));
+  // A program that needs a capability the runner did not grant does not
+  // link; it fails as a denied operation does on the JavaScript backend.
+  for (const i of WebAssembly.Module.imports(module)) {
+    if (i.module.startsWith("hf_cap_") && !imports[i.module]) throw new Error("CAPABILITY_DENIED: capability denied: " + i.module.slice(7));
+  }
+  const instance = await WebAssembly.instantiate(module, imports);
   ex = instance.exports;
   await task(() => { ex.main(); });
 })();
