@@ -276,7 +276,7 @@ func checkJSStatement(node *ast.Node, depth int) {
 		// A browser host operation (capability.HostOperations): its arity
 		// is its parameter count, and a lambda parameter must be a lambda
 		// form, whose body is checked.
-		if len(node.Children) != len(op.Params)+1 {
+		if !op.Arity(len(node.Children) - 1) {
 			ast.ReportError(fmt.Sprintf("%s expects %s", head, op.Usage()), node.Line, node.Column)
 		}
 		args := node.Children[1:]
@@ -310,15 +310,7 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError("parse_json expects (parse_json type body)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[2], depth+1)
-	} else if head == "fetch" {
-		if len(node.Children) < 3 || len(node.Children) > 5 {
-			ast.ReportError("fetch expects (fetch url method [body [headers]])", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-		for _, child := range node.Children[3:] {
-			checkJSStatement(child, depth+1)
-		}
+
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
 			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime; expects (spawn_agent name task)", node.Line, node.Column)

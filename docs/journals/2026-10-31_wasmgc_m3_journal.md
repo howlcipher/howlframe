@@ -24,7 +24,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
 | 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | #291 | Merged (`bd868833`) |
-| 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | | Open |
+| 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | #292 | Merged (`87fba9fb`) |
+| 5–6. `fetch`, browser tests on both backends, site gate (exit gate) | `feat/wasmgc-browser-gate` | | Open |
 
 ## Entries
 
@@ -126,3 +127,29 @@ Plan of slices (each its own branch and PR):
 - With handlers, frames and `time_now`, HowlScene HF's editor builds to WebAssembly (272 KB, 40 KB loader; 76 KB
   gzipped) and its site runtime too (46 KB and 17 KB; 18 KB gzipped). Both validate.
 - The JavaScript backend's `to_int` of nil read "cannot convert object to int": bugs.md #71, its own PR.
+
+### 2026-10-31 15:30: `fetch` and the exit gate (`feat/wasmgc-browser-gate`)
+
+- `fetch` joined the table (capability `network`, `Optional: 2`, result `bytes`). The checker's last inline host
+  branch went with it. On WebAssembly it resolves to a byte list, as the VM's `[]byte`; an ungranted program does not
+  link and fails with the JavaScript backend's `CAPABILITY_DENIED` text before it runs.
+- The 51 browser tests (plus #70's two) moved to `package javascript_test` and run on both backends. Mechanical port:
+  each test is wrapped in `forBackends`, `compileWebApp` became `build(t, b, ...)`, each harness runs
+  `program.inContext("browser")` (the loader gets `howlFrameWasm`, `TextEncoder` and `TextDecoder`), and expected
+  caught errors read `CODE: message` (normalized for both). Result: 53 of 53 pass on each backend.
+- The port found a loader bug: `source instanceof URL` throws when a page defines `URL` as a plain object (the
+  download harness does); now `typeof URL === "function"`.
+- HowlScene HF's browser tests are Playwright specs (M4/M5). What runs under a fake DOM now is its site runtime:
+  `TestHowlSceneSiteGate`. Two harness bugs found while writing it, both in the harness: a snapshot taken while the
+  JavaScript backend's handler (awaiting every call) was still running, and snapshots sharing live attribute objects.
+
+### 2026-10-31 16:30: merges and the exit gate
+
+- #290 (browser host), #291 (handlers) and #292 (asynchronous operations) merged in order, each after the regression
+  gate on its final tree and all four CI checks. #291's merge request returned a 502 and GitHub recorded the pull
+  request as open for a while although main held its merge commit (`bd868833`); it settled as merged later. Check
+  `gh api repos/howlcipher/howlframe/pulls/N` before assuming either way.
+- Merging #71 into the exit-gate branch broke its test (the internal `runWebAppOutput` had moved); the test now runs on
+  both backends.
+- Final gate on the exit-gate branch: 4517 tests on Go 1.26, 4516 on Go 1.27.2, 7 HowlScene HF gates (the site
+  runtime gate is the seventh).
