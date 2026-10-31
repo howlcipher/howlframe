@@ -538,10 +538,17 @@ The order of M1 and M3 work follows what the application needs.
   backend's result depends on the host; the `deflate junk` fixture pins the
   standard's result and compares with the JavaScript backend only where its
   Node agrees. Paths are compared for duplicates in lower
-  case: JavaScript's `toLowerCase` uses full case mapping (U+0130 to
-  `i` + U+0307, a final sigma to ς) where `to_lower` is Go's simple
-  mapping, so two names that differ only there are duplicates on one
-  backend and not the other; not matched yet. The standard library gained
+  case: JavaScript's `toLowerCase` uses full case mapping at the engine's
+  Unicode version (U+0130 to `i` + U+0307, a final sigma to ς by its
+  context, and Unicode 17.0 in Node 22.22) where `to_lower` is simple
+  mapping at Unicode 15.0.0 (bugs.md #69). Measured against Node 22.22,
+  lowering differs on U+0130, a final sigma, and the 55 code points Unicode
+  16 and 17 gave a lower case, so two names that differ only there are
+  duplicates on one backend and not the other. Not matched: the reference
+  varies by browser engine, and matching one engine would need a second,
+  newer table and the Final_Sigma rule's Cased and Case_Ignorable
+  properties. M3 decides whether host text operations follow the engine
+  or HowlFrame's table. The standard library gained
   `__hf_xor` (CRC-32 and stored block lengths); a std module that maps
   case or makes floats now loads the unicode or float module itself
   (before, only the program's own use did, and a non-ASCII entry name

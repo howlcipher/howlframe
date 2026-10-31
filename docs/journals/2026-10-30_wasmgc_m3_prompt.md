@@ -34,7 +34,7 @@ not a reason to stop.
   latest-go on stable.
 
 ## State at the start (main after the M2 PRs, 2026-10-30)
-M1 and M2 are done. M2 landed as #273–#280:
+M1 and M2 are done. M2 landed as #273–#283 (#282 and #283 fixed what M2 found):
 - `howlframe build prog.howl --target wasmgc [--host node|wasi] [--tests] -o DIR`.
   `--tests` compiles a file's `test` blocks, whatever its root (`cli_app` or `web_app`),
   into `app.test.wasm` with a runner that reports like node:test's spec reporter
@@ -48,7 +48,11 @@ M1 and M2 are done. M2 landed as #273–#280:
   (`std/zip.howl`, synchronous here, asynchronous on the JavaScript backend),
   `base64_text`, `sniff_media_type`.
 - Bugs fixed on the way: bugs.md #66 (JS arithmetic on run-time types), #67 (JS
-  `try_let` caught `exit` in tests), #68 (Go backend test blocks).
+  `try_let` caught `exit` in tests), #68 (Go backend test blocks), #69 (the VM's
+  case mapping depended on the Go toolchain's Unicode version: `internal/textcase`
+  now owns a Unicode 15.0.0 table, which `std/unicode.howl` is generated from).
+- `str_join` (WebAssembly runtime) and `str_repeat` (shared sugar) are linear; they
+  were quadratic (`TestLongTextIsLinear`).
 - Open PRs #206 (M3 spec freeze — an unrelated "Milestone 3") and #178 (live-v1
   harness) are someone else's drafts awaiting human review. Do not merge or touch them.
 
@@ -115,15 +119,22 @@ M1 and M2 are done. M2 landed as #273–#280:
   runners.
 
 ## Findings and traps carried over
-- `str_repeat` builds by repeated concatenation: 550 KB takes 36 s on WebAssembly.
-  The site runtime's 250 KiB budget and speed make string building matter in M4;
-  consider a string builder.
-- `std/unicode.howl` was generated from Go 1.26's Unicode tables; Go 1.27 has Unicode
-  17.0.0 and `TestUnicodeTableIsCurrent` skips there. Regenerate when the minimum Go
-  moves.
-- Duplicate ZIP paths are compared in lower case, and JavaScript's `toLowerCase`
-  (full mapping) differs from Go's simple mapping for U+0130 and final sigma: not
-  matched yet.
+- Text built by appending to the result so far is quadratic on WebAssembly (each
+  concatenation copies). M2 fixed `str_join` and `str_repeat`; watch for the pattern
+  in new std code and in M4's site runtime (250 KiB budget), and add a linear-time
+  test like `TestLongTextIsLinear` for anything that builds long text.
+- The VM's `append` copies the list and its 64 MB memory budget counts every
+  allocation, so a list built one item at a time hits the budget after a few thousand
+  items. A fixture that does so fails on the VM, not on WebAssembly.
+- Case mapping is pinned to Unicode 15.0.0 (`internal/textcase`, bugs.md #69). Do not
+  call `strings.ToLower`/`ToUpper` (or `unicode.ToLower`) on program text in the VM;
+  moving Unicode versions means regenerating the table on that version's toolchain.
+- The JavaScript backend's browser operations follow the engine's Unicode: ZIP
+  duplicate paths use `toLowerCase` (full mapping, Final_Sigma, the engine's Unicode
+  version: 17.0 in Node 22.22), the WebAssembly backend Unicode 15 simple mapping. They
+  differ on U+0130, a final sigma, and 55 code points Unicode 16 and 17 cased, and the
+  reference itself varies by browser. Decide in M3, with the other browser text
+  operations, whether host text operations follow the engine or HowlFrame's table.
 - Escape sequences: a literal backslash-u plus four hex digits written through a tool
   can arrive decoded. Build such text from parts, then grep for U+FFFD.
 - gofmt realigns map literals; match by key or line in edit scripts.

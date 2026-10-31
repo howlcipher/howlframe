@@ -26,7 +26,7 @@ last. Times are America/Detroit.
 | 1–3. Probe, roots, test blocks and runners | `feat/wasmgc-test-blocks` | #280 | Merged (`e46839ff`) |
 | Regression gate: wasm tools in CI, `scripts/wasmgc_gate.sh` | `ci/wasmgc-regression-gate` | #279 | Merged (`993d008e`) |
 | Follow-up: bugs.md #69, VM case mapping pinned to Unicode 15 | `fix/vm-unicode-case` | #282 | Merged (`2301b434`) |
-| Follow-up: linear `str_repeat` and `str_join` | `perf/wasmgc-str-repeat` | #283 | Open |
+| Follow-up: linear `str_repeat` and `str_join` | `perf/wasmgc-str-repeat` | #283 | Merged (`345963d9`) |
 | 4. Exit gate on HowlScene HF core tests | `feat/wasmgc-test-blocks` | #280 | Merged; 19 of 19 |
 
 ## Entries
@@ -149,3 +149,16 @@ and the missing `--tests` interop entry (#280). Three remain, one branch each:
   more than it did (`"x"` to 7,654 copies, was 5,881; a 10-character piece to 7,654, was 2,111).
 - `TestLongTextIsLinear` (550 KB repeat, 200 KB case mapping, a 100,000-part split and join) takes under a second
   per case and 37 to 61 s without the fix. New `str_repeat` differential fixtures cover the edge cases.
+
+### 2026-10-30 21:30: follow-ups done
+
+- #282 (bugs.md #69) merged as `2301b434` and #283 (`str_repeat`, `str_join`) as `345963d9`, each after the
+  regression gate on its final tree and all four CI checks. On #282 the full list of skipped tests on Go 1.26 was
+  compared with main's: identical (34 each).
+- ZIP duplicate paths: not changed. Measured against Node 22.22 (Unicode 17.0, ICU 78.2): `toLowerCase` and
+  Unicode 15 simple lowering differ on U+0130, a final sigma (context-dependent) and 55 code points Unicode 16 and 17
+  cased. Matching exactly is not possible (the reference is each browser's engine), and a partial match (U+0130
+  alone) would still differ, so it is documented precisely in the plan and left to M3's decision on host text
+  operations.
+- The M3 prompt is updated: state after #283, and the findings carried over (quadratic text building, the VM's
+  `append` budget, the pinned case table, host text operations).
