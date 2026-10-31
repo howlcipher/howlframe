@@ -23,7 +23,7 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
 | bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
-| 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | | Open |
+| 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | #291 | Merged (`bd868833`) |
 | 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | | Open |
 
 ## Entries
