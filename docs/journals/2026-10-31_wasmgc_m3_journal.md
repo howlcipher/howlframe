@@ -20,7 +20,8 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | --- | --- | --- | --- |
 | 0. Probe: every browser host operation | `docs/wasmgc-m3-probe` | #286 | Merged (`13362363`) |
 | 1. Typed host operation table | `feat/host-operation-registry` | #287 | Merged (`b2093457`) |
-| bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | | Open |
+| bugs.md #70: JS DOM operations' `TypeError` on a missing element | `fix/js-raw-dom-type-error` | #288 | Merged (`1ea7c708`) |
+| bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | #289 | Merged (`04505236`) |
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | | Open |
 | 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | | Open |
 
@@ -66,6 +67,19 @@ Plan of slices (each its own branch and PR):
   its own set, which a checker test holds equal to the table.
 - Checked not vacuous: dropping `storage_keys`'s asynchronous flag fails `TestHostOperationsMatchRegistry`.
 
+### 2026-10-31 11:00: bugs.md #70, raw DOM operations
+
+- Probed with `(try_let (v (OP (dom_query "#none") ...)) (catch err (print (to_string err))) ...)` on the JavaScript
+  backend: `set_text`, `set_html`, `set_attr`, `toggle_class`, `dom_value` and `on_event` printed V8's
+  `TypeError: Cannot set/read properties of null (...)`, and `(dom_query 5)` ran. They now go through DOM runtime
+  helpers that check the element (and the selector), so both backends report `TYPE_ERROR: op expected an element`.
+  `TestRawDomOperationsRejectMissingElements` failed for all seven before the fix.
+### 2026-10-31 13:00: bugs.md #71, conversion error type names
+
+- Comparing the browser host's asynchronous fixtures with the JavaScript backend: a storage read that comes back nil,
+  then `to_int`, fails with `cannot convert object to int` there and `cannot convert <nil> to int` on the VM and on
+  WebAssembly. `howlFrameToInt` and `howlFrameToFloat` named `typeof v`; they now use `howlFrameGoType` (the operand
+  errors' helper, bugs.md #66). `TestConversionErrorsNameVMTypes` failed before the fix.
 ### 2026-10-31 12:00: browser host (`feat/wasmgc-browser-host`)
 
 - `build --target wasmgc` of a `web_app` writes `app.wasm` and `app.js`. Imports come from the table; the loader runs
