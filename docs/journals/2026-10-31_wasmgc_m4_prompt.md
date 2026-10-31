@@ -40,8 +40,8 @@ published page's initial download stays within 250 KiB.
   latest-go on stable.
 
 ## State at the start (main after the M3 PRs, 2026-10-31)
-M1, M2 and M3 are done. M3 landed as #286–#288 and the PRs after them (see the M3
-journal's "Slices" for numbers and merge commits):
+M1, M2 and M3 are done. M3 landed as #286–#293 (main at `9266ee56`; the M3 journal's
+"Slices" gives each PR's merge commit):
 - `build --target wasmgc` of a `web_app` (host `browser`, its default) writes
   `app.wasm` and a generated classic-script loader, `app.js`. Each browser host
   operation is a typed import from `capability.HostOperations` (53 operations, in
