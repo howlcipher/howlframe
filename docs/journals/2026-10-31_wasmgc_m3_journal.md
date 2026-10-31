@@ -25,7 +25,6 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
 | 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | #291 | Merged (`bd868833`) |
 | 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | | Open |
-| bugs.md #71: JS conversion errors name `typeof` | `fix/js-conversion-type-names` | | Open |
 | 5–6. `fetch`, browser tests on both backends, site gate (exit gate) | `feat/wasmgc-browser-gate` | | Open |
 
 ## Entries
