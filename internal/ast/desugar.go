@@ -1,5 +1,7 @@
 package ast
 
+import "sort"
+
 // Desugar applies density sugar that expands into existing constructs:
 //   - root (do ...) becomes (cli_app ...) so programs skip the two-token root
 //   - expression-bodied defun: last value form becomes (return <form>)
@@ -252,10 +254,11 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 	}
 }
 
-// jsHostSugarParents are the browser host operations of the JavaScript
-// target. Every argument is a value (a lambda argument is its own form), so
-// sugar nested in them expands. checker's TestEveryJSHostOperationExpandsNestedSugar
-// keeps this in step with the checker's host operation tables.
+// jsHostSugarParents are the browser host operations
+// (capability.HostOperations). Every argument is a value (a lambda argument
+// is its own form), so sugar nested in them expands. checker's
+// TestEveryJSHostOperationExpandsNestedSugar keeps this set equal to the
+// table, which this package cannot import.
 var jsHostSugarParents = map[string]bool{
 	"base64_text":        true,
 	"dialog_close":       true,
@@ -308,6 +311,17 @@ var jsHostSugarParents = map[string]bool{
 	"viewport_height":    true,
 	"zip_build":          true,
 	"zip_read":           true,
+}
+
+// BrowserHostSugarParents returns jsHostSugarParents' names, for the test
+// that holds them equal to capability.HostOperations.
+func BrowserHostSugarParents() []string {
+	names := make([]string, 0, len(jsHostSugarParents))
+	for name := range jsHostSugarParents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func isSugarExprContext(parentHead string, childIndex int) bool {

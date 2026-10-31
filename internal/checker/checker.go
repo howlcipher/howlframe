@@ -2,9 +2,10 @@ package checker
 
 import (
 	"fmt"
+
 	"github.com/howlcipher/howlframe/internal/ast"
+	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/ir"
-	"strings"
 )
 
 func Check(node *ast.Node) *Analysis {
@@ -200,60 +201,6 @@ func checkWebAppHandler(handlerNode *ast.Node) {
 	checkJSStatement(handlerNode, 0)
 }
 
-// jsHostOperations are browser host operations of the JavaScript target,
-// keyed by head, with their usage; the argument count is the number of
-// spaces in the usage. The backend emits each as a runtime helper.
-var jsHostOperations = map[string]string{
-	"event_attr":    "(event_attr event name)",
-	"event_key":     "(event_key event)",
-	"event_prevent": "(event_prevent event)",
-	"set_value":     "(set_value el value)",
-	"dom_checked":   "(dom_checked el)",
-	"set_checked":   "(set_checked el bool)",
-	"dom_focus":     "(dom_focus el)",
-	"remove_attr":   "(remove_attr el name)",
-	"dom_attr":      "(dom_attr el name)",
-	"dialog_open":   "(dialog_open el)",
-	"dialog_close":  "(dialog_close el)",
-
-	"storage_get":      "(storage_get namespace key)",
-	"storage_put":      "(storage_put namespace key value)",
-	"storage_delete":   "(storage_delete namespace key)",
-	"storage_keys":     "(storage_keys namespace)",
-	"file_read_input":  "(file_read_input el max_bytes)",
-	"sniff_media_type": "(sniff_media_type base64)",
-	"image_decode":     "(image_decode base64 mime)",
-	"image_encode":     "(image_encode base64 mime max_side out_mime quality)",
-	"zip_read":         "(zip_read base64 max_entries max_bytes)",
-
-	"dom_query_all":      "(dom_query_all selector)",
-	"set_class":          "(set_class el name on)",
-	"set_style_var":      "(set_style_var el name value)",
-	"scroll_y":           "(scroll_y)",
-	"viewport_height":    "(viewport_height)",
-	"element_box":        "(element_box el)",
-	"scroll_into_view":   "(scroll_into_view el)",
-	"media_matches":      "(media_matches query)",
-	"pref_get":           "(pref_get key)",
-	"pref_put":           "(pref_put key value)",
-	"off":                "(off subscription)",
-	"subscription_count": "(subscription_count)",
-	"base64_text":        "(base64_text base64)",
-
-	"richtext_attach":  "(richtext_attach el label)",
-	"richtext_set":     "(richtext_set el blocks)",
-	"richtext_get":     "(richtext_get el)",
-	"richtext_command": "(richtext_command el command value)",
-}
-
-// jsSubscriptionOperations take a lambda as their last argument and return a
-// subscription handle for off; usage follows jsHostOperations.
-var jsSubscriptionOperations = map[string]string{
-	"on_media":   "(on_media query lambda)",
-	"on_visible": "(on_visible elements lambda)",
-	"on_scroll":  "(on_scroll lambda)",
-}
-
 func checkJSStatement(node *ast.Node, depth int) {
 	if depth > 1000 {
 		ast.ReportError("AST too deep", node.Line, node.Column)
@@ -325,81 +272,30 @@ func checkJSStatement(node *ast.Node, depth int) {
 		return
 	}
 
-	if usage, ok := jsSubscriptionOperations[head]; ok {
-		if len(node.Children) != strings.Count(usage, " ")+1 {
-			ast.ReportError(fmt.Sprintf("%s expects %s", head, usage), node.Line, node.Column)
+	if op, ok := capability.LookupHostOperation(head); ok {
+		// A browser host operation (capability.HostOperations): its arity
+		// is its parameter count, and a lambda parameter must be a lambda
+		// form, whose body is checked.
+		if len(node.Children) != len(op.Params)+1 {
+			ast.ReportError(fmt.Sprintf("%s expects %s", head, op.Usage()), node.Line, node.Column)
 		}
-		for _, child := range node.Children[1 : len(node.Children)-1] {
+		args := node.Children[1:]
+		if op.LambdaLast() {
+			args = args[:len(args)-1]
+		}
+		for _, child := range args {
 			checkJSStatement(child, depth+1)
 		}
-		lambda := node.Children[len(node.Children)-1]
-		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" || lambda.Children[1].Type != "List" {
-			ast.ReportError(head+" expects a lambda as its last argument", lambda.Line, lambda.Column)
-		}
-		checkJSStatement(lambda.Children[2], depth+1)
-		return
-	}
-	if usage, ok := jsHostOperations[head]; ok {
-		if len(node.Children) != strings.Count(usage, " ")+1 {
-			ast.ReportError(fmt.Sprintf("%s expects %s", head, usage), node.Line, node.Column)
-		}
-		for _, child := range node.Children[1:] {
-			checkJSStatement(child, depth+1)
+		if op.LambdaLast() {
+			lambda := node.Children[len(node.Children)-1]
+			if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" || lambda.Children[1].Type != "List" {
+				ast.ReportError(head+" expects a lambda as its last argument", lambda.Line, lambda.Column)
+			}
+			checkJSStatement(lambda.Children[2], depth+1)
 		}
 		return
 	}
-	if head == "dom_query" {
-		if len(node.Children) != 2 {
-			ast.ReportError("dom_query expects (dom_query selector)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "on_event" {
-		if len(node.Children) != 4 {
-			ast.ReportError("on_event expects (on_event el event lambda)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-		lambda := node.Children[3]
-		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
-			ast.ReportError("on_event expects a lambda", lambda.Line, lambda.Column)
-		}
-		checkJSStatement(lambda.Children[2], depth+1)
-	} else if head == "set_html" {
-		if len(node.Children) != 3 {
-			ast.ReportError("set_html expects (set_html el val)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-	} else if head == "toggle_class" {
-		if len(node.Children) != 3 {
-			ast.ReportError("toggle_class expects (toggle_class el class)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-	} else if head == "set_text" {
-		if len(node.Children) != 3 {
-			ast.ReportError("set_text expects (set_text el val)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-	} else if head == "set_attr" {
-		if len(node.Children) != 4 {
-			ast.ReportError("set_attr expects (set_attr el name val)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-		checkJSStatement(node.Children[2], depth+1)
-		checkJSStatement(node.Children[3], depth+1)
-	} else if head == "url_encode" {
-		if len(node.Children) != 2 {
-			ast.ReportError("url_encode expects (url_encode string)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "dom_value" {
-		if len(node.Children) != 2 {
-			ast.ReportError("dom_value expects (dom_value el)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "to_lower" || head == "to_upper" || head == "str_trim" {
+	if head == "to_lower" || head == "to_upper" || head == "str_trim" {
 		if len(node.Children) != 2 {
 			ast.ReportError(head+" expects ("+head+" string)", node.Line, node.Column)
 		}
@@ -409,23 +305,6 @@ func checkJSStatement(node *ast.Node, depth int) {
 			ast.ReportError(head+" expects ("+head+" value)", node.Line, node.Column)
 		}
 		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "dom_text" {
-		if len(node.Children) != 2 {
-			ast.ReportError("dom_text expects (dom_text el)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "zip_build" {
-		if len(node.Children) != 2 {
-			ast.ReportError("zip_build expects (zip_build entries)", node.Line, node.Column)
-		}
-		checkJSStatement(node.Children[1], depth+1)
-	} else if head == "download_file" {
-		if len(node.Children) != 4 {
-			ast.ReportError("download_file expects (download_file name mime base64)", node.Line, node.Column)
-		}
-		for _, child := range node.Children[1:] {
-			checkJSStatement(child, depth+1)
-		}
 	} else if head == "parse_json" {
 		if len(node.Children) != 3 {
 			ast.ReportError("parse_json expects (parse_json type body)", node.Line, node.Column)

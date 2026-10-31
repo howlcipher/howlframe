@@ -373,9 +373,19 @@ fails on its first `test`, as the VM's bytecode target refuses them.
 
 - [x] Probe (2026-10-31): every browser host operation of the JavaScript
       backend and HowlScene HF's use of each; see "Browser host operations".
-- [ ] Typed host operation table (name, parameter and result kinds,
+- [x] Typed host operation table (name, parameter and result kinds,
       capability, synchronous or asynchronous) shared by the checker and the
-      backends; the browser loader is generated from it.
+      backends: `capability.HostOperations` (`internal/capability/host.go`).
+      The checker takes arity, usage and lambda arguments from it (its two
+      maps and eleven inline branches are gone); the desugarer's set of
+      browser operations is held equal to it
+      (`TestEveryJSHostOperationExpandsNestedSugar`), the JavaScript
+      backend's awaits to its asynchronous flags
+      (`TestHostOperationsMatchRegistry`), and every operation's arity is
+      checked from it (`TestEveryBrowserHostOperationArity`). It lives in
+      `internal/capability`, which every consumer may import (`ast` may not
+      import it without a cycle through `construct`, hence the held-equal
+      set). The browser loader is generated from it with the browser host.
 - [ ] Host object handles (`$Host` with `externref`).
 - [ ] Closures and event dispatch: `lambda`, `on_event`, `spawn`, and the
       subscription operations (`on_media`, `on_visible`, `on_scroll`, `off`).
