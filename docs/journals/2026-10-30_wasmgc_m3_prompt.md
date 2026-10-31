@@ -125,7 +125,8 @@ M1 and M2 are done. M2 landed as #273–#283 (#282 and #283 fixed what M2 found)
   test like `TestLongTextIsLinear` for anything that builds long text.
 - The VM's `append` copies the list and its 64 MB memory budget counts every
   allocation, so a list built one item at a time hits the budget after a few thousand
-  items. A fixture that does so fails on the VM, not on WebAssembly.
+  items. A fixture that does so fails on the VM, not on WebAssembly
+  (improvements.md #111, pending).
 - Case mapping is pinned to Unicode 15.0.0 (`internal/textcase`, bugs.md #69). Do not
   call `strings.ToLower`/`ToUpper` (or `unicode.ToLower`) on program text in the VM;
   moving Unicode versions means regenerating the table on that version's toolchain.

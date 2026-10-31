@@ -162,3 +162,11 @@ and the missing `--tests` interop entry (#280). Three remain, one branch each:
   operations.
 - The M3 prompt is updated: state after #283, and the findings carried over (quadratic text building, the VM's
   `append` budget, the pinned case table, host text operations).
+
+### 2026-10-30 22:00: M2 wrap-up
+
+- The VM's copying `append` is filed as improvements.md #111 (design constraint: lists are values), referenced from
+  the plan and the M3 prompt.
+- Deleting the 27 merged M1 and M2 branches on GitHub (each verified an ancestor of main, each from a merged PR,
+  none with an open PR) was refused by the session's permission classifier as a destructive git action; left for
+  the owner to run.
