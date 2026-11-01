@@ -437,6 +437,34 @@ func sanitizeGoName(name string) string {
 	return res
 }
 
+func allocateGoTestFunctionName(desc string, reserved map[string]struct{}) string {
+	safeDesc := ""
+	lastWasUnderscore := false
+	for _, r := range desc {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			safeDesc += string(r)
+			lastWasUnderscore = false
+		} else if !lastWasUnderscore {
+			safeDesc += "_"
+			lastWasUnderscore = true
+		}
+	}
+	safeDesc = strings.Trim(safeDesc, "_")
+
+	base := "Test"
+	if safeDesc != "" {
+		base += "_" + safeDesc
+	}
+	name := base
+	for suffix := 2; ; suffix++ {
+		if _, exists := reserved[name]; !exists {
+			reserved[name] = struct{}{}
+			return name
+		}
+		name = fmt.Sprintf("%s_%d", base, suffix)
+	}
+}
+
 // rejectRouteFetch fails closed on outbound HTTP inside a route or
 // middleware body. Generated Go runs every handler with the whole process's
 // HOWLFRAME_ALLOW_CAPS, so it cannot give a route its own (empty by default)
@@ -1281,7 +1309,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 	var routesCode string
 	var cliCode string
 	var testCode string
-	testNames := map[string]int{}
+	testNames := make(map[string]struct{})
 	var extraImports []string
 	defaultImports := map[string]bool{
 		"bufio":         true,
@@ -1329,33 +1357,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			if descNode.Type != "STRING" {
 				// ast.ReportError("test description must be a string", descNode.Line, descNode.Column)
 			}
-			desc := descNode.Value
-			safeDesc := ""
-			lastWasUnderscore := false
-			for _, r := range desc {
-				if unicode.IsLetter(r) || unicode.IsDigit(r) {
-					safeDesc += string(r)
-					lastWasUnderscore = false
-				} else {
-					if !lastWasUnderscore {
-						safeDesc += "_"
-						lastWasUnderscore = true
-					}
-				}
-			}
-			safeDesc = strings.Trim(safeDesc, "_")
-			testFuncName := "Test"
-			if len(safeDesc) > 0 {
-				testFuncName += "_" + safeDesc
-			}
-			// Descriptions that differ only in punctuation, or repeat, still
-			// get a function each.
-			if testNames[testFuncName] > 0 {
-				testNames[testFuncName]++
-				testFuncName += fmt.Sprintf("_%d", testNames[testFuncName])
-			} else {
-				testNames[testFuncName] = 1
-			}
+			testFuncName := allocateGoTestFunctionName(descNode.Value, testNames)
 
 			var testBodyCode string
 			for j := 2; j < len(handlerNode.Children); j++ {
