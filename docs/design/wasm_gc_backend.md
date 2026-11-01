@@ -708,8 +708,13 @@ journal `docs/journals/2026-10-31_wasmgc_m4_journal.md`.
       varying depths compress worse than one repeated sequence), and pages
       download it gzipped. Left: 1.5 KB of unused DOM helpers and 2.7 KB of
       comments in the loader (about 1.4 KB gzipped together).
-- [ ] Speed: text conversion measured in performance.spec.mjs's terms on
-      every scroll frame, and made faster if it matters.
+- [x] Speed: measured in performance.spec.mjs's terms (Chromium 156,
+      the cyberpunk example, 1,500 ms of instant 12 px scrolls per frame,
+      best of three): the JavaScript runtime moves 82 and 85 frames in two
+      runs, the WebAssembly runtime 78 and 84; both have a median of 16.7
+      ms and a p95 of 33.3 ms, and the page held still 91–92 frames. The
+      difference is within run-to-run noise, so text conversion is left as
+      it is (decided, 2026-11-01).
 - [ ] HowlScene HF: its build makes the site runtime with `--target
       wasmgc` behind a switch, its pages carry the decided policy, and its
       motion and story specs run against it.

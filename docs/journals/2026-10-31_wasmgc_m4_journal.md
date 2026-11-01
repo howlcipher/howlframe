@@ -155,3 +155,18 @@ Plan of slices (each its own branch and PR):
 - Still open, for the owner: `performance.spec.mjs`'s "runtime at most a quarter of the editor's app.js" needs the
   runtime under 10,226 B gzipped while the editor is JavaScript; the inline runtime is 21,893 B.
 - Tests: `go test ./internal/backend/wasmgc/ ./internal/backend/javascript/ ./tools/difftest/` pass.
+
+### 2026-11-01 00:30: HowlScene HF on WebAssembly, speed and Firefox
+
+- Owner's decision on the quarter rule (the owner said to do what I recommended): compare like with like. When
+  `site.js` is a WebAssembly build, `performance.spec.mjs` measures it against the editor built the same way
+  (`--target wasmgc --inline-module`); the rule itself stays at a quarter. It also now checks HTML + CSS + runtime
+  together against 250 KiB.
+- HowlScene HF (scratch branch `build/site-runtime-wasmgc`, toolchain pinned to this branch's `c3668764`) built with
+  `SITE_TARGET=wasmgc`: the full Playwright suite passes in Chromium, 80 of 80. Sizes: `site.js` 22,241 B gzipped,
+  the editor as WebAssembly 101,721 B, HTML 5,097 B, CSS 4,582 B.
+- Speed: numbers in the plan's M4 task list; no change to text conversion.
+- Firefox 157 (an ad-hoc config with `devices["Desktop Firefox"]`, not committed): 72 of 74 pass on WebAssembly. The
+  two failures, A11Y-007 (exported text at 320 px, "nothing cut off") and TXT-002 (the editor's link dialog), fail the
+  same way with the JavaScript runtime, so they are HowlScene HF's Firefox differences, not this backend's. Every
+  motion and story spec passes in Firefox.
