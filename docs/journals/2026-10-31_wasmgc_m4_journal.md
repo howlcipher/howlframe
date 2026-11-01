@@ -18,8 +18,8 @@ decisions. Newest entry last. Times are America/Detroit.
 
 | Slice | Branch | PR | State |
 | --- | --- | --- | --- |
-| 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | #295 | Open |
-| 1. Delivery: `--inline-module` | `feat/wasmgc-inline-module` | | Open (stacked on #295) |
+| 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | #295 | Merged (`34b94023`) |
+| 1. Delivery: `--inline-module` | `feat/wasmgc-inline-module` | #296 | Open |
 
 ## Entries
 
