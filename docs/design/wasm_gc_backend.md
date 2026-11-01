@@ -117,7 +117,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
-| M4 site runtime | In progress | Probe done ("Site delivery"): the module goes inline in the loader; pages add `'wasm-unsafe-eval'`. `--inline-module` writes that loader. |
+| M4 site runtime | Done (2026-11-01) | `build --target wasmgc --inline-module` writes one `app.js` holding the module; pages add only `'wasm-unsafe-eval'` ("Site delivery"). The encoder leaves out unreached functions (site module 40,227 B). HowlScene HF builds its site runtime on WebAssembly behind `SITE_TARGET=wasmgc` and runs its browser suite on both runtimes in CI: 80 of 80 in Chromium, every motion and story spec in Firefox; initial download 31.2 KiB gzipped of 250 (`TestHowlSceneSiteBudget`). Journal: `docs/journals/2026-10-31_wasmgc_m4_journal.md`; M5 prompt: `docs/journals/2026-11-01_wasmgc_m5_prompt.md`. |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
 
@@ -715,12 +715,36 @@ journal `docs/journals/2026-10-31_wasmgc_m4_journal.md`.
       ms and a p95 of 33.3 ms, and the page held still 91–92 frames. The
       difference is within run-to-run noise, so text conversion is left as
       it is (decided, 2026-11-01).
-- [ ] HowlScene HF: its build makes the site runtime with `--target
-      wasmgc` behind a switch, its pages carry the decided policy, and its
-      motion and story specs run against it.
-- [ ] Exit gate: every motion and story spec passes on WebAssembly in each
-      Playwright browser that runs here; the initial download measured;
-      `TestHowlSceneSiteGate` and the browser tests pass on both backends.
+- [x] HowlScene HF (howlscene-hf#1, `a6715f48`): `SITE_TARGET=wasmgc
+      scripts/build.sh` builds the site runtime with `--target wasmgc
+      --inline-module` (default still `js`); the exported site's, the
+      preview's and the editor page's policies allow `'wasm-unsafe-eval'`;
+      `performance.spec.mjs` checks HTML + CSS + runtime against 250 KiB
+      and compares a WebAssembly runtime with the editor built the same way
+      (the owner's decision); CI builds both runtimes and runs the browser
+      suite on each. Toolchain pinned to `d210aa49`. No HowlFrame fix was
+      needed: every spec passed on the first WebAssembly run.
+- [x] Exit gate (2026-11-01, HowlFrame `d210aa49`, HowlScene HF
+      `a6715f48`):
+      - `scripts/wasmgc_gate.sh`: passed. Go 1.26 4,522 tests, Go 1.27.2
+        4,520, the 8 HowlScene HF gates (`TestHowlSceneSiteGate` with
+        three builds, `TestHowlSceneSiteBudget`, the browser tests on both
+        backends among them).
+      - `SITE_TARGET=wasmgc scripts/build.sh`, then `npx playwright test`
+        in Chromium 156: 80 of 80, every motion and story spec included.
+        The first run failed one editor spec, SEC-004 (a 1,001-file backup
+        refused within 5 s, in the JavaScript editor, right after the
+        gate); it passed three times alone and in the full rerun.
+      - Firefox 157 (ad-hoc config): 72 of 74; every motion and story spec
+        passes; A11Y-007 and TXT-002 fail the same way on the JavaScript
+        runtime (HowlScene HF's own Firefox differences). WebKit does not
+        start here.
+      - Initial download, ink-wash, gzipped: HTML 5,097 + CSS 4,582 +
+        `site.js` 22,241 = 31,920 B (31.2 KiB of 250); raw 15,308 + 15,855
+        + 72,237 = 103,400 B. Editor as WebAssembly 101,721 B gzipped.
+      - Scroll frames: median 16.7 ms still and moving (80–92 frames per
+        1.5 s). Core Web Vitals: LCP 80 ms (phone), 100 ms (desktop); CLS
+        0.047 and 0.007; no long task.
 
 ### Site delivery (M4 probe, 2026-10-31)
 
@@ -818,7 +842,7 @@ KB gzipped. Both page policies and the editor page's policy gain
 
 ### M4 to M6 tasks: the application
 
-- [ ] M4: HowlScene HF's published-site runtime built with this backend;
+- [x] M4: HowlScene HF's published-site runtime built with this backend;
       motion and story tests pass; size measured against 250 KiB (tasks
       below, "M4 tasks: site runtime").
 - [ ] M5: the editor built with this backend; the full browser suite and
