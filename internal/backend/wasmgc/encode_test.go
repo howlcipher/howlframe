@@ -165,3 +165,40 @@ func TestStandaloneTypesComeBeforeTheRecursionGroup(t *testing.T) {
 		t.Fatalf("a standalone type after the group: got %v", err)
 	}
 }
+
+// Functions nothing reaches are left out and the rest renumbered: calls,
+// ref.func, exports and the element segment all name the right functions.
+// Locals of one type share an entry.
+func TestEncoderLeavesOutUnreachedFunctions(t *testing.T) {
+	m := NewModule()
+	fn := m.AddType(TypeDef{IsFunc: true, Results: []ValType{I64}})
+	m.AddImport("env", "unused", fn)
+	dead := m.AddFunc(Func{Name: "dead", Type: fn, Body: NewCode().I64Const(1)})
+	m.AddFunc(Func{Name: "calls dead", Type: fn, Body: NewCode().Call(dead)})
+	add := m.AddFunc(Func{Name: "add", Type: fn, Locals: []ValType{I64, I64, I32}, Body: NewCode().
+		I64Const(40).LocalSet(0).I64Const(2).LocalSet(1).I32Const(0).LocalSet(2).LocalGet(0).LocalGet(1).I64Add()})
+	viaRef := m.AddFunc(Func{Name: "via ref", Type: fn, Body: NewCode().Call(add)})
+	main := m.AddFunc(Func{Name: "main", Type: fn, Body: NewCode().RefFunc(viaRef).CallRef(fn)})
+	m.Exports = append(m.Exports, Export{"main", main})
+	live, err := m.live()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range live.Funcs {
+		names = append(names, f.Name)
+	}
+	if got := strings.Join(names, ", "); got != "add, via ref, main" {
+		t.Fatalf("live functions: %s", got)
+	}
+	if len(m.Funcs) != 5 {
+		t.Fatal("live changed the module")
+	}
+	wasm, err := m.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := runWasm(t, wasm, `{ env: { unused: () => 0n } }`); got != "42" {
+		t.Fatalf("got %q", got)
+	}
+}

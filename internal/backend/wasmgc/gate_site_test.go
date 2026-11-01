@@ -1,9 +1,12 @@
 package wasmgc
 
 import (
+	"bytes"
+	"compress/gzip"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -163,4 +166,91 @@ func TestHowlSceneSiteGate(t *testing.T) {
 		}
 	}
 	t.Logf("site page: %s", pages["js"])
+}
+
+// siteBudget is the most a published page's initial download may be (the
+// M4 exit gate): its HTML, its stylesheet and the site runtime, before and
+// after gzip.
+const siteBudget = 250 * 1024
+
+// TestHowlSceneSiteBudget renders the published page of each of HowlScene
+// HF's fixture projects (on the VM, as the editor's export does) and
+// requires the page, src/site/site.css and the site runtime built with
+// --inline-module to fit siteBudget, uncompressed and gzipped. It needs a
+// checkout of HowlScene HF, named by HOWLSCENE_HF.
+func TestHowlSceneSiteBudget(t *testing.T) {
+	hs := os.Getenv("HOWLSCENE_HF")
+	if hs == "" {
+		t.Skip("set HOWLSCENE_HF to a HowlScene HF checkout to run the site budget gate")
+	}
+	dir := t.TempDir()
+	if out := run(t, compilerBin, "build", filepath.Join(hs, "src", "site", "site.howl"), "--target", "wasmgc", "--inline-module", "-o", dir); out.failed {
+		t.Fatalf("build: %s", out.errMsg)
+	}
+	runtime, err := os.ReadFile(filepath.Join(dir, "app.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	css, err := os.ReadFile(filepath.Join(hs, "src", "site", "site.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtures, err := filepath.Glob(filepath.Join(hs, "tests", "fixtures", "*", "*.json"))
+	if err != nil || len(fixtures) == 0 {
+		t.Fatalf("no fixture projects under %s: %v", hs, err)
+	}
+	sort.Strings(fixtures)
+	core, err := filepath.Rel(dir, filepath.Join(hs, "src", "core"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body strings.Builder
+	for _, path := range fixtures {
+		text, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body.WriteString(`
+  (let (r (call schema/parse_project ` + howlString(string(text)) + ` reg))
+    (if (map_get r "ok")
+      (print "\n=== ` + filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path) + `\n" (call render/render_document (map_get r "config") reg (dict ("css" "") ("script" true) ("csp" true))))))`)
+	}
+	driver := filepath.Join(dir, "pages.howl")
+	src := `(cli_app
+  (use "` + core + `/registry.howl" as registry)
+  (use "` + core + `/schema.howl" as schema)
+  (use "` + core + `/render.howl" as render)
+  (let (reg (call registry/registry))
+    (do` + body.String() + `)))
+`
+	if err := os.WriteFile(driver, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := run(t, compilerBin, "run", "--max-instructions", "500000000", driver)
+	if out.failed {
+		t.Fatalf("render: %s", out.errMsg)
+	}
+	pages := strings.Split(out.stdout, "\n=== ")[1:]
+	if len(pages) == 0 {
+		t.Fatalf("no fixture project rendered: %s", out.stdout)
+	}
+	gzipped := func(b []byte) int {
+		var buf bytes.Buffer
+		w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		w.Write(b)
+		w.Close()
+		return buf.Len()
+	}
+	for _, page := range pages {
+		name, html, _ := strings.Cut(page, "\n")
+		if !strings.Contains(html, `<script src="assets/site.js" defer></script>`) {
+			t.Errorf("%s: the page does not load the site runtime", name)
+		}
+		raw := len(html) + len(css) + len(runtime)
+		packed := gzipped([]byte(html)) + gzipped(css) + gzipped(runtime)
+		t.Logf("%s: %d B (HTML %d, CSS %d, runtime %d), %d B gzipped", name, raw, len(html), len(css), len(runtime), packed)
+		if raw > siteBudget || packed > siteBudget {
+			t.Errorf("%s: the initial download is %d B, %d B gzipped; the budget is %d B", name, raw, packed, siteBudget)
+		}
+	}
 }

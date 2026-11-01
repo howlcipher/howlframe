@@ -702,7 +702,7 @@ func (f *fn) endAsync() (*Code, error) {
 	if err != nil {
 		return nil, err
 	}
-	pro.buf.Write(f.code.Bytes())
+	pro.Append(f.code)
 	return pro, nil
 }
 

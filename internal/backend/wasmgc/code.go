@@ -12,6 +12,10 @@ import "bytes"
 type Code struct {
 	buf   bytes.Buffer
 	depth int
+	// funcs holds the offset of every function index in buf (the operand
+	// of call and ref.func), so the encoder can renumber functions after
+	// leaving out the ones nothing reaches.
+	funcs []int
 }
 
 // NewCode returns an empty body.
@@ -22,6 +26,20 @@ func (c *Code) op(b ...byte) *Code { c.buf.Write(b); return c }
 func (c *Code) u(v uint64) *Code { c.buf.Write(uleb(v)); return c }
 
 func (c *Code) gc(sub uint64) *Code { c.buf.WriteByte(0xFB); return c.u(sub) }
+
+// fn writes a function index, recording where it is.
+func (c *Code) fn(index int) *Code { c.funcs = append(c.funcs, c.buf.Len()); return c.u(uint64(index)) }
+
+// Append appends the instructions of o.
+func (c *Code) Append(o *Code) *Code {
+	base := c.buf.Len()
+	for _, at := range o.funcs {
+		c.funcs = append(c.funcs, base+at)
+	}
+	c.buf.Write(o.buf.Bytes())
+	c.depth += o.depth
+	return c
+}
 
 // BlockType is the result shape of a block: none, one value type, or a
 // function type index.
@@ -45,7 +63,7 @@ func (c *Code) BrIf(depth int) *Code     { return c.op(0x0D).u(uint64(depth)) }
 func (c *Code) Return() *Code            { return c.op(0x0F) }
 func (c *Code) Unreachable() *Code       { return c.op(0x00) }
 func (c *Code) Drop() *Code              { return c.op(0x1A) }
-func (c *Code) Call(fn int) *Code        { return c.op(0x10).u(uint64(fn)) }
+func (c *Code) Call(fn int) *Code        { return c.op(0x10).fn(fn) }
 func (c *Code) CallRef(typ int) *Code    { return c.op(0x14).u(uint64(typ)) }
 
 // Typed select (needed for reference operands).
@@ -159,7 +177,7 @@ func (c *Code) RefNullType(typ int) *Code {
 	return c
 }
 func (c *Code) RefIsNull() *Code     { return c.op(0xD1) }
-func (c *Code) RefFunc(fn int) *Code { return c.op(0xD2).u(uint64(fn)) }
+func (c *Code) RefFunc(fn int) *Code { return c.op(0xD2).fn(fn) }
 func (c *Code) RefEq() *Code         { return c.op(0xD3) }
 func (c *Code) RefAsNonNull() *Code  { return c.op(0xD4) }
 func (c *Code) BrOnNull(d int) *Code { return c.op(0xD5).u(uint64(d)) }
