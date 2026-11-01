@@ -20,7 +20,9 @@ decisions. Newest entry last. Times are America/Detroit.
 | --- | --- | --- | --- |
 | 0. Probe: site delivery, specs, sizes, policies | `docs/wasmgc-m4-probe` | #295 | Merged (`34b94023`) |
 | 1. Delivery: `--inline-module` | `feat/wasmgc-inline-module` | #296 | Merged (`2f32365a`) |
-| 2. Size: dead functions, locals, budget test | `feat/wasmgc-dead-code` | #297 | Open |
+| 2. Size: dead functions, locals, budget test | `feat/wasmgc-dead-code` | #297 | Merged (`d210aa49`) |
+| 3. HowlScene HF: `SITE_TARGET=wasmgc`, policies, specs on both runtimes | howlscene-hf `build/site-runtime-wasmgc` | howlscene-hf#1 | Merged (`a6715f48`) |
+| 4. Exit gate, M5 prompt | `docs/wasmgc-m4-exit` | | Open |
 
 ## Entries
 
@@ -170,3 +172,14 @@ Plan of slices (each its own branch and PR):
   two failures, A11Y-007 (exported text at 320 px, "nothing cut off") and TXT-002 (the editor's link dialog), fail the
   same way with the JavaScript runtime, so they are HowlScene HF's Firefox differences, not this backend's. Every
   motion and story spec passes in Firefox.
+
+### 2026-11-01 02:00: exit gate
+
+- HowlScene HF #1 merged (`a6715f48`), toolchain pinned to HowlFrame `d210aa49`. Its CI (`verify`) ran the browser
+  suite on both runtimes and passed.
+- Evidence on both merged mains is in the plan (M4 tasks, "Exit gate"). In short: the HowlFrame gate passed; Chromium
+  80 of 80 on the WebAssembly site runtime; Firefox every motion and story spec; initial download 31,920 B gzipped.
+- Flake seen once: SEC-004 (editor, JavaScript) failed its 5 s wait for a 1,001-file backup to be refused in the run
+  that started right after the gate; three runs alone and the full rerun passed. Not the site runtime. Watch it in M5,
+  where the editor moves to WebAssembly and ZIP reading gets slower or faster.
+- M4 done. The M5 prompt is `2026-11-01_wasmgc_m5_prompt.md`.
