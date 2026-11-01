@@ -25,7 +25,7 @@ truth for decisions. Newest entry last. Times are America/Detroit.
 | 2. Browser host: `$Host`, `web_app` root, loader, synchronous operations | `feat/wasmgc-browser-host` | #290 | Merged (`d4b83683`) |
 | 3. Handlers: closures, `on_event`, subscriptions, `spawn` | `feat/wasmgc-handlers` | #291 | Merged (`bd868833`) |
 | 4. Asynchronous operations: resumable frames | `feat/wasmgc-async` | #292 | Merged (`87fba9fb`) |
-| 5–6. `fetch`, browser tests on both backends, site gate (exit gate) | `feat/wasmgc-browser-gate` | | Open |
+| 5–6. `fetch`, browser tests on both backends, site gate (exit gate) | `feat/wasmgc-browser-gate` | #293 | Merged (`9266ee56`) |
 
 ## Entries
 
@@ -153,3 +153,8 @@ Plan of slices (each its own branch and PR):
   both backends.
 - Final gate on the exit-gate branch: 4517 tests on Go 1.26, 4516 on Go 1.27.2, 7 HowlScene HF gates (the site
   runtime gate is the seventh).
+
+### 2026-10-31 17:00: M3 done
+
+- #293 merged (`9266ee56`). M3 is #286–#293. The M4 prompt (`2026-10-31_wasmgc_m4_prompt.md`) now names them; it
+  had been written before the last merges.
