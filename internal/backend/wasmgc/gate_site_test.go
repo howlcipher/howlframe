@@ -56,7 +56,7 @@ const frames = new Map();
 let nextFrame = 1;
 const browser = {
   console: { log: (v) => out.push(String(v)), error: (v) => out.push("stderr:" + String(v)) },
-  TextEncoder, TextDecoder, setTimeout, Promise,
+  TextEncoder, TextDecoder, atob, setTimeout, Promise,
   get scrollY() { return scroll; }, scrollX: 0, innerHeight: 800,
   scrollTo(opts) { out.push("scrollTo:" + JSON.stringify(opts)); },
   matchMedia: (q) => ({ get matches() { return q === "(prefers-reduced-motion: reduce)" ? reduced : false; },
@@ -112,8 +112,9 @@ const live = () => ({ media: mediaListeners.length, observers: observers.length,
 `
 
 // TestHowlSceneSiteGate runs HowlScene HF's published-site runtime
-// (src/site/site.howl) built with --target js and --target wasmgc on a
-// stand-in published page, and requires the same page after every step:
+// (src/site/site.howl) built with --target js and --target wasmgc (with
+// app.wasm beside the loader, and with --inline-module) on a stand-in
+// published page, and requires the same page after every step:
 // reveal on visibility, scene progress and the active chapter on scroll, the
 // motion toggle and its preference, and reduced motion stopping every
 // effect. It needs a checkout of HowlScene HF, named by HOWLSCENE_HF.
@@ -131,9 +132,13 @@ func TestHowlSceneSiteGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	pages := map[string]string{}
-	for _, target := range []string{"js", "wasmgc"} {
+	for _, target := range []string{"js", "wasmgc", "wasmgc-inline"} {
 		dir := t.TempDir()
-		if out := run(t, compilerBin, "build", site, "--target", target, "-o", dir); out.failed {
+		build := []string{"build", site, "--target", target, "-o", dir}
+		if target == "wasmgc-inline" {
+			build = []string{"build", site, "--target", "wasmgc", "--inline-module", "-o", dir}
+		}
+		if out := run(t, compilerBin, build...); out.failed {
 			t.Fatalf("build (%s): %s", target, out.errMsg)
 		}
 		args := []string{page, filepath.Join(dir, "app.js")}
@@ -146,8 +151,10 @@ func TestHowlSceneSiteGate(t *testing.T) {
 		}
 		pages[target] = strings.TrimSpace(got.stdout)
 	}
-	if pages["wasmgc"] != pages["js"] {
-		t.Fatalf("the site runtime's page differs on WebAssembly\n got %s\nwant %s", pages["wasmgc"], pages["js"])
+	for _, target := range []string{"wasmgc", "wasmgc-inline"} {
+		if pages[target] != pages["js"] {
+			t.Fatalf("the site runtime's page differs on WebAssembly (%s)\n got %s\nwant %s", target, pages[target], pages["js"])
+		}
 	}
 	// Not vacuous: the runtime ran and changed the page at every step.
 	for _, want := range []string{`"hs-js"`, `"hs-motion"`, `"hs-in"`, `"hs-active"`, `"--hs-scroll"`, `"aria-current":"true"`, `"aria-pressed":"true"`, `"howlframe:howlscene-motion":"on"`} {

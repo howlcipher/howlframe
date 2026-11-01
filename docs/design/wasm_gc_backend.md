@@ -117,7 +117,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | M1 core language | Done (2026-10-30) | `build --target wasmgc` compiles `cli_app` programs using values, control flow, functions, modules, strings, lists and dicts, with `try_let`, the core-library sugar and a standard library written in HowlFrame (JSON, regular expressions, UTF-8, floats). 365 differential fixtures and the corpus (`TestWasmGCCorpusParity`, 17 programs) match the VM in Node and, built with `--host wasi`, in wasmtime; HowlScene HF's schema and renderer produce byte-identical output on both (`TestHowlSceneGate`). Unicode case mapping and trim, `bytes_to_string`, `utf8_valid`, hexadecimal floats and base64 done; all five HowlScene HF core modules compile. |
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
-| M4 site runtime | In progress | Probe done ("Site delivery"): the module goes inline in the loader; pages add `'wasm-unsafe-eval'`. |
+| M4 site runtime | In progress | Probe done ("Site delivery"): the module goes inline in the loader; pages add `'wasm-unsafe-eval'`. `--inline-module` writes that loader. |
 | M5 editor | Not started | |
 | M6 no other languages in the app | Not started | |
 
@@ -678,8 +678,18 @@ journal `docs/journals/2026-10-31_wasmgc_m4_journal.md`.
 - [x] Probe: how a published page gets the site runtime, which browser
       specs cover motion and the story, and what a page downloads ("Site
       delivery" below).
-- [ ] Delivery: the module's bytes inline in the loader (decided below);
-      a build option that writes one `app.js`, and tests.
+- [x] Delivery: the module's bytes inline in the loader (decided below).
+      `build --target wasmgc --inline-module` (a `web_app` for the
+      browser) writes one `app.js` (`CompileBrowserInline`): the loader
+      with the module as base64, decoded with `atob` before
+      `WebAssembly.compile`; nothing is fetched. `TestBrowserInlineModule`
+      requires the same page as with `app.wasm` beside the loader, handlers
+      included, and a script that can sit in a script element;
+      `TestBrowserInlineModuleFailsClosed` the option's errors;
+      `TestHowlSceneSiteGate` runs the site runtime built both ways. The
+      site runtime built so is 79,765 B (24,084 B gzipped), and runs in
+      Chromium and Firefox under both page policies with
+      `'wasm-unsafe-eval'` (journal, 2026-10-31 "delivery").
 - [ ] Size: dead code removed in the compiler (unused runtime functions
       and exports), and a test that fails when the site's download exceeds
       250 KiB.

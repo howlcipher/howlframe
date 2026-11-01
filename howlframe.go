@@ -764,6 +764,7 @@ func buildSource() {
 	profileName := buildFlags.String("profile", "default", "construct profile: default or governed")
 	target := buildFlags.String("target", "bytecode", "compilation target: bytecode (or bc), go, js (or javascript), wasm, wasmgc (in development)")
 	wasmHost := buildFlags.String("host", "", "with --target wasmgc: node (app.wasm and an app.mjs loader), wasi (a WASI command module, app.wasm only) or browser (a web_app: app.wasm and an app.js loader); default node for a cli_app and browser for a web_app")
+	wasmInline := buildFlags.Bool("inline-module", false, "with --target wasmgc for the browser: write one app.js that holds the module (base64) instead of app.wasm and a loader that fetches it; a page's policy needs 'wasm-unsafe-eval' in script-src")
 	wasmTests := buildFlags.Bool("tests", false, "with --target wasmgc: compile the program's test blocks, whatever its root, into app.test.wasm (and an app.test.mjs runner for --host node) instead of the program")
 	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
 
@@ -856,6 +857,10 @@ func buildSource() {
 	hfirModule := filepath.Base(inputFile)
 
 	targetVal := strings.ToLower(strings.TrimSpace(*target))
+	if *wasmInline && targetVal != "wasmgc" {
+		fmt.Fprintln(os.Stderr, "--inline-module requires --target wasmgc")
+		os.Exit(1)
+	}
 	if *wasmTests && targetVal != "wasmgc" {
 		fmt.Fprintln(os.Stderr, "--tests requires --target wasmgc")
 		os.Exit(1)
@@ -983,6 +988,28 @@ func buildSource() {
 		if (host == wasmgc.HostBrowser) != webApp {
 			fmt.Fprintln(os.Stderr, "--host browser builds a web_app, and a web_app builds only for the browser (its tests build with --tests for node or wasi)")
 			os.Exit(1)
+		}
+		if *wasmInline {
+			if host != wasmgc.HostBrowser {
+				fmt.Fprintln(os.Stderr, "--inline-module builds a web_app for the browser")
+				os.Exit(1)
+			}
+			script, err := wasmgc.CompileBrowserInline(root)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			outputDir := *outPath
+			if outputDir == "" {
+				outputDir = "."
+			}
+			path := filepath.Join(outputDir, "app.js")
+			if err := writeArtifact(path, []byte(script)); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", path, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Built %s\n", path)
+			break
 		}
 		compileWasm, wasmName, loaderName, loader := wasmgc.CompileFor, "app.wasm", "app.mjs", wasmgc.Loader
 		if *wasmTests {
@@ -1629,7 +1656,7 @@ var interopCommands = []interopCommand{
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
 	{Path: []string{"check"}, Flags: []string{"--profile"}},
-	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--module"}},
+	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--inline-module", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
 		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
