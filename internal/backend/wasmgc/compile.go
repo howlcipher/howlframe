@@ -9,6 +9,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/lexer"
+	"github.com/howlcipher/howlframe/internal/moduleapi"
 	"github.com/howlcipher/howlframe/internal/parser"
 )
 
@@ -169,7 +170,37 @@ func CompileFor(root *ast.Node, host Host) ([]byte, error) {
 	if rootHead(root) != "cli_app" {
 		return nil, fmt.Errorf("WASM_UNSUPPORTED: the WebAssembly backend compiles cli_app programs so far (the test blocks of a web_app build with --tests)")
 	}
-	return compile(root, host, false)
+	return compile(root, host, false, nil)
+}
+
+// CompileModule compiles a web_app's top-level exported functions for use by
+// the generated Node ESM loader. Browser host operations are refused: a Node
+// SDK module must not acquire page capabilities implicitly.
+func CompileModule(root *ast.Node) ([]byte, []string, error) {
+	if rootHead(root) != "web_app" {
+		return nil, nil, fmt.Errorf("WASM_UNSUPPORTED: an exported module requires a web_app root")
+	}
+	exports := moduleapi.Exports(root)
+	if len(exports) == 0 {
+		return nil, nil, fmt.Errorf("--module: the program has no top-level (export (defun ...)) to export")
+	}
+	ops := browserOps(root)
+	if len(ops) != 0 {
+		return nil, nil, fmt.Errorf("WASM_UNSUPPORTED: Node module exports cannot use browser host operations: %s", strings.Join(ops, ", "))
+	}
+	names := make([]string, 0, len(exports))
+	seen := map[string]bool{}
+	for _, d := range exports {
+		name := d.Children[1].Value
+		publicName := moduleapi.PublicName(name)
+		if name == "main" || name == "memory" || strings.HasPrefix(name, "__hf_") || seen[publicName] {
+			return nil, nil, unsupported(d, "an exported function named "+name+" (reserved or duplicated)")
+		}
+		seen[publicName] = true
+		names = append(names, name)
+	}
+	wasm, err := compile(root, HostBrowser, false, exports)
+	return wasm, names, err
 }
 
 // CompileTests compiles a program's test blocks, whatever its root, into a
@@ -183,7 +214,7 @@ func CompileTests(root *ast.Node, host Host) ([]byte, error) {
 	if h := rootHead(root); h != "cli_app" && h != "web_app" {
 		return nil, fmt.Errorf("WASM_UNSUPPORTED: test blocks compile from a cli_app or web_app, not %q", h)
 	}
-	return compile(root, host, true)
+	return compile(root, host, true, nil)
 }
 
 func rootHead(root *ast.Node) string {
@@ -193,7 +224,7 @@ func rootHead(root *ast.Node) string {
 	return root.Children[0].Value
 }
 
-func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
+func compile(root *ast.Node, host Host, tests bool, moduleExports []*ast.Node) ([]byte, error) {
 	m := NewModule()
 	var ops []string
 	if host == HostBrowser {
@@ -207,7 +238,15 @@ func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 	// Declare every defun first so calls can come before definitions.
 	var defuns, stmts, testBlocks []*ast.Node
 	for _, n := range body {
+		if head(n) == "export" && len(n.Children) == 2 && head(n.Children[1]) == "defun" {
+			defuns = append(defuns, n.Children[1])
+		}
+	}
+	for _, n := range body {
 		switch {
+		case head(n) == "export" && len(n.Children) == 2 && head(n.Children[1]) == "defun":
+			// The wrapped defun was collected above; it is an export declaration,
+			// not a top-level statement.
 		case head(n) == "defun":
 			if strings.HasPrefix(n.Children[1].Value, stdPrefix) {
 				return nil, unsupported(n, "a function named "+n.Children[1].Value+" (the prefix is reserved)")
@@ -295,6 +334,13 @@ func compile(root *ast.Node, host Host, tests bool) ([]byte, error) {
 		}
 		f := &m.Funcs[c.funcs[d.Children[1].Value]-len(m.Imports)]
 		f.Body, f.Locals = code, locals
+	}
+	for _, d := range moduleExports {
+		name := d.Children[1].Value
+		if _, ok := c.funcs[name]; !ok {
+			return nil, unsupported(d, "an exported function that is not defined at the top level")
+		}
+		m.Exports = append(m.Exports, Export{name, c.funcs[name]})
 	}
 	// The runtime's float bridges call the float module.
 	if seen["float"] {
