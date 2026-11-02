@@ -21,6 +21,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/ir"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/masking"
+	"github.com/howlcipher/howlframe/internal/moduleapi"
 	"github.com/howlcipher/howlframe/internal/optimization"
 	"github.com/howlcipher/howlframe/internal/parser"
 	"github.com/howlcipher/howlframe/internal/vm"
@@ -865,8 +866,8 @@ func buildSource() {
 		fmt.Fprintln(os.Stderr, "--tests requires --target wasmgc")
 		os.Exit(1)
 	}
-	if *jsModule && targetVal != "js" && targetVal != "javascript" {
-		fmt.Fprintln(os.Stderr, "--module requires --target js")
+	if *jsModule && targetVal != "js" && targetVal != "javascript" && targetVal != "wasmgc" {
+		fmt.Fprintln(os.Stderr, "--module requires --target js or --target wasmgc")
 		os.Exit(1)
 	}
 	switch targetVal {
@@ -973,6 +974,37 @@ func buildSource() {
 	case "wasmgc":
 		// The WebAssembly GC backend (docs/design/wasm_gc_backend.md), in
 		// development; it becomes the wasm target once it covers it.
+		if *jsModule {
+			if *wasmInline || *wasmTests || *wasmHost != "" {
+				fmt.Fprintln(os.Stderr, "--module cannot be combined with --host, --inline-module or --tests")
+				os.Exit(1)
+			}
+			wasmBytes, exports, err := wasmgc.CompileModule(root)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			outputDir := *outPath
+			if outputDir == "" {
+				outputDir = "."
+			}
+			files := []struct {
+				name string
+				body []byte
+			}{
+				{"app.wasm", wasmBytes},
+				{"app.mjs", []byte(wasmgc.ModuleLoader(exports, moduleVoidExports(root, analysis)))},
+				{"app.d.mts", []byte(moduleapi.DeclarationsTS(moduleapi.Exports(root), analysis.Signature))},
+			}
+			for _, f := range files {
+				if err := writeArtifact(filepath.Join(outputDir, f.name), f.body); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", filepath.Join(outputDir, f.name), err)
+					os.Exit(1)
+				}
+			}
+			fmt.Printf("Built %s\n", filepath.Join(outputDir, "app.mjs"))
+			return
+		}
 		host := wasmgc.Host(*wasmHost)
 		webApp := len(root.Children) > 0 && root.Children[0].Value == "web_app" && !*wasmTests
 		if host == "" {
@@ -1057,6 +1089,17 @@ func buildSource() {
 		fmt.Fprintf(os.Stderr, "Unknown target %q: valid targets are bytecode, go, js, wasm, wasmgc\n", *target)
 		os.Exit(1)
 	}
+}
+
+func moduleVoidExports(root *ast.Node, analysis *checker.Analysis) map[string]bool {
+	voids := map[string]bool{}
+	for _, d := range moduleapi.Exports(root) {
+		_, ret := analysis.Signature(d)
+		if ret.Kind == ast.Void {
+			voids[d.Children[1].Value] = true
+		}
+	}
+	return voids
 }
 
 // writeJSModule writes app.mjs, app.d.mts and, when the program has tests,

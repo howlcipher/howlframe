@@ -277,7 +277,7 @@ func CompileBrowser(root *ast.Node) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("WASM_UNSUPPORTED: the browser host runs a web_app, not %q", rootHead(root))
 	}
 	ops := browserOps(root)
-	wasm, err := compile(root, HostBrowser, false)
+	wasm, err := compile(root, HostBrowser, false, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -297,7 +297,7 @@ func CompileBrowserInline(root *ast.Node) (string, error) {
 		return "", fmt.Errorf("WASM_UNSUPPORTED: the browser host runs a web_app, not %q", rootHead(root))
 	}
 	ops := browserOps(root)
-	wasm, err := compile(root, HostBrowser, false)
+	wasm, err := compile(root, HostBrowser, false, nil)
 	if err != nil {
 		return "", err
 	}

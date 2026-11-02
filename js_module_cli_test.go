@@ -126,7 +126,7 @@ func TestJSModuleRefusals(t *testing.T) {
 	}
 	dir := t.TempDir()
 	path := mustWriteFile(t, dir, "b.howl", `(cli_app (print "x"))`)
-	if b, err := exec.Command(bin, "build", path, "--module", "-o", filepath.Join(dir, "o.hfbc")).CombinedOutput(); err == nil || !strings.Contains(string(b), "--module requires --target js") {
+	if b, err := exec.Command(bin, "build", path, "--module", "-o", filepath.Join(dir, "o.hfbc")).CombinedOutput(); err == nil || !strings.Contains(string(b), "--module requires --target js or --target wasmgc") {
 		t.Fatalf("--module without --target js must be refused, got %v %s", err, b)
 	}
 }
