@@ -19,7 +19,7 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 | 71 | [The JavaScript backend's `to_int` and `to_float` name a value's JavaScript type, not the VM's](#71-the-javascript-backends-to_int-and-to_float-name-a-values-javascript-type-not-the-vms) | Done (2026-10-31) | 3.0 (3×1÷1) | Opus 5.5 | — | — | `(to_int nil)` fails with `cannot convert object to int` where the VM says `cannot convert <nil> to int`; found comparing the WebAssembly browser host with the JavaScript backend (M3). |
 | 70 | [Seven JavaScript DOM operations fail with the engine's `TypeError` instead of `TYPE_ERROR`](#70-seven-javascript-dom-operations-fail-with-the-engines-typeerror-instead-of-type_error) | Done (2026-10-31) | 4.0 (4×1÷1) | Opus 5.5 | — | — | `(set_text (dom_query "#none") "x")` throws `TypeError: Cannot set properties of null` where every other element operation reports `TYPE_ERROR: op expected an element`; the WebAssembly backend (M3) needs one error to match. |
 | 69 | [The VM's `to_lower` and `to_upper` change with the Go toolchain](#69-the-vms-to_lower-and-to_upper-change-with-the-go-toolchain) | Done (2026-10-30) | 4.0 (8×1÷2) | Opus 5.5 | — | — | The VM maps case with Go's `strings.ToLower` and `ToUpper`, whose tables are the toolchain's Unicode version: Go 1.25 and 1.26 have Unicode 15.0.0, Go 1.27 has 17.0.0, which cases 110 more code points. `(print (to_upper "ɤ"))` prints `ɤ` from a release (Go 1.25) and `Ɤ` (U+A7CB) from a VM built with Go 1.27. Same class as #63. Found by the WebAssembly backend's regression gate (M2). |
-| 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and two tests whose names differ only in punctuation, or repeat, become the same function. Found probing `test` blocks for the WebAssembly backend's M2. |
+| 68 | [The Go backend's test blocks do not run as tests](#68-the-go-backends-test-blocks-do-not-run-as-tests) | Pending | 6.0 (6×1÷1) | Opus 5.5 | — | gpt-6.1-luna | In `server_test.go`, a failing `assert` calls `os.Exit(1)` and a run-time error panics, so the `go test` binary stops at the first failure and the remaining tests never run; the file redeclares every helper `server.go` defines in the same package, so a test that uses `map_get`, `/` or another helper does not compile; and test descriptions can sanitize or suffix to the same final function name. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 67 | [A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass](#67-a-try_let-catches-exit-in-the-javascript-backends-tests-so-a-failing-assert-can-pass) | Done (2026-10-30) | 8.0 (8×1÷1) | Opus 5.5 | — | — | In `app.test.js`, `exit` (and so `assert`) throws an `Error` to fail the running test, and a `try_let` caught it like any error: a test whose failing assert sits in a function called from a `try_let` binding passed, and the handler ran. On the VM, exit ends the program whatever handler encloses it. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 66 | [The JavaScript backend computes with operands of the wrong type](#66-the-javascript-backend-computes-with-operands-of-the-wrong-type) | Done (2026-10-30) | 6.0 (6×1÷1) | Opus 5.5 | — | — | When an operand's type is known only at run time (a dict of mixed values, `parse_json`), `--target js` lets JavaScript decide: `(+ 1 v)` with `v` = `"x"` prints `1x`, `(* v 2)` with `v` a one-element list prints `2`, nil + 1 is `1`, `(< 1 v)` is `false`. The VM fails each with `TYPE_ERROR: op requires numeric operands, got int64 and string`. Found probing `test` blocks for the WebAssembly backend's M2. |
 | 65 | [The JavaScript backend emits invalid JavaScript for `try_let` used as a value](#65-the-javascript-backend-emits-invalid-javascript-for-try_let-used-as-a-value) | Done (2026-10-30) | 4.0 (8×1÷2) | — | — | — | `(print (try_let (t (base64_text "abc")) (catch e e) t))` builds, but `app.js` fails to load with `SyntaxError: Unexpected identifier 't'`: the `let` the form declares lands in expression position. The VM and the WebAssembly backend run it. |
@@ -258,7 +258,9 @@ latent, so it is recorded here rather than filed as a live bug.
   already holds, so any test that needed one failed to compile with
   `redeclared in this block`; and names were derived by replacing
   punctuation, so `"a b"`, `"a-b"` or a repeated name produced the same
-  function twice.
+  function twice. A suffix collision also remained: `"twin"`, `"twin"`,
+  `"twin 2"` emitted `Test_twin_2` twice because the allocator counted base
+  names but did not reserve each final emitted identifier.
 * **Evidence:** A `cli_app` with tests `b passes`, `a fails` (assert), and
   `module call` runs `--- PASS: Test_b_passes`, then prints `assertion
   failed` and ends with `FAIL probe` without running `module call`
@@ -277,7 +279,14 @@ latent, so it is recorded here rather than filed as a live bug.
   `TestGoTestBlocksRunAsTests` runs `go test` on a generated package with
   passing and failing asserts, an assert in a called function, a helper,
   a division by zero, `exit 3` and a repeated name; before the fix the
-  package did not compile.
+  package did not compile. Follow-up regression (2026-11-01): reproduced the
+  remaining suffix collision above (Go reported `Test_twin_2 redeclared in
+  this block`) and fixed it on branch `fix/go-test-name-collisions` by
+  reserving each final identifier as it is selected. Added table coverage for
+  ordering, punctuation, nested suffixes, empty and numeric descriptions,
+  Unicode and interleaved names, plus generated-Go execution and determinism
+  checks. Focused tests pass; the final gate remains blocked by machine memory
+  pressure. Journal: `/tmp/howlframe-go-test-name-collision/journal.md`.
 
 ### 67. A `try_let` catches `exit` in the JavaScript backend's tests, so a failing assert can pass
 

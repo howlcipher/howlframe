@@ -119,23 +119,66 @@ func issue149Paths(t *testing.T, bin, src string) [][]string {
 	return [][]string{{"-run", p}, {"-run-bc", art}, {"-run-bc", hart}}
 }
 
+type issue149Chunk struct {
+	program string
+	want    string
+}
+
+// issue149Chunks keeps the arithmetic cases intact while bounding the size of
+// each independently compiled program. Numeric sugar expands into sizeable
+// control-flow trees, so compiling the entire boundary matrix at once makes
+// the HFIR test consume several GiB.
+func issue149Chunks(t *testing.T, rowsPerChunk int) []issue149Chunk {
+	t.Helper()
+	if rowsPerChunk < 1 {
+		t.Fatal("rowsPerChunk must be positive")
+	}
+
+	var forms []string
+	for _, line := range strings.Split(strings.TrimSpace(issue149Program), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "(do" && line != ")" {
+			forms = append(forms, line)
+		}
+	}
+	// The original final form also closes the outer do; each chunk supplies
+	// its own wrapper, so remove that outer delimiter from the final form.
+	forms[len(forms)-1] = strings.TrimSuffix(forms[len(forms)-1], ")")
+	want := strings.Split(strings.TrimSuffix(issue149Want, "\n"), "\n")
+	if len(forms) != len(want) {
+		t.Fatalf("issue149 fixture has %d print forms but %d expected output rows", len(forms), len(want))
+	}
+
+	chunks := make([]issue149Chunk, 0, (len(forms)+rowsPerChunk-1)/rowsPerChunk)
+	for start := 0; start < len(forms); start += rowsPerChunk {
+		end := min(start+rowsPerChunk, len(forms))
+		chunks = append(chunks, issue149Chunk{
+			program: "(do\n" + strings.Join(forms[start:end], "\n") + "\n)",
+			want:    strings.Join(want[start:end], "\n") + "\n",
+		})
+	}
+	return chunks
+}
+
 // Boundaries 2^53-1, 2^53, 2^53+1, MaxInt64, MinInt64 and negative operands,
 // identical on the interpreter, governed AST bytecode and HFIR bytecode.
 func TestIssue149IntMathBoundariesOnEveryPath(t *testing.T) {
 	bin := c1c2Binary(t)
-	for _, args := range issue149Paths(t, bin, issue149Program) {
-		got, err := exec.Command(bin, args...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("%v: %v %s", args[0], err, got)
-		}
-		if string(got) != issue149Want {
-			gl, wl := strings.Split(string(got), "\n"), strings.Split(issue149Want, "\n")
-			for i := range wl {
-				if i >= len(gl) || gl[i] != wl[i] {
-					t.Fatalf("%v %s line %d: got %q want %q", args[0], args[1], i+1, gl[min(i, len(gl)-1)], wl[i])
-				}
+	for chunkIndex, chunk := range issue149Chunks(t, 4) {
+		for _, args := range issue149Paths(t, bin, chunk.program) {
+			got, err := exec.Command(bin, args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("chunk %d %v: %v %s", chunkIndex+1, args[0], err, got)
 			}
-			t.Fatalf("%v: got %q want %q", args[0], got, issue149Want)
+			if string(got) != chunk.want {
+				gl, wl := strings.Split(string(got), "\n"), strings.Split(chunk.want, "\n")
+				for i := range wl {
+					if i >= len(gl) || gl[i] != wl[i] {
+						t.Fatalf("chunk %d %v %s line %d: got %q want %q", chunkIndex+1, args[0], args[1], i+1, gl[min(i, len(gl)-1)], wl[i])
+					}
+				}
+				t.Fatalf("chunk %d %v: got %q want %q", chunkIndex+1, args[0], got, chunk.want)
+			}
 		}
 	}
 }

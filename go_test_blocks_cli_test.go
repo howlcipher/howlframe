@@ -30,6 +30,7 @@ func TestGoTestBlocksRunAsTests(t *testing.T) {
   (test "exit 3" (exit 3))
   (test "twin" (assert true))
   (test "twin" (assert true))
+  (test "twin 2" (assert true))
   (test "runs last" (assert true)))`)
 	out := filepath.Join(dir, "go")
 	if b, err := exec.Command(bin, "build", src, "--target", "go", "-o", out).CombinedOutput(); err != nil {
@@ -37,9 +38,9 @@ func TestGoTestBlocksRunAsTests(t *testing.T) {
 	}
 	mod := "module probe\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
 	os.WriteFile(filepath.Join(out, "go.mod"), []byte(mod), 0o600)
-	cmd := exec.Command("go", "test", "-v", ".")
+	cmd := exec.Command("go", "test", "-parallel=1", "-v", ".")
 	cmd.Dir = out
-	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod")
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod -p=1")
 	b, err := cmd.CombinedOutput()
 	report := string(b)
 	if err == nil {
@@ -52,11 +53,20 @@ func TestGoTestBlocksRunAsTests(t *testing.T) {
 		"--- PASS: Test_map_get",
 		"RUNTIME_ERROR: division by zero", "--- FAIL: Test_divides_by_zero",
 		"HowlFrame exit 3 at g.howl:9", "--- FAIL: Test_exit_3",
-		"--- PASS: Test_twin ", "--- PASS: Test_twin_2",
+		"--- PASS: Test_twin ", "--- PASS: Test_twin_2 ", "--- PASS: Test_twin_2_2 ",
 		"--- PASS: Test_runs_last",
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("report lacks %q:\n%s", want, report)
+		}
+	}
+	for _, name := range []string{
+		"Test_passes", "Test_assert_fails", "Test_assert_in_a_function", "Test_map_get",
+		"Test_divides_by_zero", "Test_exit_3", "Test_twin", "Test_twin_2", "Test_twin_2_2", "Test_runs_last",
+	} {
+		count := strings.Count(report, "--- PASS: "+name+" (") + strings.Count(report, "--- FAIL: "+name+" (")
+		if count != 1 {
+			t.Errorf("generated test %s ran %d times, want exactly once:\n%s", name, count, report)
 		}
 	}
 }
