@@ -767,10 +767,10 @@ func buildSource() {
 	wasmHost := buildFlags.String("host", "", "with --target wasmgc: node (app.wasm and an app.mjs loader), wasi (a WASI command module, app.wasm only) or browser (a web_app: app.wasm and an app.js loader); default node for a cli_app and browser for a web_app")
 	wasmInline := buildFlags.Bool("inline-module", false, "with --target wasmgc for the browser: write one app.js that holds the module (base64) instead of app.wasm and a loader that fetches it; a page's policy needs 'wasm-unsafe-eval' in script-src")
 	wasmTests := buildFlags.Bool("tests", false, "with --target wasmgc: compile the program's test blocks, whatever its root, into app.test.wasm (and an app.test.mjs runner for --host node) instead of the program")
-	jsModule := buildFlags.Bool("module", false, "with --target js: write app.mjs, an ES module exporting the program's top-level (export (defun ...)) functions, and app.d.mts declarations")
+	jsModule := buildFlags.Bool("module", false, "with --target js or wasmgc: write a Node ESM module for the program's top-level exported functions and app.d.mts declarations")
 
 	buildFlags.Usage = func() {
-		fmt.Println("Usage: howlframe build <source.howl> [-o <output>] [--target={bytecode|go|js|wasm}]")
+		fmt.Println("Usage: howlframe build <source.howl> [-o <output>] [--target={bytecode|go|js|wasm|wasmgc}] [--module]")
 		buildFlags.PrintDefaults()
 	}
 	buildFlags.Parse(os.Args[2:])
