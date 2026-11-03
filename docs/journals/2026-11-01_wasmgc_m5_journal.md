@@ -305,3 +305,35 @@ Updated status: HowlFrame PR #301 is merged with all four CI jobs green; the def
 - Machine safety note: after changing only the test wait, focused Playwright passed under 3 GiB/5 GiB/no-swap/150%/128-task scope (observed current memory 469,553,152 B and current tasks 81). A project selection with default `performance` dependency started 25 of 75 tests unintentionally; its own scope was stopped, exit 143, with no external process affected. The corrected temporary one-project config listed exactly one target test and passed it. Do not repeat the accidental dependency suite.
 - Handoff next step: determine whether Firefox can be verified with a safe policy-compliant method, without raising the cgroup ceiling or touching the owner’s Firefox. If no safe method is available, report the precise blocker and obtain owner disposition of the remaining Firefox requirement. No production release or deployment action was taken; HowlScene HF is merged at `ea1eeea...`, and M6 has not started.
 - Final workspace reconciliation: removed only the task-created `build`, `dist`, and `node_modules` symlinks from `/tmp/howlscene-hf-m5` after confirming their targets; the HF branch has no leftover scratch symlinks. Final remote `origin/main` for HowlFrame was rechecked as `e2eb0ba84b499670e2576d1658ff8add86420c65`. Journal worktree `/tmp/wasmgc-m5` is locally committed; its branch remains ahead/behind `origin/main` and was not force-pushed or merged.
+
+### 2026-11-03 — Firefox resource gate remains blocked
+
+Current repository revisions and PR state:
+
+- HowlFrame journal branch is based on `origin/main` `41ee7b80c6a5eb6b08941f9415a88156b9d0875f`; this checkpoint commit is local on `docs/m5-firefox-safety-blocker`.
+- HowlScene HF `main` is merged at `ea1eeeadb724feb6d4013c9b05733cf9f1a25bfd` (tested PR head `3dc71725e97d18b87c3033a928ecd6eda3d9cf69`, identical tree).
+- Firefox-validation follow-up is open and unmerged as [HowlScene HF PR #3](https://github.com/howlcipher/howlscene-hf/pull/3), branch `test/m5-firefox-bounded`, latest pushed commit `07a8ad04a673ad1d4a9389b30d10ccc3cff6010b`. Do not merge while its required Firefox check is red or unverified.
+
+Remote validation attempts, in order:
+
+- Run `41568963393` was canceled by this task after discovering the harness expected 80 tests from a stale local checkout. It had already passed source policy, WasmGC build, provenance, core, and SDK steps; Chromium was canceled before completion and the Firefox job never started. This is not a test result.
+- Run `41569853523`: `verify` passed, including 81 Chromium cases. The Firefox job stopped before dependency installation/test discovery because Docker exposed `memory.high=max`; no Firefox browser test ran.
+- Run `41570598965`: `verify` passed, including 81 Chromium cases. A second Docker cgroup setup step failed before dependencies/tests; the step did not expose which hard-limit/writable-file assertion failed. No Firefox browser test ran.
+- Run `41571046108`: `verify` passed, including 81 Chromium cases. `systemd-run` stopped immediately because `--pipe` is incompatible with `--scope`; no validation command ran.
+- Run `41571481459`: `verify` passed, including 81 Chromium cases. `systemd-run --scope` successfully created `run-r0eb2f2224d2e4c16b018d22bcca1e51a.scope`. The bounded runner verified cgroup settings in order, then stopped at the host-memory check: `MemAvailable=6.79 GiB`, below the mandatory 10 GiB. Exit 2 occurred before `npm ci`, Firefox installation, test listing, or browser tests. No cgroup limit event or process kill occurred. The child-inheritance check was not reached.
+
+Resource investigation and decision:
+
+- The systemd scope is configured for MemoryHigh 3 GiB, MemoryMax 5 GiB, MemorySwapMax 0, CPUQuota 150%, TasksMax 128. The runner uses one Playwright worker, `GOMAXPROCS=2`, no retries, and aborts on new cgroup limit events or swap use.
+- GitHub’s standard private-repository `ubuntu-24.04` runner has 8 GiB RAM; the observed runner exposed 6.79 GiB available. The repository owner is the GitHub user `howlcipher`; the repository API reports zero self-hosted runners. GitHub larger runners require an organization/enterprise configuration. Do not switch to a paid/unavailable runner or create one without authorization.
+- Fresh local snapshot: MemAvailable 11,679,232 kB (~11.13 GiB), `/tmp` free 9.0 GiB, SwapFree 8,552,828 kB, memory/IO/CPU PSI avg10 all 0.00, load 0.27/0.43/0.49. However, the host had an active Firefox process tree including a content process with 162 tabs, other Firefox content processes, and active Codex/Claude/agy agents. No local browser or compiler workload was started. These processes were not touched.
+- No browser test executed in any failed remote preflight. There were no task-owned process kills, swap events, OOM events, or resource-limit events. The only task-owned remote workload was serial CI verification; no local tests were run concurrently.
+
+Classification: environment/resource-availability blocker, not an application failure. M5 remains **IN PROGRESS/BLOCKED** on required Firefox evidence. Existing M5 evidence remains unchanged: WasmGC production build/provenance, source policy, core 19/19, SDK 22/22, Chromium 81/81, and HowlFrame gates are passing. A11Y-007 and TXT-002 are still only known M4 shared-baseline Firefox differences; the new suite has not reproduced them on the current tree. WebKit remains unavailable as recorded earlier. Do not create the M6 handoff yet.
+
+Exact next steps for another Luna session:
+
+1. Recheck runner availability and host load. Use an already-authorized host with MemAvailable >=10 GiB, >=8 GiB scratch, no active heavy browser/agent workload, and the same verified cgroup-v2 limits; do not raise the ceilings.
+2. Resume `test/m5-firefox-bounded` at `07a8ad04a673ad1d4a9389b30d10ccc3cff6010b` or a later review commit. Run PR #3 CI and inspect the actual systemd cgroup values/child membership before tests.
+3. Require all 81 discovered Firefox cases to execute exactly once: 79 pass, while only the two documented M4 baseline cases produce expected failures with logged diagnostics. Require zero skips, no other failures, no memory/pids/swap events, and inspect peak memory/tasks.
+4. Merge PR #3 only after its complete CI run is green and the above Firefox evidence is verified. Then append final M5 evidence here and create the M6 prompt. Until then leave M5 in progress and M6 unstarted.
