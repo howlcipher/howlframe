@@ -310,7 +310,7 @@ Updated status: HowlFrame PR #301 is merged with all four CI jobs green; the def
 
 Current repository revisions and PR state:
 
-- HowlFrame journal branch is based on `origin/main` `41ee7b80c6a5eb6b08941f9415a88156b9d0875f`; this checkpoint commit is local on `docs/m5-firefox-safety-blocker`.
+- HowlFrame journal branch `docs/m5-firefox-safety-blocker` is pushed at `dea64377930b38c5cd43f31ad754488ca4d42244`, based on `origin/main` `41ee7b80c6a5eb6b08941f9415a88156b9d0875f`.
 - HowlScene HF `main` is merged at `ea1eeeadb724feb6d4013c9b05733cf9f1a25bfd` (tested PR head `3dc71725e97d18b87c3033a928ecd6eda3d9cf69`, identical tree).
 - Firefox-validation follow-up is open and unmerged as [HowlScene HF PR #3](https://github.com/howlcipher/howlscene-hf/pull/3), branch `test/m5-firefox-bounded`, latest pushed commit `07a8ad04a673ad1d4a9389b30d10ccc3cff6010b`. Do not merge while its required Firefox check is red or unverified.
 
