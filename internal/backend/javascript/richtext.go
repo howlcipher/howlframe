@@ -158,12 +158,68 @@ function howlFrameRichtextGet(el) {
   howlFrameRichtextBlocks(el, blocks);
   return blocks;
 }
+var howlFrameRichtextSelections = new WeakMap();
+var howlFrameRichtextEditors = new WeakSet();
+var howlFrameRichtextPendingBlur = new WeakSet();
+var howlFrameRichtextSelectionTracking = false;
+function howlFrameRichtextRangeWithin(el, range) {
+  if (!range) return false;
+  var node = range.commonAncestorContainer;
+  return node === el || el.contains(node);
+}
+function howlFrameRichtextOwner(node) {
+  while (node) {
+    if (node.nodeType === 1 && howlFrameRichtextEditors.has(node)) return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+function howlFrameRichtextSaveSelection(el) {
+  var selection = document.getSelection ? document.getSelection() : null;
+  if (!selection || selection.rangeCount === 0) return;
+  var range = selection.getRangeAt(0);
+  if (howlFrameRichtextRangeWithin(el, range) && (!range.collapsed || !howlFrameRichtextSelections.has(el))) {
+    howlFrameRichtextSelections.set(el, range.cloneRange());
+  }
+}
+function howlFrameRichtextTrackSelections() {
+  if (howlFrameRichtextSelectionTracking || !document.addEventListener) return;
+  howlFrameRichtextSelectionTracking = true;
+  document.addEventListener("selectionchange", function () {
+    var selection = document.getSelection ? document.getSelection() : null;
+    if (!selection || selection.rangeCount === 0) return;
+    var range = selection.getRangeAt(0);
+    var el = howlFrameRichtextOwner(range.commonAncestorContainer);
+    if (!el || (range.collapsed && howlFrameRichtextPendingBlur.has(el))) return;
+    if (document.activeElement === el || !range.collapsed) howlFrameRichtextSelections.set(el, range.cloneRange());
+  });
+  // Capture the selected range before the browser moves focus and collapses
+  // it while the user activates a toolbar or opens a dialog.
+  document.addEventListener("pointerdown", function (event) {
+    var selection = document.getSelection ? document.getSelection() : null;
+    if (!selection || selection.rangeCount === 0) return;
+    var range = selection.getRangeAt(0);
+    var el = howlFrameRichtextOwner(range.commonAncestorContainer);
+    if (!el || el.contains(event.target)) return;
+    if (!range.collapsed) howlFrameRichtextSelections.set(el, range.cloneRange());
+    howlFrameRichtextPendingBlur.add(el);
+  }, true);
+}
 function howlFrameRichtextAttach(el, label) {
   if (el === null || el === undefined || typeof el !== "object") throw new Error("TYPE_ERROR: richtext_attach expected an element");
   el.setAttribute("contenteditable", "true");
   el.setAttribute("role", "textbox");
   el.setAttribute("aria-multiline", "true");
   el.setAttribute("aria-label", String(label));
+  howlFrameRichtextEditors.add(el);
+  howlFrameRichtextTrackSelections();
+  // Browsers can clear or move the document selection when focus enters a
+  // toolbar or dialog. Keep the editor's last non-empty selection so a later
+  // command (notably createLink) can restore it after focusing the editor.
+  el.addEventListener("blur", function () {
+    howlFrameRichtextSaveSelection(el);
+    howlFrameRichtextPendingBlur.delete(el);
+  });
   el.addEventListener("paste", function (e) {
     e.preventDefault();
     var text = e.clipboardData ? e.clipboardData.getData("text/plain") : "";
@@ -180,7 +236,23 @@ function howlFrameRichtextCommand(el, cmd, value) {
   if (el === null || el === undefined || typeof el !== "object") throw new Error("TYPE_ERROR: richtext_command expected an element");
   if (!Object.prototype.hasOwnProperty.call(howlFrameRichtextCommands, cmd)) throw new Error("RICHTEXT_UNKNOWN_COMMAND: " + String(cmd));
   var spec = howlFrameRichtextCommands[cmd];
+  var selection = document.getSelection ? document.getSelection() : null;
+  var currentRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+  var focusedEditor = document.activeElement === el;
+  if (focusedEditor && howlFrameRichtextRangeWithin(el, currentRange)) {
+    howlFrameRichtextSelections.set(el, currentRange.cloneRange());
+  }
+  var savedRange = howlFrameRichtextSelections.get(el);
+  if (savedRange && !howlFrameRichtextRangeWithin(el, savedRange)) {
+    howlFrameRichtextSelections.delete(el);
+    savedRange = null;
+  }
+  var restoreRange = savedRange || (howlFrameRichtextRangeWithin(el, currentRange) ? currentRange.cloneRange() : null);
   el.focus();
+  if (selection && restoreRange) {
+    selection.removeAllRanges();
+    selection.addRange(restoreRange.cloneRange());
+  }
   if (spec[1] === true) {
     if (typeof value !== "string" || value === "") throw new Error("RICHTEXT_INVALID: link needs an address");
     document.execCommand(spec[0], false, value);

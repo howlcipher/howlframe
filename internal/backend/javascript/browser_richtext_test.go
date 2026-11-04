@@ -13,24 +13,39 @@ func richtextHarness(t *testing.T, code program, setup string) string {
 	wrapper := howlNormJS + `const vm = require("node:vm");
 const out = [];
 const commands = [];
+const selectionAtCommand = [];
 class Node_ { constructor() { this.childNodes = []; this.parentNode = null; }
   appendChild(c) { c.parentNode = this; this.childNodes.push(c); return c; }
+  contains(n) { for (let p = n; p; p = p.parentNode) if (p === this) return true; return false; }
   get textContent() { return this.childNodes.map((c) => c.textContent).join(""); }
   set textContent(v) { this.childNodes = []; if (v !== "") this.appendChild(new Text_(String(v))); } }
 class Text_ extends Node_ { constructor(t) { super(); this.nodeType = 3; this.data = t; } get textContent() { return this.data; } }
 class Element_ extends Node_ { constructor(tag) { super(); this.nodeType = 1; this.tagName = tag.toUpperCase(); this.attrs = {}; this.listeners = {}; }
   setAttribute(n, v) { this.attrs[n] = String(v); } getAttribute(n) { return n in this.attrs ? this.attrs[n] : null; }
-  addEventListener(t, f) { this.listeners[t] = f; } focus() {}
+  addEventListener(t, f) { this.listeners[t] = f; if (t === "blur" && simulateBlurOnAttach) {
+    document.activeElement = this; selection.addRange(new Range_(this, false, "selected words"));
+    document.listeners.selectionchange(); document.listeners.pointerdown({ target: new Element_("button") });
+    selection.removeAllRanges(); selection.addRange(new Range_(this, true, "collapsed after focus"));
+    document.listeners.selectionchange(); f();
+    const dialog = new Element_("input"); document.activeElement = dialog; selection.removeAllRanges();
+    selection.addRange(new Range_(dialog, true, "dialog caret")); } }
+  focus() { document.activeElement = this; }
   get innerHTML() { throw new Error("innerHTML must not be used"); } set innerHTML(v) { throw new Error("innerHTML must not be used"); } }
+class Range_ { constructor(node, collapsed, marker) { this.commonAncestorContainer = node; this.collapsed = collapsed; this.marker = marker; }
+  cloneRange() { return new Range_(this.commonAncestorContainer, this.collapsed, this.marker); } }
+const selection = { ranges: [], get rangeCount() { return this.ranges.length; }, getRangeAt(i) { return this.ranges[i]; },
+  removeAllRanges() { this.ranges = []; }, addRange(r) { this.ranges = [r]; } };
+let simulateBlurOnAttach = false;
 const document = { createElement: (t) => new Element_(t), createTextNode: (t) => new Text_(t),
-  execCommand: (c, ui, v) => { commands.push([c, v === undefined ? null : v]); return true; },
+  activeElement: null, listeners: {}, addEventListener(t, f) { this.listeners[t] = f; }, getSelection: () => selection,
+  execCommand: (c, ui, v) => { commands.push([c, v === undefined ? null : v]); selectionAtCommand.push(selection.rangeCount ? selection.getRangeAt(0).marker : null); return true; },
   querySelector: (s) => s === "#ed" ? ed : null };
 const ed = new Element_("div");
 function h(tag, ...kids) { const e = new Element_(tag); for (const k of kids) e.appendChild(typeof k === "string" ? new Text_(k) : k); return e; }
 ` + setup + `
 const browser = { console: { log: (v) => out.push(howlNorm(v)), error: () => {} }, document };
 Promise.resolve(` + code.inContext("browser") + `).then(
-  () => console.log(JSON.stringify({ out, commands, attrs: ed.attrs, listeners: Object.keys(ed.listeners).sort() })),
+  () => console.log(JSON.stringify({ out, commands, selectionAtCommand, attrs: ed.attrs, listeners: Object.keys(ed.listeners).sort() })),
   (err) => console.log(JSON.stringify({ error: String(err.message), out })));`
 	stdout, stderr, exit := runNode(t, wrapper)
 	if exit != 0 {
@@ -105,13 +120,25 @@ func TestRichtextAttachAndCommands(t *testing.T) {
 		got := richtextHarness(t, code, "")
 		for _, want := range []string{
 			`"attrs":{"contenteditable":"true","role":"textbox","aria-multiline":"true","aria-label":"Introduction"}`,
-			`"listeners":["drop","paste"]`,
+			`"listeners":["blur","drop","paste"]`,
 			`["bold",null],["italic",null],["createLink","https://example.org/"],["unlink",null],["formatBlock","<h2>"],["formatBlock","<p>"],["insertUnorderedList",null],["insertOrderedList",null]`,
 			"RICHTEXT_UNKNOWN_COMMAND",
 		} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("want %s in %s", want, got)
 			}
+		}
+	})
+}
+
+func TestRichtextCommandRestoresSelectionAfterEditorBlur(t *testing.T) {
+	forBackends(t, func(t *testing.T, b string) {
+		code := build(t, b, `(web_app (let (ed (dom_query "#ed")) (do
+  (richtext_attach ed "Introduction")
+  (richtext_command ed "link" "https://example.org/"))))`)
+		got := richtextHarness(t, code, "simulateBlurOnAttach = true;")
+		if !strings.Contains(got, `"selectionAtCommand":["selected words"]`) {
+			t.Fatalf("rich text command did not restore the editor selection after focus moved: %s", got)
 		}
 	})
 }
