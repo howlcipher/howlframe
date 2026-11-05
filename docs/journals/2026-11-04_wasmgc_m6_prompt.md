@@ -22,6 +22,10 @@ Chromium 81/81; core 19/19; SDK 22/22; provenance and recorded compiler gates pa
 
 Remaining maintained application source includes src/editor/index.html, src/editor/editor.css and src/site/site.css. Read scripts/assemble_editor.py, scripts/build.sh, scripts/check_source_policy.sh, provenance checks and current .howl UI/template/rendering sources. Generated output must remain distinguishable from maintained source. Do not inspect the separate howlcipher/howlscene repository or modify howlcipher/william_elias.
 
+## Prioritized dependency
+
+Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The roadmap defines the proposed JSON asset manifest architecture, alternatives and measurement protocol. This handoff does not authorize implementing subsequent milestones during M5 closeout.
+
 ## Suggested focused slices
 
 1. Inventory shell/style inputs and output contracts. Establish byte/DOM/CSP equivalence tests and an explicit generation design; compare small .howl-based generation options before selecting an architecture.

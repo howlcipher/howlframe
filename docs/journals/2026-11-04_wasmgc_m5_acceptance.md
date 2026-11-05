@@ -32,3 +32,11 @@ The owner instructed: “do all the stuff that doesn't require payment then let'
 2. Update the consumer compiler pin to that merged commit; integrate the tested consumer measurement correction and remove PR #3's obsolete expected-failure annotations. Do not merely relabel the old production output as the tested candidate.
 3. Run necessary final-tree checks sequentially within verified resource scopes. Publish PR #3 changes only when hosted execution is confirmed free or separately authorized. Require actual CI conclusions before merging.
 4. Reconcile PR #3's description and milestone status with this accepted-exception record. M6 planning is permitted by the owner's disposition; M6 implementation must account for these unmerged dependencies first.
+
+## 2026-11-05 closeout reconciliation
+
+Live remote heads remain compiler main `41ee7b80c6a5eb6b08941f9415a88156b9d0875f`, consumer main `ea1eeeadb724feb6d4013c9b05733cf9f1a25bfd`, and private PR #3 `07a8ad04a673ad1d4a9389b30d10ccc3cff6010b` (verify SUCCESS, firefox FAILURE). The compiler fix has no published PR yet.
+
+The earlier payment uncertainty does not apply to HowlFrame's standard public CI: live GitHub repository visibility is PUBLIC, `.github/workflows/ci.yml` uses standard `ubuntu-latest` runners, and [GitHub's billing policy](https://docs.github.com/en/actions/concepts/billing-and-usage) confirms standard public-repository runner usage is free. Publishing the compiler fix is authorized after local validation; require independent review and Build, Acceptance, Race and Latest Go success before merge. Private consumer cost uncertainty remains unchanged. This corrects the previous blanket deferral of hosted CI; retain the original historical record above.
+
+New selection-state and runner changes are unverified candidates. They do not inherit the historical 81/81 results. See `2026-11-05_m5_closeout.md` for current work and remaining gates and [the proposed roadmap](../design/ai_dx_roadmap.md) for subsequent milestones.

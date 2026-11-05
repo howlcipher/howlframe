@@ -2,6 +2,10 @@
 
 This document is the authoritative, ranked backlog for the HowlFrame transpiler project. It mirrors the format used in the main AI Knowledge Library.
 
+## Prioritized assessment
+
+Next sequence: **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3**. See the [AI-DX roadmap](docs/design/ai_dx_roadmap.md) for deliverables, alternatives, acceptance and preregistered measurement. These capabilities and efficiency gains remain proposed.
+
 ## Working Protocol
 
 This protocol applies to every worked task in the HowlFrame project:
