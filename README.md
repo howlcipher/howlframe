@@ -8,7 +8,7 @@ Historical acceptance is retained separately in [Milestone 2's decision](milesto
 The separate remote [Milestone 3 draft](milestone3/M3_ACCEPTANCE_SPEC.md) is preserved as another project track; EvidenceDesk does not claim to implement that receipt-verifier specification.
 
 WasmGC M5 is **complete with owner-accepted exceptions**. The rich-text compiler
-follow-up and consumer integration remain pending; the Firefox 81/81 evidence
+selection repair is included; consumer integration remains pending; the Firefox 81/81 evidence
 belongs to the recorded candidate, not the production pin. See [acceptance](docs/journals/2026-11-04_wasmgc_m5_acceptance.md)
 and the proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roadmap.md).
 

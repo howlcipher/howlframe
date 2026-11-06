@@ -69,6 +69,8 @@ function howlFrameRichtextSet(el, blocks) {
     }
     return node;
   });
+  howlFrameRichtextSelections.delete(el);
+  howlFrameRichtextPendingBlur.delete(el);
   el.textContent = "";
   built.forEach(function (n) { el.appendChild(n); });
 }
@@ -196,6 +198,8 @@ function howlFrameRichtextTrackSelections() {
   // Capture the selected range before the browser moves focus and collapses
   // it while the user activates a toolbar or opens a dialog.
   document.addEventListener("pointerdown", function (event) {
+    var targetEditor = howlFrameRichtextOwner(event.target);
+    if (targetEditor) howlFrameRichtextPendingBlur.delete(targetEditor);
     var selection = document.getSelection ? document.getSelection() : null;
     if (!selection || selection.rangeCount === 0) return;
     var range = selection.getRangeAt(0);
@@ -203,6 +207,16 @@ function howlFrameRichtextTrackSelections() {
     if (!el || el.contains(event.target)) return;
     if (!range.collapsed) howlFrameRichtextSelections.set(el, range.cloneRange());
     howlFrameRichtextPendingBlur.add(el);
+  }, true);
+  // Explicit editing intent ends the outside-pointer transition even when
+  // that pointer interaction did not move focus (for example preventDefault).
+  document.addEventListener("keydown", function (event) {
+    var el = howlFrameRichtextOwner(event.target);
+    if (el) howlFrameRichtextPendingBlur.delete(el);
+  }, true);
+  document.addEventListener("focusin", function (event) {
+    var el = howlFrameRichtextOwner(event.target);
+    if (el) howlFrameRichtextPendingBlur.delete(el);
   }, true);
 }
 function howlFrameRichtextAttach(el, label) {
