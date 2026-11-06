@@ -118,7 +118,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | M2 tests | Done (2026-10-30) | `build --target wasmgc --tests` compiles a file's test blocks (any root) into `app.test.wasm` with a runner that reports like node:test, in Node and in wasmtime. 13 report fixtures match the JavaScript backend's `app.test.js` (`TestTestsLikeJavaScript`) and 5 build errors fail closed (`TestTestsFailClosed`). HowlScene HF's 19 core tests (backup 6, render 5, schema 8) pass on WebAssembly with the same report as `scripts/test_core.sh` (`TestHowlSceneTestsGate`); ZIP is in `std/zip.howl` for the backup tests. |
 | M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
 | M4 site runtime | Done (2026-11-01) | `build --target wasmgc --inline-module` writes one `app.js` holding the module; pages add only `'wasm-unsafe-eval'` ("Site delivery"). The encoder leaves out unreached functions (site module 40,227 B). HowlScene HF builds its site runtime on WebAssembly behind `SITE_TARGET=wasmgc` and runs its browser suite on both runtimes in CI: 80 of 80 in Chromium, every motion and story spec in Firefox; initial download 31.2 KiB gzipped of 250 (`TestHowlSceneSiteBudget`). Journal: `docs/journals/2026-10-31_wasmgc_m4_journal.md`; M5 prompt: `docs/journals/2026-11-01_wasmgc_m5_prompt.md`. |
-| M5 editor | Not started | |
+| M5 editor | Complete with owner-accepted exceptions (2026-11-04) | See `docs/journals/2026-11-04_wasmgc_m5_acceptance.md`. Candidate Firefox 81/81 is not production evidence; compiler and consumer follow-up integration remains pending. |
 | M6 no other languages in the app | Not started | |
 
 ### Rules
@@ -845,8 +845,11 @@ KB gzipped. Both page policies and the editor page's policy gain
 - [x] M4: HowlScene HF's published-site runtime built with this backend;
       motion and story tests pass; size measured against 250 KiB (tasks
       below, "M4 tasks: site runtime").
-- [ ] M5: the editor built with this backend; the full browser suite and
-      the beginner journey pass; HowlScene HF drops `--target js`.
+- [x] M5: complete with owner-accepted exceptions. The editor and site use
+      WasmGC; final Firefox 81/81 is candidate evidence. The rich-text compiler
+      follow-up, consumer repin and private PR #3 integration remain pending.
+      See `docs/journals/2026-11-04_wasmgc_m5_acceptance.md`; this checkbox
+      does not claim the original CI-and-merge contract passed.
 - [ ] M6: styles and the editor page shell generated from `.howl`; source
       policy allows only `.howl` under `src/`.
 
