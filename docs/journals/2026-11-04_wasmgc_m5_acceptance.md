@@ -40,3 +40,7 @@ Live remote heads remain compiler main `41ee7b80c6a5eb6b08941f9415a88156b9d0875f
 The earlier payment uncertainty does not apply to HowlFrame's standard public CI: live GitHub repository visibility is PUBLIC, `.github/workflows/ci.yml` uses standard `ubuntu-latest` runners, and [GitHub's billing policy](https://docs.github.com/en/actions/concepts/billing-and-usage) confirms standard public-repository runner usage is free. Publishing the compiler fix is authorized after local validation; require independent review and Build, Acceptance, Race and Latest Go success before merge. Private consumer cost uncertainty remains unchanged. This corrects the previous blanket deferral of hosted CI; retain the original historical record above.
 
 New selection-state and runner changes are unverified candidates. They do not inherit the historical 81/81 results. See `2026-11-05_m5_closeout.md` for current work and remaining gates and [the proposed roadmap](../design/ai_dx_roadmap.md) for subsequent milestones.
+
+## Integrated follow-up: 2026-11-07
+
+Compiler PR #303 and consumer PR #3 are now merged. The owner explicitly approved the private hosted-CI exception based on final local validation. See the [integrated closeout](2026-11-07_m5_integrated_closeout.md) for exact revisions, final results and remaining limitations. Earlier deferred-integration statements above describe historical state.

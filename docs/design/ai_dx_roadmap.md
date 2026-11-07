@@ -6,7 +6,7 @@ Status: proposed, 2026-11-05. No interfaces or efficiency gains below are implem
 
 **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3.**
 
-[M5 acceptance](../journals/2026-11-04_wasmgc_m5_acceptance.md) remains complete with owner-accepted exceptions. Its candidate browser evidence does not establish production compatibility. Resolve the compiler fix, merged consumer pin, measurement correction and final candidate verification before treating M6 as an integrated application trial. Private consumer PR #3 remains unmerged while its check is red and no-payment hosted execution is unverified.
+[M5 acceptance](../journals/2026-11-04_wasmgc_m5_acceptance.md) remains complete with owner-accepted exceptions. The compiler repair and consumer pin, measurement correction and final verification are now merged; see the [integrated closeout](../journals/2026-11-07_m5_integrated_closeout.md). Private consumer PR #3 merged using the explicitly owner-approved local-validation exception, with hosted CI skipped to preserve no-payment execution. Local browser evidence establishes the tested source candidate, not a deployment or new engine compatibility claim.
 
 ## AI-DX1: Understanding
 
