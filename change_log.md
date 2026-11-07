@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-### M5 closeout candidate
-* Preserve rich-text selection across toolbar focus changes; clear stale transition state on explicit editing intent and saved state on content replacement. Focused rich-text regressions and the prescribed two-toolchain WasmGC gate pass; consumer repinning and final browser integration remain pending.
+### M5 closeout
+* Preserve rich-text selection across toolbar focus changes; clear stale transition state on explicit editing intent and saved state on content replacement. Focused rich-text regressions and the prescribed two-toolchain WasmGC gate pass; consumer repinning and final local browser integration are merged (Chromium and Firefox 81/81 each). Private hosted CI remains an explicitly owner-approved exception.
 * Record M5 as complete with owner-accepted integration exceptions and add the proposed AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap and measurement protocol. No AI-DX feature or efficiency gain is claimed.
 
 ### Correctness

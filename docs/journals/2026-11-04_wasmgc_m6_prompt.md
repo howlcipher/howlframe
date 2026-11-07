@@ -4,19 +4,18 @@
 
 Remove the remaining authored HTML/CSS application source from HowlScene HF by generating styles and the editor page shell from .howl. Enforce a policy allowing only .howl application source under src/. Preserve generated platform glue and the existing security/capability boundaries. Do not delete HowlFrame's JavaScript backend.
 
-M5 was closed by explicit owner disposition using local evidence with deferred hosted CI and merges. Read `2026-11-04_wasmgc_m5_acceptance.md` before starting. Do not claim the original M5 CI-and-merge contract passed. This document plans M6; no M6 implementation has begun.
+M5 remains complete with owner-accepted exceptions. Compiler and consumer follow-ups are now merged; private hosted CI was skipped with explicit owner approval. Read the [integrated closeout](2026-11-07_m5_integrated_closeout.md) and original [acceptance](2026-11-04_wasmgc_m5_acceptance.md). Do not claim the original hosted-CI contract passed. This document plans M6; no M6 implementation has begun.
 
 ## Starting revisions and dependencies
 
-- Merged consumer production: ea1eeeadb724feb6d4013c9b05733cf9f1a25bfd.
-- Merged compiler implementation: e2eb0ba84b499670e2576d1658ff8add86420c65; later main documentation: 41ee7b80c6a5eb6b08941f9415a88156b9d0875f. Verify remote heads before acting.
-- Local compiler fix: cac48ccdad09489598123734be3c28815565146d on fix/firefox-richtext-selection, worktree /tmp/howlframe-firefox-richtext.
-- Local consumer measurement correction: 68384f9257e42a437035cd9039e4593db1a9528b on fix/m5-firefox-baseline, worktree /tmp/howlscene-hf-firefox-fixes.
-- PR #3 https://github.com/howlcipher/howlscene-hf/pull/3 has unpushed follow-up evidence on test/m5-firefox-bounded in /tmp/howlscene-hf-m5-firefox. Its hosted Firefox check is red. Resolve the dependency sequence from the M5 acceptance record before building M6 upon those candidate fixes. No billable workflow, deployment or release publishing is authorized.
+- Merged compiler repair: `db1cbc85e2b58662a053e5d2b68df508684982ea` ([PR #303](https://github.com/howlcipher/howlframe/pull/303)); public Build, Acceptance, Race and Latest Go checks passed.
+- Merged consumer: `fe626c8606bde6d500facb1b41d413196eb198d7` ([PR #3](https://github.com/howlcipher/howlscene-hf/pull/3)), pinned to that compiler. Verify remote heads before acting.
+- Earlier `cac48ccdad09489598123734be3c28815565146d` compiler and `68384f9257e42a437035cd9039e4593db1a9528b` measurement candidates remain historical evidence, not the starting revisions.
+- No billable workflow, deployment or release publishing is authorized.
 
 ## M5 evidence and limitations
 
-Chromium 81/81; core 19/19; SDK 22/22; provenance and recorded compiler gates passed. Final Firefox candidate 81/81 in sequential shards, including the beginner journey; paired JavaScript reference TXT-002/A11Y-007 2/2 passed with the candidate compiler and corrected measurement. See the exact case ledger and acceptance record. The previous uninterrupted Firefox suite exhausted its task limit; final shards did not. Hosted CI on follow-up changes remains unexecuted; WebKit launch/compatibility remains unverified. Preserve these gaps honestly.
+Final local source policy, build, provenance, core 19/19, SDK 22/22, runner infrastructure 31/31, Chromium 81/81 and Firefox 81/81 passed. Firefox used four sequential fresh bounded scopes (27 + 22 + 16 + 16), with zero skips, retries or expected failures. See the integrated record for exact revisions and evidence hashes. The earlier uninterrupted Firefox suite exhausted its task limit; final shards did not. Private hosted CI was intentionally skipped, and WebKit remains unverified. No deployment is claimed.
 
 ## Source-purity gaps
 

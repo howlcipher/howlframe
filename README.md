@@ -7,10 +7,11 @@ accepted and reproducible from committed archives. See [the rebuild evidence led
 Historical acceptance is retained separately in [Milestone 2's decision](milestone2/MILESTONE2_DECISION.md).
 The separate remote [Milestone 3 draft](milestone3/M3_ACCEPTANCE_SPEC.md) is preserved as another project track; EvidenceDesk does not claim to implement that receipt-verifier specification.
 
-WasmGC M5 is **complete with owner-accepted exceptions**. The rich-text compiler
-selection repair is included; consumer integration remains pending; the Firefox 81/81 evidence
-belongs to the recorded candidate, not the production pin. See [acceptance](docs/journals/2026-11-04_wasmgc_m5_acceptance.md)
-and the proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roadmap.md).
+WasmGC M5 is **complete with owner-accepted exceptions**. The compiler repair and
+consumer follow-up are merged, with final local Chromium and Firefox coverage of
+81/81 each. Private hosted CI was skipped with explicit owner approval; this is
+not deployment evidence. See the [integrated closeout](docs/journals/2026-11-07_m5_integrated_closeout.md)
+and proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roadmap.md).
 
 ## What is HowlFrame?
 
