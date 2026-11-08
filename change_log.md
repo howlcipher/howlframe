@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Agent understanding
+* Add the bytecode-first `agent capabilities`, `agent describe`, `agent check --json` and `agent explain` commands with deterministic `howlframe.agent/v1` output. Reuse construct/arity registries and production compiler checks; distinguish requirements from empty actual grants and preserve unknown target/signature coverage.
+* Record inherited hygiene-gate failure on unchanged main as bug #72; preserve the failure without raising ceilings.
+* Record the AI-DX1 measurement protocol before implementation. Only the bytecode slice is implemented; typed signatures, other target catalogs and efficiency improvements remain unverified or future work.
+
 ### M5 closeout
 * Preserve rich-text selection across toolbar focus changes; clear stale transition state on explicit editing intent and saved state on content replacement. Focused rich-text regressions and the prescribed two-toolchain WasmGC gate pass; consumer repinning and final local browser integration are merged (Chromium and Firefox 81/81 each). Private hosted CI remains an explicitly owner-approved exception.
 * Record M5 as complete with owner-accepted integration exceptions and add the proposed AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap and measurement protocol. No AI-DX feature or efficiency gain is claimed.

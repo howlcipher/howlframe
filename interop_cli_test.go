@@ -112,7 +112,7 @@ func TestInteropDescriptorMatchesFlagSets(t *testing.T) {
 	}
 	var described []string
 	for path := range byPath {
-		if path != "" {
+		if path != "" && !strings.Contains(path, " ") {
 			described = append(described, path)
 		}
 	}
@@ -171,5 +171,24 @@ func TestInteropCommandPrintsAValidDescriptor(t *testing.T) {
 	}
 	if err := exec.Command(bin, "interop", "--bogus").Run(); err == nil {
 		t.Error("interop accepted an unknown argument")
+	}
+}
+
+func TestInteropAgentCommands(t *testing.T) {
+	expected := map[string]string{"agent": "", "agent capabilities": "target", "agent describe": "target", "agent check": "json,target", "agent explain": ""}
+	found := 0
+	for _, c := range interopCommands {
+		path := strings.Join(c.Path, " ")
+		want, ok := expected[path]
+		if !ok {
+			continue
+		}
+		found++
+		if !c.JSON || strings.Join(trimmedFlags(c.Flags), ",") != want || len(c.Emits) != 1 || c.Emits[0] != "howlframe.agent/v1" {
+			t.Fatalf("agent descriptor drift: %+v", c)
+		}
+	}
+	if found != len(expected) {
+		t.Fatalf("missing agent descriptors: %d", found)
 	}
 }

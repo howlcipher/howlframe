@@ -1,6 +1,6 @@
 # AI developer experience roadmap
 
-Status: proposed, 2026-11-05. No interfaces or efficiency gains below are implemented by this closeout.
+Status: updated 2026-11-08. The first AI-DX1 bytecode understanding slice is implemented; broader coverage, later milestones and all efficiency gains remain proposed or unverified.
 
 ## Ordering and integration boundary
 
@@ -10,7 +10,7 @@ Status: proposed, 2026-11-05. No interfaces or efficiency gains below are implem
 
 ## AI-DX1: Understanding
 
-First deliverable: proposed `agent capabilities`, `agent describe`, `agent check --json`, and `agent explain` interfaces. Define a versioned deterministic schema before implementation: target, construct signatures, actual runner grants, limitations, stable diagnostic codes and locations, and executable example references. Sort output deterministically; distinguish unsupported from unknown and unavailable evidence. Never infer authorization from construct availability.
+First deliverable: `agent capabilities`, `agent describe`, `agent check --json`, and `agent explain` now have a bytecode-first slice with versioned deterministic output. See the [interface contract](../reference/agent_interface.md), [implementation evidence](../journals/2026-11-08_ai_dx1_understanding.md), and [preregistered protocol](../reference/ai_dx1_measurement_protocol.md). It exposes authoritative support and argument counts, empty actual grants, explicit limitations, existing compiler diagnostic codes/locations where available, and one executable pure example. Full typed signatures and other target catalogs remain unknown. Explain coverage is partial; legacy diagnostic coverage gaps remain explicit. Availability never implies authorization.
 
 Extend `internal/construct/`, `internal/hfir/diagnostic.go`, backend registries and existing diagnostic machinery. Reuse avoids a second language catalog, but metadata is fragmented and must be reconciled. A separate manually maintained capability database would be easier to prototype but risks drift and false support claims. The standalone bytecode registry must not imply JavaScript, Go or WasmGC support. Unknown coverage stays explicit.
 
