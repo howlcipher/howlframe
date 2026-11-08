@@ -4,7 +4,7 @@ This document is the authoritative, ranked backlog for the HowlFrame transpiler 
 
 ## Prioritized assessment
 
-Next sequence: **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3**. See the [AI-DX roadmap](docs/design/ai_dx_roadmap.md) for deliverables, alternatives, acceptance and preregistered measurement. These capabilities and efficiency gains remain proposed.
+Next sequence: **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3**. See the [AI-DX roadmap](docs/design/ai_dx_roadmap.md) for deliverables, alternatives, acceptance and preregistered measurement. The AI-DX1 bytecode understanding slice is implemented in this change; other target catalogs, full typed signatures and efficiency gains remain future or unverified work. See the [interface contract](docs/reference/agent_interface.md) and [AI-DX1 evidence](docs/journals/2026-11-08_ai_dx1_understanding.md).
 
 ## Working Protocol
 
@@ -36,6 +36,8 @@ Pending rows are ranked by a diminishing-returns score:
 
 | # | Improvement | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| AI-DX1 | [Bytecode-first agent understanding](docs/reference/agent_interface.md) | Done (2026-11-08), initial slice with owner-accepted hygiene exception | Roadmap priority | — | — | Codex | Registry-derived discovery, production check diagnostics and executable example; no efficiency gain or other-target coverage claimed. |
+| AI-DX1 follow-up | [Expand understanding evidence](#ai-dx1-understanding-follow-up) | Deferred, unscored | Not ranked | — | — | — | Full typed signatures and other-target coverage need authoritative metadata and executable evidence; exceptional check failures need fault-injection coverage. |
 | 85 | [Unify compiler entry points and artifact-output contract](#85-unify-compiler-entry-points-and-artifact-output-contract) | Done (2026-08-01) | 4.0 (8×1÷2) | Sonnet 5 | — | gpt-5.6-terra | Standardized the documented compiler's output handling and closed bug #39; obsolete ignored scaffolding was removed during the HowlFrame cutover. |
 | 97 | [Standalone Runtime CLI Semantics: Phase 1 (stdin, stderr, explicit exit codes)](#97-standalone-runtime-cli-semantics) | Done (2026-08-07) | 2.67 (8×1÷3) | Sonnet 5 | Gemini 3.1 Pro (High) | — | Prioritization principle #5. Without this, building reliable CLI applications is impossible. Journal: `docs/journals/2026-08-07_improvement_97.md`. |
 | 101 | [Standalone Runtime: runner-controlled execution policy and instruction budgets](#101-standalone-runtime-runner-controlled-execution-policy-and-instruction-budgets) | Done (2026-08-09) | 2.67 (8×1÷3) | Opus 5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | Repo Analyst exceeds the fixed safe ceiling on a real workload; a finite runner-owned override separates application intent from runtime authority without weakening the default or capabilities. |
@@ -1026,3 +1028,7 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 * **Non-goals:** raising the default memory or instruction limits; changing list semantics.
 * **Model routing:** Claude **Opus 5.5** / Gemini **3.1 Pro (High)** / OpenAI **gpt-5.6-sol**. **Execution mode:** `plan-then-reviewed-edit`.
 * **Status:** Pending.
+
+## AI-DX1 understanding follow-up
+
+The initial bytecode slice is documented in [the interface contract](docs/reference/agent_interface.md). Preserve the agreed AI-DX1 → M6 → AI-DX2 → AI-DX3 ordering; this deferred expansion does not silently promote itself ahead of the application trial. Add full typed signatures or another target only from authoritative metadata and executable examples, retaining unknown coverage until then. Add deterministic fault-injection tests for timeout, truncated output, compiler launch and artifact-read failures when expanding the check boundary. Structured diagnostics preserve compiler-reported provenance, which is not proof of lossless imported-source mapping. Re-evaluate and score a bounded follow-up before selection; no efficiency gain is established by this item.

@@ -94,6 +94,19 @@ Output:
 Hello from HowlFrame
 ```
 
+## Agent understanding
+
+Use the versioned, deterministic bytecode discovery interface before generating or checking source:
+
+```bash
+howlframe agent capabilities
+howlframe agent describe read_file
+howlframe agent check --json hello.howl
+howlframe agent explain HFIR_TARGET_INFEASIBLE
+```
+
+The catalog reports construct support and argument counts, with full typed signatures explicitly unknown. Inspection grants no execution authority. Checks use production bytecode compilation without running the program; compiler warnings and diagnostic coverage gaps remain explicit. Other backend catalogs are unknown in this first slice. See the [interface contract](docs/reference/agent_interface.md) and [measurement preregistration](docs/reference/ai_dx1_measurement_protocol.md). No efficiency gain is claimed. The [integration record](docs/journals/2026-11-08_ai_dx1_understanding.md) documents the owner-accepted inherited hygiene exception.
+
 ## How it works
 
 The compiler pipeline provides semantic feedback. Invalid shared forms and type/layout mistakes fail with localized JSON errors before backend code is emitted. The language can only express behavior that has an implemented AST, IR, backend, or VM mapping. 

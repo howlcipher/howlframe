@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/howlcipher/howlframe/internal/agent"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/backend/gogen"
 	"github.com/howlcipher/howlframe/internal/backend/javascript"
@@ -48,7 +49,7 @@ func init() {
 func main() {
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help" || cmd == "interop") {
+		if !strings.HasPrefix(cmd, "-") && (cmd == "inspect" || cmd == "check" || cmd == "build" || cmd == "run" || cmd == "version" || cmd == "help" || cmd == "interop" || cmd == "agent") {
 			runSubcommand()
 			return
 		}
@@ -654,6 +655,13 @@ func runSubcommand() {
 	cmd := os.Args[1]
 
 	switch cmd {
+	case "agent":
+		executable, err := os.Executable()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(agent.Run(os.Args[2:], executable, os.Stdout))
 	case "help":
 		if len(os.Args) > 2 {
 			sub := os.Args[2]
@@ -692,6 +700,7 @@ Usage:
   howlframe <command> [arguments]
 
 Commands:
+  agent     Read-only versioned JSON discovery (capabilities, describe, check, explain).
   inspect   Report artifact capabilities (--caps), as compact JSON, without executing.
   check     Parse, type-check, and verify a .howl file without emitting an artifact.
   build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
@@ -1691,6 +1700,11 @@ type interopDescriptor struct {
 // The flag lists mirror the flag sets in howlframe.go;
 // TestInteropDescriptorMatchesFlagSets keeps them in step.
 var interopCommands = []interopCommand{
+	{Path: []string{"agent"}, Flags: []string{}, JSON: true, Emits: []string{agent.Schema}},
+	{Path: []string{"agent", "capabilities"}, Flags: []string{"--target"}, JSON: true, Emits: []string{agent.Schema}},
+	{Path: []string{"agent", "describe"}, Flags: []string{"--target"}, JSON: true, Emits: []string{agent.Schema}},
+	{Path: []string{"agent", "check"}, Flags: []string{"--json", "--target"}, JSON: true, Emits: []string{agent.Schema}},
+	{Path: []string{"agent", "explain"}, Flags: []string{}, JSON: true, Emits: []string{agent.Schema}},
 	{Path: []string{}, Flags: []string{
 		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
 		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
