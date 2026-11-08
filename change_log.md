@@ -4,7 +4,7 @@
 
 ### Agent understanding
 * Add the bytecode-first `agent capabilities`, `agent describe`, `agent check --json` and `agent explain` commands with deterministic `howlframe.agent/v1` output. Reuse construct/arity registries and production compiler checks; distinguish requirements from empty actual grants and preserve unknown target/signature coverage.
-* Record inherited hygiene-gate failure on unchanged main as bug #72; preserve the failure without raising ceilings.
+* Record inherited hygiene-gate failure on unchanged main as bug #72 and the owner-approved integration exception; preserve the failure without raising ceilings.
 * Record the AI-DX1 measurement protocol before implementation. Only the bytecode slice is implemented; typed signatures, other target catalogs and efficiency improvements remain unverified or future work.
 
 ### M5 closeout

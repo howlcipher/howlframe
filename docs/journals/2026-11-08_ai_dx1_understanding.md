@@ -35,6 +35,14 @@ Durable local task specification, routing, source hashes, review reconciliation 
 
 ## Inherited hygiene gate
 
-The generic control-plane run failed Slopslint enforcement: 745 production clones against ceiling 88. Repeating the same command against clean starting main produced exactly the same failure/count. Neither result is passing. This is filed as bug #72; no ceiling or exclusion was changed. The project's public CI has no hygiene step. The previous owner exception concerned private consumer hosted CI only and is not treated as a waiver for this failure. Integration disposition remains pending final regression and explicit resolution of this gate.
+The generic control-plane run failed Slopslint enforcement: 745 production clones against ceiling 88. Repeating the same command against clean starting main produced exactly the same failure/count. Neither result is passing. This is filed as bug #72; no ceiling or exclusion was changed. The project's public CI has no hygiene step. The previous owner exception concerned private consumer hosted CI only and is not treated as a waiver for this failure. The owner subsequently authorized continuing with the documented inherited hygiene exception. Bug #72 remains open; the enforcement failure is not reclassified as passing.
 
 Diagnostic classification scans completed for both scopes on baseline and candidate. Active clone counts are unchanged: production 745 (ceiling 88), tests 644 (ceiling 135). Production duplicated lines changed from 12,818 to 12,826 within the same clone count; test duplicated lines remain 10,366. Candidate scans include the added production file and two test files (348 production sources and 300 test sources versus 347/298 on baseline). These scans provide comparison evidence, not an enforcement pass. Raw reports are retained as `baseline-classification.json` and `candidate-classification.json`.
+
+## Accepted disposition
+
+On 2026-11-08, the owner authorized proceeding in response to the explicit request to merge PR #305 with this documented hygiene exception. The initial AI-DX1 bytecode slice is complete with that exception; broader target/signature coverage and exceptional-path fault injection remain deferred as recorded in the backlog.
+
+Implementation commit `9d3c32d4c3fb178bbb9a730ed12d9c3766f226b6` passed public Build, Acceptance, Race and Latest Go in [CI run 42501975334](https://github.com/howlcipher/howlframe/actions/runs/42501975334). This closeout updates documentation only. Source hashes match the locally tested implementation; no source, tests, dependencies, test configuration or hygiene policy changed. Documentation links, SEO and whitespace are checked before the signed closeout commit; the updated PR must pass all four public checks before merging.
+
+This exception applies to the inherited hygiene failure for this integration, not to future regressions or a higher clone ceiling. No efficiency gain, deployment, paid execution or private hosted run is claimed.
