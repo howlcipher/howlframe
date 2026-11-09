@@ -19,7 +19,10 @@ All four common options are required. `snapshot` additionally requires a project
 relative `--source`; `--claim` and `--next` may repeat. `status` requires
 `--verified`. `context` accepts neither that flag nor snapshot-only options.
 Unknown, missing, duplicate singleton and positional arguments fail. Each value
-is limited to 4096 bytes and claims plus actions to 100 entries.
+is limited to 4096 bytes and claims plus actions to 100 entries. Options,
+filenames and absolute paths must be valid UTF-8; malformed byte sequences fail
+closed before compiler checks or authenticated publication. Non-source file
+contents may contain arbitrary bytes and are hashed without text conversion.
 
 This bounded deliverable records one successful built-in bytecode compiler
 check, never source execution or arbitrary commands. It does not establish test
@@ -55,7 +58,8 @@ from the fixed absolute `/usr/bin/git`, then `/bin/git` locations, requiring a
 regular executable; ambient `PATH` cannot select an inventory program. The manifest records that recipe, normalized
 build argv (the ephemeral output directory is represented as `<temporary>`),
 logical check argv and successful exit code. Ambient `HOWLFRAME_ALLOW_CAPS` presence
-and value are conservatively fingerprinted, without storing plaintext; other
+and raw value bytes are conservatively fingerprinted, without storing plaintext;
+opaque non-UTF-8 environment values remain distinct hash inputs. Other
 ambient variables are not inputs. The existing 30-second compilation timeout and
 1 MiB per-stream output bounds apply. Includes are rejected and source is never
 run. Check output is saved separately as `check.json` and hashed.
@@ -65,7 +69,8 @@ have existing parents. Snapshot creates a fresh 0700 bundle and never overwrites
 one. A separate private 0700 trust directory contains a random 0600 32-byte key.
 The manifest is authenticated with HMAC-SHA256. This detects altered manifests or
 evidence without access to that key; hashes alone would not authenticate producer
-claims. Snapshot alone may create a key; recovery never does. There is no service,
+claims. Every holder of the key can authenticate bundles; signer and verifier
+roles are not separated. Snapshot alone may create a key; recovery never does. There is no service,
 database, external model call, certificate authority or remote trust claim.
 
 Files are written and synced through temporary names, with the authentication

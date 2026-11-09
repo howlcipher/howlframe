@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 func contained(parent, child string) bool {
@@ -20,9 +21,15 @@ func contained(parent, child string) bool {
 	return e == nil && (rel == "." || filepath.IsLocal(rel))
 }
 func secureLocation(path string) (string, error) {
+	if !utf8.ValidString(path) {
+		return "", errors.New("session paths must be valid UTF-8")
+	}
 	absolute, e := filepath.Abs(path)
 	if e != nil {
 		return "", e
+	}
+	if !utf8.ValidString(absolute) {
+		return "", errors.New("absolute session paths must be valid UTF-8")
 	}
 	current := string(filepath.Separator)
 	for _, part := range strings.Split(strings.TrimPrefix(absolute, string(filepath.Separator)), string(filepath.Separator)) {

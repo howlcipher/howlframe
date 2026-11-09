@@ -5,6 +5,7 @@
 ### Agent session evidence
 * Add local versioned `agent snapshot`, task-scoped `agent context` and `agent status --verified` for compiler-check evidence. Keep task claims and remaining actions separate from observed results.
 * Authenticate evidence with separate local trust material and invalidate conservatively on source, compiler or environment changes. Missing, altered and incomplete evidence fails closed. This initial slice does not execute inspected programs or record arbitrary test runs.
+* Reject malformed UTF-8 identity fields before publication and hash opaque environment values as raw bytes, preserving exact recovery identity.
 * Preregister session-efficiency measurements before implementation; no token, resumption or elapsed-time improvement is claimed.
 
 ### M6 application trial

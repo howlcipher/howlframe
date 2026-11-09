@@ -291,3 +291,80 @@ func TestSessionCompilerFixedEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionRejectsNonUTF8InventoryBeforeCheck(t *testing.T) {
+	root, bundle, trust, exe := sessionFixture(t)
+	if e := os.WriteFile(filepath.Join(root, "bad\xff.txt"), []byte{0xff, 0x00}, 0600); e != nil {
+		t.Fatal(e)
+	}
+	called := false
+	var out bytes.Buffer
+	status := runSession(snapshotArgs(root, bundle, trust), exe, &out, func(string, string, string) ([]byte, error) { called = true; return []byte(`{"ok":true}`), nil })
+	if status == 0 || called {
+		t.Fatalf("non-UTF8 inventory accepted or checked: status=%d called=%v %s", status, called, out.Bytes())
+	}
+	if _, e := os.Stat(filepath.Join(bundle, "authentication.json")); !os.IsNotExist(e) {
+		t.Fatal("non-UTF8 inventory published evidence")
+	}
+}
+func TestSessionRejectsNonUTF8Options(t *testing.T) {
+	for _, option := range []string{"--task", "--claim", "--source", "--root", "--bundle", "--state-dir"} {
+		t.Run(option, func(t *testing.T) {
+			root, bundle, trust, exe := sessionFixture(t)
+			args := snapshotArgs(root, bundle, trust)
+			for i := 1; i < len(args)-1; i++ {
+				if args[i] == option {
+					args[i+1] += "\xff"
+					break
+				}
+			}
+			called := false
+			var out bytes.Buffer
+			status := runSession(args, exe, &out, func(string, string, string) ([]byte, error) { called = true; return []byte(`{"ok":true}`), nil })
+			if status == 0 || called || !bytes.Contains(out.Bytes(), []byte("AGENT_SESSION_ARGUMENT")) {
+				t.Fatalf("invalid UTF8 option not rejected at interface: %s", out.Bytes())
+			}
+		})
+	}
+}
+func TestSessionRejectsNonUTF8CompilerPath(t *testing.T) {
+	root, bundle, trust, exe := sessionFixture(t)
+	malformed := exe + "\xff"
+	os.Rename(exe, malformed)
+	if _, status, _ := invokeSession(t, malformed, snapshotArgs(root, bundle, trust)...); status == 0 {
+		t.Fatal("non-UTF8 compiler path accepted")
+	}
+}
+
+func TestSessionRejectsNonUTF8AbsoluteWorkingDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "directory\xff")
+	if e := os.Mkdir(dir, 0700); e != nil {
+		t.Fatal(e)
+	}
+	t.Chdir(dir)
+	if _, e := secureLocation("ascii-relative-path"); e == nil {
+		t.Fatal("invalid UTF8 absolute path accepted")
+	}
+}
+func TestSessionBinaryNonSourceInput(t *testing.T) {
+	root, bundle, trust, exe := sessionFixture(t)
+	os.WriteFile(filepath.Join(root, "binary.data"), []byte{0xff, 0x00, 0xfe}, 0600)
+	if r, status, _ := invokeSession(t, exe, snapshotArgs(root, bundle, trust)...); status != 0 {
+		t.Fatal(r)
+	}
+	if r, status, _ := invokeSession(t, exe, statusArgs(root, bundle, trust)...); status != 0 {
+		t.Fatal(r)
+	}
+}
+
+func TestSessionOpaqueEnvironmentBytesInvalidate(t *testing.T) {
+	root, bundle, trust, exe := sessionFixture(t)
+	t.Setenv("HOWLFRAME_ALLOW_CAPS", "\xff")
+	if r, status, _ := invokeSession(t, exe, snapshotArgs(root, bundle, trust)...); status != 0 {
+		t.Fatal(r)
+	}
+	t.Setenv("HOWLFRAME_ALLOW_CAPS", "\xfe")
+	if _, status, _ := invokeSession(t, exe, statusArgs(root, bundle, trust)...); status == 0 {
+		t.Fatal("different opaque environment bytes aliased")
+	}
+}

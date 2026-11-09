@@ -16,7 +16,9 @@ and proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roa
 AI-DX2 adds a local [session evidence interface](docs/reference/agent_session_interface.md)
 for compiler-check snapshots, task-scoped recovery context and verified status.
 Claims remain separate from observed checks; this initial slice does not record
-arbitrary application test runs or establish efficiency improvements.
+arbitrary application test runs or establish efficiency improvements. Textual
+identities must be UTF-8, and unsupported module/include dependency reads are
+rejected.
 
 M6's application trial is **complete with owner-accepted exceptions**: the
 consumer generates its shell/styles from `.howl`, enforces `.howl`-only source

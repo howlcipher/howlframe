@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"unicode/utf8"
 )
 
 // SessionSchema versions authenticated local recovery reports.
@@ -202,6 +203,11 @@ func runSession(args []string, executable string, out io.Writer, checker session
 }
 func parseSession(args []string) (sessionOptions, error) {
 	o := sessionOptions{claims: []string{}, next: []string{}}
+	for _, arg := range args {
+		if !utf8.ValidString(arg) {
+			return o, errors.New("session options must be valid UTF-8")
+		}
+	}
 	seen := map[string]bool{}
 	for i := 1; i < len(args); i++ {
 		a := args[i]

@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func gitSession(root string, args ...string) ([]byte, error) {
@@ -76,6 +77,9 @@ func captureSession(o sessionOptions, exe string) (sessionManifest, error) {
 			continue
 		}
 		previous = name
+		if !utf8.ValidString(name) {
+			return m, errors.New("inventory filenames must be valid UTF-8")
+		}
 		if !filepath.IsLocal(name) || name == ".git" || strings.HasPrefix(name, ".git/") {
 			return m, errors.New("unsafe inventory path")
 		}
@@ -123,8 +127,8 @@ func captureSession(o sessionOptions, exe string) (sessionManifest, error) {
 		Fixed   []string
 		Name    string
 		Present bool
-		Value   string
-	}{sessionEnvironment(), "HOWLFRAME_ALLOW_CAPS", present, value})
+		Value   []byte
+	}{sessionEnvironment(), "HOWLFRAME_ALLOW_CAPS", present, []byte(value)})
 	m.EnvironmentSHA256 = digest(env)
 	return m, nil
 }
