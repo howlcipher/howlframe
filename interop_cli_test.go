@@ -175,7 +175,7 @@ func TestInteropCommandPrintsAValidDescriptor(t *testing.T) {
 }
 
 func TestInteropAgentCommands(t *testing.T) {
-	expected := map[string]string{"agent": "", "agent capabilities": "target", "agent describe": "target", "agent check": "json,target", "agent explain": ""}
+	expected := map[string]string{"agent": "", "agent capabilities": "target", "agent describe": "target", "agent check": "json,target", "agent explain": "", "agent snapshot": "bundle,claim,next,root,source,state-dir,task", "agent context": "bundle,root,state-dir,task", "agent status": "bundle,root,state-dir,task,verified"}
 	found := 0
 	for _, c := range interopCommands {
 		path := strings.Join(c.Path, " ")
@@ -184,7 +184,11 @@ func TestInteropAgentCommands(t *testing.T) {
 			continue
 		}
 		found++
-		if !c.JSON || strings.Join(trimmedFlags(c.Flags), ",") != want || len(c.Emits) != 1 || c.Emits[0] != "howlframe.agent/v1" {
+		schema := "howlframe.agent/v1"
+		if path == "agent snapshot" || path == "agent context" || path == "agent status" {
+			schema = "howlframe.agent.session/v1"
+		}
+		if !c.JSON || strings.Join(trimmedFlags(c.Flags), ",") != want || len(c.Emits) != 1 || c.Emits[0] != schema {
 			t.Fatalf("agent descriptor drift: %+v", c)
 		}
 	}

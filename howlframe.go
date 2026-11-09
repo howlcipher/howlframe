@@ -1705,6 +1705,9 @@ var interopCommands = []interopCommand{
 	{Path: []string{"agent", "describe"}, Flags: []string{"--target"}, JSON: true, Emits: []string{agent.Schema}},
 	{Path: []string{"agent", "check"}, Flags: []string{"--json", "--target"}, JSON: true, Emits: []string{agent.Schema}},
 	{Path: []string{"agent", "explain"}, Flags: []string{}, JSON: true, Emits: []string{agent.Schema}},
+	{Path: []string{"agent", "snapshot"}, Flags: []string{"--task", "--root", "--bundle", "--state-dir", "--source", "--claim", "--next"}, JSON: true, Emits: []string{agent.SessionSchema}},
+	{Path: []string{"agent", "context"}, Flags: []string{"--task", "--root", "--bundle", "--state-dir"}, JSON: true, Emits: []string{agent.SessionSchema}},
+	{Path: []string{"agent", "status"}, Flags: []string{"--verified", "--task", "--root", "--bundle", "--state-dir"}, JSON: true, Emits: []string{agent.SessionSchema}},
 	{Path: []string{}, Flags: []string{
 		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
 		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",

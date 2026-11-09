@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Agent session evidence
+* Add local versioned `agent snapshot`, task-scoped `agent context` and `agent status --verified` for compiler-check evidence. Keep task claims and remaining actions separate from observed results.
+* Authenticate evidence with separate local trust material and invalidate conservatively on source, compiler or environment changes. Missing, altered and incomplete evidence fails closed. This initial slice does not execute inspected programs or record arbitrary test runs.
+* Reject malformed UTF-8 identity fields before publication and hash opaque environment values as raw bytes, preserving exact recovery identity.
+* Preregister session-efficiency measurements before implementation; no token, resumption or elapsed-time improvement is claimed.
+
 ### M6 application trial
 * Close the merged consumer trial generating editor shell/styles from `.howl`, with strict source policy and provenance checks; all 11 shipped payloads remain byte-identical excluding provenance. Final local focused 9/9, core 19/19, SDK 22/22, infrastructure 33/33 and Chromium 81/81 pass.
 * Record the owner-accepted Chromium-first routine policy, M6 Firefox deferral and separately approved local Chromium reserve. Private hosted CI was skipped under the no-payment publishing route; no hosted success, deployment, compiler pin/source change or efficiency gain is claimed.

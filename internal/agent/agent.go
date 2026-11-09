@@ -107,6 +107,9 @@ var explanations = map[string]string{
 // Run returns a process exit status and writes exactly one versioned JSON document.
 // executable must be the current compiler binary, never a source-selected executable.
 func Run(args []string, executable string, out io.Writer) int {
+	if len(args) > 0 && (args[0] == "snapshot" || args[0] == "context" || args[0] == "status") {
+		return runSession(args, executable, out, compileSessionCheck)
+	}
 	r := Response{Schema: Schema, CompilerNotes: []string{}, ActualGrants: []string{}, Limitations: []string{"bytecode registry only; other backend coverage unknown", "arity is not a full typed signature", "inspection grants no execution authority", "check compiles but never runs source; includes and modules may be read", "diagnostic explanation coverage is partial", "construct authority metadata is partial; absent metadata is not proof of purity"}, Constructs: []Entry{}, Examples: []Example{}, Diagnostics: []Diagnostic{}, Target: "bytecode", Coverage: "known"}
 	fail := func(code, msg string) int {
 		r.Diagnostics = append(r.Diagnostics, Diagnostic{Code: code, Message: msg, Classification: "interface"})
@@ -244,6 +247,10 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 var codedReason = regexp.MustCompile(`^([A-Z][A-Z0-9_]+):`)
 
 func check(executable, source string) ([]Diagnostic, *bytecode.Report, []string) {
+	return checkInEnvironment(executable, source, "", nil)
+}
+
+func checkInEnvironment(executable, source, workingDirectory string, environment []string) ([]Diagnostic, *bytecode.Report, []string) {
 	ds := []Diagnostic{}
 	failure := func(code, msg string) ([]Diagnostic, *bytecode.Report, []string) {
 		return []Diagnostic{{Code: code, Message: msg, Filename: source, Classification: "interface"}}, nil, []string{}
@@ -264,6 +271,8 @@ func check(executable, source string) ([]Diagnostic, *bytecode.Report, []string)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, executable, "build", "--target", "bytecode", "-o", artifact, "--", absolute)
+	cmd.Dir = workingDirectory
+	cmd.Env = environment
 	var stdout, stderr boundedBuffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

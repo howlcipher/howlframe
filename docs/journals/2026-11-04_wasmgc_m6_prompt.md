@@ -29,7 +29,7 @@ The original maintained src/editor/index.html, src/editor/editor.css and src/sit
 
 ## Prioritized dependency
 
-Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The roadmap defines the proposed JSON asset manifest architecture, alternatives and measurement protocol. M6 is integrated; AI-DX2 is next in that order and is not implemented here.
+Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The roadmap defines the proposed JSON asset manifest architecture, alternatives and measurement protocol. M6 is integrated; AI-DX2 is the next compiler item in that order. Follow the [local session evidence interface](../reference/agent_session_interface.md) and [implementation record](2026-11-09_ai_dx2_session_evidence.md); it is separate from this consumer trial.
 
 ## Original focused slices, completed
 
