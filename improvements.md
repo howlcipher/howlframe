@@ -37,6 +37,8 @@ Pending rows are ranked by a diminishing-returns score:
 | # | Improvement | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | AI-DX1 | [Bytecode-first agent understanding](docs/reference/agent_interface.md) | Done (2026-11-08), initial slice with owner-accepted hygiene exception | Roadmap priority | — | — | Codex | Registry-derived discovery, production check diagnostics and executable example; no efficiency gain or other-target coverage claimed. |
+| AI-DX2 | [Local session evidence](docs/reference/agent_session_interface.md) | In progress (2026-11-09), compiler-check slice | Roadmap priority | — | — | Codex | Authenticated snapshots and task-scoped verified recovery; arbitrary test evidence and efficiency gains remain unverified. |
+| AI-DX2 follow-up | [Expand session evidence coverage](#ai-dx2-session-evidence-follow-up) | Deferred, unscored | Not ranked | — | — | — | Module/include dependency discovery, selected source excerpts, external/ignored inputs and arbitrary test producers need separate authority and invalidation designs. |
 | AI-DX1 follow-up | [Expand understanding evidence](#ai-dx1-understanding-follow-up) | Deferred, unscored | Not ranked | — | — | — | Full typed signatures and other-target coverage need authoritative metadata and executable evidence; exceptional check failures need fault-injection coverage. |
 | 85 | [Unify compiler entry points and artifact-output contract](#85-unify-compiler-entry-points-and-artifact-output-contract) | Done (2026-08-01) | 4.0 (8×1÷2) | Sonnet 5 | — | gpt-5.6-terra | Standardized the documented compiler's output handling and closed bug #39; obsolete ignored scaffolding was removed during the HowlFrame cutover. |
 | 97 | [Standalone Runtime CLI Semantics: Phase 1 (stdin, stderr, explicit exit codes)](#97-standalone-runtime-cli-semantics) | Done (2026-08-07) | 2.67 (8×1÷3) | Sonnet 5 | Gemini 3.1 Pro (High) | — | Prioritization principle #5. Without this, building reliable CLI applications is impossible. Journal: `docs/journals/2026-08-07_improvement_97.md`. |
@@ -1032,3 +1034,17 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 ## AI-DX1 understanding follow-up
 
 The initial bytecode slice is documented in [the interface contract](docs/reference/agent_interface.md). Preserve the agreed AI-DX1 → M6 → AI-DX2 → AI-DX3 ordering; this deferred expansion does not silently promote itself ahead of the application trial. Add full typed signatures or another target only from authoritative metadata and executable examples, retaining unknown coverage until then. Add deterministic fault-injection tests for timeout, truncated output, compiler launch and artifact-read failures when expanding the check boundary. Structured diagnostics preserve compiler-reported provenance, which is not proof of lossless imported-source mapping. Re-evaluate and score a bounded follow-up before selection; no efficiency gain is established by this item.
+
+## AI-DX2 session evidence follow-up
+
+The initial local session interface records compiler checks for self-contained
+bytecode sources. Expand only with executable coverage for module/include reads,
+ignored/external dependencies, source excerpt selection and additional trusted
+test producers. The current substring rejection deliberately rejects some
+otherwise valid sources. Do not remove it until dependency coverage is proven.
+Keep conservative invalidation, separate claims, authenticated evidence and
+interrupted-run rejection. No source replacement or efficiency improvement is
+established by the initial slice. Measure full snapshot/recovery costs under
+the [preregistered protocol](docs/reference/ai_dx2_measurement_protocol.md) before
+claiming savings. This is deferred scope, not an instruction to start a second
+item during the AI-DX2 integration.

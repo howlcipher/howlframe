@@ -1,6 +1,6 @@
 # Agent understanding interface
 
-`howlframe agent` exposes a read-only bytecode discovery slice. Every response is one JSON object with `schema: "howlframe.agent/v1"`. No command executes the inspected source. This interface does not implement snapshots, repair, M6 application generation or measured efficiency improvements.
+The understanding subcommands (`agent capabilities`, `agent describe`, `agent check --json` and `agent explain`) expose a read-only bytecode discovery slice. Every response from these commands is one JSON object with `schema: "howlframe.agent/v1"`. No command executes the inspected source. The separate [session evidence interface](agent_session_interface.md) implements compiler-check snapshots and verified task recovery. These understanding commands do not implement repair, M6 application generation or measured efficiency improvements.
 
 ```sh
 howlframe agent capabilities

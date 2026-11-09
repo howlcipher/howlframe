@@ -13,6 +13,11 @@ consumer follow-up are merged, with final local Chromium and Firefox coverage of
 not deployment evidence. See the [integrated closeout](docs/journals/2026-11-07_m5_integrated_closeout.md)
 and proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roadmap.md).
 
+AI-DX2 adds a local [session evidence interface](docs/reference/agent_session_interface.md)
+for compiler-check snapshots, task-scoped recovery context and verified status.
+Claims remain separate from observed checks; this initial slice does not record
+arbitrary application test runs or establish efficiency improvements.
+
 M6's application trial is **complete with owner-accepted exceptions**: the
 consumer generates its shell/styles from `.howl`, enforces `.howl`-only source
 and passed final Chromium 81/81. Firefox acceptance is deferred under the
