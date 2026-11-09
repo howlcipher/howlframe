@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### M6 application trial
+* Close the merged consumer trial generating editor shell/styles from `.howl`, with strict source policy and provenance checks; all 11 shipped payloads remain byte-identical excluding provenance. Final local focused 9/9, core 19/19, SDK 22/22, infrastructure 33/33 and Chromium 81/81 pass.
+* Record the owner-accepted Chromium-first routine policy, M6 Firefox deferral and separately approved local Chromium reserve. Private hosted CI was skipped under the no-payment publishing route; no hosted success, deployment, compiler pin/source change or efficiency gain is claimed.
+
 ### Agent understanding
 * Add the bytecode-first `agent capabilities`, `agent describe`, `agent check --json` and `agent explain` commands with deterministic `howlframe.agent/v1` output. Reuse construct/arity registries and production compiler checks; distinguish requirements from empty actual grants and preserve unknown target/signature coverage.
 * Record inherited hygiene-gate failure on unchanged main as bug #72 and the owner-approved integration exception; preserve the failure without raising ceilings.

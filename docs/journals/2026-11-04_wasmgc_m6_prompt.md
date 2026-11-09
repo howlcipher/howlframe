@@ -4,7 +4,13 @@
 
 Remove the remaining authored HTML/CSS application source from HowlScene HF by generating styles and the editor page shell from .howl. Enforce a policy allowing only .howl application source under src/. Preserve generated platform glue and the existing security/capability boundaries. Do not delete HowlFrame's JavaScript backend.
 
-M5 remains complete with owner-accepted exceptions. Compiler and consumer follow-ups are now merged; private hosted CI was skipped with explicit owner approval. Read the [integrated closeout](2026-11-07_m5_integrated_closeout.md) and original [acceptance](2026-11-04_wasmgc_m5_acceptance.md). Do not claim the original hosted-CI contract passed. This document plans M6; no M6 implementation has begun.
+M5 remains complete with owner-accepted exceptions. M6 is now also complete
+with owner-accepted exceptions; see the [closeout](2026-11-08_wasmgc_m6_trial.md).
+Consumer PR #4 is merged. The owner accepted Chromium as the routine gate,
+deferred M6 Firefox acceptance and approved the final local Chromium reserve.
+Private hosted CI was skipped under the no-payment publishing route; no hosted
+success or deployment is claimed. Original M5 [acceptance](2026-11-04_wasmgc_m5_acceptance.md)
+and [integrated closeout](2026-11-07_m5_integrated_closeout.md) remain historical.
 
 ## Starting revisions and dependencies
 
@@ -17,15 +23,15 @@ M5 remains complete with owner-accepted exceptions. Compiler and consumer follow
 
 Final local source policy, build, provenance, core 19/19, SDK 22/22, runner infrastructure 31/31, Chromium 81/81 and Firefox 81/81 passed. Firefox used four sequential fresh bounded scopes (27 + 22 + 16 + 16), with zero skips, retries or expected failures. See the integrated record for exact revisions and evidence hashes. The earlier uninterrupted Firefox suite exhausted its task limit; final shards did not. Private hosted CI was intentionally skipped, and WebKit remains unverified. No deployment is claimed.
 
-## Source-purity gaps
+## Original source-purity gaps, now closed
 
-Remaining maintained application source includes src/editor/index.html, src/editor/editor.css and src/site/site.css. Read scripts/assemble_editor.py, scripts/build.sh, scripts/check_source_policy.sh, provenance checks and current .howl UI/template/rendering sources. Generated output must remain distinguishable from maintained source. Do not inspect the separate howlcipher/howlscene repository or modify howlcipher/william_elias.
+The original maintained src/editor/index.html, src/editor/editor.css and src/site/site.css are replaced by generated presentation from src/presentation/*.howl. Only regular UTF-8 .howl files are admitted under src/. Read scripts/assemble_editor.py, scripts/build.sh, scripts/check_source_policy.sh, provenance checks and current .howl UI/template/rendering sources. Generated output must remain distinguishable from maintained source. Do not inspect the separate howlcipher/howlscene repository or modify howlcipher/william_elias.
 
 ## Prioritized dependency
 
-Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The roadmap defines the proposed JSON asset manifest architecture, alternatives and measurement protocol. This handoff does not authorize implementing subsequent milestones during M5 closeout.
+Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The roadmap defines the proposed JSON asset manifest architecture, alternatives and measurement protocol. M6 is integrated; AI-DX2 is next in that order and is not implemented here.
 
-## Suggested focused slices
+## Original focused slices, completed
 
 1. Inventory shell/style inputs and output contracts. Establish byte/DOM/CSP equivalence tests and an explicit generation design; compare small .howl-based generation options before selecting an architecture.
 2. Generate site/editor styles from .howl while preserving CSS behavior, accessibility, motion and size budgets. Add focused equivalence and browser tests.
@@ -35,8 +41,17 @@ Follow [AI-DX1 → M6 → AI-DX2 → AI-DX3](../design/ai_dx_roadmap.md). The ro
 
 ## Safety and validation
 
-Before heavy validation inspect memory, PSI, swap, scratch space, active workloads and ports. Require at least 10 GiB MemAvailable and 8 GiB scratch for the approved local profile. Verify the entire process tree: MemoryHigh 3 GiB, MemoryMax 5 GiB, MemorySwapMax 0, CPUQuota 150%, TasksMax 256 for Firefox (128 for focused Go where sufficient), one browser worker, GOMAXPROCS=2, Go package parallelism 1. Preserve essential Go flags. One heavy command at a time; no parallel agents or browser engines. Do not touch desktop Firefox or unrelated processes. Stop on resource denial/unsafe pressure; retain true exit codes, process ownership, task/memory peaks and logs. Do not raise ceilings automatically or weaken sandboxing/tests. Reuse successful M5 evidence unless changes justify reruns.
+Before heavy validation inspect memory, PSI, swap, scratch space, active workloads and ports. Retain at least 8 GiB scratch. The owner separately approved the final local Chromium gate on 2026-11-09 with 9 GiB launch minimum and 6 GiB runtime host reserve, unchanged 3/5 GiB scope caps, zero scope swap, 150% CPU, 128 tasks, one worker and pressure/event/final-counter checks. Other heavy checks retain the original 10 GiB host floor. Optional Firefox validation requires 13 GiB available before launch (10 GiB host floor plus the 3 GiB workload high watermark); its runtime guards are unchanged. Verify the entire process tree: MemoryHigh 3 GiB, MemoryMax 5 GiB, MemorySwapMax 0, CPUQuota 150%, TasksMax 256 for Firefox (128 for focused Go where sufficient), one browser worker, GOMAXPROCS=2, Go package parallelism 1. Preserve essential Go flags. One heavy command at a time; no parallel agents or browser engines. Do not touch desktop Firefox or unrelated processes. Stop on resource denial/unsafe pressure; retain true exit codes, process ownership, task/memory peaks and logs. Do not raise ceilings automatically or weaken sandboxing/tests. Reuse successful M5 evidence unless changes justify reruns.
 
 ## Exit criteria and journal
 
 All application source under src/ is .howl; generated shell/styles have provenance; application behavior, accessibility, security, exports and performance retain executable coverage. Required final-tree local gates and actual CI pass on merged commits unless the owner explicitly accepts a separately documented exception. Start docs/journals/<current-date>_wasmgc_m6_journal.md with exact checkout SHAs, dependencies, scope/peak measurements, commands/exit codes, tests and PR state. Update at every coherent slice and before ending a session. Commit safe durable work and leave exact next steps; temporary worktree paths are not a substitute for journaled commit IDs.
+
+## Accepted routine gate revision, 2026-11-09
+
+The owner accepted Chromium as the required routine browser gate and deferred
+M6 Firefox acceptance. Preserve Firefox as an on-demand compatibility track,
+including every assertion, inventory check and resource guard. Require fresh
+passing Firefox evidence before claiming Firefox support for a release. No paid
+or unverified private hosted execution is authorized. This supersedes the
+original M6 full-Firefox requirement above; final routine gates still apply.
