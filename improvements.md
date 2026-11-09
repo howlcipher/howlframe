@@ -4,7 +4,7 @@ This document is the authoritative, ranked backlog for the HowlFrame transpiler 
 
 ## Prioritized assessment
 
-Next sequence: **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3**. See the [AI-DX roadmap](docs/design/ai_dx_roadmap.md) for deliverables, alternatives, acceptance and preregistered measurement. The AI-DX1 bytecode understanding slice is implemented in this change; other target catalogs, full typed signatures and efficiency gains remain future or unverified work. See the [interface contract](docs/reference/agent_interface.md) and [AI-DX1 evidence](docs/journals/2026-11-08_ai_dx1_understanding.md).
+Next sequence: **AI-DX1 → M6 application trial → AI-DX2 → AI-DX3**. See the [AI-DX roadmap](docs/design/ai_dx_roadmap.md) for deliverables, alternatives, acceptance and preregistered measurement. The AI-DX1 bytecode understanding slice is merged; M6 is [complete with owner-accepted exceptions](docs/journals/2026-11-08_wasmgc_m6_trial.md); other target catalogs, full typed signatures and efficiency gains remain future or unverified work. See the [interface contract](docs/reference/agent_interface.md) and [AI-DX1 evidence](docs/journals/2026-11-08_ai_dx1_understanding.md).
 
 ## Working Protocol
 

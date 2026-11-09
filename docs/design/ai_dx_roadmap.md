@@ -1,6 +1,6 @@
 # AI developer experience roadmap
 
-Status: updated 2026-11-08. The first AI-DX1 bytecode understanding slice is implemented; broader coverage, later milestones and all efficiency gains remain proposed or unverified.
+Status: updated 2026-11-09. The first AI-DX1 bytecode understanding slice is implemented; M6 is merged and complete with owner-accepted exceptions. Broader AI-DX coverage and all efficiency gains remain proposed or unverified.
 
 ## Ordering and integration boundary
 
@@ -18,7 +18,7 @@ Acceptance: registry/output consistency checks, explicit unknown-target rejectio
 
 ## M6: Application trial
 
-First deliverable: generate `src/editor/editor.css`, `src/site/site.css` and the editor shell from `.howl`, then enforce `.howl`-only maintained application source under `src/`.
+The merged consumer generates the editor shell and editor/site styles from `src/presentation/*.howl` and enforces `.howl`-only maintained application source under `src/`. See the [trial evidence](../journals/2026-11-08_wasmgc_m6_trial.md) for current validation and integration status.
 
 Prefer a WasmGC generator emitting a small JSON asset manifest consumed by existing assembly and CSP tooling. Define a versioned manifest with an allowlisted asset name and text content; reject duplicate, absolute and traversal paths. Preserve loader ordering, CSP, provenance and artifact budgets. This uses current language features and existing build tooling, but retains string-based presentation authoring and escaping costs. A new HTML/CSS language offers structured validation and composition at substantially greater parser, type-system and tooling scope. Defer it until the trial demonstrates a measured need.
 
@@ -51,3 +51,13 @@ Before implementation, freeze matched tasks, starting revisions and dependency/t
 Measure each milestone separately against its immediate predecessor. Record input/output context, repair payload, snapshot creation/recovery, verification tokens and elapsed time, total wall time, command count, retries and correctness. Include manifest/evidence maintenance and invalidation overhead. Freeze success criteria and aggregation before runs; report per-task paired results, dispersion and failures, not only favorable averages. Keep application changes identical between matched conditions where possible and disclose unavoidable differences.
 
 Experimental targets: 30% less AI-DX1 context, 50% less invalid usage, 50% less resume context, 30% fewer maintenance tokens and 20–25% less overall time. These are hypotheses, not acceptance evidence. Correctness and resumption reliability must not regress. Use deterministic fixtures now; defer live-agent comparisons until a verified no-payment route exists. No paid model calls, plan upgrades, larger runners or private hosted runs with unverified cost are authorized.
+
+## M6 browser gate disposition, 2026-11-09
+
+The owner accepted Chromium as the required routine browser gate and Firefox as
+an on-demand compatibility track. M6 Firefox acceptance is deferred/unverified;
+its full bounded suite remains required before claiming Firefox compatibility
+for a release. Firefox's runtime resource guards and browser assertions remain intact.
+This changes the M6 acceptance gate, not the historical M5 evidence. Final
+routine consumer verification passed and PR #4 is merged; see the M6 closeout.
+AI-DX2 is the next ordered item and remains unimplemented.

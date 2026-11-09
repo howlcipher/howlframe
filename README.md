@@ -13,6 +13,12 @@ consumer follow-up are merged, with final local Chromium and Firefox coverage of
 not deployment evidence. See the [integrated closeout](docs/journals/2026-11-07_m5_integrated_closeout.md)
 and proposed [AI-DX1 → M6 → AI-DX2 → AI-DX3 roadmap](docs/design/ai_dx_roadmap.md).
 
+M6's application trial is **complete with owner-accepted exceptions**: the
+consumer generates its shell/styles from `.howl`, enforces `.howl`-only source
+and passed final Chromium 81/81. Firefox acceptance is deferred under the
+Chromium-first policy; private hosted CI was skipped to preserve no-payment
+execution. See the [M6 closeout](docs/journals/2026-11-08_wasmgc_m6_trial.md).
+
 ## What is HowlFrame?
 
 HowlFrame is an experimental AI-native language and capability-bounded execution runtime.
