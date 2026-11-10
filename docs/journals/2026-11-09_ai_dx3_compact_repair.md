@@ -1,6 +1,6 @@
 # AI-DX3 compact graph repair session
 
-Status: initial internal graph transport slice implemented and locally verified, 2026-11-10; integration pending public CI and hygiene decision. Base revision `51edd94ea349f05a289e80190f51023e35aab5b5`.
+Status: initial internal graph transport slice implemented and locally verified, 2026-11-10. [PR #308](https://github.com/howlcipher/howlframe/pull/308) records final integration, public CI and the task-specific hygiene decision. Base revision `51edd94ea349f05a289e80190f51023e35aab5b5`.
 
 ## Scope and architecture
 
