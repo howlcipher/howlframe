@@ -38,6 +38,8 @@ Pending rows are ranked by a diminishing-returns score:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | AI-DX1 | [Bytecode-first agent understanding](docs/reference/agent_interface.md) | Done (2026-11-08), initial slice with owner-accepted hygiene exception | Roadmap priority | — | — | Codex | Registry-derived discovery, production check diagnostics and executable example; no efficiency gain or other-target coverage claimed. |
 | AI-DX2 | [Local session evidence](docs/reference/agent_session_interface.md) | Done (2026-11-09), initial compiler-check slice; integration governed by PR #307 | Roadmap priority | — | — | Codex | Authenticated snapshots and task-scoped verified recovery; arbitrary test evidence and efficiency gains remain unverified. |
+| AI-DX3 | [Compact graph repair session](docs/reference/compact_repair_session.md) | Implemented locally (2026-11-10), integration pending | Roadmap priority | — | — | Codex | Retain authority in process and reuse bounded verified transactions; source editing and efficiency gains remain unverified. |
+| AI-DX3 follow-up | [Repair measurement and source mapping](#ai-dx3-repair-follow-up) | Deferred, unscored | Not ranked | — | — | — | Repeat corpus-wide timing/allocation comparison; design durable authentication and lossless source mapping before source edits. |
 | AI-DX2 follow-up | [Expand session evidence coverage](#ai-dx2-session-evidence-follow-up) | Deferred, unscored | Not ranked | — | — | — | Module/include dependency discovery, selected source excerpts, external/ignored inputs and arbitrary test producers need separate authority and invalidation designs. |
 | AI-DX1 follow-up | [Expand understanding evidence](#ai-dx1-understanding-follow-up) | Deferred, unscored | Not ranked | — | — | — | Full typed signatures and other-target coverage need authoritative metadata and executable evidence; exceptional check failures need fault-injection coverage. |
 | 85 | [Unify compiler entry points and artifact-output contract](#85-unify-compiler-entry-points-and-artifact-output-contract) | Done (2026-08-01) | 4.0 (8×1÷2) | Sonnet 5 | — | gpt-5.6-terra | Standardized the documented compiler's output handling and closed bug #39; obsolete ignored scaffolding was removed during the HowlFrame cutover. |
@@ -1048,3 +1050,9 @@ established by the initial slice. Measure full snapshot/recovery costs under
 the [preregistered protocol](docs/reference/ai_dx2_measurement_protocol.md) before
 claiming savings. This is deferred scope, not an instruction to start a second
 item during the AI-DX2 integration.
+
+## AI-DX3 repair follow-up
+
+The initial compact graph-session interface leaves corpus-wide repeated legacy-versus-compact timing/allocation comparison pending. Current deterministic corpus byte counts and the explicit three-node repeated microbenchmark establish transport size and local baseline costs only. They do not establish model-token, live-agent or elapsed-time gains. Preserve matched tasks, unsuccessful localization, total context and verification costs under the preregistered protocol before making an efficiency claim.
+
+Process-local authority cannot survive interruption. Durable authenticated restoration requires a separate trust, key ownership and replay design. Existing line/column provenance does not establish lossless `.howl` edit spans or comment/whitespace round trips. Establish and test reliable source-region mapping before introducing source replacement. Keep arbitrary restructuring, dependency insertion and production AST-path changes deferred. Score and scope any follow-up before selecting it.
