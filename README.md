@@ -20,6 +20,10 @@ arbitrary application test runs or establish efficiency improvements. Textual
 identities must be UTF-8, and unsupported module/include dependency reads are
 rejected.
 
+AI-DX3 begins with an internal [compact graph repair session](docs/reference/compact_repair_session.md).
+Trusted edit authority stays in process; model transport carries bounded proposals.
+This is not a source editor or a new CLI, and no efficiency gain is claimed.
+
 M6's application trial is **complete with owner-accepted exceptions**: the
 consumer generates its shell/styles from `.howl`, enforces `.howl`-only source
 and passed final Chromium 81/81. Firefox acceptance is deferred under the

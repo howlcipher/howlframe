@@ -36,7 +36,7 @@ Acceptance: changed source/compiler/dependencies/configuration/test inputs inval
 
 ## AI-DX3: Semantic repair
 
-First deliverable: bounded repair reusing trusted regions, graph/node preconditions, protected hashes, atomic rejection and reverification. `internal/hfir/model_adapter.go` already supports up to five same-kind replacements. Preserve the production AST compilation path and HFIR verification gate.
+Initial deliverable: a [compact process-local graph repair session](../reference/compact_repair_session.md), retaining trusted regions, graph/node preconditions, protected hashes, atomic rejection and reverification. Implementation and integration evidence will be recorded in the [AI-DX3 journal](../journals/2026-11-09_ai_dx3_compact_repair.md); the [measurement protocol](../reference/ai_dx3_measurement_protocol.md) is preregistered. `internal/hfir/model_adapter.go` already supports up to five same-kind replacements. Preserve the production AST compilation path and HFIR verification gate.
 
 Establish compact authenticated context and reliable source-region mapping first. Graph repair is not safe `.howl` source editing: line/column provenance does not establish lossless replacement boundaries, comments, whitespace or round trips. The [recorded localization gate](../journals/2026-08-13_hfir_localization_phase3c_decision_gate.md) reports complete repair requests of 5,162 B and 19,576 B against full graphs of 3,743 B and 16,486 B; measure complete context and patch costs, not delta bytes alone. Arbitrary restructuring and dependency insertion remain later work.
 
@@ -60,4 +60,4 @@ its full bounded suite remains required before claiming Firefox compatibility
 for a release. Firefox's runtime resource guards and browser assertions remain intact.
 This changes the M6 acceptance gate, not the historical M5 evidence. Final
 routine consumer verification passed and PR #4 is merged; see the M6 closeout.
-The initial AI-DX2 compiler-check slice is implemented with the explicit coverage limits above; AI-DX3 remains unimplemented.
+The initial AI-DX2 compiler-check slice is implemented with the explicit coverage limits above; AI-DX3 is limited to the initial graph transport slice described above; source editing and durable repair-session restoration remain deferred.

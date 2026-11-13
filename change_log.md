@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Compact graph repair
+* Add an internal process-local compact repair session retaining trusted authority outside model transport and reusing existing bounded atomic repair and verification.
+* Keep source rewriting, durable session authentication and production compilation changes outside this initial AI-DX3 slice. Preregister context and delta measurements; no model efficiency gain is claimed.
+
 ### Agent session evidence
 * Add local versioned `agent snapshot`, task-scoped `agent context` and `agent status --verified` for compiler-check evidence. Keep task claims and remaining actions separate from observed results.
 * Authenticate evidence with separate local trust material and invalidate conservatively on source, compiler or environment changes. Missing, altered and incomplete evidence fails closed. This initial slice does not execute inspected programs or record arbitrary test runs.
