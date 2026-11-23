@@ -1,5 +1,23 @@
 # Change Log
 
+## v0.2.1 (patch release on v0.2.0)
+
+Built from the `v0.2.0` tag plus only the VM resource-bound fixes below; none of
+the later `main` work is included. Artifacts and grants are unchanged (HFBC
+format 2). Release notes: `docs/releases/v0.2.1.md`.
+
+### Fixed
+* `spawn` bodies share their spawner's `--max-instructions` through one atomic
+  counter for the whole spawn tree, inherit spawn and call depth, and refuse
+  nesting beyond `--max-call-depth` (bugs.md #73 on `main`).
+* A `spawn` body works on its own charged copy of captured dicts, so a body and
+  its parent writing one dict can no longer crash the runtime with a Go fatal
+  error. Behavior change: a body's dict writes no longer reach the spawner
+  (bugs.md #74).
+* `read_line` charges the memory budget as it reads, and `parse_json` charges
+  the decoded value; each fails with `LIMIT_EXCEEDED` at its own opcode
+  (bugs.md #75, #76).
+
 ## Unreleased
 
 Proposed as v0.2.0 (release candidate; not tagged). v0.1.0 (2026-08-13) was released without its own section, so this

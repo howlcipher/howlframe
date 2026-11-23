@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-const Version = "0.2.0"
+const Version = "0.2.1"
 
 // HFBCFormatVersion advertises the envelope this compiler writes, not the
 // BCProgram instruction-set version or every legacy envelope it can read.
