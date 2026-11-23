@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -875,7 +874,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		// Children never inherit the host environment; only process:env= names pass.
 		var combined bytes.Buffer
-		err := runContained(context.Background(), cmd, args, capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv), &combined)
+		err := runContained(context.Background(), cmd, args, capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv), &combined, &combined)
 		out := combined.Bytes()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
@@ -2082,6 +2081,8 @@ func runBytecodeEvidence(prog *bytecode.BCProgram, cliArgs []string, policy Exec
 		mapLedger:   newMapStateLedger(),
 		startup:     programServesHTTP(prog),
 	}
+	// One live-child counter for the run, shared by every VM copied from this one.
+	vm.Limits.processes = &processBudget{}
 	if vm.In == nil {
 		vm.In = os.Stdin
 	}
@@ -2857,23 +2858,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
 			}
-			cmdCtx, cancel := context.WithCancel(vm.ctx)
-			output := &limitedOutput{max: max, cancel: cancel}
-			// Children never inherit the host environment; only process:env= names pass.
-			// runContained also ends every descendant when the call ends (HF-02).
-			err := runContained(cmdCtx, cmdStr, args, capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv), output)
-			cancel()
-			vm.checkDeadline(ip, inst.Op)
-			if output.exceeded {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
-			}
-			out := output.buffer.Bytes()
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				execErr := NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", err)
-				var exitErr *exec.ExitError
-				if errors.As(err, &exitErr) && exitErr.ExitCode() > 0 {
-					execErr.ExecExitCode = exitErr.ExitCode()
+			res := vm.runExec(cmdStr, args, max, false, ip, inst.Op)
+			out := res.stdout
+			if res.err != nil {
+				execErr := NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", res.err)
+				if res.exitCode > 0 {
+					execErr.ExecExitCode = res.exitCode
 					execErr.ExecOutput = out
 					vm.chargeBytes(len(out), ip, inst.Op)
 				}
@@ -4573,24 +4563,6 @@ func (vm *BCVM) postModel(url string, body []byte, ip int, op bytecode.Opcode) (
 	resp, err := http.DefaultClient.Do(req)
 	vm.checkDeadline(ip, op)
 	return resp, err
-}
-
-// Returning an error stops copying; cancellation also stops a producing process.
-// stdout and stderr share this writer, so os/exec serializes their writes.
-type limitedOutput struct {
-	buffer   bytes.Buffer
-	max      int
-	exceeded bool
-	cancel   context.CancelFunc
-}
-
-func (b *limitedOutput) Write(p []byte) (int, error) {
-	if len(p) > b.max-b.buffer.Len() {
-		b.exceeded = true
-		b.cancel()
-		return 0, io.ErrShortWrite
-	}
-	return b.buffer.Write(p)
 }
 
 // requireExec enforces the exact-argv process allow-list. A denial is a typed

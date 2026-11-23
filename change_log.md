@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Exec process bounds
+* `--max-exec-millis` bounds each `exec` call's wall clock; a child still running at the bound is ended with its descendants and the call fails with a catchable `LIMIT_EXCEEDED` (improvements.md #114).
+* `--max-processes` (default 32) bounds exec children alive at once across the run, including `spawn` bodies and route handlers; zero or negative values are refused (improvements.md #115).
+* The runtime can capture a child's stdout and stderr separately under one shared output limit; `exec` still returns the combined stream unchanged (improvements.md #113, in progress).
+
 ### Versioned runtime error object
 * Runtime error JSON on standard error and in `try_let` bindings now starts with `"schema":"howlframe.runtime_error/v1"`; every existing field is unchanged (improvements.md #112). Consumers that compared the whole string must allow the new leading field.
 
