@@ -1671,14 +1671,19 @@ type BCVM struct {
 	executed    int
 	spawnDepth  int
 	callDepth   int
-	Limits      VMLimits
-	AllowedCaps []capability.Capability
-	In          io.Reader
-	Out         io.Writer
-	ErrOut      io.Writer
-	lineReader  *bufio.Reader
-	trace       *boundedTrace
-	mapLedger   *mapStateLedger
+	// runInstructions is shared by a VM and every spawn or spawn_agent body
+	// it starts, so their combined work stays within one instruction limit
+	// (HF-D1). It is created at the first async spawn; nil means only
+	// executed counts.
+	runInstructions *instructionBudget
+	Limits          VMLimits
+	AllowedCaps     []capability.Capability
+	In              io.Reader
+	Out             io.Writer
+	ErrOut          io.Writer
+	lineReader      *bufio.Reader
+	trace           *boundedTrace
+	mapLedger       *mapStateLedger
 }
 
 const (
@@ -2519,6 +2524,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		// overflow into effectively unlimited execution.
 		if limit := vm.instructionLimit(); limit <= 0 || vm.executed >= limit {
 			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
+		} else if vm.runInstructions != nil && vm.runInstructions.count.Add(1) > int64(limit) {
+			panic(NewRuntimeError("LIMIT_EXCEEDED", "main", vm.ip, inst.Op, "instruction limit exceeded"))
 		}
 		vm.executed++
 		if vm.receipt != nil {
@@ -2922,6 +2929,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if err != nil {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "parse_json failed: %v", err))
 			}
+			vm.chargeJSONTree(result, ip, inst.Op)
 			vm.push(result)
 		case bytecode.OpSpawn:
 			remaining := len(insts) - ip - 1
@@ -2931,19 +2939,28 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			bodyLen := int(inst.IntOperand)
 			bodyInsts := insts[ip+1 : ip+1+bodyLen]
 			spawnCaps := vm.attenuateChild(inst.StringOperand, capability.Process, inst.Op, ip, "spawn")
+			if vm.spawnDepth >= vm.Limits.MaxCallDepth {
+				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "spawn nesting depth limit exceeded"))
+			}
+			// The body runs concurrently, so it gets its own copy of every
+			// captured dict; sharing one Go map crashed the process (HF-D2).
 			capturedEnv := NewBcEnv(nil)
 			for e := env; e != nil; e = e.parent {
 				for k, v := range e.vars {
 					if _, exists := capturedEnv.vars[k]; !exists {
-						capturedEnv.vars[k] = v
+						capturedEnv.vars[k] = vm.cloneForSpawn(v, ip, inst.Op)
 					}
 				}
 			}
-			go func(cEnv *BcEnv) {
+			if vm.runInstructions == nil {
+				vm.runInstructions = &instructionBudget{}
+				vm.runInstructions.count.Store(int64(vm.executed))
+			}
+			childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: spawnCaps, Out: vm.Out, ErrOut: vm.ErrOut, startup: vm.startup, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth, runInstructions: vm.runInstructions}
+			go func(child *BCVM, cEnv *BcEnv) {
 				defer func() { recover() }()
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: cEnv, stores: vm.stores, Limits: vm.Limits, AllowedCaps: spawnCaps, Out: vm.Out, ErrOut: vm.ErrOut}
-				childVM.run(bodyInsts, cEnv)
-			}(capturedEnv)
+				child.run(bodyInsts, cEnv)
+			}(childVM, capturedEnv)
 			ip += bodyLen
 		case bytecode.OpRes:
 			bodyAny := vm.pop(inst.Op)
@@ -3613,7 +3630,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			panic(VmExit{code: code})
 		case bytecode.OpReadLine:
-			line, err := vm.lineReader.ReadString('\n')
+			line, err := vm.readChargedLine(ip, inst.Op)
 			if err != nil && err != io.EOF {
 				panic(NewRuntimeError("IO_ERROR", "main", vm.ip, inst.Op, "Failed to read line: %v", err))
 			}
@@ -4043,11 +4060,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					}
 				}
 				// Synchronous children share the buffered reader to preserve stdin order.
-				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, startup: vm.startup, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth}
+				childVM := &BCVM{ctx: vm.ctx, allocations: vm.allocations, receipt: vm.receipt, prog: vm.prog, env: capturedEnv, args: vm.args, In: vm.In, lineReader: vm.lineReader, stores: vm.stores, Limits: vm.Limits, AllowedCaps: childCaps, Out: vm.Out, ErrOut: vm.ErrOut, executed: vm.executed, startup: vm.startup, spawnDepth: vm.spawnDepth + 1, callDepth: vm.callDepth, runInstructions: vm.runInstructions}
 				func() {
 					defer func() {
 						// Account for all child work even when it exits through a panic.
 						vm.executed = childVM.executed
+						vm.runInstructions = childVM.runInstructions
 						vm.truncateStack(stackHeight)
 						if r := recover(); r != nil {
 							switch e := r.(type) {
@@ -4414,6 +4432,12 @@ func (w *httpResponseRecorder) armWriteDeadline() {
 	}
 }
 
+// instructionBudget counts the instructions of a VM and the spawn bodies it
+// started, which run concurrently.
+type instructionBudget struct {
+	count atomic.Int64
+}
+
 // Shared across child VMs; charges are cumulative and never reclaimed.
 type allocationBudget struct {
 	sync.Mutex
@@ -4439,6 +4463,67 @@ func (vm *BCVM) chargeSlots(n, size, ip int, op bytecode.Opcode) {
 		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "memory limit exceeded (max %d bytes)", vm.Limits.MaxMemoryBytes))
 	}
 	vm.chargeAlloc(n*size, ip, op)
+}
+
+// cloneForSpawn copies dicts, and lists that may hold them, so a concurrent
+// spawn body never shares a mutable Go map with its spawner. Other values are
+// immutable or opaque handles and are shared as before. The copy is charged.
+func (vm *BCVM) cloneForSpawn(value any, ip int, op bytecode.Opcode) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		vm.chargeSlots(len(typed), 16, ip, op)
+		copied := make(map[string]any, len(typed))
+		for key, item := range typed {
+			copied[key] = vm.cloneForSpawn(item, ip, op)
+		}
+		return copied
+	case []any:
+		vm.chargeSlots(len(typed), 8, ip, op)
+		copied := make([]any, len(typed))
+		for index, item := range typed {
+			copied[index] = vm.cloneForSpawn(item, ip, op)
+		}
+		return copied
+	}
+	return value
+}
+
+// readChargedLine reads one line in bufio-sized chunks and charges each chunk
+// before keeping it, so a line larger than the memory budget fails with
+// LIMIT_EXCEEDED at READ_LINE instead of being buffered whole (HF-D3).
+func (vm *BCVM) readChargedLine(ip int, op bytecode.Opcode) (string, error) {
+	var line []byte
+	for {
+		chunk, err := vm.lineReader.ReadSlice('\n')
+		vm.chargeBytes(len(chunk), ip, op)
+		line = append(line, chunk...)
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return string(line), err
+	}
+}
+
+// chargeJSONTree charges a decoded parse_json value with the slot sizes the VM
+// uses when it builds the same values itself: 8 bytes per list item, 16 per
+// dict entry, and the bytes of every string and key. The input text was
+// already charged by whatever produced it (HF-D4).
+func (vm *BCVM) chargeJSONTree(value any, ip int, op bytecode.Opcode) {
+	switch typed := value.(type) {
+	case string:
+		vm.chargeBytes(len(typed), ip, op)
+	case []any:
+		vm.chargeSlots(len(typed), 8, ip, op)
+		for _, item := range typed {
+			vm.chargeJSONTree(item, ip, op)
+		}
+	case map[string]any:
+		vm.chargeSlots(len(typed), 16, ip, op)
+		for key, item := range typed {
+			vm.chargeBytes(len(key), ip, op)
+			vm.chargeJSONTree(item, ip, op)
+		}
+	}
 }
 
 // chargeBytes charges native byte data one byte per byte. An operation that

@@ -8,6 +8,10 @@ Pending bugs carry the same diminishing-returns score defined in `improvements.m
 
 | # | Bug | Status | Score (V×D÷E) | Claude model | Gemini model | OpenAI model | ROI rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 73 | [`spawn` bodies get a fresh instruction budget](#73-spawn-bodies-get-a-fresh-instruction-budget) | Done (2026-11-23) | 8.0 (8×1÷1) | Opus 5.5 | — | — | Five `spawn` bodies finished 500 loop iterations under `--max-instructions 1500`, which the same sequential work cannot do. Found by HowlPlane's TUI-00 feasibility gate. |
+| 74 | [A `spawn` body and its parent sharing a dict crash the runtime](#74-a-spawn-body-and-its-parent-sharing-a-dict-crash-the-runtime) | Done (2026-11-23) | 8.0 (8×1÷1) | Opus 5.5 | — | — | Concurrent `map_set` on one captured dict ends the process with Go `fatal error: concurrent map writes` (5 of 5 runs), with no structured error and no receipt. |
+| 75 | [`read_line` does not charge the memory budget](#75-read_line-does-not-charge-the-memory-budget) | Done (2026-11-23) | 6.0 (6×1÷1) | Opus 5.5 | — | — | A 32 MiB line was accepted under `--max-memory-bytes 1048576`; `read_stdin` already fails at its own opcode. |
+| 76 | [`parse_json` does not charge the decoded value](#76-parse_json-does-not-charge-the-decoded-value) | Done (2026-11-23) | 6.0 (6×1÷1) | Opus 5.5 | — | — | 4.5 MB of small objects decoded under an 8 MiB budget while the process reached about 225 MiB RSS. |
 | 72 | [Repository hygiene gate fails on unchanged main](#72-repository-hygiene-gate-fails-on-unchanged-main) | Open (2026-11-08), needs assessment | Unscored | — | — | — | AI-DX1 verification found the same 745 production clones versus ceiling 88 on unchanged main and the candidate. Restore an evidence-based passing gate without increasing ceilings or hiding debt. |
 | 50 | [`route` indexes a handler lambda it never validated, panicking the compiler](#50-route-indexes-a-handler-lambda-it-never-validated-panicking-the-compiler) | Done (2026-08-29) | 6.0 (6×1÷1) | Sonnet 5 | — | gpt-5.6-sol | `(route "/" (lambda (req)))` crashes the compiler with `index out of range [2] with length 2` instead of reporting an error. The `middleware` case ten lines below already performs exactly the guard `route` is missing, so the fix is a copy of an in-file precedent. |
 | 51 | [A stale `difftest` exemption permanently skips a fixture that now passes](#51-a-stale-difftest-exemption-permanently-skips-a-fixture-that-now-passes) | Done (2026-09-05) | 2.5 (5×1÷2) | Haiku 4.5 | — | gpt-5.6-luna | `tools/difftest/manifest.json` still exempts `test_improvement_46.howl` as "unsupported in run", but it runs clean today, so the fixture contributes zero regression coverage and nothing ever re-checks whether an exemption is still earned. |
@@ -960,3 +964,31 @@ When running `orchestrator.py` against a local Ollama instance with a large mode
 * **Impact:** The generic HowlPlane verification plan marks this repository's hygiene gate failed. The project's current public CI does not run this check. A failed command remains failed; it must not be silently relabeled as passing because it also fails on main.
 * **Follow-up:** Investigate clone families, tracked versus generated inputs, tombstone validity and detector configuration before selecting a bounded remediation. Preserve clone fingerprints and all enforcement failures. Do not raise ceilings, remove behavioral tests or add broad exclusions merely to obtain green results. Score the actual remediation once its scope is known.
 * **Evidence:** Baseline and candidate logs are retained in `/run/media/howlcipher/tallgeese/dev/worktrees/hf-agent-evidence/baseline-hygiene.log` and `verification.json`. No hygiene exception is inferred from the earlier private-consumer CI approval.
+
+### 73. `spawn` bodies get a fresh instruction budget
+
+* **Problem:** `OpSpawn` built its child VM without `executed`, `spawnDepth` or `callDepth`, so each concurrent body had a whole `--max-instructions` budget of its own and spawn nesting was unbounded. The journal `docs/journals/2026-10-06_c4a_max_call_depth.md` says spawn work "remains bounded by the shared instruction budget", which held only for the synchronous `spawn_agent`.
+* **Evidence:** HowlPlane `integrations/howlframe/tui00/reproducers/hf_d1_spawn_instruction_budget.howl` (HowlFrame `9c739c9` and `41d56ce`, 2026-11-22).
+* **Fix:** A VM and every body it spawns share one atomic instruction counter, created at the first async spawn and seeded with the spawner's count, checked with `Add(1) > limit` so concurrent bodies cannot overshoot. `spawn_agent` passes and returns the counter. Async spawn now inherits `spawnDepth + 1`, `callDepth` and `startup`, and refuses nesting beyond `MaxCallDepth` like `spawn_agent`. HTTP request handlers keep their own per-request budget.
+* **Tests:** `internal/vm/spawn_isolation_test.go` (`TestSpawnBodiesShareTheInstructionLimit`, `TestSpawnBodyWithinLimitStillRuns`).
+
+### 74. A `spawn` body and its parent sharing a dict crash the runtime
+
+* **Problem:** The captured environment copied bindings but shared every dict, the one VM value mutated in place, so a body and its spawner writing the same dict raced on one Go map. Go ends the process for that; `recover` cannot catch it.
+* **Evidence:** HowlPlane `integrations/howlframe/tui00/reproducers/hf_d2_spawn_shared_map_race.howl`.
+* **Fix:** At `SPAWN`, in the spawner's goroutine, captured dicts and lists that may hold them are copied recursively and the copy is charged to the memory budget. A body now works on a snapshot; its dict writes no longer reach the spawner, which without a join they could only ever do racily.
+* **Tests:** `TestSpawnBodyGetsItsOwnDictCopy`, `TestSpawnCopyIsDeepAndReadable`; race detector clean.
+
+### 75. `read_line` does not charge the memory budget
+
+* **Problem:** `OpReadLine` used `ReadString`, buffering a line of any length before anything was charged.
+* **Evidence:** HowlPlane `integrations/howlframe/tui00/reproducers/hf_d3_read_line_unbounded.howl`.
+* **Fix:** The line is read in `bufio`-sized chunks and each chunk is charged before it is kept, so the instruction fails with `LIMIT_EXCEEDED` at `READ_LINE` once the line exceeds the budget. The interpreter (`-run`), which has no memory budget, is unchanged.
+* **Tests:** `internal/vm/input_memory_charge_test.go` (`TestReadLineChargesMemory`, `TestReadLineLongLineWithinBudget`).
+
+### 76. `parse_json` does not charge the decoded value
+
+* **Problem:** `OpParseJson` charged nothing for the decoded tree, so input well inside the budget could decode into many times that memory.
+* **Evidence:** HowlPlane `integrations/howlframe/tui00/reproducers/hf_d4_parse_json_uncharged.howl`.
+* **Fix:** The decoded value is charged with the slot sizes the VM uses when it builds the same values (8 bytes per list item, 16 per dict entry, plus string and key bytes). Decoding still allocates before the charge, so a transient peak above the budget remains possible; the run fails closed at `PARSE_JSON`.
+* **Tests:** `TestParseJSONChargesDecodedTree`, `TestParseJSONWithinBudgetStillDecodes`.

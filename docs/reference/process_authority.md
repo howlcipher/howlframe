@@ -105,6 +105,10 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   checked against the spawner like `spawn_agent` (`SPAWN` `string_operand`
   carries the list). An over-request raises `CAPABILITY_DENIED` at `SPAWN`.
   Failures inside a spawned body stay silent, as before.
+  A spawned body counts against its spawner's `--max-instructions` (one
+  counter for the whole spawn tree), inherits spawn and call depth, and works
+  on its own copy of every captured dict: its dict writes do not reach the
+  spawner (bugs.md #73, #74).
 * `(route "/path" (grants "cap" ...) (lambda (req) body))`: a handler runs with
   `network` (required to answer: `res`, `res_json` and `res_header` are
   network-classified, and `HTTP_ROUTE` already required it) **plus only** its
