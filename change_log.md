@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Versioned runtime error object
+* Runtime error JSON on standard error and in `try_let` bindings now starts with `"schema":"howlframe.runtime_error/v1"`; every existing field is unchanged (improvements.md #112). Consumers that compared the whole string must allow the new leading field.
+
 ### Spawn and input resource bounds
 * `spawn` bodies now share their spawner's instruction limit through one atomic counter, inherit spawn and call depth, and refuse nesting beyond `--max-call-depth` (bugs.md #73).
 * A `spawn` body receives its own copy of captured dicts, charged to the memory budget, so concurrent writes can no longer crash the runtime with a Go fatal error (bugs.md #74).

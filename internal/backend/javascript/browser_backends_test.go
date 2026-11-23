@@ -98,7 +98,7 @@ const howlNormJS = `function howlNorm(s) {
   s = String(s);
   let m = /^Error: ([A-Z][A-Z0-9_]*: [\s\S]*)$/.exec(s);
   if (m) return m[1];
-  if (s.startsWith('{"phase":"runtime"')) { try { const r = JSON.parse(s); return r.code + ": " + r.message; } catch (e) {} }
+  if (s.startsWith('{"schema":"howlframe.runtime_error/v1","phase":"runtime"')) { try { const r = JSON.parse(s); return r.code + ": " + r.message; } catch (e) {} }
   if (/^[A-Za-z]*Error: /.test(s)) return "RUNTIME_ERROR: " + s;
   return s;
 }
@@ -106,7 +106,7 @@ const howlNormJS = `function howlNorm(s) {
 
 var (
 	jsCaught  = regexp.MustCompile(`^Error: ([A-Z][A-Z0-9_]*: .*)$`)
-	vmReport  = regexp.MustCompile(`^\{"phase":"runtime".*\}$`)
+	vmReport  = regexp.MustCompile(`^\{"schema":"howlframe\.runtime_error/v1","phase":"runtime".*\}$`)
 	engineErr = regexp.MustCompile(`^[A-Za-z]*Error: `)
 )
 

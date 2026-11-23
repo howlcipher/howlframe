@@ -153,7 +153,7 @@ const live = () => ({ media: mediaListeners.length, observers: observers.length,
 // JavaScript backend's Error ("Error: CODE: message", or an engine error
 // such as "TypeError: message") and the VM's report, which this backend
 // binds.
-var caughtError = regexp.MustCompile(`^(?:Error: ([A-Z][A-Z0-9_]*): (.*)|\{"phase":"runtime","code":"([^"]*)","function":"main","message":"(.*)"\}|([A-Za-z]*Error: .*))$`)
+var caughtError = regexp.MustCompile(`^(?:Error: ([A-Z][A-Z0-9_]*): (.*)|\{"schema":"howlframe\.runtime_error/v1","phase":"runtime","code":"([^"]*)","function":"main","message":"(.*)"\}|([A-Za-z]*Error: .*))$`)
 
 // normalizePage rewrites caught errors in a page's output to CODE: message.
 // The two backends bind a caught error differently (the plan's "Caught

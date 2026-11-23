@@ -44,19 +44,19 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 			source: "examples/swarm_argv_dogfood/swarm_argv_dogfood.howl",
 			exit:   1,
 			stdout: "swarm argv start\n",
-			stderr: "{\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
+			stderr: "{\"schema\":\"howlframe.runtime_error/v1\",\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
 		},
 		{
 			source: "examples/swarm_nested_dogfood/swarm_nested_dogfood.howl",
 			exit:   1,
 			stdout: "swarm start\n",
-			stderr: "{\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
+			stderr: "{\"schema\":\"howlframe.runtime_error/v1\",\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
 		},
 		{
 			source: "examples/swarm_dogfood/swarm_dogfood.howl",
 			exit:   1,
 			stdout: "swarm start\n",
-			stderr: "{\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
+			stderr: "{\"schema\":\"howlframe.runtime_error/v1\",\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":3,\"opcode\":\"SPAWN_AGENT\",\"message\":\"capability denied: process\"}\n",
 		},
 		{
 			source: "examples/cli_hello.howl",
@@ -86,7 +86,7 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 			stdin:  "",
 			exit:   1,
 			stdout: "Attempting to write to filesystem...\n",
-			stderr: "{\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":6,\"opcode\":\"WRITE_FILE\",\"message\":\"capability denied: filesystem\"}\n",
+			stderr: "{\"schema\":\"howlframe.runtime_error/v1\",\"phase\":\"runtime\",\"code\":\"CAPABILITY_DENIED\",\"function\":\"main\",\"instruction\":6,\"opcode\":\"WRITE_FILE\",\"message\":\"capability denied: filesystem\"}\n",
 		},
 		{
 			source: "examples/repo_analyst/repo_analyst.howl",
