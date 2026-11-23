@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Spawn and input resource bounds
+* `spawn` bodies now share their spawner's instruction limit through one atomic counter, inherit spawn and call depth, and refuse nesting beyond `--max-call-depth` (bugs.md #73).
+* A `spawn` body receives its own copy of captured dicts, charged to the memory budget, so concurrent writes can no longer crash the runtime with a Go fatal error (bugs.md #74).
+* `read_line` charges the memory budget as it reads and `parse_json` charges the decoded value, so both fail with `LIMIT_EXCEEDED` at their own opcode (bugs.md #75, #76).
+
 ### Compact graph repair
 * Add an internal process-local compact repair session retaining trusted authority outside model transport and reusing existing bounded atomic repair and verification.
 * Keep source rewriting, durable session authentication and production compilation changes outside this initial AI-DX3 slice. Preregister context and delta measurements; no model efficiency gain is claimed.
