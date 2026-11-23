@@ -67,6 +67,10 @@ Pending rows are ranked by a diminishing-returns score:
 | 99 | [Generated runtime coverage matrix](#99-generated-runtime-coverage-matrix) | Done (2026-08-12) | 2.5 (5×1÷2) | Sonnet 5 | Gemini 3.1 Pro | gpt-5.6-luna | Blueprint Milestone 0's exit gate. The only coverage matrix today is the hand-written table in the 2026-08-05 planning journal, which already drifted when #97 shipped. Generates from bug #45's registry and diff-checks in CI. |
 | 110 | [Bounded deterministic collection ordering and retention-consumer algorithm benchmark](#110-bounded-deterministic-collection-ordering-and-retention-consumer-algorithm-benchmark) | Pending | 1.5 (6×1÷4) | Sonnet 5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | Reverse-ordered retention input grows far faster than sorted input; a deterministic bounded ordering primitive and a benchmark would let consumers avoid quadratic scans. |
 | 111 | [VM `append` without copying the list](#111-vm-append-without-copying-the-list) | Pending | 1.5 (6×1÷4) | Opus 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | A list built one item at a time in a loop costs the VM n²/2 slot copies against its 64 MB memory budget, which counts every allocation: about 4,000 appends exhaust it, so ordinary accumulation loops fail on the VM while WebAssembly runs them. Performance and capacity only; output unchanged. |
+| 112 | [Versioned runtime error object](#112-versioned-runtime-error-object) | Pending | 6.0 (6×1÷1) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | The VM's runtime error JSON (`phase, code, function, instruction, opcode, message`) has no `schema` field, so consumers cannot detect a contract change; found by HowlPlane TUI-00 (HF-G6). |
+| 113 | [Separate exec stdout and stderr](#113-separate-exec-stdout-and-stderr) | Pending | 2.0 (4×1÷2) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | `exec` returns stdout and stderr in one buffer, so one diagnostic line on stderr turns a JSON reply into unparseable output; found by HowlPlane TUI-00 (HF-G3). |
+| 114 | [Per-call exec timeout](#114-per-call-exec-timeout) | Pending | 2.5 (5×1÷2) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | The only bound on a hung child is the global `--deadline`, which ends the whole program and cannot be caught; found by HowlPlane TUI-00 (HF-G4). |
+| 115 | [Bound concurrent exec children](#115-bound-concurrent-exec-children) | Pending | 2.5 (5×1÷2) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | 20 `spawn` bodies started 20 concurrent exec children with no runner limit; found by HowlPlane TUI-00 (HF-G5). |
 | 100 | [Structured experience memory (learning Level 1)](#100-structured-experience-memory-learning-level-1) | Pending — blocked on #88 | 1.0 (6×1÷6) | Opus 5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | First level of the blueprint's learning model and the prerequisite for policy adaptation. Nothing in `internal/` records execution outcomes today. Deliberately blocked until the provider-neutral model adapter (#88) exists, so vendor API shape never becomes HowlFrame semantics. |
 | 94 | [Centralize capability metadata behind one authoritative source](#94-centralize-capability-metadata-behind-one-authoritative-source) | Done (2026-08-05) | 1.33 (4×1÷3) | Sonnet 5 | — | — | `internal/hfir`'s capability inference duplicates `internal/bytecode`'s `OpInfo` table with no mechanism preventing silent drift between the two. |
 | 1 | [Add Routing Support](#1-add-routing-support) | Done | — | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Highest value to allow building web apps with multiple endpoints instead of just the root path. |
@@ -1031,6 +1035,32 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 * **Required tests:** aliasing and nested-list cases on the interpreter and the bytecode VM, a memory-accounting test (charged bytes linear in n), and the WebAssembly differential suite unchanged.
 * **Non-goals:** raising the default memory or instruction limits; changing list semantics.
 * **Model routing:** Claude **Opus 5.5** / Gemini **3.1 Pro (High)** / OpenAI **gpt-5.6-sol**. **Execution mode:** `plan-then-reviewed-edit`.
+* **Status:** Pending.
+
+### 112. Versioned runtime error object
+* **Description:** Add `"schema": "howlframe.runtime_error/v1"` to the runtime error JSON the CLI prints and `try_let` binds, keeping every existing field.
+* **Why:** Consumers parse this object (HowlPlane's TUI-00 probes and `tui` reducer runner do); without a version they cannot tell a changed contract from a malformed one. Additive, so existing parsers keep working.
+* **Impact:** 6/10. **Effort:** 1. **Files:** `internal/vm/error.go`, `mustVMErrorString`, the exec error enrichment, tests asserting the error shape.
+* **Acceptance criteria:** every runtime error object carries the schema field; existing fields unchanged; a test pins the field on CLI output and on a `try_let`-bound error.
+* **Status:** Pending. Near term: the only one of #112 to #115 a known consumer needs now.
+
+### 113. Separate exec stdout and stderr
+* **Description:** Let a program read a child's stderr separately from stdout (for example an `exec` result record with `stdout`, `stderr` and `exit_code`), keeping today's combined form as the default.
+* **Why:** HowlPlane TUI-00 showed one `[HowlPlane] ROUTING` line on stderr making a valid JSON stdout reply unparseable. Consumers currently work around it by suppressing child diagnostics.
+* **Impact:** 4/10. **Effort:** 2. **Files:** `internal/vm/vm.go` (`OpExec`), `exec_contain_*.go`, process authority docs.
+* **Acceptance criteria:** both streams bounded by `--max-exec-output-bytes` in total; denial and containment behavior unchanged; existing callers see identical results.
+* **Status:** Pending. Not needed by HowlPlane, whose host owns execution (ADR 0009).
+
+### 114. Per-call exec timeout
+* **Description:** A runner-owned per-call timeout for `exec` (for example a `timeout_ms` term in a `process:exec=` grant), raising a catchable `LIMIT_EXCEEDED` while the program continues.
+* **Why:** Today a hung child is stopped only by `--deadline`, which ends the whole program; TUI-00 observed the kill at 2.02 s with containment intact, but nothing could recover in-process.
+* **Impact:** 5/10. **Effort:** 2. **Acceptance criteria:** the child's process group is ended at the per-call bound; the error is catchable by `try_let`; the global deadline still applies; programs cannot widen the bound.
+* **Status:** Pending.
+
+### 115. Bound concurrent exec children
+* **Description:** A runner limit on simultaneously running exec children (for example `--max-processes`, finite and validated like the other limits).
+* **Why:** TUI-00 started 20 concurrent boundary children (41 processes with supervisors) from 20 `spawn` bodies; nothing bounded the count. Cleanup on exit was correct.
+* **Impact:** 5/10. **Effort:** 2. **Acceptance criteria:** the limit counts live children across all spawn bodies of a run; exceeding it is `LIMIT_EXCEEDED` at `EXEC`; zero or unlimited values are refused.
 * **Status:** Pending.
 
 ## AI-DX1 understanding follow-up
