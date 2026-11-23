@@ -114,7 +114,21 @@ type VMLimits struct {
 	// budget. Zero means startup uses MaxInstructions like any other program; when
 	// both are set the larger applies to startup.
 	MaxStartupInstructions int
+	// MaxProcesses bounds the exec children alive at once across the whole
+	// run, including spawn bodies and route handlers (improvements.md #115).
+	// <=0 means DefaultMaxProcesses; the run command refuses <=0 outright.
+	MaxProcesses int
+	// MaxExecMillis bounds each exec call's wall clock (improvements.md
+	// #114). Zero means no per-call bound (only --deadline applies). A
+	// program can neither read nor widen it.
+	MaxExecMillis int
+	// processes is the run's shared live-child counter. VMLimits is copied
+	// into every child VM by value, so the pointer is shared by all of them.
+	processes *processBudget
 }
+
+// DefaultMaxProcesses is the live exec child ceiling when none is set.
+const DefaultMaxProcesses = 32
 
 // DefaultStartupInstructions is the startup ceiling the "run" command applies to
 // HTTP server programs when --max-instructions was not given explicitly.

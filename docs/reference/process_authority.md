@@ -122,6 +122,19 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
 * Both forms are bytecode-only; the Go checker/backends reject them with
   `UNSUPPORTED_ON_TARGET`.
 
+## Runner bounds on exec children (#114, #115)
+
+* `--max-exec-millis N` ends a child, and every descendant, that is still
+  running N milliseconds after its `exec` started; the call fails with a
+  catchable `LIMIT_EXCEEDED`. A program cannot read, set or widen it.
+* `--max-processes N` (default 32) bounds the exec children alive at once in
+  the whole run, across `spawn` bodies and route handlers. A call over the
+  ceiling fails with `LIMIT_EXCEEDED` before the child starts; the slot is
+  released when the child and its output have finished.
+* Inside the runtime a child's stdout and stderr can be captured separately
+  under one shared `--max-exec-output-bytes` limit (#113). The `exec` form
+  still returns the combined stream exactly as written, through one pipe.
+
 ## Environment pass-through and receipts (#166)
 
 * `process:env=NAME` refuses code-loading, startup, config-lookup, trust-store

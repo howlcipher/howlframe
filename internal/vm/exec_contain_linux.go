@@ -47,7 +47,9 @@ func init() {
 	}
 }
 
-// runContained runs program with args, capturing stdout and stderr into out.
+// runContained runs program with args, capturing stdout and stderr. When both
+// are the same writer they share one pipe, so their interleaving is exactly
+// what the program wrote; otherwise each has its own pipe.
 // It returns what (*exec.Cmd).Run would: nil, an *exec.ExitError for a non-zero
 // or signalled exit, or another error when the program could not be started.
 //
@@ -57,7 +59,7 @@ func init() {
 // killed. The end of the output is never taken for the end of the program: a
 // program may close its own stdout and keep running, so the supervisor reports
 // the program's exit explicitly over the status pipe.
-func runContained(ctx context.Context, program string, args []string, env []string, out io.Writer) error {
+func runContained(ctx context.Context, program string, args []string, env []string, stdout, stderr io.Writer) error {
 	self, err := os.Executable()
 	if err != nil {
 		return errors.New("exec containment unavailable: cannot locate the runner executable")
@@ -81,11 +83,24 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 		return err
 	}
 	defer outR.Close()
+	errR, errW := outR, outW
+	split := !sameWriter(stdout, stderr)
+	if split {
+		errR, errW, err = os.Pipe()
+		if err != nil {
+			ctrlR.Close()
+			ctrlW.Close()
+			statusW.Close()
+			outW.Close()
+			return err
+		}
+		defer errR.Close()
+	}
 
 	argv := append([]string{supervisorFlag, "--", program}, args...)
 	cmd := exec.Command(self, argv...)
 	cmd.Env = env
-	cmd.Stdout, cmd.Stderr = outW, outW
+	cmd.Stdout, cmd.Stderr = outW, errW
 	cmd.ExtraFiles = []*os.File{ctrlR, statusW}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -93,16 +108,45 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 		ctrlW.Close()
 		statusW.Close()
 		outW.Close()
+		if split {
+			errW.Close()
+		}
 		return err
 	}
 	ctrlR.Close()
 	statusW.Close()
 	outW.Close()
+	if split {
+		errW.Close()
+	}
 
 	copyDone := make(chan error, 1)
 	go func() {
-		_, err := io.Copy(out, outR)
-		copyDone <- err
+		copies := make(chan error, 2)
+		go func() {
+			_, err := io.Copy(stdout, outR)
+			copies <- err
+		}()
+		if split {
+			go func() {
+				_, err := io.Copy(stderr, errR)
+				copies <- err
+			}()
+		}
+		streams := 1
+		if split {
+			streams = 2
+		}
+		var first error
+		for i := 0; i < streams; i++ {
+			if err := <-copies; err != nil && first == nil {
+				first = err
+				// The other stream may be blocked on a full pipe.
+				outR.Close()
+				errR.Close()
+			}
+		}
+		copyDone <- first
 	}()
 	// The first line on the status pipe says how the program ended; end-of-file
 	// without one means the supervisor is gone.
@@ -134,6 +178,7 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 	ctrlW.Close() // asks the supervisor to sweep the tree
 	if stopNow {
 		outR.Close() // release any writer blocked on a full pipe
+		errR.Close()
 	}
 
 	var runErr error
@@ -147,6 +192,7 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 	// Safety net for a supervisor that was itself killed.
 	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	outR.Close()
+	errR.Close()
 	if copyDone != nil {
 		<-copyDone
 	}

@@ -1177,6 +1177,8 @@ func runArtifact() {
 	maxMemory := runFlags.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
 	maxFetch := runFlags.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := runFlags.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	maxProcesses := runFlags.Int("max-processes", vm.DefaultMaxProcesses, "positive ceiling for exec children alive at once across the run")
+	maxExecMillis := runFlags.Int("max-exec-millis", 0, "wall-clock bound in milliseconds for each exec call (default none; --deadline still applies)")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
 	listenHost := runFlags.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
@@ -1259,6 +1261,10 @@ func runArtifact() {
 		}
 		executionPolicy.Limits.MaxInstructions = *maxInst
 		executionPolicy.Limits.MaxStartupInstructions = startupInstructionLimit(runFlags, *maxStartupInst)
+		if err := applyProcessLimits(&executionPolicy, *maxProcesses, *maxExecMillis); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
 		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
 			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
 			os.Exit(2)
@@ -1366,6 +1372,21 @@ func resourcePolicy(memory, fetch, output, request int, deadline string) (vm.Exe
 		policy.Deadline = d
 	}
 	return policy, nil
+}
+
+// applyProcessLimits validates the run command's exec process flags. A zero
+// or negative process ceiling would mean unlimited and is refused; a zero
+// per-call bound means none.
+func applyProcessLimits(policy *vm.ExecutionPolicy, maxProcesses, maxExecMillis int) error {
+	if maxProcesses <= 0 {
+		return fmt.Errorf("-max-processes must be greater than zero; unlimited processes are not supported")
+	}
+	if maxExecMillis < 0 {
+		return fmt.Errorf("-max-exec-millis must not be negative")
+	}
+	policy.Limits.MaxProcesses = maxProcesses
+	policy.Limits.MaxExecMillis = maxExecMillis
+	return nil
 }
 
 // runBytecodeArtifact keeps the legacy path unchanged when reporting is absent.
@@ -1719,7 +1740,7 @@ var interopCommands = []interopCommand{
 	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--inline-module", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
-		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
+		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-processes", "--max-exec-millis", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
 		"--deadline",
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"version"}, Flags: []string{}},
