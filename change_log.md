@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.3.0 (prepared 2026-11-23; not yet tagged)
+
+Release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
+
 ### Interactive terminal programs
 * New `(terminal_app "handler" initial_state)`: the runtime owns the terminal (raw mode with line editing when stdin is a terminal, line mode otherwise), timers and child processes, and calls a zero-grant handler once per event with a fresh instruction and memory budget (`--max-event-instructions`, `--max-event-memory-bytes`) and bounded JSON state (`--max-state-bytes`). Effects come from a closed table (`quit`, `timer`, `exec_start`, `exec_signal`, `tail`, `append_log`) executed under the run's grants; view text is sanitized so it cannot inject terminal sequences (improvements.md #117). `process_exit` carries a child's stdout and stderr separately (#113).
 
