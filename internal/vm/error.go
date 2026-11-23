@@ -45,7 +45,18 @@ func execArgv(raw []any) []string {
 	return args
 }
 
+// RuntimeErrorSchema versions the runtime error object a consumer parses
+// from stderr or a try_let binding (improvements.md #112). Fields are only
+// ever added under this version; a removal or meaning change bumps it.
+const RuntimeErrorSchema = "howlframe.runtime_error/v1"
+
+type versionedVMError struct {
+	Schema string `json:"schema"`
+	VMError
+}
+
 type vmErrorWithExec struct {
+	Schema string `json:"schema"`
 	VMError
 	ExitCode int    `json:"exit_code"`
 	Output   string `json:"output"`
@@ -58,12 +69,12 @@ func (e *VMError) CatchString() string {
 	if e.ExecExitCode == 0 {
 		return e.Error()
 	}
-	b, _ := json.Marshal(vmErrorWithExec{VMError: *e, ExitCode: e.ExecExitCode, Output: string(e.ExecOutput)})
+	b, _ := json.Marshal(vmErrorWithExec{Schema: RuntimeErrorSchema, VMError: *e, ExitCode: e.ExecExitCode, Output: string(e.ExecOutput)})
 	return string(b)
 }
 
 func (e *VMError) Error() string {
-	b, _ := json.Marshal(e)
+	b, _ := json.Marshal(versionedVMError{Schema: RuntimeErrorSchema, VMError: *e})
 	return string(b)
 }
 

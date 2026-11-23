@@ -274,7 +274,7 @@ func TestDiffTryLet(t *testing.T) {
 		"type error":         `(let (d (dict)) (try_let (v (map_get (map_get d "z") "q")) (catch e (do ` + has("TYPE_ERROR") + ` (print (str_contains e "got \\u003cnil\\u003e")))) (print v)))`,
 		"conversion error":   `(try_let (v (to_int "x")) (catch e (do ` + has("CONVERSION_ERROR") + ` (print (str_contains e "cannot convert \\\"x\\\" to int")))) (print v))`,
 		"overflow":           `(try_let (v (* 4611686018427387904 2)) (catch e ` + has("RUNTIME_ERROR") + `) (print v))`,
-		"error report shape": `(try_let (v (/ 1 0)) (catch e (print (starts_with e "{\"phase\":\"runtime\",\"code\":\"RUNTIME_ERROR\",\"function\":\"main\",") (ends_with e "\"message\":\"division by zero\"}"))) (print v))`,
+		"error report shape": `(try_let (v (/ 1 0)) (catch e (print (starts_with e "{\"schema\":\"howlframe.runtime_error/v1\",\"phase\":\"runtime\",\"code\":\"RUNTIME_ERROR\",\"function\":\"main\",") (ends_with e "\"message\":\"division by zero\"}"))) (print v))`,
 		"from a function": `(defun f (n) (type_hint n "int") (type_hint return "float") (return (/ n 0)))
   (try_let (v (call f 1)) (catch e (print "fn caught")) (print v))`,
 		"return from catch": `(defun g (n) (type_hint n "int") (type_hint return "string") (try_let (v (/ 1 n)) (catch e (return "from catch")) (return (+ "ok " (to_string v)))))

@@ -1394,7 +1394,7 @@ const jsonEsc = `\` + "u"
 // emitErrors writes what try_let needs to bind an error as the VM does: the
 // VM's JSON report of it. The report's "instruction" and "opcode" fields
 // describe the VM's own code and have no WebAssembly equivalent, so they
-// are left out; phase, code, function and message are the VM's.
+// are left out; schema, phase, code, function and message are the VM's.
 func (r *rt) emitErrors() {
 	// utf8_len(b, i): the length of the valid UTF-8 sequence at b[i], or 0
 	// when it is invalid (Go's rules: no overlong forms, no surrogates,
@@ -1533,7 +1533,7 @@ func (r *rt) emitErrors() {
 		r.sliceStr(c, 1, 3, 2, 6)
 		c.LocalSet(5).Br(2).End()
 		c.LocalGet(3).I32Const(1).I32Add().LocalSet(3).Br(0).End().End()
-		r.StrLiteral(c, `{"phase":"runtime","code":"`)
+		r.StrLiteral(c, `{"schema":"howlframe.runtime_error/v1","phase":"runtime","code":"`)
 		c.LocalGet(4).RefAsNonNull().Call(r.fConcat)
 		r.StrLiteral(c, `","function":"main","message":`).Call(r.fConcat)
 		c.LocalGet(5).RefAsNonNull().Call(r.fJSONQuote).Call(r.fConcat)
