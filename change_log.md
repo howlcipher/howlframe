@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Runner environment for one trusted program
+* New runner-only grant `process:exec_inherit_env=<absolute program>` passes the environment `howlframe run` was started with, unchanged, to exactly that program when `exec` runs it. Child VMs cannot request it, it authorizes nothing without a matching `process:exec=` grant, and receipts mark such calls with `environment_inherited`. `process:env=` keeps refusing `PATH`, `HOME` and the other code-loading names.
+
 ### Exec process bounds
 * `--max-exec-millis` bounds each `exec` call's wall clock; a child still running at the bound is ended with its descendants and the call fails with a catchable `LIMIT_EXCEEDED` (improvements.md #114).
 * `--max-processes` (default 32) bounds exec children alive at once across the run, including `spawn` bodies and route handlers; zero or negative values are refused (improvements.md #115).

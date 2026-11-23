@@ -872,9 +872,10 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if denied != nil {
 			InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s", denied.Error()), node)
 		}
-		// Children never inherit the host environment; only process:env= names pass.
+		// Children get only process:env= names, or the runner's environment
+		// under a process:exec_inherit_env= grant for this program.
 		var combined bytes.Buffer
-		err := runContained(context.Background(), cmd, args, capability.Grants(interp.AllowedCaps).ExecEnv(os.LookupEnv), &combined, &combined)
+		err := runContained(context.Background(), cmd, args, execChildEnv(capability.Grants(interp.AllowedCaps), cmd), &combined, &combined)
 		out := combined.Bytes()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
@@ -4574,7 +4575,7 @@ func (vm *BCVM) requireExec(program string, args []string, op bytecode.Opcode) s
 		vm.recordEffect(capability.Process, op, "denied")
 		panic(NewRuntimeError("CAPABILITY_DENIED", "main", vm.ip, op, "capability denied: %s", err.Error()))
 	}
-	vm.recordEffectGrant(capability.Process, op, "allowed", grant)
+	vm.recordEffectDetail(capability.Process, op, "allowed", grant, capability.Grants(vm.AllowedCaps).InheritsEnv(path))
 	return path
 }
 
