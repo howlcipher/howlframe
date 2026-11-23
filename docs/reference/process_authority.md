@@ -135,6 +135,33 @@ Rules, enforced identically on the interpreter (`-run`), `-run-bc` (both
   under one shared `--max-exec-output-bytes` limit (#113). The `exec` form
   still returns the combined stream exactly as written, through one pipe.
 
+## Handing one program the runner's environment
+
+`process:exec_inherit_env=/abs/program` gives exactly that program the
+environment `howlframe run` was started with, unchanged, whenever `exec` runs
+it. It is for a program the operator would otherwise run from their own
+shell, such as a CLI that needs `PATH` to find its tools and `HOME` for the
+operator's credentials, which `process:env=` deliberately cannot pass.
+
+Why it does not reopen the code-loading hole the refusal list closes:
+
+* Only the runner holds it. It must appear in `--allow-caps`; `spawn`,
+  `spawn_agent` and route `(grants ...)` requests for it are refused with
+  `CAPABILITY_DENIED` (`capability.Attenuate`), so no child VM ever has it.
+* The program cannot steer it. No `.howl` form sets, changes or removes a
+  variable; the child sees the runner's environment, as if the operator ran
+  the program themselves.
+* It authorizes nothing by itself. `exec` still needs a `process:exec=`
+  argv grant for the same absolute, symlink-free path; every other program
+  still starts with only its `process:env=` names.
+* Receipts mark the call with `"environment_inherited": true`; variable
+  names and values are never recorded.
+* Generated Go and JavaScript do not honor it: their children keep the empty
+  environment (fail closed).
+
+Grant it only for a program you trust with your whole environment, since the
+child receives every secret in it.
+
 ## Environment pass-through and receipts (#166)
 
 * `process:env=NAME` refuses code-loading, startup, config-lookup, trust-store

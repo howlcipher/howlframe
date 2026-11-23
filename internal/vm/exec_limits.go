@@ -117,9 +117,8 @@ func (vm *BCVM) runExec(program string, args []string, maxOutput int, split bool
 	defer stopTimer()
 	cmdCtx, cancel := context.WithCancel(base)
 	stdout, stderr := newCapture(maxOutput, cancel, split)
-	// Children never inherit the host environment; only process:env= names pass.
 	// runContained also ends every descendant when the call ends (HF-02).
-	err := runContained(cmdCtx, program, args, capability.Grants(vm.AllowedCaps).ExecEnv(os.LookupEnv), stdout, stderr)
+	err := runContained(cmdCtx, program, args, execChildEnv(capability.Grants(vm.AllowedCaps), program), stdout, stderr)
 	timedOut := base.Err() == context.DeadlineExceeded && vm.ctx.Err() == nil
 	cancel()
 	vm.checkDeadline(ip, op)
@@ -149,4 +148,15 @@ func sameWriter(a, b io.Writer) (same bool) {
 		}
 	}()
 	return a == b
+}
+
+// execChildEnv is an authorized child's environment. By default only names
+// granted by process:env= pass. A process:exec_inherit_env= grant for this
+// exact program, which only the runner can hold, passes the runner's own
+// environment unchanged instead.
+func execChildEnv(grants capability.Grants, program string) []string {
+	if grants.InheritsEnv(program) {
+		return append([]string{}, os.Environ()...)
+	}
+	return grants.ExecEnv(os.LookupEnv)
 }

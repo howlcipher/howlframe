@@ -17,7 +17,7 @@ func ParseGrant(raw string) (Capability, error) {
 	}
 	if name, ok := strings.CutPrefix(raw, EnvGrantPrefix); ok {
 		if DynamicLoaderEnv(name) {
-			return None, fmt.Errorf("process:env= refuses code-loading variables (including LD_*, DYLD_*, GIT_*, PATH, HOME): %q", raw)
+			return None, fmt.Errorf("process:env= refuses code-loading variables (including LD_*, DYLD_*, GIT_*, PATH, HOME): %q; to give one trusted program your whole environment, grant process:exec_inherit_env=<absolute program path>", raw)
 		}
 		if !validEnvName(name) {
 			return None, fmt.Errorf("unknown capability: %q", raw)
@@ -25,6 +25,12 @@ func ParseGrant(raw string) (Capability, error) {
 		return Capability(raw), nil
 	}
 	if c, ok, err := parseFetchGrant(raw); ok {
+		if err != nil {
+			return None, err
+		}
+		return c, nil
+	}
+	if c, ok, err := parseInheritEnvGrant(raw); ok {
 		if err != nil {
 			return None, err
 		}

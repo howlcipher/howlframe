@@ -87,6 +87,45 @@ func slotMatches(p, arg string) bool {
 	return p == arg
 }
 
+// ExecInheritEnvPrefix hands one absolute program the runner's own
+// environment, unchanged, when exec runs it. It exists for programs such as
+// a CLI the operator would otherwise run from their shell (PATH to find its
+// tools, HOME for their credentials), which process:env= deliberately cannot
+// supply: PATH, HOME and the other code-loading names stay refused there.
+//
+// It is safe in the same sense as the operator running the program:
+//   - only the runner's --allow-caps can hold it. Attenuate refuses it, so no
+//     spawn body, spawn_agent child or route handler ever receives it;
+//   - the program text cannot add, change or remove a variable; the child gets
+//     exactly the environment the runner was started with;
+//   - exec still needs a matching process:exec= argv grant for the program,
+//     which must be the same absolute, symlink-free path.
+//
+// Syntax: process:exec_inherit_env=<absolute program path>
+const ExecInheritEnvPrefix = "process:exec_inherit_env="
+
+func parseInheritEnvGrant(raw string) (Capability, bool, error) {
+	program, ok := strings.CutPrefix(raw, ExecInheritEnvPrefix)
+	if !ok {
+		return None, false, nil
+	}
+	if !filepath.IsAbs(program) || filepath.Clean(program) != program || strings.ContainsAny(program, " \t\n") {
+		return None, true, fmt.Errorf("process:exec_inherit_env program must be one absolute, clean path: %q", raw)
+	}
+	return Capability(ExecInheritEnvPrefix + program), true, nil
+}
+
+// InheritsEnv reports whether exec of program (already authorized, so absolute
+// and canonical) receives the runner's environment.
+func (g Grants) InheritsEnv(program string) bool {
+	for _, grant := range g {
+		if string(grant) == ExecInheritEnvPrefix+program {
+			return true
+		}
+	}
+	return false
+}
+
 // EnvGrantPrefix names one host environment variable passed through to every
 // exec child. exec children otherwise start with an empty environment.
 const EnvGrantPrefix = "process:env="
@@ -261,6 +300,10 @@ func Attenuate(parent Grants, requested []string) (Grants, error) {
 		// "inherit:filesystem" hands the child exactly the filesystem grants the
 		// parent holds (scoped or coarse), whatever their run-time roots are.
 		// It can only narrow: the child never gets more than the parent.
+		if strings.HasPrefix(raw, ExecInheritEnvPrefix) {
+			// Runner-only: the operator's environment never flows to a child VM.
+			return nil, &ExecDenied{"child requested a runner-only grant"}
+		}
 		if raw == InheritFilesystem {
 			for _, pg := range parent {
 				s := string(pg)

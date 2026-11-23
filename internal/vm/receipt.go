@@ -46,6 +46,10 @@ type ReceiptEffect struct {
 	// pattern literals (exec argument literals, hosts) appear as written.
 	Grant                    string `json:"grant,omitempty"`
 	PrivateDestinationOptOut string `json:"private_destination_opt_out,omitempty"`
+	// EnvironmentInherited marks an allowed exec whose child received the
+	// runner's environment through a process:exec_inherit_env= grant. Only
+	// the fact is recorded; names and values never are.
+	EnvironmentInherited bool `json:"environment_inherited,omitempty"`
 }
 type ReceiptExit struct {
 	Status string        `json:"status"`
@@ -92,6 +96,10 @@ func (vm *BCVM) recordEffect(cap capability.Capability, op bytecode.Opcode, deci
 }
 
 func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode, decision, grant string) {
+	vm.recordEffectDetail(cap, op, decision, grant, false)
+}
+
+func (vm *BCVM) recordEffectDetail(cap capability.Capability, op bytecode.Opcode, decision, grant string, inherited bool) {
 	if vm.receipt == nil {
 		return
 	}
@@ -115,7 +123,7 @@ func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode,
 		r.truncated = true
 		return
 	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant, receiptPrivateOptOut(decision, grant)})
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant, receiptPrivateOptOut(decision, grant), inherited})
 }
 
 // recordHop records a redirect hop. Unlike recordEffectGrant it does not
@@ -135,7 +143,7 @@ func (vm *BCVM) recordHop(cap capability.Capability, op bytecode.Opcode, decisio
 		r.truncated = true
 		return
 	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant, receiptPrivateOptOut(decision, grant)})
+	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant, receiptPrivateOptOut(decision, grant), false})
 }
 
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match

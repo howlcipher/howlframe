@@ -71,6 +71,8 @@ Pending rows are ranked by a diminishing-returns score:
 | 113 | [Separate exec stdout and stderr](#113-separate-exec-stdout-and-stderr) | In progress | 2.0 (4×1÷2) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | `exec` returns stdout and stderr in one buffer, so one diagnostic line on stderr turns a JSON reply into unparseable output; found by HowlPlane TUI-00 (HF-G3). |
 | 114 | [Per-call exec timeout](#114-per-call-exec-timeout) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | The only bound on a hung child is the global `--deadline`, which ends the whole program and cannot be caught; found by HowlPlane TUI-00 (HF-G4). |
 | 115 | [Bound concurrent exec children](#115-bound-concurrent-exec-children) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | 20 `spawn` bodies started 20 concurrent exec children with no runner limit; found by HowlPlane TUI-00 (HF-G5). |
+| 116 | [Runner environment for one trusted program](#116-runner-environment-for-one-trusted-program) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | A CLI run through `exec` cannot find its tools or credentials because `PATH` and `HOME` are refused for `process:env=`; HowlPlane's pure HowlFrame TUI needs `howlplane` to run with the operator's environment (HP-F1). |
+| 117 | [Terminal event-loop application](#117-terminal-event-loop-application) | In progress | 4.5 (9×1÷2) | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | No raw mode, key events, resize, async processes or per-event budgets, so an interactive terminal program cannot be written in HowlFrame (HF-G1, HF-G2, HF-G7). |
 | 100 | [Structured experience memory (learning Level 1)](#100-structured-experience-memory-learning-level-1) | Pending — blocked on #88 | 1.0 (6×1÷6) | Opus 5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | First level of the blueprint's learning model and the prerequisite for policy adaptation. Nothing in `internal/` records execution outcomes today. Deliberately blocked until the provider-neutral model adapter (#88) exists, so vendor API shape never becomes HowlFrame semantics. |
 | 94 | [Centralize capability metadata behind one authoritative source](#94-centralize-capability-metadata-behind-one-authoritative-source) | Done (2026-08-05) | 1.33 (4×1÷3) | Sonnet 5 | — | — | `internal/hfir`'s capability inference duplicates `internal/bytecode`'s `OpInfo` table with no mechanism preventing silent drift between the two. |
 | 1 | [Add Routing Support](#1-add-routing-support) | Done | — | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Highest value to allow building web apps with multiple endpoints instead of just the root path. |
@@ -1062,6 +1064,19 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 * **Why:** TUI-00 started 20 concurrent boundary children (41 processes with supervisors) from 20 `spawn` bodies; nothing bounded the count. Cleanup on exit was correct.
 * **Impact:** 5/10. **Effort:** 2. **Acceptance criteria:** the limit counts live children across all spawn bodies of a run; exceeding it is `LIMIT_EXCEEDED` at `EXEC`; zero or unlimited values are refused.
 * **Status:** Done (2026-11-23): `--max-processes` (default 32), one counter shared by every VM of the run. `exec_process_limits_cli_test.go`.
+
+### 116. Runner environment for one trusted program
+* **Description:** A runner-only grant, `process:exec_inherit_env=<absolute program>`, that passes the runner's environment unchanged to exactly that program when `exec` runs it.
+* **Why:** HowlPlane TUI-00 (HP-F1): run through `exec`, `howlplane` reported installed providers as missing and they could not authenticate, because `PATH` and `HOME` are refused for `process:env=` by design.
+* **Impact:** 7/10. **Effort:** 1. **Files:** `internal/capability/process.go`, `grants.go`, `internal/vm/exec_limits.go` (`execChildEnv`), `receipt.go`.
+* **Acceptance criteria:** the named program sees the runner's environment; every other exec still starts empty; child VMs cannot request it; it authorizes nothing alone; receipts mark it without names or values.
+* **Status:** Done (2026-11-23). `exec_inherit_env_cli_test.go`; rationale in `docs/reference/process_authority.md`.
+
+### 117. Terminal event-loop application
+* **Description:** A `terminal_app` program kind: the runtime owns the terminal, timers and child processes and calls a zero-grant handler once per event with a fresh instruction and memory budget; the handler returns state, view and effects from a closed table the runtime executes under the run's grants.
+* **Why:** Needed for a pure HowlFrame HowlPlane TUI (HowlPlane ADR 0010 plan); today a long interactive loop exhausts the cumulative budget and cannot read keys or watch a child.
+* **Impact:** 9/10. **Effort:** 2.
+* **Status:** In progress.
 
 ## AI-DX1 understanding follow-up
 

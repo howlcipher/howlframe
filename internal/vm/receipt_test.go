@@ -58,7 +58,7 @@ func testReceiptFetch(t *testing.T, origin string) {
 	address := strings.Replace(origin, "http://", "http://user:pw@", 1) + "/path?token=secret#frag"
 	grant := fetchGrantFor(t, origin)
 	r, raw, _ := receiptRun(t, fmt.Sprintf(`(cli_app (fetch %q "GET"))`, address), DefaultExecutionPolicy(), grant)
-	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", string(grant), capability.FetchPrivateOptOut(string(grant))}) {
+	if r.Exit.Code != 0 || len(r.Effects) != 1 || r.Effects[0] != (ReceiptEffect{"FETCH", "network", origin, "allowed", string(grant), capability.FetchPrivateOptOut(string(grant)), false}) {
 		t.Fatalf("receipt: %s", raw)
 	}
 	for _, secret := range []string{"secret", "token", "pw", "/path", "user:"} {
