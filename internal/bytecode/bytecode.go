@@ -821,6 +821,12 @@ func (c *BCCompiler) compileNode(node *ast.Node) []BCInstruction {
 				op, opName = OpPortAvailable, "PORT_AVAILABLE"
 			}
 			insts = append(insts, BCInstruction{OpString: opName, Op: op})
+		case "terminal_app":
+			if len(node.Children) != 3 || node.Children[1].Type != "STRING" {
+				ast.ReportError("terminal_app expects (terminal_app \"handler\" initial_state) where handler names a (defun handler (state event) ...)", node.Line, node.Column)
+			}
+			insts = append(insts, c.compileNode(node.Children[2])...)
+			insts = append(insts, BCInstruction{OpString: "TERMINAL_APP", Op: OpTerminalApp, StringOperand: node.Children[1].Value})
 		case "req_id":
 			if len(node.Children) != 2 {
 				ast.ReportError("req_id expects (req_id req)", node.Line, node.Column)

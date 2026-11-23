@@ -70,6 +70,49 @@ func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
 	return f.Close()
 }
 
+// AppendFile appends data to the target, creating it with perm if needed.
+// One Write call on an O_APPEND descriptor, so concurrent appenders never
+// interleave within a line.
+func (s *Scope) AppendFile(data []byte, perm os.FileMode) error {
+	f, err := s.openTarget(os.O_WRONLY|os.O_CREATE|os.O_APPEND, perm)
+	if err != nil {
+		return s.classify(err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// ReadFrom reads at most max bytes of the target starting at offset. It
+// returns the bytes and the file's size, so a reader can tell whether more
+// remain. A missing target is reported as an error like ReadFile.
+func (s *Scope) ReadFrom(offset int64, max int) ([]byte, int64, error) {
+	f, err := s.openTarget(os.O_RDONLY, 0)
+	if err != nil {
+		return nil, 0, s.classify(err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset < 0 || offset > info.Size() {
+		offset = info.Size()
+	}
+	n := info.Size() - offset
+	if n > int64(max) {
+		n = int64(max)
+	}
+	buf := make([]byte, n)
+	read, err := f.ReadAt(buf, offset)
+	if err != nil && err != io.EOF {
+		return nil, 0, err
+	}
+	return buf[:read], info.Size(), nil
+}
+
 // openTarget opens the scope's target. For a directory grant that is a plain
 // open through the root. For a single-file grant it refuses a symlink at the
 // granted name and confirms that the file actually opened is the one inspected,
@@ -245,6 +288,27 @@ func (g Grants) ScopedWriteFile(path string, data []byte, perm os.FileMode) erro
 	}
 	defer sc.Close()
 	return sc.WriteFile(data, perm)
+}
+
+// ScopedAppendFile appends to path within the granted write scope.
+func (g Grants) ScopedAppendFile(path string, data []byte, perm os.FileMode) error {
+	sc, err := g.OpenScope(path, true)
+	if err != nil {
+		return err
+	}
+	defer sc.Close()
+	return sc.AppendFile(data, perm)
+}
+
+// ScopedReadFrom reads up to max bytes of path from offset within the granted
+// read scope, returning them and the file size.
+func (g Grants) ScopedReadFrom(path string, offset int64, max int) ([]byte, int64, error) {
+	sc, err := g.OpenScope(path, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer sc.Close()
+	return sc.ReadFrom(offset, max)
 }
 
 // ScopedMkdirAll creates path (and parents) within the granted scope.

@@ -72,6 +72,7 @@ var adapterExemptForms = map[string]struct{ reason, sample string }{
 	"serialize_requests": {"http_server option; http_server is not lowered by -compile-hfir-bc", `(http_server 8080 (serialize_requests) (route "/a" (lambda (req) (res_json 200 (dict ("a" "b"))))))`},
 	"rand_hex":           {"promote-blocker fence; -compile-hfir-bc does not lower RAND_HEX", `(do (print (rand_hex 4)))`},
 	"secure_equal":       {"promote-blocker fence; -compile-hfir-bc does not lower SECURE_EQUAL", `(do (print (secure_equal "a" "b")))`},
+	"terminal_app":       {"promote-blocker fence; -compile-hfir-bc does not lower TERMINAL_APP (bytecode VM only)", `(do (print (terminal_app "h" 1)))`},
 	"confidence":         {"promote-blocker fence; model call (network grant); not lowered by HFIR", `(do (print (confidence 1)))`},
 	"http_request":       {"promote-blocker fence; not lowered by HFIR (fetch is the lowered network form)", `(do (print (http_request "http://127.0.0.1:9/" "GET")))`},
 	"req_method":         {"promote-blocker fence; not lowered by HFIR (req_query/req_header/req_path are)", `(do (let (r (dict ("method" "GET"))) (print (req_method r))))`},

@@ -41,6 +41,14 @@ func TestCliAppsNoFlagBytecode(t *testing.T) {
 	// A program that is not listed fails the test instead of being skipped.
 	want := []cliAppNoFlagCase{
 		{
+			// terminal_app in line mode: stdin is a pipe, so each changed frame
+			// is written once and the quit effect's code is the exit status.
+			source: "examples/terminal_counter/terminal_counter.howl",
+			stdin:  "+\n+\nq\n",
+			exit:   3,
+			stdout: "count 0\nlast start\n> \ncount 1\nlast line\n> \ncount 2\nlast line\n> \n",
+		},
+		{
 			source: "examples/swarm_argv_dogfood/swarm_argv_dogfood.howl",
 			exit:   1,
 			stdout: "swarm argv start\n",

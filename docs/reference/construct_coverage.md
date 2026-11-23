@@ -166,6 +166,7 @@
 | `sum` | No | None | Yes | No | - | AUTHORITATIVE |
 | `switch` | No | None | Yes | No | - | AUTHORITATIVE |
 | `task` | Yes | None | No | No | - | AUTHORITATIVE |
+| `terminal_app` | Yes | None | No | No | - | AUTHORITATIVE |
 | `test` | No | None | No | Yes | improvements.md #96 | AUTHORITATIVE |
 | `time_now` | Yes | None | No | No | - | AUTHORITATIVE |
 | `to_base` | No | None | Yes | No | - | AUTHORITATIVE |

@@ -241,6 +241,7 @@ var table = []Entry{
 	{Name: "sum", Support: CompileTimeOnly, Note: "core-library sugar; (sum lst) for/+ by ast.Desugar (pure)"},
 	{Name: "switch", Support: CompileTimeOnly, Note: "density sugar; (switch expr (pat body...)... (else body...)) → let+cond by ast.Desugar"},
 	{Name: "task", Support: Supported, Opaque: true, Note: "TASK; reads description child .Value directly; optional body forms execute through SPAWN_AGENT"},
+	{Name: "terminal_app", Support: Supported, Note: "TERMINAL_APP; bytecode VM only; runtime-owned terminal event loop with per-event budgets and a closed effect table"},
 	{Name: "test", Support: Unsupported, Tracker: "improvements.md #96", Note: "test blocks are extracted into Go _test.go output; the VM cannot run them"},
 	{Name: "time_now", Support: Supported, Note: "TIME_NOW"},
 	{Name: "to_base", Support: CompileTimeOnly, Note: "core-library sugar; (to_base n b) digits via %/// and list_get by ast.Desugar (pure)"},

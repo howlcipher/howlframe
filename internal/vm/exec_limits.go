@@ -18,6 +18,20 @@ import (
 type processBudget struct {
 	mu   sync.Mutex
 	live int
+	// terminal marks that the run has started its terminal_app: the input
+	// reader owns stdin for the rest of the run, so it can start only once.
+	terminal bool
+}
+
+// claimTerminal reports whether this is the run's first terminal_app.
+func (b *processBudget) claimTerminal() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.terminal {
+		return false
+	}
+	b.terminal = true
+	return true
 }
 
 // processSlots returns the run's shared counter, creating it for a VM built
@@ -104,22 +118,22 @@ type execResult struct {
 // runExec runs an authorized child under the run's process ceiling, per-call
 // time bound, deadline and output limit. Limit and deadline failures panic
 // with typed errors; a child that ran and failed is returned in err.
-func (vm *BCVM) runExec(program string, args []string, maxOutput int, split bool, ip int, op bytecode.Opcode) execResult {
+func (vm *BCVM) runExec(ctx context.Context, program string, args []string, maxOutput int, split bool, signals <-chan os.Signal, ip int, op bytecode.Opcode) execResult {
 	slots := vm.Limits.processSlots()
 	if !slots.acquire(vm.Limits.maxProcesses()) {
 		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "exec would exceed --max-processes of %d live children", vm.Limits.maxProcesses()))
 	}
 	defer slots.release()
-	base, stopTimer := vm.ctx, context.CancelFunc(func() {})
+	base, stopTimer := ctx, context.CancelFunc(func() {})
 	if vm.Limits.MaxExecMillis > 0 {
-		base, stopTimer = context.WithTimeout(vm.ctx, time.Duration(vm.Limits.MaxExecMillis)*time.Millisecond)
+		base, stopTimer = context.WithTimeout(ctx, time.Duration(vm.Limits.MaxExecMillis)*time.Millisecond)
 	}
 	defer stopTimer()
 	cmdCtx, cancel := context.WithCancel(base)
 	stdout, stderr := newCapture(maxOutput, cancel, split)
 	// runContained also ends every descendant when the call ends (HF-02).
-	err := runContained(cmdCtx, program, args, execChildEnv(capability.Grants(vm.AllowedCaps), program), stdout, stderr)
-	timedOut := base.Err() == context.DeadlineExceeded && vm.ctx.Err() == nil
+	err := runContained(cmdCtx, program, args, execChildEnv(capability.Grants(vm.AllowedCaps), program), stdout, stderr, signals)
+	timedOut := base.Err() == context.DeadlineExceeded && ctx.Err() == nil
 	cancel()
 	vm.checkDeadline(ip, op)
 	if timedOut {

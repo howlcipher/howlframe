@@ -1,0 +1,19 @@
+; Interactive counter: type + to count, q to quit (exit code 3). See docs/reference/terminal_app.md.
+(cli_app
+  (defun on_event (state event)
+    (type_hints (state dict) (event dict) (return dict))
+    (let (n (map_get state "n"))
+      (let (kind (map_get event "type"))
+        (let (effects (list))
+          (do
+            (when (= kind "line")
+              (let (text (map_get event "text"))
+                (do
+                  (when (= text "+") (set n (+ n 1)))
+                  (when (= text "q") (append effects (dict ("kind" "quit") ("code" 3)))))))
+            (when (= kind "eof") (append effects (dict ("kind" "quit") ("code" 0))))
+            (return (dict ("state" (dict ("n" n)))
+                          ("view" (list (str_join (list "count " (to_string n)) "") (str_join (list "last " (to_string kind)) "")))
+                          ("prompt" "> ")
+                          ("effects" effects))))))))
+  (exit (terminal_app "on_event" (dict ("n" 0)))))
