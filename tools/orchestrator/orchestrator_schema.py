@@ -391,6 +391,11 @@ class TaskInstruction(BaseModel):
     string_operand: str
 
 
+class TerminalAppInstruction(BaseModel):
+    op: Literal["TERMINAL_APP"]
+    string_operand: str
+
+
 class TimeNowInstruction(BaseModel):
     op: Literal["TIME_NOW"]
     pass
@@ -491,6 +496,7 @@ Instruction = Annotated[
         StrJoinInstruction,
         StrSplitInstruction,
         TaskInstruction,
+        TerminalAppInstruction,
         TimeNowInstruction,
         TryLetInstruction,
         Utf8ValidInstruction,

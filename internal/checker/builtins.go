@@ -22,6 +22,7 @@ var builtinSignatures = map[string]builtinSignature{
 	"req_url_path":   {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
 	"utf8_valid":     {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.Bool)},
 	"port_available": {Params: []ast.ValueKind{ast.Int}, Result: ast.Layout(ast.Bool)},
+	"terminal_app":   {Params: []ast.ValueKind{ast.String, ""}, Result: ast.Layout(ast.Int)},
 	"granted":        {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.Bool)},
 	"req_id":         {Params: []ast.ValueKind{""}, Result: ast.Layout(ast.String)},
 	"sha256_hex":     {Params: []ast.ValueKind{ast.String}, Result: ast.Layout(ast.String)},

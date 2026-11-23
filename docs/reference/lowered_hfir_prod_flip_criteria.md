@@ -130,6 +130,7 @@ store_keys
 store_open
 store_put
 task
+terminal_app
 utf8_valid
 wasm_app
 web_app

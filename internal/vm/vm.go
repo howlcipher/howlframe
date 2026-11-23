@@ -875,7 +875,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		// Children get only process:env= names, or the runner's environment
 		// under a process:exec_inherit_env= grant for this program.
 		var combined bytes.Buffer
-		err := runContained(context.Background(), cmd, args, execChildEnv(capability.Grants(interp.AllowedCaps), cmd), &combined, &combined)
+		err := runContained(context.Background(), cmd, args, execChildEnv(capability.Grants(interp.AllowedCaps), cmd), &combined, &combined, nil)
 		out := combined.Bytes()
 		if err != nil {
 			InterpErr(fmt.Sprintf("IO_ERROR: exec failed: %v", err), node)
@@ -2859,7 +2859,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if max <= 0 {
 				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "exec output exceeds maximum limit of %d bytes", max))
 			}
-			res := vm.runExec(cmdStr, args, max, false, ip, inst.Op)
+			res := vm.runExec(vm.ctx, cmdStr, args, max, false, nil, ip, inst.Op)
 			out := res.stdout
 			if res.err != nil {
 				execErr := NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "exec failed: %v", res.err)
@@ -3676,6 +3676,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "utf8_valid expected string"))
 			}
 			vm.push(utf8.ValidString(s))
+		case bytecode.OpTerminalApp:
+			initial := vm.pop(inst.Op)
+			code := vm.runTerminalApp(inst.StringOperand, initial, ip)
+			vm.checkDeadline(ip, inst.Op)
+			vm.push(int64(code))
 		case bytecode.OpPortAvailable:
 			portVal := vm.pop(inst.Op)
 			n, convErr := strconv.Atoi(strings.TrimSpace(fmt.Sprint(portVal)))

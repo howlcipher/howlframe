@@ -14,7 +14,7 @@ func TestRunContainedSplitsStreams(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stdout, stderr := newCapture(1024, cancel, true)
-	if err := runContained(ctx, sh, []string{"-c", "echo out; echo err >&2; echo out2"}, []string{}, stdout, stderr); err != nil {
+	if err := runContained(ctx, sh, []string{"-c", "echo out; echo err >&2; echo out2"}, []string{}, stdout, stderr, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(stdout.buffer.Bytes()); got != "out\nout2\n" {
@@ -29,7 +29,7 @@ func TestSplitStreamsShareTheOutputLimit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stdout, stderr := newCapture(8, cancel, true)
-	_ = runContained(ctx, "/bin/sh", []string{"-c", "printf 12345; printf 67890 >&2; sleep 1"}, []string{}, stdout, stderr)
+	_ = runContained(ctx, "/bin/sh", []string{"-c", "printf 12345; printf 67890 >&2; sleep 1"}, []string{}, stdout, stderr, nil)
 	if !stdout.limit.exceeded {
 		t.Fatalf("10 bytes across both streams passed an 8 byte limit: %q %q", stdout.buffer.Bytes(), stderr.buffer.Bytes())
 	}

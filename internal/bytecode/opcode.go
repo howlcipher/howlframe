@@ -88,6 +88,7 @@ const (
 	OpUTF8Valid
 	OpGranted
 	OpPortAvailable
+	OpTerminalApp
 )
 
 type OperandType string
@@ -183,6 +184,7 @@ var Registry = map[Opcode]OpcodeSpec{
 	OpUTF8Valid:        {Code: OpUTF8Valid, Name: "UTF8_VALID", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when a string is valid UTF-8"},
 	OpGranted:          {Code: OpGranted, Name: "GRANTED", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "True when the runner granted the named capability (introspection only; confers no authority)"},
 	OpPortAvailable:    {Code: OpPortAvailable, Name: "PORT_AVAILABLE", Operands: []OperandType{}, Pops: 1, Pushes: 1, Capability: capability.Network, Description: "True when a TCP port can be bound right now (binds and releases it)"},
+	OpTerminalApp:      {Code: OpTerminalApp, Name: "TERMINAL_APP", Operands: []OperandType{OperandString}, Pops: 1, Pushes: 1, Description: "Runs the terminal event loop: calls the named two-parameter handler once per event with a fresh budget and executes its effects under the run's grants; pushes the quit code"},
 	OpStderr:           {Code: OpStderr, Name: "STDERR", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Prints a value to standard error"},
 	OpExit:             {Code: OpExit, Name: "EXIT", Operands: []OperandType{}, Pops: 1, Pushes: 0, Description: "Exits the process with a given status code"},
 	OpListLen:          {Code: OpListLen, Name: "LIST_LEN", Operands: []OperandType{}, Pops: 1, Pushes: 1, Description: "Returns the length of a list, string, or byte sequence"},

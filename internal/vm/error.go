@@ -122,6 +122,13 @@ type VMLimits struct {
 	// #114). Zero means no per-call bound (only --deadline applies). A
 	// program can neither read nor widen it.
 	MaxExecMillis int
+	// MaxEventInstructions, MaxEventMemoryBytes and MaxStateBytes bound each
+	// terminal_app handler call: every event gets a fresh budget, so a long
+	// interactive session never exhausts a cumulative one. <=0 means the
+	// Default* value below.
+	MaxEventInstructions int
+	MaxEventMemoryBytes  int
+	MaxStateBytes        int
 	// processes is the run's shared live-child counter. VMLimits is copied
 	// into every child VM by value, so the pointer is shared by all of them.
 	processes *processBudget
@@ -129,6 +136,13 @@ type VMLimits struct {
 
 // DefaultMaxProcesses is the live exec child ceiling when none is set.
 const DefaultMaxProcesses = 32
+
+// terminal_app per-event defaults.
+const (
+	DefaultMaxEventInstructions = 100000
+	DefaultMaxEventMemoryBytes  = 16 * 1024 * 1024
+	DefaultMaxStateBytes        = 1024 * 1024
+)
 
 // DefaultStartupInstructions is the startup ceiling the "run" command applies to
 // HTTP server programs when --max-instructions was not given explicitly.

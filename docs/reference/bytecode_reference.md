@@ -78,6 +78,7 @@
 | `STR_JOIN` |  | 2 | 1 |  | Joins a list of strings |
 | `STR_SPLIT` |  | 2 | 1 |  | Splits a string |
 | `TASK` | string | 0 | 1 |  | Defines a task for a subagent |
+| `TERMINAL_APP` | string | 1 | 1 |  | Runs the terminal event loop: calls the named two-parameter handler once per event with a fresh budget and executes its effects under the run's grants; pushes the quit code |
 | `TIME_NOW` |  | 0 | 1 |  | Gets current unix timestamp |
 | `TRY_LET` | string, string, int64 | 0 | 0 |  | Try block with let binding |
 | `UTF8_VALID` |  | 1 | 1 |  | True when a string is valid UTF-8 |

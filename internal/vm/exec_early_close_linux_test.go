@@ -22,7 +22,7 @@ func TestExecProgramThatClosesItsOutputEarlyKeepsRunning(t *testing.T) {
 	}
 	var out bytes.Buffer
 	start := time.Now()
-	runErr := runContained(context.Background(), sh, []string{"-c", "exec >/dev/null 2>&1; sleep 0.5; exit 7"}, []string{}, &out, &out)
+	runErr := runContained(context.Background(), sh, []string{"-c", "exec >/dev/null 2>&1; sleep 0.5; exit 7"}, []string{}, &out, &out, nil)
 	took := time.Since(start)
 	var exitErr *exec.ExitError
 	if !errors.As(runErr, &exitErr) || exitErr.ExitCode() != 7 {

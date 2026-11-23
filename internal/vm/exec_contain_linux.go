@@ -59,7 +59,7 @@ func init() {
 // killed. The end of the output is never taken for the end of the program: a
 // program may close its own stdout and keep running, so the supervisor reports
 // the program's exit explicitly over the status pipe.
-func runContained(ctx context.Context, program string, args []string, env []string, stdout, stderr io.Writer) error {
+func runContained(ctx context.Context, program string, args []string, env []string, stdout, stderr io.Writer, signals <-chan os.Signal) error {
 	self, err := os.Executable()
 	if err != nil {
 		return errors.New("exec containment unavailable: cannot locate the runner executable")
@@ -173,6 +173,12 @@ func runContained(ctx context.Context, program string, args []string, env []stri
 			statusLine = nil
 		case <-ctx.Done():
 			stopNow = true
+		case sig := <-signals:
+			// Delivered to the whole group: the supervisor catches and drops
+			// it, the program and its descendants get the default action.
+			if s, ok := sig.(syscall.Signal); ok {
+				syscall.Kill(-cmd.Process.Pid, s)
+			}
 		}
 	}
 	ctrlW.Close() // asks the supervisor to sweep the tree
@@ -215,6 +221,10 @@ func runSupervisor(program string, args []string) int {
 	ctrl := os.NewFile(3, "control")
 	status := os.NewFile(4, "status")
 
+	// Interrupt and terminate are forwarded to the whole process group; the
+	// supervisor must outlive them to sweep the tree. A caught signal is reset
+	// to its default in the program at exec, so the program still sees them.
+	signal.Notify(make(chan os.Signal, 1), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	child := exec.Command(program, args...)
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
 	child.Env = os.Environ()
