@@ -52,6 +52,17 @@ Download `howlframe_v0.2.0_windows_amd64.zip` and `SHA256SUMS`, check the archiv
 `Get-FileHash howlframe_v0.2.0_windows_amd64.zip -Algorithm SHA256` against the matching line of `SHA256SUMS`, extract
 it, and place `howlframe.exe` in a directory included in your `%PATH%`.
 
+### Smoke-test a release on your machine
+`scripts/release_smoke.sh` (Linux, macOS) and `scripts/release_smoke.ps1` (Windows) download a published archive, verify
+it against `SHA256SUMS`, and check the binary: version, a standalone program, invalid source, filesystem and `exec`
+grant scoping, and the instruction budget. They install nothing.
+```bash
+scripts/release_smoke.sh v0.3.0                                        # Linux or macOS; no argument: latest release
+powershell -ExecutionPolicy Bypass -File scripts\release_smoke.ps1 -Version v0.3.0   # Windows
+```
+The `Release smoke` workflow runs both on native GitHub-hosted runners after every release (Linux x86-64 and ARM64,
+macOS Intel and Apple silicon, Windows x86-64). It can also be started by hand from the Actions tab.
+
 ### Older releases
 v0.1.0 archives use the same naming, for example `howlframe_v0.1.0_linux_amd64.tar.gz`. A v0.1.0 binary writes and
 reads only HFBC format 1 and rejects artifacts built by v0.2.0; see
