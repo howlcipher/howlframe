@@ -1,0 +1,70 @@
+name: Release smoke
+
+# Runs the published release archives on native hosts: the platforms no maintainer machine covers (#238).
+# The scripts download from GitHub Releases, so this tests what users install, not a fresh build.
+on:
+  # A release created by the Release workflow's GITHUB_TOKEN does not fire `release` events, so follow the workflow.
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, for example v0.3.0 (empty: the latest release)"
+        required: false
+        default: ""
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "scripts/release_smoke.sh"
+      - "scripts/release_smoke.ps1"
+      - ".github/workflows/release-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: linux-amd64, runner: ubuntu-latest }
+          - { label: linux-arm64, runner: ubuntu-24.04-arm }
+          - { label: darwin-amd64, runner: macos-15-intel }
+          - { label: darwin-arm64, runner: macos-latest }
+          - { label: windows-amd64, runner: windows-latest }
+    env:
+      # workflow_run: the tag the Release workflow ran on. Empty: the scripts resolve the latest release.
+      VERSION: ${{ github.event.workflow_run.head_branch || inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke test (bash)
+        if: runner.os != 'Windows'
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/smoke
+        run: scripts/release_smoke.sh "$VERSION"
+
+      - name: Smoke test (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/release_smoke.ps1 -Version "$env:VERSION" -SmokeDir "$env:RUNNER_TEMP\smoke"
+
+      - name: Smoke test (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/release_smoke.ps1 -Version "$env:VERSION" -SmokeDir "$env:RUNNER_TEMP\smoke-ps51"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-${{ matrix.label }}
+          path: |
+            ${{ runner.temp }}/smoke*/results.md
+          if-no-files-found: warn
