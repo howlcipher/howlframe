@@ -70,10 +70,30 @@ failed. That was the environment, not the release. The results above are from th
 
 ## Platform status
 
-| Platform | Status |
-|---|---|
-| Linux x86-64 | Published v0.3.0 binary executed (clean install, this record); published v0.2.1 binary ran `version` |
-| Linux ARM64, macOS x86-64, macOS ARM64, Windows x86-64 | Cross-compiled by the release workflow, **not executed** for these releases (#238) |
+v0.3.0 was executed natively on every published platform with `scripts/release_smoke.sh` and
+`scripts/release_smoke.ps1`. The run was https://github.com/howlcipher/howlframe/actions/runs/45701494330 on
+GitHub-hosted runners (PR #317). All 19 checks passed on each platform.
+
+Each executable hash below matches the binary in the downloaded archive.
+
+| Platform | Host | Executable SHA-256 | Result |
+|---|---|---|---|
+| Linux x86-64 | Ubuntu runner, kernel 7.0.0 (also this record's clean install) | `c8f27a1c982657b792cdd3672c003b15024cd94d217e38faac4f9a32ff4f2fac` | 19/19 |
+| Linux ARM64 | Ubuntu runner `ubuntu-24.04-arm`, native aarch64 | `53257b7aab57c8e08be0e0f9f104664e65ef44eeeb0d8ca0a19ebcf804e74803` | 19/19 |
+| macOS x86-64 | macOS 15.7.9 (24G830), Intel | `a3051bb3048e2a6a257a4d17e439850ef5412068e407544750a999be3f06a292` | 19/19 |
+| macOS ARM64 | macOS 26.7.2 (25G332), Apple silicon | `099f505986c6b9c61db8061ac3cdd391e9c75e3f6344cedf917caed971139a06` | 19/19 |
+| Windows x86-64 | Windows Server 2025 (10.0.26100), PowerShell 5.1 and 7.6 | `23b1df28858e84709648e877007a99155cf8c0310ece4a42d6cf5f298af1cba9` | 19/19 under each PowerShell |
+
+The published v0.2.1 linux/amd64 binary ran `version`. The other v0.2.1 binaries were not executed.
+
+Signing and Gatekeeper observations (information only, #240):
+
+- On macOS the binaries carry no Developer ID signature, and `spctl -a -t exec` rejects both. The ARM64 binary has the Go linker's ad-hoc signature; the x86-64 binary has none.
+- A copy with the `com.apple.quarantine` attribute set, as a browser download would have, still ran `howlframe version` from a shell on both macOS runners with Gatekeeper assessments enabled.
+- This was observed on CI runners only. A double-click or Finder launch on a desktop Mac was not tested.
+- On Windows, Authenticode reports `NotSigned`.
+
+Containment on macOS and Windows was not exercised beyond the `exec` grant checks (#217).
 
 ## Limitations shipped
 

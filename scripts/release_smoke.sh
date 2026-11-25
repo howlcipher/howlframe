@@ -178,7 +178,9 @@ if [ "$OS" = darwin ]; then
   # Information only. curl does not quarantine downloads; a browser does. Simulate that on a copy.
   out "- Gatekeeper: \`spctl --status\`: $(spctl --status 2>&1 | head -1)"
   out "- Gatekeeper: \`spctl -a -t exec\` on the binary: $(spctl -a -t exec -vv "$HF" 2>&1 | head -1)"
-  out "- Code signature: $(codesign -dv "$HF" 2>&1 | grep -E '^(Signature|CodeDirectory)' | tr '\n' ' ')"
+  sig=$(codesign -dv "$HF" 2>&1 | grep -E '^(Signature|CodeDirectory)' | tr '\n' ' ')
+  [ -n "$sig" ] || sig="none ($(codesign -dv "$HF" 2>&1 | head -1 | sed 's/^.*: //'))"
+  out "- Code signature: $sig"
   cp "$HF" "$W/howlframe-quarantined"
   if xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$W/howlframe-quarantined" 2>/dev/null; then
     run_limited 30 "$W/howlframe-quarantined" version > "$W/q.out" 2>&1; qrc=$?
