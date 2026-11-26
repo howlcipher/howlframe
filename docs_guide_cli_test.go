@@ -91,3 +91,35 @@ func TestHTTPAPIGuideRule(t *testing.T) {
 		t.Errorf("rule 6: the guide contains something that looks like a real token")
 	}
 }
+
+func TestPublicDocsAvoidStaleCLIExamples(t *testing.T) {
+	checks := []struct {
+		path      string
+		forbidden []string
+	}{
+		{
+			path:      "docs/index.html",
+			forbidden: []string{"-compile-wat", "-compile-go", "-allow-caps system", "SPEC_VER // 0.1.0"},
+		},
+		{
+			path:      "docs/installation.md",
+			forbidden: []string{"VERSION=v0.2.0", "HowlFrame 0.2.0"},
+		},
+		{
+			path:      "README.md",
+			forbidden: []string{"-run-bc app.json", "pip install outlines"},
+		},
+	}
+	for _, tc := range checks {
+		raw, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.path, err)
+		}
+		text := string(raw)
+		for _, bad := range tc.forbidden {
+			if strings.Contains(text, bad) {
+				t.Errorf("%s still contains stale reference %q", tc.path, bad)
+			}
+		}
+	}
+}

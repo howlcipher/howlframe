@@ -3,25 +3,28 @@ package file_transform_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestFileTransform(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "file_transform.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "file_transform.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "file_transform.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
-	in := "sample.csv"
-	out := "sample.jsonl"
-	os.WriteFile(in, []byte("name,age\nalice,30\nbob,25\n"), 0644)
-	defer os.Remove(in)
-	defer os.Remove(out)
+	in := filepath.Join(tmp, "sample.csv")
+	out := filepath.Join(tmp, "sample.jsonl")
+	if err := os.WriteFile(in, []byte("name,age\nalice,30\nbob,25\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"file_transform.howl.bc.bin", in, out)
+		artifact, in, out)
 	cmd.Dir = "."
 	got, err := cmd.CombinedOutput()
 	if err != nil {
@@ -40,7 +43,7 @@ func TestFileTransform(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"file_transform.howl.bc.bin", "missing.csv", out)
+		artifact, filepath.Join(tmp, "missing.csv"), out)
 	cmd.Dir = "."
 	got, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(got), "error=") {
@@ -48,7 +51,7 @@ func TestFileTransform(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc",
-		"file_transform.howl.bc.bin", in, out)
+		artifact, in, out)
 	cmd.Dir = "."
 	got, _ = cmd.CombinedOutput()
 	if !strings.Contains(string(got), "capability denied: filesystem") {

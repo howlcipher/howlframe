@@ -71,6 +71,25 @@ func IsCorelibSugar(head string) bool {
 	return ok
 }
 
+func prepareTemplateArgs(node *Node, head string, arity int, vars, temps []string, binder int) (map[string]*Node, bool) {
+	if len(node.Children) != arity+1 {
+		ReportError(head+" expects "+itoa(arity)+" arguments", node.Line, node.Column)
+		return nil, false
+	}
+	if binder >= 0 && node.Children[binder+1].Type != "SYMBOL" {
+		ReportError(head+" expects a variable name as argument "+itoa(binder+1), node.Line, node.Column)
+		return nil, false
+	}
+	args := map[string]*Node{}
+	for i, v := range vars {
+		args[v] = node.Children[i+1]
+	}
+	for _, tmp := range temps {
+		args[tmp] = symNode(compactTemp("cl"+tmp), node)
+	}
+	return args, true
+}
+
 func desugarCorelib(node *Node) bool {
 	head := node.Children[0].Value
 	spec := corelibTemplates[head]
@@ -82,27 +101,16 @@ func desugarCorelib(node *Node) bool {
 		big := &Node{Type: "INT", Value: "9007199254740991", Line: node.Line, Column: node.Column, Filename: node.Filename}
 		node.Children = append(node.Children, big)
 	}
-	if len(node.Children) != spec.arity+1 {
-		ReportError(head+" expects "+itoa(spec.arity)+" arguments", node.Line, node.Column)
-		return false
-	}
-	if spec.binder >= 0 && node.Children[spec.binder+1].Type != "SYMBOL" {
-		ReportError(head+" expects a variable name as argument "+itoa(spec.binder+1), node.Line, node.Column)
-		return false
-	}
-	if head == "reduce" && node.Children[1].Type != "SYMBOL" {
+	if head == "reduce" && len(node.Children) == spec.arity+1 && node.Children[1].Type != "SYMBOL" {
 		ReportError("reduce expects an accumulator name as argument 1", node.Line, node.Column)
 		return false
 	}
-	args := map[string]*Node{}
-	for i, v := range spec.vars {
-		args[v] = node.Children[i+1]
+	args, ok := prepareTemplateArgs(node, head, spec.arity, spec.vars, spec.temps, spec.binder)
+	if !ok {
+		return false
 	}
 	if head == "min" || head == "max" {
-		args["msg"] = &Node{Type: "STRING", Value: "VALUE_ERROR: " + head + " of empty list\n", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	}
-	for _, tmp := range spec.temps {
-		args[tmp] = symNode(compactTemp("cl"+tmp), node)
+		args["msg"] = strNode("VALUE_ERROR: "+head+" of empty list\n", node)
 	}
 	node.Children = buildTemplateFresh(spec.tpl, args, nil, node).Children
 	return true

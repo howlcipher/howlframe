@@ -131,6 +131,24 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		}
 		return id, nil
 	}
+	lowerNamed := func(argc int, kind string, names ...string) (NodeID, bool, error) {
+		if len(astNode.Children) != argc+1 {
+			return "", false, nil
+		}
+		node.Kind = kind
+		pairs := make([]struct {
+			name  string
+			child *ast.Node
+		}, argc)
+		for i, name := range names {
+			pairs[i] = struct {
+				name  string
+				child *ast.Node
+			}{name, astNode.Children[i+1]}
+		}
+		id, err := addNamed(pairs)
+		return id, true, err
+	}
 
 	switch head {
 	case "cli_app":
@@ -194,19 +212,17 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.ControlEdges = edges
 		return id, true, nil
 	case "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "=", "and", "or":
-		if len(astNode.Children) != 3 {
-			return "", false, nil
-		}
-		node.Kind = "binary"
 		node.Value = head
 		if node.Value == "=" {
 			node.Value = "=="
 		}
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"left", astNode.Children[1]}, {"right", astNode.Children[2]}})
-		return id, true, err
+		return lowerNamed(2, "binary", "left", "right")
+	case "str_split", "str_join":
+		return lowerNamed(2, head, "value", "separator")
+	case "html_escape", "attr_escape":
+		return lowerNamed(1, head, "value")
+	case "regex_match":
+		return lowerNamed(2, head, "pattern", "string")
 	case "list":
 		node.Kind = "list"
 		id, err := addChildren(1, "item")
@@ -242,61 +258,12 @@ func (ctx *LoweringContext) lowerSemanticList(node *Node, astNode *ast.Node, hea
 		node.Value = head
 		id, err := addChildren(1, "value")
 		return id, true, err
-	case "str_split", "str_join":
-		if len(astNode.Children) != 3 {
-			return "", false, nil
-		}
-		node.Kind = head
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"value", astNode.Children[1]}, {"separator", astNode.Children[2]}})
-		return id, true, err
 	case "list_len", "env", "map_keys":
 		if len(astNode.Children) != 2 {
 			return "", false, nil
 		}
 		node.Kind = head
 		id, err := addChildren(1, "value")
-		return id, true, err
-	case "html_escape":
-		// (html_escape text). Existing HTML_ESCAPE opcode. Experimental
-		// -compile-hfir-bc only. No new opcode and no new capability.
-		if len(astNode.Children) != 2 {
-			return "", false, nil
-		}
-		node.Kind = head
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"value", astNode.Children[1]}})
-		return id, true, err
-	case "attr_escape":
-		// (attr_escape text). Existing ATTR_ESCAPE opcode. Same shape as
-		// html_escape. Experimental -compile-hfir-bc only. No new opcode
-		// and no new capability.
-		if len(astNode.Children) != 2 {
-			return "", false, nil
-		}
-		node.Kind = head
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"value", astNode.Children[1]}})
-		return id, true, err
-	case "regex_match":
-		// (regex_match pattern text). Existing REGEX_MATCH opcode. Pattern
-		// then text, the same order as bytecode.CompileToBytecode.
-		// Experimental -compile-hfir-bc only. No new opcode and no new
-		// capability.
-		if len(astNode.Children) != 3 {
-			return "", false, nil
-		}
-		node.Kind = head
-		id, err := addNamed([]struct {
-			name  string
-			child *ast.Node
-		}{{"pattern", astNode.Children[1]}, {"string", astNode.Children[2]}})
 		return id, true, err
 	case "time_now":
 		// (time_now). Existing TIME_NOW opcode. No data edge. Experimental

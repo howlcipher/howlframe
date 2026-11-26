@@ -3,21 +3,26 @@ package cut_cli_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestCutCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "cut_cli.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "cut_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "cut_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	os.WriteFile("sample.csv", []byte("a,b,c\n1,2,3\n"), 0644)
-	defer os.Remove("sample.csv")
+	sample := filepath.Join(tmp, "sample.csv")
+	if err := os.WriteFile(sample, []byte("a,b,c\n1,2,3\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"cut_cli.howl.bc.bin", "1", "sample.csv")
+		artifact, "1", sample)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {

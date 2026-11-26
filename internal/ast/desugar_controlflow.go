@@ -193,17 +193,9 @@ func desugarControlflow(node *Node) bool {
 	case (head == "pad_left" || head == "pad_right") && len(node.Children) == 3:
 		node.Children = append(node.Children, strNode(" ", node))
 	}
-	if len(node.Children) != spec.arity+1 {
-		ReportError(head+" expects "+itoa(spec.arity)+" arguments", node.Line, node.Column)
+	args, ok := prepareTemplateArgs(node, head, spec.arity, spec.vars, spec.temps, spec.binder)
+	if !ok {
 		return false
-	}
-	if spec.binder >= 0 && node.Children[spec.binder+1].Type != "SYMBOL" {
-		ReportError(head+" expects a variable name as argument "+itoa(spec.binder+1), node.Line, node.Column)
-		return false
-	}
-	args := map[string]*Node{}
-	for i, v := range spec.vars {
-		args[v] = node.Children[i+1]
 	}
 	// Literal constants get a fresh node per occurrence (the template
 	// builder only clones symbols).
@@ -260,9 +252,6 @@ func desugarControlflow(node *Node) bool {
 		args["msg"] = strNode("VALUE_ERROR: "+head+" of empty list\n", node)
 	case "to_base":
 		args["msg"] = strNode("VALUE_ERROR: to_base base must be 2..36\n", node)
-	}
-	for _, tmp := range spec.temps {
-		args[tmp] = symNode(compactTemp("cl"+tmp), node)
 	}
 	node.Children = buildTemplateFresh(tpl, args, nil, node).Children
 	if head == "%" || head == "//" {

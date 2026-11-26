@@ -142,7 +142,10 @@ func writeGeneratedFile(path string, content []byte) {
 func snakeToCamel(s string) string {
 	parts := strings.Split(s, "_")
 	for i := range parts {
-		parts[i] = strings.Title(strings.ToLower(parts[i]))
+		if parts[i] == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
 	}
 	return strings.Join(parts, "")
 }

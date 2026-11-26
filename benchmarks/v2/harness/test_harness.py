@@ -9,11 +9,22 @@ import run_track_a
 import aggregate
 
 class TestHarness(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._orig_path = os.environ.get("PATH", "")
+        cls._bin_dir = tempfile.TemporaryDirectory(prefix="howlframe-v2-test-")
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        built = os.path.join(cls._bin_dir.name, "howlframe")
+        subprocess.run(["go", "build", "-o", built, "."], cwd=root_dir, check=True)
+        os.environ["PATH"] = cls._bin_dir.name + os.pathsep + cls._orig_path
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ["PATH"] = cls._orig_path
+        cls._bin_dir.cleanup()
+
     def setUp(self):
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
-        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        subprocess.run(["go", "build", "-o", "howlframe", "."], cwd=root_dir, check=True)
-        os.environ["PATH"] = root_dir + os.pathsep + os.environ.get("PATH", "")
         self.temp_dir = tempfile.TemporaryDirectory()
         self.results_dir = os.path.join(self.temp_dir.name, "results")
         os.makedirs(self.results_dir)

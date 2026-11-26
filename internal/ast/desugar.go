@@ -51,6 +51,32 @@ func Desugar(node *Node) {
 	reportStrayBreaks(node)
 }
 
+func childContextHead(head, parentHead string, idx int) string {
+	childParent := head
+	if childParent == "" {
+		childParent = parentHead
+	}
+	switch head {
+	case "defun", "lazy_synthesize":
+		// (defun name (params) body...) — params at index 2
+		if idx == 2 {
+			return "params"
+		}
+	case "lambda":
+		// (lambda (params) body...) — params at index 1
+		if idx == 1 {
+			return "params"
+		}
+	case "let", "try_let":
+		if idx == 1 {
+			return "binding"
+		}
+	case "dict", "type_hints", "type_hint", "type_param":
+		return "binding"
+	}
+	return childParent
+}
+
 // desugarInContext walks the tree with parent context so binding pairs and
 // parameter lists are not mistaken for (lines …) / (read_text …) / (assert …).
 func desugarInContext(node *Node, parentHead string, childIndex int) {
@@ -76,29 +102,7 @@ func desugarInContext(node *Node, parentHead string, childIndex int) {
 		head = node.Children[0].Value
 	}
 	for i, child := range node.Children {
-		childParent := head
-		if childParent == "" {
-			childParent = parentHead
-		}
-		switch head {
-		case "defun", "lazy_synthesize":
-			// (defun name (params) body...) — params at index 2
-			if i == 2 {
-				childParent = "params"
-			}
-		case "lambda":
-			// (lambda (params) body...) — params at index 1
-			if i == 1 {
-				childParent = "params"
-			}
-		case "let", "try_let":
-			if i == 1 {
-				childParent = "binding"
-			}
-		case "dict", "type_hints", "type_hint", "type_param":
-			childParent = "binding"
-		}
-		desugarInContext(child, childParent, i)
+		desugarInContext(child, childContextHead(head, parentHead, i), i)
 	}
 	if head == "" {
 		return
@@ -404,27 +408,7 @@ func rewriteAutoCallsInContext(node *Node, funcs map[string]bool, parentHead str
 		head = node.Children[0].Value
 	}
 	for i, child := range node.Children {
-		childParent := head
-		if childParent == "" {
-			childParent = parentHead
-		}
-		switch head {
-		case "defun", "lazy_synthesize":
-			if i == 2 {
-				childParent = "params"
-			}
-		case "lambda":
-			if i == 1 {
-				childParent = "params"
-			}
-		case "let", "try_let":
-			if i == 1 {
-				childParent = "binding"
-			}
-		case "dict", "type_hints", "type_hint", "type_param":
-			childParent = "binding"
-		}
-		rewriteAutoCallsInContext(child, funcs, childParent, i)
+		rewriteAutoCallsInContext(child, funcs, childContextHead(head, parentHead, i), i)
 	}
 	if !isSugarExprContext(parentHead, childIndex) {
 		return
@@ -499,16 +483,7 @@ func desugarDefunExprBody(node *Node) {
 	if isReturnForm(last) || !isExprBodyForm(last) {
 		return
 	}
-	node.Children[lastIdx] = &Node{
-		Type:     "List",
-		Line:     last.Line,
-		Column:   last.Column,
-		Filename: last.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "return", Line: last.Line, Column: last.Column, Filename: last.Filename},
-			last,
-		},
-	}
+	node.Children[lastIdx] = callAt(last, "return", last)
 }
 
 func desugarLines(node *Node) {
@@ -517,17 +492,10 @@ func desugarLines(node *Node) {
 		return
 	}
 	expr := node.Children[1]
-	bytesToString := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "bytes_to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			expr,
-		},
-	}
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		bytesToString,
-		{Type: "STRING", Value: "\n", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		nodeTok(node, "SYMBOL", "str_split"),
+		callAt(node, "bytes_to_string", expr),
+		nodeTok(node, "STRING", "\n"),
 	}
 }
 
@@ -615,20 +583,9 @@ func desugarCond(node *Node) {
 			continue
 		}
 		if acc == nil {
-			acc = &Node{
-				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-				Children: []*Node{{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename}},
-			}
+			acc = callAt(node, "do")
 		}
-		acc = &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				test,
-				body,
-				acc,
-			},
-		}
+		acc = callAt(node, "if", test, body, acc)
 	}
 	if acc == nil {
 		return
@@ -640,10 +597,7 @@ func wrapBodyForms(forms []*Node, line, col int, filename string) *Node {
 	if len(forms) == 1 {
 		return forms[0]
 	}
-	children := make([]*Node, 0, len(forms)+1)
-	children = append(children, &Node{Type: "SYMBOL", Value: "do", Line: line, Column: col, Filename: filename})
-	children = append(children, forms...)
-	return &Node{Type: "List", Line: line, Column: col, Filename: filename, Children: children}
+	return callAt(&Node{Line: line, Column: col, Filename: filename}, "do", forms...)
 }
 
 func desugarSGet(node *Node) {
@@ -653,45 +607,12 @@ func desugarSGet(node *Node) {
 	}
 	handle := node.Children[1]
 	key := node.Children[2]
-	tmp := &Node{Type: "SYMBOL", Value: "__sget", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	storeGet := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "store_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			handle,
-			key,
-		},
-	}
-	isNil := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			tmp,
-		},
-	}
-	mapGet := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "map_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			tmp,
-			{Type: "STRING", Value: "val", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	iff := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			isNil,
-			tmp,
-			mapGet,
-		},
-	}
+	tmp := nodeTok(node, "SYMBOL", "__sget")
+	storeGet := callAt(node, "store_get", handle, key)
+	iff := callAt(node, "if", callAt(node, "is_nil", tmp), tmp, callAt(node, "map_get", tmp, nodeTok(node, "STRING", "val")))
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{tmp, storeGet},
-		},
+		nodeTok(node, "SYMBOL", "let"),
+		listAt(node, tmp, storeGet),
 		iff,
 	}
 }
@@ -704,25 +625,8 @@ func desugarSPut(node *Node) {
 	handle := node.Children[1]
 	key := node.Children[2]
 	val := node.Children[3]
-	dict := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "dict", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{
-				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-				Children: []*Node{
-					{Type: "STRING", Value: "val", Line: node.Line, Column: node.Column, Filename: node.Filename},
-					val,
-				},
-			},
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "store_put", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		handle,
-		key,
-		dict,
-	}
+	dict := callAt(node, "dict", listAt(node, nodeTok(node, "STRING", "val"), val))
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "store_put"), handle, key, dict}
 }
 
 func desugarSInc(node *Node) {
@@ -734,85 +638,17 @@ func desugarSInc(node *Node) {
 	key := node.Children[2]
 	// (let (k key v (sget handle k) n (+ (if (is_nil v) 0 (to_int v)) 1))
 	//   (do (sput handle k (to_string n)) (print n)))
-	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	vSym := &Node{Type: "SYMBOL", Value: "__v", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	nSym := &Node{Type: "SYMBOL", Value: "__n", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	sget := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "sget", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			handle,
-			kSym,
-		},
-	}
-	isNilV := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			vSym,
-		},
-	}
-	toInt := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "to_int", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			vSym,
-		},
-	}
-	ifZero := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			isNilV,
-			{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			toInt,
-		},
-	}
-	plus := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "+", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			ifZero,
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	toString := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			nSym,
-		},
-	}
-	sput := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "sput", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			handle,
-			kSym,
-			toString,
-		},
-	}
-	printN := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "print", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			nSym,
-		},
-	}
-	body := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			sput,
-			printN,
-		},
-	}
+	kSym := nodeTok(node, "SYMBOL", "__k")
+	vSym := nodeTok(node, "SYMBOL", "__v")
+	nSym := nodeTok(node, "SYMBOL", "__n")
+	sget := callAt(node, "sget", handle, kSym)
+	ifZero := callAt(node, "if", callAt(node, "is_nil", vSym), nodeTok(node, "INT", "0"), callAt(node, "to_int", vSym))
+	plus := callAt(node, "+", ifZero, nodeTok(node, "INT", "1"))
+	sput := callAt(node, "sput", handle, kSym, callAt(node, "to_string", nSym))
+	body := callAt(node, "do", sput, callAt(node, "print", nSym))
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{kSym, key, vSym, sget, nSym, plus},
-		},
+		nodeTok(node, "SYMBOL", "let"),
+		listAt(node, kSym, key, vSym, sget, nSym, plus),
 		body,
 	}
 }
@@ -824,11 +660,8 @@ func desugarSwitch(node *Node) {
 		return
 	}
 	expr := node.Children[1]
-	tmp := &Node{Type: "SYMBOL", Value: "__sw", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	cond := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{{Type: "SYMBOL", Value: "cond", Line: node.Line, Column: node.Column, Filename: node.Filename}},
-	}
+	tmp := nodeTok(node, "SYMBOL", "__sw")
+	cond := callAt(node, "cond")
 	for _, clause := range node.Children[2:] {
 		if clause == nil || clause.Type != "List" || len(clause.Children) < 2 {
 			ReportError("switch clause expects (pat body...) or (else body...)", node.Line, node.Column)
@@ -839,75 +672,34 @@ func desugarSwitch(node *Node) {
 		if pat != nil && pat.Type == "SYMBOL" {
 			switch pat.Value {
 			case "else", "default", "_":
-				elseClause := &Node{
-					Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
-					Children: append([]*Node{{Type: "SYMBOL", Value: "else", Line: pat.Line, Column: pat.Column, Filename: pat.Filename}}, bodyForms...),
-				}
+				elseClause := listAt(clause, append([]*Node{nodeTok(pat, "SYMBOL", "else")}, bodyForms...)...)
 				cond.Children = append(cond.Children, elseClause)
 				continue
 			}
 		}
-		eq := &Node{
-			Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "=", Line: clause.Line, Column: clause.Column, Filename: clause.Filename},
-				tmp,
-				pat,
-			},
-		}
-		cond.Children = append(cond.Children, &Node{
-			Type: "List", Line: clause.Line, Column: clause.Column, Filename: clause.Filename,
-			Children: append([]*Node{eq}, bodyForms...),
-		})
+		eq := callAt(clause, "=", tmp, pat)
+		cond.Children = append(cond.Children, listAt(clause, append([]*Node{eq}, bodyForms...)...))
 	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{tmp, expr},
-		},
-		cond,
-	}
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "let"), listAt(node, tmp, expr), cond}
 }
 
-func desugarInc(node *Node) {
+func desugarIncDec(node *Node, name, op string) {
 	if len(node.Children) != 2 || node.Children[1] == nil || node.Children[1].Type != "SYMBOL" {
-		ReportError("inc expects (inc symbol)", node.Line, node.Column)
+		ReportError(name+" expects ("+name+" symbol)", node.Line, node.Column)
 		return
 	}
 	sym := node.Children[1]
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
+		nodeTok(node, "SYMBOL", "set"),
 		sym,
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "+", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				{Type: "SYMBOL", Value: sym.Value, Line: sym.Line, Column: sym.Column, Filename: sym.Filename},
-				{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		},
+		callAt(node, op, nodeTok(sym, "SYMBOL", sym.Value), nodeTok(node, "INT", "1")),
 	}
 }
+
+func desugarInc(node *Node) { desugarIncDec(node, "inc", "+") }
 
 func desugarDec(node *Node) {
-	if len(node.Children) != 2 || node.Children[1] == nil || node.Children[1].Type != "SYMBOL" {
-		ReportError("dec expects (dec symbol)", node.Line, node.Column)
-		return
-	}
-	sym := node.Children[1]
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		sym,
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "-", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				{Type: "SYMBOL", Value: sym.Value, Line: sym.Line, Column: sym.Column, Filename: sym.Filename},
-				{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		},
-	}
+	desugarIncDec(node, "dec", "-")
 }
 
 func desugarHTTPBody(node *Node) {
@@ -988,28 +780,9 @@ func desugarNot(node *Node) {
 		ReportError("not expects (not expr)", node.Line, node.Column)
 		return
 	}
-	falseLit := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	trueLit := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		node.Children[1],
-		falseLit,
-		trueLit,
-	}
+	falseLit := callAt(node, "=", nodeTok(node, "INT", "0"), nodeTok(node, "INT", "1"))
+	trueLit := callAt(node, "=", nodeTok(node, "INT", "1"), nodeTok(node, "INT", "1"))
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "if"), node.Children[1], falseLit, trueLit}
 }
 
 func desugarBlank(node *Node) {
@@ -1018,11 +791,7 @@ func desugarBlank(node *Node) {
 		ReportError("blank expects (blank expr)", node.Line, node.Column)
 		return
 	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		node.Children[1],
-		{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
-	}
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "="), node.Children[1], nodeTok(node, "STRING", "")}
 }
 
 func desugarUnixNow(node *Node) {
@@ -1031,84 +800,32 @@ func desugarUnixNow(node *Node) {
 		ReportError("unix_now expects (unix_now)", node.Line, node.Column)
 		return
 	}
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "to_string"), callAt(node, "time_now")}
+}
+
+func desugarMembershipCheck(node *Node, errMsg, aName, bName, iterName string, iterExpr func(*Node) *Node) {
+	if len(node.Children) != 3 {
+		ReportError(errMsg, node.Line, node.Column)
+		return
+	}
+	aSym := nodeTok(node, "SYMBOL", aName)
+	bSym := nodeTok(node, "SYMBOL", bName)
+	hSym := nodeTok(node, "SYMBOL", "__h")
+	iterSym := nodeTok(node, "SYMBOL", iterName)
+	forLoop := callAt(node, "for", iterSym, iterExpr(aSym),
+		callAt(node, "if", callAt(node, "=", iterSym, bSym), callAt(node, "set", hSym, nodeTok(node, "INT", "1"))))
+	body := callAt(node, "do", forLoop, callAt(node, "=", hSym, nodeTok(node, "INT", "1")))
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "time_now", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		},
+		nodeTok(node, "SYMBOL", "let"),
+		listAt(node, aSym, node.Children[1], bSym, node.Children[2], hSym, nodeTok(node, "INT", "0")),
+		body,
 	}
 }
 
 func desugarListContains(node *Node) {
 	// (list_contains lst x) → (let (__lst lst __x x __h 0)
 	//   (do (for __i __lst (if (= __i __x) (set __h 1))) (= __h 1)))
-	if len(node.Children) != 3 {
-		ReportError("list_contains expects (list_contains list value)", node.Line, node.Column)
-		return
-	}
-	lstSym := &Node{Type: "SYMBOL", Value: "__lst", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	xSym := &Node{Type: "SYMBOL", Value: "__x", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	hSym := &Node{Type: "SYMBOL", Value: "__h", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	iSym := &Node{Type: "SYMBOL", Value: "__i", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	setOne := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			hSym,
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	eq := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			iSym, xSym,
-		},
-	}
-	iff := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			eq, setOne,
-		},
-	}
-	forLoop := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "for", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			iSym, lstSym, iff,
-		},
-	}
-	eqH := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			hSym,
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	body := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			forLoop, eqH,
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				lstSym, node.Children[1],
-				xSym, node.Children[2],
-				hSym, {Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		},
-		body,
-	}
+	desugarMembershipCheck(node, "list_contains expects (list_contains list value)", "__lst", "__x", "__i", func(a *Node) *Node { return a })
 }
 
 func desugarStr(node *Node) {
@@ -1117,23 +834,11 @@ func desugarStr(node *Node) {
 		ReportError("str expects (str part...)", node.Line, node.Column)
 		return
 	}
-	parts := make([]*Node, 0, len(node.Children))
-	parts = append(parts, &Node{Type: "SYMBOL", Value: "list", Line: node.Line, Column: node.Column, Filename: node.Filename})
+	parts := make([]*Node, 0, len(node.Children)-1)
 	for _, part := range node.Children[1:] {
-		parts = append(parts, &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "to_string", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				part,
-			},
-		})
+		parts = append(parts, callAt(node, "to_string", part))
 	}
-	list := &Node{Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename, Children: parts}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "str_join", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		list,
-		{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
-	}
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "str_join"), callAt(node, "list", parts...), nodeTok(node, "STRING", "")}
 }
 
 func desugarNz(node *Node) {
@@ -1142,112 +847,15 @@ func desugarNz(node *Node) {
 		ReportError("nz expects (nz value default)", node.Line, node.Column)
 		return
 	}
-	tmp := &Node{Type: "SYMBOL", Value: "__nz", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	isNil := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "is_nil", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			tmp,
-		},
-	}
-	iff := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			isNil,
-			node.Children[2],
-			tmp,
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{tmp, node.Children[1]},
-		},
-		iff,
-	}
+	tmp := nodeTok(node, "SYMBOL", "__nz")
+	iff := callAt(node, "if", callAt(node, "is_nil", tmp), node.Children[2], tmp)
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "let"), listAt(node, tmp, node.Children[1]), iff}
 }
 
 func desugarMapHas(node *Node) {
 	// (map_has d k) → (let (__d d __k k __h 0)
 	//   (do (for __x (map_keys __d) (if (= __x __k) (set __h 1))) (= __h 1)))
-	if len(node.Children) != 3 {
-		ReportError("map_has expects (map_has dict key)", node.Line, node.Column)
-		return
-	}
-	dSym := &Node{Type: "SYMBOL", Value: "__d", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	kSym := &Node{Type: "SYMBOL", Value: "__k", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	hSym := &Node{Type: "SYMBOL", Value: "__h", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	xSym := &Node{Type: "SYMBOL", Value: "__x", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	keys := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "map_keys", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			dSym,
-		},
-	}
-	setOne := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "set", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			hSym,
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	eq := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			xSym,
-			kSym,
-		},
-	}
-	iff := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			eq,
-			setOne,
-		},
-	}
-	forLoop := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "for", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			xSym,
-			keys,
-			iff,
-		},
-	}
-	eqH := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			hSym,
-			{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
-	body := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			forLoop,
-			eqH,
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				dSym, node.Children[1],
-				kSym, node.Children[2],
-				hSym, {Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		},
-		body,
-	}
+	desugarMembershipCheck(node, "map_has expects (map_has dict key)", "__d", "__k", "__x", func(d *Node) *Node { return callAt(node, "map_keys", d) })
 }
 
 func desugarStrContains(node *Node) {
@@ -1256,26 +864,8 @@ func desugarStrContains(node *Node) {
 		ReportError("str_contains expects (str_contains hay needle)", node.Line, node.Column)
 		return
 	}
-	split := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			node.Children[1],
-			node.Children[2],
-		},
-	}
-	llen := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "list_len", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			split,
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: ">", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		llen,
-		{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-	}
+	llen := callAt(node, "list_len", callAt(node, "str_split", node.Children[1], node.Children[2]))
+	node.Children = []*Node{nodeTok(node, "SYMBOL", ">"), llen, nodeTok(node, "INT", "1")}
 }
 
 func desugarStrReplace(node *Node) {
@@ -1284,19 +874,8 @@ func desugarStrReplace(node *Node) {
 		ReportError("str_replace expects (str_replace s old new)", node.Line, node.Column)
 		return
 	}
-	split := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			node.Children[1],
-			node.Children[2],
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "str_join", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		split,
-		node.Children[3],
-	}
+	split := callAt(node, "str_split", node.Children[1], node.Children[2])
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "str_join"), split, node.Children[3]}
 }
 
 func desugarStartsEndsWith(node *Node) {
@@ -1310,94 +889,26 @@ func desugarStartsEndsWith(node *Node) {
 		return
 	}
 	head := node.Children[0].Value
-	sSym := &Node{Type: "SYMBOL", Value: "__s", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	pSym := &Node{Type: "SYMBOL", Value: "__p", Line: node.Line, Column: node.Column, Filename: node.Filename}
-	emptyP := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			pSym,
-			{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		},
-	}
+	sSym := nodeTok(node, "SYMBOL", "__s")
+	pSym := nodeTok(node, "SYMBOL", "__p")
+	emptyP := callAt(node, "=", pSym, nodeTok(node, "STRING", ""))
 	var test *Node
 	bindings := []*Node{sSym, node.Children[1], pSym, node.Children[2]}
 	if head == "starts_with" {
-		partsSym := &Node{Type: "SYMBOL", Value: "__parts", Line: node.Line, Column: node.Column, Filename: node.Filename}
-		split := &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "str_split", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				sSym, pSym,
-			},
-		}
-		bindings = append(bindings, partsSym, split)
-		test = &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				{
-					Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-					Children: []*Node{
-						{Type: "SYMBOL", Value: "list_get", Line: node.Line, Column: node.Column, Filename: node.Filename},
-						partsSym,
-						{Type: "INT", Value: "0", Line: node.Line, Column: node.Column, Filename: node.Filename},
-					},
-				},
-				{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			},
-		}
+		partsSym := nodeTok(node, "SYMBOL", "__parts")
+		bindings = append(bindings, partsSym, callAt(node, "str_split", sSym, pSym))
+		headEq := callAt(node, "=", callAt(node, "list_get", partsSym, nodeTok(node, "INT", "0")), nodeTok(node, "STRING", ""))
 		// An empty subject splits to [""], which would match every non-empty
 		// prefix; only a non-empty subject can start with a non-empty prefix.
-		test = &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "and", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				{
-					Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-					Children: []*Node{
-						{Type: "SYMBOL", Value: "!=", Line: node.Line, Column: node.Column, Filename: node.Filename},
-						sSym,
-						{Type: "STRING", Value: "", Line: node.Line, Column: node.Column, Filename: node.Filename},
-					},
-				},
-				test,
-			},
-		}
+		test = callAt(node, "and", callAt(node, "!=", sSym, nodeTok(node, "STRING", "")), headEq)
 	} else {
-		sentinel := &Node{Type: "STRING", Value: "\x1e", Line: node.Line, Column: node.Column, Filename: node.Filename}
-		hay := &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "str", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				sSym, sentinel,
-			},
-		}
-		needle := &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "str", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				pSym, sentinel,
-			},
-		}
-		test = &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "str_contains", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				hay, needle,
-			},
-		}
+		sentinel := nodeTok(node, "STRING", "\x1e")
+		test = callAt(node, "str_contains", callAt(node, "str", sSym, sentinel), callAt(node, "str", pSym, sentinel))
 	}
 	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "let", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		{Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename, Children: bindings},
-		{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: "or", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				emptyP, test,
-			},
-		},
+		nodeTok(node, "SYMBOL", "let"),
+		listAt(node, bindings...),
+		callAt(node, "or", emptyP, test),
 	}
 }
 
@@ -1409,14 +920,7 @@ func desugarNaryLogic(node *Node) {
 	head := node.Children[0]
 	acc := node.Children[len(node.Children)-1]
 	for i := len(node.Children) - 2; i >= 1; i-- {
-		acc = &Node{
-			Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-			Children: []*Node{
-				{Type: "SYMBOL", Value: head.Value, Line: head.Line, Column: head.Column, Filename: head.Filename},
-				node.Children[i],
-				acc,
-			},
-		}
+		acc = listAt(node, nodeTok(head, "SYMBOL", head.Value), node.Children[i], acc)
 	}
 	node.Children = acc.Children
 }
@@ -1431,20 +935,12 @@ func desugarWhenUnless(node *Node) {
 	head := node.Children[0].Value
 	test := node.Children[1]
 	body := wrapBodyForms(node.Children[2:], node.Line, node.Column, node.Filename)
-	empty := &Node{
-		Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-		Children: []*Node{{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename}},
-	}
+	empty := callAt(node, "do")
 	thenForm, elseForm := body, empty
 	if head == "unless" {
 		thenForm, elseForm = empty, body
 	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		test,
-		thenForm,
-		elseForm,
-	}
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "if"), test, thenForm, elseForm}
 }
 
 func desugarAssert(node *Node) {
@@ -1453,42 +949,12 @@ func desugarAssert(node *Node) {
 		return
 	}
 	expr := node.Children[1]
-	ok := &Node{
-		Type:     "List",
-		Line:     node.Line,
-		Column:   node.Column,
-		Filename: node.Filename,
-		Children: []*Node{{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename}},
-	}
-	fail := &Node{
-		Type:     "List",
-		Line:     node.Line,
-		Column:   node.Column,
-		Filename: node.Filename,
-		Children: []*Node{
-			{Type: "SYMBOL", Value: "do", Line: node.Line, Column: node.Column, Filename: node.Filename},
-			{
-				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-				Children: []*Node{
-					{Type: "SYMBOL", Value: "stderr", Line: node.Line, Column: node.Column, Filename: node.Filename},
-					{Type: "STRING", Value: "assertion failed\n", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				},
-			},
-			{
-				Type: "List", Line: node.Line, Column: node.Column, Filename: node.Filename,
-				Children: []*Node{
-					{Type: "SYMBOL", Value: "exit", Line: node.Line, Column: node.Column, Filename: node.Filename},
-					{Type: "INT", Value: "1", Line: node.Line, Column: node.Column, Filename: node.Filename},
-				},
-			},
-		},
-	}
-	node.Children = []*Node{
-		{Type: "SYMBOL", Value: "if", Line: node.Line, Column: node.Column, Filename: node.Filename},
-		expr,
-		ok,
-		fail,
-	}
+	ok := callAt(node, "do")
+	fail := callAt(node, "do",
+		callAt(node, "stderr", nodeTok(node, "STRING", "assertion failed\n")),
+		callAt(node, "exit", nodeTok(node, "INT", "1")),
+	)
+	node.Children = []*Node{nodeTok(node, "SYMBOL", "if"), expr, ok, fail}
 }
 
 func defunDeclaresVoidReturn(node *Node) bool {
@@ -1576,4 +1042,19 @@ func IsSugarExprParent(head string) bool {
 		}
 	}
 	return false
+}
+
+func nodeTok(ref *Node, typ, val string) *Node {
+	return &Node{Type: typ, Value: val, Line: ref.Line, Column: ref.Column, Filename: ref.Filename}
+}
+
+func listAt(ref *Node, children ...*Node) *Node {
+	return &Node{Type: "List", Line: ref.Line, Column: ref.Column, Filename: ref.Filename, Children: children}
+}
+
+func callAt(ref *Node, op string, args ...*Node) *Node {
+	children := make([]*Node, 0, 1+len(args))
+	children = append(children, nodeTok(ref, "SYMBOL", op))
+	children = append(children, args...)
+	return listAt(ref, children...)
 }

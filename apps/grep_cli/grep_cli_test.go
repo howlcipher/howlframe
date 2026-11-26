@@ -3,22 +3,27 @@ package grep_cli_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestGrepCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "grep_cli.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "grep_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "grep_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
-	os.WriteFile("sample.txt", []byte("alpha\nbeta foo\ngamma\nfoo bar\n"), 0644)
-	defer os.Remove("sample.txt")
+	sample := filepath.Join(tmp, "sample.txt")
+	if err := os.WriteFile(sample, []byte("alpha\nbeta foo\ngamma\nfoo bar\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"grep_cli.howl.bc.bin", "foo", "sample.txt")
+		artifact, "foo", sample)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -30,7 +35,7 @@ func TestGrepCLI(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"grep_cli.howl.bc.bin", "zzz", "sample.txt")
+		artifact, "zzz", sample)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "hits=0") {
@@ -38,7 +43,7 @@ func TestGrepCLI(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc",
-		"grep_cli.howl.bc.bin", "foo", "sample.txt")
+		artifact, "foo", sample)
 	cmd.Dir = "."
 	out, _ = cmd.CombinedOutput()
 	if !strings.Contains(string(out), "capability denied: filesystem") {

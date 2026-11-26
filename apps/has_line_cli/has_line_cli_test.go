@@ -3,21 +3,26 @@ package has_line_cli_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestHasLineCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "has_line_cli.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "has_line_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "has_line_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	os.WriteFile("sample.txt", []byte("alpha\nbeta\ngamma\n"), 0644)
-	defer os.Remove("sample.txt")
+	sample := filepath.Join(tmp, "sample.txt")
+	if err := os.WriteFile(sample, []byte("alpha\nbeta\ngamma\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"has_line_cli.howl.bc.bin", "beta", "sample.txt")
+		artifact, "beta", sample)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "FOUND") {
@@ -25,7 +30,7 @@ func TestHasLineCLI(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"has_line_cli.howl.bc.bin", "zzz", "sample.txt")
+		artifact, "zzz", sample)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "MISSING") {

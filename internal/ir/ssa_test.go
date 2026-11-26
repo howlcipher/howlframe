@@ -6,12 +6,8 @@ import (
 	"testing"
 )
 
-func TestLowerSSAStraightLine(t *testing.T) {
-	root := ssaList("do",
-		ssaList("+", ssaInt("1"), ssaInt("2")),
-		ssaList("print", ssaString("done")),
-	)
-
+func mustLowerValidatedSSA(t *testing.T, root *ast.Node, wantBlocks int) *Graph {
+	t.Helper()
 	graph, err := LowerSSA(root)
 	if err != nil {
 		t.Fatalf("LowerSSA() error = %v", err)
@@ -19,9 +15,19 @@ func TestLowerSSAStraightLine(t *testing.T) {
 	if err := graph.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
-	if len(graph.Blocks) != 1 {
-		t.Fatalf("block count = %d, want 1", len(graph.Blocks))
+	if wantBlocks > 0 && len(graph.Blocks) != wantBlocks {
+		t.Fatalf("block count = %d, want %d", len(graph.Blocks), wantBlocks)
 	}
+	return graph
+}
+
+func TestLowerSSAStraightLine(t *testing.T) {
+	root := ssaList("do",
+		ssaList("+", ssaInt("1"), ssaInt("2")),
+		ssaList("print", ssaString("done")),
+	)
+
+	graph := mustLowerValidatedSSA(t, root, 1)
 	block := graph.Blocks[0]
 	gotOps := instructionOps(block)
 	wantOps := []SSAOp{OpConst, OpConst, OpAdd, OpConst, OpPrint}
@@ -43,16 +49,7 @@ func TestLowerSSAIfBuildsBranchAndMerge(t *testing.T) {
 		ssaList("+", ssaInt("3"), ssaInt("4")),
 	)
 
-	graph, err := LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	if err := graph.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
-	}
-	if len(graph.Blocks) != 4 {
-		t.Fatalf("block count = %d, want 4", len(graph.Blocks))
-	}
+	graph := mustLowerValidatedSSA(t, root, 4)
 	entry := graph.Blocks[0]
 	if entry.Terminator == nil || entry.Terminator.Kind != TermBranch {
 		t.Fatalf("entry terminator = %+v, want branch", entry.Terminator)
@@ -84,16 +81,7 @@ func TestLowerSSAWhileBuildsLoopCarriedPhi(t *testing.T) {
 		),
 	)
 
-	graph, err := LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	if err := graph.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
-	}
-	if len(graph.Blocks) != 4 {
-		t.Fatalf("block count = %d, want 4", len(graph.Blocks))
-	}
+	graph := mustLowerValidatedSSA(t, root, 4)
 	header := graph.Blocks[1]
 	if len(header.Instructions) == 0 || header.Instructions[0].Op != OpPhi {
 		t.Fatalf("header instructions = %+v, want leading loop phi", header.Instructions)
@@ -161,13 +149,7 @@ func TestLowerSSASupportedDataCallsAndConversions(t *testing.T) {
 		),
 	)
 
-	graph, err := LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	if err := graph.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
-	}
+	graph := mustLowerValidatedSSA(t, root, 0)
 	gotOps := instructionOps(graph.Blocks[0])
 	for _, want := range []SSAOp{
 		OpList, OpDict, OpCall, OpListGet, OpMapGet,
@@ -181,6 +163,10 @@ func TestLowerSSASupportedDataCallsAndConversions(t *testing.T) {
 	if call == nil || call.Symbol != "consume" || len(call.Operands) != 1 {
 		t.Errorf("call instruction = %+v, want consume with one operand", call)
 	}
+}
+
+func singleEntryGraph(insts []Instruction, term *Terminator) *Graph {
+	return &Graph{Entry: "entry", Blocks: []*BasicBlock{{Label: "entry", Instructions: insts, Terminator: term}}}
 }
 
 func TestGraphValidateRejectsMalformedGraphs(t *testing.T) {
@@ -205,40 +191,27 @@ func TestGraphValidateRejectsMalformedGraphs(t *testing.T) {
 		},
 		{
 			name: "duplicate value",
-			graph: &Graph{Entry: "entry", Blocks: []*BasicBlock{{
-				Label: "entry",
-				Instructions: []Instruction{
-					{Result: Value{ID: 1}, Op: OpConst},
-					{Result: Value{ID: 1}, Op: OpConst},
-				},
-				Terminator: validReturn,
-			}}},
+			graph: singleEntryGraph([]Instruction{
+				{Result: Value{ID: 1}, Op: OpConst},
+				{Result: Value{ID: 1}, Op: OpConst},
+			}, validReturn),
 			want: "duplicate SSA value %1",
 		},
 		{
-			name: "unknown jump target",
-			graph: &Graph{Entry: "entry", Blocks: []*BasicBlock{{
-				Label:      "entry",
-				Terminator: &Terminator{Kind: TermJump, Target: "missing"},
-			}}},
-			want: `jump target "missing" does not exist`,
+			name:  "unknown jump target",
+			graph: singleEntryGraph(nil, &Terminator{Kind: TermJump, Target: "missing"}),
+			want:  `jump target "missing" does not exist`,
 		},
 		{
 			name: "undefined operand",
-			graph: &Graph{Entry: "entry", Blocks: []*BasicBlock{{
-				Label: "entry",
-				Instructions: []Instruction{{
-					Result:   Value{ID: 1},
-					Op:       OpAdd,
-					Operands: []ValueID{99},
-				}},
-				Terminator: &Terminator{Kind: TermReturn, Value: 1},
-			}}},
+			graph: singleEntryGraph([]Instruction{
+				{Result: Value{ID: 1}, Op: OpAdd, Operands: []ValueID{99}},
+			}, &Terminator{Kind: TermReturn, Value: 1}),
 			want: "references undefined value %99",
 		},
 		{
 			name:  "missing terminator",
-			graph: &Graph{Entry: "entry", Blocks: []*BasicBlock{{Label: "entry"}}},
+			graph: singleEntryGraph(nil, nil),
 			want:  `block "entry" has no terminator`,
 		},
 	}

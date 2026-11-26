@@ -11,11 +11,17 @@ import (
 // TestBarePathUnnamedRootsFailClosed proves leftover/unnamed roots on the
 // bare/default path never fall through to gogen/server.go. They exit nonzero
 // with a clear diagnostic and leave no Go artifacts.
-func TestBarePathUnnamedRootsFailClosed(t *testing.T) {
-	binaryPath := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build CLI: %v\n%s", err, output)
+func assertFilesAbsent(t *testing.T, dir string, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected artifact %s in %s: %v", name, dir, err)
+		}
 	}
+}
+
+func TestBarePathUnnamedRootsFailClosed(t *testing.T) {
+	binaryPath := buildHowlFrameBinaryForTest(t)
 
 	cases := []struct {
 		name   string
@@ -42,10 +48,7 @@ func TestBarePathUnnamedRootsFailClosed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			workDir := t.TempDir()
-			input := filepath.Join(workDir, tc.name+".howl")
-			if err := os.WriteFile(input, []byte(tc.source), 0o644); err != nil {
-				t.Fatal(err)
-			}
+			input := mustWriteFile(t, workDir, tc.name+".howl", tc.source)
 			cmd := exec.Command(binaryPath, input)
 			cmd.Dir = workDir
 			output, err := cmd.CombinedOutput()
@@ -55,11 +58,7 @@ func TestBarePathUnnamedRootsFailClosed(t *testing.T) {
 			if !strings.Contains(string(output), tc.want) {
 				t.Fatalf("diagnostic = %q, want substring %q", output, tc.want)
 			}
-			for _, name := range []string{"server.go", "server_test.go", tc.name + ".hfbc"} {
-				if _, statErr := os.Stat(filepath.Join(workDir, name)); !os.IsNotExist(statErr) {
-					t.Fatalf("unexpected artifact %s after fail-closed rejection: %v", name, statErr)
-				}
-			}
+			assertFilesAbsent(t, workDir, "server.go", "server_test.go", tc.name+".hfbc")
 		})
 	}
 }
@@ -67,10 +66,7 @@ func TestBarePathUnnamedRootsFailClosed(t *testing.T) {
 // TestBarePathNamedRootsStillWriteHFBC proves the four named roots keep writing
 // .hfbc on the bare/default path and still do not emit server.go.
 func TestBarePathNamedRootsStillWriteHFBC(t *testing.T) {
-	binaryPath := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build CLI: %v\n%s", err, output)
-	}
+	binaryPath := buildHowlFrameBinaryForTest(t)
 
 	cases := []struct {
 		name   string
@@ -104,10 +100,7 @@ func TestBarePathNamedRootsStillWriteHFBC(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			workDir := t.TempDir()
-			input := filepath.Join(workDir, tc.stem+".howl")
-			if err := os.WriteFile(input, []byte(tc.source), 0o644); err != nil {
-				t.Fatal(err)
-			}
+			input := mustWriteFile(t, workDir, tc.stem+".howl", tc.source)
 			cmd := exec.Command(binaryPath, "-o", workDir, input)
 			cmd.Dir = workDir
 			output, err := cmd.CombinedOutput()
@@ -122,11 +115,7 @@ func TestBarePathNamedRootsStillWriteHFBC(t *testing.T) {
 			if info.Size() == 0 {
 				t.Fatalf("%s.hfbc is empty", tc.stem)
 			}
-			for _, name := range []string{"server.go", "server_test.go", "app.js", "app.wat"} {
-				if _, goErr := os.Stat(filepath.Join(workDir, name)); !os.IsNotExist(goErr) {
-					t.Fatalf("unexpected %s for %s: %v", name, tc.name, goErr)
-				}
-			}
+			assertFilesAbsent(t, workDir, "server.go", "server_test.go", "app.js", "app.wat")
 			if tc.runVM {
 				// Flagged -o writes and stops for cli_app; no-flag also runs.
 				runDir := t.TempDir()
@@ -146,9 +135,7 @@ func TestBarePathNamedRootsStillWriteHFBC(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(runDir, tc.stem+".hfbc")); err != nil {
 					t.Fatalf("cli_app no-flag missing .hfbc: %v", err)
 				}
-				if _, err := os.Stat(filepath.Join(runDir, "server.go")); !os.IsNotExist(err) {
-					t.Fatalf("cli_app no-flag wrote server.go: %v", err)
-				}
+				assertFilesAbsent(t, runDir, "server.go")
 			}
 		})
 	}
@@ -157,10 +144,7 @@ func TestBarePathNamedRootsStillWriteHFBC(t *testing.T) {
 // TestBarePathExplicitGoTargetStillEmitsServerGo proves build --target=go is
 // unchanged: the bare-path fail-closed does not remove explicit Go emission.
 func TestBarePathExplicitGoTargetStillEmitsServerGo(t *testing.T) {
-	binaryPath := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build CLI: %v\n%s", err, output)
-	}
+	binaryPath := buildHowlFrameBinaryForTest(t)
 	workDir := t.TempDir()
 	input := filepath.Join(workDir, "cli.howl")
 	if err := os.WriteFile(input, []byte(`(cli_app (print "ok"))`), 0o644); err != nil {

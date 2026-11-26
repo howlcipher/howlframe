@@ -898,11 +898,14 @@ func (f *fn) expr(n *ast.Node) error {
 	h := head(n)
 	args := n.Children[1:]
 	binary := map[string]int{"+": r.fAdd, "-": r.fSub, "*": r.fMul, "/": r.fDiv, "%": r.fMod}
-	if fnIdx, ok := binary[h]; ok && len(args) == 2 {
-		if err := f.expr(args[0]); err != nil {
+	emitTwoExprs := func(a, b *ast.Node) error {
+		if err := f.expr(a); err != nil {
 			return err
 		}
-		if err := f.expr(args[1]); err != nil {
+		return f.expr(b)
+	}
+	if fnIdx, ok := binary[h]; ok && len(args) == 2 {
+		if err := emitTwoExprs(args[0], args[1]); err != nil {
 			return err
 		}
 		c.Call(fnIdx)
@@ -914,10 +917,7 @@ func (f *fn) expr(n *ast.Node) error {
 		if len(args) != 2 {
 			return unsupported(n, h)
 		}
-		if err := f.expr(args[0]); err != nil {
-			return err
-		}
-		if err := f.expr(args[1]); err != nil {
+		if err := emitTwoExprs(args[0], args[1]); err != nil {
 			return err
 		}
 		c.Call(r.fEq)
@@ -1054,9 +1054,17 @@ func (f *fn) expr(n *ast.Node) error {
 		}
 		c.ArrayNewFixed(r.tItems, 2*len(args)).Call(r.fDictNew)
 		return nil
-	case "map_get", "map_keys":
-		want := map[string]int{"map_get": 2, "map_keys": 1}[h]
-		if len(args) != want {
+	case "map_get", "map_keys", "list_get", "list_len":
+		spec := map[string]struct {
+			want int
+			fn   int
+		}{
+			"map_get":  {2, r.fMapGet},
+			"map_keys": {1, r.fMapKeys},
+			"list_get": {2, r.fListGet},
+			"list_len": {1, r.fListLen},
+		}[h]
+		if len(args) != spec.want {
 			return unsupported(n, h)
 		}
 		for _, a := range args {
@@ -1064,28 +1072,7 @@ func (f *fn) expr(n *ast.Node) error {
 				return err
 			}
 		}
-		if h == "map_get" {
-			c.Call(r.fMapGet)
-		} else {
-			c.Call(r.fMapKeys)
-		}
-		f.check()
-		return nil
-	case "list_get", "list_len":
-		want := map[string]int{"list_get": 2, "list_len": 1}[h]
-		if len(args) != want {
-			return unsupported(n, h)
-		}
-		for _, a := range args {
-			if err := f.expr(a); err != nil {
-				return err
-			}
-		}
-		if h == "list_get" {
-			c.Call(r.fListGet)
-		} else {
-			c.Call(r.fListLen)
-		}
+		c.Call(spec.fn)
 		f.check()
 		return nil
 	case "str_split", "str_join", "to_lower", "to_upper", "str_trim", "html_escape", "attr_escape", "is_nil":

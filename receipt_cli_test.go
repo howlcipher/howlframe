@@ -49,19 +49,10 @@ func TestReceiptCLI(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "receipt.json")
 				args := append([]string{mode.runner, "--receipt", path}, tc.flags...)
 				args = append(args, mode.input)
+				code, stdoutStr, stderrStr := runCommandExitOutput(t, "", binary, args...)
 				var stdout, stderr bytes.Buffer
-				cmd := exec.Command(binary, args...)
-				cmd.Stdout = &stdout
-				cmd.Stderr = &stderr
-				err := cmd.Run()
-				code := 0
-				if err != nil {
-					e, ok := err.(*exec.ExitError)
-					if !ok {
-						t.Fatal(err)
-					}
-					code = e.ExitCode()
-				}
+				stdout.WriteString(stdoutStr)
+				stderr.WriteString(stderrStr)
 				if code != tc.code {
 					t.Fatalf("code %d want %d: %s", code, tc.code, &stderr)
 				}

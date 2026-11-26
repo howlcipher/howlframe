@@ -123,9 +123,8 @@ func TestTaskAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	bcPath := filepath.Join(srcDir, "task_api.howl.bc.bin")
+	bcPath := filepath.Join(t.TempDir(), "task_api.hfbc")
 	compileBytecode(t, srcDir, bcPath)
-	t.Cleanup(func() { os.Remove(bcPath) })
 
 	startServer(t, srcDir, bcPath, "network,database")
 
@@ -375,9 +374,8 @@ func TestTaskAPICapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	bcPath := filepath.Join(srcDir, "task_api_caps.howl.bc.bin")
+	bcPath := filepath.Join(t.TempDir(), "task_api_caps.hfbc")
 	compileBytecode(t, srcDir, bcPath)
-	t.Cleanup(func() { os.Remove(bcPath) })
 
 	t.Run("no capabilities fails closed at startup", func(t *testing.T) {
 		cmd := exec.Command("go", "run", "../../howlframe.go", "-run-bc", bcPath)
@@ -438,9 +436,8 @@ func TestTaskAPIStandaloneBytecode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	buildBcPath := filepath.Join(srcDir, "task_api_standalone.howl.bc.bin")
+	buildBcPath := filepath.Join(t.TempDir(), "task_api_standalone.hfbc")
 	compileBytecode(t, srcDir, buildBcPath)
-	t.Cleanup(func() { os.Remove(buildBcPath) })
 
 	isolatedDir := t.TempDir()
 	isolatedBc := filepath.Join(isolatedDir, "task_api.hfbc")

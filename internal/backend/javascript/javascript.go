@@ -44,67 +44,29 @@ func flattenModulesJS(nodes []*ast.Node) []*ast.Node {
 	return result
 }
 
-// jsNeedsRequestRead is set when GenerateJSCode emits req_query, req_header,
-// or req_path, so the helper is prepended once. It is reset on every call.
-var jsNeedsRequestRead bool
-
-// jsNeedsHTMLEscape is set when GenerateJSCode emits html_escape or
-// attr_escape. Both share one helper. It is reset on every call.
-var jsNeedsHTMLEscape bool
-
-// jsNeedsEncodeJSON is set when GenerateJSCode emits encode_json, which
-// writes JSON as the VM's Go encoding/json does.
-var jsNeedsEncodeJSON bool
-
-// jsNeedsEq is set when GenerateJSCode emits =, == or !=, which follow the
-// VM's equality through howlFrameEq.
-var jsNeedsEq bool
-
-// jsNeedsArchive is set when GenerateJSCode emits dom_text, zip_build, or
-// download_file, so the browser archive helpers are prepended.
-var jsNeedsArchive bool
-
-// jsNeedsExit is set when GenerateJSCode emits stderr or exit (assert lowers
-// to both).
-var jsNeedsExit bool
-
-// jsNeedsCollection is set when GenerateJSCode emits a dict or list op
-// that must fail closed. map_keys keeps its own guard. The flag is reset
-// on every call.
-var jsNeedsCollection bool
-
-// jsNeedsMapKeyOrder is set when GenerateJSCode emits map_keys. The
-// comparator orders keys by UTF-8 bytes. It is reset on every call.
-var jsNeedsMapKeyOrder bool
-
-// jsNeedsEnv is set when GenerateJSCode emits env. The helper checks the
-// runner grant before reading the requested variable. It is reset on every call.
-var jsNeedsEnv bool
-
-// jsNeedsExec is set when GenerateJSCode emits exec. The helper checks the
-// runner grant before spawning a process. It is reset on every call.
-var jsNeedsExec bool
-
-// jsNeedsReadFile is set when GenerateJSCode emits read_file. The helper
-// checks the runner grant before any filesystem read. It is reset on every call.
-var jsNeedsReadFile bool
-
-// jsNeedsFetch is set when GenerateJSCode emits fetch. The helper checks
-// the runner grant before any HTTP request. It is reset on every call.
-var jsNeedsFetch bool
-
-// jsNeedsWriteFile is set when GenerateJSCode emits write_file. The helper
-// checks the runner grant before any filesystem write. It is reset on every call.
-var jsNeedsWriteFile bool
-
-// jsNeedsMkdir is set when GenerateJSCode emits mkdir. The helper checks
-// the runner grant before any directory creation. It is reset on every call.
-var jsNeedsMkdir bool
-
-// jsNumeric is set when GenerateJSCode emits a numeric operation that must not
-// inherit host-language semantics (division, checked conversion). The helper is
-// prepended once. It is reset on every call.
-var jsNumeric bool
+// jsGenerator holds per-invocation JavaScript emission flags so concurrent
+// builds share no mutable package state.
+type jsGenerator struct {
+	needsRequestRead bool
+	needsHTMLEscape  bool
+	needsEncodeJSON  bool
+	needsEq          bool
+	needsArchive     bool
+	needsExit        bool
+	needsDOM         bool
+	needsRichtext    bool
+	needsBrowserIO   bool
+	needsMotion      bool
+	needsCollection  bool
+	needsMapKeyOrder bool
+	needsEnv         bool
+	needsExec        bool
+	needsReadFile    bool
+	needsFetch       bool
+	needsWriteFile   bool
+	needsMkdir       bool
+	numeric          bool
+}
 
 func collectionJSHelper() string {
 	// Dicts are plain objects. Lists are arrays. A missing map_get key is
@@ -930,97 +892,97 @@ function howlFrameDiv(a, b) {
 `
 }
 
-func jsHostHelpers() string {
-	if !jsNeedsEnv && !jsNeedsExec && !jsNeedsReadFile && !jsNeedsFetch && !jsNeedsWriteFile && !jsNeedsMkdir {
+func (g *jsGenerator) hostHelpers() string {
+	if !g.needsEnv && !g.needsExec && !g.needsReadFile && !g.needsFetch && !g.needsWriteFile && !g.needsMkdir {
 		return ""
 	}
 	helper := grantJSHelper()
-	if jsNeedsEnv {
+	if g.needsEnv {
 		helper += envJSHelper()
 	}
-	if jsNeedsExec {
+	if g.needsExec {
 		helper += execJSHelper()
 	}
-	if jsNeedsReadFile {
+	if g.needsReadFile {
 		helper += readFileJSHelper()
 	}
-	if jsNeedsFetch {
+	if g.needsFetch {
 		helper += fetchJSHelper()
 	}
-	if jsNeedsWriteFile {
+	if g.needsWriteFile {
 		helper += writeFileJSHelper()
 	}
-	if jsNeedsMkdir {
+	if g.needsMkdir {
 		helper += mkdirJSHelper()
 	}
 	return helper
 }
 
-func jsEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
-	jsNeedsEnv = true
+func (g *jsGenerator) envCall(keyNode *ast.Node, reqVar string, depth int) string {
+	g.needsEnv = true
 	if keyNode != nil && keyNode.Type == "STRING" {
 		return fmt.Sprintf("howlFrameEnv(%q)", keyNode.Value)
 	}
-	return fmt.Sprintf("howlFrameEnv(%s)", generateJSExpression(keyNode, reqVar, depth+1))
+	return fmt.Sprintf("howlFrameEnv(%s)", g.generateExpression(keyNode, reqVar, depth+1))
 }
 
-func jsExecCall(node *ast.Node, reqVar string, depth int) string {
-	jsNeedsExec = true
+func (g *jsGenerator) execCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsExec = true
 	if node == nil || len(node.Children) < 2 {
 		return ""
 	}
-	cmd := generateJSExpression(node.Children[1], reqVar, depth+1)
+	cmd := g.generateExpression(node.Children[1], reqVar, depth+1)
 	args := make([]string, 0, len(node.Children)-2)
 	for _, arg := range node.Children[2:] {
-		args = append(args, generateJSExpression(arg, reqVar, depth+1))
+		args = append(args, g.generateExpression(arg, reqVar, depth+1))
 	}
 	return fmt.Sprintf("howlFrameExec(%s, [%s])", cmd, strings.Join(args, ", "))
 }
 
-func jsReadFileCall(node *ast.Node, reqVar string, depth int) string {
-	jsNeedsReadFile = true
+func (g *jsGenerator) readFileCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsReadFile = true
 	if node == nil || len(node.Children) != 2 {
 		return ""
 	}
-	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+	pathStr := g.generateExpression(node.Children[1], reqVar, depth+1)
 	return fmt.Sprintf("howlFrameReadFile(%s)", pathStr)
 }
 
-func jsFetchCall(node *ast.Node, reqVar string, depth int) string {
-	jsNeedsFetch = true
+func (g *jsGenerator) fetchCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsFetch = true
 	if node == nil || (len(node.Children) < 3 || len(node.Children) > 5) {
 		return ""
 	}
-	urlStr := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-	methodStr := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+	urlStr := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
+	methodStr := g.generateStatementRaw(node.Children[2], reqVar, depth+1)
 	if len(node.Children) == 5 {
-		bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
-		headersStr := generateJSStatementRaw(node.Children[4], reqVar, depth+1)
+		bodyStr := g.generateStatementRaw(node.Children[3], reqVar, depth+1)
+		headersStr := g.generateStatementRaw(node.Children[4], reqVar, depth+1)
 		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s, %s))", urlStr, methodStr, bodyStr, headersStr)
 	}
 	if len(node.Children) == 4 {
-		bodyStr := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		bodyStr := g.generateStatementRaw(node.Children[3], reqVar, depth+1)
 		return fmt.Sprintf("(await howlFrameFetch(%s, %s, %s))", urlStr, methodStr, bodyStr)
 	}
 	return fmt.Sprintf("(await howlFrameFetch(%s, %s))", urlStr, methodStr)
 }
 
-func jsWriteFileCall(node *ast.Node, reqVar string, depth int) string {
-	jsNeedsWriteFile = true
+func (g *jsGenerator) writeFileCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsWriteFile = true
 	if node == nil || len(node.Children) != 3 {
 		return ""
 	}
-	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
-	dataStr := generateJSExpression(node.Children[2], reqVar, depth+1)
+	pathStr := g.generateExpression(node.Children[1], reqVar, depth+1)
+	dataStr := g.generateExpression(node.Children[2], reqVar, depth+1)
 	return fmt.Sprintf("howlFrameWriteFile(%s, %s)", pathStr, dataStr)
 }
 
-func jsMkdirCall(node *ast.Node, reqVar string, depth int) string {
-	jsNeedsMkdir = true
+func (g *jsGenerator) mkdirCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsMkdir = true
 	if node == nil || len(node.Children) != 2 {
 		return ""
 	}
-	pathStr := generateJSExpression(node.Children[1], reqVar, depth+1)
+	pathStr := g.generateExpression(node.Children[1], reqVar, depth+1)
 	return fmt.Sprintf("howlFrameMkdir(%s)", pathStr)
 }
 
@@ -1072,33 +1034,38 @@ func jsMayBeInt(node *ast.Node) bool {
 }
 
 func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
+	g := &jsGenerator{}
+	return g.emitJSIR(ir, reqVar, depth)
+}
+
+func (g *jsGenerator) emitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
-		arg1 := generateJSExpression(ir.Kids[0], reqVar, depth+1)
-		arg2 := generateJSExpression(ir.Kids[1], reqVar, depth+1)
+		arg1 := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		arg2 := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		if ir.Op == "/" {
-			jsNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
 		}
 		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") &&
 			ir.Kids[0].Inferred.Kind == ast.Int && ir.Kids[1].Inferred.Kind == ast.Int {
 			// int64 arithmetic must not silently round once a binary64 result
 			// leaves the exact integer range (NUMERIC_CONTRACT sections 4 and 12).
-			jsNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameSafeInt(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
 		}
 		if (ir.Op == "+" || ir.Op == "-" || ir.Op == "*") && jsMayBeInt(ir.Kids[0]) && jsMayBeInt(ir.Kids[1]) {
 			// Operand types are not statically known to rule out ints. The
 			// helper checks at runtime and still concatenates strings.
-			jsNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameArith(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		if ir.Op == "+" || ir.Op == "-" || ir.Op == "*" {
-			jsNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameFloatArith(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		if ir.Op == "=" || ir.Op == "==" || ir.Op == "!=" {
-			jsNeedsEq = true
+			g.needsEq = true
 			if ir.Op == "!=" {
 				return fmt.Sprintf("(!howlFrameEq(%s, %s))", arg1, arg2)
 			}
@@ -1108,7 +1075,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			(!jsKnownOrdered(ir.Kids[0]) || !jsKnownOrdered(ir.Kids[1])) {
 			// An operand of unknown type: the VM orders two numbers or two
 			// strings and fails on anything else (bugs.md #66).
-			jsNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameCompare(%q, %s, %s)", ir.Op, arg1, arg2)
 		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpJSToken(ir.Op), arg2)
@@ -1133,7 +1100,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 						if valNode.Children[j].Type == "STRING" {
 							args = append(args, fmt.Sprintf("%q", valNode.Children[j].Value))
 						} else {
-							args = append(args, generateJSExpression(valNode.Children[j], reqVar, depth+1))
+							args = append(args, g.generateExpression(valNode.Children[j], reqVar, depth+1))
 						}
 					}
 					valStr = fmt.Sprintf("(await %s(%s))", sanitizeJSName(valNode.Children[1].Value), strings.Join(args, ", "))
@@ -1143,7 +1110,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 						if valNode.Children[j].Type == "STRING" {
 							items = append(items, fmt.Sprintf("%q", valNode.Children[j].Value))
 						} else {
-							items = append(items, generateJSExpression(valNode.Children[j], reqVar, depth+1))
+							items = append(items, g.generateExpression(valNode.Children[j], reqVar, depth+1))
 						}
 					}
 					valStr = fmt.Sprintf("[%s]", strings.Join(items, ", "))
@@ -1157,7 +1124,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 							if pair.Children[1].Type == "STRING" {
 								v = fmt.Sprintf("%q", v)
 							} else {
-								v = generateJSExpression(pair.Children[1], reqVar, depth+1)
+								v = g.generateExpression(pair.Children[1], reqVar, depth+1)
 							}
 							pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
 						}
@@ -1165,13 +1132,13 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 					valStr = fmt.Sprintf("{%s}", strings.Join(pairs, ", "))
 				} else if funcName == "parse_json" {
 					bodyVar := valNode.Children[2].Value
-					jsNumeric = true
+					g.numeric = true
 					valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 				} else {
-					valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
+					valStr = g.generateStatementRaw(valNode, reqVar, depth+1)
 				}
 			} else {
-				valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
+				valStr = g.generateStatementRaw(valNode, reqVar, depth+1)
 			}
 
 			if declaredVars[varName] {
@@ -1181,7 +1148,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 				declaredVars[varName] = true
 			}
 		}
-		bodyCode := generateJSStatement(curr, reqVar, depth+1)
+		bodyCode := g.generateStatement(curr, reqVar, depth+1)
 		return fmt.Sprintf("%s%s\n}", letPrefix.String(), bodyCode)
 	case "try_let":
 		binds := ir.Kids[0]
@@ -1190,17 +1157,17 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-			bodyVar := generateJSStatementRaw(valNode.Children[2], reqVar, depth+1)
-			jsNumeric = true
+			bodyVar := g.generateStatementRaw(valNode.Children[2], reqVar, depth+1)
+			g.numeric = true
 			valStr = fmt.Sprintf("howlFrameParseJSON(%s)", bodyVar)
 		} else {
-			valStr = generateJSStatementRaw(valNode, reqVar, depth+1)
+			valStr = g.generateStatementRaw(valNode, reqVar, depth+1)
 		}
 
 		catchNode := ir.Kids[1]
 		errVar := catchNode.Children[1].Value
-		catchBodyCode := generateJSStatement(catchNode.Children[2], reqVar, depth+1)
-		successBodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
+		catchBodyCode := g.generateStatement(catchNode.Children[2], reqVar, depth+1)
+		successBodyCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 
 		return fmt.Sprintf("{\n\tlet %s;\n\tlet %s = null;\n\ttry {\n\t\t%s = %s;\n\t} catch (__howlFrameCaught) {\n\t\tif (__howlFrameCaught && __howlFrameCaught.howlFrameExit) throw __howlFrameCaught;\n\t\t%s = __howlFrameCaught;\n\t}\n\tif (%s !== null) {\n\t\t%s\n\t} else {\n\t\t%s\n\t}\n}", varName, errVar, varName, valStr, errVar, errVar, catchBodyCode, successBodyCode)
 	case "for":
@@ -1208,53 +1175,53 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// The iterable may be any expression, not only a bound symbol. Reading
 		// .Value directly yielded "" for a list-valued expression such as
 		// (for m (map_get d "missions") ...), emitting "for (let m of )".
-		listExpr := generateJSExpression(ir.Kids[1], reqVar, depth+1)
-		bodyCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
+		listExpr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
+		bodyCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf("for (let %s of %s) {\n%s\n}", itemNode, listExpr, bodyCode)
 	case "call":
 		funcName := sanitizeJSName(ir.Kids[0].Value)
 		var args []string
 		for j := 1; j < len(ir.Kids); j++ {
-			args = append(args, generateJSExpression(ir.Kids[j], reqVar, depth+1))
+			args = append(args, g.generateExpression(ir.Kids[j], reqVar, depth+1))
 		}
 		return fmt.Sprintf("(await %s(%s))", funcName, strings.Join(args, ", "))
 	case "spawn":
 		lambdaNode := ir.Kids[0]
-		bodyCode := generateJSStatement(lambdaNode.Children[2], reqVar, depth+1)
+		bodyCode := g.generateStatement(lambdaNode.Children[2], reqVar, depth+1)
 		return fmt.Sprintf(";(async () => {\n%s\n})();", bodyCode)
 	case "return":
-		return fmt.Sprintf("return %s;", generateJSStatementRaw(ir.Kids[0], reqVar, depth+1))
+		return fmt.Sprintf("return %s;", g.generateStatementRaw(ir.Kids[0], reqVar, depth+1))
 	case "if":
-		condExpr := generateJSExpression(ir.Kids[0], reqVar, depth+1)
-		thenCode := generateJSStatement(ir.Kids[1], reqVar, depth+1)
+		condExpr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		thenCode := g.generateStatement(ir.Kids[1], reqVar, depth+1)
 		if len(ir.Kids) == 2 {
 			return fmt.Sprintf("if (%s) {\n%s\n}", condExpr, thenCode)
 		}
-		elseCode := generateJSStatement(ir.Kids[2], reqVar, depth+1)
+		elseCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf("if (%s) {\n%s\n} else {\n%s\n}", condExpr, thenCode, elseCode)
 	case "while":
-		condExpr := generateJSExpression(ir.Kids[0], reqVar, depth+1)
-		bodyCode := generateJSStatement(ir.Kids[1], reqVar, depth+1)
+		condExpr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		bodyCode := g.generateStatement(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("while (%s) {\n%s\n}", condExpr, bodyCode)
 	case "do":
 		var stmts string
 		for _, kid := range ir.Kids {
-			stmts += generateJSStatement(kid, reqVar, depth+1) + ";\n"
+			stmts += g.generateStatement(kid, reqVar, depth+1) + ";\n"
 		}
 		return fmt.Sprintf("{\n%s}", stmts)
 	case "set":
-		varStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		valStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		varStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("%s = %s", varStr, valStr)
 	case "match":
-		varStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		varStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		var casesStr string
 		for _, c := range ir.Cases {
 			caseValStr := c.Label.Value
 			if c.Label.Type == "STRING" {
 				caseValStr = fmt.Sprintf("%q", caseValStr)
 			}
-			caseBodyCode := generateJSStatement(c.Body, reqVar, depth+1)
+			caseBodyCode := g.generateStatement(c.Body, reqVar, depth+1)
 			if c.IsDefault {
 				casesStr += fmt.Sprintf("default:\n%s;\nbreak;\n", caseBodyCode)
 			} else {
@@ -1263,84 +1230,84 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("switch (%s) {\n%s}", varStr, casesStr)
 	case "sleep":
-		msStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		msStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(await new Promise(r => setTimeout(r, %s)))", msStr)
 	case "to_int":
-		jsNumeric = true
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.numeric = true
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameToInt(%s)", valStr)
 	case "to_float":
-		jsNumeric = true
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.numeric = true
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string", "bytes_to_string":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("((_v) => _v == null ? \"\" : String(_v))(%s)", valStr)
 	case "encode_json":
-		jsNeedsEncodeJSON = true
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.needsEncodeJSON = true
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameEncodeJSON(%s)", valStr)
 	case "html_escape", "attr_escape":
-		jsNeedsHTMLEscape = true
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.needsHTMLEscape = true
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameHTMLEscape(%q, %s)", ir.Kind, valStr)
 	case "str_split":
-		sStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		sStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
+		sepStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("(%s).split(%s)", sStr, sepStr)
 	case "str_join":
-		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		listStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
+		sepStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("(%s).join(%s)", listStr, sepStr)
 	case "regex_match":
-		patStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
-		sStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		patStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
+		sStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("new RegExp(%s).test(%s)", patStr, sStr)
 	case "append":
-		jsNeedsCollection = true
+		g.needsCollection = true
 		listNode := ir.Kids[0]
-		itemStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		itemStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("%s = howlFrameAppend(%s, %s)", listNode.Value, listNode.Value, itemStr)
 	case "map_set":
-		jsNeedsCollection = true
+		g.needsCollection = true
 		dictNode := ir.Kids[0]
-		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
-		valStr := generateJSStatementRaw(ir.Kids[2], reqVar, depth+1)
+		keyStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
+		valStr := g.generateStatementRaw(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameMapSet(%s, %s, %s)", dictNode.Value, keyStr, valStr)
 	case "map_delete":
-		jsNeedsCollection = true
+		g.needsCollection = true
 		dictNode := ir.Kids[0]
-		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		keyStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameMapDelete(%s, %s)", dictNode.Value, keyStr)
 	case "map_get":
-		jsNeedsCollection = true
+		g.needsCollection = true
 		dictNode := ir.Kids[0]
-		keyStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		keyStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		// Every map_get rejects a non-dict. The miss sentinel stays "".
 		// Indexing that sentinel must not become another miss.
 		dictStr := dictNode.Value
 		if dictNode.Type != "SYMBOL" {
-			dictStr = generateJSStatementRaw(dictNode, reqVar, depth+1)
+			dictStr = g.generateStatementRaw(dictNode, reqVar, depth+1)
 		}
 		return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictStr, keyStr)
 	case "list_get":
-		jsNeedsCollection = true
+		g.needsCollection = true
 		listNode := ir.Kids[0]
-		idxStr := generateJSStatementRaw(ir.Kids[1], reqVar, depth+1)
+		idxStr := g.generateStatementRaw(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameListGet(%s, %s)", listNode.Value, idxStr)
 	case "list_len":
-		jsNeedsCollection = true
-		listStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.needsCollection = true
+		listStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameListLen(%s)", listStr)
 	case "map_keys":
-		jsNeedsMapKeyOrder = true
-		dictStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		g.needsMapKeyOrder = true
+		dictStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		// Object.keys order is insertion order. howlFrameCompareUTF8 is
 		// UTF-8 byte order, matching sort.Strings on the VM and the Go
 		// backend. The default sort is UTF-16 code-unit order.
 		return fmt.Sprintf("(function(_d){ if (_d === null || typeof _d !== \"object\" || Array.isArray(_d)) { throw new Error(\"TYPE_ERROR: map_keys expected dict\"); } return Object.keys(_d).sort(howlFrameCompareUTF8); })(%s)", dictStr)
 	case "is_nil":
-		valStr := generateJSStatementRaw(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateStatementRaw(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("(%s === null || %s === undefined)", valStr, valStr)
 	case "time_now":
 		// Unix seconds, matching the bytecode and Go backends. A web_app that
@@ -1352,7 +1319,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			if kid.Type == "STRING" {
 				items = append(items, fmt.Sprintf("%q", kid.Value))
 			} else {
-				items = append(items, generateJSExpression(kid, reqVar, depth+1))
+				items = append(items, g.generateExpression(kid, reqVar, depth+1))
 			}
 		}
 		return fmt.Sprintf("[%s]", strings.Join(items, ", "))
@@ -1367,7 +1334,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 			if kid.Children[1].Type == "STRING" {
 				v = fmt.Sprintf("%q", v)
 			} else {
-				v = generateJSExpression(kid.Children[1], reqVar, depth+1)
+				v = g.generateExpression(kid.Children[1], reqVar, depth+1)
 			}
 			pairs = append(pairs, fmt.Sprintf("%s: %s", k, v))
 		}
@@ -1376,7 +1343,7 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 		var args []string
 		for _, kid := range ir.Kids {
 			// null (a map_get miss) renders as "", matching vm.TextOf.
-			argStr := generateJSStatementRaw(kid, reqVar, depth+1)
+			argStr := g.generateStatementRaw(kid, reqVar, depth+1)
 			if kid.Type != "STRING" && kid.Type != "INT" && kid.Type != "FLOAT" {
 				argStr = fmt.Sprintf("((_v) => _v == null ? \"\" : _v)(%s)", argStr)
 			}
@@ -1389,26 +1356,12 @@ func EmitJSIR(ir *ir.IRNode, reqVar string, depth int) string {
 }
 
 func GenerateJSCode(node *ast.Node) (string, string) {
+	g := &jsGenerator{}
+	return g.generateCode(node)
+}
+
+func (g *jsGenerator) generateCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
-	jsNeedsRequestRead = false
-	jsNeedsHTMLEscape = false
-	jsNeedsEncodeJSON = false
-	jsNeedsEq = false
-	jsNeedsArchive = false
-	jsNeedsExit = false
-	jsNeedsDOM = false
-	jsNeedsRichtext = false
-	jsNeedsBrowserIO = false
-	jsNeedsMotion = false
-	jsNeedsCollection = false
-	jsNeedsMapKeyOrder = false
-	jsNeedsEnv = false
-	jsNeedsExec = false
-	jsNeedsReadFile = false
-	jsNeedsFetch = false
-	jsNeedsWriteFile = false
-	jsNeedsMkdir = false
-	jsNumeric = false
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -1425,7 +1378,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	for i := 0; i < len(handlers); i++ {
 		handlerNode := handlers[i]
 		if handlerNode.Type != "List" || len(handlerNode.Children) == 0 {
-			appCode += generateJSStatement(handlerNode, "", 0) + "\n"
+			appCode += g.generateStatement(handlerNode, "", 0) + "\n"
 			continue
 		}
 
@@ -1446,7 +1399,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			desc := descNode.Value
 			var testBodyCode string
 			for j := 2; j < len(handlerNode.Children); j++ {
-				testBodyCode += generateJSStatement(handlerNode.Children[j], "", 0) + "\n"
+				testBodyCode += g.generateStatement(handlerNode.Children[j], "", 0) + "\n"
 			}
 			testCode += fmt.Sprintf("test(%q, async (t) => {\n%s\n});\n\n", desc, testBodyCode)
 			continue
@@ -1463,14 +1416,14 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 
 			var bodyParts []string
 			for _, form := range ast.DefunBody(handlerNode) {
-				bodyParts = append(bodyParts, generateJSStatement(form, "", 0)+";")
+				bodyParts = append(bodyParts, g.generateStatement(form, "", 0)+";")
 			}
 			bodyCode := strings.Join(bodyParts, "\n")
 			funcsCode += fmt.Sprintf("async function %s(%s) {\n%s\n}\n\n", name, argsStr, bodyCode)
 			continue
 		}
 
-		appCode += generateJSStatement(handlerNode, "", 0) + "\n"
+		appCode += g.generateStatement(handlerNode, "", 0) + "\n"
 	}
 
 	// Top-level statements are the application's bootstrap and routinely
@@ -1479,7 +1432,7 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	// keeps them reachable as globals for inline event handlers.
 	code := funcsCode
 	if strings.TrimSpace(appCode) != "" {
-		if jsNeedsEnv || jsNeedsExec || jsNeedsReadFile || jsNeedsFetch || jsNeedsWriteFile || jsNeedsMkdir {
+		if g.needsEnv || g.needsExec || g.needsReadFile || g.needsFetch || g.needsWriteFile || g.needsMkdir {
 			// A denied env read, exec, read_file, fetch, write_file, or mkdir throws.
 			// The async IIFE would otherwise turn that into an unhandled rejection
 			// and a zero exit. try_let still catches the throw before it reaches
@@ -1496,55 +1449,55 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			funcsCode + testCode
 	}
 
-	if jsNeedsRequestRead {
+	if g.needsRequestRead {
 		helper := requestReadJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsEncodeJSON {
+	if g.needsEncodeJSON {
 		helper := encodeJSONJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsEq {
+	if g.needsEq {
 		helper := eqJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsHTMLEscape {
+	if g.needsHTMLEscape {
 		helper := htmlEscapeJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsExit {
+	if g.needsExit {
 		code = exitJSHelper(false) + code
 		if testCode != "" {
 			testCode = exitJSHelper(true) + testCode
 		}
 	}
-	if jsNeedsBrowserIO {
+	if g.needsBrowserIO {
 		code = browserIOJSHelper() + code
 		if testCode != "" {
 			testCode = browserIOJSHelper() + testCode
 		}
 	}
-	if jsNeedsMotion {
+	if g.needsMotion {
 		code = motionJSHelper() + code
 		if testCode != "" {
 			testCode = motionJSHelper() + testCode
 		}
 	}
-	if jsNeedsDOM {
+	if g.needsDOM {
 		helper := domJSHelper()
-		if jsNeedsRichtext {
+		if g.needsRichtext {
 			helper += richtextJSHelper()
 		}
 		code = helper + code
@@ -1552,35 +1505,35 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsArchive {
+	if g.needsArchive {
 		helper := archiveJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsCollection {
+	if g.needsCollection {
 		helper := collectionJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNeedsMapKeyOrder {
+	if g.needsMapKeyOrder {
 		helper := mapKeyOrderJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if jsNumeric {
+	if g.numeric {
 		helper := numericJSHelper()
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
 		}
 	}
-	if helper := jsHostHelpers(); helper != "" {
+	if helper := g.hostHelpers(); helper != "" {
 		code = helper + code
 		if testCode != "" {
 			testCode = helper + testCode
@@ -1590,8 +1543,8 @@ func GenerateJSCode(node *ast.Node) (string, string) {
 	return code, testCode
 }
 
-func generateJSStatement(node *ast.Node, reqVar string, depth int) string {
-	code := generateJSStatementRaw(node, reqVar, depth)
+func (g *jsGenerator) generateStatement(node *ast.Node, reqVar string, depth int) string {
+	code := g.generateStatementRaw(node, reqVar, depth)
 	if node.Type != "List" || len(node.Children) == 0 {
 		return code
 	}
@@ -1605,11 +1558,11 @@ func generateJSStatement(node *ast.Node, reqVar string, depth int) string {
 	return code
 }
 
-func generateJSExpression(node *ast.Node, reqVar string, depth int) string {
-	return generateJSStatementRaw(node, reqVar, depth)
+func (g *jsGenerator) generateExpression(node *ast.Node, reqVar string, depth int) string {
+	return g.generateStatementRaw(node, reqVar, depth)
 }
 
-func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
+func (g *jsGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if depth > 1000 {
 		// ast.ReportError("AST too deep", node.Line, node.Column)
 	}
@@ -1627,38 +1580,38 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return ""
 	}
 	if ir, ok := ir.LowerShared(node); ok {
-		return EmitJSIR(ir, reqVar, depth)
+		return g.emitJSIR(ir, reqVar, depth)
 	}
 	if head == valueBlockHead {
-		return jsValueBlock(node, reqVar, depth)
+		return g.valueBlock(node, reqVar, depth)
 	}
-	if call, ok := jsDOMCall(head, node, reqVar, depth); ok {
+	if call, ok := g.domCall(head, node, reqVar, depth); ok {
 		return call
 	}
-	if call, ok := jsMotionCall(head, node, reqVar, depth); ok {
+	if call, ok := g.motionCall(head, node, reqVar, depth); ok {
 		return call
 	}
 	// to_lower, to_upper and str_trim are not shared IR kinds, so they are
 	// emitted here rather than in EmitJSIR.
 	switch head {
 	case "to_lower":
-		return fmt.Sprintf("String(%s).toLowerCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+		return fmt.Sprintf("String(%s).toLowerCase()", g.generateStatementRaw(node.Children[1], reqVar, depth+1))
 	case "to_upper":
-		return fmt.Sprintf("String(%s).toUpperCase()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+		return fmt.Sprintf("String(%s).toUpperCase()", g.generateStatementRaw(node.Children[1], reqVar, depth+1))
 	case "str_trim":
-		return fmt.Sprintf("String(%s).trim()", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+		return fmt.Sprintf("String(%s).trim()", g.generateStatementRaw(node.Children[1], reqVar, depth+1))
 	case "stderr":
-		jsNeedsExit = true
-		return fmt.Sprintf("howlFrameStderr(%s)", generateJSStatementRaw(node.Children[1], reqVar, depth+1))
+		g.needsExit = true
+		return fmt.Sprintf("howlFrameStderr(%s)", g.generateStatementRaw(node.Children[1], reqVar, depth+1))
 	case "exit":
-		jsNeedsExit = true
+		g.needsExit = true
 		where := fmt.Sprintf("%s:%d", node.Filename, node.Line)
-		return fmt.Sprintf("howlFrameExit(%s, %q)", generateJSStatementRaw(node.Children[1], reqVar, depth+1), where)
+		return fmt.Sprintf("howlFrameExit(%s, %q)", g.generateStatementRaw(node.Children[1], reqVar, depth+1), where)
 	case "parse_json":
 		// Bindings special-case parse_json above; this covers every other
 		// value position, such as the result of a value block.
-		jsNumeric = true
-		return fmt.Sprintf("howlFrameParseJSON(%s)", generateJSStatementRaw(node.Children[2], reqVar, depth+1))
+		g.numeric = true
+		return fmt.Sprintf("howlFrameParseJSON(%s)", g.generateStatementRaw(node.Children[2], reqVar, depth+1))
 	}
 	if head == "time_now" {
 		// Unix seconds, matching the bytecode VM and the Go backend.
@@ -1667,8 +1620,8 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) != 4 {
 			// ast.ReportError("on_event expects (on_event el event lambda)", node.Line, node.Column)
 		}
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		event := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		el := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
+		event := g.generateStatementRaw(node.Children[2], reqVar, depth+1)
 		lambda := node.Children[3]
 		if lambda.Type != "List" || len(lambda.Children) != 3 || lambda.Children[0].Value != "lambda" {
 			// ast.ReportError("on_event expects a lambda", lambda.Line, lambda.Column)
@@ -1678,69 +1631,69 @@ func generateJSStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(args) > 0 {
 			argName = args[0].Value
 		}
-		body := generateJSStatement(lambda.Children[2], reqVar, depth+1)
+		body := g.generateStatement(lambda.Children[2], reqVar, depth+1)
 		// The trailing semicolon is required: without it a following statement
 		// that begins with "(" is parsed as a call of this expression's result
 		// rather than as its own statement.
-		jsNeedsDOM = true
+		g.needsDOM = true
 		return fmt.Sprintf("howlFrameOnEvent(%s, %s, async (%s) => {\n%s\n});", el, event, argName, body)
 	} else if head == "url_encode" {
-		value := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		value := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("(function(v){%s})(%s)", urlEncodeJS, value)
 	} else if head == "dom_text" {
-		jsNeedsArchive = true
-		el := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		g.needsArchive = true
+		el := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameDomText(%s)", el)
 	} else if head == "zip_build" {
-		jsNeedsArchive = true
-		entries := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
+		g.needsArchive = true
+		entries := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameZipBuild(%s)", entries)
 	} else if head == "download_file" {
-		jsNeedsArchive = true
-		name := generateJSStatementRaw(node.Children[1], reqVar, depth+1)
-		mime := generateJSStatementRaw(node.Children[2], reqVar, depth+1)
-		data := generateJSStatementRaw(node.Children[3], reqVar, depth+1)
+		g.needsArchive = true
+		name := g.generateStatementRaw(node.Children[1], reqVar, depth+1)
+		mime := g.generateStatementRaw(node.Children[2], reqVar, depth+1)
+		data := g.generateStatementRaw(node.Children[3], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameDownloadFile(%s, %s, %s)", name, mime, data)
 	} else if head == "fetch" {
-		return jsFetchCall(node, reqVar, depth)
+		return g.fetchCall(node, reqVar, depth)
 	} else if head == "spawn_agent" {
 		if len(node.Children) != 3 {
 			// Child grant attenuation is enforced only by the bytecode runtime.
 			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
-		agentNameStr := generateJSExpression(node.Children[1], reqVar, depth+1)
-		taskDescStr := generateJSExpression(node.Children[2], reqVar, depth+1)
+		agentNameStr := g.generateExpression(node.Children[1], reqVar, depth+1)
+		taskDescStr := g.generateExpression(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf(";(async () => {\n  console.log(`[Swarm JS] Spawning agent ${%s} for task: ${%s}`);\n  await new Promise(r => setTimeout(r, 100));\n  console.log(`[Swarm JS] Agent ${%s} completed task: ${%s}`);\n})();", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
 	} else if head == "task" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
-		return generateJSExpression(node.Children[1], reqVar, depth+1)
+		return g.generateExpression(node.Children[1], reqVar, depth+1)
 	} else if head == "env" {
 		if len(node.Children) != 2 {
 			return ""
 		}
-		return jsEnvCall(node.Children[1], reqVar, depth)
+		return g.envCall(node.Children[1], reqVar, depth)
 	} else if head == "exec" {
-		return jsExecCall(node, reqVar, depth)
+		return g.execCall(node, reqVar, depth)
 	} else if head == "read_file" {
-		return jsReadFileCall(node, reqVar, depth)
+		return g.readFileCall(node, reqVar, depth)
 	} else if head == "write_file" {
-		return jsWriteFileCall(node, reqVar, depth)
+		return g.writeFileCall(node, reqVar, depth)
 	} else if head == "mkdir" {
-		return jsMkdirCall(node, reqVar, depth)
+		return g.mkdirCall(node, reqVar, depth)
 	} else if head == "req_query" || head == "req_header" || head == "req_path" {
-		jsNeedsRequestRead = true
+		g.needsRequestRead = true
 		if len(node.Children) != 3 {
 			return ""
 		}
-		recv := generateJSExpression(node.Children[1], reqVar, depth+1)
-		name := generateJSExpression(node.Children[2], reqVar, depth+1)
+		recv := g.generateExpression(node.Children[1], reqVar, depth+1)
+		name := g.generateExpression(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("howlRequestRead(%q, %s, %s)", head, recv, name)
 	} else if head == "schema_bridge" {
-		return generateJSStatementRaw(node.Children[2], reqVar, depth+1)
+		return g.generateStatementRaw(node.Children[2], reqVar, depth+1)
 	} else if head == "optimize_signature" {
-		return generateJSStatementRaw(node.Children[len(node.Children)-1], reqVar, depth+1)
+		return g.generateStatementRaw(node.Children[len(node.Children)-1], reqVar, depth+1)
 	}
 
 	// ast.ReportError(fmt.Sprintf("Unknown statement for JS: %s", head), node.Line, node.Column)

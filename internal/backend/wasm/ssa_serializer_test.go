@@ -8,6 +8,58 @@ import (
 	"testing"
 )
 
+func mustAnalyzeLowerSerializeSSA(t *testing.T, root *ast.Node, wantBlocks int) (*ir.Graph, string) {
+	t.Helper()
+	analysis := checker.Analyze(serializerList("cli_app", root))
+	if len(analysis.Diagnostics) != 0 {
+		t.Fatalf("Analyze() diagnostics = %+v", analysis.Diagnostics)
+	}
+	graph, err := ir.LowerSSA(root)
+	if err != nil {
+		t.Fatalf("LowerSSA() error = %v", err)
+	}
+	if wantBlocks > 0 && (len(graph.Blocks) != wantBlocks || graph.Blocks[0].Terminator.Kind != ir.TermBranch) {
+		t.Fatalf("LowerSSA() blocks = %+v, want %d with branch entry", graph.Blocks, wantBlocks)
+	}
+	wat, err := SerializeSSA(graph)
+	if err != nil {
+		t.Fatalf("SerializeSSA() error = %v", err)
+	}
+	return graph, wat
+}
+
+func assertWATContainsAndValid(t *testing.T, wat string, fragments ...string) {
+	t.Helper()
+	for _, fragment := range fragments {
+		if !strings.Contains(wat, fragment) {
+			t.Errorf("serialized WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+	if err := ValidateWAT(wat); err != nil {
+		t.Fatalf("ValidateWAT() error = %v\n%s", err, wat)
+	}
+}
+
+func assertSerializeSSAFailsSingleOp(t *testing.T, op ir.SSAOp, kind ast.ValueKind, symbol, wantErrSub string) {
+	t.Helper()
+	graph := &ir.Graph{
+		Entry: "entry",
+		Blocks: []*ir.BasicBlock{{
+			Label: "entry",
+			Instructions: []ir.Instruction{{
+				Result: ir.Value{ID: 1, Type: ast.Layout(kind)},
+				Op:     op,
+				Symbol: symbol,
+			}},
+			Terminator: &ir.Terminator{Kind: ir.TermReturn, Value: 1},
+		}},
+	}
+	_, err := SerializeSSA(graph)
+	if err == nil || !strings.Contains(err.Error(), wantErrSub) {
+		t.Fatalf("SerializeSSA() error = %v, want %s", err, wantErrSub)
+	}
+}
+
 func TestSerializeSSAUsesBranchBlocksAndPhi(t *testing.T) {
 	root := serializerList("let",
 		serializerPair(serializerSymbol("x"), serializerInt("4")),
@@ -17,40 +69,18 @@ func TestSerializeSSAUsesBranchBlocksAndPhi(t *testing.T) {
 			serializerList("-", serializerSymbol("x"), serializerInt("1")),
 		),
 	)
-	analysis := checker.Analyze(serializerList("cli_app", root))
-	if len(analysis.Diagnostics) != 0 {
-		t.Fatalf("Analyze() diagnostics = %+v", analysis.Diagnostics)
-	}
-	graph, err := ir.LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	if len(graph.Blocks) != 4 || graph.Blocks[0].Terminator.Kind != ir.TermBranch {
-		t.Fatalf("LowerSSA() did not produce the expected branch CFG: %+v", graph.Blocks)
-	}
+	graph, wat := mustAnalyzeLowerSerializeSSA(t, root, 4)
 	merge := graph.Blocks[3]
 	if len(merge.Instructions) != 1 || merge.Instructions[0].Op != ir.OpPhi {
 		t.Fatalf("merge block = %+v, want one phi instruction", merge)
 	}
-
-	wat, err := SerializeSSA(graph)
-	if err != nil {
-		t.Fatalf("SerializeSSA() error = %v", err)
-	}
-	for _, fragment := range []string{
+	assertWATContainsAndValid(t, wat,
 		`(func (export "main") (result i64)`,
 		`(if (result i64)`,
 		`(i64.gt_s (i64.const 4) (i64.const 2))`,
 		`(then (i64.add (i64.const 4) (i64.const 3)))`,
 		`(else (i64.sub (i64.const 4) (i64.const 1)))`,
-	} {
-		if !strings.Contains(wat, fragment) {
-			t.Errorf("serialized WAT is missing %q:\n%s", fragment, wat)
-		}
-	}
-	if err := ValidateWAT(wat); err != nil {
-		t.Fatalf("ValidateWAT() error = %v\n%s", err, wat)
-	}
+	)
 }
 
 func TestSerializeSSASupportedOperators(t *testing.T) {
@@ -79,15 +109,7 @@ func TestSerializeSSASupportedOperators(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			checker.Analyze(serializerList("cli_app", test.expr))
-			graph, err := ir.LowerSSA(test.expr)
-			if err != nil {
-				t.Fatalf("LowerSSA() error = %v", err)
-			}
-			wat, err := SerializeSSA(graph)
-			if err != nil {
-				t.Fatalf("SerializeSSA() error = %v", err)
-			}
+			_, wat := mustAnalyzeLowerSerializeSSA(t, test.expr, 0)
 			if !strings.Contains(wat, "(result "+test.result+")") ||
 				!strings.Contains(wat, "("+test.operator+" ") {
 				t.Fatalf("SerializeSSA() output does not contain %s with result %s:\n%s", test.operator, test.result, wat)
@@ -97,40 +119,11 @@ func TestSerializeSSASupportedOperators(t *testing.T) {
 }
 
 func TestSerializeSSARejectsUnsupportedOperations(t *testing.T) {
-	graph := &ir.Graph{
-		Entry: "entry",
-		Blocks: []*ir.BasicBlock{{
-			Label: "entry",
-			Instructions: []ir.Instruction{{
-				Result: ir.Value{ID: 1, Type: ast.Layout(ast.List)},
-				Op:     ir.OpList,
-			}},
-			Terminator: &ir.Terminator{Kind: ir.TermReturn, Value: 1},
-		}},
-	}
-	_, err := SerializeSSA(graph)
-	if err == nil || !strings.Contains(err.Error(), `does not support operation "list"`) {
-		t.Fatalf("SerializeSSA() error = %v, want clear unsupported operation diagnostic", err)
-	}
+	assertSerializeSSAFailsSingleOp(t, ir.OpList, ast.List, "", `does not support operation "list"`)
 }
 
 func TestSerializeSSARejectsCallToUndefinedFunction(t *testing.T) {
-	graph := &ir.Graph{
-		Entry: "entry",
-		Blocks: []*ir.BasicBlock{{
-			Label: "entry",
-			Instructions: []ir.Instruction{{
-				Result: ir.Value{ID: 1, Type: ast.Layout(ast.Int)},
-				Op:     ir.OpCall,
-				Symbol: "work",
-			}},
-			Terminator: &ir.Terminator{Kind: ir.TermReturn, Value: 1},
-		}},
-	}
-	_, err := SerializeSSA(graph)
-	if err == nil || !strings.Contains(err.Error(), `does not support calling undefined function "work"`) {
-		t.Fatalf("SerializeSSA() error = %v, want clear undefined function diagnostic", err)
-	}
+	assertSerializeSSAFailsSingleOp(t, ir.OpCall, ast.Int, "work", `does not support calling undefined function "work"`)
 }
 
 func TestSerializeSSASerializesReturnTerminatorsInBothBranches(t *testing.T) {
@@ -139,15 +132,7 @@ func TestSerializeSSASerializesReturnTerminatorsInBothBranches(t *testing.T) {
 		serializerList("return", serializerInt("7")),
 		serializerList("return", serializerInt("9")),
 	)
-	checker.Analyze(serializerList("cli_app", root))
-	graph, err := ir.LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	wat, err := SerializeSSA(graph)
-	if err != nil {
-		t.Fatalf("SerializeSSA() error = %v", err)
-	}
+	_, wat := mustAnalyzeLowerSerializeSSA(t, root, 0)
 	if !strings.Contains(wat, "(then (return (i64.const 7)))") ||
 		!strings.Contains(wat, "(else (return (i64.const 9)))") {
 		t.Fatalf("SerializeSSA() did not preserve branch return terminators:\n%s", wat)
@@ -205,19 +190,8 @@ func TestSerializeSSAWhileLoopAccumulator(t *testing.T) {
 			serializerList("return", serializerSymbol("i")),
 		),
 	)
-	analysis := checker.Analyze(serializerList("cli_app", root))
-	if len(analysis.Diagnostics) != 0 {
-		t.Fatalf("Analyze() diagnostics = %+v", analysis.Diagnostics)
-	}
-	graph, err := ir.LowerSSA(root)
-	if err != nil {
-		t.Fatalf("LowerSSA() error = %v", err)
-	}
-	wat, err := SerializeSSA(graph)
-	if err != nil {
-		t.Fatalf("SerializeSSA() error = %v", err)
-	}
-	for _, fragment := range []string{
+	_, wat := mustAnalyzeLowerSerializeSSA(t, root, 0)
+	assertWATContainsAndValid(t, wat,
 		`(func (export "main") (result i64)`,
 		`(loop`,
 		`(local.set `,
@@ -225,14 +199,7 @@ func TestSerializeSSAWhileLoopAccumulator(t *testing.T) {
 		`(br_if `,
 		`(i32.eqz `,
 		`(br 0)`,
-	} {
-		if !strings.Contains(wat, fragment) {
-			t.Errorf("serialized WAT is missing %q:\n%s", fragment, wat)
-		}
-	}
-	if err := ValidateWAT(wat); err != nil {
-		t.Fatalf("ValidateWAT() error = %v\n%s", err, wat)
-	}
+	)
 }
 
 func serializerList(head string, children ...*ast.Node) *ast.Node {

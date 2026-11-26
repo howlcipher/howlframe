@@ -1,5 +1,6 @@
 # Generated binaries
 /bin/
+/codegen
 .directory
 /server
 hello

@@ -1,8 +1,6 @@
 package vm
 
 import (
-	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
@@ -65,60 +63,31 @@ const absenceStoreWant = "field-nil false\n" +
 	"gone \n"
 
 func TestMapGetMissIsNil(t *testing.T) {
-	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, absenceMapGetSource)
-		var out, errOut bytes.Buffer
-		if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != absenceMapGetWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), absenceMapGetWant)
-		}
-	})
-
-	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, absenceMapGetSource)
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != absenceMapGetWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), absenceMapGetWant)
-		}
-	})
+	t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, absenceMapGetSource, absenceMapGetWant) })
+	t.Run("bytecode", func(t *testing.T) { assertBytecodeStdout(t, absenceMapGetSource, absenceMapGetWant) })
 }
 
 func TestStoreGetMissIsNil(t *testing.T) {
-	_, prog := parseAndCompile(t, absenceStoreSource)
-	var out, errOut bytes.Buffer
-	exitCode := RunBytecode(prog, nil, []capability.Capability{capability.Database}, strings.NewReader(""), &out, &errOut)
-	if exitCode != 0 {
-		t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-	}
-	if out.String() != absenceStoreWant {
-		t.Fatalf("stdout = %q, want %q", out.String(), absenceStoreWant)
-	}
+	assertRuntimeResult(t, absenceStoreSource, []capability.Capability{capability.Database}, "", absenceStoreWant, "", 0, true)
 	// nil renders as "" in print (2026-10-12); absence is observed with is_nil.
 }
 
 func TestAbsenceOpcodeValuesAndCapabilities(t *testing.T) {
-	if got := bytecode.Registry[bytecode.OpMapGet].Capability; got != capability.None {
-		t.Fatalf("map_get capability = %q, want none", got)
-	}
-	if got := bytecode.Registry[bytecode.OpStoreGet].Capability; got != capability.Database {
-		t.Fatalf("store_get capability = %q, want database", got)
-	}
-	if got := bytecode.Registry[bytecode.OpStoreKeys].Capability; got != capability.Database {
-		t.Fatalf("store_keys capability = %q, want database", got)
-	}
-	if got := capability.ForConstruct("map_get"); got != capability.None {
-		t.Fatalf("ForConstruct(map_get) = %q, want none", got)
-	}
-	if got := capability.ForConstruct("store_get"); got != capability.Database {
-		t.Fatalf("ForConstruct(store_get) = %q, want database", got)
-	}
-	if got := capability.ForConstruct("store_keys"); got != capability.Database {
-		t.Fatalf("ForConstruct(store_keys) = %q, want database", got)
+	for _, spec := range []struct {
+		op        bytecode.Opcode
+		construct string
+		want      capability.Capability
+	}{
+		{bytecode.OpMapGet, "map_get", capability.None},
+		{bytecode.OpStoreGet, "store_get", capability.Database},
+		{bytecode.OpStoreKeys, "store_keys", capability.Database},
+	} {
+		if got := bytecode.Registry[spec.op].Capability; got != spec.want {
+			t.Fatalf("%s capability = %q, want %q", spec.construct, got, spec.want)
+		}
+		if got := capability.ForConstruct(spec.construct); got != spec.want {
+			t.Fatalf("ForConstruct(%s) = %q, want %q", spec.construct, got, spec.want)
+		}
 	}
 
 	mapGet := bytecode.BCInstruction{Op: bytecode.OpMapGet, OpString: "MAP_GET", StringOperand: "records"}
@@ -145,89 +114,88 @@ func TestAbsenceOpcodeValuesAndCapabilities(t *testing.T) {
 		"null":   nil,
 	}
 
-	if got := runMapGet(t, vm, "strings", "hit"); got != "yes" {
+	if got := runMapOp(t, vm, "strings", "hit", false); got != "yes" {
 		t.Fatalf("string hit = %#v", got)
 	}
-	if got := runMapGet(t, vm, "strings", "empty"); got != "" {
+	if got := runMapOp(t, vm, "strings", "empty", false); got != "" {
 		t.Fatalf("present empty string = %#v", got)
 	}
-	if got := runMapGet(t, vm, "strings", "missing"); got != nil {
+	if got := runMapOp(t, vm, "strings", "missing", false); got != nil {
 		t.Fatalf("string-map miss = %#v, want nil", got)
 	}
-	if got := runMapGet(t, vm, "records", "missing"); got != nil {
+	if got := runMapOp(t, vm, "records", "missing", false); got != nil {
 		t.Fatalf("map[string]any miss = %#v, want nil", got)
 	}
-	if got := runMapGet(t, vm, "records", "n"); got != int64(7) {
+	if got := runMapOp(t, vm, "records", "n", false); got != int64(7) {
 		t.Fatalf("non-string hit = %#v, want 7", got)
 	}
-	nested, ok := runMapGet(t, vm, "records", "nested").(map[string]any)
+	nested, ok := runMapOp(t, vm, "records", "nested", false).(map[string]any)
 	if !ok || nested["k"] != "v" {
 		t.Fatalf("nested hit = %#v", nested)
 	}
-	if got := runMapGet(t, vm, "records", "null"); got != nil {
+	if got := runMapOp(t, vm, "records", "null", false); got != nil {
 		t.Fatalf("present nil = %#v, want nil", got)
 	}
-	if got := runIsNil(t, vm, "strings", "empty"); got {
+	if runMapOp(t, vm, "strings", "empty", true).(bool) {
 		t.Fatal("is_nil(present \"\") = true")
 	}
-	if got := runIsNil(t, vm, "strings", "missing"); !got {
+	if !runMapOp(t, vm, "strings", "missing", true).(bool) {
 		t.Fatal("is_nil(map_get miss) = false, want true")
 	}
-	if got := runIsNil(t, vm, "records", "null"); !got {
+	if !runMapOp(t, vm, "records", "null", true).(bool) {
 		t.Fatal("is_nil(present nil) = false")
 	}
 
 	store := newStoreTestVM()
 	putStoreRecord(store, "db", "memory://absence", "blank", map[string]any{"note": ""})
-	store.run([]bytecode.BCInstruction{
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "blank"},
-		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "db", ""),
-		{Op: bytecode.OpIsNil, OpString: "IS_NIL"},
-	}, store.env)
-	if got := store.pop(bytecode.OpIsNil); got != false {
+	if got := runStoreLookup(store, "blank", true); got != false {
 		t.Fatalf("is_nil(present record) = %#v, want false", got)
 	}
-	store.run([]bytecode.BCInstruction{
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "gone"},
-		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "db", ""),
-	}, store.env)
-	missing := store.pop(bytecode.OpStoreGet)
+	missing := runStoreLookup(store, "gone", false)
 	if missing != nil {
 		t.Fatalf("store_get miss = %#v, want nil", missing)
 	}
 	if _, isString := missing.(string); isString {
 		t.Fatal("store_get miss is a string")
 	}
-	store.run([]bytecode.BCInstruction{
-		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: "gone"},
-		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "db", ""),
-		{Op: bytecode.OpIsNil, OpString: "IS_NIL"},
-	}, store.env)
-	if got := store.pop(bytecode.OpIsNil); got != true {
+	if got := runStoreLookup(store, "gone", true); got != true {
 		t.Fatalf("is_nil(store_get miss) = %#v, want true", got)
 	}
 }
 
-func runMapGet(t *testing.T, vm *BCVM, dict string, key string) any {
-	t.Helper()
-	vm.run([]bytecode.BCInstruction{
+func runStoreLookup(store *BCVM, key string, checkNil bool) any {
+	insts := []bytecode.BCInstruction{
 		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: key},
-		{Op: bytecode.OpMapGet, OpString: "MAP_GET", StringOperand: dict},
-	}, vm.env)
-	return vm.pop(bytecode.OpMapGet)
+		storeInstruction(bytecode.OpStoreGet, "STORE_GET", "db", ""),
+	}
+	resultOp := bytecode.OpStoreGet
+	if checkNil {
+		insts = append(insts, bytecode.BCInstruction{Op: bytecode.OpIsNil, OpString: "IS_NIL"})
+		resultOp = bytecode.OpIsNil
+	}
+	store.run(insts, store.env)
+	return store.pop(resultOp)
 }
 
-func runIsNil(t *testing.T, vm *BCVM, dict string, key string) bool {
+func runMapOp(t *testing.T, vm *BCVM, dict, key string, checkNil bool) any {
 	t.Helper()
-	vm.run([]bytecode.BCInstruction{
+	insts := []bytecode.BCInstruction{
 		{Op: bytecode.OpLoadConst, OpString: "LOAD_CONST", ValueOperand: key},
 		{Op: bytecode.OpMapGet, OpString: "MAP_GET", StringOperand: dict},
-		{Op: bytecode.OpIsNil, OpString: "IS_NIL"},
-	}, vm.env)
-	got := vm.pop(bytecode.OpIsNil)
-	flag, ok := got.(bool)
-	if !ok {
-		t.Fatalf("is_nil result = %#v, want bool", got)
 	}
-	return flag
+	resultOp := bytecode.OpMapGet
+	if checkNil {
+		insts = append(insts, bytecode.BCInstruction{Op: bytecode.OpIsNil, OpString: "IS_NIL"})
+		resultOp = bytecode.OpIsNil
+	}
+	vm.run(insts, vm.env)
+	got := vm.pop(resultOp)
+	if checkNil {
+		flag, ok := got.(bool)
+		if !ok {
+			t.Fatalf("is_nil result = %#v, want bool", got)
+		}
+		return flag
+	}
+	return got
 }

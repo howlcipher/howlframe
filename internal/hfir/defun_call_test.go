@@ -54,20 +54,31 @@ func TestLowerToBytecodeEmitsDefunAndCall(t *testing.T) {
 		t.Fatalf("call node = %#v", call)
 	}
 
+	program, fn := mustLowerValidDefun(t, graph, "add", "a", "b")
+	if !hasOp(fn.Instructions, bytecode.OpReturn) || !hasOp(program.Main, bytecode.OpCall) {
+		t.Fatalf("missing CALL or RETURN\nmain=%#v\nfn=%#v", program.Main, fn.Instructions)
+	}
+}
+
+func mustLowerValidDefun(t *testing.T, graph *Graph, name string, wantParams ...string) (*bytecode.BCProgram, *bytecode.BCFunction) {
+	t.Helper()
 	program, diags := LowerToBytecode(graph)
 	if len(diags) != 0 || program == nil {
 		t.Fatalf("LowerToBytecode() program=%v diags=%#v", program != nil, diags)
 	}
-	fn := program.Functions["add"]
-	if fn == nil || len(fn.Params) != 2 || fn.Params[0] != "a" || fn.Params[1] != "b" {
-		t.Fatalf("function = %#v", fn)
+	fn := program.Functions[name]
+	if fn == nil || len(fn.Params) != len(wantParams) {
+		t.Fatalf("function %q = %#v, want params %v", name, fn, wantParams)
 	}
-	if !hasOp(fn.Instructions, bytecode.OpReturn) || !hasOp(program.Main, bytecode.OpCall) {
-		t.Fatalf("missing CALL or RETURN\nmain=%#v\nfn=%#v", program.Main, fn.Instructions)
+	for i, p := range wantParams {
+		if fn.Params[i] != p {
+			t.Fatalf("function %q param[%d] = %q, want %q", name, i, fn.Params[i], p)
+		}
 	}
 	if err := bytecode.ValidateProgram(program); err != nil {
 		t.Fatal(err)
 	}
+	return program, fn
 }
 
 func TestLowerToBytecodeTypedParamDefun(t *testing.T) {
@@ -80,14 +91,7 @@ func TestLowerToBytecodeTypedParamDefun(t *testing.T) {
 			t.Fatalf("return-type symbol was lowered: %#v", node)
 		}
 	}
-	program, diags := LowerToBytecode(graph)
-	if len(diags) != 0 {
-		t.Fatalf("diags = %#v", diags)
-	}
-	fn := program.Functions["add"]
-	if fn == nil || len(fn.Params) != 2 || fn.Params[0] != "a" || fn.Params[1] != "b" {
-		t.Fatalf("function = %#v", fn)
-	}
+	mustLowerValidDefun(t, graph, "add", "a", "b")
 }
 
 func TestLowerToBytecodeDefunFromGraphWithoutAST(t *testing.T) {

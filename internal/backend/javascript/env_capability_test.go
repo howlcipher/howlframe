@@ -1,9 +1,7 @@
 package javascript
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -68,30 +66,5 @@ func TestJSEnvRequiresGrantBeforeRead(t *testing.T) {
 
 func runJS(t *testing.T, source string, envPairs ...string) (string, string, int) {
 	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "app.js")
-	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("node", path)
-	filtered := make([]string, 0, len(os.Environ()))
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOWLFRAME_ALLOW_CAPS=") || strings.HasPrefix(entry, "HOWLFRAME_ABI_SECRET=") {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	cmd.Env = append(filtered, envPairs...)
-	out, err := cmd.Output()
-	stderr := ""
-	code := 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			code = exitErr.ExitCode()
-			stderr = string(exitErr.Stderr)
-		} else {
-			t.Fatal(err)
-		}
-	}
-	return string(out), stderr, code
+	return runNodeScript(t, source, envPairs...)
 }

@@ -367,6 +367,22 @@ func validateFunction(form *watForm, ctx validationContext) error {
 	return nil
 }
 
+func validateTypedOperands(form *watForm, expected []string, functionResult string, ctx validationContext) error {
+	if err := requireExpressionArgs(form, len(expected)); err != nil {
+		return err
+	}
+	for index, want := range expected {
+		actual, err := validateExpression(form.args[index].form, functionResult, ctx)
+		if err != nil {
+			return err
+		}
+		if !watTypeMatches(want, actual) {
+			return fmt.Errorf("%s operand %d has type %s, want %s", form.head, index+1, actual, want)
+		}
+	}
+	return nil
+}
+
 func validateExpression(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	if strings.HasSuffix(form.head, ".const") {
 		valueType := strings.TrimSuffix(form.head, ".const")
@@ -396,17 +412,8 @@ func validateExpression(form *watForm, functionResult string, ctx validationCont
 		"f64.eq": {"f64", "f64", "i32"}, "f64.ne": {"f64", "f64", "i32"},
 	}
 	if signature, ok := binaryOps[form.head]; ok {
-		if err := requireExpressionArgs(form, 2); err != nil {
+		if err := validateTypedOperands(form, signature[:2], functionResult, ctx); err != nil {
 			return "", err
-		}
-		for index, expected := range signature[:2] {
-			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
-			if err != nil {
-				return "", err
-			}
-			if !watTypeMatches(expected, actual) {
-				return "", fmt.Errorf("%s operand %d has type %s, want %s", form.head, index+1, actual, expected)
-			}
 		}
 		return signature[2], nil
 	}
@@ -426,38 +433,13 @@ func validateExpression(form *watForm, functionResult string, ctx validationCont
 		}
 		resultType := strings.TrimSuffix(form.head, ".load")
 		return validateUnary(form, "i32", resultType, functionResult, ctx)
-	case "i64.store":
+	case "i64.store", "i32.store":
 		if !ctx.hasMemory {
 			return "", fmt.Errorf("%s requires declared memory at byte %d", form.head, form.position)
 		}
-		if err := requireExpressionArgs(form, 2); err != nil {
+		valueType := strings.TrimSuffix(form.head, ".store")
+		if err := validateTypedOperands(form, []string{"i32", valueType}, functionResult, ctx); err != nil {
 			return "", err
-		}
-		for index, expected := range []string{"i32", "i64"} {
-			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
-			if err != nil {
-				return "", err
-			}
-			if !watTypeMatches(expected, actual) {
-				return "", fmt.Errorf("%s operand %d has type %s, want %s", form.head, index+1, actual, expected)
-			}
-		}
-		return watVoid, nil
-	case "i32.store":
-		if !ctx.hasMemory {
-			return "", fmt.Errorf("%s requires declared memory at byte %d", form.head, form.position)
-		}
-		if err := requireExpressionArgs(form, 2); err != nil {
-			return "", err
-		}
-		for index, expected := range []string{"i32", "i32"} {
-			actual, err := validateExpression(form.args[index].form, functionResult, ctx)
-			if err != nil {
-				return "", err
-			}
-			if !watTypeMatches(expected, actual) {
-				return "", fmt.Errorf("%s operand %d has type %s, want %s", form.head, index+1, actual, expected)
-			}
 		}
 		return watVoid, nil
 	case "drop":
@@ -537,15 +519,35 @@ func validateIf(form *watForm, functionResult string, ctx validationContext) (st
 	return resultType, nil
 }
 
+func optionalLabelOffset(args []watValue) int {
+	if len(args) > 0 && args[0].form == nil && !args[0].quoted &&
+		strings.HasPrefix(args[0].atom, "$") {
+		return 1
+	}
+	return 0
+}
+
+func validateVoidBody(body []watValue, kind, functionResult string, ctx validationContext) error {
+	for index, value := range body {
+		if value.form == nil {
+			return fmt.Errorf("%s contains unexpected atom %q", kind, value.atom)
+		}
+		actual, err := validateExpression(value.form, functionResult, ctx)
+		if err != nil {
+			return err
+		}
+		if actual != watVoid && actual != watBottom {
+			return fmt.Errorf("%s statement %d leaves unused %s value", kind, index+1, actual)
+		}
+	}
+	return nil
+}
+
 func validateBlock(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	// block may optionally have a leading label atom: (block $label (result T) stmts...)
 	// or no label: (block (result T) stmts...)
 	// or a void block (no result): (block $label stmts...) or (block stmts...)
-	start := 0
-	if len(form.args) > 0 && form.args[0].form == nil && !form.args[0].quoted &&
-		strings.HasPrefix(form.args[0].atom, "$") {
-		start = 1
-	}
+	start := optionalLabelOffset(form.args)
 	// If the first non-label arg is a (result T) form, this is a valued block.
 	if start < len(form.args) && form.args[start].form != nil && form.args[start].form.head == "result" {
 		resultType, err := declaredResult(form.args[start].form)
@@ -575,18 +577,8 @@ func validateBlock(form *watForm, functionResult string, ctx validationContext) 
 		return resultType, nil
 	}
 	// Void block: all statements must be void or bottom.
-	body := form.args[start:]
-	for index, value := range body {
-		if value.form == nil {
-			return "", fmt.Errorf("block contains unexpected atom %q", value.atom)
-		}
-		actual, err := validateExpression(value.form, functionResult, ctx)
-		if err != nil {
-			return "", err
-		}
-		if actual != watVoid && actual != watBottom {
-			return "", fmt.Errorf("void block expression %d leaves unused %s value", index+1, actual)
-		}
+	if err := validateVoidBody(form.args[start:], "void block", functionResult, ctx); err != nil {
+		return "", err
 	}
 	return watVoid, nil
 }
@@ -595,22 +587,9 @@ func validateBlock(form *watForm, functionResult string, ctx validationContext) 
 // Loops in Wasm structured control flow have void result type.
 func validateLoop(form *watForm, functionResult string, ctx validationContext) (string, error) {
 	// loop may optionally have a leading label atom: (loop $label stmts...)
-	start := 0
-	if len(form.args) > 0 && form.args[0].form == nil && !form.args[0].quoted &&
-		strings.HasPrefix(form.args[0].atom, "$") {
-		start = 1
-	}
-	for index, value := range form.args[start:] {
-		if value.form == nil {
-			return "", fmt.Errorf("loop contains unexpected atom %q at position %d", value.atom, index)
-		}
-		actual, err := validateExpression(value.form, functionResult, ctx)
-		if err != nil {
-			return "", err
-		}
-		if actual != watVoid && actual != watBottom {
-			return "", fmt.Errorf("loop statement %d leaves unused %s value", index+1, actual)
-		}
+	start := optionalLabelOffset(form.args)
+	if err := validateVoidBody(form.args[start:], "loop", functionResult, ctx); err != nil {
+		return "", err
 	}
 	return watVoid, nil
 }

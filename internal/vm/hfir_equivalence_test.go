@@ -255,6 +255,50 @@ const htmlEscapeFixtureStdout = "&amp;\n" +
 // runs the same file through -compile-bc and -compile-hfir-bc. Both
 // compilers must emit HTML_ESCAPE and the same artifact. attr_escape is
 // not in this fixture.
+func compileRoundTripBothWithCaps(t *testing.T, root *ast.Node, graph *hfir.Graph, wantCaps ...capability.Capability) (*bytecode.BCProgram, *bytecode.BCProgram) {
+	t.Helper()
+	if got := graphCapabilities(graph); !reflect.DeepEqual(got, wantCaps) && !(len(got) == 0 && len(wantCaps) == 0) {
+		t.Fatalf("HFIR effects = %v, want %v", got, wantCaps)
+	}
+	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
+	direct, diagnostics := hfir.LowerToBytecode(graph)
+	if len(diagnostics) != 0 {
+		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
+	}
+	direct = roundTripArtifact(t, direct)
+	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
+		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
+	}
+	if got := programCapabilities(direct); !reflect.DeepEqual(got, wantCaps) && !(len(got) == 0 && len(wantCaps) == 0) {
+		t.Fatalf("emitted capabilities = %v, want %v", got, wantCaps)
+	}
+	return legacy, direct
+}
+
+func assertSameBytecodePrograms(t *testing.T, legacy, direct *bytecode.BCProgram, ctx string) {
+	t.Helper()
+	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
+		t.Fatalf("AST and HFIR bytecode disagree (%s)\nAST main %#v\nHFIR main %#v\nAST functions %#v\nHFIR functions %#v", ctx, legacy.Main, direct.Main, legacy.Functions, direct.Functions)
+	}
+}
+
+func assertSameOutcomeStdout(t *testing.T, legacy, direct *bytecode.BCProgram, wantStdout string, forbidSubstrs ...string) {
+	t.Helper()
+	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
+	directOutcome := runBytecodeOutcome(direct, "", nil)
+	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
+		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
+	}
+	if legacyOutcome.stdout != wantStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
+		t.Fatalf("outcome = %#v, want stdout %q", legacyOutcome, wantStdout)
+	}
+	for _, bad := range forbidSubstrs {
+		if strings.Contains(legacyOutcome.stdout, bad) {
+			t.Fatalf("unexpected %q in stdout:\n%s", bad, legacyOutcome.stdout)
+		}
+	}
+}
+
 func TestHFIRBytecodeHTMLEscapeFixture(t *testing.T) {
 	source := readAbiFixture(t, "22_html_escape.howl")
 	root, graph := checkedHFIRGraph(t, source)
@@ -274,21 +318,8 @@ func TestHFIRBytecodeHTMLEscapeFixture(t *testing.T) {
 	if escapes != 13 {
 		t.Fatalf("html_escape nodes = %d, want 13", escapes)
 	}
-	if caps := graphCapabilities(graph); len(caps) != 0 {
-		t.Fatalf("graph capabilities = %v, want none", caps)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
-		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
-	}
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v", legacy.Main, direct.Main)
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "html_escape")
 	if got := countOpcode(direct, bytecode.OpHTMLEscape); got != escapes {
 		t.Fatalf("HTML_ESCAPE count = %d, want %d", got, escapes)
 	}
@@ -297,34 +328,17 @@ func TestHFIRBytecodeHTMLEscapeFixture(t *testing.T) {
 	}
 	for _, inst := range htmlEscapeInstructions(direct) {
 		if inst.StringOperand != "" || inst.IntOperand != 0 || bytecode.Registry[inst.Op].Capability != capability.None {
-			t.Fatalf("HTML_ESCAPE = %#v, want a bare instruction with no capability", inst)
+			t.Fatalf("HTML_ESCAPE = %#v, want bare", inst)
 		}
 	}
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
-	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
-		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
-	}
-	if legacyOutcome.stdout != htmlEscapeFixtureStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
-		t.Fatalf("outcome = %#v, want the escaped lines", legacyOutcome)
-	}
-	if strings.Contains(legacyOutcome.stdout, "untaken") || strings.Contains(legacyOutcome.stdout, "<") {
-		t.Fatalf("raw or untaken markup survived:\n%s", legacyOutcome.stdout)
-	}
+	assertSameOutcomeStdout(t, legacy, direct, htmlEscapeFixtureStdout, "untaken", "<script")
 }
 
 func TestHFIRBytecodeHTMLEscapeTypeErrorMatchesAST(t *testing.T) {
 	source := readAbiFixture(t, "23_html_escape_type_error.howl")
 	root, graph := checkedHFIRGraph(t, source)
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatal("AST and HFIR bytecode disagree on html_escape type error")
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "html_escape type error")
 	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
 	directOutcome := runBytecodeOutcome(direct, "", nil)
 	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
@@ -359,21 +373,8 @@ func TestHFIRBytecodeAttrEscapeFixture(t *testing.T) {
 	if escapes != 13 {
 		t.Fatalf("attr_escape nodes = %d, want 13", escapes)
 	}
-	if caps := graphCapabilities(graph); len(caps) != 0 {
-		t.Fatalf("graph capabilities = %v, want none", caps)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
-		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
-	}
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v", legacy.Main, direct.Main)
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "attr_escape")
 	if got := countOpcode(direct, bytecode.OpAttrEscape); got != escapes {
 		t.Fatalf("ATTR_ESCAPE count = %d, want %d", got, escapes)
 	}
@@ -385,31 +386,14 @@ func TestHFIRBytecodeAttrEscapeFixture(t *testing.T) {
 			t.Fatalf("ATTR_ESCAPE = %#v, want a bare instruction with no capability", inst)
 		}
 	}
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
-	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
-		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
-	}
-	if legacyOutcome.stdout != htmlEscapeFixtureStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
-		t.Fatalf("outcome = %#v, want the escaped lines", legacyOutcome)
-	}
-	if strings.Contains(legacyOutcome.stdout, "untaken") || strings.Contains(legacyOutcome.stdout, "<") {
-		t.Fatalf("raw or untaken markup survived:\n%s", legacyOutcome.stdout)
-	}
+	assertSameOutcomeStdout(t, legacy, direct, htmlEscapeFixtureStdout, "untaken", "<")
 }
 
 func TestHFIRBytecodeAttrEscapeTypeErrorMatchesAST(t *testing.T) {
 	source := readAbiFixture(t, "25_attr_escape_type_error.howl")
 	root, graph := checkedHFIRGraph(t, source)
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatal("AST and HFIR bytecode disagree on attr_escape type error")
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "attr_escape type error")
 	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
 	directOutcome := runBytecodeOutcome(direct, "", nil)
 	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
@@ -506,21 +490,8 @@ func TestHFIRBytecodeRegexMatchFixture(t *testing.T) {
 	if matches != 12 {
 		t.Fatalf("regex_match nodes = %d, want 12", matches)
 	}
-	if caps := graphCapabilities(graph); len(caps) != 0 {
-		t.Fatalf("graph capabilities = %v, want none", caps)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
-		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
-	}
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v", legacy.Main, direct.Main)
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "regex_match")
 	if got := countOpcode(direct, bytecode.OpRegexMatch); got != matches {
 		t.Fatalf("REGEX_MATCH count = %d, want %d", got, matches)
 	}
@@ -536,17 +507,7 @@ func TestHFIRBytecodeRegexMatchFixture(t *testing.T) {
 			t.Fatalf("REGEX_MATCH = %#v, want a bare instruction with no capability", inst)
 		}
 	}
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
-	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
-		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
-	}
-	if legacyOutcome.stdout != regexMatchFixtureStdout || legacyOutcome.stderr != "" || legacyOutcome.exitCode != 0 || legacyOutcome.vmError != nil {
-		t.Fatalf("outcome = %#v, want the match lines", legacyOutcome)
-	}
-	if strings.Contains(legacyOutcome.stdout, "untaken") {
-		t.Fatalf("untaken branch printed:\n%s", legacyOutcome.stdout)
-	}
+	assertSameOutcomeStdout(t, legacy, direct, regexMatchFixtureStdout, "untaken")
 }
 
 // TestHFIRBytecodeRegexMatchTypeErrorMatchesAST compares the two bytecode
@@ -690,21 +651,8 @@ func assertTimeNowInstructionIdentity(t *testing.T, source string, want int) {
 	if clocks != want {
 		t.Fatalf("time_now nodes = %d, want %d", clocks, want)
 	}
-	if caps := graphCapabilities(graph); len(caps) != 0 {
-		t.Fatalf("graph capabilities = %v, want none", caps)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
-		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
-	}
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v\nAST functions %#v\nHFIR functions %#v", legacy.Main, direct.Main, legacy.Functions, direct.Functions)
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "time_now")
 	if got := countOpcode(direct, bytecode.OpTimeNow); got != want {
 		t.Fatalf("TIME_NOW count = %d, want %d", got, want)
 	}
@@ -801,21 +749,8 @@ func assertSleepInstructionIdentity(t *testing.T, source string, want int) {
 	if sleeps != want {
 		t.Fatalf("sleep nodes = %d, want %d", sleeps, want)
 	}
-	if caps := graphCapabilities(graph); len(caps) != 0 {
-		t.Fatalf("graph capabilities = %v, want none", caps)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if caps := programCapabilities(direct); len(caps) != 0 || len(programCapabilities(legacy)) != 0 {
-		t.Fatalf("capabilities AST %v HFIR %v, want none", programCapabilities(legacy), caps)
-	}
-	if !reflect.DeepEqual(legacy.Main, direct.Main) || !reflect.DeepEqual(legacy.Functions, direct.Functions) {
-		t.Fatalf("AST and HFIR bytecode disagree\nAST main %#v\nHFIR main %#v\nAST functions %#v\nHFIR functions %#v", legacy.Main, direct.Main, legacy.Functions, direct.Functions)
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph)
+	assertSameBytecodePrograms(t, legacy, direct, "sleep")
 	if got := countOpcode(direct, bytecode.OpSleep); got != want {
 		t.Fatalf("SLEEP count = %d, want %d", got, want)
 	}
@@ -850,76 +785,32 @@ func assertSleepFollowsDuration(t *testing.T, program *bytecode.BCProgram) {
 	}
 }
 
-func regexMatchInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
+func collectOpcode(program *bytecode.BCProgram, op bytecode.Opcode) []bytecode.BCInstruction {
 	var found []bytecode.BCInstruction
-	scan := func(insts []bytecode.BCInstruction) {
+	walkProgramFunctions(program, func(_ string, insts []bytecode.BCInstruction) {
 		for _, inst := range insts {
-			if inst.Op == bytecode.OpRegexMatch {
+			if inst.Op == op {
 				found = append(found, inst)
 			}
 		}
-	}
-	scan(program.Main)
-	for _, fn := range program.Functions {
-		if fn != nil {
-			scan(fn.Instructions)
-		}
-	}
+	})
 	return found
+}
+
+func regexMatchInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
+	return collectOpcode(program, bytecode.OpRegexMatch)
 }
 
 func attrEscapeInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
-	var found []bytecode.BCInstruction
-	scan := func(insts []bytecode.BCInstruction) {
-		for _, inst := range insts {
-			if inst.Op == bytecode.OpAttrEscape {
-				found = append(found, inst)
-			}
-		}
-	}
-	scan(program.Main)
-	for _, fn := range program.Functions {
-		if fn != nil {
-			scan(fn.Instructions)
-		}
-	}
-	return found
+	return collectOpcode(program, bytecode.OpAttrEscape)
 }
 
 func countOpcode(program *bytecode.BCProgram, op bytecode.Opcode) int {
-	count := 0
-	scan := func(insts []bytecode.BCInstruction) {
-		for _, inst := range insts {
-			if inst.Op == op {
-				count++
-			}
-		}
-	}
-	scan(program.Main)
-	for _, fn := range program.Functions {
-		if fn != nil {
-			scan(fn.Instructions)
-		}
-	}
-	return count
+	return len(collectOpcode(program, op))
 }
 
 func htmlEscapeInstructions(program *bytecode.BCProgram) []bytecode.BCInstruction {
-	var found []bytecode.BCInstruction
-	scan := func(insts []bytecode.BCInstruction) {
-		for _, inst := range insts {
-			if inst.Op == bytecode.OpHTMLEscape {
-				found = append(found, inst)
-			}
-		}
-	}
-	scan(program.Main)
-	for _, fn := range program.Functions {
-		if fn != nil {
-			scan(fn.Instructions)
-		}
-	}
-	return found
+	return collectOpcode(program, bytecode.OpHTMLEscape)
 }
 
 // TestHFIRBytecodeNestedIfWhileDefunFixture compares production AST bytecode
@@ -934,47 +825,16 @@ func TestHFIRBytecodeNestedIfWhileDefunFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	root, graph := checkedHFIRGraph(t, string(source))
-	var defuns, calls, whiles, ifThenOnly, ifWithElse int
-	for _, node := range graph.Nodes {
-		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != len(node.DataInputs) || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			switch len(node.ControlEdges) {
-			case 2:
-				ifThenOnly++
-			case 3:
-				if node.DataInputs[2].Name != "else" {
-					t.Fatalf("if %s else edge name = %q", node.ID, node.DataInputs[2].Name)
-				}
-				ifWithElse++
-			default:
-				t.Fatalf("if %s has %d control edges", node.ID, len(node.ControlEdges))
-			}
-		case "for":
+	counts := walkNestedControlFlow(t, graph, true, func(node *hfir.Node) {
+		if node.Kind == "for" {
 			t.Fatalf("dogfood fixture lowered a for node %s", node.ID)
 		}
+	})
+	if len(counts.fors) != 0 {
+		t.Fatalf("dogfood fixture lowered for nodes %v", counts.fors)
 	}
-	if defuns != 1 || calls != 2 || whiles != 3 || ifThenOnly != 1 || ifWithElse != 3 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d, want 1, 2, 3, 1, 3", defuns, calls, whiles, ifThenOnly, ifWithElse)
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 3 || counts.ifThenOnly != 1 || counts.ifWithElse != 3 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d, want 1, 2, 3, 1, 3", counts.defuns, counts.calls, counts.whiles, counts.ifThenOnly, counts.ifWithElse)
 	}
 
 	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
@@ -1010,55 +870,11 @@ func TestHFIRBytecodeNestedForIfWhileDefunFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	root, graph := checkedHFIRGraph(t, string(source))
-	var defuns, calls, whiles, ifThenOnly, ifWithElse int
-	fors := map[string]*hfir.Node{}
-	for _, node := range graph.Nodes {
-		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != len(node.DataInputs) || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			switch len(node.ControlEdges) {
-			case 2:
-				ifThenOnly++
-			case 3:
-				if node.DataInputs[2].Name != "else" {
-					t.Fatalf("if %s else edge name = %q", node.ID, node.DataInputs[2].Name)
-				}
-				ifWithElse++
-			default:
-				t.Fatalf("if %s has %d control edges", node.ID, len(node.ControlEdges))
-			}
-		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
-				t.Fatalf("duplicate for iterator %q", node.Value)
-			}
-			fors[node.Value] = node
-		}
+	counts := walkNestedControlFlow(t, graph, true, nil)
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 3 || counts.ifThenOnly != 1 || counts.ifWithElse != 3 || len(counts.fors) != 4 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d for=%d, want 1, 2, 3, 1, 3, 4", counts.defuns, counts.calls, counts.whiles, counts.ifThenOnly, counts.ifWithElse, len(counts.fors))
 	}
-	if defuns != 1 || calls != 2 || whiles != 3 || ifThenOnly != 1 || ifWithElse != 3 || len(fors) != 4 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-then=%d if-else=%d for=%d, want 1, 2, 3, 1, 3, 4", defuns, calls, whiles, ifThenOnly, ifWithElse, len(fors))
-	}
+	fors := counts.fors
 	label := fors["label"]
 	item := fors["item"]
 	word := fors["word"]
@@ -1328,21 +1144,7 @@ func TestHFIRBytecodeExecFixture(t *testing.T) {
 		t.Fatalf("exec nodes = %d, want 1", execs)
 	}
 
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if got, want := graphCapabilities(graph), []capability.Capability{capability.Process}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("HFIR effects = %v, want process", got)
-	}
-	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
-		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
-	}
-	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Process}) {
-		t.Fatalf("emitted capabilities = %v, want process", programCapabilities(direct))
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph, capability.Process)
 	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
 	}
@@ -1426,21 +1228,7 @@ func TestHFIRBytecodeNestedExecFixture(t *testing.T) {
 	root, graph := checkedHFIRGraph(t, source)
 	assertNestedExecShape(t, graph)
 
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if got, want := graphCapabilities(graph), []capability.Capability{capability.Process}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("HFIR effects = %v, want process", got)
-	}
-	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
-		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
-	}
-	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Process}) {
-		t.Fatalf("emitted capabilities = %v, want process", programCapabilities(direct))
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph, capability.Process)
 	if got, want := execOperandShapes(legacy), execOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("EXEC operands\nAST %#v\nHFIR %#v", got, want)
 	}
@@ -1493,21 +1281,7 @@ func TestHFIRBytecodeFetchFixture(t *testing.T) {
 		t.Fatalf("fetch nodes = %d, want 1", fetches)
 	}
 
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if got, want := graphCapabilities(graph), []capability.Capability{capability.Network}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("HFIR effects = %v, want network", got)
-	}
-	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
-		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
-	}
-	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Network}) {
-		t.Fatalf("emitted capabilities = %v, want network", programCapabilities(direct))
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph, capability.Network)
 	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
 	}
@@ -1611,21 +1385,7 @@ func TestHFIRBytecodeNestedFetchFixture(t *testing.T) {
 	root, graph := checkedHFIRGraph(t, source)
 	assertNestedFetchShape(t, graph)
 
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	if got, want := graphCapabilities(graph), []capability.Capability{capability.Network}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("HFIR effects = %v, want network", got)
-	}
-	if got, want := programCapabilities(legacy), programCapabilities(direct); !reflect.DeepEqual(got, want) {
-		t.Fatalf("legacy capabilities = %v, HFIR capabilities = %v", got, want)
-	}
-	if !reflect.DeepEqual(programCapabilities(direct), []capability.Capability{capability.Network}) {
-		t.Fatalf("emitted capabilities = %v, want network", programCapabilities(direct))
-	}
+	legacy, direct := compileRoundTripBothWithCaps(t, root, graph, capability.Network)
 	if got, want := fetchOperandShapes(legacy), fetchOperandShapes(direct); !reflect.DeepEqual(got, want) {
 		t.Fatalf("FETCH operands\nAST %#v\nHFIR %#v", got, want)
 	}
@@ -1854,44 +1614,139 @@ func programHasLiteral(program *bytecode.BCProgram, text string) bool {
 	return false
 }
 
-func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
+type nestedCFCounts struct {
+	defuns, calls, whiles, ifThenOnly, ifWithElse int
+	fors                                          map[string]*hfir.Node
+}
+
+func assertTwoEdgeNode(t *testing.T, node *hfir.Node, label, edge0, edge1 string) {
 	t.Helper()
-	var defuns, calls, whiles, ifWithElse, writes, mkdirs int
-	fors := map[string]*hfir.Node{}
-	writePaths := map[string]*hfir.Node{}
-	mkdirPaths := map[string]*hfir.Node{}
+	if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != edge0 || node.DataInputs[1].Name != edge1 || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
+		t.Fatalf("%s %s control %v data %#v", label, node.ID, node.ControlEdges, node.DataInputs)
+	}
+}
+
+func assertIfNodeEdges(t *testing.T, node *hfir.Node, allowTwoEdge bool) (hasElse bool) {
+	t.Helper()
+	if len(node.ControlEdges) != len(node.DataInputs) || len(node.DataInputs) < 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" {
+		t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+	}
+	for index := range node.ControlEdges {
+		if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
+			t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+		}
+	}
+	switch len(node.ControlEdges) {
+	case 2:
+		if !allowTwoEdge {
+			t.Fatalf("if %s has 2 control edges, want 3", node.ID)
+		}
+		return false
+	case 3:
+		if node.DataInputs[2].Name != "else" {
+			t.Fatalf("if %s else edge name = %q", node.ID, node.DataInputs[2].Name)
+		}
+		return true
+	default:
+		t.Fatalf("if %s has %d control edges", node.ID, len(node.ControlEdges))
+		return false
+	}
+}
+
+func walkNestedControlFlow(t *testing.T, graph *hfir.Graph, allowTwoEdgeIf bool, onEffect func(node *hfir.Node)) nestedCFCounts {
+	t.Helper()
+	counts := nestedCFCounts{fors: map[string]*hfir.Node{}}
 	for _, node := range graph.Nodes {
 		switch node.Kind {
 		case "defun":
-			defuns++
+			counts.defuns++
 			if len(node.ControlEdges) != 0 {
 				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
 			}
 		case "call":
-			calls++
+			counts.calls++
 		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
+			counts.whiles++
+			assertTwoEdgeNode(t, node, "while", "condition", "body")
 		case "if":
-			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
+			if assertIfNodeEdges(t, node, allowTwoEdgeIf) {
+				counts.ifWithElse++
+			} else {
+				counts.ifThenOnly++
 			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			ifWithElse++
 		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
+			assertTwoEdgeNode(t, node, "for", "iterable", "body")
+			if _, ok := counts.fors[node.Value]; ok {
 				t.Fatalf("duplicate for iterator %q", node.Value)
 			}
-			fors[node.Value] = node
+			counts.fors[node.Value] = node
+		default:
+			if onEffect != nil {
+				onEffect(node)
+			}
+		}
+	}
+	return counts
+}
+
+func assertNestedEffectStructure(
+	t *testing.T,
+	graph *hfir.Graph,
+	fors map[string]*hfir.Node,
+	checkTakenElse func(takenElse hfir.NodeID, name, absent *hfir.Node),
+	checkFalseWhile func(body hfir.NodeID),
+	checkNameAndAbsent func(name, absent *hfir.Node),
+) {
+	t.Helper()
+	label := fors["label"]
+	name := fors["name"]
+	absent := fors["absent"]
+	if label == nil || name == nil || absent == nil {
+		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
+	}
+	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
+		t.Fatal("label for does not contain the name for")
+	}
+	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
+	if taken == nil || taken.Kind != "if" {
+		t.Fatalf("label for body = %#v, want if", taken)
+	}
+	takenElse := taken.DataInputs[2].SourceNode
+	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
+		t.Fatal("taken branch does not contain both inner fors")
+	}
+	if checkTakenElse != nil {
+		checkTakenElse(takenElse, name, absent)
+	}
+	var countingWhile *hfir.Node
+	for _, node := range graph.Nodes {
+		if node.Kind != "while" {
+			continue
+		}
+		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
+		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
+			if checkFalseWhile != nil {
+				checkFalseWhile(node.DataInputs[1].SourceNode)
+			}
+			continue
+		}
+		countingWhile = node
+	}
+	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
+		t.Fatal("counting while does not contain the label for")
+	}
+	if checkNameAndAbsent != nil {
+		checkNameAndAbsent(name, absent)
+	}
+}
+
+func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
+	t.Helper()
+	var writes, mkdirs int
+	writePaths := map[string]*hfir.Node{}
+	mkdirPaths := map[string]*hfir.Node{}
+	counts := walkNestedControlFlow(t, graph, false, func(node *hfir.Node) {
+		switch node.Kind {
 		case "write_file":
 			writes++
 			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "path" || node.DataInputs[1].Name != "data" {
@@ -1905,54 +1760,30 @@ func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
 			}
 			mkdirPaths[fsPathValue(t, graph, node)] = node
 		}
+	})
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 2 || counts.ifWithElse != 3 || len(counts.fors) != 3 || writes != 5 || mkdirs != 4 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d write=%d mkdir=%d, want 1, 2, 2, 3, 3, 5, 4", counts.defuns, counts.calls, counts.whiles, counts.ifWithElse, len(counts.fors), writes, mkdirs)
 	}
-	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || writes != 5 || mkdirs != 4 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d write=%d mkdir=%d, want 1, 2, 2, 3, 3, 5, 4", defuns, calls, whiles, ifWithElse, len(fors), writes, mkdirs)
-	}
-	label := fors["label"]
-	name := fors["name"]
-	absent := fors["absent"]
-	if label == nil || name == nil || absent == nil {
-		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
-	}
-	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
-		t.Fatal("label for does not contain the name for")
-	}
-	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
-	// The label for's body is the if. Its else is the taken write.
-	if taken == nil || taken.Kind != "if" {
-		t.Fatalf("label for body = %#v, want if", taken)
-	}
-	takenElse := taken.DataInputs[2].SourceNode
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "write_file" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "mkdir" }) {
-		t.Fatal("taken branch does not contain write_file and mkdir")
-	}
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
-		t.Fatal("taken branch does not contain both inner fors")
-	}
-	var countingWhile *hfir.Node
-	for _, node := range graph.Nodes {
-		if node.Kind != "while" {
-			continue
-		}
-		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
-		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
-			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "mkdir" }) {
+	assertNestedEffectStructure(t, graph, counts.fors,
+		func(takenElse hfir.NodeID, _, _ *hfir.Node) {
+			if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "write_file" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "mkdir" }) {
+				t.Fatal("taken branch does not contain write_file and mkdir")
+			}
+		},
+		func(body hfir.NodeID) {
+			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "mkdir" }) {
 				t.Fatal("false while body does not mkdir")
 			}
-			continue
-		}
-		countingWhile = node
-	}
-	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
-		t.Fatal("counting while does not contain the label for")
-	}
-	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
-		t.Fatal("name for does not contain write_file")
-	}
-	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
-		t.Fatal("empty for does not contain write_file")
-	}
+		},
+		func(name, absent *hfir.Node) {
+			if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
+				t.Fatal("name for does not contain write_file")
+			}
+			if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "write_file" }) {
+				t.Fatal("empty for does not contain write_file")
+			}
+		},
+	)
 	var defunHoldsWrite bool
 	for _, node := range graph.Nodes {
 		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
@@ -1978,42 +1809,11 @@ func assertNestedFsWriteShape(t *testing.T, graph *hfir.Graph) {
 
 func assertNestedEnvReadShape(t *testing.T, graph *hfir.Graph) {
 	t.Helper()
-	var defuns, calls, whiles, ifWithElse, reads int
+	var reads int
 	envKeys := map[string]int{}
-	fors := map[string]*hfir.Node{}
 	readPaths := map[string]*hfir.Node{}
-	for _, node := range graph.Nodes {
+	counts := walkNestedControlFlow(t, graph, false, func(node *hfir.Node) {
 		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			ifWithElse++
-		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
-				t.Fatalf("duplicate for iterator %q", node.Value)
-			}
-			fors[node.Value] = node
 		case "env":
 			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" {
 				t.Fatalf("env %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
@@ -2026,57 +1826,33 @@ func assertNestedEnvReadShape(t *testing.T, graph *hfir.Graph) {
 			}
 			readPaths[fsPathValue(t, graph, node)] = node
 		}
-	}
-	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || len(envKeys) != 4 || reads != 6 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d env-keys=%d read=%d, want 1, 2, 2, 3, 3, 4, 6", defuns, calls, whiles, ifWithElse, len(fors), len(envKeys), reads)
+	})
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 2 || counts.ifWithElse != 3 || len(counts.fors) != 3 || len(envKeys) != 4 || reads != 6 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d env-keys=%d read=%d, want 1, 2, 2, 3, 3, 4, 6", counts.defuns, counts.calls, counts.whiles, counts.ifWithElse, len(counts.fors), len(envKeys), reads)
 	}
 	if envKeys["HOWLFRAME_ABI_SECRET"] != 2 || envKeys["HOWLFRAME_ABI_SKIP"] != 1 || envKeys["HOWLFRAME_ABI_ELSE"] != 1 || envKeys["HOWLFRAME_ABI_DEAD"] != 1 {
 		t.Fatalf("env keys = %#v", envKeys)
 	}
-	label := fors["label"]
-	name := fors["name"]
-	absent := fors["absent"]
-	if label == nil || name == nil || absent == nil {
-		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
-	}
-	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
-		t.Fatal("label for does not contain the name for")
-	}
-	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
-	if taken == nil || taken.Kind != "if" {
-		t.Fatalf("label for body = %#v, want if", taken)
-	}
-	takenElse := taken.DataInputs[2].SourceNode
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
-		t.Fatal("taken branch does not contain env and read_file")
-	}
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
-		t.Fatal("taken branch does not contain both inner fors")
-	}
-	var countingWhile *hfir.Node
-	for _, node := range graph.Nodes {
-		if node.Kind != "while" {
-			continue
-		}
-		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
-		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
-			body := node.DataInputs[1].SourceNode
+	assertNestedEffectStructure(t, graph, counts.fors,
+		func(takenElse hfir.NodeID, _, _ *hfir.Node) {
+			if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+				t.Fatal("taken branch does not contain env and read_file")
+			}
+		},
+		func(body hfir.NodeID) {
 			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "env" }) || !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "read_file" }) {
 				t.Fatal("false while body does not contain env and read_file")
 			}
-			continue
-		}
-		countingWhile = node
-	}
-	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
-		t.Fatal("counting while does not contain the label for")
-	}
-	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
-		t.Fatal("name for does not contain env and read_file")
-	}
-	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
-		t.Fatal("empty for does not contain read_file")
-	}
+		},
+		func(name, absent *hfir.Node) {
+			if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "env" }) || !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+				t.Fatal("name for does not contain env and read_file")
+			}
+			if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "read_file" }) {
+				t.Fatal("empty for does not contain read_file")
+			}
+		},
+	)
 	var defunHoldsRead bool
 	for _, node := range graph.Nodes {
 		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
@@ -2097,107 +1873,53 @@ func assertNestedEnvReadShape(t *testing.T, graph *hfir.Graph) {
 
 func assertNestedExecShape(t *testing.T, graph *hfir.Graph) {
 	t.Helper()
-	var defuns, calls, whiles, ifWithElse, execs int
+	var execs int
 	args := map[string]int{}
-	fors := map[string]*hfir.Node{}
-	for _, node := range graph.Nodes {
-		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			ifWithElse++
-		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
-				t.Fatalf("duplicate for iterator %q", node.Value)
-			}
-			fors[node.Value] = node
-		case "exec":
-			execs++
-			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
-				t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
-			}
-			if got := fsPathValue(t, graph, node); got != testutil.CanonicalExecFixture(t, "/usr/bin/printf") {
-				t.Fatalf(testutil.CanonicalExecFixture(t, "exec command = %q, want /usr/bin/printf"), got)
-			}
-			arg := graph.NodeByID(node.DataInputs[1].SourceNode)
-			if arg == nil || arg.Kind != "const" || arg.LiteralKind != "STRING" || arg.Value == "" {
-				t.Fatalf("exec argument = %#v, want a string const", arg)
-			}
-			args[arg.Value]++
+	counts := walkNestedControlFlow(t, graph, false, func(node *hfir.Node) {
+		if node.Kind != "exec" {
+			return
 		}
-	}
-	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || execs != 7 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d exec=%d, want 1, 2, 2, 3, 3, 7", defuns, calls, whiles, ifWithElse, len(fors), execs)
+		execs++
+		if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "cmd" || node.DataInputs[1].Name != "arg" {
+			t.Fatalf("exec %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
+		}
+		if got := fsPathValue(t, graph, node); got != testutil.CanonicalExecFixture(t, "/usr/bin/printf") {
+			t.Fatalf(testutil.CanonicalExecFixture(t, "exec command = %q, want /usr/bin/printf"), got)
+		}
+		arg := graph.NodeByID(node.DataInputs[1].SourceNode)
+		if arg == nil || arg.Kind != "const" || arg.LiteralKind != "STRING" || arg.Value == "" {
+			t.Fatalf("exec argument = %#v, want a string const", arg)
+		}
+		args[arg.Value]++
+	})
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 2 || counts.ifWithElse != 3 || len(counts.fors) != 3 || execs != 7 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d exec=%d, want 1, 2, 2, 3, 3, 7", counts.defuns, counts.calls, counts.whiles, counts.ifWithElse, len(counts.fors), execs)
 	}
 	for _, arg := range []string{"no-skip", "phase2b-exec-marker", "no-else", "no-empty", "no-dead", "phase2b-exec-kept", "phase2b-exec-miss"} {
 		if args[arg] != 1 {
 			t.Fatalf("exec args = %#v, missing %s", args, arg)
 		}
 	}
-	label := fors["label"]
-	name := fors["name"]
-	absent := fors["absent"]
-	if label == nil || name == nil || absent == nil {
-		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
-	}
-	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
-		t.Fatal("label for does not contain the name for")
-	}
-	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
-	if taken == nil || taken.Kind != "if" {
-		t.Fatalf("label for body = %#v, want if", taken)
-	}
-	takenElse := taken.DataInputs[2].SourceNode
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
-		t.Fatal("taken branch does not contain exec")
-	}
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
-		t.Fatal("taken branch does not contain both inner fors")
-	}
-	var countingWhile *hfir.Node
-	for _, node := range graph.Nodes {
-		if node.Kind != "while" {
-			continue
-		}
-		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
-		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
-			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
+	assertNestedEffectStructure(t, graph, counts.fors,
+		func(takenElse hfir.NodeID, _, _ *hfir.Node) {
+			if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+				t.Fatal("taken branch does not contain exec")
+			}
+		},
+		func(body hfir.NodeID) {
+			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
 				t.Fatal("false while body does not contain exec")
 			}
-			continue
-		}
-		countingWhile = node
-	}
-	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
-		t.Fatal("counting while does not contain the label for")
-	}
-	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
-		t.Fatal("name for does not contain exec")
-	}
-	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
-		t.Fatal("empty for does not contain exec")
-	}
+		},
+		func(name, absent *hfir.Node) {
+			if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+				t.Fatal("name for does not contain exec")
+			}
+			if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "exec" }) {
+				t.Fatal("empty for does not contain exec")
+			}
+		},
+	)
 	var defunHoldsExec bool
 	for _, node := range graph.Nodes {
 		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "exec" }) {
@@ -2211,100 +1933,46 @@ func assertNestedExecShape(t *testing.T, graph *hfir.Graph) {
 
 func assertNestedFetchShape(t *testing.T, graph *hfir.Graph) {
 	t.Helper()
-	var defuns, calls, whiles, ifWithElse, fetches int
-	fors := map[string]*hfir.Node{}
-	for _, node := range graph.Nodes {
-		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			ifWithElse++
-		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
-				t.Fatalf("duplicate for iterator %q", node.Value)
-			}
-			fors[node.Value] = node
-		case "fetch":
-			fetches++
-			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
-				t.Fatalf("fetch %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
-			}
-			if got := fsPathValue(t, graph, node); got != abiFetchURL {
-				t.Fatalf("fetch url = %q, want %s", got, abiFetchURL)
-			}
-			method := graph.NodeByID(node.DataInputs[1].SourceNode)
-			if method == nil || method.Kind != "const" || method.Value != "GET" {
-				t.Fatalf("fetch method = %#v, want GET", method)
-			}
+	var fetches int
+	counts := walkNestedControlFlow(t, graph, false, func(node *hfir.Node) {
+		if node.Kind != "fetch" {
+			return
 		}
-	}
-	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || fetches != 7 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d fetch=%d, want 1, 2, 2, 3, 3, 7", defuns, calls, whiles, ifWithElse, len(fors), fetches)
-	}
-	label := fors["label"]
-	name := fors["name"]
-	absent := fors["absent"]
-	if label == nil || name == nil || absent == nil {
-		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
-	}
-	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
-		t.Fatal("label for does not contain the name for")
-	}
-	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
-	if taken == nil || taken.Kind != "if" {
-		t.Fatalf("label for body = %#v, want if", taken)
-	}
-	takenElse := taken.DataInputs[2].SourceNode
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
-		t.Fatal("taken branch does not contain fetch")
-	}
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
-		t.Fatal("taken branch does not contain both inner fors")
-	}
-	var countingWhile *hfir.Node
-	for _, node := range graph.Nodes {
-		if node.Kind != "while" {
-			continue
+		fetches++
+		if len(node.ControlEdges) != 0 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "url" || node.DataInputs[1].Name != "method" {
+			t.Fatalf("fetch %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
 		}
-		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
-		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
-			if !hfirSubtreeHas(graph, node.DataInputs[1].SourceNode, func(child *hfir.Node) bool { return child.Kind == "fetch" }) {
+		if got := fsPathValue(t, graph, node); got != abiFetchURL {
+			t.Fatalf("fetch url = %q, want %s", got, abiFetchURL)
+		}
+		method := graph.NodeByID(node.DataInputs[1].SourceNode)
+		if method == nil || method.Kind != "const" || method.Value != "GET" {
+			t.Fatalf("fetch method = %#v, want GET", method)
+		}
+	})
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 2 || counts.ifWithElse != 3 || len(counts.fors) != 3 || fetches != 7 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d fetch=%d, want 1, 2, 2, 3, 3, 7", counts.defuns, counts.calls, counts.whiles, counts.ifWithElse, len(counts.fors), fetches)
+	}
+	assertNestedEffectStructure(t, graph, counts.fors,
+		func(takenElse hfir.NodeID, _, _ *hfir.Node) {
+			if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+				t.Fatal("taken branch does not contain fetch")
+			}
+		},
+		func(body hfir.NodeID) {
+			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool { return child.Kind == "fetch" }) {
 				t.Fatal("false while body does not contain fetch")
 			}
-			continue
-		}
-		countingWhile = node
-	}
-	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
-		t.Fatal("counting while does not contain the label for")
-	}
-	if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
-		t.Fatal("name for does not contain fetch")
-	}
-	if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
-		t.Fatal("empty for does not contain fetch")
-	}
+		},
+		func(name, absent *hfir.Node) {
+			if !hfirSubtreeHas(graph, name.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+				t.Fatal("name for does not contain fetch")
+			}
+			if !hfirSubtreeHas(graph, absent.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node.Kind == "fetch" }) {
+				t.Fatal("empty for does not contain fetch")
+			}
+		},
+	)
 	var defunHoldsFetch bool
 	for _, node := range graph.Nodes {
 		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool { return child.Kind == "fetch" }) {
@@ -2318,45 +1986,14 @@ func assertNestedFetchShape(t *testing.T, graph *hfir.Graph) {
 
 func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string) {
 	t.Helper()
-	var defuns, calls, whiles, ifWithElse, reads, writes, mkdirs, execs, fetches, bodyEdges int
+	var reads, writes, mkdirs, execs, fetches, bodyEdges int
 	envKeys := map[string]int{}
 	execArgs := map[string]int{}
-	fors := map[string]*hfir.Node{}
 	readPaths := map[string]*hfir.Node{}
 	writePaths := map[string]*hfir.Node{}
 	mkdirPaths := map[string]*hfir.Node{}
-	for _, node := range graph.Nodes {
+	counts := walkNestedControlFlow(t, graph, false, func(node *hfir.Node) {
 		switch node.Kind {
-		case "defun":
-			defuns++
-			if len(node.ControlEdges) != 0 {
-				t.Fatalf("defun %s has control edges %v", node.ID, node.ControlEdges)
-			}
-		case "call":
-			calls++
-		case "while":
-			whiles++
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("while %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-		case "if":
-			if len(node.ControlEdges) != 3 || len(node.DataInputs) != 3 || node.DataInputs[0].Name != "condition" || node.DataInputs[1].Name != "then" || node.DataInputs[2].Name != "else" {
-				t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			for index := range node.ControlEdges {
-				if node.ControlEdges[index] != node.DataInputs[index].SourceNode {
-					t.Fatalf("if %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-				}
-			}
-			ifWithElse++
-		case "for":
-			if len(node.ControlEdges) != 2 || len(node.DataInputs) != 2 || node.DataInputs[0].Name != "iterable" || node.DataInputs[1].Name != "body" || node.ControlEdges[0] != node.DataInputs[0].SourceNode || node.ControlEdges[1] != node.DataInputs[1].SourceNode {
-				t.Fatalf("for %s control %v data %#v", node.ID, node.ControlEdges, node.DataInputs)
-			}
-			if _, ok := fors[node.Value]; ok {
-				t.Fatalf("duplicate for iterator %q", node.Value)
-			}
-			fors[node.Value] = node
 		case "env":
 			if len(node.ControlEdges) != 0 || len(node.DataInputs) != 1 || node.DataInputs[0].Name != "value" {
 				t.Fatalf("env %s edges %#v control %v", node.ID, node.DataInputs, node.ControlEdges)
@@ -2427,9 +2064,9 @@ func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string
 				t.Fatalf("try %s has control edges %v", node.ID, node.ControlEdges)
 			}
 		}
-	}
-	if defuns != 1 || calls != 2 || whiles != 2 || ifWithElse != 3 || len(fors) != 3 || reads != 7 || writes != 7 || mkdirs != 7 || execs != 7 || fetches != 7 || bodyEdges != 1 {
-		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d read=%d write=%d mkdir=%d exec=%d fetch=%d body=%d, want 1, 2, 2, 3, 3, 7, 7, 7, 7, 7, 1", defuns, calls, whiles, ifWithElse, len(fors), reads, writes, mkdirs, execs, fetches, bodyEdges)
+	})
+	if counts.defuns != 1 || counts.calls != 2 || counts.whiles != 2 || counts.ifWithElse != 3 || len(counts.fors) != 3 || reads != 7 || writes != 7 || mkdirs != 7 || execs != 7 || fetches != 7 || bodyEdges != 1 {
+		t.Fatalf("surface counts defun=%d call=%d while=%d if-else=%d for=%d read=%d write=%d mkdir=%d exec=%d fetch=%d body=%d, want 1, 2, 2, 3, 3, 7, 7, 7, 7, 7, 1", counts.defuns, counts.calls, counts.whiles, counts.ifWithElse, len(counts.fors), reads, writes, mkdirs, execs, fetches, bodyEdges)
 	}
 	if envKeys["HOWLFRAME_ABI_SECRET"] != 3 || envKeys["HOWLFRAME_ABI_SKIP"] != 1 || envKeys["HOWLFRAME_ABI_ELSE"] != 1 || envKeys["HOWLFRAME_ABI_EMPTY"] != 1 || envKeys["HOWLFRAME_ABI_DEAD"] != 1 || len(envKeys) != 5 {
 		t.Fatalf("env keys = %#v", envKeys)
@@ -2454,49 +2091,24 @@ func assertNestedMultiEffectShape(t *testing.T, graph *hfir.Graph, prefix string
 			t.Fatalf("missing mkdir %s in %v", suffix, pathKeys(mkdirPaths))
 		}
 	}
-	label := fors["label"]
-	name := fors["name"]
-	absent := fors["absent"]
-	if label == nil || name == nil || absent == nil {
-		t.Fatalf("for iterators = %v, want label, name, absent", forIteratorNames(fors))
-	}
-	if !hfirSubtreeHas(graph, label.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == name }) {
-		t.Fatal("label for does not contain the name for")
-	}
-	taken := graph.NodeByID(label.DataInputs[1].SourceNode)
-	if taken == nil || taken.Kind != "if" {
-		t.Fatalf("label for body = %#v, want if", taken)
-	}
-	takenElse := taken.DataInputs[2].SourceNode
-	for _, kind := range []string{"env", "read_file", "write_file", "mkdir", "exec", "fetch"} {
-		kind := kind
-		if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == kind }) {
-			t.Fatalf("taken branch does not contain %s", kind)
-		}
-	}
-	if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == name }) || !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node == absent }) {
-		t.Fatal("taken branch does not contain both inner fors")
-	}
-	var countingWhile *hfir.Node
-	for _, node := range graph.Nodes {
-		if node.Kind != "while" {
-			continue
-		}
-		cond := graph.NodeByID(node.DataInputs[0].SourceNode)
-		if cond != nil && cond.Kind == "const" && cond.Value == "false" {
-			body := node.DataInputs[1].SourceNode
+	assertNestedEffectStructure(t, graph, counts.fors,
+		func(takenElse hfir.NodeID, _, _ *hfir.Node) {
+			for _, kind := range []string{"env", "read_file", "write_file", "mkdir", "exec", "fetch"} {
+				kind := kind
+				if !hfirSubtreeHas(graph, takenElse, func(node *hfir.Node) bool { return node.Kind == kind }) {
+					t.Fatalf("taken branch does not contain %s", kind)
+				}
+			}
+		},
+		func(body hfir.NodeID) {
 			if !hfirSubtreeHas(graph, body, func(child *hfir.Node) bool {
 				return child.Kind == "fetch" && len(child.DataInputs) == 3
 			}) {
 				t.Fatal("false while body does not contain the fetch body edge")
 			}
-			continue
-		}
-		countingWhile = node
-	}
-	if countingWhile == nil || !hfirSubtreeHas(graph, countingWhile.DataInputs[1].SourceNode, func(node *hfir.Node) bool { return node == label }) {
-		t.Fatal("counting while does not contain the label for")
-	}
+		},
+		nil,
+	)
 	var defunHoldsEffects bool
 	for _, node := range graph.Nodes {
 		if node.Kind == "defun" && hfirSubtreeHas(graph, node.ID, func(child *hfir.Node) bool {
@@ -2865,11 +2477,8 @@ func runBytecodeOutcome(program *bytecode.BCProgram, stdin string, caps []capabi
 	return outcome
 }
 
-func TestHFIRBytecodeForRejectsNonListLikeAST(t *testing.T) {
-	// The checker rejects this before either compiler on the CLI. This
-	// comparison is the two bytecode emitters, which both still emit
-	// FOR_INIT and then fail in the VM.
-	source := `(cli_app (for item 1 (print "no")))`
+func compareASTAndHFIRUnchecked(t *testing.T, source string) (bytecodeOutcome, bytecodeOutcome) {
+	t.Helper()
 	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
 	root := parsed.ParseExpression()
 	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
@@ -2882,8 +2491,14 @@ func TestHFIRBytecodeForRejectsNonListLikeAST(t *testing.T) {
 		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
 	}
 	direct = roundTripArtifact(t, direct)
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
+	return runBytecodeOutcome(legacy, "", nil), runBytecodeOutcome(direct, "", nil)
+}
+
+func TestHFIRBytecodeForRejectsNonListLikeAST(t *testing.T) {
+	// The checker rejects this before either compiler on the CLI. This
+	// comparison is the two bytecode emitters, which both still emit
+	// FOR_INIT and then fail in the VM.
+	legacyOutcome, directOutcome := compareASTAndHFIRUnchecked(t, `(cli_app (for item 1 (print "no")))`)
 	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
 		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
 	}
@@ -2899,21 +2514,7 @@ func TestHFIRBytecodeWhileRejectsNonBoolLikeAST(t *testing.T) {
 	// The checker rejects this before either compiler on the CLI. This
 	// comparison is the two bytecode emitters, which both still emit the
 	// while jumps and then fail in the VM.
-	source := `(cli_app (while 1 (print "no")))`
-	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
-	root := parsed.ParseExpression()
-	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
+	legacyOutcome, directOutcome := compareASTAndHFIRUnchecked(t, `(cli_app (while 1 (print "no")))`)
 	if !reflect.DeepEqual(legacyOutcome, directOutcome) {
 		t.Fatalf("AST bytecode outcome = %#v\nHFIR bytecode outcome = %#v", legacyOutcome, directOutcome)
 	}
@@ -2933,20 +2534,7 @@ func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {
     (type_hints (n int) (return int))
     (return n))
   (print (call id)))`
-	parsed := parser.NewParser(lexer.NewLexer(source), "hfir_equivalence.howl")
-	root := parsed.ParseExpression()
-	graph, err := hfir.LowerAST(root, "hfir_equivalence.howl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy := roundTripArtifact(t, bytecode.CompileToBytecode(root))
-	direct, diagnostics := hfir.LowerToBytecode(graph)
-	if len(diagnostics) != 0 {
-		t.Fatalf("LowerToBytecode() diagnostics = %#v", diagnostics)
-	}
-	direct = roundTripArtifact(t, direct)
-	legacyOutcome := runBytecodeOutcome(legacy, "", nil)
-	directOutcome := runBytecodeOutcome(direct, "", nil)
+	legacyOutcome, directOutcome := compareASTAndHFIRUnchecked(t, source)
 	if legacyOutcome.vmError == nil || directOutcome.vmError == nil {
 		t.Fatalf("AST error = %#v\nHFIR error = %#v", legacyOutcome, directOutcome)
 	}
@@ -2958,6 +2546,33 @@ func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {
 	}
 }
 
+func walkProgramFunctions(program *bytecode.BCProgram, collect func(where string, insts []bytecode.BCInstruction)) {
+	collect("main", program.Main)
+	names := make([]string, 0, len(program.Functions))
+	for name := range program.Functions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if fn := program.Functions[name]; fn != nil {
+			collect(name, fn.Instructions)
+		}
+	}
+}
+
+func appendWindowLiteralShape(shapes *[]string, where string, insts []bytecode.BCInstruction, start, end int) {
+	parts := []string{where}
+	for _, prev := range insts[start:end] {
+		text, ok := prev.ValueOperand.(string)
+		if prev.Op != bytecode.OpLoadConst || !ok {
+			*shapes = append(*shapes, where+"\x00nonliteral")
+			return
+		}
+		parts = append(parts, text)
+	}
+	*shapes = append(*shapes, strings.Join(parts, "\x00"))
+}
+
 // execOperandShapes records each EXEC as its function, then the command,
 // then each argument. Those values are the LOAD_CONST instructions
 // immediately before EXEC, which is the operand order CompileToBytecode
@@ -2965,7 +2580,7 @@ func TestHFIRBytecodeCallArityRejectsLikeAST(t *testing.T) {
 // count plus the command.
 func execOperandShapes(program *bytecode.BCProgram) []string {
 	var shapes []string
-	collect := func(where string, insts []bytecode.BCInstruction) {
+	walkProgramFunctions(program, func(where string, insts []bytecode.BCInstruction) {
 		for index, inst := range insts {
 			if inst.Op != bytecode.OpExec {
 				continue
@@ -2975,35 +2590,9 @@ func execOperandShapes(program *bytecode.BCProgram) []string {
 				shapes = append(shapes, where+"\x00short")
 				continue
 			}
-			parts := []string{where}
-			literal := true
-			for _, prev := range insts[index-argc-1 : index] {
-				text, ok := prev.ValueOperand.(string)
-				if prev.Op != bytecode.OpLoadConst || !ok {
-					literal = false
-					break
-				}
-				parts = append(parts, text)
-			}
-			if !literal {
-				shapes = append(shapes, where+"\x00nonliteral")
-				continue
-			}
-			shapes = append(shapes, strings.Join(parts, "\x00"))
+			appendWindowLiteralShape(&shapes, where, insts, index-argc-1, index)
 		}
-	}
-	collect("main", program.Main)
-	names := make([]string, 0, len(program.Functions))
-	for name := range program.Functions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		fn := program.Functions[name]
-		if fn != nil {
-			collect(name, fn.Instructions)
-		}
-	}
+	})
 	return shapes
 }
 
@@ -3014,7 +2603,7 @@ func execOperandShapes(program *bytecode.BCProgram) []string {
 // window off the URL.
 func fetchOperandShapes(program *bytecode.BCProgram) []string {
 	var shapes []string
-	collect := func(where string, insts []bytecode.BCInstruction) {
+	walkProgramFunctions(program, func(where string, insts []bytecode.BCInstruction) {
 		for index, inst := range insts {
 			// A fetch with a body lowers to url, method, body, CONVERT,
 			// HTTP_REQUEST 1, LOAD_CONST "body", MAP_GET (#143).
@@ -3043,35 +2632,9 @@ func fetchOperandShapes(program *bytecode.BCProgram) []string {
 				shapes = append(shapes, where+"\x00short")
 				continue
 			}
-			parts := []string{where}
-			literal := true
-			for _, prev := range insts[index-2 : index] {
-				text, ok := prev.ValueOperand.(string)
-				if prev.Op != bytecode.OpLoadConst || !ok {
-					literal = false
-					break
-				}
-				parts = append(parts, text)
-			}
-			if !literal {
-				shapes = append(shapes, where+"\x00nonliteral")
-				continue
-			}
-			shapes = append(shapes, strings.Join(parts, "\x00"))
+			appendWindowLiteralShape(&shapes, where, insts, index-2, index)
 		}
-	}
-	collect("main", program.Main)
-	names := make([]string, 0, len(program.Functions))
-	for name := range program.Functions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		fn := program.Functions[name]
-		if fn != nil {
-			collect(name, fn.Instructions)
-		}
-	}
+	})
 	return shapes
 }
 

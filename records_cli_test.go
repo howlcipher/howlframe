@@ -61,37 +61,7 @@ func recordsPaths(t *testing.T, bin, src, dir string) map[string][]string {
 }
 
 func TestRecordsSugarIsPureOnEveryPath(t *testing.T) {
-	bin := c1c2Binary(t)
-	dir := t.TempDir()
-	src := writeTemp(t, dir, "p.howl", recordsProgram)
-	for _, profile := range []string{"default", "governed"} {
-		if out, err := exec.Command(bin, "check", "--profile", profile, src).CombinedOutput(); err != nil {
-			t.Fatalf("check %s: %v %s", profile, err, out)
-		}
-	}
-	runs := recordsPaths(t, bin, src, dir)
-	out, err := exec.Command(bin, "inspect", "--caps", runs["bytecode_governed"][1]).CombinedOutput()
-	if err != nil {
-		t.Fatalf("inspect: %v %s", err, out)
-	}
-	var report bytecode.Report
-	if err := json.Unmarshal(out, &report); err != nil {
-		t.Fatalf("%v: %s", err, out)
-	}
-	if len(report.Capabilities) != 0 {
-		t.Fatalf("pure records sugar required capabilities %v", report.Capabilities)
-	}
-	for name, args := range runs {
-		t.Run(name, func(t *testing.T) {
-			got, err := exec.Command(bin, args...).CombinedOutput()
-			if err != nil {
-				t.Fatalf("run: %v %s", err, got)
-			}
-			if string(got) != recordsWant {
-				t.Fatalf("got %q want %q", got, recordsWant)
-			}
-		})
-	}
+	assertPureProgramAllPaths(t, recordsProgram, recordsWant, true, true)
 }
 
 // read_json/write_json need exactly filesystem (inferred from the
@@ -166,7 +136,7 @@ func TestRecordsErrorsOnEveryPath(t *testing.T) {
 
 func TestRecordsCompileErrors(t *testing.T) {
 	bin := c1c2Binary(t)
-	for src, want := range map[string]string{
+	assertDirectAndBytecodePathsReject(t, bin, map[string]string{
 		`(do (print (rec a)))`:                    "rec expects key/value pairs",
 		`(do (print (rec (+ 1 2) 3)))`:            "rec keys must be names or string literals",
 		`(do (print (select (list) (+ 1 2))))`:    "select keys must be names or string literals",
@@ -176,16 +146,7 @@ func TestRecordsCompileErrors(t *testing.T) {
 		`(do (print (read_json)))`:                "ARITY_ERROR: read_json expects 1 arg",
 		`(do (print (pluck (list) "a" "b")))`:     "ARITY_ERROR: pluck expects 2 args, got 3",
 		`(do (print (merge)))`:                    "ARITY_ERROR: merge expects at least 1 arg",
-	} {
-		dir := t.TempDir()
-		p := writeTemp(t, dir, "c.howl", src)
-		for _, args := range [][]string{{"-run", p}, {"build", "--profile", "governed", p, "-o", filepath.Join(dir, "c.hfbc")}, {"-compile-hfir-bc", p, "-o", filepath.Join(dir, "h.hfbc")}} {
-			out, err := exec.Command(bin, args...).CombinedOutput()
-			if err == nil || !strings.Contains(string(out), want) {
-				t.Errorf("%s %v: err=%v out=%q want %q", src, args[0], err, out, want)
-			}
-		}
-	}
+	})
 }
 
 func TestRecordsRejectedOnGoJS(t *testing.T) {
@@ -201,25 +162,12 @@ func TestRecordsRejectedOnGoJS(t *testing.T) {
 		`(let (f (lambda (rec) (get rec "a"))) (print "ok"))`,
 		`(print (dict ("a" (rec b 1))))`,
 	}
-	for _, f := range forms {
-		for _, target := range []string{"go", "js"} {
-			dir := t.TempDir()
-			p := writeTemp(t, dir, "g.howl", "(do "+f+")")
-			o := filepath.Join(dir, "out")
-			out, err := exec.Command(bin, "build", "--target", target, p, "-o", o).CombinedOutput()
-			if err == nil || !strings.Contains(string(out), "UNSUPPORTED_ON_TARGET") || strings.Contains(string(out), "Built") {
-				t.Errorf("%s on %s: err=%v out=%s", f, target, err, out)
-			}
-			if _, statErr := os.Stat(o); statErr == nil {
-				t.Errorf("%s on %s wrote output", f, target)
-			}
-		}
-	}
+	assertRejectedOnGoAndJS(t, bin, forms)
 }
 
 func TestRecordsGovernedFailsClosed(t *testing.T) {
 	bin := c1c2Binary(t)
-	for _, src := range []string{
+	assertGovernedRejectsForbiddenSources(t, bin, []string{
 		`(do (print (rec a (exec "ls"))))`,
 		`(do (print (get (rec a 1) (exec "ls"))))`,
 		`(do (let (m (dict)) (put m "a" (exec "ls"))))`,
@@ -229,14 +177,7 @@ func TestRecordsGovernedFailsClosed(t *testing.T) {
 		`(do (print (select (exec "ls") a)))`,
 		`(do (print (group_by x (list 1) (exec "ls"))))`,
 		`(do (print (merge (dict) (exec "ls"))))`,
-	} {
-		dir := t.TempDir()
-		p := writeTemp(t, dir, "g.howl", src)
-		out, err := exec.Command(bin, "build", "--profile", "governed", p, "-o", filepath.Join(dir, "g.hfbc")).CombinedOutput()
-		if err == nil || !strings.Contains(string(out), "PROFILE_FORBIDDEN_CONSTRUCT") {
-			t.Errorf("%s: err=%v out=%s", src, err, out)
-		}
-	}
+	})
 }
 
 func TestTargetSugarNamesInBindings(t *testing.T) {

@@ -51,12 +51,9 @@ func heads(nodes []*ast.Node) []string {
 // "alias" stmt...) — matching what ast.ResolveModules consumes at Children[2:].
 // Slicing the source module at [2:] silently dropped its first statement
 // (bugs.md #43).
-func TestExpandIncludesRetainsModuleStatements(t *testing.T) {
-	root := expandWithModule(t, `(list (use "mod.howl" as m))`, "mod.howl", `(module
-		(export (defun first () 1))
-		(defun second () 2)
-	)`)
-
+func assertModuleHeads(t *testing.T, rootSource, modSource string, wantHeads ...string) {
+	t.Helper()
+	root := expandWithModule(t, rootSource, "mod.howl", modSource)
 	if len(root.Children) != 2 {
 		t.Fatalf("expected 2 children, got %d: %v", len(root.Children), heads(root.Children))
 	}
@@ -64,25 +61,24 @@ func TestExpandIncludesRetainsModuleStatements(t *testing.T) {
 	if mod.Children[0].Value != "module" || mod.Children[1].Value != "m" {
 		t.Fatalf("expected (module \"m\" ...), got (%s %s ...)", mod.Children[0].Value, mod.Children[1].Value)
 	}
-	if got, want := heads(mod.Children[2:]), []string{"export", "defun"}; !equalStrings(got, want) {
-		t.Fatalf("expected module statements %v, got %v", want, got)
+	if got := heads(mod.Children[2:]); !equalStrings(got, wantHeads) {
+		t.Fatalf("expected module statements %v, got %v", wantHeads, got)
 	}
+}
+
+func TestExpandIncludesRetainsModuleStatements(t *testing.T) {
+	assertModuleHeads(t, `(list (use "mod.howl" as m))`, `(module
+		(export (defun first () 1))
+		(defun second () 2)
+	)`, "export", "defun")
 }
 
 // The first statement is retained whether or not it is an export.
 func TestExpandIncludesRetainsModuleFirstStatementNonExport(t *testing.T) {
-	root := expandWithModule(t, `(list (use "mod.howl" as m))`, "mod.howl", `(module
+	assertModuleHeads(t, `(list (use "mod.howl" as m))`, `(module
 		(defun hidden () 1)
 		(export (defun first () 1))
-	)`)
-
-	if len(root.Children) != 2 {
-		t.Fatalf("expected 2 children, got %d: %v", len(root.Children), heads(root.Children))
-	}
-	mod := root.Children[1]
-	if got, want := heads(mod.Children[2:]), []string{"defun", "export"}; !equalStrings(got, want) {
-		t.Fatalf("expected module statements %v, got %v", want, got)
-	}
+	)`, "defun", "export")
 }
 
 // The deprecated (include ...) path splices the module's statements straight

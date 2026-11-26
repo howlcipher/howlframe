@@ -176,6 +176,19 @@ func TestBytecodeStoreKeysReflectsDeletesAndEmptyStore(t *testing.T) {
 	}
 }
 
+func assertStoreKeysDenied(t *testing.T, vm *BCVM, caps []capability.Capability, wantSub string) {
+	t.Helper()
+	vm.AllowedCaps = caps
+	failure := captureVMError(func() {
+		vm.run([]bytecode.BCInstruction{
+			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
+		}, vm.env)
+	})
+	if failure == nil || failure.Code != "CAPABILITY_DENIED" || !strings.Contains(failure.Message, wantSub) {
+		t.Fatalf("STORE_KEYS with %v = %#v, want CAPABILITY_DENIED %s", caps, failure, wantSub)
+	}
+}
+
 func TestBytecodeStoreKeysRequiresDatabaseCapability(t *testing.T) {
 	if got := bytecode.Registry[bytecode.OpStoreKeys].Capability; got != capability.Database {
 		t.Fatalf("OpStoreKeys capability = %q, want database", got)
@@ -186,17 +199,7 @@ func TestBytecodeStoreKeysRequiresDatabaseCapability(t *testing.T) {
 
 	vm := newStoreTestVM()
 	putStoreRecord(vm, "kv", "memory://session", "task:1", map[string]any{"status": "open"})
-	vm.AllowedCaps = []capability.Capability{capability.Filesystem}
-
-	failure := captureVMError(func() {
-		vm.run([]bytecode.BCInstruction{
-			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
-		}, vm.env)
-	})
-
-	if failure == nil || failure.Code != "CAPABILITY_DENIED" || !strings.Contains(failure.Message, "database") {
-		t.Fatalf("STORE_KEYS without database capability = %#v, want CAPABILITY_DENIED database", failure)
-	}
+	assertStoreKeysDenied(t, vm, []capability.Capability{capability.Filesystem}, "database")
 }
 
 // TestFileStoreKeysDeniedWithDatabaseAlone fails if a file:// enumeration
@@ -214,15 +217,7 @@ func TestFileStoreKeysDeniedWithDatabaseAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	vm.AllowedCaps = []capability.Capability{capability.Database}
-	failure := captureVMError(func() {
-		vm.run([]bytecode.BCInstruction{
-			storeInstruction(bytecode.OpStoreKeys, "STORE_KEYS", "kv", ""),
-		}, vm.env)
-	})
-	if failure == nil || failure.Code != "CAPABILITY_DENIED" || !strings.Contains(failure.Message, "filesystem") {
-		t.Fatalf("file:// STORE_KEYS with database alone = %#v, want CAPABILITY_DENIED filesystem", failure)
-	}
+	assertStoreKeysDenied(t, vm, []capability.Capability{capability.Database}, "filesystem")
 
 	after, err := os.ReadFile(path)
 	if err != nil {

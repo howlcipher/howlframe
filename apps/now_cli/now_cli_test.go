@@ -2,6 +2,7 @@ package now_cli_test
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -9,13 +10,14 @@ import (
 )
 
 func TestNowCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "now_cli.howl")
+	artifact := filepath.Join(t.TempDir(), "now_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "now_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 	before := time.Now().Unix() - 2
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "now_cli.howl.bc.bin")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", artifact)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {

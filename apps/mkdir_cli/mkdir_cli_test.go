@@ -9,14 +9,16 @@ import (
 )
 
 func TestMkdirCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "mkdir_cli.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "mkdir_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "mkdir_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	dir := filepath.Join(t.TempDir(), "nested", "dir")
+	dir := filepath.Join(tmp, "nested", "dir")
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"mkdir_cli.howl.bc.bin", dir)
+		artifact, dir)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "OK") {

@@ -16,6 +16,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
 	"github.com/howlcipher/howlframe/internal/construct"
+	"github.com/howlcipher/howlframe/internal/verification"
 )
 
 const Schema = "howlframe.agent/v1"
@@ -49,19 +50,20 @@ type Example struct {
 	Stdout string `json:"stdout"`
 }
 type Response struct {
-	Schema        string           `json:"schema"`
-	Command       string           `json:"command"`
-	Target        string           `json:"target"`
-	Coverage      string           `json:"coverage"`
-	OK            bool             `json:"ok"`
-	ActualGrants  []string         `json:"actual_grants"`
-	Limitations   []string         `json:"limitations"`
-	Constructs    []Entry          `json:"constructs"`
-	Examples      []Example        `json:"examples"`
-	Diagnostics   []Diagnostic     `json:"diagnostics"`
-	CompilerNotes []string         `json:"compiler_notes"`
-	Requirements  *bytecode.Report `json:"requirements,omitempty"`
-	Explanation   string           `json:"explanation,omitempty"`
+	Schema             string               `json:"schema"`
+	Command            string               `json:"command"`
+	Target             string               `json:"target"`
+	Coverage           string               `json:"coverage"`
+	OK                 bool                 `json:"ok"`
+	ActualGrants       []string             `json:"actual_grants"`
+	Limitations        []string             `json:"limitations"`
+	Constructs         []Entry              `json:"constructs"`
+	Examples           []Example            `json:"examples"`
+	Diagnostics        []Diagnostic         `json:"diagnostics"`
+	CompilerNotes      []string             `json:"compiler_notes"`
+	Requirements       *bytecode.Report     `json:"requirements,omitempty"`
+	VerificationReport *verification.Report `json:"verification_report,omitempty"`
+	Explanation        string               `json:"explanation,omitempty"`
 }
 
 func entries() []Entry {
@@ -216,6 +218,7 @@ func Run(args []string, executable string, out io.Writer) int {
 			r.CompilerNotes = notes
 			r.Diagnostics = ds
 			r.Requirements = requirements
+			r.VerificationReport = checkReportInEnvironment(executable, positional[0], "", nil)
 			if len(ds) > 0 {
 				json.NewEncoder(out).Encode(r)
 				return 1
@@ -250,6 +253,18 @@ func check(executable, source string) ([]Diagnostic, *bytecode.Report, []string)
 	return checkInEnvironment(executable, source, "", nil)
 }
 
+func runCompilerSubcommand(executable, workingDirectory string, environment []string, args ...string) (stdout, stderr boundedBuffer, timedOut bool, runErr error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, executable, args...)
+	cmd.Dir = workingDirectory
+	cmd.Env = environment
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	runErr = cmd.Run()
+	return stdout, stderr, ctx.Err() != nil, runErr
+}
+
 func checkInEnvironment(executable, source, workingDirectory string, environment []string) ([]Diagnostic, *bytecode.Report, []string) {
 	ds := []Diagnostic{}
 	failure := func(code, msg string) ([]Diagnostic, *bytecode.Report, []string) {
@@ -268,16 +283,8 @@ func checkInEnvironment(executable, source, workingDirectory string, environment
 	}
 	defer os.RemoveAll(dir)
 	artifact := filepath.Join(dir, "checked.hfbc")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, executable, "build", "--target", "bytecode", "-o", artifact, "--", absolute)
-	cmd.Dir = workingDirectory
-	cmd.Env = environment
-	var stdout, stderr boundedBuffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	if ctx.Err() != nil {
+	stdout, stderr, timedOut, err := runCompilerSubcommand(executable, workingDirectory, environment, "build", "--target", "bytecode", "-o", artifact, "--", absolute)
+	if timedOut {
 		return failure("AGENT_CHECK_TIMEOUT", "compilation exceeded 30 seconds")
 	}
 	if err != nil {
@@ -316,6 +323,25 @@ func checkInEnvironment(executable, source, workingDirectory string, environment
 	}
 	report := bytecode.RequiredCapabilities(program)
 	return ds, &report, notes
+}
+
+func checkReportInEnvironment(executable, source, workingDirectory string, environment []string) *verification.Report {
+	if executable == "" {
+		return nil
+	}
+	absolute, err := filepath.Abs(source)
+	if err != nil {
+		return nil
+	}
+	stdout, stderr, timedOut, _ := runCompilerSubcommand(executable, workingDirectory, environment, "check", "--json", "--target", "bytecode", "--", absolute)
+	if timedOut || stdout.truncated || stderr.truncated {
+		return nil
+	}
+	var report verification.Report
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil || report.Schema != verification.ReportSchema {
+		return nil
+	}
+	return &report
 }
 func normalize(data []byte, source string) []Diagnostic {
 	var legacy struct {

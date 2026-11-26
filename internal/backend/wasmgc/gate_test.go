@@ -15,11 +15,8 @@ import (
 // HowlScene HF's schema and renderer, run on its fixture projects, give
 // byte-identical output on the VM and as WebAssembly. It needs a checkout
 // of HowlScene HF, named by HOWLSCENE_HF, and is skipped without one.
-func TestHowlSceneGate(t *testing.T) {
-	hs := os.Getenv("HOWLSCENE_HF")
-	if hs == "" {
-		t.Skip("set HOWLSCENE_HF to a HowlScene HF checkout to run the M1 exit gate")
-	}
+func writeHowlSceneFixtureDriver(t *testing.T, hs, stem, renderBody string) string {
+	t.Helper()
 	fixtures, err := filepath.Glob(filepath.Join(hs, "tests", "fixtures", "*", "*.json"))
 	if err != nil || len(fixtures) == 0 {
 		t.Fatalf("no fixture projects under %s: %v", hs, err)
@@ -30,8 +27,6 @@ func TestHowlSceneGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The driver embeds each fixture as text: a cli_app on WebAssembly has
-	// no file system.
 	var body strings.Builder
 	for _, path := range fixtures {
 		text, err := os.ReadFile(path)
@@ -39,16 +34,10 @@ func TestHowlSceneGate(t *testing.T) {
 			t.Fatal(err)
 		}
 		name := filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path)
-		body.WriteString(`
-  (let (text ` + howlString(string(text)) + `)
-    (let (r (call schema/parse_project text reg))
-      (do
-        (print "=== ` + name + `" (map_get r "ok") (str_join (map_get r "errors") "; "))
-        (print (call render/render_document (map_get r "config") reg (dict ("css" "") ("script" true) ("csp" true))))
-        (print (call render/render_document (map_get r "config") reg (dict ("css" "body{margin:0}") ("script" false) ("csp" false) ("motion_off" true))))
-        (print (encode_json (map_get r "config"))))))`)
+		r := strings.NewReplacer("__NAME__", name, "__TEXT__", howlString(string(text)))
+		body.WriteString(r.Replace(renderBody))
 	}
-	driver := filepath.Join(dir, "gate.howl")
+	driver := filepath.Join(dir, stem+".howl")
 	src := `(cli_app
   (use "` + core + `/registry.howl" as registry)
   (use "` + core + `/schema.howl" as schema)
@@ -59,6 +48,24 @@ func TestHowlSceneGate(t *testing.T) {
 	if err := os.WriteFile(driver, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	return driver
+}
+
+func TestHowlSceneGate(t *testing.T) {
+	hs := os.Getenv("HOWLSCENE_HF")
+	if hs == "" {
+		t.Skip("set HOWLSCENE_HF to a HowlScene HF checkout to run the M1 exit gate")
+	}
+	// The driver embeds each fixture as text: a cli_app on WebAssembly has
+	// no file system.
+	driver := writeHowlSceneFixtureDriver(t, hs, "gate", `
+  (let (text __TEXT__)
+    (let (r (call schema/parse_project text reg))
+      (do
+        (print "=== __NAME__" (map_get r "ok") (str_join (map_get r "errors") "; "))
+        (print (call render/render_document (map_get r "config") reg (dict ("css" "") ("script" true) ("csp" true))))
+        (print (call render/render_document (map_get r "config") reg (dict ("css" "body{margin:0}") ("script" false) ("csp" false) ("motion_off" true))))
+        (print (encode_json (map_get r "config"))))))`)
 	// The renderer runs far past the VM's default instruction limit.
 	want := run(t, compilerBin, "run", "--max-instructions", "500000000", driver)
 	if want.failed {
@@ -77,7 +84,7 @@ func TestHowlSceneGate(t *testing.T) {
 			t.Fatalf("output differs (vm %d bytes, %s %d bytes); first difference at byte %d",
 				len(want.stdout), engine, len(got.stdout), firstDifference(want.stdout, got.stdout))
 		}
-		t.Logf("%s: %d fixture projects, %d bytes of identical output", engine, len(fixtures), len(want.stdout))
+		t.Logf("%s: %d bytes of identical output", engine, len(want.stdout))
 	}
 }
 

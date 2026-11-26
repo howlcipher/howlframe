@@ -12,6 +12,7 @@ ports of the same contracts. Fails unless:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -320,11 +321,28 @@ APPS = {
 LANGS = ["howlframe", "python", "go", "node"]
 
 
-def ensure_howlframe() -> str:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--check",
+        action="store_true",
+        help="verify apps and token counts without writing proof_latest.json (default)",
+    )
+    group.add_argument(
+        "--write",
+        action="store_true",
+        help="write updated benchmarks/real_apps/proof_latest.json",
+    )
+    return parser.parse_args()
+
+
+def ensure_howlframe() -> tuple[str, tempfile.TemporaryDirectory[str]]:
     # Always rebuild so prove tracks language changes on the branch tip.
-    built = Path(tempfile.gettempdir()) / "howlframe-real-apps"
+    td = tempfile.TemporaryDirectory(prefix="howlframe-real-apps-")
+    built = Path(td.name) / "howlframe"
     subprocess.run(["go", "build", "-o", str(built), "howlframe.go"], cwd=ROOT, check=True)
-    return str(built)
+    return str(built), td
 
 
 def run(cmd, **kwargs):
@@ -1515,7 +1533,15 @@ def run_app_tests(pkg: str) -> None:
 
 
 def main() -> int:
-    howl_bin = ensure_howlframe()
+    args = parse_args()
+    howl_bin, tmp_bin_dir = ensure_howlframe()
+    try:
+        return _run_proof(args, howl_bin)
+    finally:
+        tmp_bin_dir.cleanup()
+
+
+def _run_proof(args: argparse.Namespace, howl_bin: str) -> int:
     errors: list[str] = []
     tokens: dict[str, dict[str, int]] = {}
     parity_ok: dict[str, dict[str, bool]] = {}
@@ -1606,8 +1632,10 @@ def main() -> int:
             "Ports implement the same behavioral contracts used by apps/*_test.go."
         ),
     }
-    out = HERE / "proof_latest.json"
-    out.write_text(json.dumps(proof, indent=2) + "\n")
+    if args.write:
+        out = HERE / "proof_latest.json"
+        out.write_text(json.dumps(proof, indent=2) + "\n")
+        print(f"Wrote {out}")
 
     if errors:
         print("\nFAILED:")
@@ -1615,7 +1643,6 @@ def main() -> int:
             print(f"  - {e}")
         return 1
     print("\nPASSED: densified real apps beat Python/Go/Node on tokens with parity + app tests.")
-    print(f"Wrote {out}")
     return 0
 
 

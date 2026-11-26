@@ -6,7 +6,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -124,10 +123,7 @@ func TestInteropDescriptorMatchesFlagSets(t *testing.T) {
 }
 
 func TestInteropCommandPrintsAValidDescriptor(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "howlframe")
-	if out, err := exec.Command("go", "build", "-o", bin, "howlframe.go").CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
-	}
+	bin := buildHowlFrameBinaryForTest(t)
 	out, err := exec.Command(bin, "interop", "--json").Output()
 	if err != nil {
 		t.Fatalf("interop --json: %v", err)

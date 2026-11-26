@@ -1,13 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"github.com/howlcipher/howlframe/internal/bytecode"
 )
 
 const corelibProgram = `(do
@@ -29,56 +26,33 @@ const corelibWant = "Apple,fig fig,pear ell llo 5\n" +
 	"{\"Apple\":1,\"fig\":1,\"pear\":2} true true\n" +
 	"Apple\nfig\npear\npear\n"
 
+func assertPureProgramAllPaths(t *testing.T, program, want string, includeInterpreter, includeHFIR bool) {
+	t.Helper()
+	bin := c1c2Binary(t)
+	dir := t.TempDir()
+	src := filepath.Join(dir, "p.howl")
+	if err := os.WriteFile(src, []byte(program), 0600); err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string][]string{
+		"bytecode_governed": {"-run-bc", filepath.Join(dir, "p.hfbc")},
+	}
+	if includeInterpreter {
+		paths["interpreter"] = []string{"-run", src}
+	} else {
+		paths["run"] = []string{src}
+	}
+	if includeHFIR {
+		paths["hfir_bytecode"] = []string{"-run-bc", filepath.Join(dir, "h.hfbc")}
+	}
+	assertPureProgramBuiltinsAndOutputs(t, bin, src, paths, want)
+}
+
 // Core-library built-ins are pure sugar: a program using only them needs no
 // capability under the governed profile, and computes the documented results
 // on the interpreter, governed AST bytecode, and HFIR bytecode.
 func TestCoreLibraryBuiltinsArePureOnEveryPath(t *testing.T) {
-	bin := c1c2Binary(t)
-	dir := t.TempDir()
-	src := filepath.Join(dir, "p.howl")
-	art := filepath.Join(dir, "p.hfbc")
-	hart := filepath.Join(dir, "h.hfbc")
-	if err := os.WriteFile(src, []byte(corelibProgram), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, profile := range []string{"default", "governed"} {
-		if out, err := exec.Command(bin, "check", "--profile", profile, src).CombinedOutput(); err != nil {
-			t.Fatalf("check %s: %v %s", profile, err, out)
-		}
-	}
-	if out, err := exec.Command(bin, "build", "--profile", "governed", src, "-o", art).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, out)
-	}
-	out, err := exec.Command(bin, "inspect", "--caps", art).CombinedOutput()
-	if err != nil {
-		t.Fatalf("inspect: %v %s", err, out)
-	}
-	var report bytecode.Report
-	if err := json.Unmarshal(out, &report); err != nil {
-		t.Fatalf("%v: %s", err, out)
-	}
-	if len(report.Capabilities) != 0 {
-		t.Fatalf("pure core-library built-ins required capabilities %v", report.Capabilities)
-	}
-	if out, err := exec.Command(bin, "-compile-hfir-bc", src, "-o", hart).CombinedOutput(); err != nil {
-		t.Fatalf("hfir compile: %v %s", err, out)
-	}
-	runs := map[string][]string{
-		"interpreter":       {"-run", src},
-		"bytecode_governed": {"-run-bc", art},
-		"hfir_bytecode":     {"-run-bc", hart},
-	}
-	for name, args := range runs {
-		t.Run(name, func(t *testing.T) {
-			got, err := exec.Command(bin, args...).CombinedOutput()
-			if err != nil {
-				t.Fatalf("run: %v %s", err, got)
-			}
-			if string(got) != corelibWant {
-				t.Fatalf("got %q want %q", got, corelibWant)
-			}
-		})
-	}
+	assertPureProgramAllPaths(t, corelibProgram, corelibWant, true, true)
 }
 
 // Mixed string/number ordering stays a TYPE_ERROR; only string pairs gained

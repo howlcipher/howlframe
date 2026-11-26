@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 type ErrorOutput struct {
@@ -13,11 +15,44 @@ type ErrorOutput struct {
 	Column int    `json:"column"`
 }
 
+type reportedError struct {
+	out ErrorOutput
+}
+
+var (
+	errorCaptureMu sync.Mutex
+	captureErrors  atomic.Bool
+)
+
 func ReportError(reason string, line, column int) {
 	errOut := ErrorOutput{Reason: reason, Line: line, Column: column}
+	if captureErrors.Load() {
+		panic(reportedError{out: errOut})
+	}
 	b, _ := json.Marshal(errOut)
 	fmt.Println(string(b))
 	os.Exit(1)
+}
+
+// RunCatchingErrors executes fn while intercepting ast.ReportError calls instead
+// of exiting the process, returning the structured diagnostic when triggered.
+func RunCatchingErrors(fn func()) (caught *ErrorOutput) {
+	errorCaptureMu.Lock()
+	defer errorCaptureMu.Unlock()
+	prev := captureErrors.Swap(true)
+	defer func() {
+		captureErrors.Store(prev)
+		if r := recover(); r != nil {
+			if re, ok := r.(reportedError); ok {
+				out := re.out
+				caught = &out
+				return
+			}
+			panic(r)
+		}
+	}()
+	fn()
+	return nil
 }
 
 type Node struct {

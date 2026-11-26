@@ -153,7 +153,7 @@ func InterpErr(reason string, node *ast.Node) {
 func escapeHTMLText(val any, opName string, node *ast.Node) string {
 	s, ok := val.(string)
 	if !ok {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: %s expected string, got %T", opName, val), node)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: %s expected string, got %s", opName, vmTypeName(val)), node)
 	}
 	return htmlescape.Escape(s)
 }
@@ -164,6 +164,143 @@ func escapeHTMLText(val any, opName string, node *ast.Node) string {
 // plane key (for example U+1F600) sorts after U+F000 here, and before it
 // under JavaScript's default Array sort. Go randomizes map iteration. An
 // empty dict must stay an empty list so JSON callers see [] rather than null.
+func decodeOllamaResponse(body io.ReadCloser) (string, error) {
+	defer body.Close()
+	var res struct {
+		Response string `json:"response"`
+	}
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
+		return "", err
+	}
+	return res.Response, nil
+}
+
+func newOllamaJSONRequest(ctx context.Context, method, path string, payload any) (*http.Request, error) {
+	body, _ := json.Marshal(payload)
+	url := "http://localhost:11434" + path
+	var (
+		req *http.Request
+		err error
+	)
+	if ctx != nil {
+		req, err = http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	} else {
+		req, err = http.NewRequest(method, url, bytes.NewReader(body))
+	}
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
+func postOllamaGenerate(ctx context.Context, client *http.Client, reqPayload map[string]any) (string, error, bool) {
+	req, err := newOllamaJSONRequest(ctx, "POST", "/api/generate", reqPayload)
+	if err != nil {
+		return "", err, false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err, false
+	}
+	text, derr := decodeOllamaResponse(resp.Body)
+	if derr != nil {
+		return "", derr, true
+	}
+	return text, nil, false
+}
+
+func interpOllamaGenerate(reqPayload map[string]any, opName string, node *ast.Node) string {
+	text, err, isDecode := postOllamaGenerate(nil, http.DefaultClient, reqPayload)
+	if err != nil {
+		kind := "network request failed"
+		if isDecode {
+			kind = "response decode failed"
+		}
+		InterpErr(fmt.Sprintf("%s: %s: %v", opName, kind, err), node)
+	}
+	return text
+}
+
+func (vm *BCVM) bcOllamaGenerate(reqPayload map[string]any, errCode, opLabel string, ip int, op bytecode.Opcode, chargeResult bool) string {
+	reqBody, _ := json.Marshal(reqPayload)
+	resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, op)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError(errCode, "main", ip, op, "%s request failed: %v", opLabel, err))
+	}
+	text, err := decodeOllamaResponse(resp.Body)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError(errCode, "main", ip, op, "%s response decode failed: %v", opLabel, err))
+	}
+	if chargeResult {
+		vm.chargeAlloc(len(text), ip, op)
+	}
+	return text
+}
+
+func (vm *BCVM) bcHTTPFetch(label, createPrefix string, ip int, op bytecode.Opcode, hasBody bool) (int, []byte) {
+	var bodyReader io.Reader
+	if hasBody {
+		bodyReader = strings.NewReader(vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string body"))
+	}
+	method := vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string method")
+	urlStr := vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string url")
+	max := vm.Limits.MaxFetchBodyBytes
+	if max <= 0 {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "%s body exceeds maximum limit of %d bytes", label, max))
+	}
+	client := vm.requireFetch(urlStr, op)
+	req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s creation failed: %v", createPrefix, err))
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		vm.denyFetchHop(err, op)
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s failed: %v", label, err))
+	}
+	defer resp.Body.Close()
+	readLimit := int64(max)
+	if readLimit < math.MaxInt64 {
+		readLimit++
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
+	vm.checkDeadline(ip, op)
+	if len(b) > max {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "%s body exceeds maximum limit of %d bytes", label, max))
+	}
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s body read failed: %v", label, err))
+	}
+	vm.chargeBytes(len(b), ip, op)
+	return resp.StatusCode, b
+}
+
+func deleteOllamaEphemeralModel(ctx context.Context, modelName string) {
+	req, err := newOllamaJSONRequest(ctx, "DELETE", "/api/delete", map[string]any{"name": modelName})
+	if err != nil {
+		return
+	}
+	resp, _ := (&http.Client{}).Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
+
+func stripSynthesizedDefun(name string, params []string, raw string) string {
+	code := strings.TrimSpace(raw)
+	code = strings.TrimPrefix(code, "```lisp")
+	code = strings.TrimPrefix(code, "```")
+	code = strings.TrimSuffix(code, "```")
+	code = strings.TrimSpace(code)
+	return fmt.Sprintf("(defun %s (%s) %s)", name, strings.Join(params, " "), code)
+}
+
 func sortedMapKeys(dict map[string]any) []any {
 	keys := make([]string, 0, len(dict))
 	for key := range dict {
@@ -457,9 +594,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
-	case "neural_circuit":
+	case "neural_circuit", "ephemeral_circuit":
 		if len(node.Children) < 3 {
-			InterpErr("neural_circuit expects (neural_circuit (args...) \"instruction\")", node)
+			InterpErr(head+" expects ("+head+" (args...) \"instruction\")", node)
 		}
 		argsNode := node.Children[1]
 		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
@@ -467,48 +604,24 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, arg := range argsNode.Children {
 			argVals = append(argVals, interp.eval(arg, env))
 		}
-
-		prompt := fmt.Sprintf("Instruction: %s", instructionStr)
-		if len(argVals) > 0 {
-			prompt += fmt.Sprintf("\nInputs: %v", argVals)
-		}
-
-		reqBody, _ := json.Marshal(map[string]any{
-			"model":  "llama3",
-			"prompt": prompt,
-			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("neural_circuit: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("neural_circuit: response decode failed: %v", err), node)
-		}
-		return res.Response
-	case "ephemeral_circuit":
-		if len(node.Children) < 3 {
-			InterpErr("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node)
-		}
-		argsNode := node.Children[1]
-		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
-		var argVals []any
-		for _, arg := range argsNode.Children {
-			argVals = append(argVals, interp.eval(arg, env))
+		if head == "neural_circuit" {
+			prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+			if len(argVals) > 0 {
+				prompt += fmt.Sprintf("\nInputs: %v", argVals)
+			}
+			return interpOllamaGenerate(map[string]any{
+				"model":  "llama3",
+				"prompt": prompt,
+				"stream": false,
+			}, "neural_circuit", node)
 		}
 
 		prompt := ""
 		if len(argVals) > 0 {
 			prompt = fmt.Sprintf("Inputs: %v", argVals)
 		}
-
 		modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
 		modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
-
 		createReq, _ := json.Marshal(map[string]any{
 			"name":      modelName,
 			"modelfile": modelfile,
@@ -520,81 +633,37 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		createResp.Body.Close()
 
-		defer func() {
-			delReq, _ := json.Marshal(map[string]any{"name": modelName})
-			req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{}
-			resp, _ := client.Do(req)
-			if resp != nil {
-				resp.Body.Close()
-			}
-		}()
+		defer deleteOllamaEphemeralModel(nil, modelName)
 
-		reqBody, _ := json.Marshal(map[string]any{
+		return interpOllamaGenerate(map[string]any{
 			"model":  modelName,
 			"prompt": prompt,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("ephemeral_circuit: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("ephemeral_circuit: response decode failed: %v", err), node)
-		}
-		return res.Response
+		}, "ephemeral_circuit", node)
 	case "achieve":
 		if len(node.Children) != 3 {
 			InterpErr("achieve expects (achieve target constraint)", node)
 		}
 		targetStr := ast.Stringify(node.Children[1])
 		constraintStr := ast.Stringify(node.Children[2])
-		reqBody, _ := json.Marshal(map[string]any{
+		return interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("achieve: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("achieve: response decode failed: %v", err), node)
-		}
-		return res.Response
+		}, "achieve", node)
 	case "confidence":
 		if len(node.Children) != 2 {
 			InterpErr("confidence expects (confidence prompt)", node)
 		}
 		promptStr := fmt.Sprintf("%v", interp.eval(node.Children[1], env))
-		reqBody, _ := json.Marshal(map[string]any{
+		respText := interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("confidence: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("confidence: response decode failed: %v", err), node)
-		}
-		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+		}, "confidence", node)
+		val, _ := strconv.ParseFloat(strings.TrimSpace(respText), 64)
 		if math.IsNaN(val) || math.IsInf(val, 0) {
-			InterpErr(fmt.Sprintf("CONVERSION_ERROR: confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)), node)
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: confidence response %.64q is not a finite number", strings.TrimSpace(respText)), node)
 		}
 		return val
 	case "list":
@@ -602,7 +671,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, kid := range node.Children[1:] {
 			items = append(items, interp.eval(kid, env))
 		}
-		return items
+		return mustVMList(items)
 	case "dict":
 		d := make(map[string]any)
 		for _, kid := range node.Children[1:] {
@@ -646,7 +715,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			return parsed
 		default:
-			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to int", value), node.Children[1])
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %s to int", vmTypeName(value)), node.Children[1])
 		}
 	case "to_float":
 		if len(node.Children) != 2 {
@@ -668,7 +737,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			return parsed
 		default:
-			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %T to float", value), node.Children[1])
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: cannot convert %s to float", vmTypeName(value)), node.Children[1])
 		}
 	case "to_string":
 		if len(node.Children) != 2 {
@@ -705,7 +774,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		if n, ok := collectionLen(val); ok {
 			return int64(n)
 		}
-		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, string, or bytes, got %T", val), node.Children[1])
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_len expected list, string, or bytes, got %s", vmTypeName(val)), node.Children[1])
 		return int64(0)
 	case "map_keys":
 		if len(node.Children) != 2 {
@@ -714,7 +783,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		val := interp.eval(node.Children[1], env)
 		dict, ok := val.(map[string]any)
 		if !ok {
-			InterpErr(fmt.Sprintf("TYPE_ERROR: map_keys expected dict, got %T", val), node.Children[1])
+			InterpErr(fmt.Sprintf("TYPE_ERROR: map_keys expected dict, got %s", vmTypeName(val)), node.Children[1])
 		}
 		return sortedMapKeys(dict)
 	case "req_query", "req_header", "req_path":
@@ -768,6 +837,15 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			data = []byte(v)
 		case []byte:
 			data = v
+		case *vmList:
+			v.ForEach(func(e any) bool {
+				n, ok := e.(int64)
+				if !ok || n < 0 || n > 255 {
+					InterpErr("parse_json failed: byte list must hold ints 0..255", node)
+				}
+				data = append(data, byte(n))
+				return true
+			})
 		case []any:
 			for _, e := range v {
 				n, ok := e.(int64)
@@ -777,7 +855,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 				data = append(data, byte(n))
 			}
 		default:
-			InterpErr(fmt.Sprintf("parse_json failed: expected text, got %T", v), node)
+			InterpErr(fmt.Sprintf("parse_json failed: expected text, got %s", vmTypeName(v)), node)
 		}
 		result, err := decodeJSONValue(data)
 		if err != nil {
@@ -800,14 +878,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for i, p := range parts {
 			items[i] = p
 		}
-		return items
+		return mustVMList(items)
 	case "str_join":
 		if len(node.Children) != 3 {
 			InterpErr("str_join expects (str_join list sep)", node)
 		}
 		listVal := interp.eval(node.Children[1], env)
 		sep := fmt.Sprint(interp.eval(node.Children[2], env))
-		items, ok := listVal.([]any)
+		items, ok := sliceFromList(listVal)
 		if !ok {
 			InterpErr("str_join expects a list", node.Children[1])
 		}
@@ -829,7 +907,7 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		return matched
 	case "cli_args":
 		if len(node.Children) == 1 {
-			return SliceToAny(interp.args)
+			return mustVMList(SliceToAny(interp.args))
 		} else if len(node.Children) == 2 {
 			idx, err := ToInt(interp.eval(node.Children[1], env))
 			if err != nil {
@@ -931,14 +1009,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			return nil
 		}
-	case "fetch":
-		if len(node.Children) == 5 {
+	case "fetch", "http_request":
+		if head == "fetch" && len(node.Children) == 5 {
 			InterpErr("UNSUPPORTED_ON_TARGET: fetch headers are supported only by the JavaScript target", node)
 		}
 		// requireCapability already ran for network. The request is sent only
 		// after that grant, so a denial cannot open a connection.
 		if len(node.Children) != 3 && len(node.Children) != 4 {
-			InterpErr("fetch expects (fetch url method [body])", node)
+			InterpErr(fmt.Sprintf("%s expects (%s url method [body])", head, head), node)
 		}
 		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
 		method := fmt.Sprint(interp.eval(node.Children[2], env))
@@ -949,52 +1027,31 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		client := interp.requireFetch(urlStr, node)
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch request creation failed: %v", err), node)
+			prefix := head
+			if head == "fetch" {
+				prefix = "fetch request"
+			}
+			InterpErr(fmt.Sprintf("IO_ERROR: %s creation failed: %v", prefix, err), node)
 		}
 		resp, err := client.Do(req)
 		if err != nil {
 			if d, ok := capability.AsFetchDenied(err); ok {
 				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
 			}
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch failed: %v", err), node)
+			InterpErr(fmt.Sprintf("IO_ERROR: %s failed: %v", head, err), node)
 		}
 		defer resp.Body.Close()
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch body read failed: %v", err), node)
+			InterpErr(fmt.Sprintf("IO_ERROR: %s body read failed: %v", head, err), node)
+		}
+		if head == "http_request" {
+			return map[string]any{
+				"status": resp.StatusCode,
+				"body":   b,
+			}
 		}
 		return b
-	case "http_request":
-		if len(node.Children) != 3 && len(node.Children) != 4 {
-			InterpErr("http_request expects (http_request url method [body])", node)
-		}
-		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
-		method := fmt.Sprint(interp.eval(node.Children[2], env))
-		var body io.Reader
-		if len(node.Children) == 4 {
-			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
-		}
-		client := interp.requireFetch(urlStr, node)
-		req, err := http.NewRequest(method, urlStr, body)
-		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request creation failed: %v", err), node)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			if d, ok := capability.AsFetchDenied(err); ok {
-				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
-			}
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request body read failed: %v", err), node)
-		}
-		return map[string]any{
-			"status": resp.StatusCode,
-			"body":   b,
-		}
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])
@@ -1056,13 +1113,16 @@ func (interp *Interpreter) evalFor(node *ast.Node, env *InterpEnv) any {
 	}
 	itemName := node.Children[1].Value
 	listVal := interp.eval(node.Children[2], env)
-	items, ok := listVal.([]any)
-	if !ok {
+	n, ok := collectionLen(listVal)
+	if _, isStr := listVal.(string); isStr || !ok {
 		InterpErr("for requires a list value to iterate", node.Children[2])
 	}
-	for _, item := range items {
+	if _, isBytes := listVal.([]byte); isBytes {
+		InterpErr("for requires a list value to iterate", node.Children[2])
+	}
+	for i := 0; i < n; i++ {
 		childEnv := NewInterpEnv(env)
-		childEnv.vars[itemName] = item
+		childEnv.vars[itemName] = listElement(listVal, i)
 		interp.eval(node.Children[3], childEnv)
 	}
 	return nil
@@ -1084,30 +1144,12 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 		// the request is built so a denied run never reaches the model host.
 		interp.requireCapability(capability.Network, node)
 		promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
-		reqBody, _ := json.Marshal(map[string]any{
+		raw := interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": promptStr,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("lazy_synthesize: network request failed: %v", err), node)
-		}
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			resp.Body.Close()
-			InterpErr(fmt.Sprintf("lazy_synthesize: response decode failed: %v", err), node)
-		}
-		resp.Body.Close()
-		code := strings.TrimSpace(res.Response)
-
-		code = strings.TrimPrefix(code, "```lisp")
-		code = strings.TrimPrefix(code, "```")
-		code = strings.TrimSuffix(code, "```")
-		code = strings.TrimSpace(code)
-		progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.name, strings.Join(fn.params, " "), code)
+		}, "lazy_synthesize", node)
+		progCode := stripSynthesizedDefun(fn.name, fn.params, raw)
 		lx := lexer.NewLexer(progCode)
 		p := parser.NewParser(lx, "lazy_synthesize")
 		astNode := p.ParseExpression()
@@ -1154,13 +1196,18 @@ func (interp *Interpreter) evalAppend(node *ast.Node, env *InterpEnv) any {
 	if !ok {
 		InterpErr(fmt.Sprintf("undefined variable: %s", listNode.Value), listNode)
 	}
-	items, ok := current.([]any)
-	if !ok {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: append expected list, got %T", current), listNode)
+	var base *vmList
+	switch typed := current.(type) {
+	case *vmList:
+		base = typed
+	case []any:
+		base = mustVMList(typed)
+	default:
+		InterpErr(fmt.Sprintf("TYPE_ERROR: append expected list, got %s", vmTypeName(current)), listNode)
 	}
 	item := interp.eval(node.Children[2], env)
-	newItems := append(append([]any{}, items...), item)
-	if !env.set(listNode.Value, newItems) {
+	next, _ := base.Append(item)
+	if !env.set(listNode.Value, next) {
 		InterpErr(fmt.Sprintf("undefined variable: %s", listNode.Value), listNode)
 	}
 	return nil
@@ -1180,7 +1227,7 @@ func (interp *Interpreter) evalMapSet(node *ast.Node, env *InterpEnv) any {
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: map_set expected dict, got %T", current), dictNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_set expected dict, got %s", vmTypeName(current)), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	val := interp.eval(node.Children[3], env)
@@ -1202,7 +1249,7 @@ func (interp *Interpreter) evalMapDelete(node *ast.Node, env *InterpEnv) any {
 	}
 	d, ok := current.(map[string]any)
 	if !ok {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: map_delete expected dict, got %T", current), dictNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_delete expected dict, got %s", vmTypeName(current)), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	delete(d, key)
@@ -1228,7 +1275,7 @@ func (interp *Interpreter) evalMapGet(node *ast.Node, env *InterpEnv) any {
 	if !ok {
 		// A missing key is nil. Reading through nil, or any other
 		// non-dict, is a type error rather than another absence value.
-		InterpErr(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %T", current), dictNode)
+		InterpErr(fmt.Sprintf("TYPE_ERROR: map_get expected dict, got %s", vmTypeName(current)), dictNode)
 	}
 	key := fmt.Sprint(interp.eval(node.Children[2], env))
 	if val, ok := d[key]; ok {
@@ -1250,19 +1297,22 @@ func (interp *Interpreter) evalListGet(node *ast.Node, env *InterpEnv) any {
 	if !ok {
 		InterpErr(fmt.Sprintf("undefined variable: %s", listNode.Value), listNode)
 	}
-	items, ok := current.([]any)
-	if !ok {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get expected list, got %T", current), listNode)
+	n, ok := collectionLen(current)
+	if _, isStr := current.(string); isStr || !ok {
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get expected list, got %s", vmTypeName(current)), listNode)
+	}
+	if _, isBytes := current.([]byte); isBytes {
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get expected list, got %s", vmTypeName(current)), listNode)
 	}
 	idxVal := interp.eval(node.Children[2], env)
 	idx, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idxVal)))
 	if err != nil {
-		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get index must be a number, got %T", idxVal), node.Children[2])
+		InterpErr(fmt.Sprintf("TYPE_ERROR: list_get index must be a number, got %s", vmTypeName(idxVal)), node.Children[2])
 	}
-	if idx < 0 || idx >= len(items) {
+	if idx < 0 || idx >= n {
 		return ""
 	}
-	return items[idx]
+	return listElement(current, idx)
 }
 
 func (interp *Interpreter) evalBinop(op string, node *ast.Node, env *InterpEnv) any {
@@ -1331,7 +1381,7 @@ func interpNumericArithmetic(op string, a, b any, node *ast.Node) any {
 	af, aOk := toFloat64(a)
 	bf, bOk := toFloat64(b)
 	if !aOk || !bOk {
-		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
+		InterpErr(fmt.Sprintf("%s requires numeric operands, got %s and %s", op, vmTypeName(a), vmTypeName(b)), node)
 	}
 	res, finite := floatArithmetic(op, af, bf)
 	if !finite {
@@ -1365,7 +1415,7 @@ func interpNumericDiv(a, b any, node *ast.Node) any {
 	af, aOk := toFloat64(a)
 	bf, bOk := toFloat64(b)
 	if !aOk || !bOk {
-		InterpErr(fmt.Sprintf("/ requires numeric operands, got %T and %T", a, b), node)
+		InterpErr(fmt.Sprintf("/ requires numeric operands, got %s and %s", vmTypeName(a), vmTypeName(b)), node)
 	}
 	if bf == 0 {
 		InterpErr("division by zero", node)
@@ -1386,7 +1436,7 @@ func interpNumericRelational(op string, a, b any, node *ast.Node) bool {
 		cmp, numeric = compareStrings(a, b)
 	}
 	if !numeric {
-		InterpErr(fmt.Sprintf("%s requires numeric operands, got %T and %T", op, a, b), node)
+		InterpErr(fmt.Sprintf("%s requires numeric operands, got %s and %s", op, vmTypeName(a), vmTypeName(b)), node)
 	}
 	switch op {
 	case "<":
@@ -1576,24 +1626,24 @@ func ToInt(v any) (int64, error) {
 	case string:
 		return strconv.ParseInt(t, 10, 64)
 	}
-	return 0, fmt.Errorf("cannot convert %T to int", v)
+	return 0, fmt.Errorf("cannot convert %s to int", vmTypeName(v))
 }
 
 func ToBool(v any, node *ast.Node) bool {
 	if b, ok := v.(bool); ok {
 		return b
 	}
-	InterpErr(fmt.Sprintf("expected boolean, got %T", v), node)
+	InterpErr(fmt.Sprintf("expected boolean, got %s", vmTypeName(v)), node)
 	return false
 }
 
 func ValuesEqual(a, b any) bool {
 	switch a.(type) {
-	case []any, []byte, map[string]any:
+	case *vmList, []any, []byte, map[string]any:
 		return false
 	}
 	switch b.(type) {
-	case []any, []byte, map[string]any:
+	case *vmList, []any, []byte, map[string]any:
 		return false
 	}
 	if eq, ok := numericEqual(a, b); ok {
@@ -2331,6 +2381,13 @@ func cloneStoreValue(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
 		return cloneStoreRecord(typed)
+	case *vmList:
+		clone := make([]any, 0, typed.Len())
+		typed.ForEach(func(item any) bool {
+			clone = append(clone, cloneStoreValue(item))
+			return true
+		})
+		return clone
 	case []any:
 		clone := make([]any, len(typed))
 		for index, item := range typed {
@@ -2353,7 +2410,7 @@ func (vm *BCVM) popCheckedString(inst bytecode.BCInstruction, ip int, msgPrefix 
 	val := vm.pop(inst.Op)
 	s, ok := val.(string)
 	if !ok {
-		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, msgPrefix+", got %T", val))
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, msgPrefix+", got %s", vmTypeName(val)))
 	}
 	return s
 }
@@ -2407,6 +2464,8 @@ func (vm *BCVM) readRequestField(ip int, inst bytecode.BCInstruction, kind strin
 // collectionLen returns the length of list, string, or []byte values.
 func collectionLen(val any) (int, bool) {
 	switch v := val.(type) {
+	case *vmList:
+		return v.Len(), true
 	case []any:
 		return len(v), true
 	case string:
@@ -2418,13 +2477,17 @@ func collectionLen(val any) (int, bool) {
 	}
 }
 
-// listElement returns item i of a []any or native byte list; the caller has
+// listElement returns item i of a *vmList, []any, or native byte list; the caller has
 // checked the bounds.
 func listElement(list any, i int) any {
-	if b, ok := list.([]byte); ok {
-		return byteValues[b[i]]
+	switch l := list.(type) {
+	case *vmList:
+		return l.At(i)
+	case []byte:
+		return byteValues[l[i]]
+	default:
+		return list.([]any)[i]
 	}
-	return list.([]any)[i]
 }
 
 // byteValues holds every byte value boxed once as the float64 a byte list
@@ -2452,6 +2515,8 @@ func bytesToAnySlice(b []byte) []any {
 // number list, charged like any other list of that length.
 func (vm *BCVM) listItems(v any, ip int, op bytecode.Opcode) ([]any, bool) {
 	switch typed := v.(type) {
+	case *vmList:
+		return typed.Slice(), true
 	case []any:
 		return typed, true
 	case []byte:
@@ -2474,7 +2539,7 @@ func (vm *BCVM) popCheckedStatus(inst bytecode.BCInstruction, ip int, opName str
 	case int:
 		return s
 	default:
-		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected number status, got %T", statusVal))
+		panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" expected number status, got %s", vmTypeName(statusVal)))
 	}
 }
 
@@ -2493,7 +2558,7 @@ func bytesFromNumberList(items []any, ip int, inst bytecode.BCInstruction, opNam
 		case int:
 			bNum = float64(n)
 		default:
-			panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" byte list element expected number, got %T", bb))
+			panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, opName+" byte list element expected number, got %s", vmTypeName(bb)))
 		}
 		data = append(data, byte(bNum))
 	}
@@ -2732,80 +2797,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.persistStore(store, records, inst.Op)
 			})
 		case bytecode.OpFetch:
-			method := vm.popCheckedString(inst, ip, "fetch expected string method")
-			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
-			max := vm.Limits.MaxFetchBodyBytes
-			if max <= 0 {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
-			}
-			client := vm.requireFetch(urlStr, inst.Op)
-			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, nil)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch request creation failed: %v", err))
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				vm.denyFetchHop(err, inst.Op)
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch failed: %v", err))
-			}
-			defer resp.Body.Close()
-			readLimit := int64(max)
-			if readLimit < math.MaxInt64 {
-				readLimit++
-			}
-			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
-			vm.checkDeadline(ip, inst.Op)
-			if len(b) > max {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
-			}
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch body read failed: %v", err))
-			}
-			vm.chargeBytes(len(b), ip, inst.Op)
+			_, b := vm.bcHTTPFetch("fetch", "fetch request", ip, inst.Op, false)
 			vm.push(b)
 		case bytecode.OpHttpRequest:
-			var bodyReader io.Reader
-			if inst.IntOperand == 1 {
-				bodyReader = strings.NewReader(vm.popCheckedString(inst, ip, "http_request expected string body"))
-			}
-			method := vm.popCheckedString(inst, ip, "http_request expected string method")
-			urlStr := vm.popCheckedString(inst, ip, "http_request expected string url")
-			max := vm.Limits.MaxFetchBodyBytes
-			if max <= 0 {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
-			}
-			client := vm.requireFetch(urlStr, inst.Op)
-			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request creation failed: %v", err))
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				vm.denyFetchHop(err, inst.Op)
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			readLimit := int64(max)
-			if readLimit < math.MaxInt64 {
-				readLimit++
-			}
-			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
-			vm.checkDeadline(ip, inst.Op)
-			if len(b) > max {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
-			}
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request body read failed: %v", err))
-			}
-			vm.chargeBytes(len(b), ip, inst.Op)
+			status, b := vm.bcHTTPFetch("http_request", "http_request", ip, inst.Op, inst.IntOperand == 1)
 			vm.push(map[string]any{
-				"status": resp.StatusCode,
+				"status": status,
 				"body":   b,
 			})
 		case bytecode.OpReadFile:
@@ -2828,6 +2825,8 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				data = []byte(v)
 			case []byte:
 				data = v
+			case *vmList:
+				data = bytesFromNumberList(v.Slice(), ip, inst, "write_file")
 			case []any:
 				data = bytesFromNumberList(v, ip, inst, "write_file")
 			default:
@@ -2912,7 +2911,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					data = []byte(s)
 				} else if b, ok := bodyAny.([]byte); ok {
 					data = b
-				} else if b, ok := bodyAny.([]any); ok {
+				} else if b, ok := sliceFromList(bodyAny); ok {
 					data = bytesFromNumberList(b, ip, inst, "parse_json")
 				}
 			}
@@ -2975,7 +2974,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				w.Write([]byte(s))
 			} else if b, ok := bodyAny.([]byte); ok {
 				w.Write(b)
-			} else if b, ok := bodyAny.([]any); ok {
+			} else if b, ok := sliceFromList(bodyAny); ok {
 				w.Write(bytesFromNumberList(b, ip, inst, "res"))
 			}
 		case bytecode.OpResJson:
@@ -3241,26 +3240,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				prompt += fmt.Sprintf("\nInputs: %v", inputs)
 			}
 
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": prompt,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "neural_circuit", ip, inst.Op, true))
 
 		case bytecode.OpEphemeralCircuit:
 			numInputs := int(inst.IntOperand)
@@ -3291,90 +3275,38 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			createResp.Body.Close()
 
-			func() {
-				delReq, _ := json.Marshal(map[string]any{"name": modelName})
-				req, _ := http.NewRequestWithContext(vm.ctx, "DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
-				req.Header.Set("Content-Type", "application/json")
-				client := &http.Client{}
-				resp, _ := client.Do(req)
-				if resp != nil {
-					resp.Body.Close()
-				}
-			}()
+			deleteOllamaEphemeralModel(vm.ctx, modelName)
 
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  modelName,
 				"prompt": prompt,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit request failed: %v", err))
-			}
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit response decode failed: %v", err))
-			}
-			resp.Body.Close()
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "ephemeral_circuit", ip, inst.Op, true))
 
 		case bytecode.OpAchieve:
 			constraintAny := vm.pop(inst.Op)
 			targetAny := vm.pop(inst.Op)
 			constraintStr := fmt.Sprintf("%v", constraintAny)
 			targetStr := fmt.Sprintf("%v", targetAny)
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "achieve", ip, inst.Op, true))
 
 		case bytecode.OpConfidence:
 			promptStrAny := vm.pop(inst.Op)
 			promptStr := fmt.Sprintf("%v", promptStrAny)
-			reqBody, _ := json.Marshal(map[string]any{
+			respText := vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence response decode failed: %v", err))
-			}
-			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+			}, "IO_ERROR", "confidence", ip, inst.Op, false)
+			val, _ := strconv.ParseFloat(strings.TrimSpace(respText), 64)
 			// A model can answer "NaN", "Inf" or "1e400". NUMERIC_CONTRACT
 			// section 2.3 keeps those out of policy decisions, as to_float does.
 			if math.IsNaN(val) || math.IsInf(val, 0) {
-				panic(NewRuntimeError("CONVERSION_ERROR", "main", ip, inst.Op, "confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)))
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", ip, inst.Op, "confidence response %.64q is not a finite number", strings.TrimSpace(respText)))
 			}
 			vm.push(val)
 
@@ -3383,28 +3315,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			promptVal := vm.pop(inst.Op)
 			promptStr, ok := promptVal.(string)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "llm_generate expected string prompt, got %T", promptVal))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "llm_generate expected string prompt, got %s", vmTypeName(promptVal)))
 			}
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  modelStr,
 				"prompt": promptStr,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "llm_generate", ip, inst.Op, true))
 
 		case bytecode.OpLoadConst:
 			vm.push(inst.ValueOperand)
@@ -3440,9 +3357,9 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 		case bytecode.OpForInit:
 			list := vm.pop(inst.Op)
 			switch list.(type) {
-			case []any, []byte:
+			case *vmList, []any, []byte:
 			default:
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", list))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %s", vmTypeName(list)))
 			}
 			loopBases = append(loopBases, len(vm.stack))
 			vm.push(list)
@@ -3459,17 +3376,19 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 
 			n, ok := 0, false
 			switch items := itemsAny.(type) {
+			case *vmList:
+				n, ok = items.Len(), true
 			case []any:
 				n, ok = len(items), true
 			case []byte:
 				n, ok = len(items), true
 			}
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %T", itemsAny))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for requires a list, got %s", vmTypeName(itemsAny)))
 			}
 			idx, err := ToInt(idxAny)
 			if err != nil {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for index must be a number, got %T", idxAny))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "for index must be a number, got %s", vmTypeName(idxAny)))
 			}
 			if f, ok := idxAny.(float64); ok && float64(int64(f)) != f {
 				panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "for index must be an integer, got %v", f))
@@ -3502,34 +3421,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.requireCapability(capability.Network, inst.Op)
 
 				promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
-				reqBody, _ := json.Marshal(map[string]any{
+				raw := vm.bcOllamaGenerate(map[string]any{
 					"model":  "llama3",
 					"prompt": promptStr,
 					"stream": false,
-				})
-				resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-				if err != nil {
-					vm.checkDeadline(ip, inst.Op)
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis network request failed: %v", err))
-				}
-				var res struct {
-					Response string `json:"response"`
-				}
-				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-					resp.Body.Close()
-					vm.checkDeadline(ip, inst.Op)
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis response decode failed: %v", err))
-				}
-				resp.Body.Close()
-				code := strings.TrimSpace(res.Response)
-
-				// Strip potential markdown blocks
-				code = strings.TrimPrefix(code, "```lisp")
-				code = strings.TrimPrefix(code, "```")
-				code = strings.TrimSuffix(code, "```")
-				code = strings.TrimSpace(code)
-
-				progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.Name, strings.Join(fn.Params, " "), code)
+				}, "RUNTIME_ERROR", "lazy synthesis network", ip, inst.Op, false)
+				progCode := stripSynthesizedDefun(fn.Name, fn.Params, raw)
 				lx := lexer.NewLexer(progCode)
 				p := parser.NewParser(lx, "lazy_synthesize")
 				astNode := p.ParseExpression()
@@ -3750,25 +3647,37 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			sep, ok1 := sepVal.(string)
 			s, ok2 := sVal.(string)
 			if !ok1 || !ok2 {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_split expected string, got %T and %T", sVal, sepVal))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_split expected string, got %s and %s", vmTypeName(sVal), vmTypeName(sepVal)))
 			}
 			parts := strings.Split(s, sep)
 			vm.chargeSlots(len(parts), 8, ip, inst.Op)
 			for _, part := range parts {
 				vm.chargeAlloc(len(part), ip, inst.Op)
 			}
-			vm.push(BcSliceToAny(parts))
+			vm.push(mustVMList(BcSliceToAny(parts)))
 		case bytecode.OpStrJoin:
 			sepVal := vm.pop(inst.Op)
 			listVal := vm.pop(inst.Op)
 			sep, ok1 := sepVal.(string)
-			list, ok2 := vm.listItems(listVal, ip, inst.Op)
-			if !ok1 || !ok2 {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_join expected list and string, got %T and %T", listVal, sepVal))
-			}
 			var strs []string
-			for _, item := range list {
-				strs = append(strs, TextOf(item))
+			if !ok1 {
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_join expected list and string, got %s and %s", vmTypeName(listVal), vmTypeName(sepVal)))
+			}
+			switch typed := listVal.(type) {
+			case *vmList:
+				strs = make([]string, 0, typed.Len())
+				typed.ForEach(func(item any) bool {
+					strs = append(strs, TextOf(item))
+					return true
+				})
+			case []any, []byte:
+				list, _ := vm.listItems(typed, ip, inst.Op)
+				strs = make([]string, len(list))
+				for i, item := range list {
+					strs[i] = TextOf(item)
+				}
+			default:
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "str_join expected list and string, got %s and %s", vmTypeName(listVal), vmTypeName(sepVal)))
 			}
 			joined := strings.Join(strs, sep)
 			vm.chargeAlloc(len(joined), ip, inst.Op)
@@ -3779,7 +3688,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			s, ok1 := sVal.(string)
 			pattern, ok2 := patternVal.(string)
 			if !ok1 || !ok2 {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "regex_match expected string pattern and string, got %T and %T", patternVal, sVal))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "regex_match expected string pattern and string, got %s and %s", vmTypeName(patternVal), vmTypeName(sVal)))
 			}
 			matched, err := regexp.MatchString(pattern, s)
 			if err != nil {
@@ -3796,7 +3705,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 					vm.chargeAlloc(len(str), ip, inst.Op)
 				}
 			}
-			vm.push(items)
+			list, allocSlots := newVMList(items)
+			if allocSlots > num {
+				vm.chargeSlots(allocSlots-num, 8, ip, inst.Op)
+			}
+			vm.push(list)
 		case bytecode.OpMakeDict:
 			num := int(inst.IntOperand)
 			dict := make(map[string]any)
@@ -3826,24 +3739,26 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			n, ok := collectionLen(current)
 			if _, isString := current.(string); isString || !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %T", current))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "append expected list, got %s", vmTypeName(current)))
 			}
 			vm.trace.state("list:", varName, n)
-			// Approximate list storage as eight bytes per slot, plus new string payload.
-			vm.chargeSlots(n+1, 8, ip, inst.Op)
+			var base *vmList
+			var buildSlots int
+			switch items := current.(type) {
+			case *vmList:
+				base = items
+			case []any:
+				base, buildSlots = newVMList(items)
+			case []byte:
+				base, buildSlots = newVMList(bytesToAnySlice(items))
+			}
+			next, pushSlots := base.Append(item)
+			// Charge 8 bytes per newly copied tail/node slot, plus any new string payload.
+			vm.chargeSlots(buildSlots+pushSlots, 8, ip, inst.Op)
 			if str, ok := item.(string); ok {
 				vm.chargeAlloc(len(str), ip, inst.Op)
 			}
-			newItems := make([]any, n, n+1)
-			switch items := current.(type) {
-			case []any:
-				copy(newItems, items)
-			case []byte:
-				for i, c := range items {
-					newItems[i] = byteValues[c]
-				}
-			}
-			env.set(varName, append(newItems, item))
+			env.set(varName, next)
 		case bytecode.OpMapSet:
 			varName := inst.StringOperand
 			val := vm.pop(inst.Op)
@@ -3855,7 +3770,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			dict, ok := current.(map[string]any)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_set expected dict, got %T", current))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_set expected dict, got %s", vmTypeName(current)))
 			}
 			if _, exists := dict[key]; !exists {
 				vm.chargeAlloc(16, ip, inst.Op)
@@ -3875,7 +3790,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			dict, ok := current.(map[string]any)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_delete expected dict, got %T", current))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_delete expected dict, got %s", vmTypeName(current)))
 			}
 			_, deleted := dict[key]
 			delete(dict, key)
@@ -3904,7 +3819,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			if !ok {
 				// A missing key is nil. map_get of nil is a type error,
 				// not a second miss.
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %T", current))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_get expected dict, got %s", vmTypeName(current)))
 			}
 			if val, ok := dict[key]; ok {
 				vm.trace.state("map:", varName, key)
@@ -3925,7 +3840,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			idxStr := strings.TrimSpace(fmt.Sprint(idxAny))
 			idx, err := strconv.Atoi(idxStr)
 			if err != nil {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get index must be a number, got %T", idxAny))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get index must be a number, got %s", vmTypeName(idxAny)))
 			}
 			vm.trace.state("list:", varName, idx)
 
@@ -3935,7 +3850,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			n, ok := collectionLen(current)
 			if _, isString := current.(string); isString || !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get expected list, got %T", current))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_get expected list, got %s", vmTypeName(current)))
 			}
 			if idx < 0 || idx >= n {
 				vm.push("")
@@ -3946,14 +3861,14 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			val := vm.pop(inst.Op)
 			n, ok := collectionLen(val)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, string, or bytes, got %T", val))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "list_len expected list, string, or bytes, got %s", vmTypeName(val)))
 			}
 			vm.push(int64(n))
 		case bytecode.OpMapKeys:
 			val := vm.pop(inst.Op)
 			dict, ok := val.(map[string]any)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_keys expected dict, got %T", val))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "map_keys expected dict, got %s", vmTypeName(val)))
 			}
 			keys := sortedMapKeys(dict)
 			vm.chargeSlots(len(keys), 8, ip, inst.Op)
@@ -3979,7 +3894,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			val := vm.pop(inst.Op)
 			s, ok := val.(string)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "%s expected string, got %T", opName, val))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "%s expected string, got %s", opName, vmTypeName(val)))
 			}
 			escaped := htmlescape.Escape(s)
 			vm.chargeAlloc(len(escaped), ip, inst.Op)
@@ -3989,12 +3904,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			for _, arg := range vm.args {
 				argsAny = append(argsAny, arg)
 			}
-			vm.push(argsAny)
+			vm.push(mustVMList(argsAny))
 		case bytecode.OpCliArgsGet:
 			idxAny := vm.pop(inst.Op)
 			idx, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(idxAny)))
 			if err != nil {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "cli_args index must be a number, got %T", idxAny))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "cli_args index must be a number, got %s", vmTypeName(idxAny)))
 			}
 			if idx >= 0 && idx < len(vm.args) {
 				vm.push(vm.args[idx])
@@ -4005,7 +3920,7 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			msAny := vm.pop(inst.Op)
 			ms, err := ToInt(msAny)
 			if err != nil {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %T", msAny))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "sleep requires number, got %s", vmTypeName(msAny)))
 			}
 			if deadline, ok := vm.ctx.Deadline(); ok && ms > 0 && (ms > int64(time.Until(deadline)/time.Millisecond)) {
 				code := "LIMIT_EXCEEDED"
@@ -4099,7 +4014,7 @@ func BcToBool(v any) bool {
 	if b, ok := v.(bool); ok {
 		return b
 	}
-	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected boolean, got %T", v))
+	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected boolean, got %s", vmTypeName(v)))
 }
 
 func BcBinop(op string, a, b any) any {
@@ -4142,7 +4057,7 @@ func bcNumericBinop(op string, a, b any) any {
 		af, aOk := toFloat64(a)
 		bf, bOk := toFloat64(b)
 		if !aOk || !bOk {
-			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %s and %s", op, vmTypeName(a), vmTypeName(b)))
 		}
 		res, finite := floatArithmetic(op, af, bf)
 		if !finite {
@@ -4153,7 +4068,7 @@ func bcNumericBinop(op string, a, b any) any {
 		af, aOk := toFloat64(a)
 		bf, bOk := toFloat64(b)
 		if !aOk || !bOk {
-			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "/ requires numeric operands, got %T and %T", a, b))
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "/ requires numeric operands, got %s and %s", vmTypeName(a), vmTypeName(b)))
 		}
 		if bf == 0 {
 			panic(NewRuntimeError("RUNTIME_ERROR", "main", 0, 0, "division by zero"))
@@ -4172,7 +4087,7 @@ func bcNumericBinop(op string, a, b any) any {
 			cmp, numeric = compareStrings(a, b)
 		}
 		if !numeric {
-			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %T and %T", op, a, b))
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "%s requires numeric operands, got %s and %s", op, vmTypeName(a), vmTypeName(b)))
 		}
 		switch op {
 		case "<":
@@ -4218,22 +4133,11 @@ func ToBCFloat(v any) float64 {
 	case int:
 		return float64(t)
 	}
-	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected number, got %T", v))
+	panic(NewRuntimeError("TYPE_ERROR", "main", 0, 0, "expected number, got %s", vmTypeName(v)))
 }
 
 func BcValuesEqual(a, b any) bool {
-	switch a.(type) {
-	case []any, []byte, map[string]any:
-		return false
-	}
-	switch b.(type) {
-	case []any, []byte, map[string]any:
-		return false
-	}
-	if eq, ok := numericEqual(a, b); ok {
-		return eq
-	}
-	return a == b
+	return ValuesEqual(a, b)
 }
 
 func BcConvert(target string, a any) any {
@@ -4255,7 +4159,7 @@ func BcConvert(target string, a any) any {
 		case int64:
 			return t
 		default:
-			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %T to int", a))
+			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %s to int", vmTypeName(a)))
 		}
 	case "to_float":
 		switch t := a.(type) {
@@ -4273,7 +4177,7 @@ func BcConvert(target string, a any) any {
 		case int64:
 			return float64(t)
 		default:
-			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %T to float", a))
+			panic(NewRuntimeError("CONVERSION_ERROR", "main", 0, bytecode.OpConvert, "cannot convert %s to float", vmTypeName(a)))
 		}
 	case "to_string":
 		return TextOf(a)
@@ -4281,9 +4185,9 @@ func BcConvert(target string, a any) any {
 		if b, ok := a.([]byte); ok {
 			return string(b)
 		}
-		items, ok := a.([]any)
+		items, ok := sliceFromList(a)
 		if !ok {
-			panic(NewRuntimeError("TYPE_ERROR", "main", 0, bytecode.OpConvert, "bytes_to_string expected []any, got %T", a))
+			panic(NewRuntimeError("TYPE_ERROR", "main", 0, bytecode.OpConvert, "bytes_to_string expected []any, got %s", vmTypeName(a)))
 		}
 		return string(bytesFromNumberList(items, 0, bytecode.BCInstruction{Op: bytecode.OpConvert}, "bytes_to_string"))
 	case "to_lower":
@@ -4360,6 +4264,13 @@ func normalizeForJSON(v any) any {
 		for k, val := range t {
 			out[k] = normalizeForJSON(val)
 		}
+		return out
+	case *vmList:
+		out := make([]any, 0, t.Len())
+		t.ForEach(func(val any) bool {
+			out = append(out, normalizeForJSON(val))
+			return true
+		})
 		return out
 	case []any:
 		out := make([]any, len(t))
@@ -4473,6 +4384,18 @@ func (vm *BCVM) cloneForSpawn(value any, ip int, op bytecode.Opcode) any {
 			copied[key] = vm.cloneForSpawn(item, ip, op)
 		}
 		return copied
+	case *vmList:
+		if typed.Len() == 0 {
+			return typed
+		}
+		vm.chargeSlots(typed.Len(), 8, ip, op)
+		copied := make([]any, 0, typed.Len())
+		typed.ForEach(func(item any) bool {
+			copied = append(copied, vm.cloneForSpawn(item, ip, op))
+			return true
+		})
+		cloned, _ := newVMList(copied)
+		return cloned
 	case []any:
 		vm.chargeSlots(len(typed), 8, ip, op)
 		copied := make([]any, len(typed))
@@ -4508,6 +4431,12 @@ func (vm *BCVM) chargeJSONTree(value any, ip int, op bytecode.Opcode) {
 	switch typed := value.(type) {
 	case string:
 		vm.chargeBytes(len(typed), ip, op)
+	case *vmList:
+		vm.chargeSlots(typed.Len(), 8, ip, op)
+		typed.ForEach(func(item any) bool {
+			vm.chargeJSONTree(item, ip, op)
+			return true
+		})
 	case []any:
 		vm.chargeSlots(len(typed), 8, ip, op)
 		for _, item := range typed {

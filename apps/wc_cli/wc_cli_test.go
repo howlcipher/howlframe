@@ -3,22 +3,27 @@ package wc_cli_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestWcCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "wc_cli.howl")
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "wc_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "wc_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
-	os.WriteFile("sample.txt", []byte("one two\nthree\nfour five six\n"), 0644)
-	defer os.Remove("sample.txt")
+	sample := filepath.Join(tmp, "sample.txt")
+	if err := os.WriteFile(sample, []byte("one two\nthree\nfour five six\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem",
-		"wc_cli.howl.bc.bin", "sample.txt")
+		artifact, sample)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -31,7 +36,7 @@ func TestWcCLI(t *testing.T) {
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc",
-		"wc_cli.howl.bc.bin", "sample.txt")
+		artifact, sample)
 	cmd.Dir = "."
 	out, _ = cmd.CombinedOutput()
 	if !strings.Contains(string(out), "capability denied: filesystem") {

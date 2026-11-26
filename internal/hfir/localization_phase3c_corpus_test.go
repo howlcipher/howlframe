@@ -337,14 +337,13 @@ func (b *phase3CBuilder) splitJoinOutput(prefix, input, splitSeparator, joinSepa
 	return b.node(NodeID(prefix+"_print"), "print", "", "", b.edges("value", join))
 }
 
-func (b *phase3CBuilder) nestedConditionalOutput(prefix, value string) NodeID {
+func (b *phase3CBuilder) nestedConditionalNode(prefix string, thenValue NodeID) NodeID {
 	outerLeft := b.node(NodeID(prefix+"_outer_left"), "const", "1", "INT", nil)
 	outerRight := b.node(NodeID(prefix+"_outer_right"), "const", "1", "INT", nil)
 	outerCondition := b.node(NodeID(prefix+"_outer_condition"), "binary", "==", "", b.edges("left", outerLeft, "right", outerRight))
 	innerLeft := b.node(NodeID(prefix+"_inner_left"), "const", "2", "INT", nil)
 	innerRight := b.node(NodeID(prefix+"_inner_right"), "const", "2", "INT", nil)
 	innerCondition := b.node(NodeID(prefix+"_inner_condition"), "binary", "==", "", b.edges("left", innerLeft, "right", innerRight))
-	thenValue := b.node(NodeID(prefix+"_then_value"), "const", value, "STRING", nil)
 	thenPrint := b.node(NodeID(prefix+"_then_print"), "print", "", "", b.edges("value", thenValue))
 	innerElseValue := b.node(NodeID(prefix+"_inner_else_value"), "const", "inner-never", "STRING", nil)
 	innerElsePrint := b.node(NodeID(prefix+"_inner_else_print"), "print", "", "", b.edges("value", innerElseValue))
@@ -354,21 +353,14 @@ func (b *phase3CBuilder) nestedConditionalOutput(prefix, value string) NodeID {
 	return b.node(NodeID(prefix+"_outer"), "if", "", "", b.edges("condition", outerCondition, "then", inner, "else", outerElsePrint))
 }
 
+func (b *phase3CBuilder) nestedConditionalOutput(prefix, value string) NodeID {
+	thenValue := b.node(NodeID(prefix+"_then_value"), "const", value, "STRING", nil)
+	return b.nestedConditionalNode(prefix, thenValue)
+}
+
 func (b *phase3CBuilder) nestedConditionalArithmeticOutput(prefix, left, right string) NodeID {
-	outerLeft := b.node(NodeID(prefix+"_outer_left"), "const", "1", "INT", nil)
-	outerRight := b.node(NodeID(prefix+"_outer_right"), "const", "1", "INT", nil)
-	outerCondition := b.node(NodeID(prefix+"_outer_condition"), "binary", "==", "", b.edges("left", outerLeft, "right", outerRight))
-	innerLeft := b.node(NodeID(prefix+"_inner_left"), "const", "2", "INT", nil)
-	innerRight := b.node(NodeID(prefix+"_inner_right"), "const", "2", "INT", nil)
-	innerCondition := b.node(NodeID(prefix+"_inner_condition"), "binary", "==", "", b.edges("left", innerLeft, "right", innerRight))
 	leftID := b.node(NodeID(prefix+"_left"), "const", left, "INT", nil)
 	rightID := b.node(NodeID(prefix+"_right"), "const", right, "INT", nil)
 	value := b.node(NodeID(prefix+"_value"), "binary", "+", "", b.edges("left", leftID, "right", rightID))
-	thenPrint := b.node(NodeID(prefix+"_then_print"), "print", "", "", b.edges("value", value))
-	innerElseValue := b.node(NodeID(prefix+"_inner_else_value"), "const", "inner-never", "STRING", nil)
-	innerElsePrint := b.node(NodeID(prefix+"_inner_else_print"), "print", "", "", b.edges("value", innerElseValue))
-	inner := b.node(NodeID(prefix+"_inner"), "if", "", "", b.edges("condition", innerCondition, "then", thenPrint, "else", innerElsePrint))
-	outerElseValue := b.node(NodeID(prefix+"_outer_else_value"), "const", "outer-never", "STRING", nil)
-	outerElsePrint := b.node(NodeID(prefix+"_outer_else_print"), "print", "", "", b.edges("value", outerElseValue))
-	return b.node(NodeID(prefix+"_outer"), "if", "", "", b.edges("condition", outerCondition, "then", inner, "else", outerElsePrint))
+	return b.nestedConditionalNode(prefix, value)
 }

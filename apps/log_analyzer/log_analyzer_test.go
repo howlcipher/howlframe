@@ -3,21 +3,27 @@ package log_analyzer_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLogAnalyzer(t *testing.T) {
+	tmp := t.TempDir()
+	artifact := filepath.Join(tmp, "log_analyzer.hfbc")
 	// Compile
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "log_analyzer.howl")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "log_analyzer.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
 	// Clean log
-	os.WriteFile("clean.log", []byte("INFO: Start\nINFO: End\n"), 0644)
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "log_analyzer.howl.bc.bin", "clean.log")
+	cleanLog := filepath.Join(tmp, "clean.log")
+	if err := os.WriteFile(cleanLog, []byte("INFO: Start\nINFO: End\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", artifact, cleanLog)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -28,8 +34,11 @@ func TestLogAnalyzer(t *testing.T) {
 	}
 
 	// Err log
-	os.WriteFile("err.log", []byte("ERROR: Failed\n"), 0644)
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "log_analyzer.howl.bc.bin", "err.log")
+	errLog := filepath.Join(tmp, "err.log")
+	if err := os.WriteFile(errLog, []byte("ERROR: Failed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", artifact, errLog)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil {
@@ -40,7 +49,7 @@ func TestLogAnalyzer(t *testing.T) {
 	}
 
 	// Missing file
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "log_analyzer.howl.bc.bin", "missing.log")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", artifact, filepath.Join(tmp, "missing.log"))
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil {
@@ -51,7 +60,7 @@ func TestLogAnalyzer(t *testing.T) {
 	}
 
 	// Capability denied
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "log_analyzer.howl.bc.bin", "clean.log")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", artifact, cleanLog)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if !strings.Contains(string(out), "capability denied: filesystem") {
@@ -67,29 +76,38 @@ func TestLogAnalyzer(t *testing.T) {
 			)
 		)
 	)`
-	os.WriteFile("static.howl", []byte(staticScript), 0644)
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "static.howl")
+	staticSrc := filepath.Join(tmp, "static.howl")
+	staticOut := filepath.Join(tmp, "static.hfbc")
+	if err := os.WriteFile(staticSrc, []byte(staticScript), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-compile-bc", staticSrc, "-o", staticOut)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "str_split argument 1 must be string") {
 		t.Errorf("expected static str_split rejection, got err=%v out=%s", err, out)
 	}
-	if _, statErr := os.Stat("static.howl.bc.bin"); statErr == nil {
+	if _, statErr := os.Stat(staticOut); statErr == nil {
 		t.Errorf("a rejected program must not emit bytecode")
 	}
-	os.Remove("static.howl")
 
 	// The runtime guard still fails closed when the type is hidden from the
 	// checker behind an untyped (any) parameter.
 	badScript := `(cli_app
 		(defun split_lines ((value any)) list (return (str_split value "\n")))
-		(let (content (read_file "clean.log"))
+		(let (content (read_file ` + `"` + cleanLog + `"` + `))
 			(print (call split_lines content))
 		)
 	)`
-	os.WriteFile("bad.howl", []byte(badScript), 0644)
-	exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "bad.howl").Run()
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "bad.howl.bc.bin")
+	badSrc := filepath.Join(tmp, "bad.howl")
+	badOut := filepath.Join(tmp, "bad.hfbc")
+	if err := os.WriteFile(badSrc, []byte(badScript), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", badSrc, "-o", badOut).CombinedOutput(); err != nil {
+		t.Fatalf("compile bad.howl: %v\n%s", err, out)
+	}
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", badOut)
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil {
@@ -98,11 +116,4 @@ func TestLogAnalyzer(t *testing.T) {
 	if !strings.Contains(string(out), "TYPE_ERROR") || strings.Contains(string(out), "interface {} is []interface {}, not string") {
 		t.Errorf("expected structured TYPE_ERROR without Go panic text, got: %s", out)
 	}
-
-	// Cleanup
-	os.Remove("clean.log")
-	os.Remove("err.log")
-	os.Remove("bad.howl")
-	os.Remove("bad.howl.bc.bin")
-	os.Remove("err.log")
 }

@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
@@ -34,16 +33,7 @@ const mapGetPathNonDictSource = `(cli_app
     (print "bad" (map_get (map_get row "user") "name"))))`
 
 func TestChainedMapGetPath(t *testing.T) {
-	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, mapGetPathHitSource)
-		var out, errOut bytes.Buffer
-		if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != mapGetPathHitWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), mapGetPathHitWant)
-		}
-	})
+	t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, mapGetPathHitSource, mapGetPathHitWant) })
 
 	t.Run("bytecode", func(t *testing.T) {
 		_, prog := parseAndCompile(t, mapGetPathHitSource)
@@ -61,68 +51,38 @@ func TestChainedMapGetPath(t *testing.T) {
 		if named == 0 || value == 0 {
 			t.Fatalf("MAP_GET named=%d value=%d, want both forms", named, value)
 		}
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != mapGetPathHitWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), mapGetPathHitWant)
-		}
+		assertBytecodeStdout(t, mapGetPathHitSource, mapGetPathHitWant)
 	})
 }
 
 func TestChainedMapGetMissingIntermediate(t *testing.T) {
 	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, mapGetPathMissingIntermediateSource)
-		var out, errOut bytes.Buffer
-		exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut)
-		assertMapGetPathTypeError(t, exitCode, out.String(), errOut.String())
+		out := assertInterpretErrorContains(t, mapGetPathMissingIntermediateSource, "TYPE_ERROR", "map_get expected dict, got")
+		if out != "sentinel \n" || strings.Contains(out, "chained") {
+			t.Fatalf("stdout = %q, want the nil miss and no chained print", out)
+		}
 	})
 
 	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, mapGetPathMissingIntermediateSource)
-		var out, errOut bytes.Buffer
-		evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-		if evidence.RuntimeFailure == nil || evidence.RuntimeFailure.Code != "TYPE_ERROR" {
-			t.Fatalf("failure = %#v, want TYPE_ERROR", evidence.RuntimeFailure)
-		}
-		if !strings.Contains(evidence.RuntimeFailure.Message, "map_get expected dict, got <nil>") {
-			t.Fatalf("message = %q", evidence.RuntimeFailure.Message)
-		}
-		if out.String() != "sentinel \n" {
-			t.Fatalf("stdout = %q, want the nil miss and no chained print", out.String())
-		}
-		if strings.Contains(out.String(), "chained") {
-			t.Fatalf("chained read of the sentinel printed %q", out.String())
+		out := assertBytecodeTypeErrorContains(t, mapGetPathMissingIntermediateSource, "TYPE_ERROR", "map_get expected dict, got <nil>")
+		if out != "sentinel \n" || strings.Contains(out, "chained") {
+			t.Fatalf("stdout = %q, want the nil miss and no chained print", out)
 		}
 	})
 }
 
 func TestChainedMapGetNonDictIntermediate(t *testing.T) {
 	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, mapGetPathNonDictSource)
-		var out, errOut bytes.Buffer
-		exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut)
-		if exitCode == 0 || !strings.Contains(errOut.String(), "TYPE_ERROR: map_get expected dict, got string") {
-			t.Fatalf("exit = %d, stdout = %q, stderr = %q", exitCode, out.String(), errOut.String())
-		}
-		if strings.Contains(out.String(), "bad") {
-			t.Fatalf("non-dict path printed %q", out.String())
+		out := assertInterpretErrorContains(t, mapGetPathNonDictSource, "TYPE_ERROR", "map_get expected dict, got string")
+		if strings.Contains(out, "bad") {
+			t.Fatalf("non-dict path printed %q", out)
 		}
 	})
 
 	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, mapGetPathNonDictSource)
-		var out, errOut bytes.Buffer
-		evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-		if evidence.RuntimeFailure == nil || evidence.RuntimeFailure.Code != "TYPE_ERROR" {
-			t.Fatalf("failure = %#v, want TYPE_ERROR", evidence.RuntimeFailure)
-		}
-		if !strings.Contains(evidence.RuntimeFailure.Message, "map_get expected dict, got string") {
-			t.Fatalf("message = %q", evidence.RuntimeFailure.Message)
-		}
-		if strings.Contains(out.String(), "bad") {
-			t.Fatalf("non-dict path printed %q", out.String())
+		out := assertBytecodeTypeErrorContains(t, mapGetPathNonDictSource, "TYPE_ERROR", "map_get expected dict, got string")
+		if strings.Contains(out, "bad") {
+			t.Fatalf("non-dict path printed %q", out)
 		}
 	})
 }
@@ -141,18 +101,5 @@ func TestChainedMapGetDeclaresNoCapability(t *testing.T) {
 	valueGet := bytecode.BCInstruction{Op: bytecode.OpMapGet, OpString: "MAP_GET"}
 	if code := capabilityDenialCode(valueGet, nil); code == "CAPABILITY_DENIED" {
 		t.Fatal("value map_get was denied with an empty grant")
-	}
-}
-
-func assertMapGetPathTypeError(t *testing.T, exitCode int, stdout, stderr string) {
-	t.Helper()
-	if exitCode == 0 || !strings.Contains(stderr, "TYPE_ERROR: map_get expected dict, got") || !strings.Contains(stderr, "nil") {
-		t.Fatalf("exit = %d, stdout = %q, stderr = %q", exitCode, stdout, stderr)
-	}
-	if stdout != "sentinel \n" {
-		t.Fatalf("stdout = %q, want the nil miss and no chained print", stdout)
-	}
-	if strings.Contains(stdout, "chained") {
-		t.Fatalf("chained read of the sentinel printed %q", stdout)
 	}
 }

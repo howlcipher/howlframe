@@ -52,37 +52,16 @@ func TestJSFetchRequiresGrantBeforeRequest(t *testing.T) {
 		t.Fatalf("grant check must precede the HTTP request:\n%s", helper)
 	}
 
-	assertDenied := func(label, stdout, stderr string, code int) {
-		t.Helper()
-		if code == 0 {
-			t.Fatalf("%s: fetch succeeded: %s", label, stdout+stderr)
-		}
+	assertJSCapabilityDenied(t, code, "network", "the response or URL", []string{secretBody, "phase2d-secret-url"}, func(label string) {
 		if hits.Load() != 0 {
 			t.Fatalf("%s: denial performed %d HTTP request(s)", label, hits.Load())
 		}
-		combined := stdout + stderr
-		if strings.Contains(combined, secretBody) || strings.Contains(combined, "phase2d-secret-url") {
-			t.Fatalf("%s: output leaked the response or URL: stdout=%q stderr=%q", label, stdout, stderr)
-		}
-		if !strings.Contains(stderr, "CAPABILITY_DENIED") || !strings.Contains(stderr, "capability denied: network") {
-			t.Fatalf("%s: stderr = %q, want CAPABILITY_DENIED", label, stderr)
-		}
-		if strings.TrimSpace(stdout) != "" {
-			t.Fatalf("%s: denied stdout = %q, want empty", label, stdout)
-		}
-	}
-
-	unsetOut, unsetErr, unsetCode := runJS(t, code)
-	assertDenied("unset grant", unsetOut, unsetErr, unsetCode)
-
-	emptyOut, emptyErr, emptyCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=")
-	assertDenied("empty grant", emptyOut, emptyErr, emptyCode)
-
-	otherOut, otherErr, otherCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
-	assertDenied("filesystem grant", otherOut, otherErr, otherCode)
-
-	coarseOut, coarseErr, coarseCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=network")
-	assertDenied("coarse network grant (#165)", coarseOut, coarseErr, coarseCode)
+	}, [][2]string{
+		{"unset grant", "__UNSET__"},
+		{"empty grant", "HOWLFRAME_ALLOW_CAPS="},
+		{"filesystem grant", "HOWLFRAME_ALLOW_CAPS=filesystem"},
+		{"coarse network grant (#165)", "HOWLFRAME_ALLOW_CAPS=network"},
+	})
 
 	grantedOut, grantedErr, grantedCode := runJS(t, code, "HOWLFRAME_ALLOW_CAPS=network:fetch="+strings.TrimPrefix(srv.URL, "http://"))
 	if grantedCode != 0 {

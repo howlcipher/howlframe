@@ -87,6 +87,15 @@ func TestAdapterDepthCapRejects4095Chain(t *testing.T) {
 	}
 }
 
+func assertTransportTooLarge(t *testing.T, label string, tr candidateTransport) {
+	t.Helper()
+	data, _ := json.Marshal(tr)
+	c, ds := DecodeCandidate(data)
+	if c.Graph != nil || len(ds) != 1 || ds[0].Code != "HFIR_TRANSPORT_TOO_LARGE" {
+		t.Fatalf("%s: %#v", label, ds)
+	}
+}
+
 func TestAdapterExpansionCap(t *testing.T) {
 	// Shared allocation expressions are deliberately not outlined.
 	tr := blockerDAG(17, true)
@@ -97,11 +106,7 @@ func TestAdapterExpansionCap(t *testing.T) {
 			tr.Nodes[i].Inputs[j].Role = "item"
 		}
 	}
-	data, _ := json.Marshal(tr)
-	c, ds := DecodeCandidate(data)
-	if c.Graph != nil || len(ds) != 1 || ds[0].Code != "HFIR_TRANSPORT_TOO_LARGE" {
-		t.Fatalf("expansion: %#v", ds)
-	}
+	assertTransportTooLarge(t, "expansion", tr)
 }
 
 func TestAdapterRunDeadlineAndSleep(t *testing.T) {
@@ -118,19 +123,7 @@ func TestAdapterRunDeadlineAndSleep(t *testing.T) {
 		{"normal_sleep", `(cli_app (sleep 2) (print 7))`, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			g := parseAndLower(t, tc.source, "deadline.howl", false)
-			data, err := EncodeCandidateTransport(g)
-			if err != nil {
-				t.Fatal(err)
-			}
-			c, ds := DecodeCandidate(data)
-			if len(ds) > 0 {
-				t.Fatal(ds)
-			}
-			p, ds := CompileCandidate(c)
-			if len(ds) > 0 {
-				t.Fatal(ds)
-			}
+			p := adapterProgram(t, tc.source)
 			policy := vm.DefaultExecutionPolicy()
 			policy.Deadline = tc.deadline
 			if tc.name == "busy_loop" {
@@ -211,9 +204,5 @@ func TestAdapterAggregateFragmentCap(t *testing.T) {
 			tr.Nodes[i].Inputs = append(tr.Nodes[i].Inputs, transportEdge{Role: "body", NodeID: "printb"})
 		}
 	}
-	data, _ := json.Marshal(tr)
-	c, ds := DecodeCandidate(data)
-	if c.Graph != nil || len(ds) != 1 || ds[0].Code != "HFIR_TRANSPORT_TOO_LARGE" {
-		t.Fatalf("aggregate fragments: %#v", ds)
-	}
+	assertTransportTooLarge(t, "aggregate fragments", tr)
 }

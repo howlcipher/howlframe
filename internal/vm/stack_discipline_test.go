@@ -1,10 +1,6 @@
 package vm
 
-import (
-	"bytes"
-	"strings"
-	"testing"
-)
+import "testing"
 
 // The VM keeps for-loop state and call operands on one shared operand stack.
 // A callee that returns from inside a loop, a discarded value, or a failed
@@ -72,15 +68,7 @@ func TestOperandStackDiscipline(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, prog := parseAndCompile(t, c.src)
-			var out, errOut bytes.Buffer
-			evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-			if evidence.RuntimeFailure != nil || evidence.ExitCode != 0 {
-				t.Fatalf("exit = %d, failure = %+v, stdout = %q", evidence.ExitCode, evidence.RuntimeFailure, out.String())
-			}
-			if out.String() != c.want {
-				t.Fatalf("stdout = %q, want %q", out.String(), c.want)
-			}
+			assertBytecodeEvidenceStdout(t, c.src, c.want)
 		})
 	}
 }
@@ -92,13 +80,5 @@ func TestTryLetFailureDropsPartialOperands(t *testing.T) {
     (try_let (v (call risky o))
       (catch err (print "caught" o))
       (print "ok" o v))))`
-	_, prog := parseAndCompile(t, src)
-	var out, errOut bytes.Buffer
-	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-	if evidence.RuntimeFailure != nil || evidence.ExitCode != 0 {
-		t.Fatalf("exit = %d, failure = %+v, stdout = %q", evidence.ExitCode, evidence.RuntimeFailure, out.String())
-	}
-	if want := "caught a\ncaught b\ncaught c\n"; out.String() != want {
-		t.Fatalf("stdout = %q, want %q", out.String(), want)
-	}
+	assertBytecodeEvidenceStdout(t, src, "caught a\ncaught b\ncaught c\n")
 }

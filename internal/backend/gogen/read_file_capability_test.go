@@ -42,46 +42,13 @@ func TestGoReadFileRequiresGrantBeforeRead(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
+	assertGoCapabilityDenied(t, rootDir, code, "filesystem", "the file", []string{secretBody, "phase2c-secret-path"}, nil, [][2]string{
+		{"unset grant", "__UNSET__"},
+		{"empty grant", "HOWLFRAME_ALLOW_CAPS="},
+		{"process grant", "HOWLFRAME_ALLOW_CAPS=process"},
+	})
 
-	assertDenied := func(label, output, errText string) {
-		t.Helper()
-		if errText == "" {
-			t.Fatalf("%s: read_file succeeded: %s", label, output)
-		}
-		if strings.Contains(output, secretBody) || strings.Contains(output, "phase2c-secret-path") {
-			t.Fatalf("%s: process output leaked the file: %s", label, output)
-		}
-		crash, err := os.ReadFile(crashPath)
-		if err != nil {
-			t.Fatalf("%s: denial did not write crash.json: %v\n%s", label, err, output)
-		}
-		if strings.Contains(string(crash), secretBody) || strings.Contains(string(crash), "phase2c-secret-path") {
-			t.Fatalf("%s: crash.json leaked the file: %s", label, crash)
-		}
-		if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: filesystem") {
-			t.Fatalf("%s: crash.json = %s, want CAPABILITY_DENIED", label, crash)
-		}
-		os.Remove(crashPath)
-	}
-
-	unsetOut, unsetErr := runGenerated(t, rootDir, code)
-	assertDenied("unset grant", unsetOut, unsetErr)
-
-	emptyOut, emptyErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=")
-	assertDenied("empty grant", emptyOut, emptyErr)
-
-	otherOut, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
-	assertDenied("process grant", otherOut, otherErr)
-
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
-	if grantErr != "" {
-		t.Fatalf("filesystem grant failed: %s\n%s", grantErr, granted)
-	}
-	if strings.TrimSpace(granted) != secretBody {
-		t.Fatalf("granted stdout = %q, want %s", granted, secretBody)
-	}
+	assertGoGrantedStdout(t, rootDir, code, "filesystem", secretBody)
 }
 
 func TestGoReadFileTryLetDeniesBeforeRead(t *testing.T) {
@@ -104,35 +71,9 @@ func TestGoReadFileTryLetDeniesBeforeRead(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
+	assertGoCapabilityDenied(t, rootDir, code, "filesystem", "the IO catch path", []string{"phase2c-secret-path", "caught-io", "read-ok"}, nil, [][2]string{{"empty grant", "HOWLFRAME_ALLOW_CAPS="}})
 
-	denied, errText := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=")
-	if errText == "" {
-		t.Fatalf("empty grant succeeded: %s", denied)
-	}
-	if strings.Contains(denied, "caught-io") || strings.Contains(denied, "read-ok") {
-		t.Fatalf("empty grant treated the miss as an IO error: %s", denied)
-	}
-	crash, err := os.ReadFile(crashPath)
-	if err != nil {
-		t.Fatalf("denial did not write crash.json: %v\n%s", err, denied)
-	}
-	if strings.Contains(string(crash), "phase2c-secret-path") {
-		t.Fatalf("crash.json leaked the path: %s", crash)
-	}
-	if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: filesystem") {
-		t.Fatalf("crash.json = %s, want CAPABILITY_DENIED", crash)
-	}
-	os.Remove(crashPath)
-
-	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
-	if grantErr != "" {
-		t.Fatalf("filesystem grant failed: %s\n%s", grantErr, granted)
-	}
-	if strings.TrimSpace(granted) != "caught-io" {
-		t.Fatalf("granted miss stdout = %q, want caught-io", granted)
-	}
+	assertGoGrantedStdout(t, rootDir, code, "filesystem", "caught-io")
 }
 
 func TestGoReadFileExpressionPositionIsMediated(t *testing.T) {

@@ -6,9 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -28,35 +25,14 @@ func freeTCPPort(t *testing.T) int {
 func startM2Server(t *testing.T, src string, env []string, grants string, flags ...string) (*bytes.Buffer, func()) {
 	t.Helper()
 	binary := buildHowlFrameBinaryForTest(t)
-	dir := t.TempDir()
-	file := filepath.Join(dir, "srv.howl")
-	os.WriteFile(file, []byte(src), 0o600)
-	artifact := filepath.Join(dir, "srv.hfbc")
-	if out, err := exec.Command(binary, "build", file, "-o", artifact).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, out)
-	}
-	args := append([]string{"run", "--allow-caps", grants}, flags...)
-	args = append(args, artifact)
-	cmd := exec.Command(binary, args...)
-	cmd.Env = append(os.Environ(), env...)
-	log := &bytes.Buffer{}
-	cmd.Stdout, cmd.Stderr = log, log
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	stop := func() { cmd.Process.Kill(); cmd.Wait() }
-	t.Cleanup(stop)
-	return log, stop
+	artifact := buildHFBCArtifact(t, binary, t.TempDir(), "srv", src)
+	return startHFBCServerCmdEnv(t, binary, artifact, env, grants, flags...)
 }
 
 func waitHTTP(t *testing.T, url string, log *bytes.Buffer) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
-		if resp, err := http.Get(url); err == nil {
-			resp.Body.Close()
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
+	if code, _ := pollHTTPDoStatusBody(http.MethodGet, url, "", ""); code != 0 {
+		return
 	}
 	t.Fatalf("server not ready at %s\nlog: %s", url, log)
 }

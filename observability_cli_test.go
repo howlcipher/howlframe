@@ -19,22 +19,11 @@ import (
 // line per request, and a faulting handler logs the same id next to its error.
 func TestRequestIDAccessLogAndFaultLine(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	port := freeTCPPort(t)
 	src := fmt.Sprintf(`(http_server %d
   (route "/id" (lambda (req) (res_json 200 (dict ("id" (req_id req))))))
   (route "/boom" (lambda (req) (res_json 200 (dict ("n" (to_int "not-a-number")))))))`, port)
-	dir := t.TempDir()
-	file := filepath.Join(dir, "srv.howl")
-	os.WriteFile(file, []byte(src), 0o600)
-	artifact := filepath.Join(dir, "srv.hfbc")
-	if out, err := exec.Command(binary, "build", file, "-o", artifact).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, out)
-	}
+	artifact := buildHFBCArtifact(t, binary, t.TempDir(), "srv", src)
 	cmd := exec.Command(binary, "run", "--allow-caps", "network", "--access-log", artifact)
 	log := &syncBuffer{}
 	cmd.Stdout, cmd.Stderr = log, log

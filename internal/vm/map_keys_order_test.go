@@ -49,27 +49,8 @@ func TestMapKeysSortParity(t *testing.T) {
 			want := byteOrder + "\n"
 			source := string(mustRead(t, filepath.Join("..", "..", "tests", "fixtures", tc.file)))
 
-			t.Run("interpreter", func(t *testing.T) {
-				node, _ := parseAndCompile(t, source)
-				var out, errOut bytes.Buffer
-				if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-					t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-				}
-				if out.String() != want {
-					t.Fatalf("stdout = %q, want byte order %q (UTF-16 would be %q)", out.String(), want, utf16Order+"\n")
-				}
-			})
-
-			t.Run("bytecode", func(t *testing.T) {
-				_, prog := parseAndCompile(t, source)
-				var out, errOut bytes.Buffer
-				if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-					t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-				}
-				if out.String() != want {
-					t.Fatalf("stdout = %q, want byte order %q (UTF-16 would be %q)", out.String(), want, utf16Order+"\n")
-				}
-			})
+			t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, source, want) })
+			t.Run("bytecode", func(t *testing.T) { assertBytecodeStdout(t, source, want) })
 
 			t.Run("go", func(t *testing.T) {
 				code := generateCheckedGoOrder(t, source)

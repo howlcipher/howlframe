@@ -33,37 +33,11 @@ func TestGoEnvRequiresGrantBeforeRead(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
-
-	denied, errText := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=", "HOWLFRAME_ABI_SECRET=phase1-token")
-	if errText == "" {
-		t.Fatalf("empty grant succeeded: %s", denied)
-	}
-	if strings.Contains(denied, "phase1-token") {
-		t.Fatalf("empty grant leaked the secret in process output: %s", denied)
-	}
-	crash, err := os.ReadFile(crashPath)
-	if err != nil {
-		t.Fatalf("denial did not write crash.json: %v\n%s", err, denied)
-	}
-	if strings.Contains(string(crash), "phase1-token") {
-		t.Fatalf("crash.json leaked the secret: %s", crash)
-	}
-	if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: environment") {
-		t.Fatalf("crash.json = %s, want CAPABILITY_DENIED", crash)
-	}
-	os.Remove(crashPath)
-
-	other, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network", "HOWLFRAME_ABI_SECRET=phase1-token")
-	if otherErr == "" {
-		t.Fatalf("network grant succeeded for env: %s", other)
-	}
-	if strings.Contains(other, "phase1-token") {
-		t.Fatalf("network grant leaked the secret: %s", other)
-	}
-	os.Remove(crashPath)
-
+	assertGoCapabilityDeniedEnv(t, rootDir, code, "environment", "the secret", []string{"phase1-token"}, nil, []string{"HOWLFRAME_ABI_SECRET=phase1-token"}, [][2]string{
+		{"empty grant", "HOWLFRAME_ALLOW_CAPS="},
+		{"network grant", "HOWLFRAME_ALLOW_CAPS=network"},
+	})
+	_ = filepath.Join
 	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=environment", "HOWLFRAME_ABI_SECRET=phase1-token")
 	if grantErr != "" {
 		t.Fatalf("environment grant failed: %s\n%s", grantErr, granted)

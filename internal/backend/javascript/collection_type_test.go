@@ -32,41 +32,22 @@ func TestJSCollectionOpsAgreeOnMissAndMutation(t *testing.T) {
 }
 
 func TestJSCollectionOpsFailClosed(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "append string", source: dynamicCollectionJS(`(append s "z")`), want: "TYPE_ERROR: append expected list"},
-		{name: "append dict", source: dynamicCollectionJS(`(append d "z")`), want: "TYPE_ERROR: append expected list"},
-		{name: "map_set string", source: dynamicCollectionJS(`(map_set s "k" "v")`), want: "TYPE_ERROR: map_set expected dict"},
-		{name: "map_set list", source: dynamicCollectionJS(`(map_set xs "k" "v")`), want: "TYPE_ERROR: map_set expected dict"},
-		{name: "map_delete string", source: dynamicCollectionJS(`(map_delete s "k")`), want: "TYPE_ERROR: map_delete expected dict"},
-		{name: "map_delete list", source: dynamicCollectionJS(`(map_delete xs "k")`), want: "TYPE_ERROR: map_delete expected dict"},
-		{name: "map_get string", source: dynamicCollectionJS(`(print (map_get s "k"))`), want: "TYPE_ERROR: map_get expected dict, got string"},
-		{name: "map_get list", source: dynamicCollectionJS(`(print (map_get xs "0"))`), want: "TYPE_ERROR: map_get expected dict, got list"},
-		{name: "list_get string", source: dynamicCollectionJS(`(print (list_get s 0))`), want: "TYPE_ERROR: list_get expected list"},
-		{name: "list_get dict", source: dynamicCollectionJS(`(print (list_get d 0))`), want: "TYPE_ERROR: list_get expected list"},
-		{name: "list_get bad index", source: dynamicCollectionJS(`(print (list_get xs s))`), want: "TYPE_ERROR: list_get index must be a number"},
-		{name: "list_len string", source: dynamicCollectionJS(`(print (list_len s))`), want: "TYPE_ERROR: list_len expected list"},
-		{name: "list_len dict", source: dynamicCollectionJS(`(print (list_len d))`), want: "TYPE_ERROR: list_len expected list"},
-		{name: "map_keys string", source: dynamicCollectionJS(`(print (map_keys s))`), want: "TYPE_ERROR: map_keys expected dict"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := generateCheckedJS(t, tc.source)
-			stdout, stderr, err := runNode(t, code)
-			if err == nil {
-				t.Fatalf("wrong type succeeded, stdout=%q stderr=%q\nsource:\n%s", stdout, stderr, code)
-			}
-			if strings.TrimSpace(stdout) != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(stderr, tc.want) {
-				t.Fatalf("stderr = %q, want %q", stderr, tc.want)
-			}
-		})
-	}
+	runJSTypeErrorCases(t, []jsTypeErrCase{
+		{"append string", dynamicCollectionJS(`(append s "z")`), "TYPE_ERROR: append expected list"},
+		{"append dict", dynamicCollectionJS(`(append d "z")`), "TYPE_ERROR: append expected list"},
+		{"map_set string", dynamicCollectionJS(`(map_set s "k" "v")`), "TYPE_ERROR: map_set expected dict"},
+		{"map_set list", dynamicCollectionJS(`(map_set xs "k" "v")`), "TYPE_ERROR: map_set expected dict"},
+		{"map_delete string", dynamicCollectionJS(`(map_delete s "k")`), "TYPE_ERROR: map_delete expected dict"},
+		{"map_delete list", dynamicCollectionJS(`(map_delete xs "k")`), "TYPE_ERROR: map_delete expected dict"},
+		{"map_get string", dynamicCollectionJS(`(print (map_get s "k"))`), "TYPE_ERROR: map_get expected dict, got string"},
+		{"map_get list", dynamicCollectionJS(`(print (map_get xs "0"))`), "TYPE_ERROR: map_get expected dict, got list"},
+		{"list_get string", dynamicCollectionJS(`(print (list_get s 0))`), "TYPE_ERROR: list_get expected list"},
+		{"list_get dict", dynamicCollectionJS(`(print (list_get d 0))`), "TYPE_ERROR: list_get expected list"},
+		{"list_get bad index", dynamicCollectionJS(`(print (list_get xs s))`), "TYPE_ERROR: list_get index must be a number"},
+		{"list_len string", dynamicCollectionJS(`(print (list_len s))`), "TYPE_ERROR: list_len expected list"},
+		{"list_len dict", dynamicCollectionJS(`(print (list_len d))`), "TYPE_ERROR: list_len expected list"},
+		{"map_keys string", dynamicCollectionJS(`(print (map_keys s))`), "TYPE_ERROR: map_keys expected dict"},
+	})
 }
 
 const collectionHappyJS = `(web_app

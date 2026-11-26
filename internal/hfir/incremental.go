@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
+	"github.com/howlcipher/howlframe/internal/verification"
 )
 
 // CompileResult represents the outcome of an incremental compilation step.
@@ -208,12 +209,16 @@ func (c *IncrementalCompiler) Compile(graph *Graph) (*CompileResult, error) {
 		}
 	}
 
+	effects := collectEffects(graph)
 	evidence := &VerificationEvidence{
+		Schema:          verification.ReportSchema,
 		GraphHash:       GraphHash(graph),
 		Target:          c.target,
+		VerifierVersion: DiagnosticContractVersion,
 		Verified:        true,
+		Checks:          hfirEvidenceChecks(graph, c.target, diags, effects),
 		Diagnostics:     diags,
-		InferredEffects: collectEffects(graph),
+		InferredEffects: effects,
 	}
 	evHash, err := PutEvidence(c.store, evidence)
 	if err != nil {
@@ -301,4 +306,57 @@ func collectEffects(graph *Graph) []Effect {
 		}
 	}
 	return effects
+}
+
+func hfirEvidenceChecks(graph *Graph, target string, diags []Diagnostic, effects []Effect) []verification.Check {
+	nodeCount := 0
+	var entry NodeID
+	if graph != nil {
+		nodeCount = len(graph.Nodes)
+		entry = graph.EntryNode
+	}
+	codes := make([]string, 0, len(diags))
+	diagMsgs := make([]string, 0, len(diags))
+	for _, d := range diags {
+		if d.Code != "" {
+			codes = append(codes, d.Code)
+		}
+		if d.Message != "" {
+			diagMsgs = append(diagMsgs, d.Message)
+		}
+	}
+	feasibilityStatus := verification.StatusPartial
+	feasibilitySummary := "generic structural feasibility only; strict infeasibility rules are active only for wasm"
+	if target == "wasm" {
+		feasibilityStatus = verification.StatusPass
+		feasibilitySummary = "verified strict wasm target infeasibility rules"
+	}
+	return []verification.Check{
+		{
+			Name:    "hfir_graph_structure",
+			Status:  verification.StatusPass,
+			Version: DiagnosticContractVersion,
+			Summary: fmt.Sprintf("verified %d node(s) and entry node %q", nodeCount, entry),
+		},
+		{
+			Name:    "hfir_effect_inference",
+			Status:  verification.StatusPass,
+			Version: DiagnosticContractVersion,
+			Summary: fmt.Sprintf("inferred %d static effect(s)", len(effects)),
+		},
+		{
+			Name:    "hfir_target_feasibility",
+			Status:  feasibilityStatus,
+			Version: DiagnosticContractVersion,
+			Summary: feasibilitySummary,
+		},
+		{
+			Name:        "hfir_blocking_policy",
+			Status:      verification.StatusPass,
+			Version:     DiagnosticContractVersion,
+			Codes:       dedupeAndSort(codes),
+			Summary:     "no SeverityError blocking diagnostics recorded",
+			Diagnostics: dedupeAndSort(diagMsgs),
+		},
+	}
 }

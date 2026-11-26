@@ -325,25 +325,10 @@ func TestHTTPHandlerFailuresFailClosed(t *testing.T) {
   (route "/denied" (lambda (req) (do (store_open kv "memory://x") (res_json 200 (dict ("ok" "yes"))))))
   (route "/ok" (lambda (req) (res_json 200 (dict ("ok" "yes"))))))`)
 
-	env := NewBcEnv(nil)
 	errOut := &bytes.Buffer{}
-	vm := &BCVM{
-		prog:        program,
-		env:         env,
-		insts:       program.Main,
-		stores:      newBCStoreRegistry(),
-		Limits:      DefaultLimits,
-		AllowedCaps: []capability.Capability{capability.Network},
-		ErrOut:      errOut,
-	}
+	vm, serve := newHTTPDispatchVM(program, errOut)
+	env := vm.env
 	// Register both routes without reaching HTTP_SERVER_SERVE, which blocks.
-	serve := len(program.Main)
-	for index, inst := range program.Main {
-		if inst.Op == bytecode.OpHttpServerServe {
-			serve = index
-			break
-		}
-	}
 	vm.run(program.Main[:serve], env)
 	mux := env.vars["__http_mux"].(*http.ServeMux)
 

@@ -111,25 +111,9 @@ func TestHTTPRouteReadsQueryHeaderAndPath(t *testing.T) {
 		t.Fatal("compiled program has no request-read opcode")
 	}
 
-	env := NewBcEnv(nil)
 	var errOut bytes.Buffer
-	machine := &BCVM{
-		prog:        prog,
-		env:         env,
-		insts:       prog.Main,
-		stores:      newBCStoreRegistry(),
-		Limits:      DefaultLimits,
-		AllowedCaps: []capability.Capability{capability.Network},
-		Out:         &bytes.Buffer{},
-		ErrOut:      &errOut,
-	}
-	serve := len(prog.Main)
-	for index, inst := range prog.Main {
-		if inst.Op == bytecode.OpHttpServerServe {
-			serve = index
-			break
-		}
-	}
+	machine, serve := newHTTPDispatchVM(prog, &errOut)
+	env := machine.env
 	machine.run(prog.Main[:serve], env)
 	dispatch, ok := env.vars["__http_dispatch"].(*httpreq.Server)
 	if !ok {
@@ -189,17 +173,7 @@ func TestHTTPRoutePatternFailClosed(t *testing.T) {
   (route "/tasks/{id}" (lambda (req) (res 200 "text/plain" "a")))
   (route "/tasks/{name}" (lambda (req) (res 200 "text/plain" "b"))))`
 		_, prog := parseAndCompile(t, src)
-		env := NewBcEnv(nil)
-		machine := &BCVM{
-			prog:        prog,
-			env:         env,
-			insts:       prog.Main,
-			stores:      newBCStoreRegistry(),
-			Limits:      DefaultLimits,
-			AllowedCaps: []capability.Capability{capability.Network},
-			Out:         &bytes.Buffer{},
-			ErrOut:      &bytes.Buffer{},
-		}
+		machine, _ := newHTTPDispatchVM(prog, &bytes.Buffer{})
 		defer func() {
 			recovered := recover()
 			vmErr, ok := recovered.(*VMError)
@@ -208,7 +182,7 @@ func TestHTTPRoutePatternFailClosed(t *testing.T) {
 			}
 		}()
 		serve := len(prog.Main) - 1
-		machine.run(prog.Main[:serve], env)
+		machine.run(prog.Main[:serve], machine.env)
 		t.Fatal("duplicate pattern did not fail")
 	})
 }

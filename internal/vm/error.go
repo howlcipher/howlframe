@@ -32,6 +32,8 @@ type VMError struct {
 func execArgv(raw []any) []string {
 	if len(raw) == 1 {
 		switch list := raw[0].(type) {
+		case *vmList:
+			raw = list.Slice()
 		case []any:
 			raw = list
 		case []byte:

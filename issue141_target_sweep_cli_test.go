@@ -71,29 +71,8 @@ func TestIssue141TargetNeverFalseBuilt(t *testing.T) {
 					}
 					return // rejected: fail closed
 				}
-				if target == "js" {
-					if nodeErr != nil {
-						t.Skip("node not installed")
-					}
-					files, _ := filepath.Glob(filepath.Join(outDir, "*.js"))
-					if len(files) == 0 {
-						t.Fatalf("Built but no .js output")
-					}
-					for _, f := range files {
-						if b, err := exec.Command("node", "--check", f).CombinedOutput(); err != nil {
-							t.Fatalf("false Built: node --check %s: %s", f, b)
-						}
-					}
-					return
-				}
-				mod := "module probe\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
-				os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(mod), 0o600)
-				cmd := exec.Command("go", "vet", ".")
-				cmd.Dir = outDir
-				cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod")
-				if b, err := cmd.CombinedOutput(); err != nil {
-					t.Fatalf("false Built: go vet: %s", b)
-				}
+				verifyBuiltGoOrJS(t, target, outDir, repo)
+				_ = nodeErr
 			})
 		}
 	}

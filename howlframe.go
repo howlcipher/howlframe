@@ -25,6 +25,7 @@ import (
 	"github.com/howlcipher/howlframe/internal/moduleapi"
 	"github.com/howlcipher/howlframe/internal/optimization"
 	"github.com/howlcipher/howlframe/internal/parser"
+	"github.com/howlcipher/howlframe/internal/verification"
 	"github.com/howlcipher/howlframe/internal/vm"
 	"io"
 	"net"
@@ -70,10 +71,16 @@ func main() {
 	runBc := flag.Bool("run-bc", false, "run a bytecode artifact")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
+	maxStartupInst := flag.Int("max-startup-instructions", 0, "finite instruction limit for HTTP server startup code (default 10000000 for servers unless -max-instructions is given)")
 	maxCallDepth := flag.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting for -run-bc (default 1000)")
 	maxMemory := flag.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
 	maxFetch := flag.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	maxProcesses := flag.Int("max-processes", vm.DefaultMaxProcesses, "positive ceiling for exec children alive at once across the run")
+	maxExecMillis := flag.Int("max-exec-millis", 0, "wall-clock bound in milliseconds for each exec call (default none; --deadline still applies)")
+	maxEventInst := flag.Int("max-event-instructions", vm.DefaultMaxEventInstructions, "terminal_app: positive instruction limit for each handler call (fresh per event)")
+	maxEventMemory := flag.Int("max-event-memory-bytes", vm.DefaultMaxEventMemoryBytes, "terminal_app: positive allocation limit for each handler call (fresh per event)")
+	maxStateBytes := flag.Int("max-state-bytes", vm.DefaultMaxStateBytes, "terminal_app: positive limit on the encoded state carried between events")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
 	listenHost := flag.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
@@ -88,15 +95,16 @@ func main() {
 		os.Exit(1)
 	}
 	if *runBc {
-		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline); err != nil {
+		if _, err := configureBytecodeExecutionPolicy(
+			flag.CommandLine,
+			*maxInstructions, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		); err != nil {
 			ast.ReportError(err.Error(), 0, 0)
 		}
-	}
-	if *runBc && *maxInstructions <= 0 {
-		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
-	}
-	if *runBc && *maxCallDepth <= 0 {
-		ast.ReportError("-max-call-depth must be greater than zero; unlimited recursion is not supported", 0, 0)
 	}
 	if *outDir != "" && strings.HasPrefix(*outDir, "-") {
 		ast.ReportError("flag needs an argument: -o", 0, 0)
@@ -184,40 +192,26 @@ func main() {
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
+		executionPolicy, policyErr := configureBytecodeExecutionPolicy(
+			flag.CommandLine,
+			*maxInstructions, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		)
 		if policyErr != nil {
+			if strings.Contains(policyErr.Error(), "listen-host") {
+				fmt.Fprintln(os.Stderr, policyErr)
+				os.Exit(2)
+			}
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(1)
 		}
-		executionPolicy.Limits.MaxInstructions = *maxInstructions
-		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
-			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
-			os.Exit(2)
-		}
-		executionPolicy.Limits.HTTPListenHost = *listenHost
-		executionPolicy.Limits.LogRequests = *accessLog
-		executionPolicy.Limits.LogTiming = *timingLog
-		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
-
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	ast.Desugar(root)
-	analysis := checker.Check(root)
+	root, analysis := parseAndPrepareProgram(inputFile, content)
 	hfirModule := filepath.Base(inputFile)
 
 	if *maskPlan {
@@ -248,16 +242,7 @@ func main() {
 	// semantic verifier and contract gate. bytecode.CompileToBytecode remains the production compiler.
 	if *compileBc {
 		runHFIRGate(root, hfirModule, hfirTargetBytecode)
-		prog := bytecode.CompileToBytecode(root)
-		var buf bytes.Buffer
-		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
-		}
-		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
-		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
-		}
-		os.Exit(0)
+		encodeAndWriteBytecodeArtifact(bytecode.CompileToBytecode(root), inputFile, *outDir, setAfterInput["o"])
 	}
 
 	// Path 2 (Experimental Research Lowering): AST -> runHFIRGate -> hfir.LowerToBytecode.
@@ -266,7 +251,6 @@ func main() {
 	if *compileHfirBc {
 		// The VM stores bindings by name per call, so shadowing bindings
 		// are renamed first, as CompileToBytecode does.
-		ast.Desugar(root)
 		bytecode.ScopeBindings(root)
 		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		var prog *bytecode.BCProgram
@@ -279,15 +263,7 @@ func main() {
 		if len(diags) > 0 {
 			ast.ReportError(fmt.Sprintf("HFIR direct lowering failed: %s", diags[0].Message), diags[0].Location.Line, diags[0].Location.Column)
 		}
-		var buf bytes.Buffer
-		if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
-		}
-		outFile := artifactOutputPath(inputFile, *outDir, setAfterInput["o"], ".bc.bin")
-		if err = writeArtifact(outFile, buf.Bytes()); err != nil {
-			ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
-		}
-		os.Exit(0)
+		encodeAndWriteBytecodeArtifact(prog, inputFile, *outDir, setAfterInput["o"])
 	}
 
 	if *compileWasm {
@@ -352,6 +328,18 @@ func main() {
 		}
 		ast.ReportError(fmt.Sprintf("bare path requires cli_app, http_server, web_app, or wasm_app root (got %s); use howlframe build --target=go for explicit Go emission", got), line, column)
 	}
+}
+
+func encodeAndWriteBytecodeArtifact(prog *bytecode.BCProgram, inputFile, outDir string, outSet bool) {
+	var buf bytes.Buffer
+	if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
+		ast.ReportError(fmt.Sprintf("Failed to encode bytecode: %v", err), 0, 0)
+	}
+	outFile := artifactOutputPath(inputFile, outDir, outSet, ".bc.bin")
+	if err := writeArtifact(outFile, buf.Bytes()); err != nil {
+		ast.ReportError(fmt.Sprintf("Failed to write %s: %v", outFile, err), 0, 0)
+	}
+	os.Exit(0)
 }
 
 // wasmFunctionSource is one defun collected from a cli_app root, ready to be
@@ -522,29 +510,17 @@ const (
 	hfirTargetNone        hfirTarget = ""            // -validate: target-independent
 	hfirTargetBytecode    hfirTarget = "bytecode"    // -compile-bc
 	hfirTargetWasm        hfirTarget = "wasm"        // -compile-wasm and build --target=wasm
+	hfirTargetWasmGC      hfirTarget = "wasmgc"      // build --target=wasmgc
 	hfirTargetInterpreter hfirTarget = "interpreter" // -run
 	hfirTargetJavaScript  hfirTarget = "javascript"  // web_app
 	hfirTargetGo          hfirTarget = "go"          // default cli_app/http_server backend
 )
 
-// hfirBlockingCodes are the HFIR diagnostic codes currently trusted enough to
-// fail a production build closed. HFIR_UNBOUND_REF is deliberately excluded:
-// verifying against the real tests/*.howl corpus (see
-// TestHFIRGateAcceptsAllExistingFixtures in howlframe_test.go) showed it produces
-// false positives on any variable bound via try_let/catch or bound to the
-// result of a dynamically-typed primitive (llm_generate, generics, HTTP
-// lambda parameter field access, etc.) - internal/checker's Analysis.infer
-// (internal/checker/types.go) legitimately types these as ast.Unknown
-// without raising a checker diagnostic (this is intentional dynamic-typing
-// support, not a bug), but the checked AST's TypeInfo does not preserve the
-// difference between "resolved, dynamically typed" and "never resolved" by
-// the time HFIR lowers it - and a genuinely unresolved reference already
-// fails checker.Check before HFIR ever runs, so on real programs
-// HFIR_UNBOUND_REF currently has no reachable true positive, only false
-// positives. Tracked as bugs.md #42. Verify() still computes and returns
-// this diagnostic (internal/hfir/verifier.go is unchanged) - this exclusion
-// lives only in the production gate's failure policy, not in the verifier
-// itself, so nothing here silently skips verification.
+// hfirBlockingCodes are the HFIR diagnostic codes that fail a production
+// build closed. Notice bugs.md #42 already removed the false-positive
+// HFIR_UNBOUND_REF check from internal/hfir/verifier.go; keeping an explicit
+// allow-list ensures experimental non-blocking verifier checks cannot
+// unexpectedly fail builds closed unless opted in here.
 var hfirBlockingCodes = map[string]bool{
 	"PROFILE_FORBIDDEN_CONSTRUCT": true,
 	"HFIR_INVALID_REF":            true,
@@ -701,8 +677,8 @@ Usage:
 
 Commands:
   agent     Read-only versioned JSON discovery (capabilities, describe, check, explain).
-  inspect   Report artifact capabilities (--caps), as compact JSON, without executing.
-  check     Parse, type-check, and verify a .howl file without emitting an artifact.
+  inspect   Report artifact capabilities (--caps) or verification report (--report) without executing.
+  check     Parse, type-check, and verify a .howl file (--target, --json) without emitting an artifact.
   build     Compile a .howl file (--target=bytecode|go|js|wasm, default: bytecode).
   run       Execute a bytecode artifact or source script (--target=bytecode|interpreter).
   version   Print version information.
@@ -713,12 +689,65 @@ Capabilities are denied by default and must be granted by the runner with --allo
 Example: howlframe run --allow-caps filesystem,network app.hfbc arg1 arg2`)
 }
 
+func parseSourceAST(inputFile string, content []byte) *ast.Node {
+	lx := lexer.NewLexer(string(content))
+	p := parser.NewParser(lx, filepath.Base(inputFile))
+	root := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		p.ReportTrailing()
+	}
+	return root
+}
+
+func prepareProgramAST(root *ast.Node, baseDir string, beforeDesugar, afterDesugar func(*ast.Node)) (*ast.Node, *checker.Analysis) {
+	parser.ExpandIncludes(root, baseDir, 0)
+	ast.ResolveModules(root)
+	ast.ApplyPatches(root)
+	root = ast.ApplyWithContext(root, nil)
+	construct.EnforceArity(root)
+	if beforeDesugar != nil {
+		beforeDesugar(root)
+	}
+	ast.Desugar(root)
+	if afterDesugar != nil {
+		afterDesugar(root)
+	}
+	analysis := checker.Check(root)
+	return root, analysis
+}
+
+func parseAndPrepareProgram(inputFile string, content []byte) (*ast.Node, *checker.Analysis) {
+	root := parseSourceAST(inputFile, content)
+	return prepareProgramAST(root, filepath.Dir(inputFile), nil, nil)
+}
+
+func resumeSubcommandTrailingFlags(fs *flag.FlagSet, inputFile, inputKind string, trailing []string) map[string]bool {
+	setAfterInput, leftover, err := resumeFlagsAfterInput(fs, trailing)
+	if errors.Is(err, flag.ErrHelp) {
+		fs.Usage()
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot parse arguments after %s %q: %v\n", inputKind, inputFile, err)
+		fs.Usage()
+		os.Exit(1)
+	}
+	if len(leftover) > 0 {
+		fmt.Fprintf(os.Stderr, "Unexpected argument %q after %s %q\n", leftover[0], inputKind, inputFile)
+		fs.Usage()
+		os.Exit(1)
+	}
+	return setAfterInput
+}
+
 func checkSource() {
 	checkFlags := flag.NewFlagSet("check", flag.ExitOnError)
 	checkFlags.Usage = func() {
-		fmt.Println("Usage: howlframe check [--profile=default|governed] <source.howl>")
+		fmt.Println("Usage: howlframe check [--profile=default|governed] [--target=bytecode|go|js|wasm|wasmgc|interpreter] [--json] <source.howl>")
 	}
 	profileName := checkFlags.String("profile", "default", "construct profile: default or governed")
+	targetName := checkFlags.String("target", "", "optional verification target (use bytecode to include in-memory HFBC validation)")
+	jsonOut := checkFlags.Bool("json", false, "emit canonical howlframe.verification_report/v0 JSON")
 	checkFlags.Parse(os.Args[2:])
 
 	if checkFlags.NArg() < 1 {
@@ -728,6 +757,28 @@ func checkSource() {
 	}
 
 	inputFile := checkFlags.Arg(0)
+	resumeSubcommandTrailingFlags(checkFlags, inputFile, "source file", checkFlags.Args()[1:])
+	if *profileName != "" && strings.HasPrefix(*profileName, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: --profile")
+		checkFlags.Usage()
+		os.Exit(1)
+	}
+	if *targetName != "" && strings.HasPrefix(*targetName, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: --target")
+		checkFlags.Usage()
+		os.Exit(1)
+	}
+
+	if *jsonOut {
+		report := buildCheckReport(inputFile, *profileName, *targetName)
+		os.Exit(emitVerificationReport(report))
+	}
+
+	canonTarget, gateTarget, targetErr := resolveCheckTarget(*targetName)
+	if targetErr != nil {
+		fmt.Fprintln(os.Stderr, targetErr)
+		os.Exit(1)
+	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -735,37 +786,41 @@ func checkSource() {
 		os.Exit(1)
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
+	root := parseSourceAST(inputFile, content)
 
 	profile, profileErr := construct.LookupProfile(*profileName)
 	if profileErr != nil {
 		ast.ReportError(profileErr.Error(), 0, 0)
 	}
-	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
+	if diags := hfir.VerifyProfile(root, profile, inputFile, canonTarget); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	ast.Desugar(root)
-	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
-		reportHFIRDiagnostics(diags)
-	}
-
-	_ = checker.Check(root)
+	root, _ = prepareProgramAST(root, filepath.Dir(inputFile), func(n *ast.Node) {
+		rejectUnsupportedTargetControlflow(n, canonTarget)
+	}, func(prepared *ast.Node) {
+		if diags := hfir.VerifyProfile(prepared, profile, inputFile, ""); len(diags) > 0 {
+			reportHFIRDiagnostics(diags)
+		}
+		rejectUnsupportedTargetSugar(prepared, canonTarget)
+		rejectUnsupportedTargetValueForms(prepared, canonTarget)
+	})
 
 	hfirModule := filepath.Base(inputFile)
-	runHFIRGate(root, hfirModule, hfirTargetNone)
+	runHFIRGate(root, hfirModule, gateTarget)
+	if gateTarget == hfirTargetBytecode {
+		_ = compileValidatedBytecodeOrExit(root)
+	}
 
 	fmt.Printf("OK: %s\n", inputFile)
+}
+
+func compileValidatedBytecodeOrExit(root *ast.Node) *bytecode.BCProgram {
+	prog := bytecode.CompileToBytecode(root)
+	if err := bytecode.ValidateProgram(prog); err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot compile bytecode: %v: %v\n", bytecode.ErrInvalidProgram, err)
+		os.Exit(1)
+	}
+	return prog
 }
 
 func buildSource() {
@@ -803,16 +858,7 @@ func buildSource() {
 	inputFile := buildFlags.Arg(0)
 	// build has no argv-owning mode, so every token after the source file is
 	// this subcommand's to parse or to reject (bugs.md #52).
-	setAfterInput, leftover, err := resumeFlagsAfterInput(buildFlags, buildFlags.Args()[1:])
-	if errors.Is(err, flag.ErrHelp) {
-		buildFlags.Usage()
-		os.Exit(0)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: %v\n", inputFile, err)
-		buildFlags.Usage()
-		os.Exit(1)
-	}
+	setAfterInput := resumeSubcommandTrailingFlags(buildFlags, inputFile, "source file", buildFlags.Args()[1:])
 	if *outPath != "" && strings.HasPrefix(*outPath, "-") {
 		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: flag needs an argument: -o\n", inputFile)
 		buildFlags.Usage()
@@ -823,11 +869,6 @@ func buildSource() {
 		buildFlags.Usage()
 		os.Exit(1)
 	}
-	if len(leftover) > 0 {
-		fmt.Fprintf(os.Stderr, "Unexpected argument %q after source file %q\n", leftover[0], inputFile)
-		buildFlags.Usage()
-		os.Exit(1)
-	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -835,38 +876,32 @@ func buildSource() {
 		os.Exit(1)
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
+	root := parseSourceAST(inputFile, content)
+	targetVal := strings.ToLower(strings.TrimSpace(*target))
 
 	profile, profileErr := construct.LookupProfile(*profileName)
 	if profileErr != nil {
 		ast.ReportError(profileErr.Error(), 0, 0)
 	}
-	if diags := hfir.VerifyProfile(root, profile, inputFile, strings.ToLower(strings.TrimSpace(*target))); len(diags) > 0 {
+	if diags := hfir.VerifyProfile(root, profile, inputFile, targetVal); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	rejectUnsupportedTargetControlflow(root, strings.ToLower(strings.TrimSpace(*target)))
-	ast.Desugar(root)
-	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
-		reportHFIRDiagnostics(diags)
-	}
-	rejectUnsupportedTargetSugar(root, strings.ToLower(strings.TrimSpace(*target)))
-	jsValueForms := rejectUnsupportedTargetValueForms(root, strings.ToLower(strings.TrimSpace(*target)))
-
-	analysis := checker.Check(root)
+	var jsValueForms []*ast.Node
+	root, analysis := prepareProgramAST(
+		root,
+		filepath.Dir(inputFile),
+		func(n *ast.Node) {
+			rejectUnsupportedTargetControlflow(n, targetVal)
+		},
+		func(n *ast.Node) {
+			if diags := hfir.VerifyProfile(n, profile, inputFile, ""); len(diags) > 0 {
+				reportHFIRDiagnostics(diags)
+			}
+			rejectUnsupportedTargetSugar(n, targetVal)
+			jsValueForms = rejectUnsupportedTargetValueForms(n, targetVal)
+		},
+	)
 	hfirModule := filepath.Base(inputFile)
-
-	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	if *wasmInline && targetVal != "wasmgc" {
 		fmt.Fprintln(os.Stderr, "--inline-module requires --target wasmgc")
 		os.Exit(1)
@@ -983,6 +1018,7 @@ func buildSource() {
 	case "wasmgc":
 		// The WebAssembly GC backend (docs/design/wasm_gc_backend.md), in
 		// development; it becomes the wasm target once it covers it.
+		runHFIRGate(root, hfirModule, hfirTargetWasmGC)
 		if *jsModule {
 			if *wasmInline || *wasmTests || *wasmHost != "" {
 				fmt.Fprintln(os.Stderr, "--module cannot be combined with --host, --inline-module or --tests")
@@ -1143,8 +1179,9 @@ func writeJSModule(root *ast.Node, analysis *checker.Analysis, outputDir string)
 // are refused on a command line that runs nothing. -allow-caps also governs
 // -run.
 var runOnlyFlags = []string{
-	"max-instructions", "max-call-depth", "max-memory-bytes", "max-fetch-bytes",
-	"max-exec-output-bytes", "max-request-bytes", "access-log", "listen-host",
+	"max-instructions", "max-startup-instructions", "max-call-depth", "max-memory-bytes", "max-fetch-bytes",
+	"max-exec-output-bytes", "max-processes", "max-exec-millis", "max-event-instructions",
+	"max-event-memory-bytes", "max-state-bytes", "max-request-bytes", "access-log", "listen-host",
 	"timing-log", "deadline", "allow-caps",
 }
 
@@ -1240,35 +1277,23 @@ func runArtifact() {
 			fmt.Fprintln(os.Stderr, "--receipt requires bytecode target; interpreter receipts are unsupported")
 			os.Exit(1)
 		}
-		lx := lexer.NewLexer(string(content))
-		p := parser.NewParser(lx, filepath.Base(inputFile))
-		root := p.ParseExpression()
-		if p.Cur.Type != lexer.TokenEOF {
-			p.ReportTrailing()
-		}
-		parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-		ast.ResolveModules(root)
-		ast.ApplyPatches(root)
-		root = ast.ApplyWithContext(root, nil)
-		root = ast.ApplyWithContext(root, nil)
-		construct.EnforceArity(root)
-		ast.Desugar(root)
-		_ = checker.Check(root)
+		root, _ := parseAndPrepareProgram(inputFile, content)
 		hfirModule := filepath.Base(inputFile)
 		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
 		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 
 	case "bytecode", "bc":
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
+		executionPolicy, policyErr := configureBytecodeExecutionPolicy(
+			runFlags,
+			*maxInst, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		)
 		if policyErr != nil {
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(2) // usage error: an invalid resource flag value
-		}
-		executionPolicy.Limits.MaxInstructions = *maxInst
-		executionPolicy.Limits.MaxStartupInstructions = startupInstructionLimit(runFlags, *maxStartupInst)
-		if err := applyEventLimits(&executionPolicy, *maxEventInst, *maxEventMemory, *maxStateBytes); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
 		}
 		executionPolicy.Limits.TerminalReplay = *replay
 		switch *color {
@@ -1278,42 +1303,13 @@ func runArtifact() {
 			fmt.Fprintf(os.Stderr, "-color must be auto, always or never, got %q\n", *color)
 			os.Exit(2)
 		}
-		if err := applyProcessLimits(&executionPolicy, *maxProcesses, *maxExecMillis); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
-			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
-			os.Exit(2)
-		}
-		executionPolicy.Limits.HTTPListenHost = *listenHost
-		executionPolicy.Limits.LogRequests = *accessLog
-		executionPolicy.Limits.LogTiming = *timingLog
-		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 
 		var prog *bytecode.BCProgram
 		if strings.HasSuffix(inputFile, ".howl") {
-			lx := lexer.NewLexer(string(content))
-			p := parser.NewParser(lx, filepath.Base(inputFile))
-			root := p.ParseExpression()
-			if p.Cur.Type != lexer.TokenEOF {
-				p.ReportTrailing()
-			}
-			parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-			ast.ResolveModules(root)
-			ast.ApplyPatches(root)
-			root = ast.ApplyWithContext(root, nil)
-			root = ast.ApplyWithContext(root, nil)
-			construct.EnforceArity(root)
-			ast.Desugar(root)
-			_ = checker.Check(root)
+			root, _ := parseAndPrepareProgram(inputFile, content)
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
-			prog = bytecode.CompileToBytecode(root)
-			if err := bytecode.ValidateProgram(prog); err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot compile bytecode: %v: %v\n", bytecode.ErrInvalidProgram, err)
-				os.Exit(1)
-			}
+			prog = compileValidatedBytecodeOrExit(root)
 			if *receiptPath != "" {
 				var canonical bytes.Buffer
 				if err := bytecode.WriteArtifact(&canonical, prog); err != nil {
@@ -1352,16 +1348,68 @@ func printRequiredCapabilities(content []byte) {
 func inspectArtifact() {
 	flags := flag.NewFlagSet("inspect", flag.ExitOnError)
 	caps := flags.Bool("caps", false, "report required capabilities as compact JSON without execution")
+	report := flags.Bool("report", false, "emit canonical howlframe.verification_report/v0 JSON without executing")
+	flags.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: howlframe inspect (--caps | --report) <artifact.hfbc>")
+	}
 	flags.Parse(os.Args[2:])
-	if !*caps || flags.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "Usage: howlframe inspect --caps <artifact.hfbc>")
+	if flags.NArg() < 1 {
+		flags.Usage()
 		os.Exit(1)
 	}
-	data, err := os.ReadFile(flags.Arg(0))
+	artifact := flags.Arg(0)
+	resumeSubcommandTrailingFlags(flags, artifact, "artifact file", flags.Args()[1:])
+	if *caps == *report {
+		flags.Usage()
+		os.Exit(1)
+	}
+	if *report {
+		os.Exit(emitVerificationReport(buildInspectReport(artifact)))
+	}
+	data, err := os.ReadFile(artifact)
 	if err != nil {
 		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
 	}
 	printRequiredCapabilities(data)
+}
+
+func configureBytecodeExecutionPolicy(
+	fs *flag.FlagSet,
+	maxInst, maxStartupInst, maxCallDepth, maxMemory, maxFetch, maxExec, maxRequest int,
+	deadline string,
+	maxProcesses, maxExecMillis, maxEventInst, maxEventMemory, maxStateBytes int,
+	listenHost string,
+	accessLog, timingLog bool,
+) (vm.ExecutionPolicy, error) {
+	policy, err := resourcePolicy(maxMemory, maxFetch, maxExec, maxRequest, deadline)
+	if err != nil {
+		return policy, err
+	}
+	if maxInst <= 0 {
+		return policy, fmt.Errorf("-max-instructions must be greater than zero; unlimited execution is not supported")
+	}
+	if maxCallDepth <= 0 {
+		return policy, fmt.Errorf("-max-call-depth must be greater than zero; unlimited recursion is not supported")
+	}
+	if maxStartupInst < 0 {
+		return policy, fmt.Errorf("-max-startup-instructions must not be negative")
+	}
+	policy.Limits.MaxInstructions = maxInst
+	policy.Limits.MaxStartupInstructions = startupInstructionLimit(fs, maxStartupInst)
+	if err := applyEventLimits(&policy, maxEventInst, maxEventMemory, maxStateBytes); err != nil {
+		return policy, err
+	}
+	if err := applyProcessLimits(&policy, maxProcesses, maxExecMillis); err != nil {
+		return policy, err
+	}
+	if listenHost != "" && net.ParseIP(listenHost) == nil {
+		return policy, fmt.Errorf("--listen-host must be an IP literal")
+	}
+	policy.Limits.HTTPListenHost = listenHost
+	policy.Limits.LogRequests = accessLog
+	policy.Limits.LogTiming = timingLog
+	policy.Limits.MaxCallDepth = maxCallDepth
+	return policy, nil
 }
 
 func resourcePolicy(memory, fetch, output, request int, deadline string) (vm.ExecutionPolicy, error) {
@@ -1765,12 +1813,13 @@ var interopCommands = []interopCommand{
 	{Path: []string{"agent", "status"}, Flags: []string{"--verified", "--task", "--root", "--bundle", "--state-dir"}, JSON: true, Emits: []string{agent.SessionSchema}},
 	{Path: []string{}, Flags: []string{
 		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
-		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
-		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-request-bytes", "-access-log",
+		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-startup-instructions", "-max-call-depth",
+		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-processes", "-max-exec-millis",
+		"-max-event-instructions", "-max-event-memory-bytes", "-max-state-bytes", "-max-request-bytes", "-access-log",
 		"-timing-log", "-listen-host", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
 	}, Emits: []string{"howlframe.receipt/v0"}},
-	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},
-	{Path: []string{"check"}, Flags: []string{"--profile"}},
+	{Path: []string{"inspect"}, Flags: []string{"--caps", "--report"}, JSON: true, Emits: []string{verification.ReportSchema}},
+	{Path: []string{"check"}, Flags: []string{"--profile", "--target", "--json"}, JSON: true, Emits: []string{verification.ReportSchema}},
 	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--inline-module", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
@@ -1812,4 +1861,272 @@ func printInterop(args []string) {
 	}
 	out, _ := json.MarshalIndent(interopDescription(), "", "  ")
 	fmt.Println(string(out))
+}
+
+func resolveCheckTarget(raw string) (string, hfirTarget, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return "", hfirTargetNone, nil
+	case "bytecode", "bc":
+		return "bytecode", hfirTargetBytecode, nil
+	case "go":
+		return "go", hfirTargetGo, nil
+	case "js", "javascript":
+		return "javascript", hfirTargetJavaScript, nil
+	case "wasm":
+		return "wasm", hfirTargetWasm, nil
+	case "wasmgc":
+		return "wasmgc", hfirTargetWasmGC, nil
+	case "interpreter":
+		return "interpreter", hfirTargetInterpreter, nil
+	default:
+		return raw, hfirTargetNone, fmt.Errorf("unknown target %q: valid check targets are bytecode, go, js, wasm, wasmgc, interpreter", raw)
+	}
+}
+
+func newVerificationReport(target, profile string, extraLimitations ...string) verification.Report {
+	blocking := make([]string, 0, len(hfirBlockingCodes))
+	for code := range hfirBlockingCodes {
+		blocking = append(blocking, code)
+	}
+	return verification.Report{
+		Target:  target,
+		Profile: profile,
+		Versions: verification.Versions{
+			Compiler:          Version,
+			HFBCFormat:        HFBCFormatVersion,
+			ConstructRegistry: len(construct.Table()),
+			HFIRVerifier:      hfir.DiagnosticContractVersion,
+		},
+		HFIRBlockingCodes: blocking,
+		Limitations:       extraLimitations,
+	}
+}
+
+func emitVerificationReport(r verification.Report) int {
+	r.Finalize()
+	out, _ := json.MarshalIndent(r, "", "  ")
+	fmt.Println(string(out))
+	if r.Passed {
+		return 0
+	}
+	return 1
+}
+
+func captureCheckStdout(fn func()) string {
+	r, w, err := os.Pipe()
+	if err != nil {
+		fn()
+		return ""
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&buf, r)
+		_ = r.Close()
+		close(done)
+	}()
+	func() {
+		defer func() {
+			os.Stdout = orig
+			_ = w.Close()
+		}()
+		fn()
+	}()
+	<-done
+	return strings.TrimSpace(buf.String())
+}
+
+func formatCatchDiagnostic(caught *ast.ErrorOutput) (codes, diagnostics []string) {
+	if caught == nil {
+		return nil, nil
+	}
+	if code := verification.ExtractErrorCode(caught.Reason); code != "" {
+		codes = []string{code}
+	}
+	msg := caught.Reason
+	if caught.Line > 0 || caught.Column > 0 {
+		msg = fmt.Sprintf("%s (line %d, col %d)", caught.Reason, caught.Line, caught.Column)
+	}
+	return codes, []string{msg}
+}
+
+func hfirDiagSummary(diags []hfir.Diagnostic) (allCodes, msgs []string, hasBlocking bool) {
+	for _, d := range diags {
+		if d.Code != "" {
+			allCodes = append(allCodes, d.Code)
+		}
+		msgs = append(msgs, fmt.Sprintf("%s: %s (line %d, col %d)", d.Code, d.Message, d.Location.Line, d.Location.Column))
+		if d.Severity == hfir.SeverityError && hfirBlockingCodes[d.Code] {
+			hasBlocking = true
+		}
+	}
+	return allCodes, msgs, hasBlocking
+}
+
+func appendCheck(r *verification.Report, name, status, version, summary string, codes, diagnostics []string) {
+	r.Checks = append(r.Checks, verification.Check{
+		Name:        name,
+		Status:      status,
+		Version:     version,
+		Codes:       codes,
+		Summary:     summary,
+		Diagnostics: diagnostics,
+	})
+}
+
+func failCheckStage(r *verification.Report, name, version, summary string, codes, diagnostics []string) verification.Report {
+	appendCheck(r, name, verification.StatusFail, version, summary, codes, diagnostics)
+	r.Checks = verification.AppendRemainingSkipped(r.Checks, verification.StandardPipelineChecks, "skipped after prior verification failure")
+	r.Finalize()
+	return *r
+}
+
+func validateInMemoryBytecode(root *ast.Node) (sha string, funcs int, errCode, errSummary string, err error) {
+	prog := bytecode.CompileToBytecode(root)
+	if err := bytecode.ValidateProgram(prog); err != nil {
+		return "", 0, "BYTECODE_INVALID", "bytecode structural validation failed", err
+	}
+	var buf bytes.Buffer
+	if err := bytecode.WriteValidatedArtifact(&buf, prog); err != nil {
+		return "", 0, "HFBC_ENCODE_ERROR", "HFBC artifact encoding failed", err
+	}
+	sum := sha256.Sum256(buf.Bytes())
+	return fmt.Sprintf("%x", sum), len(prog.Functions) + 1, "", "", nil
+}
+
+func buildCheckReport(inputFile, profileName, rawTarget string) verification.Report {
+	canonTarget, gateTarget, targetErr := resolveCheckTarget(rawTarget)
+	r := newVerificationReport(canonTarget, profileName)
+	if targetErr != nil {
+		return failCheckStage(&r, "hfir_gate", hfir.DiagnosticContractVersion, "invalid target option", []string{"UNKNOWN_TARGET"}, []string{targetErr.Error()})
+	}
+
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		return failCheckStage(&r, "parser", Version, "unable to read source file", []string{"SOURCE_IO_ERROR"}, []string{err.Error()})
+	}
+
+	var root *ast.Node
+	var parseCaught *ast.ErrorOutput
+	warnings := captureCheckStdout(func() {
+		parseCaught = ast.RunCatchingErrors(func() {
+			root = parseSourceAST(inputFile, content)
+			parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
+			ast.ResolveModules(root)
+			ast.ApplyPatches(root)
+			root = ast.ApplyWithContext(root, nil)
+		})
+	})
+	var parseDiags []string
+	if warnings != "" {
+		parseDiags = strings.Split(warnings, "\n")
+	}
+	if parseCaught != nil {
+		codes, msgs := formatCatchDiagnostic(parseCaught)
+		return failCheckStage(&r, "parser", Version, "source parsing or module expansion failed", codes, append(msgs, parseDiags...))
+	}
+	appendCheck(&r, "parser", verification.StatusPass, Version, "parsed source AST and expanded modules cleanly", nil, parseDiags)
+
+	if violations := construct.CheckArity(root); len(violations) > 0 {
+		msgs := make([]string, 0, len(violations))
+		for _, v := range violations {
+			msgs = append(msgs, fmt.Sprintf("%s (line %d, col %d)", v.Message(), v.Line, v.Column))
+		}
+		return failCheckStage(&r, "construct_registry", HFBCFormatVersion, "construct arity check failed", []string{"ARITY_ERROR"}, msgs)
+	}
+	appendCheck(&r, "construct_registry", verification.StatusPass, HFBCFormatVersion, fmt.Sprintf("verified arity across %d registered constructs", len(construct.Table())), nil, nil)
+
+	profile, profileErr := construct.LookupProfile(profileName)
+	if profileErr != nil {
+		return failCheckStage(&r, "profile_policy", HFBCFormatVersion, "unknown construct profile", []string{"PROFILE_UNKNOWN"}, []string{profileErr.Error()})
+	}
+	if preDiags := hfir.VerifyProfile(root, profile, inputFile, canonTarget); len(preDiags) > 0 {
+		codes, msgs, _ := hfirDiagSummary(preDiags)
+		return failCheckStage(&r, "profile_policy", hfir.DiagnosticContractVersion, "construct profile policy violation", codes, msgs)
+	}
+
+	preCheckerCaught := ast.RunCatchingErrors(func() {
+		rejectUnsupportedTargetControlflow(root, canonTarget)
+	})
+	if preCheckerCaught == nil {
+		if desugarCaught := ast.RunCatchingErrors(func() { ast.Desugar(root) }); desugarCaught != nil {
+			codes, msgs := formatCatchDiagnostic(desugarCaught)
+			return failCheckStage(&r, "profile_policy", Version, "AST desugaring failed", codes, msgs)
+		}
+		if postDiags := hfir.VerifyProfile(root, profile, inputFile, ""); len(postDiags) > 0 {
+			codes, msgs, _ := hfirDiagSummary(postDiags)
+			return failCheckStage(&r, "profile_policy", hfir.DiagnosticContractVersion, "desugared construct profile policy violation", codes, msgs)
+		}
+	}
+	appendCheck(&r, "profile_policy", verification.StatusPass, hfir.DiagnosticContractVersion, fmt.Sprintf("construct profile %q permitted all forms", profileName), nil, nil)
+
+	if preCheckerCaught != nil {
+		codes, msgs := formatCatchDiagnostic(preCheckerCaught)
+		return failCheckStage(&r, "checker", Version, "target control-flow compatibility check failed", codes, msgs)
+	}
+	if checkerCaught := ast.RunCatchingErrors(func() {
+		rejectUnsupportedTargetSugar(root, canonTarget)
+		rejectUnsupportedTargetValueForms(root, canonTarget)
+		checker.Check(root)
+	}); checkerCaught != nil {
+		codes, msgs := formatCatchDiagnostic(checkerCaught)
+		return failCheckStage(&r, "checker", Version, "semantic/type checking or target compatibility check failed", codes, msgs)
+	}
+	appendCheck(&r, "checker", verification.StatusPass, Version, "semantic, type, and target form checks passed", nil, nil)
+
+	graph, lowerErr := hfir.LowerAST(root, filepath.Base(inputFile))
+	if lowerErr != nil {
+		return failCheckStage(&r, "hfir_gate", hfir.DiagnosticContractVersion, "HFIR lowering failed", []string{"HFIR_LOWERING_FAILED"}, []string{lowerErr.Error()})
+	}
+	diags := hfir.NewVerifier(graph, string(gateTarget)).Verify()
+	diags = append(diags, hfir.VerifyConstructs(root, string(gateTarget))...)
+	hfirCodes, hfirMsgs, hasBlocking := hfirDiagSummary(diags)
+	if hasBlocking {
+		return failCheckStage(&r, "hfir_gate", hfir.DiagnosticContractVersion, "blocking HFIR verification gate diagnostic reported", hfirCodes, hfirMsgs)
+	}
+	appendCheck(&r, "hfir_gate", verification.StatusPass, hfir.DiagnosticContractVersion, "passed HFIR structural verification and blocking policy gate", hfirCodes, hfirMsgs)
+
+	if gateTarget == hfirTargetBytecode {
+		sha, funcs, code, summary, err := validateInMemoryBytecode(root)
+		if err != nil {
+			return failCheckStage(&r, "artifact_validation", HFBCFormatVersion, summary, []string{code}, []string{err.Error()})
+		}
+		r.ArtifactSHA256 = sha
+		appendCheck(&r, "artifact_validation", verification.StatusPass, HFBCFormatVersion, fmt.Sprintf("validated in-memory HFBC v%s artifact (%d functions)", HFBCFormatVersion, funcs), nil, nil)
+	} else {
+		appendCheck(&r, "artifact_validation", verification.StatusSkipped, HFBCFormatVersion, "skipped (pass --target=bytecode to validate compiled HFBC bytecode invariants)", nil, nil)
+	}
+	r.Finalize()
+	return r
+}
+
+func buildInspectReport(artifact string) verification.Report {
+	r := newVerificationReport("bytecode", "", "Binary inspection validates HFBC framing, opcodes, and structural bytecode invariants only; original source AST, profile policy, and HFIR checks are not available from .hfbc alone.")
+	for _, stage := range verification.StandardPipelineChecks {
+		if stage != "artifact_validation" {
+			appendCheck(&r, stage, verification.StatusSkipped, "", "skipped (compiled .hfbc artifact inspection only)", nil, nil)
+		}
+	}
+	failInspect := func(code, summary string, err error) verification.Report {
+		appendCheck(&r, "artifact_validation", verification.StatusFail, HFBCFormatVersion, summary, []string{code}, []string{err.Error()})
+		r.Finalize()
+		return r
+	}
+	data, err := os.ReadFile(artifact)
+	if err != nil {
+		return failInspect("ARTIFACT_IO_ERROR", "unable to read artifact file", err)
+	}
+	sum := sha256.Sum256(data)
+	r.ArtifactSHA256 = fmt.Sprintf("%x", sum)
+	prog, err := bytecode.ReadArtifact(bytes.NewReader(data))
+	if err != nil {
+		return failInspect("HFBC_INVALID_ARTIFACT", "HFBC artifact failed decoding or structural validation", err)
+	}
+	req := bytecode.RequiredCapabilities(prog)
+	appendCheck(&r, "artifact_validation", verification.StatusPass, HFBCFormatVersion, fmt.Sprintf("validated HFBC artifact (%d functions, %d required capabilities)", len(prog.Functions)+1, len(req.Capabilities)), nil, nil)
+	r.Finalize()
+	return r
 }

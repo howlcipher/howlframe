@@ -190,28 +190,13 @@ func TestIssue151NonNumericOperandMessage(t *testing.T) {
 // fractional floats without rounding the int through float64 (2^63 used to
 // compare as MinInt64, which made (% MaxInt64 1e33) add the divisor).
 func TestIssue151MixedCompareOnEveryPath(t *testing.T) {
-	bin := c1c2Binary(t)
 	src := `(do (print (< 9223372036854775807 9223372036854775808.0) (> 9223372036854775808.0 0) (< -9223372036854775808 -9223372036854777856.0) (= 9223372036854775807 9223372036854775808.0) (< 3 3.5) (> 4 3.5) (< -4 -3.5) (> -3 -3.5) (<= 3 3.0) (< (- 9223372036854775807 0.0) 0)))`
 	want := "true true false false true true true true true false\n"
-	for _, args := range issue149Paths(t, bin, src) {
-		out, err := issue151Run(t, bin, args)
-		if err != nil || out != want {
-			t.Errorf("%v: err=%v out=%q want %q", args[0], err, out, want)
-		}
-	}
+	issue161Run(t, src, want)
 }
 
 // Go and JS still reject % and // with UNSUPPORTED_ON_TARGET.
 func TestIssue151RejectedOnGoJS(t *testing.T) {
 	bin := c1c2Binary(t)
-	for _, f := range []string{`(print (% 9223372036854775807 1.5))`, `(print (// -0.0 2.5))`, `(print (% 1.0 0.1))`} {
-		for _, target := range []string{"go", "js"} {
-			dir := t.TempDir()
-			p := writeTemp(t, dir, "g.howl", "(do "+f+")")
-			out, err := exec.Command(bin, "build", "--target", target, p, "-o", dir+"/out").CombinedOutput()
-			if err == nil || !strings.Contains(string(out), "UNSUPPORTED_ON_TARGET") {
-				t.Errorf("%s on %s: err=%v out=%s", f, target, err, out)
-			}
-		}
-	}
+	assertRejectedOnGoAndJS(t, bin, []string{`(print (% 9223372036854775807 1.5))`, `(print (// -0.0 2.5))`, `(print (% 1.0 0.1))`})
 }

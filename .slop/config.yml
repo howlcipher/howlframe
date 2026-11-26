@@ -18,7 +18,39 @@ scopes:
     pattern: "**/*.go"
     ignore:
       - "**/*_test.go"
+      - "experiments/**"
+      - "benchmarks/**"
+  go_experiments:
+    scan_path: experiments
+    pattern: "**/*.go"
+    ignore:
+      - "**/*_test.go"
+  go_benchmarks:
+    scan_path: benchmarks
+    pattern: "**/*.go"
+    ignore:
+      - "**/*_test.go"
   go_tests:
     scan_path: .
+    pattern: "**/*_test.go"
+    ignore:
+      - "apps/**"
+      - "examples/**"
+      - "experiments/**"
+      - "benchmarks/**"
+  go_apps_tests:
+    scan_path: apps
+    pattern: "**/*_test.go"
+    ignore: []
+  go_examples_tests:
+    scan_path: examples
+    pattern: "**/*_test.go"
+    ignore: []
+  go_experiments_tests:
+    scan_path: experiments
+    pattern: "**/*_test.go"
+    ignore: []
+  go_benchmarks_tests:
+    scan_path: benchmarks
     pattern: "**/*_test.go"
     ignore: []

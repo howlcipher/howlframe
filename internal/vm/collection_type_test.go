@@ -45,101 +45,35 @@ const collectionHappyWant = "miss \n" +
 	"del \n"
 
 func TestCollectionOpsAgreeOnMissAndMutation(t *testing.T) {
-	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, collectionHappy)
-		var out, errOut bytes.Buffer
-		if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != collectionHappyWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), collectionHappyWant)
-		}
-	})
-
-	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, collectionHappy)
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != collectionHappyWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), collectionHappyWant)
-		}
-	})
+	t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, collectionHappy, collectionHappyWant) })
+	t.Run("bytecode", func(t *testing.T) { assertBytecodeStdout(t, collectionHappy, collectionHappyWant) })
 }
 
 func TestCollectionOpsFailClosed(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "append string", source: dynamicCollection(`(append s "z")`), want: "append expected list"},
-		{name: "append dict", source: dynamicCollection(`(append d "z")`), want: "append expected list"},
-		{name: "map_set string", source: dynamicCollection(`(map_set s "k" "v")`), want: "map_set expected dict"},
-		{name: "map_set list", source: dynamicCollection(`(map_set xs "k" "v")`), want: "map_set expected dict"},
-		{name: "map_delete string", source: dynamicCollection(`(map_delete s "k")`), want: "map_delete expected dict"},
-		{name: "map_delete list", source: dynamicCollection(`(map_delete xs "k")`), want: "map_delete expected dict"},
-		{name: "map_get string", source: dynamicCollection(`(print (map_get s "k"))`), want: "map_get expected dict"},
-		{name: "map_get list", source: dynamicCollection(`(print (map_get xs "0"))`), want: "map_get expected dict"},
-		{name: "list_get string", source: dynamicCollection(`(print (list_get s 0))`), want: "list_get expected list"},
-		{name: "list_get dict", source: dynamicCollection(`(print (list_get d 0))`), want: "list_get expected list"},
-		{name: "list_get bad index", source: dynamicCollection(`(print (list_get xs s))`), want: "list_get index must be a number"},
-		{name: "list_len dict", source: dynamicCollection(`(print (list_len d))`), want: "list_len expected list, string, or bytes"},
-		{name: "list_len dict literal", source: `(cli_app (let (d (dict ("a" "b"))) (print (list_len d))))`, want: "list_len expected list, string, or bytes"},
-		{name: "map_keys string", source: dynamicCollection(`(print (map_keys s))`), want: "map_keys expected dict"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Run("interpreter", func(t *testing.T) {
-				node, _ := parseAndCompile(t, tc.source)
-				var out, errOut bytes.Buffer
-				exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut)
-				if exitCode == 0 || !strings.Contains(errOut.String(), "TYPE_ERROR") || !strings.Contains(errOut.String(), tc.want) {
-					t.Fatalf("exit = %d, stdout = %q, stderr = %q", exitCode, out.String(), errOut.String())
-				}
-				if strings.TrimSpace(out.String()) != "" {
-					t.Fatalf("stdout = %q, want empty", out.String())
-				}
-			})
-			t.Run("bytecode", func(t *testing.T) {
-				_, prog := parseAndCompile(t, tc.source)
-				var out, errOut bytes.Buffer
-				evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-				if evidence.RuntimeFailure == nil || evidence.RuntimeFailure.Code != "TYPE_ERROR" {
-					t.Fatalf("failure = %#v, want TYPE_ERROR", evidence.RuntimeFailure)
-				}
-				if !strings.Contains(evidence.RuntimeFailure.Message, tc.want) {
-					t.Fatalf("message = %q, want %q", evidence.RuntimeFailure.Message, tc.want)
-				}
-				if strings.TrimSpace(out.String()) != "" {
-					t.Fatalf("stdout = %q, want empty", out.String())
-				}
-			})
-		})
-	}
+	runVMTypeErrorCases(t, []vmTypeErrCase{
+		{"append string", dynamicCollection(`(append s "z")`), "append expected list"},
+		{"append dict", dynamicCollection(`(append d "z")`), "append expected list"},
+		{"map_set string", dynamicCollection(`(map_set s "k" "v")`), "map_set expected dict"},
+		{"map_set list", dynamicCollection(`(map_set xs "k" "v")`), "map_set expected dict"},
+		{"map_delete string", dynamicCollection(`(map_delete s "k")`), "map_delete expected dict"},
+		{"map_delete list", dynamicCollection(`(map_delete xs "k")`), "map_delete expected dict"},
+		{"map_get string", dynamicCollection(`(print (map_get s "k"))`), "map_get expected dict"},
+		{"map_get list", dynamicCollection(`(print (map_get xs "0"))`), "map_get expected dict"},
+		{"list_get string", dynamicCollection(`(print (list_get s 0))`), "list_get expected list"},
+		{"list_get dict", dynamicCollection(`(print (list_get d 0))`), "list_get expected list"},
+		{"list_get bad index", dynamicCollection(`(print (list_get xs s))`), "list_get index must be a number"},
+		{"list_len dict", dynamicCollection(`(print (list_len d))`), "list_len expected list, string, or bytes"},
+		{"list_len dict literal", `(cli_app (let (d (dict ("a" "b"))) (print (list_len d))))`, "list_len expected list, string, or bytes"},
+		{"map_keys string", dynamicCollection(`(print (map_keys s))`), "map_keys expected dict"},
+	})
 }
 
 func TestListLenAcceptsStringAndBytes(t *testing.T) {
 	t.Run("string", func(t *testing.T) {
-		_, prog := parseAndCompile(t, `(cli_app (print (list_len "hello")))`)
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d stderr=%s", exitCode, errOut.String())
-		}
-		if out.String() != "5\n" {
-			t.Fatalf("stdout=%q", out.String())
-		}
+		assertBytecodeStdout(t, `(cli_app (print (list_len "hello")))`, "5\n")
 	})
 	t.Run("dynamic string", func(t *testing.T) {
-		_, prog := parseAndCompile(t, dynamicCollection(`(print (list_len s))`))
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d stderr=%s", exitCode, errOut.String())
-		}
-		if out.String() != "3\n" {
-			t.Fatalf("stdout=%q", out.String())
-		}
+		assertBytecodeStdout(t, dynamicCollection(`(print (list_len s))`), "3\n")
 	})
 	t.Run("read_file bytes", func(t *testing.T) {
 		dir := t.TempDir()

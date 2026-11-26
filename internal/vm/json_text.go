@@ -40,6 +40,24 @@ func appendJSON(b []byte, v any) ([]byte, error) {
 		return appendJSONFloat(b, x)
 	case string:
 		return appendJSONString(b, x), nil
+	case *vmList:
+		b = append(b, '[')
+		var err error
+		idx := 0
+		x.ForEach(func(e any) bool {
+			if idx > 0 {
+				b = append(b, ',')
+			}
+			idx++
+			if b, err = appendJSON(b, e); err != nil {
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return nil, err
+		}
+		return append(b, ']'), nil
 	case []any:
 		b = append(b, '[')
 		for i, e := range x {

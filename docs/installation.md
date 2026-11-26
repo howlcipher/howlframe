@@ -5,11 +5,13 @@ The simplest way to install HowlFrame is to download a pre-compiled release bina
 
 1. Go to the [GitHub Releases](https://github.com/howlcipher/howlframe/releases) page.
 2. Download the archive for your platform and `SHA256SUMS`. Archive names keep the `v` of the tag:
-   `howlframe_v0.2.0_<os>_<arch>.tar.gz`, or `.zip` on Windows.
+   `howlframe_v0.3.0_<os>_<arch>.tar.gz`, or `.zip` on Windows.
 3. Verify the checksum, extract the archive (it contains the single executable `howlframe`, or `howlframe.exe`), and
    move the executable to a directory in your `PATH`.
 4. Run `howlframe version`. It prints the release version and the bytecode format it writes:
-   `HowlFrame 0.2.0` and `HFBC format: 2`.
+   `HowlFrame 0.3.0` and `HFBC format: 2`.
+
+Platform execution status below was recorded for `v0.2.0` (and is not re-claimed for `v0.3.0` without native release-smoke runs; see `docs/releases/v0.3.0.md`):
 
 | Archive | Platform | Status for v0.2.0 |
 |---|---|---|
@@ -24,7 +26,7 @@ Linux (see `SECURITY.md`); run programs that need `process:exec` on Linux.
 
 ### Linux
 ```bash
-VERSION=v0.2.0
+VERSION=v0.3.0
 curl -fLO https://github.com/howlcipher/howlframe/releases/download/${VERSION}/howlframe_${VERSION}_linux_amd64.tar.gz
 curl -fLO https://github.com/howlcipher/howlframe/releases/download/${VERSION}/SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS
@@ -36,7 +38,7 @@ Use `linux_arm64` in both names on ARM64.
 
 ### macOS
 ```bash
-VERSION=v0.2.0
+VERSION=v0.3.0
 ARCH=arm64   # amd64 on Intel
 curl -fLO https://github.com/howlcipher/howlframe/releases/download/${VERSION}/howlframe_${VERSION}_darwin_${ARCH}.tar.gz
 curl -fLO https://github.com/howlcipher/howlframe/releases/download/${VERSION}/SHA256SUMS
@@ -48,8 +50,8 @@ howlframe version
 A binary downloaded through a browser may be quarantined by Gatekeeper because it is not signed.
 
 ### Windows
-Download `howlframe_v0.2.0_windows_amd64.zip` and `SHA256SUMS`, check the archive with
-`Get-FileHash howlframe_v0.2.0_windows_amd64.zip -Algorithm SHA256` against the matching line of `SHA256SUMS`, extract
+Download `howlframe_v0.3.0_windows_amd64.zip` and `SHA256SUMS`, check the archive with
+`Get-FileHash howlframe_v0.3.0_windows_amd64.zip -Algorithm SHA256` against the matching line of `SHA256SUMS`, extract
 it, and place `howlframe.exe` in a directory included in your `%PATH%`.
 
 ### Smoke-test a release on your machine

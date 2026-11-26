@@ -16,7 +16,8 @@ import (
 // TestParityCorpus verifies that every semantic fixture in tests/parity/
 // produces identical observable behavior (exit code, stdout, stderr, errors)
 // across canonical Bytecode VM, Interpreter, and Go backend.
-func TestParityCorpus(t *testing.T) {
+func globParityHowlFiles(t *testing.T) (string, []string) {
+	t.Helper()
 	parityDir := filepath.Join("..", "..", "tests", "parity")
 	files, err := filepath.Glob(filepath.Join(parityDir, "*.howl"))
 	if err != nil {
@@ -25,6 +26,11 @@ func TestParityCorpus(t *testing.T) {
 	if len(files) == 0 {
 		t.Fatalf("no parity tests found in %s", parityDir)
 	}
+	return parityDir, files
+}
+
+func TestParityCorpus(t *testing.T) {
+	_, files := globParityHowlFiles(t)
 
 	targets := []Target{
 		TargetBytecode,
@@ -74,11 +80,7 @@ var hfirRejectedParity []string
 // hosts already in TestParityCorpus. Unsupported parity files must fail
 // closed and must not emit a program.
 func TestHFIRBytecodeSupportedParity(t *testing.T) {
-	parityDir := filepath.Join("..", "..", "tests", "parity")
-	files, err := filepath.Glob(filepath.Join(parityDir, "*.howl"))
-	if err != nil {
-		t.Fatalf("failed to glob parity tests: %v", err)
-	}
+	parityDir, files := globParityHowlFiles(t)
 	classified := map[string]bool{}
 	for _, name := range hfirSupportedParity {
 		classified[name] = true

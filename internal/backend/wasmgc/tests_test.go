@@ -97,6 +97,15 @@ func jsTestsAt(t *testing.T, path string) testReport {
 	return parseSpec(runMerged(t, "node", "--test", "--test-reporter=spec", file))
 }
 
+func validateWasmToolsIfPresent(t *testing.T, wasm string) {
+	t.Helper()
+	if tools, err := exec.LookPath("wasm-tools"); err == nil {
+		if out, err := exec.Command(tools, "validate", "--features", "all", wasm).CombinedOutput(); err != nil {
+			t.Fatalf("wasm-tools rejects the module: %v\n%s", err, out)
+		}
+	}
+}
+
 // wasmTestsAt builds a program's tests with --tests and runs them in Node
 // or, for the wasi host, in wasmtime.
 func wasmTestsAt(t *testing.T, path string, host Host) testReport {
@@ -106,11 +115,7 @@ func wasmTestsAt(t *testing.T, path string, host Host) testReport {
 		t.Fatalf("build (%s): %s", host, out.errMsg)
 	}
 	wasm := filepath.Join(dir, "app.test.wasm")
-	if tools, err := exec.LookPath("wasm-tools"); err == nil {
-		if out, err := exec.Command(tools, "validate", "--features", "all", wasm).CombinedOutput(); err != nil {
-			t.Fatalf("wasm-tools rejects the module: %v\n%s", err, out)
-		}
-	}
+	validateWasmToolsIfPresent(t, wasm)
 	if host == HostWASI {
 		return parseSpec(runMerged(t, "wasmtime", "run", "-W", "gc=y,function-references=y", wasm))
 	}

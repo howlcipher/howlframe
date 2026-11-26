@@ -1,9 +1,6 @@
 package javascript
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,16 +53,11 @@ func TestJSMapGetMissIsNil(t *testing.T) {
 		t.Fatalf("generated JavaScript does not route map_get through the helper:\n%s", code)
 	}
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "app.js")
-	if err := os.WriteFile(path, []byte(code), 0o644); err != nil {
-		t.Fatal(err)
+	stdout, stderr, exitCode := runNodeScript(t, code)
+	if exitCode != 0 {
+		t.Fatalf("node exited %d: %s\n\nsource:\n%s", exitCode, stderr, code)
 	}
-	out, err := exec.Command("node", path).CombinedOutput()
-	if err != nil {
-		t.Fatalf("node: %v\n%s\n\nsource:\n%s", err, out, code)
-	}
-	if string(out) != want {
-		t.Fatalf("stdout = %q, want %q\nsource:\n%s", string(out), want, code)
+	if stdout != want {
+		t.Fatalf("stdout = %q, want %q\nsource:\n%s", stdout, want, code)
 	}
 }

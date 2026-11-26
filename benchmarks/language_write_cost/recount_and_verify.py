@@ -9,6 +9,7 @@ Exit 0 only when:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -66,13 +67,30 @@ TASKS = {
 LANG_ORDER = ["HowlFrame", "go", "python", "node", "csharp", "java"]
 
 
-def howlframe_bin() -> str:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--check",
+        action="store_true",
+        help="verify counts without writing proof_latest.json (default)",
+    )
+    group.add_argument(
+        "--write",
+        action="store_true",
+        help="write updated benchmarks/language_write_cost/proof_latest.json",
+    )
+    return parser.parse_args()
+
+
+def howlframe_bin() -> tuple[str, tempfile.TemporaryDirectory[str] | None]:
     candidate = ROOT / "howlframe"
     if candidate.exists():
-        return str(candidate)
-    built = Path(tempfile.gettempdir()) / "howlframe-bench"
+        return str(candidate), None
+    td = tempfile.TemporaryDirectory(prefix="howlframe-bench-")
+    built = Path(td.name) / "howlframe"
     subprocess.run(["go", "build", "-o", str(built), "howlframe.go"], cwd=ROOT, check=True)
-    return str(built)
+    return str(built), td
 
 
 def verify_howlframe(bin_path: str) -> list[str]:
@@ -80,12 +98,12 @@ def verify_howlframe(bin_path: str) -> list[str]:
 
     # Task A: compile only (HTTP server).
     a = BENCH / "task_a_hello_json/howlframe/hello.howl"
-    r = subprocess.run([bin_path, "-compile-bc", str(a), "-o", str(BENCH / "_a.hfbc")],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        errors.append(f"task A compile failed: {r.stderr or r.stdout}")
-    else:
-        (BENCH / "_a.hfbc").unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory() as td:
+        bc_a = Path(td) / "a.hfbc"
+        r = subprocess.run([bin_path, "-compile-bc", str(a), "-o", str(bc_a)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            errors.append(f"task A compile failed: {r.stderr or r.stdout}")
 
     # Task B: compile + run with fixture file and missing-file path.
     b = BENCH / "task_b_cli_file_sum/howlframe/greet.howl"
@@ -145,8 +163,13 @@ def recount() -> dict[str, dict[str, int]]:
 
 
 def main() -> int:
-    bin_path = howlframe_bin()
-    errors = verify_howlframe(bin_path)
+    args = parse_args()
+    bin_path, tmp_bin_dir = howlframe_bin()
+    try:
+        errors = verify_howlframe(bin_path)
+    finally:
+        if tmp_bin_dir is not None:
+            tmp_bin_dir.cleanup()
     counts = recount()
 
     print(f"Token method: {METHOD}")
@@ -187,8 +210,10 @@ def main() -> int:
         "verify_errors": errors,
         "passed": len(errors) == 0,
     }
-    out_json = BENCH / "proof_latest.json"
-    out_json.write_text(json.dumps(proof, indent=2) + "\n")
+    if args.write:
+        out_json = BENCH / "proof_latest.json"
+        out_json.write_text(json.dumps(proof, indent=2) + "\n")
+        print(f"Wrote {out_json}")
 
     if errors:
         print("\nFAILED:")
@@ -196,7 +221,6 @@ def main() -> int:
             print(f"  - {e}")
         return 1
     print("\nPASSED: HowlFrame under Python on A/B/C and under all language totals.")
-    print(f"Wrote {out_json}")
     return 0
 
 

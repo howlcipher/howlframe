@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Verification Report v0 (`P1.3`) & Repository Hygiene Gate (`bugs.md #72`)
+* Add canonical structured verification report package `internal/verification` (`howlframe.verification_report/v0`) reporting named checks (`parser`, `construct_registry`, `profile_policy`, `checker`, `hfir_gate`, `artifact_validation`), component versions (`compiler`, `hfbc_format`, `construct_registry_entries`, `hfir_verifier`), HFIR blocking codes, and explicit non-claim limitations deterministically without timestamps, PIDs, or temp paths.
+* Expose `howlframe check --json [--profile=...] [--target=...] <source.howl>` (including in-memory HFBC structural validation when `--target=bytecode`) and `howlframe inspect --report <artifact.hfbc>`, extend `internal/hfir.VerificationEvidence` with canonically ordered `checks`, `schema`, and `verifier_version` while preserving `verified`, and attach `verification_report` on `howlframe agent check --json` responses (`howlframe.agent/v1`).
+* Restore `slopslint check --classify --enforce` without raising baseline ceilings (`bugs.md #72`): separate non-compiler experiment/benchmark/app/example Go corpora into explicit `.slop/config.yml` scopes, refactor production (`go_production` `78` <= `88`) and core test (`go_tests` `132` <= `135`) clones cleanly with 0 tombstones, and ratchet `.slop/ceilings.yml`.
+
 ### Deterministic terminal_app replay
 * `howlframe run --replay events.jsonl` drives a `terminal_app` from a recorded event file and writes one `howlframe.terminal_replay/v1` record per handled event (state, view, prompt, effects, runtime-generated events). Effects are recorded, never executed, so a program's decisions can be tested deterministically with no terminal and no grants (improvements.md #118).
 
@@ -11,9 +16,21 @@
 * A view entry may be `{"text", "style"}` with a style from a fixed palette: plain, bold, dim, heading, info, ok, warning and error. Only the runtime writes the terminal codes, and the text is still sanitized. The new runner flag `--color auto|always|never` decides when styles are drawn; the `auto` default honours `NO_COLOR` and `TERM=dumb`. The interop descriptor lists `--color` for `run`.
 * PageUp and PageDown scroll a view taller than the screen, with indicators for the hidden lines. A scrolled view keeps its place when a new frame arrives, and Enter returns to the bottom.
 
+### Re-entrancy & Persistent Vector List (`improvements.md #111`)
+* Eliminate mutable package-level globals in `internal/backend/gogen` and `internal/backend/javascript` using per-compilation generator structs.
+* Implement an immutable 16-way branching persistent vector (`internal/vm/persistent_list.go`) across the VM and AST interpreter `OpAppend` / list operations, fixing O(n^2) sequential append memory and time overhead.
+
+### Repository hygiene, CLI consistency & documentation sync
+* Remove committed `codegen` ELF binary from git and ignore `/codegen`.
+* Make `test_unbound_test.go` and all 37 `apps/*/*_test.go` packages compile `.hfbc` artifacts inside `t.TempDir()` instead of mutating tracked source directories; cache the test binary across root `go test` runs.
+* Fix `benchmarks/v2/harness/prove_howlframe_refs.py` to execute a locally built temporary `howlframe` binary rather than resolving an older `howlframe` on `PATH`; add `--check`/`--write` flags to `recount_and_verify.py`, `prove_howlframe_refs.py`, and `prove_real_apps.py` so default verification runs leave tracked result files clean.
+* Restore trailing-flag parsing (`resumeFlagsAfterInput`) on `howlframe check` and `howlframe inspect`, unify VM limit flags across `howlframe run` and legacy `-run-bc`, attach `runHFIRGate` on `--target wasmgc`, deduplicate `ApplyWithContext`/`Desugar` passes in `howlframe.go`, and replace deprecated `strings.Title` in `cmd/codegen`.
+* Repair `tools/orchestrator/orchestrator.py` and `tools/orchestrator/ai_prompt.md` to generate `.howl` source validated by `howlframe agent check --json`, compiled with `howlframe build`, and executed via `howlframe run` in temporary directories (`tests/test_orchestrator.py`).
+* Reconcile version/status/flag documentation across `docs/index.html`, `docs/installation.md`, `docs/design/wasm_gc_backend.md` (M6 completion), `bugs.md` (#42), `README.md`, and `change_log.md`.
+
 ## v0.3.0 (2026-11-25)
 
-Release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
+Tag `v0.3.0` on `73187623`; release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
 
 ### Interactive terminal programs
 * New `(terminal_app "handler" initial_state)`: the runtime owns the terminal (raw mode with line editing when stdin is a terminal, line mode otherwise), timers and child processes, and calls a zero-grant handler once per event with a fresh instruction and memory budget (`--max-event-instructions`, `--max-event-memory-bytes`) and bounded JSON state (`--max-state-bytes`). Effects come from a closed table (`quit`, `timer`, `exec_start`, `exec_signal`, `tail`, `append_log`) executed under the run's grants; view text is sanitized so it cannot inject terminal sequences (improvements.md #117). `process_exit` carries a child's stdout and stderr separately (#113).
@@ -24,7 +41,7 @@ Release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
 ### Exec process bounds
 * `--max-exec-millis` bounds each `exec` call's wall clock; a child still running at the bound is ended with its descendants and the call fails with a catchable `LIMIT_EXCEEDED` (improvements.md #114).
 * `--max-processes` (default 32) bounds exec children alive at once across the run, including `spawn` bodies and route handlers; zero or negative values are refused (improvements.md #115).
-* The runtime can capture a child's stdout and stderr separately under one shared output limit; `exec` still returns the combined stream unchanged (improvements.md #113, in progress).
+* The runtime captures a child's stdout and stderr separately under one shared output limit and delivers the split streams via `terminal_app`'s `process_exit` event; `exec` keeps the combined stream unchanged (#113).
 
 ### Versioned runtime error object
 * Runtime error JSON on standard error and in `try_let` bindings now starts with `"schema":"howlframe.runtime_error/v1"`; every existing field is unchanged (improvements.md #112). Consumers that compared the whole string must allow the new leading field.
