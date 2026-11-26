@@ -72,4 +72,21 @@ All baseline checks were executed directly against clean `main` (`187bc073`) bef
 
 ## 5. Execution Log
 
-*(Updated during remediation and finalized before PR/merge.)*
+1. **Checkpoint 1 (`a769f0b6`) — Hygiene, CLI Consistency, Orchestrator & Docs Reconciliation:**
+   - Removed tracked `codegen` ELF binary (`git rm codegen`, ignored `/codegen`), cleaned stray root build/test artifacts, and killed the pre-existing orphan listener on `127.0.0.1:8106`.
+   - Made `test_unbound_test.go`, root binary caching (`howlframe_test.go`), and `apps/*/*_test.go` hermetic inside `t.TempDir()`.
+   - Restored `resumeFlagsAfterInput` on `howlframe check` and `howlframe inspect`, unified `howlframe run` / `-run-bc` execution policy limits, wired `runHFIRGate` on `--target wasmgc`, removed duplicate `ApplyWithContext` / `Desugar` passes, and replaced deprecated `strings.Title` in `cmd/codegen/main.go`.
+   - Updated benchmark proof scripts (`--check` / `--write` separation, temporary local binary build on `PATH`), repaired `tools/orchestrator/orchestrator.py` + `tests/test_orchestrator.py`, and synced stale doc versions/CLI flags.
+
+2. **Checkpoint 2 (`e2e3a2f5`) — Re-entrant Backends & Persistent Vector List (`improvements.md #111`):**
+   - Eliminated mutable package-level globals in `internal/backend/gogen` and `internal/backend/javascript` using per-compilation structs verified under `-race`.
+   - Replaced `O(n^2)` copy-on-append slices in `internal/vm` (`OpAppend` and list helpers) with an immutable 16-way branching persistent vector (`internal/vm/persistent_list.go`), keeping VM type-name parity and bounded memory accounting across 100k appends.
+
+3. **Checkpoint 3 (`f9c6d7cf`) — Repository Hygiene Gate (`bugs.md #72`) & Verification Report v0 (`P1.3`):**
+   - Separated non-compiler corpora (`experiments/`, `benchmarks/`, `apps/*_test.go`, `examples/*_test.go`, `experiments/*_test.go`, `benchmarks/*_test.go`) into explicit tracked scopes in `.slop/config.yml` while refactoring compiler (`go_production`: `78` <= `88`) and core test (`go_tests`: `132` <= `135`) duplication down with 0 tombstones, ratcheting `.slop/ceilings.yml` to exact active counts (`78` / `132` + explicit split ceilings `541`, `41`, `55`, `97`, `25`, `0`). Note: `slopslint ratchet main` reports `scope mismatch` strictly because `main` defines 2 scopes while `.slop/config.yml`/`.slop/ceilings.yml` now track all 8 scopes explicitly; core ceilings only decreased (`88 -> 78`, `135 -> 132`).
+   - Added `internal/verification` (`howlframe.verification_report/v0`), `internal/ast.RunCatchingErrors`, structured `Checks`/`Schema`/`VerifierVersion` on `internal/hfir.VerificationEvidence`, `howlframe check --json [--profile] [--target]` (with in-memory HFBC validation on `--target=bytecode`), `howlframe inspect --report <artifact.hfbc>`, `verification_report` attachment on `agent check --json`, `interopCommands` updates, and tests in `internal/verification/report_test.go`, `internal/hfir/cas_incremental_test.go`, and `verification_report_cli_test.go`.
+   - Verified before upstream merge (`f9c6d7cf`): `gofmt -l .`, `go build ./...`, `go vet ./...`, `go run ./cmd/codegen` (zero drift), `slopslint check --classify --enforce`, `slopslint tombstone check`, `scripts/check_vendored_schemas.py` (`5/5` match pinned `howldream@dc6019a485be`), all 3 benchmark `--check` scripts, `benchmarks/v2/harness` unittest (`8` passed), `scripts/test_seo.py`, `pytest -q tests/` (`12` passed), `bash scripts/ci_acceptance.sh` (all suites passed with documented `XFAIL m10_port_lost_race_stderr_shape`), `HOWL_FORBID_LOCAL_INFERENCE=1 go test -p 1 -count=1 ./...`, and `HOWL_FORBID_LOCAL_INFERENCE=1 go test -race -p 1 -count=1 ./...`.
+
+4. **Upstream Sync (`21bfc171`) — Merge `origin/main` (`e64256e5`, PRs `#318` & `#319`):**
+   - Merged `origin/main` (`#118` deterministic `terminal_app --replay`, `#119` raw-mode line editing/bracketed paste/`parseView` styles/`--color` scrolling) cleanly into `fix/audit-remediation`, keeping `sliceFromList` persistent-vector compatibility inside `terminal_app.apply` and avoiding duplicated limit wiring in `howlframe.go`.
+   - Verified post-merge `gofmt`, `slopslint check --classify --enforce` (`go_production` `78`, `go_tests` `132`), `./internal/vm`, and `TestTerminalApp|TestInterop|TestVerificationReport`. Final full regression & GitHub CI (`build`, `acceptance`, `race`) execute against the immutable closeout commit before PR merge.
