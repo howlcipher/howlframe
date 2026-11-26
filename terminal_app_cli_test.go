@@ -38,6 +38,22 @@ const terminalEchoApp = `(cli_app
                           ("effects" effects))))))))
   (exit (terminal_app "on_event" (dict ("seen" 0)))))`
 
+// howlString quotes s as a HowlFrame string literal.
+func howlString(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+// terminalStyledApp paints styled view entries, one carrying an escape the
+// runtime must sanitize and one naming a style outside the palette, and
+// quits.
+var terminalStyledApp = `(cli_app
+  (defun on_event (state event)
+    (type_hints (state dict) (event dict) (return dict))
+    (return (dict ("state" state) ("view" (map_get state "view")) ("prompt" "> ")
+                  ("effects" (list (dict ("kind" "quit") ("code" 0)))))))
+  (let (raw ` + howlString(`{"view":[{"text":"FAILED","style":"error"},{"text":"fine","style":"ok"},{"text":"a\u001b[5mb","style":"warning"},{"text":"odd","style":"\u001b[7m"},"plain"]}`) + `)
+    (exit (terminal_app "on_event" (parse_json Any raw)))))`
+
 type termSession struct {
 	t      *testing.T
 	cmd    *exec.Cmd
@@ -308,6 +324,23 @@ func TestTerminalAppViewCannotInjectTerminalSequences(t *testing.T) {
 	s.exit()
 	if out := s.text(); strings.Contains(out, "\x1b") || !strings.Contains(out, "a?[2Jb") {
 		t.Fatalf("view not sanitized: %q", out)
+	}
+}
+
+func TestTerminalAppColourFlag(t *testing.T) {
+	// Line mode stays plain under auto, whatever the environment says.
+	s := startTerminalApp(t, terminalStyledApp)
+	if code := s.exit(); code != 0 || strings.Contains(s.text(), "\x1b") || !strings.Contains(s.text(), "FAILED\nfine\na?[5mb\nodd\nplain\n") {
+		t.Fatalf("line mode: exit %d %q", code, s.text())
+	}
+	// --color always colours line mode too, from the palette only.
+	s = startTerminalApp(t, terminalStyledApp, "--color", "always")
+	if code := s.exit(); code != 0 || !strings.Contains(s.text(), "\x1b[31mFAILED\x1b[0m\n\x1b[32mfine\x1b[0m\n\x1b[33ma?[5mb\x1b[0m\nodd\nplain\n") {
+		t.Fatalf("--color always: exit %d %q", code, s.text())
+	}
+	code, _, errOut := runSource(t, buildHowlFrameBinaryForTest(t), `(cli_app (print "ran"))`, "--color", "sometimes")
+	if code != 2 || !strings.Contains(errOut, "auto, always or never") {
+		t.Fatalf("--color sometimes: code %d stderr %q", code, errOut)
 	}
 }
 

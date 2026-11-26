@@ -5,6 +5,12 @@
 ### Deterministic terminal_app replay
 * `howlframe run --replay events.jsonl` drives a `terminal_app` from a recorded event file and writes one `howlframe.terminal_replay/v1` record per handled event (state, view, prompt, effects, runtime-generated events). Effects are recorded, never executed, so a program's decisions can be tested deterministically with no terminal and no grants (improvements.md #118).
 
+### terminal_app line editing, paste safety, colour and scrolling
+* Raw mode edits the line with a cursor: Left, Right, Home, End and Delete, plus Ctrl-A, E, B, F, D, K, U and W, and Ctrl-L redraws. Up and Down (Ctrl-P, Ctrl-N) recall up to 200 lines of this session's history, which is kept in memory only. A line longer than the screen scrolls sideways to keep the cursor in view (improvements.md #119).
+* Bracketed paste: a paste is inserted as text, with line breaks as spaces, and never sends the line by itself. **Every `line` event now carries `pasted`**, which is true when any of the line was pasted and always false in line mode, so a program can refuse a pasted confirmation.
+* A view entry may be `{"text", "style"}` with a style from a fixed palette: plain, bold, dim, heading, info, ok, warning and error. Only the runtime writes the terminal codes, and the text is still sanitized. The new runner flag `--color auto|always|never` decides when styles are drawn; the `auto` default honours `NO_COLOR` and `TERM=dumb`. The interop descriptor lists `--color` for `run`.
+* PageUp and PageDown scroll a view taller than the screen, with indicators for the hidden lines. A scrolled view keeps its place when a new frame arrives, and Enter returns to the bottom.
+
 ## v0.3.0 (2026-11-25)
 
 Release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.

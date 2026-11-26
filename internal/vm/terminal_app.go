@@ -10,10 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/capability"
@@ -54,6 +54,13 @@ type termTimer struct {
 	gen int64
 }
 
+// viewLine is one entry of the handler's view: plain text, or text with a
+// style from the fixed palette (termStyles).
+type viewLine struct {
+	text  string
+	style string
+}
+
 type terminalApp struct {
 	vm      *BCVM
 	ip      int
@@ -67,13 +74,16 @@ type terminalApp struct {
 	raw      bool
 	restore  func()
 	paintMu  sync.Mutex
-	edit     []rune
+	editor   *lineEditor
 	cols     int
 	rows     int
-	view     []string
+	view     []viewLine
 	prompt   string
 	painted  bool
 	lastText string
+	colour   bool
+	scroll   int // wrapped lines hidden below the window; 0 follows the newest
+	shown    int // wrapped lines in the last raw paint
 
 	procs    map[string]*termProc
 	timers   map[string]*termTimer
@@ -99,7 +109,8 @@ func (vm *BCVM) runTerminalApp(handlerName string, initial any, ip int) int {
 		panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, bytecode.OpTerminalApp, "terminal_app can run only once per program"))
 	}
 	app := &terminalApp{vm: vm, ip: ip, handler: fn, events: make(chan termEvent, termEventQueue), out: vm.Out,
-		procs: map[string]*termProc{}, timers: map[string]*termTimer{}, cols: 80, rows: 24}
+		procs: map[string]*termProc{}, timers: map[string]*termTimer{}, cols: 80, rows: 24,
+		editor: newLineEditor(termMaxLineBytes / 4)}
 	state, err := app.boundState(initial)
 	if err != nil {
 		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, bytecode.OpTerminalApp, "terminal_app initial state: %v", err))
@@ -118,10 +129,12 @@ func (a *terminalApp) loop() int {
 		if restore, err := makeRaw(a.inFD); err == nil {
 			a.raw, a.restore = true, restore
 			a.cols, a.rows = terminalSize(os.Stdout.Fd())
-			// The alternate screen keeps the operator's scrollback intact.
-			fmt.Fprint(a.out, "\x1b[?1049h")
+			// The alternate screen keeps the operator's scrollback intact;
+			// bracketed paste lets a paste arrive as text, never as keystrokes.
+			fmt.Fprint(a.out, "\x1b[?1049h\x1b[?2004h")
 		}
 	}
+	a.colour = colourWanted(vm.Limits.TerminalColor, a.raw)
 	defer a.shutdown()
 	sigs := make(chan os.Signal, 8)
 	signal.Notify(sigs, terminalSignals...)
@@ -158,7 +171,10 @@ func (a *terminalApp) onSignal(sig os.Signal) {
 	switch {
 	case isResizeSignal(sig):
 		if a.raw {
-			a.cols, a.rows = terminalSize(os.Stdout.Fd())
+			cols, rows := terminalSize(os.Stdout.Fd())
+			a.paintMu.Lock()
+			a.cols, a.rows = cols, rows
+			a.paintMu.Unlock()
 		}
 		a.dispatch(termEvent{"type": "resize", "cols": int64(a.cols), "rows": int64(a.rows)})
 		a.paint(true)
@@ -261,16 +277,14 @@ func (a *terminalApp) boundState(v any) (any, error) {
 
 func (a *terminalApp) apply(doc map[string]any) {
 	a.state = doc["state"]
+	a.paintMu.Lock()
 	if lines, ok := doc["view"].([]any); ok {
-		view := make([]string, len(lines))
-		for i, l := range lines {
-			view[i] = TextOf(l)
-		}
-		a.view = view
+		a.view = parseView(lines)
 	}
 	if p, ok := doc["prompt"].(string); ok {
 		a.prompt = p
 	}
+	a.paintMu.Unlock()
 	if a.replayOut == nil {
 		a.paint(false)
 	}
@@ -508,7 +522,7 @@ func (a *terminalApp) readInput() {
 				a.events <- termEvent{"type": "eof"}
 				return
 			}
-			a.events <- termEvent{"type": "line", "text": line}
+			a.events <- termEvent{"type": "line", "text": line, "pasted": false}
 			if err != nil {
 				a.events <- termEvent{"type": "eof"}
 				return
@@ -517,53 +531,63 @@ func (a *terminalApp) readInput() {
 	}
 	in := bufio.NewReader(os.NewFile(a.inFD, "terminal"))
 	for {
-		r, _, err := in.ReadRune()
+		k, err := readKey(in)
 		if err != nil {
 			a.events <- termEvent{"type": "eof"}
 			return
 		}
-		switch {
-		case r == 0x03:
+		switch k.kind {
+		case keyInterrupt:
 			a.events <- termEvent{"type": "interrupt"}
-		case r == 0x04:
+		case keyEnter:
+			var text string
+			var pasted bool
+			a.withEditor(func(e *lineEditor) { text, pasted = e.submit() })
+			a.scrollTo(0)
+			a.events <- termEvent{"type": "line", "text": text, "pasted": pasted}
+		case keyEOFOrDelete:
 			if a.editText() == "" {
 				a.events <- termEvent{"type": "eof"}
+			} else {
+				a.withEditor((*lineEditor).deleteAt)
 			}
-		case r == '\r' || r == '\n':
-			text := a.takeEdit()
-			a.events <- termEvent{"type": "line", "text": text}
-		case r == 0x7f || r == 0x08:
-			a.changeEdit(func(e []rune) []rune {
-				if len(e) > 0 {
-					return e[:len(e)-1]
-				}
-				return e
-			})
-		case r == 0x15:
-			a.changeEdit(func([]rune) []rune { return nil })
-		case r == 0x1b:
-			dropEscapeSequence(in)
-		case r < 0x20 || r == utf8.RuneError:
-		default:
-			a.changeEdit(func(e []rune) []rune {
-				if len(e) < termMaxLineBytes/4 {
-					return append(e, r)
-				}
-				return e
-			})
-		}
-	}
-}
-
-func dropEscapeSequence(in *bufio.Reader) {
-	next, _, err := in.ReadRune()
-	if err != nil || (next != '[' && next != 'O') {
-		return
-	}
-	for {
-		b, err := in.ReadByte()
-		if err != nil || (b >= 0x40 && b <= 0x7e) {
-			return
+		case keyPasteStart:
+			text, err := readPaste(in, termMaxLineBytes/4)
+			a.withEditor(func(e *lineEditor) { e.paste(text) })
+			if err != nil {
+				a.events <- termEvent{"type": "eof"}
+				return
+			}
+		case keyRune:
+			a.withEditor(func(e *lineEditor) { e.insert([]rune{k.r}) })
+		case keyBackspace:
+			a.withEditor((*lineEditor).backspace)
+		case keyDelete:
+			a.withEditor((*lineEditor).deleteAt)
+		case keyLeft:
+			a.withEditor((*lineEditor).left)
+		case keyRight:
+			a.withEditor((*lineEditor).right)
+		case keyHome:
+			a.withEditor((*lineEditor).home)
+		case keyEnd:
+			a.withEditor((*lineEditor).end)
+		case keyUp:
+			a.withEditor((*lineEditor).prev)
+		case keyDown:
+			a.withEditor((*lineEditor).next)
+		case keyKillToStart:
+			a.withEditor((*lineEditor).killToStart)
+		case keyKillToEnd:
+			a.withEditor((*lineEditor).killToEnd)
+		case keyDeleteWord:
+			a.withEditor((*lineEditor).deleteWord)
+		case keyPageUp:
+			a.scrollBy(1)
+		case keyPageDown:
+			a.scrollBy(-1)
+		case keyRedraw:
+			a.paint(true)
 		}
 	}
 }
@@ -589,21 +613,13 @@ func readBoundedLine(r *bufio.Reader, max int) (string, error) {
 func (a *terminalApp) editText() string {
 	a.paintMu.Lock()
 	defer a.paintMu.Unlock()
-	return string(a.edit)
+	return a.editor.text()
 }
 
-func (a *terminalApp) takeEdit() string {
+// withEditor applies one edit under the paint lock and redraws the input line.
+func (a *terminalApp) withEditor(f func(*lineEditor)) {
 	a.paintMu.Lock()
-	text := string(a.edit)
-	a.edit = nil
-	a.paintMu.Unlock()
-	a.repaintInput()
-	return text
-}
-
-func (a *terminalApp) changeEdit(f func([]rune) []rune) {
-	a.paintMu.Lock()
-	a.edit = f(a.edit)
+	f(a.editor)
 	a.paintMu.Unlock()
 	a.repaintInput()
 }
@@ -617,29 +633,53 @@ func (a *terminalApp) repaintInput() {
 	fmt.Fprint(a.out, "\r\x1b[K"+a.inputLine())
 }
 
-// inputLine is the prompt and the edited text, keeping the tail visible.
+// inputLine draws the prompt and the edited text, scrolled to keep the
+// cursor visible, and leaves the cursor where the editor has it.
 func (a *terminalApp) inputLine() string {
-	line := []rune(sanitizeTerminal(a.prompt) + sanitizeTerminal(string(a.edit)))
-	if a.cols > 1 && len(line) >= a.cols {
-		line = line[len(line)-a.cols+1:]
+	prompt := []rune(sanitizeTerminal(a.prompt))
+	line := []rune(sanitizeTerminal(a.editor.text()))
+	text, col := inputView(prompt, line, a.editor.cursor, a.cols)
+	if col <= 0 {
+		return text + "\r"
 	}
-	return string(line)
+	return text + "\r\x1b[" + strconv.Itoa(col) + "C"
+}
+
+// scrollBy moves a tall view by one page (positive is up) and redraws.
+func (a *terminalApp) scrollBy(pages int) {
+	if !a.raw {
+		return
+	}
+	a.paintMu.Lock()
+	page := a.rows - 3
+	if page < 1 {
+		page = 1
+	}
+	a.scroll += pages * page
+	if a.scroll < 0 {
+		a.scroll = 0
+	}
+	a.paintMu.Unlock()
+	a.paint(true)
+}
+
+func (a *terminalApp) scrollTo(n int) {
+	a.paintMu.Lock()
+	a.scroll = n
+	a.paintMu.Unlock()
 }
 
 // paint draws the view and prompt. Line mode writes a frame only when it
-// changed; raw mode redraws the screen.
+// changed; raw mode redraws the screen, wrapping, styling and windowing a
+// view taller than the terminal.
 func (a *terminalApp) paint(force bool) {
 	a.paintMu.Lock()
 	defer a.paintMu.Unlock()
-	var lines []string
-	for _, l := range a.view {
-		if a.raw {
-			lines = append(lines, wrapTerminal(sanitizeTerminal(l), a.cols)...)
-		} else {
-			lines = append(lines, sanitizeTerminal(l))
-		}
-	}
 	if !a.raw {
+		lines := make([]string, len(a.view))
+		for i, l := range a.view {
+			lines[i] = styled(sanitizeTerminal(l.text), l.style, a.colour)
+		}
 		text := strings.Join(lines, "\n") + "\n" + sanitizeTerminal(a.prompt)
 		if text == a.lastText && !force {
 			return
@@ -652,17 +692,69 @@ func (a *terminalApp) paint(force bool) {
 		a.lastText, a.painted = text, true
 		return
 	}
-	if room := a.rows - 1; room > 0 && len(lines) > room {
-		lines = lines[len(lines)-room:]
+	var lines []viewLine
+	for _, l := range a.view {
+		for _, seg := range wrapTerminal(sanitizeTerminal(l.text), a.cols) {
+			lines = append(lines, viewLine{text: seg, style: l.style})
+		}
 	}
+	// A scrolled view keeps its place when a new frame adds lines; a view at
+	// the bottom follows the newest lines.
+	if a.scroll > 0 {
+		a.scroll += len(lines) - a.shown
+	}
+	a.shown = len(lines)
+	start, end, above, below, scroll := scrollWindow(len(lines), a.rows-1, a.scroll)
+	a.scroll = scroll
 	var b strings.Builder
 	b.WriteString("\x1b[H\x1b[2J")
-	for _, l := range lines {
-		b.WriteString(l + "\r\n")
+	if above > 0 {
+		b.WriteString(styled(fmt.Sprintf("-- %d more lines above: PageUp --", above), "dim", a.colour) + "\r\n")
+	}
+	for _, l := range lines[start:end] {
+		b.WriteString(styled(l.text, l.style, a.colour) + "\r\n")
+	}
+	if below > 0 {
+		b.WriteString(styled(fmt.Sprintf("-- %d more lines below: PageDown --", below), "dim", a.colour) + "\r\n")
 	}
 	b.WriteString(a.inputLine())
 	fmt.Fprint(a.out, b.String())
 	a.painted = true
+}
+
+// parseView reads the handler's view: each entry is text, or a
+// {"text", "style"} dict whose style names the fixed palette; an unknown
+// style is plain.
+func parseView(entries []any) []viewLine {
+	view := make([]viewLine, len(entries))
+	for i, e := range entries {
+		if m, ok := e.(map[string]any); ok {
+			style, _ := m["style"].(string)
+			if _, known := termStyles[style]; !known {
+				style = ""
+			}
+			text := ""
+			if m["text"] != nil {
+				text = TextOf(m["text"])
+			}
+			view[i] = viewLine{text: text, style: style}
+			continue
+		}
+		view[i] = viewLine{text: TextOf(e)}
+	}
+	return view
+}
+
+// colourWanted applies --color: auto colours only a terminal with NO_COLOR
+// unset and TERM not "dumb"; always and never are explicit.
+func colourWanted(mode string, raw bool) bool {
+	switch mode {
+	case "always":
+		return true
+	case "never":
+		return false
+	}
+	return raw && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 }
 
 // sanitizeTerminal replaces control characters, so text from a child or the
@@ -710,7 +802,7 @@ func (a *terminalApp) shutdown() {
 	}
 	if a.restore != nil {
 		a.paintMu.Lock()
-		fmt.Fprint(a.out, "\r\n\x1b[?1049l")
+		fmt.Fprint(a.out, "\r\n\x1b[?2004l\x1b[?1049l")
 		a.restore()
 		a.paintMu.Unlock()
 	} else if a.painted {

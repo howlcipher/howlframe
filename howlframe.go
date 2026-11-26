@@ -1182,6 +1182,7 @@ func runArtifact() {
 	maxEventInst := runFlags.Int("max-event-instructions", vm.DefaultMaxEventInstructions, "terminal_app: positive instruction limit for each handler call (fresh per event)")
 	maxEventMemory := runFlags.Int("max-event-memory-bytes", vm.DefaultMaxEventMemoryBytes, "terminal_app: positive allocation limit for each handler call (fresh per event)")
 	maxStateBytes := runFlags.Int("max-state-bytes", vm.DefaultMaxStateBytes, "terminal_app: positive limit on the encoded state carried between events")
+	color := runFlags.String("color", "auto", "terminal_app: auto (colour only on a terminal with NO_COLOR unset and TERM not dumb), always or never")
 	replay := runFlags.String("replay", "", "terminal_app: drive the program from this JSON Lines event file; each handled event is written to stdout as a howlframe.terminal_replay/v1 record and no effect is executed")
 	maxRequest := runFlags.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := runFlags.Bool("access-log", false, "write one access line per HTTP request to stderr")
@@ -1270,6 +1271,13 @@ func runArtifact() {
 			os.Exit(2)
 		}
 		executionPolicy.Limits.TerminalReplay = *replay
+		switch *color {
+		case "auto", "always", "never":
+			executionPolicy.Limits.TerminalColor = *color
+		default:
+			fmt.Fprintf(os.Stderr, "-color must be auto, always or never, got %q\n", *color)
+			os.Exit(2)
+		}
 		if err := applyProcessLimits(&executionPolicy, *maxProcesses, *maxExecMillis); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
@@ -1766,7 +1774,7 @@ var interopCommands = []interopCommand{
 	{Path: []string{"build"}, Flags: []string{"-o", "--profile", "--target", "--host", "--tests", "--inline-module", "--module"}},
 	{Path: []string{"run"}, Flags: []string{
 		"--receipt", "--target", "--allow-caps", "--max-instructions", "--max-startup-instructions", "--max-call-depth", "--max-memory-bytes",
-		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-processes", "--max-exec-millis", "--max-event-instructions", "--max-event-memory-bytes", "--max-state-bytes", "--replay", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
+		"--max-fetch-bytes", "--max-exec-output-bytes", "--max-processes", "--max-exec-millis", "--max-event-instructions", "--max-event-memory-bytes", "--max-state-bytes", "--replay", "--color", "--max-request-bytes", "--access-log", "--timing-log", "--listen-host",
 		"--deadline",
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"version"}, Flags: []string{}},
