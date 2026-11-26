@@ -73,6 +73,7 @@ Pending rows are ranked by a diminishing-returns score:
 | 115 | [Bound concurrent exec children](#115-bound-concurrent-exec-children) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | 20 `spawn` bodies started 20 concurrent exec children with no runner limit; found by HowlPlane TUI-00 (HF-G5). |
 | 116 | [Runner environment for one trusted program](#116-runner-environment-for-one-trusted-program) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | A CLI run through `exec` cannot find its tools or credentials because `PATH` and `HOME` are refused for `process:env=`; HowlPlane's pure HowlFrame TUI needs `howlplane` to run with the operator's environment (HP-F1). |
 | 117 | [Terminal event-loop application](#117-terminal-event-loop-application) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | No raw mode, key events, resize, async processes or per-event budgets, so an interactive terminal program cannot be written in HowlFrame (HF-G1, HF-G2, HF-G7). |
+| 118 | [Deterministic terminal_app replay](#118-deterministic-terminal_app-replay) | Done | — | Sonnet 5.5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | A `terminal_app` can only be tested through a real terminal and real children, so its decisions have no fast, deterministic test path; HowlPlane lost its fixture-driven reducer tests when its TUI moved to HowlFrame. |
 | 100 | [Structured experience memory (learning Level 1)](#100-structured-experience-memory-learning-level-1) | Pending — blocked on #88 | 1.0 (6×1÷6) | Opus 5 | Gemini 3.1 Pro (High) | gpt-5.6-sol | First level of the blueprint's learning model and the prerequisite for policy adaptation. Nothing in `internal/` records execution outcomes today. Deliberately blocked until the provider-neutral model adapter (#88) exists, so vendor API shape never becomes HowlFrame semantics. |
 | 94 | [Centralize capability metadata behind one authoritative source](#94-centralize-capability-metadata-behind-one-authoritative-source) | Done (2026-08-05) | 1.33 (4×1÷3) | Sonnet 5 | — | — | `internal/hfir`'s capability inference duplicates `internal/bytecode`'s `OpInfo` table with no mechanism preventing silent drift between the two. |
 | 1 | [Add Routing Support](#1-add-routing-support) | Done | — | Sonnet 3.5 | Gemini 1.5 Pro | gpt-5.6-terra | Highest value to allow building web apps with multiple endpoints instead of just the root path. |
@@ -1077,6 +1078,12 @@ As HowlFrame matures past transpilation into Go and JS, the ultimate objective i
 * **Why:** Needed for a pure HowlFrame HowlPlane TUI (HowlPlane ADR 0010 plan); today a long interactive loop exhausts the cumulative budget and cannot read keys or watch a child.
 * **Impact:** 9/10. **Effort:** 2.
 * **Status:** Done (2026-11-23). `internal/vm/terminal_app.go`, `docs/reference/terminal_app.md`; tests `terminal_app_cli_test.go` (line mode, per-event budgets, state cap, every effect, injection) and `terminal_app_pty_linux_test.go` (raw mode, editing, Ctrl-C, restore). The program-visible stdout/stderr split of #113 is its `process_exit` event.
+
+### 118. Deterministic terminal_app replay
+* **Description:** `howlframe run --replay events.jsonl` drives a `terminal_app` from a recorded event file: no terminal, no children and no grants; every handled event is written out as a `howlframe.terminal_replay/v1` record with the state, view, prompt and effects, and effects are recorded rather than executed.
+* **Why:** HowlPlane's pure HowlFrame TUI (ADR 0010) needs fast, deterministic tests of each decision (failure explanations, schema refusal, cancel sequence, confirmation), which its retired Python host had through a reducer and fixtures.
+* **Impact:** 7/10. **Effort:** 1.
+* **Status:** Done (2026-11-26). `internal/vm/terminal_app.go` (`replay`, `record`), `terminal_app_replay_cli_test.go`, `docs/reference/terminal_app.md`.
 
 ## AI-DX1 understanding follow-up
 

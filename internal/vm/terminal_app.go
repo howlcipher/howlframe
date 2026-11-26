@@ -81,6 +81,13 @@ type terminalApp struct {
 
 	quit bool
 	code int
+
+	// Replay mode (--replay): replayOut receives one record per handled
+	// event; replaySource says whether it came from the file or the runtime.
+	replayOut    io.Writer
+	replaySource string
+	replaySeq    int
+	replayView   []any
 }
 
 func (vm *BCVM) runTerminalApp(handlerName string, initial any, ip int) int {
@@ -98,6 +105,9 @@ func (vm *BCVM) runTerminalApp(handlerName string, initial any, ip int) int {
 		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, bytecode.OpTerminalApp, "terminal_app initial state: %v", err))
 	}
 	app.state = state
+	if vm.Limits.TerminalReplay != "" {
+		return app.replay(vm.Limits.TerminalReplay)
+	}
 	return app.loop()
 }
 
@@ -171,14 +181,14 @@ func (a *terminalApp) dispatch(ev termEvent) {
 		if kind == "interrupt" {
 			// A handler that cannot answer Ctrl-C must not trap the operator.
 			a.quit, a.code = true, 130
-			return
-		}
-		if kind != "handler_failed" {
+		} else if kind != "handler_failed" {
 			a.pending = append(a.pending, termEvent{"type": "handler_failed", "event_type": kind, "error": errorObject(failure)})
 		}
+		a.record(ev, nil, failure)
 		return
 	}
 	a.apply(result)
+	a.record(ev, result, nil)
 }
 
 func (a *terminalApp) call(ev termEvent) (map[string]any, *VMError) {
@@ -261,7 +271,9 @@ func (a *terminalApp) apply(doc map[string]any) {
 	if p, ok := doc["prompt"].(string); ok {
 		a.prompt = p
 	}
-	a.paint(false)
+	if a.replayOut == nil {
+		a.paint(false)
+	}
 	effects, _ := doc["effects"].([]any)
 	if len(effects) > termMaxEffectsPerEvent {
 		a.pending = append(a.pending, termEvent{"type": "effect_failed", "kind": "", "id": "", "error": a.effectError("LIMIT_EXCEEDED", "more than %d effects in one event", termMaxEffectsPerEvent)})
@@ -271,7 +283,11 @@ func (a *terminalApp) apply(doc map[string]any) {
 		if a.quit {
 			return
 		}
-		a.effect(e)
+		if a.replayOut != nil {
+			a.replayEffect(e)
+		} else {
+			a.effect(e)
+		}
 	}
 }
 
@@ -742,3 +758,92 @@ func errorObject(e *VMError) map[string]any {
 	}
 	return map[string]any{"schema": RuntimeErrorSchema, "code": e.Code, "message": e.Message}
 }
+
+// replayEffects are the closed effect table's kinds, for replay validation.
+var replayEffects = map[string]bool{"quit": true, "timer": true, "exec_start": true, "exec_signal": true, "tail": true, "append_log": true}
+
+// replay drives the program from a JSON Lines event file (improvements.md
+// #118). Nothing touches the terminal, no child, timer or file effect runs,
+// and every handled event is written out as one record, so a terminal_app can
+// be tested deterministically and without any grant.
+func (a *terminalApp) replay(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic(NewRuntimeError("IO_ERROR", "main", a.ip, bytecode.OpTerminalApp, "terminal_app replay: %v", err))
+	}
+	a.replayOut = a.vm.Out
+	for n, raw := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		value, err := decodeJSONValue([]byte(raw))
+		event, ok := value.(map[string]any)
+		if _, typed := event["type"].(string); err != nil || !ok || !typed {
+			panic(NewRuntimeError("RUNTIME_ERROR", "main", a.ip, bytecode.OpTerminalApp, "terminal_app replay: line %d is not an event object with a string type", n+1))
+		}
+		a.pending = append(a.pending, termEvent(event))
+		a.replaySource = "replay"
+		for len(a.pending) > 0 && !a.quit {
+			ev := a.pending[0]
+			a.pending = a.pending[1:]
+			a.dispatch(ev)
+			// Everything queued while handling a file event came from the runtime.
+			a.replaySource = "runtime"
+		}
+		if event["type"] == "terminate" && !a.quit {
+			a.quit, a.code = true, 143 // as live: one event to react, then the runtime stops
+		}
+		if a.quit {
+			break
+		}
+	}
+	return a.code
+}
+
+// replayEffect checks an effect's kind against the closed table and records
+// it; only quit acts, by ending the replay.
+func (a *terminalApp) replayEffect(raw any) {
+	e, _ := raw.(map[string]any)
+	kind, _ := e["kind"].(string)
+	if !replayEffects[kind] {
+		id, _ := e["id"].(string)
+		a.pending = append(a.pending, termEvent{"type": "effect_failed", "kind": kind, "id": id, "error": a.effectError("UNKNOWN_EFFECT", "unknown terminal_app effect %q", kind)})
+		return
+	}
+	if kind == "quit" {
+		a.quit, a.code = true, int(intOf(e["code"]))
+	}
+}
+
+// record writes one howlframe.terminal_replay/v1 line in replay mode.
+func (a *terminalApp) record(ev termEvent, result map[string]any, failure *VMError) {
+	if a.replayOut == nil {
+		return
+	}
+	a.replaySeq++
+	rec := map[string]any{"schema": TerminalReplaySchema, "seq": int64(a.replaySeq), "source": a.replaySource,
+		"event": map[string]any(ev), "ok": failure == nil, "state": a.state, "error": nil, "quit": nil,
+		"view": a.replayView, "prompt": a.prompt, "effects": []any{}}
+	if failure != nil {
+		rec["error"] = errorObject(failure)
+	} else {
+		if view, ok := result["view"].([]any); ok {
+			a.replayView = view
+			rec["view"] = view
+		}
+		if effects, ok := result["effects"].([]any); ok {
+			rec["effects"] = effects
+		}
+	}
+	if a.quit {
+		rec["quit"] = int64(a.code)
+	}
+	text, err := encodeJSONText(normalizeForJSON(rec))
+	if err != nil {
+		panic(NewRuntimeError("ENCODE_JSON_ERROR", "main", a.ip, bytecode.OpTerminalApp, "terminal_app replay record: %v", err))
+	}
+	fmt.Fprintln(a.replayOut, string(text))
+}
+
+// TerminalReplaySchema versions the records --replay writes.
+const TerminalReplaySchema = "howlframe.terminal_replay/v1"
