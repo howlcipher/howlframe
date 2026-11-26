@@ -7,6 +7,15 @@
 * Expose `howlframe check --json [--profile=...] [--target=...] <source.howl>` (including in-memory HFBC structural validation when `--target=bytecode`) and `howlframe inspect --report <artifact.hfbc>`, extend `internal/hfir.VerificationEvidence` with canonically ordered `checks`, `schema`, and `verifier_version` while preserving `verified`, and attach `verification_report` on `howlframe agent check --json` responses (`howlframe.agent/v1`).
 * Restore `slopslint check --classify --enforce` without raising baseline ceilings (`bugs.md #72`): separate non-compiler experiment/benchmark/app/example Go corpora into explicit `.slop/config.yml` scopes, refactor production (`go_production` `78` <= `88`) and core test (`go_tests` `132` <= `135`) clones cleanly with 0 tombstones, and ratchet `.slop/ceilings.yml`.
 
+### Deterministic terminal_app replay
+* `howlframe run --replay events.jsonl` drives a `terminal_app` from a recorded event file and writes one `howlframe.terminal_replay/v1` record per handled event (state, view, prompt, effects, runtime-generated events). Effects are recorded, never executed, so a program's decisions can be tested deterministically with no terminal and no grants (improvements.md #118).
+
+### terminal_app line editing, paste safety, colour and scrolling
+* Raw mode edits the line with a cursor: Left, Right, Home, End and Delete, plus Ctrl-A, E, B, F, D, K, U and W, and Ctrl-L redraws. Up and Down (Ctrl-P, Ctrl-N) recall up to 200 lines of this session's history, which is kept in memory only. A line longer than the screen scrolls sideways to keep the cursor in view (improvements.md #119).
+* Bracketed paste: a paste is inserted as text, with line breaks as spaces, and never sends the line by itself. **Every `line` event now carries `pasted`**, which is true when any of the line was pasted and always false in line mode, so a program can refuse a pasted confirmation.
+* A view entry may be `{"text", "style"}` with a style from a fixed palette: plain, bold, dim, heading, info, ok, warning and error. Only the runtime writes the terminal codes, and the text is still sanitized. The new runner flag `--color auto|always|never` decides when styles are drawn; the `auto` default honours `NO_COLOR` and `TERM=dumb`. The interop descriptor lists `--color` for `run`.
+* PageUp and PageDown scroll a view taller than the screen, with indicators for the hidden lines. A scrolled view keeps its place when a new frame arrives, and Enter returns to the bottom.
+
 ### Re-entrancy & Persistent Vector List (`improvements.md #111`)
 * Eliminate mutable package-level globals in `internal/backend/gogen` and `internal/backend/javascript` using per-compilation generator structs.
 * Implement an immutable 16-way branching persistent vector (`internal/vm/persistent_list.go`) across the VM and AST interpreter `OpAppend` / list operations, fixing O(n^2) sequential append memory and time overhead.
@@ -19,7 +28,7 @@
 * Repair `tools/orchestrator/orchestrator.py` and `tools/orchestrator/ai_prompt.md` to generate `.howl` source validated by `howlframe agent check --json`, compiled with `howlframe build`, and executed via `howlframe run` in temporary directories (`tests/test_orchestrator.py`).
 * Reconcile version/status/flag documentation across `docs/index.html`, `docs/installation.md`, `docs/design/wasm_gc_backend.md` (M6 completion), `bugs.md` (#42), `README.md`, and `change_log.md`.
 
-## v0.3.0 (2026-11-23)
+## v0.3.0 (2026-11-25)
 
 Tag `v0.3.0` on `73187623`; release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
 
