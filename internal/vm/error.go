@@ -129,6 +129,11 @@ type VMLimits struct {
 	MaxEventInstructions int
 	MaxEventMemoryBytes  int
 	MaxStateBytes        int
+	// TerminalReplay, when set, drives a terminal_app from this JSON Lines
+	// event file instead of the terminal: effects are recorded to stdout as
+	// howlframe.terminal_replay/v1 lines and never executed. Runner owned,
+	// like --receipt; a program cannot read or set it.
+	TerminalReplay string
 	// processes is the run's shared live-child counter. VMLimits is copied
 	// into every child VM by value, so the pointer is shared by all of them.
 	processes *processBudget

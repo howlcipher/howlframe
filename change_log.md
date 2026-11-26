@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-## v0.3.0 (prepared 2026-11-23; not yet tagged)
+### Deterministic terminal_app replay
+* `howlframe run --replay events.jsonl` drives a `terminal_app` from a recorded event file and writes one `howlframe.terminal_replay/v1` record per handled event (state, view, prompt, effects, runtime-generated events). Effects are recorded, never executed, so a program's decisions can be tested deterministically with no terminal and no grants (improvements.md #118).
+
+## v0.3.0 (2026-11-25)
 
 Release notes: `docs/releases/v0.3.0.md`. Includes everything in v0.2.1.
 

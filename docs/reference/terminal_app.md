@@ -69,6 +69,27 @@ At most 64 effects run per event. Any other `kind` fails with `UNKNOWN_EFFECT`. 
 * **Line mode.** Otherwise the runtime reads whole lines, which is also how tests drive it. It writes a frame only when the view or prompt changed.
 * **Sanitizing.** The runtime replaces control characters in the view and prompt with `?`, so neither the program nor a child's output can move the cursor or send escape sequences. No colors are emitted, so `NO_COLOR` holds trivially.
 
+## Testing with `--replay`
+
+`howlframe run --replay events.jsonl app.howl` runs a `terminal_app` against a recorded event file instead of the terminal. It makes a program's decisions testable deterministically, with no terminal, no children and no grants.
+
+* **Input.** Each non-blank line of the file is one event object with a string `type`. It reaches the handler exactly as written; the runtime adds no `start` event, so begin the file with one if the program expects it.
+* **No authority used.** Nothing is painted, no input is read, and no effect runs: `exec_start`, `exec_signal`, `timer`, `tail` and `append_log` are recorded, not executed. Feed their results back as events (`process_exit`, `timer`, `tail_lines`) to continue the story. Effect kinds are still checked against the closed table, so an unknown kind produces `effect_failed` as it would live.
+* **Same rules as live.** Per-event budgets and the state cap apply. A failed handler call keeps the previous state and produces `handler_failed`. A `quit` effect ends the replay with its code, and a `terminate` event stops it with 143.
+* **Output.** One `howlframe.terminal_replay/v1` JSON line per handled event, in order, on standard output:
+
+| Field | Meaning |
+| --- | --- |
+| `schema`, `seq` | `howlframe.terminal_replay/v1`, and a 1-based sequence number |
+| `source` | `replay` for an event from the file, `runtime` for one the runtime generated (`handler_failed`, `effect_failed`) |
+| `event` | the event as the handler received it |
+| `ok`, `error` | whether the handler call succeeded; on failure, the `howlframe.runtime_error/v1` object |
+| `state`, `view`, `prompt` | after the event; a failed event leaves them unchanged |
+| `effects` | the effects the handler returned, as data |
+| `quit` | the quit code once the program has quit, otherwise `null` |
+
+`--replay` is runner owned, like `--receipt`: a program cannot read or set it.
+
 ## Runner flags
 
 | Flag | Default | Meaning |
