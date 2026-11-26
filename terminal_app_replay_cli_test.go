@@ -114,6 +114,18 @@ func TestTerminalReplayTerminateStopsLikeLive(t *testing.T) {
 	}
 }
 
+func TestTerminalReplayRecordsStyledEntriesAsData(t *testing.T) {
+	code, records, errOut := runReplay(t, terminalStyledApp, []string{`{"type":"start"}`})
+	if code != 0 || len(records) != 1 {
+		t.Fatalf("exit %d, %d records; stderr %q", code, len(records), errOut)
+	}
+	view := records[0].View
+	first, _ := view[0].(map[string]any)
+	if len(view) != 5 || first["text"] != "FAILED" || first["style"] != "error" || view[4] != "plain" {
+		t.Fatalf("view = %v", view)
+	}
+}
+
 func TestTerminalReplayRefusesMalformedEvents(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
 	file := filepath.Join(t.TempDir(), "events.jsonl")
