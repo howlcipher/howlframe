@@ -2,20 +2,22 @@ package kv_cli_test
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestKVCLI(t *testing.T) {
 	// Compile
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "kv_cli.howl")
+	artifact := filepath.Join(t.TempDir(), "kv_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "kv_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
 	// Test state sharing sequence
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", "kv_cli.howl.bc.bin", "set", "theme", "dark", "get", "theme", "get", "missing", "delete", "theme", "get", "theme")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", artifact, "set", "theme", "dark", "get", "theme", "get", "missing", "delete", "theme", "get", "theme")
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -27,7 +29,7 @@ func TestKVCLI(t *testing.T) {
 	}
 
 	// Test increment sequence
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", "kv_cli.howl.bc.bin", "increment", "visits", "increment", "visits", "get", "visits")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", artifact, "increment", "visits", "increment", "visits", "get", "visits")
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -39,7 +41,7 @@ func TestKVCLI(t *testing.T) {
 	}
 
 	// Capability denied
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "kv_cli.howl.bc.bin", "set", "theme", "dark")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", artifact, "set", "theme", "dark")
 	cmd.Dir = "."
 	out, err = cmd.CombinedOutput()
 	if err == nil {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -352,11 +353,7 @@ func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
 }
 
 func TestCrashStateSerialization(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir, err := os.MkdirTemp("", "howlframe-crash-test-*")
 	if err != nil {
@@ -369,7 +366,7 @@ func TestCrashStateSerialization(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=go", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=go", "-o", outDir, inputFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to transpilation: %v\n%s", err, string(out))
@@ -398,11 +395,7 @@ func TestCrashStateSerialization(t *testing.T) {
 }
 
 func TestWasmBackendWritesPortableWAT(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "math.howl")
@@ -411,7 +404,7 @@ func TestWasmBackendWritesPortableWAT(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 	}
@@ -430,11 +423,7 @@ func TestWasmBackendWritesPortableWAT(t *testing.T) {
 }
 
 func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "unsupported.howl")
@@ -442,7 +431,7 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("Expected unsupported wasm node to fail")
@@ -453,11 +442,7 @@ func TestWasmBackendRejectsUnsupportedNodes(t *testing.T) {
 }
 
 func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tests := []struct {
 		name   string
@@ -488,7 +473,7 @@ func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
 
-			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+			cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 			output, err := cmd.CombinedOutput()
 			if err == nil {
 				t.Fatalf("Expected semantic validation to fail")
@@ -504,11 +489,7 @@ func TestWasmBackendRejectsSemanticLayoutErrorsBeforeOutput(t *testing.T) {
 }
 
 func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "multi_aggregate.howl")
@@ -517,7 +498,7 @@ func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate multi aggregate WAT: %v: %s", err, output)
 	}
@@ -540,11 +521,7 @@ func TestWasmBackendAllocatesMultipleAggregateRegions(t *testing.T) {
 }
 
 func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "dict_key.howl")
@@ -552,7 +529,7 @@ func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to generate WAT for dict key named list: %v: %s", err, output)
@@ -563,11 +540,7 @@ func TestWasmBackendDoesNotCountDictionaryKeyNamesAsAggregates(t *testing.T) {
 }
 
 func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "float.howl")
@@ -576,7 +549,7 @@ func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
 
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate float WAT: %v: %s", err, output)
 	}
@@ -595,18 +568,14 @@ func TestWasmBackendUsesFloatLayoutsAndConversions(t *testing.T) {
 }
 
 func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "list.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list 1 2))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list WAT: %v: %s", err, output)
 	}
@@ -624,18 +593,14 @@ func TestWasmBackendEmitsIntegerListMemory(t *testing.T) {
 }
 
 func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "list_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list 10 20) 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate list_get WAT: %v: %s", err, output)
 	}
@@ -653,11 +618,7 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 }
 
 func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tests := []struct {
 		name      string
@@ -688,7 +649,7 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+			cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate aggregate WAT: %v: %s", err, output)
 			}
@@ -706,11 +667,7 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 }
 
 func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tests := []struct {
 		name      string
@@ -754,7 +711,7 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
 				t.Fatalf("Failed to write input file: %v", err)
 			}
-			cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+			cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("Failed to generate WAT: %v: %s", err, output)
 			}
@@ -772,18 +729,14 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 }
 
 func TestWasmBackendReadsStringListPointers(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "string_list_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list "alpha" "beta") 1))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate string-list WAT: %v: %s", err, output)
 	}
@@ -801,18 +754,14 @@ func TestWasmBackendReadsStringListPointers(t *testing.T) {
 }
 
 func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "dict_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate dict WAT: %v: %s", err, output)
 	}
@@ -830,18 +779,14 @@ func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
 }
 
 func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", "howlframe", ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
-	defer os.Remove("howlframe")
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "int_dict_get.howl")
 	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" 10) ("b" 20)) "b"))`), 0644); err != nil {
 		t.Fatalf("Failed to write input file: %v", err)
 	}
-	cmd = exec.Command("./howlframe", "build", "--target=wasm", "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to generate integer dict WAT: %v: %s", err, output)
 	}
@@ -1647,13 +1592,41 @@ func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
 // construct.Scan, tools/difftest); these are the shapes that must not become
 // permanent corpus fixtures, so they use scratch t.TempDir() files instead.
 
+var (
+	cachedHowlFrameOnce sync.Once
+	cachedHowlFrameDir  string
+	cachedHowlFrameBin  string
+	cachedHowlFrameErr  error
+)
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if cachedHowlFrameDir != "" {
+		_ = os.RemoveAll(cachedHowlFrameDir)
+	}
+	os.Exit(code)
+}
+
 func buildHowlFrameBinaryForTest(t *testing.T) string {
 	t.Helper()
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
+	cachedHowlFrameOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "howlframe-test-bin-*")
+		if err != nil {
+			cachedHowlFrameErr = err
+			return
+		}
+		cachedHowlFrameDir = dir
+		bin := filepath.Join(dir, "howlframe")
+		if output, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+			cachedHowlFrameErr = fmt.Errorf("failed to build HowlFrame binary: %v\n%s", err, output)
+			return
+		}
+		cachedHowlFrameBin = bin
+	})
+	if cachedHowlFrameErr != nil {
+		t.Fatal(cachedHowlFrameErr)
 	}
-	return howlframeBinary
+	return cachedHowlFrameBin
 }
 
 // TestModuleInterpreterAndBytecodeParity proves -run and -compile-bc+-run-bc

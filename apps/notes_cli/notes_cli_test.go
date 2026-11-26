@@ -9,16 +9,17 @@ import (
 )
 
 func TestNotesCLI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "notes_cli.howl")
+	dir := t.TempDir()
+	artifact := filepath.Join(dir, "notes_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "notes_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
-	dir := t.TempDir()
 	store := "file://" + filepath.Join(dir, "notes.store")
 	run := func(args ...string) (string, error) {
-		cmdArgs := append([]string{"run", "../../howlframe.go", "-run-bc", "-allow-caps", "database,filesystem,environment", "notes_cli.howl.bc.bin"}, args...)
+		cmdArgs := append([]string{"run", "../../howlframe.go", "-run-bc", "-allow-caps", "database,filesystem,environment", artifact}, args...)
 		c := exec.Command("go", cmdArgs...)
 		c.Dir = "."
 		c.Env = append(os.Environ(), "NOTES_STORE="+store)

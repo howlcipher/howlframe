@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -15,14 +16,15 @@ func TestFetchCLI(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "fetch_cli.howl")
+	artifact := filepath.Join(t.TempDir(), "fetch_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "fetch_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network:fetch="+strings.TrimPrefix(srv.URL, "http://"),
-		"fetch_cli.howl.bc.bin", srv.URL)
+		artifact, srv.URL)
 	cmd.Dir = "."
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -35,7 +37,7 @@ func TestFetchCLI(t *testing.T) {
 
 	// #165: the coarse network grant no longer authorizes outbound fetch.
 	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network",
-		"fetch_cli.howl.bc.bin", srv.URL)
+		artifact, srv.URL)
 	cmd.Dir = "."
 	out, _ = cmd.CombinedOutput()
 	if !strings.Contains(string(out), "capability denied: network") {

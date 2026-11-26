@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -35,13 +36,14 @@ func TestWebhookRelay(t *testing.T) {
 	upstream.Start()
 	defer upstream.Close()
 
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "webhook_relay.howl")
+	artifact := filepath.Join(t.TempDir(), "webhook_relay.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "webhook_relay.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment,network:fetch=127.0.0.1:8099", "webhook_relay.howl.bc.bin")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment,network:fetch=127.0.0.1:8099", artifact)
 	cmd.Dir = "."
 	cmd.Env = append(cmd.Environ(), "UPSTREAM_URL="+upstream.URL+"/")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -51,6 +53,7 @@ func TestWebhookRelay(t *testing.T) {
 	errc := make(chan error, 1)
 	go func() { errc <- cmd.Wait() }()
 	defer func() {
+		http.DefaultClient.CloseIdleConnections()
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		<-errc
 	}()

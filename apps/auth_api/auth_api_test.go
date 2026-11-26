@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -11,13 +12,14 @@ import (
 )
 
 func TestAuthAPI(t *testing.T) {
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "auth_api.howl")
+	artifact := filepath.Join(t.TempDir(), "auth_api.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "auth_api.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("compile: %v", err)
 	}
 
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network", "auth_api.howl.bc.bin")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network", artifact)
 	cmd.Dir = "."
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -26,6 +28,7 @@ func TestAuthAPI(t *testing.T) {
 	errc := make(chan error, 1)
 	go func() { errc <- cmd.Wait() }()
 	defer func() {
+		http.DefaultClient.CloseIdleConnections()
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		<-errc
 	}()

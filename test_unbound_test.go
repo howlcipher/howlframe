@@ -3,11 +3,14 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestUnboundVariablesChecker(t *testing.T) {
+	binary := buildHowlFrameBinaryForTest(t)
+
 	cases := []struct {
 		name string
 		src  string
@@ -27,8 +30,11 @@ func TestUnboundVariablesChecker(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			os.WriteFile("test_unbound.howl", []byte(tc.src), 0644)
-			cmd := exec.Command("go", "run", "howlframe.go", "-validate", "test_unbound.howl")
+			srcFile := filepath.Join(t.TempDir(), "test_unbound.howl")
+			if err := os.WriteFile(srcFile, []byte(tc.src), 0o644); err != nil {
+				t.Fatalf("write temp fixture: %v", err)
+			}
+			cmd := exec.Command(binary, "-validate", srcFile)
 			out, err := cmd.CombinedOutput()
 
 			if tc.want == "" {

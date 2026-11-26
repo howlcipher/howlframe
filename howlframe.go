@@ -70,10 +70,16 @@ func main() {
 	runBc := flag.Bool("run-bc", false, "run a bytecode artifact")
 	allowCaps := flag.String("allow-caps", "", "comma-separated capabilities to allow when running bytecode with -run-bc (network,filesystem,filesystem:read=<root>,filesystem:write=<root>,process,environment,database); instructions requiring an unlisted capability are denied")
 	maxInstructions := flag.Int("max-instructions", vm.DefaultLimits.MaxInstructions, "positive finite instruction ceiling for -run-bc (default 100000; zero and negative values are invalid)")
+	maxStartupInst := flag.Int("max-startup-instructions", 0, "finite instruction limit for HTTP server startup code (default 10000000 for servers unless -max-instructions is given)")
 	maxCallDepth := flag.Int("max-call-depth", vm.DefaultLimits.MaxCallDepth, "positive ceiling for CALL recursion and SPAWN_AGENT nesting for -run-bc (default 1000)")
 	maxMemory := flag.Int("max-memory-bytes", vm.DefaultLimits.MaxMemoryBytes, "cumulative allocation ceiling in bytes")
 	maxFetch := flag.Int("max-fetch-bytes", vm.DefaultLimits.MaxFetchBodyBytes, "fetch response body ceiling in bytes")
 	maxExec := flag.Int("max-exec-output-bytes", vm.DefaultLimits.MaxExecOutputBytes, "combined exec output ceiling in bytes")
+	maxProcesses := flag.Int("max-processes", vm.DefaultMaxProcesses, "positive ceiling for exec children alive at once across the run")
+	maxExecMillis := flag.Int("max-exec-millis", 0, "wall-clock bound in milliseconds for each exec call (default none; --deadline still applies)")
+	maxEventInst := flag.Int("max-event-instructions", vm.DefaultMaxEventInstructions, "terminal_app: positive instruction limit for each handler call (fresh per event)")
+	maxEventMemory := flag.Int("max-event-memory-bytes", vm.DefaultMaxEventMemoryBytes, "terminal_app: positive allocation limit for each handler call (fresh per event)")
+	maxStateBytes := flag.Int("max-state-bytes", vm.DefaultMaxStateBytes, "terminal_app: positive limit on the encoded state carried between events")
 	maxRequest := flag.Int("max-request-bytes", vm.DefaultLimits.MaxRequestBodyBytes, "HTTP route request body ceiling in bytes for parse_json")
 	accessLog := flag.Bool("access-log", false, "write one access line per HTTP request to stderr")
 	listenHost := flag.String("listen-host", "", "HTTP listen IP literal (default all interfaces)")
@@ -88,15 +94,16 @@ func main() {
 		os.Exit(1)
 	}
 	if *runBc {
-		if _, err := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline); err != nil {
+		if _, err := configureBytecodeExecutionPolicy(
+			flag.CommandLine,
+			*maxInstructions, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		); err != nil {
 			ast.ReportError(err.Error(), 0, 0)
 		}
-	}
-	if *runBc && *maxInstructions <= 0 {
-		ast.ReportError("-max-instructions must be greater than zero; unlimited execution is not supported", 0, 0)
-	}
-	if *runBc && *maxCallDepth <= 0 {
-		ast.ReportError("-max-call-depth must be greater than zero; unlimited recursion is not supported", 0, 0)
 	}
 	if *outDir != "" && strings.HasPrefix(*outDir, "-") {
 		ast.ReportError("flag needs an argument: -o", 0, 0)
@@ -184,40 +191,26 @@ func main() {
 		if err != nil {
 			ast.ReportError(fmt.Sprintf("Cannot parse bytecode: %v", err), 0, 0)
 		}
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
+		executionPolicy, policyErr := configureBytecodeExecutionPolicy(
+			flag.CommandLine,
+			*maxInstructions, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		)
 		if policyErr != nil {
+			if strings.Contains(policyErr.Error(), "listen-host") {
+				fmt.Fprintln(os.Stderr, policyErr)
+				os.Exit(2)
+			}
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(1)
 		}
-		executionPolicy.Limits.MaxInstructions = *maxInstructions
-		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
-			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
-			os.Exit(2)
-		}
-		executionPolicy.Limits.HTTPListenHost = *listenHost
-		executionPolicy.Limits.LogRequests = *accessLog
-		executionPolicy.Limits.LogTiming = *timingLog
-		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 		os.Exit(runBytecodeArtifact(prog, content, programArgs, executionPolicy, parseAllowedCaps(*allowCaps), *receiptPath))
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
-
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	ast.Desugar(root)
-	analysis := checker.Check(root)
+	root, analysis := parseAndPrepareProgram(inputFile, content)
 	hfirModule := filepath.Base(inputFile)
 
 	if *maskPlan {
@@ -266,7 +259,6 @@ func main() {
 	if *compileHfirBc {
 		// The VM stores bindings by name per call, so shadowing bindings
 		// are renamed first, as CompileToBytecode does.
-		ast.Desugar(root)
 		bytecode.ScopeBindings(root)
 		graph := runHFIRGate(root, hfirModule, hfirTargetBytecode)
 		var prog *bytecode.BCProgram
@@ -522,29 +514,17 @@ const (
 	hfirTargetNone        hfirTarget = ""            // -validate: target-independent
 	hfirTargetBytecode    hfirTarget = "bytecode"    // -compile-bc
 	hfirTargetWasm        hfirTarget = "wasm"        // -compile-wasm and build --target=wasm
+	hfirTargetWasmGC      hfirTarget = "wasmgc"      // build --target=wasmgc
 	hfirTargetInterpreter hfirTarget = "interpreter" // -run
 	hfirTargetJavaScript  hfirTarget = "javascript"  // web_app
 	hfirTargetGo          hfirTarget = "go"          // default cli_app/http_server backend
 )
 
-// hfirBlockingCodes are the HFIR diagnostic codes currently trusted enough to
-// fail a production build closed. HFIR_UNBOUND_REF is deliberately excluded:
-// verifying against the real tests/*.howl corpus (see
-// TestHFIRGateAcceptsAllExistingFixtures in howlframe_test.go) showed it produces
-// false positives on any variable bound via try_let/catch or bound to the
-// result of a dynamically-typed primitive (llm_generate, generics, HTTP
-// lambda parameter field access, etc.) - internal/checker's Analysis.infer
-// (internal/checker/types.go) legitimately types these as ast.Unknown
-// without raising a checker diagnostic (this is intentional dynamic-typing
-// support, not a bug), but the checked AST's TypeInfo does not preserve the
-// difference between "resolved, dynamically typed" and "never resolved" by
-// the time HFIR lowers it - and a genuinely unresolved reference already
-// fails checker.Check before HFIR ever runs, so on real programs
-// HFIR_UNBOUND_REF currently has no reachable true positive, only false
-// positives. Tracked as bugs.md #42. Verify() still computes and returns
-// this diagnostic (internal/hfir/verifier.go is unchanged) - this exclusion
-// lives only in the production gate's failure policy, not in the verifier
-// itself, so nothing here silently skips verification.
+// hfirBlockingCodes are the HFIR diagnostic codes that fail a production
+// build closed. Notice bugs.md #42 already removed the false-positive
+// HFIR_UNBOUND_REF check from internal/hfir/verifier.go; keeping an explicit
+// allow-list ensures experimental non-blocking verifier checks cannot
+// unexpectedly fail builds closed unless opted in here.
 var hfirBlockingCodes = map[string]bool{
 	"PROFILE_FORBIDDEN_CONSTRUCT": true,
 	"HFIR_INVALID_REF":            true,
@@ -713,6 +693,57 @@ Capabilities are denied by default and must be granted by the runner with --allo
 Example: howlframe run --allow-caps filesystem,network app.hfbc arg1 arg2`)
 }
 
+func parseSourceAST(inputFile string, content []byte) *ast.Node {
+	lx := lexer.NewLexer(string(content))
+	p := parser.NewParser(lx, filepath.Base(inputFile))
+	root := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		p.ReportTrailing()
+	}
+	return root
+}
+
+func prepareProgramAST(root *ast.Node, baseDir string, beforeDesugar, afterDesugar func(*ast.Node)) (*ast.Node, *checker.Analysis) {
+	parser.ExpandIncludes(root, baseDir, 0)
+	ast.ResolveModules(root)
+	ast.ApplyPatches(root)
+	root = ast.ApplyWithContext(root, nil)
+	construct.EnforceArity(root)
+	if beforeDesugar != nil {
+		beforeDesugar(root)
+	}
+	ast.Desugar(root)
+	if afterDesugar != nil {
+		afterDesugar(root)
+	}
+	analysis := checker.Check(root)
+	return root, analysis
+}
+
+func parseAndPrepareProgram(inputFile string, content []byte) (*ast.Node, *checker.Analysis) {
+	root := parseSourceAST(inputFile, content)
+	return prepareProgramAST(root, filepath.Dir(inputFile), nil, nil)
+}
+
+func resumeSubcommandTrailingFlags(fs *flag.FlagSet, inputFile, inputKind string, trailing []string) map[string]bool {
+	setAfterInput, leftover, err := resumeFlagsAfterInput(fs, trailing)
+	if errors.Is(err, flag.ErrHelp) {
+		fs.Usage()
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot parse arguments after %s %q: %v\n", inputKind, inputFile, err)
+		fs.Usage()
+		os.Exit(1)
+	}
+	if len(leftover) > 0 {
+		fmt.Fprintf(os.Stderr, "Unexpected argument %q after %s %q\n", leftover[0], inputKind, inputFile)
+		fs.Usage()
+		os.Exit(1)
+	}
+	return setAfterInput
+}
+
 func checkSource() {
 	checkFlags := flag.NewFlagSet("check", flag.ExitOnError)
 	checkFlags.Usage = func() {
@@ -728,6 +759,12 @@ func checkSource() {
 	}
 
 	inputFile := checkFlags.Arg(0)
+	resumeSubcommandTrailingFlags(checkFlags, inputFile, "source file", checkFlags.Args()[1:])
+	if *profileName != "" && strings.HasPrefix(*profileName, "-") {
+		fmt.Fprintln(os.Stderr, "flag needs an argument: --profile")
+		checkFlags.Usage()
+		os.Exit(1)
+	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -735,12 +772,7 @@ func checkSource() {
 		os.Exit(1)
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
+	root := parseSourceAST(inputFile, content)
 
 	profile, profileErr := construct.LookupProfile(*profileName)
 	if profileErr != nil {
@@ -749,18 +781,11 @@ func checkSource() {
 	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	ast.Desugar(root)
-	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
-		reportHFIRDiagnostics(diags)
-	}
-
-	_ = checker.Check(root)
+	root, _ = prepareProgramAST(root, filepath.Dir(inputFile), nil, func(prepared *ast.Node) {
+		if diags := hfir.VerifyProfile(prepared, profile, inputFile, ""); len(diags) > 0 {
+			reportHFIRDiagnostics(diags)
+		}
+	})
 
 	hfirModule := filepath.Base(inputFile)
 	runHFIRGate(root, hfirModule, hfirTargetNone)
@@ -803,16 +828,7 @@ func buildSource() {
 	inputFile := buildFlags.Arg(0)
 	// build has no argv-owning mode, so every token after the source file is
 	// this subcommand's to parse or to reject (bugs.md #52).
-	setAfterInput, leftover, err := resumeFlagsAfterInput(buildFlags, buildFlags.Args()[1:])
-	if errors.Is(err, flag.ErrHelp) {
-		buildFlags.Usage()
-		os.Exit(0)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: %v\n", inputFile, err)
-		buildFlags.Usage()
-		os.Exit(1)
-	}
+	setAfterInput := resumeSubcommandTrailingFlags(buildFlags, inputFile, "source file", buildFlags.Args()[1:])
 	if *outPath != "" && strings.HasPrefix(*outPath, "-") {
 		fmt.Fprintf(os.Stderr, "Cannot parse arguments after source file %q: flag needs an argument: -o\n", inputFile)
 		buildFlags.Usage()
@@ -823,11 +839,6 @@ func buildSource() {
 		buildFlags.Usage()
 		os.Exit(1)
 	}
-	if len(leftover) > 0 {
-		fmt.Fprintf(os.Stderr, "Unexpected argument %q after source file %q\n", leftover[0], inputFile)
-		buildFlags.Usage()
-		os.Exit(1)
-	}
 
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -835,38 +846,32 @@ func buildSource() {
 		os.Exit(1)
 	}
 
-	lx := lexer.NewLexer(string(content))
-	p := parser.NewParser(lx, filepath.Base(inputFile))
-	root := p.ParseExpression()
-	if p.Cur.Type != lexer.TokenEOF {
-		p.ReportTrailing()
-	}
+	root := parseSourceAST(inputFile, content)
+	targetVal := strings.ToLower(strings.TrimSpace(*target))
 
 	profile, profileErr := construct.LookupProfile(*profileName)
 	if profileErr != nil {
 		ast.ReportError(profileErr.Error(), 0, 0)
 	}
-	if diags := hfir.VerifyProfile(root, profile, inputFile, strings.ToLower(strings.TrimSpace(*target))); len(diags) > 0 {
+	if diags := hfir.VerifyProfile(root, profile, inputFile, targetVal); len(diags) > 0 {
 		reportHFIRDiagnostics(diags)
 	}
-	parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-	ast.ResolveModules(root)
-	ast.ApplyPatches(root)
-	root = ast.ApplyWithContext(root, nil)
-	root = ast.ApplyWithContext(root, nil)
-	construct.EnforceArity(root)
-	rejectUnsupportedTargetControlflow(root, strings.ToLower(strings.TrimSpace(*target)))
-	ast.Desugar(root)
-	if diags := hfir.VerifyProfile(root, profile, inputFile, ""); len(diags) > 0 {
-		reportHFIRDiagnostics(diags)
-	}
-	rejectUnsupportedTargetSugar(root, strings.ToLower(strings.TrimSpace(*target)))
-	jsValueForms := rejectUnsupportedTargetValueForms(root, strings.ToLower(strings.TrimSpace(*target)))
-
-	analysis := checker.Check(root)
+	var jsValueForms []*ast.Node
+	root, analysis := prepareProgramAST(
+		root,
+		filepath.Dir(inputFile),
+		func(n *ast.Node) {
+			rejectUnsupportedTargetControlflow(n, targetVal)
+		},
+		func(n *ast.Node) {
+			if diags := hfir.VerifyProfile(n, profile, inputFile, ""); len(diags) > 0 {
+				reportHFIRDiagnostics(diags)
+			}
+			rejectUnsupportedTargetSugar(n, targetVal)
+			jsValueForms = rejectUnsupportedTargetValueForms(n, targetVal)
+		},
+	)
 	hfirModule := filepath.Base(inputFile)
-
-	targetVal := strings.ToLower(strings.TrimSpace(*target))
 	if *wasmInline && targetVal != "wasmgc" {
 		fmt.Fprintln(os.Stderr, "--inline-module requires --target wasmgc")
 		os.Exit(1)
@@ -983,6 +988,7 @@ func buildSource() {
 	case "wasmgc":
 		// The WebAssembly GC backend (docs/design/wasm_gc_backend.md), in
 		// development; it becomes the wasm target once it covers it.
+		runHFIRGate(root, hfirModule, hfirTargetWasmGC)
 		if *jsModule {
 			if *wasmInline || *wasmTests || *wasmHost != "" {
 				fmt.Fprintln(os.Stderr, "--module cannot be combined with --host, --inline-module or --tests")
@@ -1143,8 +1149,9 @@ func writeJSModule(root *ast.Node, analysis *checker.Analysis, outputDir string)
 // are refused on a command line that runs nothing. -allow-caps also governs
 // -run.
 var runOnlyFlags = []string{
-	"max-instructions", "max-call-depth", "max-memory-bytes", "max-fetch-bytes",
-	"max-exec-output-bytes", "max-request-bytes", "access-log", "listen-host",
+	"max-instructions", "max-startup-instructions", "max-call-depth", "max-memory-bytes", "max-fetch-bytes",
+	"max-exec-output-bytes", "max-processes", "max-exec-millis", "max-event-instructions",
+	"max-event-memory-bytes", "max-state-bytes", "max-request-bytes", "access-log", "listen-host",
 	"timing-log", "deadline", "allow-caps",
 }
 
@@ -1238,65 +1245,28 @@ func runArtifact() {
 			fmt.Fprintln(os.Stderr, "--receipt requires bytecode target; interpreter receipts are unsupported")
 			os.Exit(1)
 		}
-		lx := lexer.NewLexer(string(content))
-		p := parser.NewParser(lx, filepath.Base(inputFile))
-		root := p.ParseExpression()
-		if p.Cur.Type != lexer.TokenEOF {
-			p.ReportTrailing()
-		}
-		parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-		ast.ResolveModules(root)
-		ast.ApplyPatches(root)
-		root = ast.ApplyWithContext(root, nil)
-		root = ast.ApplyWithContext(root, nil)
-		construct.EnforceArity(root)
-		ast.Desugar(root)
-		_ = checker.Check(root)
+		root, _ := parseAndPrepareProgram(inputFile, content)
 		hfirModule := filepath.Base(inputFile)
 		runHFIRGate(root, hfirModule, hfirTargetInterpreter)
 		os.Exit(vm.Interpret(root, programArgs, parseAllowedCaps(*allowCaps), os.Stdin, os.Stdout, os.Stderr))
 
 	case "bytecode", "bc":
-		executionPolicy, policyErr := resourcePolicy(*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline)
+		executionPolicy, policyErr := configureBytecodeExecutionPolicy(
+			runFlags,
+			*maxInst, *maxStartupInst, *maxCallDepth,
+			*maxMemory, *maxFetch, *maxExec, *maxRequest, *deadline,
+			*maxProcesses, *maxExecMillis,
+			*maxEventInst, *maxEventMemory, *maxStateBytes,
+			*listenHost, *accessLog, *timingLog,
+		)
 		if policyErr != nil {
 			fmt.Fprintln(os.Stderr, policyErr)
 			os.Exit(2) // usage error: an invalid resource flag value
 		}
-		executionPolicy.Limits.MaxInstructions = *maxInst
-		executionPolicy.Limits.MaxStartupInstructions = startupInstructionLimit(runFlags, *maxStartupInst)
-		if err := applyEventLimits(&executionPolicy, *maxEventInst, *maxEventMemory, *maxStateBytes); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		if err := applyProcessLimits(&executionPolicy, *maxProcesses, *maxExecMillis); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		if *listenHost != "" && net.ParseIP(*listenHost) == nil {
-			fmt.Fprintln(os.Stderr, "--listen-host must be an IP literal")
-			os.Exit(2)
-		}
-		executionPolicy.Limits.HTTPListenHost = *listenHost
-		executionPolicy.Limits.LogRequests = *accessLog
-		executionPolicy.Limits.LogTiming = *timingLog
-		executionPolicy.Limits.MaxCallDepth = *maxCallDepth
 
 		var prog *bytecode.BCProgram
 		if strings.HasSuffix(inputFile, ".howl") {
-			lx := lexer.NewLexer(string(content))
-			p := parser.NewParser(lx, filepath.Base(inputFile))
-			root := p.ParseExpression()
-			if p.Cur.Type != lexer.TokenEOF {
-				p.ReportTrailing()
-			}
-			parser.ExpandIncludes(root, filepath.Dir(inputFile), 0)
-			ast.ResolveModules(root)
-			ast.ApplyPatches(root)
-			root = ast.ApplyWithContext(root, nil)
-			root = ast.ApplyWithContext(root, nil)
-			construct.EnforceArity(root)
-			ast.Desugar(root)
-			_ = checker.Check(root)
+			root, _ := parseAndPrepareProgram(inputFile, content)
 			hfirModule := filepath.Base(inputFile)
 			runHFIRGate(root, hfirModule, hfirTargetBytecode)
 			prog = bytecode.CompileToBytecode(root)
@@ -1342,16 +1312,64 @@ func printRequiredCapabilities(content []byte) {
 func inspectArtifact() {
 	flags := flag.NewFlagSet("inspect", flag.ExitOnError)
 	caps := flags.Bool("caps", false, "report required capabilities as compact JSON without execution")
-	flags.Parse(os.Args[2:])
-	if !*caps || flags.NArg() != 1 {
+	flags.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: howlframe inspect --caps <artifact.hfbc>")
+	}
+	flags.Parse(os.Args[2:])
+	if flags.NArg() < 1 {
+		flags.Usage()
 		os.Exit(1)
 	}
-	data, err := os.ReadFile(flags.Arg(0))
+	artifact := flags.Arg(0)
+	resumeSubcommandTrailingFlags(flags, artifact, "artifact file", flags.Args()[1:])
+	if !*caps {
+		flags.Usage()
+		os.Exit(1)
+	}
+	data, err := os.ReadFile(artifact)
 	if err != nil {
 		ast.ReportError(fmt.Sprintf("Cannot read file: %v", err), 0, 0)
 	}
 	printRequiredCapabilities(data)
+}
+
+func configureBytecodeExecutionPolicy(
+	fs *flag.FlagSet,
+	maxInst, maxStartupInst, maxCallDepth, maxMemory, maxFetch, maxExec, maxRequest int,
+	deadline string,
+	maxProcesses, maxExecMillis, maxEventInst, maxEventMemory, maxStateBytes int,
+	listenHost string,
+	accessLog, timingLog bool,
+) (vm.ExecutionPolicy, error) {
+	policy, err := resourcePolicy(maxMemory, maxFetch, maxExec, maxRequest, deadline)
+	if err != nil {
+		return policy, err
+	}
+	if maxInst <= 0 {
+		return policy, fmt.Errorf("-max-instructions must be greater than zero; unlimited execution is not supported")
+	}
+	if maxCallDepth <= 0 {
+		return policy, fmt.Errorf("-max-call-depth must be greater than zero; unlimited recursion is not supported")
+	}
+	if maxStartupInst < 0 {
+		return policy, fmt.Errorf("-max-startup-instructions must not be negative")
+	}
+	policy.Limits.MaxInstructions = maxInst
+	policy.Limits.MaxStartupInstructions = startupInstructionLimit(fs, maxStartupInst)
+	if err := applyEventLimits(&policy, maxEventInst, maxEventMemory, maxStateBytes); err != nil {
+		return policy, err
+	}
+	if err := applyProcessLimits(&policy, maxProcesses, maxExecMillis); err != nil {
+		return policy, err
+	}
+	if listenHost != "" && net.ParseIP(listenHost) == nil {
+		return policy, fmt.Errorf("--listen-host must be an IP literal")
+	}
+	policy.Limits.HTTPListenHost = listenHost
+	policy.Limits.LogRequests = accessLog
+	policy.Limits.LogTiming = timingLog
+	policy.Limits.MaxCallDepth = maxCallDepth
+	return policy, nil
 }
 
 func resourcePolicy(memory, fetch, output, request int, deadline string) (vm.ExecutionPolicy, error) {
@@ -1755,8 +1773,9 @@ var interopCommands = []interopCommand{
 	{Path: []string{"agent", "status"}, Flags: []string{"--verified", "--task", "--root", "--bundle", "--state-dir"}, JSON: true, Emits: []string{agent.SessionSchema}},
 	{Path: []string{}, Flags: []string{
 		"--version", "-o", "-run", "-compile-bc", "-compile-hfir-bc", "-hfir-adapter-roundtrip", "-compile-wasm",
-		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-call-depth",
-		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-request-bytes", "-access-log",
+		"-required-caps", "-receipt", "-run-bc", "-allow-caps", "-max-instructions", "-max-startup-instructions", "-max-call-depth",
+		"-max-memory-bytes", "-max-fetch-bytes", "-max-exec-output-bytes", "-max-processes", "-max-exec-millis",
+		"-max-event-instructions", "-max-event-memory-bytes", "-max-state-bytes", "-max-request-bytes", "-access-log",
 		"-timing-log", "-listen-host", "-deadline", "-validate", "-mask-plan", "-optimization-plan",
 	}, Emits: []string{"howlframe.receipt/v0"}},
 	{Path: []string{"inspect"}, Flags: []string{"--caps"}, JSON: true},

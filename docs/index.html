@@ -227,7 +227,7 @@
             <!-- Hero Panel -->
             <section class="hero-panel" aria-labelledby="main-title">
                 <div class="hero-banner">
-                    <span>SPEC_VER // 0.1.0 (HFBC v1)</span>
+                    <span>SPEC_VER // 0.3.0 (HFBC v2)</span>
                     <span>AUTHORITY: CAPABILITY-CHECKED</span>
                 </div>
                 <div class="hero-body">
@@ -369,7 +369,7 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                         <li><strong>REASON:</strong> AI models author declarative intent in the <code>.howl</code> syntax, avoiding imperative boilerplate.</li>
                         <li><strong>VERIFY:</strong> The HFIR compiler validates schemas, type signatures, and declared capability sets.</li>
                         <li><strong>BOUND:</strong> The bytecode generator emits binary format <code>.hfbc</code> with deterministic instruction limits.</li>
-                        <li><strong>EXECUTE:</strong> The runtime environment invokes the code under strict runner capabilities (<code>network</code>, <code>database</code>, <code>filesystem</code>, <code>system</code>).</li>
+                        <li><strong>EXECUTE:</strong> The runtime environment invokes the code under strict runner capabilities (<code>network</code>, <code>database</code>, <code>filesystem</code>, <code>process</code>, <code>environment</code>).</li>
                     </ol>
                 </div>
             </section>
@@ -412,10 +412,16 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                                     <td>Runner flag: <code>-allow-caps filesystem:read=/data,filesystem:write=/out</code> (native VM; <code>filesystem</code> remains unrestricted)</td>
                                 </tr>
                                 <tr>
-                                    <td><code>system</code></td>
-                                    <td><code>env_get</code>, <code>process_spawn</code></td>
+                                    <td><code>environment</code></td>
+                                    <td><code>env</code></td>
                                     <td><span class="chip chip-deny">DENY (Blocked)</span></td>
-                                    <td>Runner flag: <code>-allow-caps system</code></td>
+                                    <td>Runner flag: <code>--allow-caps environment</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>process</code></td>
+                                    <td><code>exec</code></td>
+                                    <td><span class="chip chip-deny">DENY (Blocked)</span></td>
+                                    <td>Runner flag: <code>--allow-caps process:exec=/abs/path</code></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -479,16 +485,16 @@ HFBC Bytecode       Native Go        WebAssembly       Browser JS
                             <button class="btn-copy" type="button">[COPY]</button>
                         </div>
                         <pre><code># 1. Compile Howl source to Bytecode
-howlframe -compile-bc -o output.hfbc input.howl
+howlframe build -o output.hfbc input.howl
 
 # 2. Run Bytecode VM with explicit capabilities
-howlframe -run-bc -allow-caps network,database output.hfbc
+howlframe run --allow-caps network,database output.hfbc
 
 # 3. Transpile Howl to Native Go
-howlframe -compile-go -o main.go input.howl
+howlframe build --target go -o main.go input.howl
 
-# 4. Transpile Howl to WebAssembly WAT
-howlframe -compile-wat -o module.wat input.howl</code></pre>
+# 4. Transpile Howl to WebAssembly WAT or WasmGC
+howlframe build --target wasm -o module.wat input.howl</code></pre>
                     </div>
                 </div>
             </section>

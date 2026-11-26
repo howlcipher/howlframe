@@ -119,7 +119,7 @@ as the work it describes: tick tasks, move the status line, record findings.
 | M3 browser host | Done (2026-10-31) | A `web_app` builds for the browser (`app.wasm` and a generated `app.js`). Every browser host operation of `capability.HostOperations` (53, `fetch` included) is a typed import gated by its capability; the loader runs the JavaScript backend's own runtime functions, so the errors are the same. Handlers are closures sharing their variables; asynchronous operations suspend by resumable frames (decided with measurements). Exit gate: HowlFrame's 53 browser tests run every fake-DOM program on both backends and pass on both (106 subtests); HowlScene HF's site runtime gives the same page on both (`TestHowlSceneSiteGate`), and its editor builds. Journal: `docs/journals/2026-10-31_wasmgc_m3_journal.md`. |
 | M4 site runtime | Done (2026-11-01) | `build --target wasmgc --inline-module` writes one `app.js` holding the module; pages add only `'wasm-unsafe-eval'` ("Site delivery"). The encoder leaves out unreached functions (site module 40,227 B). HowlScene HF builds its site runtime on WebAssembly behind `SITE_TARGET=wasmgc` and runs its browser suite on both runtimes in CI: 80 of 80 in Chromium, every motion and story spec in Firefox; initial download 31.2 KiB gzipped of 250 (`TestHowlSceneSiteBudget`). Journal: `docs/journals/2026-10-31_wasmgc_m4_journal.md`; M5 prompt: `docs/journals/2026-11-01_wasmgc_m5_prompt.md`. |
 | M5 editor | Complete with owner-accepted exceptions (2026-11-04) | See `docs/journals/2026-11-04_wasmgc_m5_acceptance.md`. Compiler and consumer follow-ups merged on 2026-11-07; final local Chromium and Firefox each pass 81/81. Private hosted CI was skipped with owner approval. See `docs/journals/2026-11-07_m5_integrated_closeout.md`; no deployment is claimed. |
-| M6 no other languages in the app | Not started | |
+| M6 no other languages in the app | Complete with owner-accepted exceptions (2026-11-08) | Consumer trial merged (`howlframe` PR / consumer repo): editor shell/styles generated from `.howl` with strict `.howl`-only policy and provenance checks; Chromium 81/81 passed, Firefox acceptance deferred under owner-accepted Chromium-first policy, private hosted CI skipped. See `docs/journals/2026-11-08_wasmgc_m6_trial.md`. |
 
 ### Rules
 
@@ -851,8 +851,11 @@ KB gzipped. Both page policies and the editor page's policy gain
       skipped with explicit owner approval.
       See `docs/journals/2026-11-04_wasmgc_m5_acceptance.md`; this checkbox
       does not claim the original CI-and-merge contract passed.
-- [ ] M6: styles and the editor page shell generated from `.howl`; source
-      policy allows only `.howl` under `src/`.
+- [x] M6: complete with owner-accepted exceptions (2026-11-08). Styles and the
+      editor page shell are generated from `.howl`; source policy allows only
+      `.howl` under `src/`. Final Chromium 81/81 passed; Firefox deferred under
+      owner-accepted Chromium-first policy and private hosted CI skipped
+      (`docs/journals/2026-11-08_wasmgc_m6_trial.md`).
 
 ### What HowlScene HF uses
 

@@ -1,22 +1,23 @@
 package todo_cli_test
 
 import (
-	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestTodoCLI(t *testing.T) {
 	// Compile
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "todo_cli.howl")
+	artifact := filepath.Join(t.TempDir(), "todo_cli.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "todo_cli.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
 	runTodo := func(args ...string) (string, error) {
-		cmdArgs := append([]string{"run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", "todo_cli.howl.bc.bin"}, args...)
+		cmdArgs := append([]string{"run", "../../howlframe.go", "-run-bc", "-allow-caps", "database", artifact}, args...)
 		cmd := exec.Command("go", cmdArgs...)
 		cmd.Dir = "."
 		out, err := cmd.CombinedOutput()
@@ -82,7 +83,7 @@ func TestTodoCLI(t *testing.T) {
 	}
 
 	// 4. Capability denial
-	cmdCap := exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", "todo_cli.howl.bc.bin")
+	cmdCap := exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "filesystem", artifact)
 	cmdCap.Dir = "."
 	outCap, errCap := cmdCap.CombinedOutput()
 	if errCap == nil || !strings.Contains(string(outCap), "capability denied: database") {
@@ -101,7 +102,4 @@ func TestTodoCLI(t *testing.T) {
 	if !strings.Contains(out, "ADDED 100 Task") {
 		t.Errorf("expected ADDED 100 Task in stress test, got: %s", out)
 	}
-
-	// Cleanup
-	os.Remove("todo_cli.howl.bc.bin")
 }

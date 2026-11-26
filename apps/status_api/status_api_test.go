@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -12,14 +13,15 @@ import (
 
 func TestStatusAPI(t *testing.T) {
 	// Compile
-	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "status_api.howl")
+	artifact := filepath.Join(t.TempDir(), "status_api.hfbc")
+	cmd := exec.Command("go", "run", "../../howlframe.go", "-compile-bc", "status_api.howl", "-o", artifact)
 	cmd.Dir = "."
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
 	// Start server
-	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment", "status_api.howl.bc.bin")
+	cmd = exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "network,environment", artifact)
 	cmd.Dir = "."
 	cmd.Env = append(cmd.Environ(), "REQUIRED_ENV=yes", "PUBLIC_CONFIG=foo")
 
@@ -35,6 +37,7 @@ func TestStatusAPI(t *testing.T) {
 	}()
 
 	defer func() {
+		http.DefaultClient.CloseIdleConnections()
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		<-errc
 	}()
@@ -79,7 +82,7 @@ func TestStatusAPI(t *testing.T) {
 	}
 
 	// Test missing network
-	cmdFail := exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "environment", "status_api.howl.bc.bin")
+	cmdFail := exec.Command("go", "run", "../../howlframe.go", "-run-bc", "-allow-caps", "environment", artifact)
 	cmdFail.Dir = "."
 	out, _ := cmdFail.CombinedOutput()
 	if !strings.Contains(string(out), "capability denied: network") {
