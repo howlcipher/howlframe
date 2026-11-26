@@ -99,6 +99,19 @@ func (vm *BCVM) recordEffectGrant(cap capability.Capability, op bytecode.Opcode,
 	vm.recordEffectDetail(cap, op, decision, grant, false)
 }
 
+func (r *receiptRecorder) appendEffect(eff ReceiptEffect) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.finalized {
+		return
+	}
+	if len(r.effects) >= maxReceiptEffects {
+		r.truncated = true
+		return
+	}
+	r.effects = append(r.effects, eff)
+}
+
 func (vm *BCVM) recordEffectDetail(cap capability.Capability, op bytecode.Opcode, decision, grant string, inherited bool) {
 	if vm.receipt == nil {
 		return
@@ -113,17 +126,7 @@ func (vm *BCVM) recordEffectDetail(cap capability.Capability, op bytecode.Opcode
 		}
 	}
 	d.seen = append(d.seen, cap)
-	r := vm.receipt
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.finalized {
-		return
-	}
-	if len(r.effects) >= maxReceiptEffects {
-		r.truncated = true
-		return
-	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant, receiptPrivateOptOut(decision, grant), inherited})
+	vm.receipt.appendEffect(ReceiptEffect{bytecode.Registry[op].Name, string(cap), d.summary, decision, grant, receiptPrivateOptOut(decision, grant), inherited})
 }
 
 // recordHop records a redirect hop. Unlike recordEffectGrant it does not
@@ -133,17 +136,7 @@ func (vm *BCVM) recordHop(cap capability.Capability, op bytecode.Opcode, decisio
 	if vm.receipt == nil || vm.receiptDecision == nil {
 		return
 	}
-	r := vm.receipt
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.finalized {
-		return
-	}
-	if len(r.effects) >= maxReceiptEffects {
-		r.truncated = true
-		return
-	}
-	r.effects = append(r.effects, ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant, receiptPrivateOptOut(decision, grant), false})
+	vm.receipt.appendEffect(ReceiptEffect{bytecode.Registry[op].Name, string(cap), "redirect", decision, grant, receiptPrivateOptOut(decision, grant), false})
 }
 
 // RunBytecodeWithReceipt returns normally on every VM outcome. Diagnostics match

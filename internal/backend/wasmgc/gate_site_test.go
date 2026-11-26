@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -195,37 +194,10 @@ func TestHowlSceneSiteBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixtures, err := filepath.Glob(filepath.Join(hs, "tests", "fixtures", "*", "*.json"))
-	if err != nil || len(fixtures) == 0 {
-		t.Fatalf("no fixture projects under %s: %v", hs, err)
-	}
-	sort.Strings(fixtures)
-	core, err := filepath.Rel(dir, filepath.Join(hs, "src", "core"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var body strings.Builder
-	for _, path := range fixtures {
-		text, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body.WriteString(`
-  (let (r (call schema/parse_project ` + howlString(string(text)) + ` reg))
+	driver := writeHowlSceneFixtureDriver(t, hs, "pages", `
+  (let (r (call schema/parse_project __TEXT__ reg))
     (if (map_get r "ok")
-      (print "\n=== ` + filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path) + `\n" (call render/render_document (map_get r "config") reg (dict ("css" "") ("script" true) ("csp" true))))))`)
-	}
-	driver := filepath.Join(dir, "pages.howl")
-	src := `(cli_app
-  (use "` + core + `/registry.howl" as registry)
-  (use "` + core + `/schema.howl" as schema)
-  (use "` + core + `/render.howl" as render)
-  (let (reg (call registry/registry))
-    (do` + body.String() + `)))
-`
-	if err := os.WriteFile(driver, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
+      (print "\n=== __NAME__\n" (call render/render_document (map_get r "config") reg (dict ("css" "") ("script" true) ("csp" true))))))`)
 	out := run(t, compilerBin, "run", "--max-instructions", "500000000", driver)
 	if out.failed {
 		t.Fatalf("render: %s", out.errMsg)

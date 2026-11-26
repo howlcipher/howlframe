@@ -473,6 +473,15 @@ func (r *rt) emitArith() {
 		return c.LocalGet(5).Call(r.fBoxFloat).Return()
 	}
 
+	finishNumOp := func(c *Code, name string, emitFloat func(*Code)) {
+		bothNum(c).If(NoResult)
+		asFloat(c, 0)
+		asFloat(c, 1)
+		emitFloat(c)
+		floatResult(c, name).End()
+		typeErr(c, name)
+	}
+
 	r.body(r.fAdd, nums, func(c *Code) {
 		// Strings concatenate.
 		c.LocalGet(0).RefTest(r.tStr).LocalGet(1).RefTest(r.tStr).I32And().If(NoResult).
@@ -485,12 +494,7 @@ func (r *rt) emitArith() {
 		c.LocalGet(2).LocalGet(4).I64Xor().LocalGet(3).LocalGet(4).I64Xor().I64And().I64Const(0).I64LtS().If(NoResult)
 		overflow(c).End()
 		c.LocalGet(4).Call(r.fBoxInt).Return().End()
-		bothNum(c).If(NoResult)
-		asFloat(c, 0)
-		asFloat(c, 1)
-		c.F64Add()
-		floatResult(c, "+").End()
-		typeErr(c, "+")
+		finishNumOp(c, "+", func(c *Code) { c.F64Add() })
 	})
 	r.body(r.fSub, nums, func(c *Code) {
 		bothInt(c).If(NoResult)
@@ -502,12 +506,7 @@ func (r *rt) emitArith() {
 		c.LocalGet(2).LocalGet(3).I64Xor().LocalGet(2).LocalGet(4).I64Xor().I64And().I64Const(0).I64LtS().If(NoResult)
 		overflow(c).End()
 		c.LocalGet(4).Call(r.fBoxInt).Return().End()
-		bothNum(c).If(NoResult)
-		asFloat(c, 0)
-		asFloat(c, 1)
-		c.F64Sub()
-		floatResult(c, "-").End()
-		typeErr(c, "-")
+		finishNumOp(c, "-", func(c *Code) { c.F64Sub() })
 	})
 	r.body(r.fMul, nums, func(c *Code) {
 		bothInt(c).If(NoResult)
@@ -524,12 +523,7 @@ func (r *rt) emitArith() {
 		overflow(c).End()
 		c.End()
 		c.LocalGet(4).Call(r.fBoxInt).Return().End()
-		bothNum(c).If(NoResult)
-		asFloat(c, 0)
-		asFloat(c, 1)
-		c.F64Mul()
-		floatResult(c, "*").End()
-		typeErr(c, "*")
+		finishNumOp(c, "*", func(c *Code) { c.F64Mul() })
 	})
 	// "/" always divides as floats, like the VM.
 	r.body(r.fDiv, nums, func(c *Code) {

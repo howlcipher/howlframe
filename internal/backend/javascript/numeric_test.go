@@ -1,11 +1,6 @@
 package javascript
 
-import (
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func TestJSNumericContractSemantics(t *testing.T) {
 	script := numericJSHelper() + `
@@ -44,13 +39,7 @@ assert.strictEqual(howlFrameDiv(9.0, 2.0), 4.5);
 assert.throws(() => howlFrameDiv(1, 0), /RUNTIME_ERROR: division by zero/);
 assert.throws(() => howlFrameDiv(0, 0), /RUNTIME_ERROR: division by zero/);
 `
-	dir := t.TempDir()
-	path := filepath.Join(dir, "numeric_test.js")
-	if err := os.WriteFile(path, []byte(script), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	out, err := exec.Command("node", path).CombinedOutput()
-	if err != nil {
-		t.Fatalf("node numeric contract assertions failed: %v\n%s", err, out)
+	if _, stderr, code := runNodeScript(t, script); code != 0 {
+		t.Fatalf("node numeric contract assertions failed (%d): %s", code, stderr)
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+
+	"github.com/howlcipher/howlframe/internal/verification"
 )
 
 var (
@@ -85,19 +87,55 @@ func (m *Module) ComputeHash() string {
 	return hashBytes(data)
 }
 
-// VerificationEvidence records the proof that a graph or module passed verification.
+// VerificationEvidence records structured verification checks and effects for a graph or module.
 type VerificationEvidence struct {
-	GraphHash       string       `json:"graph_hash"`
-	Target          string       `json:"target"`
-	Verified        bool         `json:"verified"`
-	Diagnostics     []Diagnostic `json:"diagnostics,omitempty"`
-	InferredEffects []Effect     `json:"effects,omitempty"`
-	EvidenceHash    string       `json:"-"`
+	Schema          string               `json:"schema,omitempty"`
+	GraphHash       string               `json:"graph_hash"`
+	Target          string               `json:"target"`
+	VerifierVersion string               `json:"verifier_version,omitempty"`
+	Verified        bool                 `json:"verified"`
+	Checks          []verification.Check `json:"checks,omitempty"`
+	Diagnostics     []Diagnostic         `json:"diagnostics,omitempty"`
+	InferredEffects []Effect             `json:"effects,omitempty"`
+	EvidenceHash    string               `json:"-"`
 }
 
 func (v *VerificationEvidence) Canonicalize() {
 	if v == nil {
 		return
+	}
+	if len(v.Checks) > 0 {
+		for i := range v.Checks {
+			if len(v.Checks[i].Codes) > 0 {
+				v.Checks[i].Codes = dedupeAndSort(v.Checks[i].Codes)
+			}
+			if len(v.Checks[i].Diagnostics) > 0 {
+				v.Checks[i].Diagnostics = dedupeAndSort(v.Checks[i].Diagnostics)
+			}
+		}
+		sort.Slice(v.Checks, func(i, j int) bool {
+			if v.Checks[i].Name != v.Checks[j].Name {
+				return v.Checks[i].Name < v.Checks[j].Name
+			}
+			if v.Checks[i].Status != v.Checks[j].Status {
+				return v.Checks[i].Status < v.Checks[j].Status
+			}
+			if v.Checks[i].Version != v.Checks[j].Version {
+				return v.Checks[i].Version < v.Checks[j].Version
+			}
+			return v.Checks[i].Summary < v.Checks[j].Summary
+		})
+	}
+	if len(v.Diagnostics) > 0 {
+		sort.Slice(v.Diagnostics, func(i, j int) bool {
+			if v.Diagnostics[i].Code != v.Diagnostics[j].Code {
+				return v.Diagnostics[i].Code < v.Diagnostics[j].Code
+			}
+			if v.Diagnostics[i].Severity != v.Diagnostics[j].Severity {
+				return v.Diagnostics[i].Severity < v.Diagnostics[j].Severity
+			}
+			return v.Diagnostics[i].Message < v.Diagnostics[j].Message
+		})
 	}
 	if len(v.InferredEffects) > 0 {
 		sort.Slice(v.InferredEffects, func(i, j int) bool {

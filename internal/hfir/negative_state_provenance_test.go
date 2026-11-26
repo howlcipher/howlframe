@@ -1,12 +1,10 @@
 package hfir
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/howlcipher/howlframe/internal/bytecode"
-	"github.com/howlcipher/howlframe/internal/vm"
 )
 
 type negativeMapWrite struct{ key, value string }
@@ -73,14 +71,9 @@ func TestNegativeStateProvenanceCorpus(t *testing.T) {
 
 func TestNegativeStateProvenanceRejectsTamperingAndOverflow(t *testing.T) {
 	candidate := negativeMapCandidate(t, []negativeMapWrite{{"wrong", "ready"}}, false, false, false, false)
-	program, diagnostics := CompileCandidate(candidate)
-	if len(diagnostics) != 0 {
-		t.Fatal(diagnostics)
-	}
-	var stdout bytes.Buffer
-	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 256)
+	evidence, actual := compileAndRunEvidence(t, candidate, 256)
 	oracle := bytecode.NewExpectedValueObservation("ready")
-	input := LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "ready\n", ActualOutcome: stdout.String(), ExpectedValue: &oracle}
+	input := LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "ready\n", ActualOutcome: actual, ExpectedValue: &oracle}
 	if region, diagnostics := LocalizeFailure(candidate, input); len(diagnostics) != 0 || !containsNodeID(region.Context.EditableNodeIDs, "key_0") {
 		t.Fatalf("baseline negative localization = %#v, %#v", region, diagnostics)
 	}
@@ -89,7 +82,7 @@ func TestNegativeStateProvenanceRejectsTamperingAndOverflow(t *testing.T) {
 		forged := evidence
 		forged.MapStateEvents = append([]bytecode.MapStateEvent(nil), evidence.MapStateEvents...)
 		forged.MapStateEvents[len(forged.MapStateEvents)-1].KeyFingerprint = "forged"
-		_, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &forged, ExpectedOutcome: "ready\n", ActualOutcome: stdout.String(), ExpectedValue: &oracle})
+		_, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &forged, ExpectedOutcome: "ready\n", ActualOutcome: actual, ExpectedValue: &oracle})
 		if len(diagnostics) != 1 || diagnostics[0].Code != "HFIR_LOCALIZATION_PROVENANCE" {
 			t.Fatalf("forged ledger diagnostics = %#v", diagnostics)
 		}
@@ -98,7 +91,7 @@ func TestNegativeStateProvenanceRejectsTamperingAndOverflow(t *testing.T) {
 	t.Run("forged expected observation cannot grant authority", func(t *testing.T) {
 		forged := oracle
 		forged.Value = "forged"
-		region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "forged\n", ActualOutcome: stdout.String(), ExpectedValue: &forged})
+		region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "forged\n", ActualOutcome: actual, ExpectedValue: &forged})
 		if len(diagnostics) != 1 || diagnostics[0].Code != "HFIR_LOCALIZATION_AMBIGUOUS_STATE_CAUSE" || len(region.Context.EditableNodeIDs) != 0 {
 			t.Fatalf("forged expected result = %#v, %#v", region, diagnostics)
 		}
@@ -116,7 +109,7 @@ func TestNegativeStateProvenanceRejectsTamperingAndOverflow(t *testing.T) {
 			}
 		}
 		stale := Candidate{Graph: &graph, Hash: GraphHash(&graph)}
-		_, diagnostics := LocalizeFailure(stale, LocalizationEvidence{GraphHash: stale.Hash, GraphVersion: stale.Graph.Version, Execution: &evidence, ExpectedOutcome: "ready\n", ActualOutcome: stdout.String(), ExpectedValue: &oracle})
+		_, diagnostics := LocalizeFailure(stale, LocalizationEvidence{GraphHash: stale.Hash, GraphVersion: stale.Graph.Version, Execution: &evidence, ExpectedOutcome: "ready\n", ActualOutcome: actual, ExpectedValue: &oracle})
 		if len(diagnostics) != 1 || diagnostics[0].Code != "HFIR_LOCALIZATION_PROVENANCE" {
 			t.Fatalf("stale graph diagnostics = %#v", diagnostics)
 		}
@@ -189,17 +182,12 @@ func (b *phase3CBuilder) edgesForItems(items []NodeID) []transportEdge {
 
 func localizeNegativeMap(t *testing.T, candidate Candidate, expected string) (CandidateRepairRegion, []Diagnostic) {
 	t.Helper()
-	program, diagnostics := CompileCandidate(candidate)
-	if len(diagnostics) != 0 {
-		t.Fatal(diagnostics)
-	}
-	var stdout bytes.Buffer
-	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 256)
+	evidence, actual := compileAndRunEvidence(t, candidate, 256)
 	if evidence.RuntimeFailure != nil {
 		t.Fatal(evidence.RuntimeFailure)
 	}
 	oracle := bytecode.NewExpectedValueObservation(expected)
-	return LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: expected + "\n", ActualOutcome: stdout.String(), ExpectedValue: &oracle})
+	return LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: expected + "\n", ActualOutcome: actual, ExpectedValue: &oracle})
 }
 
 func negativeMapCandidate(t *testing.T, writes []negativeMapWrite, deleteWanted, rewriteWanted, postRead, branchWrite bool) Candidate {

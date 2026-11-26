@@ -34,26 +34,10 @@ func TestGoHTMLEscapeMatchesBytecodeContract(t *testing.T) {
 }
 
 func TestGoHTMLEscapeRejectsNonString(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "list", source: `(cli_app (print (html_escape (list "a"))))`, want: "TYPE_ERROR: html_escape expected string"},
-		{name: "number", source: `(cli_app (print (attr_escape 1)))`, want: "TYPE_ERROR: attr_escape expected string"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := generateCheckedGo(t, tc.source)
-			stdout, crash := goRunCrash(t, code)
-			if strings.TrimSpace(stdout) != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(crash, tc.want) {
-				t.Fatalf("crash = %q", crash)
-			}
-		})
-	}
+	runGoTypeErrorCases(t, []goTypeErrCase{
+		{"list", `(cli_app (print (html_escape (list "a"))))`, "TYPE_ERROR: html_escape expected string"},
+		{"number", `(cli_app (print (attr_escape 1)))`, "TYPE_ERROR: attr_escape expected string"},
+	})
 }
 
 const htmlEscapeStdout = "&amp;\n" +

@@ -99,7 +99,9 @@ Then check, build, and run:
 
 ```bash
 howlframe check hello.howl
+howlframe check --json --target=bytecode hello.howl
 howlframe build hello.howl
+howlframe inspect --report hello.hfbc
 howlframe run hello.hfbc
 ```
 

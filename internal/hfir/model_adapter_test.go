@@ -13,17 +13,37 @@ import (
 	"github.com/howlcipher/howlframe/internal/vm"
 )
 
-func TestDecodeCandidateDirectPipelineAndArtifact(t *testing.T) {
-	candidate := mustCandidate(t, candidateTransport{
+func assertBytecodeExecutesStdout(t *testing.T, program *bytecode.BCProgram, want string) {
+	t.Helper()
+	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+	if exit := vm.RunBytecode(program, nil, nil, strings.NewReader(""), stdout, stderr); exit != 0 {
+		t.Fatalf("RunBytecode() exit = %d, stderr = %q", exit, stderr.String())
+	}
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func simplePrintTransport(value, kind string) candidateTransport {
+	return candidateTransport{
 		SchemaVersion: ModelAdapterSchemaVersion,
 		GraphVersion:  "v1",
 		EntryNode:     "program",
 		Nodes: []transportNode{
 			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
-			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "number"}}),
-			testNode("number", "const", "42", "INT", nil),
+			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "value"}}),
+			testNode("value", "const", value, kind, nil),
 		},
-	})
+	}
+}
+
+func simplePrintCandidate(t *testing.T, value, kind string) Candidate {
+	t.Helper()
+	return mustCandidate(t, simplePrintTransport(value, kind))
+}
+
+func TestDecodeCandidateDirectPipelineAndArtifact(t *testing.T) {
+	candidate := simplePrintCandidate(t, "42", "INT")
 	if candidate.Graph == nil || candidate.Hash == "" {
 		t.Fatalf("DecodeCandidate() = %#v, want canonical graph and hash", candidate)
 	}
@@ -39,25 +59,11 @@ func TestDecodeCandidateDirectPipelineAndArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadArtifact() error = %v", err)
 	}
-	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-	if exit := vm.RunBytecode(program, nil, nil, strings.NewReader(""), stdout, stderr); exit != 0 {
-		t.Fatalf("RunBytecode() exit = %d, stderr = %q", exit, stderr.String())
-	}
-	if got := stdout.String(); got != "42\n" {
-		t.Fatalf("stdout = %q, want 42\\n", got)
-	}
+	assertBytecodeExecutesStdout(t, program, "42\n")
 }
 
 func TestDecodeCandidateFailsClosedForAdversarialOutput(t *testing.T) {
-	valid := candidateTransport{
-		SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program",
-		Nodes: []transportNode{
-			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
-			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "value"}}),
-			testNode("value", "const", "ok", "STRING", nil),
-		},
-	}
-	encoded, err := json.Marshal(valid)
+	encoded, err := json.Marshal(simplePrintTransport("ok", "STRING"))
 	if err != nil {
 		t.Fatal(err)
 	}

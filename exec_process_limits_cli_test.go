@@ -1,11 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,24 +15,8 @@ import (
 func runSource(t *testing.T, binary, source string, flags ...string) (int, string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	src := filepath.Join(dir, "prog.howl")
-	if err := os.WriteFile(src, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(binary, append(append([]string{"run"}, flags...), src)...)
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
-	code := 0
-	if err != nil {
-		e, ok := err.(*exec.ExitError)
-		if !ok {
-			t.Fatal(err)
-		}
-		code = e.ExitCode()
-	}
-	return code, stdout.String(), stderr.String()
+	src := mustWriteFile(t, dir, "prog.howl", source)
+	return runCommandExitOutput(t, dir, binary, append(append([]string{"run"}, flags...), src)...)
 }
 
 func TestExecPerCallTimeout(t *testing.T) {

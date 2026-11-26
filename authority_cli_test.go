@@ -32,10 +32,7 @@ func authorityPaths() []string { return []string{"interpreter", "bytecode", "hfi
 func runAuthority(t *testing.T, binary, path, source, grant string) authorityRun {
 	t.Helper()
 	dir := t.TempDir()
-	src := filepath.Join(dir, "prog.howl")
-	if err := os.WriteFile(src, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	src := mustWriteFile(t, dir, "prog.howl", source)
 	var args []string
 	receiptPath := ""
 	switch path {
@@ -498,19 +495,11 @@ func TestAuthorityRouteAttenuation(t *testing.T) {
 
 func serveOnce(t *testing.T, binary, path, source, grant string, port int) string {
 	t.Helper()
-	dir := t.TempDir()
-	src := filepath.Join(dir, "srv.howl")
-	if err := os.WriteFile(src, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	flag := "-compile-bc"
 	if path == "hfir" {
 		flag = "-compile-hfir-bc"
 	}
-	artifact := filepath.Join(dir, "srv.hfbc")
-	if out, err := exec.Command(binary, flag, src, "-o", artifact).CombinedOutput(); err != nil {
-		t.Fatalf("compile: %v %s", err, out)
-	}
+	artifact := buildArtifactWithFlag(t, binary, t.TempDir(), "srv", flag, source)
 	cmd := exec.Command(binary, "-allow-caps", grant, "-run-bc", artifact)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out

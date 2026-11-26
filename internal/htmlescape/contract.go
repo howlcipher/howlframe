@@ -143,18 +143,7 @@ func scriptClose(s string) int {
 	return len("</script") + rel + 1
 }
 
-func inlineHandler(s string) (advance int, quote byte, ok bool) {
-	low := strings.ToLower(s)
-	if !strings.HasPrefix(low, "on") || len(s) < 3 || !isAlpha(s[2]) {
-		return 0, 0, false
-	}
-	i := 2
-	for i < len(s) && isAlpha(s[i]) {
-		i++
-	}
-	if i == 2 {
-		return 0, 0, false
-	}
+func scanAttrEqualsAndQuote(s string, i int, requireQuote bool) (advance int, quote byte, ok bool) {
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
 		i++
 	}
@@ -168,7 +157,25 @@ func inlineHandler(s string) (advance int, quote byte, ok bool) {
 	if i < len(s) && (s[i] == '"' || s[i] == '\'') {
 		return i + 1, s[i], true
 	}
+	if requireQuote {
+		return 0, 0, false
+	}
 	return i, 0, true
+}
+
+func inlineHandler(s string) (advance int, quote byte, ok bool) {
+	low := strings.ToLower(s)
+	if !strings.HasPrefix(low, "on") || len(s) < 3 || !isAlpha(s[2]) {
+		return 0, 0, false
+	}
+	i := 2
+	for i < len(s) && isAlpha(s[i]) {
+		i++
+	}
+	if i == 2 {
+		return 0, 0, false
+	}
+	return scanAttrEqualsAndQuote(s, i, false)
 }
 
 func quotedAttribute(s string) (advance int, quote byte, ok bool) {
@@ -179,20 +186,7 @@ func quotedAttribute(s string) (advance int, quote byte, ok bool) {
 	for i < len(s) && isNameCont(s[i]) {
 		i++
 	}
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-	if i >= len(s) || s[i] != '=' {
-		return 0, 0, false
-	}
-	i++
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-	if i >= len(s) || (s[i] != '"' && s[i] != '\'') {
-		return 0, 0, false
-	}
-	return i + 1, s[i], true
+	return scanAttrEqualsAndQuote(s, i, true)
 }
 
 func isAlpha(c byte) bool {
@@ -418,12 +412,9 @@ func piecesFromElements(elements []string) []Piece {
 	return pieces
 }
 
-func splitTop(s string, sep byte) []string {
-	var parts []string
-	depth := 0
+func walkBalancedText(s string, depth int, visit func(i int, c byte, depth *int) bool) {
 	inStr := false
 	esc := false
-	start := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if inStr {
@@ -444,60 +435,53 @@ func splitTop(s string, sep byte) []string {
 			inStr = true
 			continue
 		}
+		if !visit(i, c, &depth) {
+			return
+		}
+	}
+}
+
+func splitTop(s string, sep byte) []string {
+	var parts []string
+	start := 0
+	walkBalancedText(s, 0, func(i int, c byte, depth *int) bool {
 		switch c {
 		case '{', '[', '(':
-			depth++
+			*depth++
 		case '}', ']', ')':
-			if depth > 0 {
-				depth--
+			if *depth > 0 {
+				*depth--
 			}
 		default:
-			if c == sep && depth == 0 {
+			if c == sep && *depth == 0 {
 				parts = append(parts, s[start:i])
 				start = i + 1
 			}
 		}
-	}
+		return true
+	})
 	parts = append(parts, s[start:])
 	return parts
 }
 
 func takeUntilClose(s string, close byte) (string, bool) {
-	depth := 1
-	inStr := false
-	esc := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if inStr {
-			if esc {
-				esc = false
-				continue
-			}
-			if c == '\\' {
-				esc = true
-				continue
-			}
-			if c == '"' {
-				inStr = false
-			}
-			continue
-		}
-		if c == '"' {
-			inStr = true
-			continue
-		}
+	result := ""
+	found := false
+	walkBalancedText(s, 1, func(i int, c byte, depth *int) bool {
 		switch c {
 		case '{', '[', '(':
-			depth++
+			*depth++
 		case '}', ']', ')':
-			depth--
-			if depth == 0 {
+			*depth--
+			if *depth == 0 {
 				if c == close {
-					return s[:i], true
+					result = s[:i]
+					found = true
 				}
-				return "", false
+				return false
 			}
 		}
-	}
-	return "", false
+		return true
+	})
+	return result, found
 }

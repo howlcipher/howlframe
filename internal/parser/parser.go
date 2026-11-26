@@ -79,6 +79,22 @@ func (p *Parser) ReportTrailing() {
 	ast.ReportError("Unexpected tokens after EOF", p.Cur.Line, p.Cur.Column)
 }
 
+func loadIncludedAST(baseDir, filename, kind string, child *ast.Node, depth int) *ast.Node {
+	fullPath := filepath.Join(baseDir, filename)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		ast.ReportError(fmt.Sprintf("Failed to read %s file %q: %v", kind, filename, err), child.Line, child.Column)
+	}
+	lx := lexer.NewLexer(string(content))
+	p := NewParser(lx, filepath.Base(fullPath))
+	includedAst := p.ParseExpression()
+	if p.Cur.Type != lexer.TokenEOF {
+		ast.ReportError(fmt.Sprintf("Unexpected tokens after EOF in %s file %q", kind, filename), p.Cur.Line, p.Cur.Column)
+	}
+	ExpandIncludes(includedAst, filepath.Dir(fullPath), depth+1)
+	return includedAst
+}
+
 func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 	if depth > 100 {
 		ast.ReportError("Include depth exceeded (circular include?)", node.Line, node.Column)
@@ -103,22 +119,7 @@ func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 				ast.ReportError("use expects a symbol alias", child.Line, child.Column)
 			}
 			alias := aliasNode.Value
-			fullPath := filepath.Join(baseDir, filename)
-
-			content, err := os.ReadFile(fullPath)
-			if err != nil {
-				ast.ReportError(fmt.Sprintf("Failed to read used file %q: %v", filename, err), child.Line, child.Column)
-			}
-
-			lx := lexer.NewLexer(string(content))
-			parser := NewParser(lx, filepath.Base(fullPath))
-			includedAst := parser.ParseExpression()
-
-			if parser.Cur.Type != lexer.TokenEOF {
-				ast.ReportError(fmt.Sprintf("Unexpected tokens after EOF in used file %q", filename), parser.Cur.Line, parser.Cur.Column)
-			}
-
-			ExpandIncludes(includedAst, filepath.Dir(fullPath), depth+1)
+			includedAst := loadIncludedAST(baseDir, filename, "used", child, depth)
 
 			moduleNode := &ast.Node{Type: "List", Line: child.Line, Column: child.Column, Filename: child.Filename}
 			moduleNode.Children = append(moduleNode.Children, &ast.Node{Type: "SYMBOL", Value: "module", Line: child.Line, Column: child.Column})
@@ -136,23 +137,7 @@ func ExpandIncludes(node *ast.Node, baseDir string, depth int) {
 			if filenameNode.Type != "STRING" {
 				ast.ReportError("include expects a string filename", child.Line, child.Column)
 			}
-			filename := filenameNode.Value
-			fullPath := filepath.Join(baseDir, filename)
-
-			content, err := os.ReadFile(fullPath)
-			if err != nil {
-				ast.ReportError(fmt.Sprintf("Failed to read included file %q: %v", filename, err), child.Line, child.Column)
-			}
-
-			lx := lexer.NewLexer(string(content))
-			parser := NewParser(lx, filepath.Base(fullPath))
-			includedAst := parser.ParseExpression()
-
-			if parser.Cur.Type != lexer.TokenEOF {
-				ast.ReportError(fmt.Sprintf("Unexpected tokens after EOF in included file %q", filename), parser.Cur.Line, parser.Cur.Column)
-			}
-
-			ExpandIncludes(includedAst, filepath.Dir(fullPath), depth+1)
+			includedAst := loadIncludedAST(baseDir, filenameNode.Value, "included", child, depth)
 
 			if includedAst.Type == "List" && len(includedAst.Children) > 0 && includedAst.Children[0].Value == "module" {
 				newChildren = append(newChildren, includedAst.Children[1:]...)

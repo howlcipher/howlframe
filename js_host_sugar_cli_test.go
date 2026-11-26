@@ -13,22 +13,13 @@ import (
 // desugarer skipped host operations and (set_value el (not x)) failed with
 // "Unknown statement for JS: not".
 func TestJSHostOperationArgumentsExpandSugar(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed")
-	}
 	bin := buildHowlFrameBinaryForTest(t)
-	dir := t.TempDir()
-	src := filepath.Join(dir, "app.howl")
-	os.WriteFile(src, []byte(`(web_app (do
+	dir, out := buildJSTargetDir(t, bin, "app.howl", `(web_app (do
   (set_value (dom_query "#a") (not true))
   (set_attr (dom_query "#a") "data-k" (str "x" (to_string (not false))))
   (set_class (dom_query "#a") "on" (not false))
   (on_visible (dom_query_all ".scene") (lambda (el v) (set_class el "seen" (not (not v)))))))
-`), 0o600)
-	out := filepath.Join(dir, "out")
-	if msg, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
-		t.Fatalf("build failed: %v\n%s", err, msg)
-	}
+`)
 	app, err := os.ReadFile(filepath.Join(out, "app.js"))
 	if err != nil {
 		t.Fatal(err)

@@ -1,10 +1,6 @@
 package vm
 
-import (
-	"bytes"
-	"strings"
-	"testing"
-)
+import "testing"
 
 // list_len and time_now produce int64 while literals, arithmetic and JSON
 // produce float64 on the VM. Equality must compare them by value, or a guard
@@ -27,27 +23,8 @@ const numericEqualityWant = "empty-eq-0 true\n" +
 	"decision DENY\n"
 
 func TestNumericEqualityAcrossRepresentations(t *testing.T) {
-	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, numericEqualitySource)
-		var out, errOut bytes.Buffer
-		if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != numericEqualityWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), numericEqualityWant)
-		}
-	})
-
-	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, numericEqualitySource)
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != numericEqualityWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), numericEqualityWant)
-		}
-	})
+	t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, numericEqualitySource, numericEqualityWant) })
+	t.Run("bytecode", func(t *testing.T) { assertBytecodeStdout(t, numericEqualitySource, numericEqualityWant) })
 }
 
 func TestJSONNumberEqualsListLen(t *testing.T) {
@@ -56,14 +33,7 @@ func TestJSONNumberEqualsListLen(t *testing.T) {
     (let (ctx (parse_json Ctx line))
       (let (items (map_get ctx "items"))
         (print "count-eq-len" (= (map_get ctx "count") (list_len items)))))))`
-	_, prog := parseAndCompile(t, src)
-	var out, errOut bytes.Buffer
-	if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(`{"items":[1,2],"count":2}`+"\n"), &out, &errOut); exitCode != 0 {
-		t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-	}
-	if out.String() != "count-eq-len true\n" {
-		t.Fatalf("stdout = %q", out.String())
-	}
+	assertRuntimeResult(t, src, nil, `{"items":[1,2],"count":2}`+"\n", "count-eq-len true\n", "", 0, true)
 }
 
 func TestJSONIntegersRemainExactAcrossFloatBoundary(t *testing.T) {
@@ -74,15 +44,8 @@ func TestJSONIntegersRemainExactAcrossFloatBoundary(t *testing.T) {
         (print (= (map_get ctx "below") 9007199254740991))
         (print (= (map_get ctx "boundary") (map_get ctx "above")))
         (print (!= (map_get ctx "boundary") (map_get ctx "above")))))))`
-	_, program := parseAndCompile(t, source)
-	var out, errOut bytes.Buffer
 	input := `{"below":9007199254740991,"boundary":9007199254740992,"above":9007199254740993}` + "\n"
-	if exit := RunBytecode(program, nil, nil, strings.NewReader(input), &out, &errOut); exit != 0 {
-		t.Fatalf("exit = %d, stderr = %s", exit, errOut.String())
-	}
-	if want := "true\nfalse\ntrue\n"; out.String() != want {
-		t.Fatalf("stdout = %q, want %q", out.String(), want)
-	}
+	assertRuntimeResult(t, source, nil, input, "true\nfalse\ntrue\n", "", 0, true)
 }
 
 func TestNumericEqualIsExact(t *testing.T) {

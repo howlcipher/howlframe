@@ -90,15 +90,20 @@ func TestSemanticRepairRejectsAdversarialTransactions(t *testing.T) {
 	})
 }
 
-func semanticRepairAdversarialCandidate(t *testing.T) Candidate {
+func twoValuePrintCandidate(t *testing.T, left, right, kind string) Candidate {
 	t.Helper()
 	return mustCandidate(t, candidateTransport{
 		SchemaVersion: ModelAdapterSchemaVersion, GraphVersion: "v1", EntryNode: "program",
 		Nodes: []transportNode{
 			testNode("program", "program", "", "", []transportEdge{{Role: "body", NodeID: "print"}}),
-			testNode("left", "const", "1", "INT", nil),
-			testNode("right", "const", "2", "INT", nil),
+			testNode("left", "const", left, kind, nil),
+			testNode("right", "const", right, kind, nil),
 			testNode("print", "print", "", "", []transportEdge{{Role: "value", NodeID: "left"}, {Role: "value", NodeID: "right"}}),
 		},
 	})
+}
+
+func semanticRepairAdversarialCandidate(t *testing.T) Candidate {
+	t.Helper()
+	return twoValuePrintCandidate(t, "1", "2", "INT")
 }

@@ -27,15 +27,9 @@ func TestLoopbackListenerAndTruncatedUpload(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 	listener.Close()
 	dir := t.TempDir()
-	source, artifact := filepath.Join(dir, "server.howl"), filepath.Join(dir, "server.hfbc")
 	program := fmt.Sprintf(`(http_server %d (serialize_requests)
   (route "/" (lambda (req) (let (body (req_body req)) (res_json 200 (dict ("status" "ok")))))))`, port)
-	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command(binary, "build", source, "-o", artifact).CombinedOutput(); err != nil {
-		t.Fatalf("compile: %v: %s", err, out)
-	}
+	artifact := buildHFBCArtifact(t, binary, dir, "server", program)
 	for _, host := range []string{"localhost", "127.0.0.1:8080", "not-an-address"} {
 		out, err := exec.Command(binary, "run", "--listen-host", host, artifact).CombinedOutput()
 		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 2 || !strings.Contains(string(out), "IP literal") {

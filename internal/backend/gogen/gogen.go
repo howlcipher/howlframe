@@ -1233,6 +1233,60 @@ func GenerateCode(node *ast.Node) (string, string) {
 	return g.generateCode(node)
 }
 
+const goCommonBlankRefs = `var _ = bufio.NewReader
+var _ = sql.Open
+var _ = os.Getenv
+var _ = json.Marshal
+var _ = io.ReadAll
+var _ = bytes.NewBuffer
+var _ = http.DefaultClient
+var _ = exec.Command
+var _ = regexp.MatchString
+var _ = strings.Split
+var _ = time.Sleep
+var _ = strconv.Atoi
+var _ = sort.Strings
+var _ = fmt.Println
+var _ = observer.Trace`
+
+func (g *goGenerator) formatGoPreamble(extraImports []string, includeRuntime, includeTesting bool, bodyFilter string) string {
+	var sb strings.Builder
+	sb.WriteString("package main\n\nimport (\n")
+	for _, pkg := range []string{
+		"bufio", "bytes", "database/sql", "encoding/json", "fmt", "io",
+		"net/http", "os", "os/exec", "regexp",
+	} {
+		sb.WriteString("\t\"" + pkg + "\"\n")
+	}
+	if includeRuntime {
+		sb.WriteString("\t\"runtime\"\n\t\"runtime/debug\"\n")
+	}
+	for _, pkg := range []string{"sort", "strconv", "strings"} {
+		sb.WriteString("\t\"" + pkg + "\"\n")
+	}
+	if includeTesting {
+		sb.WriteString("\t\"testing\"\n")
+	}
+	sb.WriteString("\t\"time\"\n\t\"github.com/howlcipher/howlframe/observer\"\n")
+	for _, imp := range extraImports {
+		if bodyFilter != "" {
+			parts := strings.Split(imp, "/")
+			if !strings.Contains(bodyFilter, parts[len(parts)-1]+".") {
+				continue
+			}
+		}
+		sb.WriteString(fmt.Sprintf("\t%q\n", imp))
+	}
+	if g.numeric {
+		sb.WriteString("\t\"math\"\n")
+	}
+	if g.needsFetch {
+		sb.WriteString(fetchImports(extraImports))
+	}
+	sb.WriteString(")\n")
+	return sb.String()
+}
+
 func (g *goGenerator) generateCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
 	g.resetGoVarTypes()
@@ -1533,20 +1587,7 @@ func (g *goGenerator) generateCode(node *ast.Node) (string, string) {
 				promptExpr = fmt.Sprintf("fmt.Sprintf(%q, %s)", promptTemplate, strings.Join(params, ", "))
 			}
 
-			bodyCode := fmt.Sprintf(`	reqBody, _ := json.Marshal(map[string]any{
-		"model":  "llama3",
-		"prompt": %s,
-		"stream": false,
-	})
-	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-	if err != nil { panic(err) }
-	defer resp.Body.Close()
-	var res struct {
-		Response string `+"`json:\"response\"`"+`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-	return strings.TrimSpace(res.Response)
-`, promptExpr)
+			bodyCode := goOllamaGenerateBlock("\t", `"llama3"`, promptExpr, "", "panic(err)", "return strings.TrimSpace(res.Response)") + "\n"
 
 			funcsCode += fmt.Sprintf("//line %s:%d\nfunc %s(%s) string {\n%s}\n\n", handlerNode.Filename, handlerNode.Line, name, argsStr, bodyCode)
 			continue
@@ -1641,37 +1682,7 @@ func (g *goGenerator) generateCode(node *ast.Node) (string, string) {
 		extraImports = append(extraImports, "html")
 	}
 
-	code := `package main
-
-import (
-	"bufio"
-	"bytes"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec"
-	"regexp"
-	"runtime"
-	"runtime/debug"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-	"github.com/howlcipher/howlframe/observer"
-`
-	for _, imp := range extraImports {
-		code += fmt.Sprintf("\t%q\n", imp)
-	}
-	if g.numeric {
-		code += "\t\"math\"\n"
-	}
-	if g.needsFetch {
-		code += fetchImports(extraImports)
-	}
-	code += `)
+	code := g.formatGoPreamble(extraImports, true, false, "") + `
 `
 	if g.mapGet {
 		code += mapGetHelperSource()
@@ -1707,22 +1718,7 @@ import (
 	}()
 	var _ = runtime.GOOS
 	var _ = debug.Stack
-	var _ = bufio.NewReader
-	var _ = sql.Open
-	var _ = os.Getenv
-	var _ = json.Marshal
-	var _ = io.ReadAll
-	var _ = bytes.NewBuffer
-	var _ = http.DefaultClient
-	var _ = exec.Command
-	var _ = regexp.MatchString
-	var _ = strings.Split
-	var _ = time.Sleep
-	var _ = strconv.Atoi
-	var _ = sort.Strings
-	var _ = fmt.Println
-	var _ = observer.Trace
-`
+` + goCommonBlankRefs + "\n"
 	if isCliApp {
 		code += cliCode
 		code += "}\n"
@@ -1745,58 +1741,7 @@ import (
 	}
 
 	if testCode != "" {
-		fullTestCode := `package main
-
-import (
-	"bufio"
-	"bytes"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-	"github.com/howlcipher/howlframe/observer"
-`
-		for _, imp := range extraImports {
-			parts := strings.Split(imp, "/")
-			pkgName := parts[len(parts)-1]
-			if strings.Contains(testCode, pkgName+".") {
-				fullTestCode += fmt.Sprintf("\t%q\n", imp)
-			}
-		}
-		if g.numeric {
-			fullTestCode += "\t\"math\"\n"
-		}
-		if g.needsFetch {
-			fullTestCode += fetchImports(extraImports)
-		}
-		fullTestCode += `)
-
-var _ = bufio.NewReader
-var _ = sql.Open
-var _ = os.Getenv
-var _ = json.Marshal
-var _ = io.ReadAll
-var _ = bytes.NewBuffer
-var _ = http.DefaultClient
-var _ = exec.Command
-var _ = regexp.MatchString
-var _ = strings.Split
-var _ = time.Sleep
-var _ = strconv.Atoi
-var _ = sort.Strings
-var _ = fmt.Println
-var _ = observer.Trace
-
-`
+		fullTestCode := g.formatGoPreamble(extraImports, false, true, testCode) + "\n" + goCommonBlankRefs + "\n\n"
 		if g.htmlEscape {
 			fullTestCode = strings.Replace(fullTestCode, "\t\"github.com/howlcipher/howlframe/observer\"\n", "\t\"github.com/howlcipher/howlframe/observer\"\n\t\"html\"\n", 1)
 		}
@@ -1861,6 +1806,27 @@ func (g *goGenerator) generateExpression(node *ast.Node, reqVar string, depth in
 		return "int(time.Now().Unix())"
 	}
 	return g.generateStatementRaw(node, reqVar, depth)
+}
+
+func goOllamaGenerateBlock(indent, modelExpr, promptExpr, extraField, failAction, bodyAction string) string {
+	return fmt.Sprintf(`%[1]sreqBody, _ := json.Marshal(map[string]any{
+%[1]s	"model":  %[2]s,
+%[1]s	"prompt": %[3]s,
+%[1]s	"stream": false,%[4]s
+%[1]s})
+%[1]sresp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
+%[1]sif err != nil { %[5]s }
+%[1]sdefer resp.Body.Close()
+%[1]svar res struct {
+%[1]s	Response string `+"`json:\"response\"`"+`
+%[1]s}
+%[1]sif err := json.NewDecoder(resp.Body).Decode(&res); err != nil { %[5]s }
+%[1]s%[6]s`, indent, modelExpr, promptExpr, extraField, failAction, bodyAction)
+}
+
+func goOllamaIIFE(retType, modelExpr, promptExpr, extraField, failAction, bodyAction string) string {
+	return fmt.Sprintf("func() %s {\n%s\n\t\t}()",
+		retType, goOllamaGenerateBlock("\t\t\t", modelExpr, promptExpr, extraField, failAction, bodyAction))
 }
 
 func BinOpGoToken(head string) string {
@@ -1943,17 +1909,8 @@ func (g *goGenerator) emitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 				valStr = g.generateStatement(valNode, reqVar, depth+1)
 			}
 
-			if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-				targetType := sanitizeGoName(valNode.Children[1].Value)
-				bodyVar := valNode.Children[2].Value
-				if bodyVar == "req.body" {
-					bodyVar = reqVar + ".Body"
-				}
-				if bodyVar == reqVar+".Body" {
-					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.NewDecoder(%s).Decode(&%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
-				} else {
-					letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = json.Unmarshal([]byte(%s), &%s)\n			_ = %s\n", varName, targetType, bodyVar, varName, varName))
-				}
+			if targetType, decodeExpr, isPJ := goParseJSONDecodeStmt(valNode, varName, reqVar); isPJ {
+				letPrefix.WriteString(fmt.Sprintf("			var %s %s\n			_ = %s\n			_ = %s\n", varName, targetType, decodeExpr, varName))
 				declaredVars[varName] = true
 			} else {
 				if declaredVars[varName] {
@@ -1979,31 +1936,16 @@ func (g *goGenerator) emitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		catchBodyCode := g.generateStatement(catchNode.Children[2], reqVar, depth+1)
 		successBodyCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 
-		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
-			targetType := sanitizeGoName(valNode.Children[1].Value)
-			bodyVar := valNode.Children[2].Value
-			if bodyVar == "req.body" {
-				bodyVar = reqVar + ".Body"
-				return fmt.Sprintf(`		{
+		if targetType, decodeExpr, isPJ := goParseJSONDecodeStmt(valNode, varName, reqVar); isPJ {
+			return fmt.Sprintf(`		{
 			var %s %s
-			if %s := json.NewDecoder(%s).Decode(&%s); %s != nil {
+			if %s := %s; %s != nil {
 %s
 			} else {
 				_ = %s
 %s
 			}
-		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
-			} else {
-				return fmt.Sprintf(`		{
-			var %s %s
-			if %s := json.Unmarshal([]byte(%s), &%s); %s != nil {
-%s
-			} else {
-				_ = %s
-%s
-			}
-		}`, varName, targetType, errVar, bodyVar, varName, errVar, catchBodyCode, varName, successBodyCode)
-			}
+		}`, varName, targetType, errVar, decodeExpr, errVar, catchBodyCode, varName, successBodyCode)
 		}
 
 		var valStr string
@@ -2442,22 +2384,8 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 		}
 		promptStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 
-		return fmt.Sprintf(`func() float64 {
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  "llama3",
-				"prompt": fmt.Sprintf("Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: %%v", %s),
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
-			return val
-		}()`, promptStr)
+		promptExpr := fmt.Sprintf(`fmt.Sprintf("Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: %%v", %s)`, promptStr)
+		return goOllamaIIFE("float64", `"llama3"`, promptExpr, "", "panic(err)", "val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)\n\t\t\treturn val")
 	} else if head == "achieve" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("achieve expects (achieve target constraint)", node.Line, node.Column)
@@ -2467,21 +2395,7 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 
 		prompt := fmt.Sprintf("Achieve the following target: %s with constraint: %s. Return ONLY the result, no explanations.", targetStr, constraintStr)
 
-		return fmt.Sprintf(`func() string {
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  "llama3",
-				"prompt": %q,
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-			return res.Response
-		}()`, prompt)
+		return goOllamaIIFE("string", `"llama3"`, fmt.Sprintf("%q", prompt), "", "panic(err)", "return res.Response")
 	} else if head == "llm_generate" {
 		if len(node.Children) < 2 {
 			// ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)
@@ -2492,32 +2406,14 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 			modelStr = g.generateStatement(node.Children[2], reqVar, depth+1)
 		}
 
-		return fmt.Sprintf(`func() (string, error) {
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  %s,
-				"prompt": %s,
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { return "", err }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return "", err }
-			return res.Response, nil
-		}()`, modelStr, promptStr)
+		return goOllamaIIFE("(string, error)", modelStr, promptStr, "", `return "", err`, "return res.Response, nil")
 	} else if head == "neural_circuit" {
 		if len(node.Children) < 3 {
 			// ast.ReportError("neural_circuit expects (neural_circuit (args) \"instruction\")", node.Line, node.Column)
 		}
 		argsNode := node.Children[1]
 		instructionStr := g.generateStatement(node.Children[2], reqVar, depth+1)
-
-		var argVals []string
-		for _, arg := range argsNode.Children {
-			argVals = append(argVals, g.generateExpression(arg, reqVar, depth+1))
-		}
+		argVals := g.generateArgExprs(argsNode, reqVar, depth)
 
 		promptVar := ""
 		if len(argVals) > 0 {
@@ -2526,21 +2422,7 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 			promptVar = fmt.Sprintf("fmt.Sprintf(\"Instruction: %%s\", %s)", instructionStr)
 		}
 
-		return fmt.Sprintf(`func() string {
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  "llama3",
-				"prompt": %s,
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-			return res.Response
-		}()`, promptVar)
+		return goOllamaIIFE("string", `"llama3"`, promptVar, "", "panic(err)", "return res.Response")
 	} else if head == "req_method" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("req_method expects (req_method req)", node.Line, node.Column)
@@ -2596,10 +2478,7 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 		argsNode := node.Children[1]
 		instructionStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 
-		var argVals []string
-		for _, arg := range argsNode.Children {
-			argVals = append(argVals, g.generateExpression(arg, reqVar, depth+1))
-		}
+		argVals := g.generateArgExprs(argsNode, reqVar, depth)
 
 		promptVar := ""
 		if len(argVals) > 0 {
@@ -2608,6 +2487,7 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 			promptVar = `""`
 		}
 
+		genBlock := goOllamaGenerateBlock("\t\t\t", "modelName", promptVar, "", "panic(err)", "return res.Response")
 		return fmt.Sprintf(`func() string {
 			modelName := fmt.Sprintf("ephemeral-%%d", time.Now().UnixNano())
 			modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %%s", %s)
@@ -2630,20 +2510,8 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 				if resp != nil { resp.Body.Close() }
 			}()
 
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  modelName,
-				"prompt": %s,
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-			return res.Response
-		}()`, instructionStr, promptVar)
+%s
+		}()`, instructionStr, genBlock)
 	} else if head == "fuzzy_cast" {
 		if len(node.Children) < 3 {
 			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
@@ -2655,24 +2523,9 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 			modelStr = g.generateStatement(node.Children[3], reqVar, depth+1)
 		}
 
-		return fmt.Sprintf(`func() (%s, error) {
-			var out %s
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  %s,
-				"prompt": fmt.Sprintf("Coerce this input into a valid JSON object matching the requested schema. Reply strictly with the JSON object and nothing else.\nInput: %%s", %s),
-				"stream": false,
-				"format": "json",
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { return out, err }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return out, err }
-			err = json.Unmarshal([]byte(res.Response), &out)
-			return out, err
-		}()`, typeStr, typeStr, modelStr, varStr)
+		promptExpr := fmt.Sprintf(`fmt.Sprintf("Coerce this input into a valid JSON object matching the requested schema. Reply strictly with the JSON object and nothing else.\nInput: %%s", %s)`, varStr)
+		block := goOllamaGenerateBlock("\t\t\t", modelStr, promptExpr, "\n\t\t\t\t\"format\": \"json\",", "return out, err", "err = json.Unmarshal([]byte(res.Response), &out)\n\t\t\treturn out, err")
+		return fmt.Sprintf("func() (%s, error) {\n\t\t\tvar out %s\n%s\n\t\t}()", typeStr, typeStr, block)
 	} else if head == "semantic_match" {
 		if len(node.Children) < 3 {
 			ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
@@ -2703,6 +2556,15 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 		}
 
 		intentsArrayStr := "[]string{" + strings.Join(intentExprs, ", ") + "}"
+		promptExpr := fmt.Sprintf(`fmt.Sprintf("Determine which of the following intents best matches the given input string. Return ONLY the integer ID of the matching intent. If none match, return 'default'.\n\nIntents:\n%%s\nInput: %%s", intentsStr, %s)`, varStr)
+		bodyAction := fmt.Sprintf(`ans := strings.TrimSpace(strings.ToLower(res.Response))
+			idx, err := strconv.Atoi(ans)
+			if err != nil {
+				idx = -1
+			}
+			switch idx {
+%s			}`, casesStr)
+		block := goOllamaGenerateBlock("\t\t\t", `"llama3"`, promptExpr, "", "panic(err)", bodyAction)
 
 		return fmt.Sprintf(`func() {
 			intents := %s
@@ -2710,27 +2572,8 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 			for i, intent := range intents {
 				intentsStr += fmt.Sprintf("%%d: %%s\n", i, intent)
 			}
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  "llama3",
-				"prompt": fmt.Sprintf("Determine which of the following intents best matches the given input string. Return ONLY the integer ID of the matching intent. If none match, return 'default'.\n\nIntents:\n%%s\nInput: %%s", intentsStr, %s),
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { panic(err) }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { panic(err) }
-
-			ans := strings.TrimSpace(strings.ToLower(res.Response))
-			idx, err := strconv.Atoi(ans)
-			if err != nil {
-				idx = -1
-			}
-			switch idx {
-%s			}
-		}()`, intentsArrayStr, varStr, casesStr)
+%s
+		}()`, intentsArrayStr, block)
 	} else if head == "assert_semantic" {
 		if len(node.Children) != 3 {
 			ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
@@ -2738,21 +2581,8 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 		varStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 		condStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 
-		return fmt.Sprintf(`func() bool {
-			reqBody, _ := json.Marshal(map[string]any{
-				"model":  "llama3",
-				"prompt": fmt.Sprintf("Does this input satisfy the condition: '%%s'? Reply strictly with 'true' or 'false' and nothing else.\nInput: %%s", %s, %s),
-				"stream": false,
-			})
-			resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-			if err != nil { return false }
-			defer resp.Body.Close()
-			var res struct {
-				Response string `+"`json:\"response\"`"+`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil { return false }
-			return strings.TrimSpace(strings.ToLower(res.Response)) == "true"
-		}()`, condStr, varStr)
+		promptExpr := fmt.Sprintf(`fmt.Sprintf("Does this input satisfy the condition: '%%s'? Reply strictly with 'true' or 'false' and nothing else.\nInput: %%s", %s, %s)`, condStr, varStr)
+		return goOllamaIIFE("bool", `"llama3"`, promptExpr, "", "return false", `return strings.TrimSpace(strings.ToLower(res.Response)) == "true"`)
 	} else if head == "env" {
 		if len(node.Children) != 2 {
 			return ""
@@ -2779,4 +2609,27 @@ func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth 
 	}
 	// ast.ReportError(fmt.Sprintf("Unknown statement: %s", head), node.Line, node.Column)
 	return ""
+}
+
+func (g *goGenerator) generateArgExprs(argsNode *ast.Node, reqVar string, depth int) []string {
+	var argVals []string
+	for _, arg := range argsNode.Children {
+		argVals = append(argVals, g.generateExpression(arg, reqVar, depth+1))
+	}
+	return argVals
+}
+
+func goParseJSONDecodeStmt(valNode *ast.Node, varName, reqVar string) (targetType, decodeExpr string, ok bool) {
+	if valNode.Type != "List" || len(valNode.Children) == 0 || valNode.Children[0].Value != "parse_json" {
+		return "", "", false
+	}
+	targetType = sanitizeGoName(valNode.Children[1].Value)
+	bodyVar := valNode.Children[2].Value
+	if bodyVar == "req.body" {
+		bodyVar = reqVar + ".Body"
+	}
+	if bodyVar == reqVar+".Body" {
+		return targetType, fmt.Sprintf("json.NewDecoder(%s).Decode(&%s)", bodyVar, varName), true
+	}
+	return targetType, fmt.Sprintf("json.Unmarshal([]byte(%s), &%s)", bodyVar, varName), true
 }

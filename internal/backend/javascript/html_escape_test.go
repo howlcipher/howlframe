@@ -45,29 +45,10 @@ func TestJSHTMLEscapeMatchesBytecodeContract(t *testing.T) {
 }
 
 func TestJSHTMLEscapeRejectsNonString(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "list", source: `(web_app (print (html_escape (list "a"))))`, want: "TYPE_ERROR: html_escape expected string"},
-		{name: "number", source: `(web_app (print (attr_escape 1)))`, want: "TYPE_ERROR: attr_escape expected string"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := generateCheckedJS(t, tc.source)
-			stdout, stderr, err := runNode(t, code)
-			if err == nil {
-				t.Fatalf("non-string succeeded, stdout=%q stderr=%q", stdout, stderr)
-			}
-			if strings.TrimSpace(stdout) != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(stderr, tc.want) {
-				t.Fatalf("stderr = %q", stderr)
-			}
-		})
-	}
+	runJSTypeErrorCases(t, []jsTypeErrCase{
+		{"list", `(web_app (print (html_escape (list "a"))))`, "TYPE_ERROR: html_escape expected string"},
+		{"number", `(web_app (print (attr_escape 1)))`, "TYPE_ERROR: attr_escape expected string"},
+	})
 }
 
 func TestJSHTMLEscapeCheckerAcceptsWebApp(t *testing.T) {

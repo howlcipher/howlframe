@@ -32,13 +32,7 @@ func TestEvidenceDeskLedgerParseWithin(t *testing.T) {
       (if (= ceiling "")
         (print (encode_json (call ledger/parse text limit)))
         (print (encode_json (call ledger/parse_within text limit (to_int ceiling))))))))`
-	source, artifact := filepath.Join(dir, "probe.howl"), filepath.Join(dir, "probe.hfbc")
-	if err := os.WriteFile(source, []byte(program), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command(binary, "build", source, "-o", artifact).CombinedOutput(); err != nil {
-		t.Fatalf("compile: %v: %s", err, out)
-	}
+	artifact := buildHFBCArtifact(t, binary, dir, "probe", program)
 	line := func(id string, pad int) string {
 		return `{"schema":"ai.evidence_entry/v1","entry_id":"` + id + `","task_id":"T","agent_id":"a","action":"x","pad":"` +
 			strings.Repeat("p", pad) + `"}` + "\n"

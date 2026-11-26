@@ -11,6 +11,33 @@ import (
 // TestIssue141WasmExamplesBuildOnGoJS is the regression for the #142 review:
 // wasm_app bodies are statement positions, so the wasm examples must still
 // build on --target=go|js and the output must compile.
+func verifyBuiltGoOrJS(t *testing.T, target, outDir, repo string) {
+	t.Helper()
+	if target == "js" {
+		if _, err := exec.LookPath("node"); err != nil {
+			t.Skip("node not installed")
+		}
+		files, _ := filepath.Glob(filepath.Join(outDir, "*.js"))
+		if len(files) == 0 {
+			t.Fatal("no .js output")
+		}
+		for _, f := range files {
+			if b, err := exec.Command("node", "--check", f).CombinedOutput(); err != nil {
+				t.Fatalf("node --check %s: %s", f, b)
+			}
+		}
+		return
+	}
+	mod := "module probe\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
+	os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(mod), 0o600)
+	cmd := exec.Command("go", "vet", ".")
+	cmd.Dir = outDir
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go vet: %s", b)
+	}
+}
+
 func TestIssue141WasmExamplesBuildOnGoJS(t *testing.T) {
 	bin := c1c2Binary(t)
 	repo, err := os.Getwd()
@@ -27,29 +54,7 @@ func TestIssue141WasmExamplesBuildOnGoJS(t *testing.T) {
 				if code != 0 || !strings.Contains(out, "Built") {
 					t.Fatalf("build rejected: exit %d %s", code, out)
 				}
-				if target == "js" {
-					if _, err := exec.LookPath("node"); err != nil {
-						t.Skip("node not installed")
-					}
-					files, _ := filepath.Glob(filepath.Join(outDir, "*.js"))
-					if len(files) == 0 {
-						t.Fatal("no .js output")
-					}
-					for _, f := range files {
-						if b, err := exec.Command("node", "--check", f).CombinedOutput(); err != nil {
-							t.Fatalf("node --check %s: %s", f, b)
-						}
-					}
-					return
-				}
-				mod := "module probe\n\ngo 1.25\n\nrequire github.com/howlcipher/howlframe v0.0.0\n\nreplace github.com/howlcipher/howlframe => " + repo + "\n"
-				os.WriteFile(filepath.Join(outDir, "go.mod"), []byte(mod), 0o600)
-				cmd := exec.Command("go", "vet", ".")
-				cmd.Dir = outDir
-				cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod")
-				if b, err := cmd.CombinedOutput(); err != nil {
-					t.Fatalf("go vet: %s", b)
-				}
+				verifyBuiltGoOrJS(t, target, outDir, repo)
 			})
 		}
 	}

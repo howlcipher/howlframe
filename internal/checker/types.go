@@ -195,25 +195,36 @@ func (a *Analysis) renameModuleNodes(node *ast.Node, modName string, inExport bo
 	}
 }
 
-func (a *Analysis) collectStructs(node *ast.Node) {
-	for stack := []*ast.Node{node}; len(stack) > 0; {
-		node = stack[len(stack)-1]
+func walkASTPreorder(root *ast.Node, fn func(*ast.Node)) {
+	for stack := []*ast.Node{root}; len(stack) > 0; {
+		node := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if node == nil {
 			continue
 		}
-		if node.Type == "List" && len(node.Children) > 1 && node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "struct" || node.Children[0].Value == "schema") {
-			name := node.Children[1].Value
+		fn(node)
+		if node.Type == "List" {
+			for i := len(node.Children) - 1; i >= 0; i-- {
+				stack = append(stack, node.Children[i])
+			}
+		}
+	}
+}
+
+func (a *Analysis) collectStructs(node *ast.Node) {
+	walkASTPreorder(node, func(cur *ast.Node) {
+		if cur.Type == "List" && len(cur.Children) > 1 && cur.Children[0].Type == "SYMBOL" && (cur.Children[0].Value == "struct" || cur.Children[0].Value == "schema") {
+			name := cur.Children[1].Value
 			info := ast.Layout(ast.Struct)
 			info.Name = name
 			info.Fields = make(map[string]ast.TypeInfo)
 			var fieldOrder []string
-			for _, field := range node.Children[2:] {
+			for _, field := range cur.Children[2:] {
 				if field.Type != "List" || len(field.Children) < 2 {
 					continue
 				}
 				start := 0
-				if node.Children[0].Value == "schema" && len(field.Children) == 3 && field.Children[0].Value == "column" {
+				if cur.Children[0].Value == "schema" && len(field.Children) == 3 && field.Children[0].Value == "column" {
 					start = 1
 				}
 				fieldName := field.Children[start].Value
@@ -228,32 +239,19 @@ func (a *Analysis) collectStructs(node *ast.Node) {
 			info.Size, info.Align, info.FieldOffsets = structLayout(info.Fields, fieldOrder)
 			a.Structs[name] = info
 		}
-		if node.Type == "List" {
-			for i := len(node.Children) - 1; i >= 0; i-- {
-				stack = append(stack, node.Children[i])
-			}
-		}
-	}
+	})
 }
 
 func (a *Analysis) collectFunctions(node *ast.Node) {
-	for stack := []*ast.Node{node}; len(stack) > 0; {
-		node = stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if node == nil {
-			continue
-		}
-		if node.Type == "List" && len(node.Children) > 0 {
-			if node.Children[0].Type == "SYMBOL" && (node.Children[0].Value == "defun" || node.Children[0].Value == "lazy_synthesize") && len(node.Children) >= 4 {
-				name := node.Children[1].Value
-				params, ret := a.functionSignature(node)
+	walkASTPreorder(node, func(cur *ast.Node) {
+		if cur.Type == "List" && len(cur.Children) > 0 {
+			if cur.Children[0].Type == "SYMBOL" && (cur.Children[0].Value == "defun" || cur.Children[0].Value == "lazy_synthesize") && len(cur.Children) >= 4 {
+				name := cur.Children[1].Value
+				params, ret := a.functionSignature(cur)
 				a.Functions[name] = FunctionInfo{Params: params, Return: ret}
 			}
-			for i := len(node.Children) - 1; i >= 0; i-- {
-				stack = append(stack, node.Children[i])
-			}
 		}
-	}
+	})
 }
 
 func (a *Analysis) inferRoot(root *ast.Node) {

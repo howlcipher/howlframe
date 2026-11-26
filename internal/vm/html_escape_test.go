@@ -24,64 +24,21 @@ const htmlEscapeWant = "&amp;\n" +
 func TestHTMLEscapeMatchesOnInterpreterAndBytecode(t *testing.T) {
 	source := string(mustRead(t, "../../tests/parity/13_html_escape.howl"))
 
-	t.Run("interpreter", func(t *testing.T) {
-		node, _ := parseAndCompile(t, source)
-		var out, errOut bytes.Buffer
-		if exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != htmlEscapeWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), htmlEscapeWant)
-		}
-	})
+	t.Run("interpreter", func(t *testing.T) { assertInterpretStdout(t, source, htmlEscapeWant) })
 
 	t.Run("bytecode", func(t *testing.T) {
-		_, prog := parseAndCompile(t, source)
-		var out, errOut bytes.Buffer
-		if exitCode := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); exitCode != 0 {
-			t.Fatalf("exit = %d, stderr = %s", exitCode, errOut.String())
-		}
-		if out.String() != htmlEscapeWant {
-			t.Fatalf("stdout = %q, want %q", out.String(), htmlEscapeWant)
-		}
-		if strings.Contains(out.String(), "a<b") || strings.Contains(out.String(), "<script") {
-			t.Fatalf("raw markup survived encoding:\n%s", out.String())
+		got := assertBytecodeStdout(t, source, htmlEscapeWant)
+		if strings.Contains(got, "a<b") || strings.Contains(got, "<script") {
+			t.Fatalf("raw markup survived encoding:\n%s", got)
 		}
 	})
 }
 
 func TestHTMLEscapeRejectsNonString(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "html_escape list", source: `(cli_app (print (html_escape (list "a"))))`, want: "html_escape expected string"},
-		{name: "attr_escape number", source: `(cli_app (print (attr_escape 1)))`, want: "attr_escape expected string"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Run("interpreter", func(t *testing.T) {
-				node, _ := parseAndCompile(t, tc.source)
-				var out, errOut bytes.Buffer
-				exitCode := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut)
-				if exitCode == 0 || !strings.Contains(errOut.String(), "TYPE_ERROR") || !strings.Contains(errOut.String(), tc.want) {
-					t.Fatalf("exit = %d, stdout = %q, stderr = %q", exitCode, out.String(), errOut.String())
-				}
-			})
-			t.Run("bytecode", func(t *testing.T) {
-				_, prog := parseAndCompile(t, tc.source)
-				var out, errOut bytes.Buffer
-				evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &out, &errOut, 0)
-				if evidence.RuntimeFailure == nil || evidence.RuntimeFailure.Code != "TYPE_ERROR" {
-					t.Fatalf("failure = %#v, want TYPE_ERROR", evidence.RuntimeFailure)
-				}
-				if !strings.Contains(evidence.RuntimeFailure.Message, tc.want) {
-					t.Fatalf("message = %q", evidence.RuntimeFailure.Message)
-				}
-			})
-		})
-	}
+	runVMTypeErrorCases(t, []vmTypeErrCase{
+		{"html_escape list", `(cli_app (print (html_escape (list "a"))))`, "html_escape expected string"},
+		{"attr_escape number", `(cli_app (print (attr_escape 1)))`, "attr_escape expected string"},
+	})
 }
 
 func TestHTMLEscapeHasNoCapability(t *testing.T) {

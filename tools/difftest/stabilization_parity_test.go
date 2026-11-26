@@ -53,7 +53,8 @@ func stabilizationOutcome(canonical, candidate ExecutionResult) string {
 // production VM (canonical), HFIR bytecode, interpreter, generated Go, and
 // generated JavaScript, and compares every outcome to tests/parity_stabilization
 // /manifest.json.
-func TestStabilizationParityCorpus(t *testing.T) {
+func loadStabilizationCorpus(t *testing.T, glob string) (string, stabilizationManifest, []string) {
+	t.Helper()
 	dir := filepath.Join("..", "..", "tests", "parity_stabilization")
 	data, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -63,7 +64,12 @@ func TestStabilizationParityCorpus(t *testing.T) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	files, _ := filepath.Glob(filepath.Join(dir, "*.howl"))
+	files, _ := filepath.Glob(filepath.Join(dir, glob))
+	return dir, manifest, files
+}
+
+func TestStabilizationParityCorpus(t *testing.T) {
+	_, manifest, files := loadStabilizationCorpus(t, "*.howl")
 	if len(files) != len(manifest.Fixtures) {
 		t.Fatalf("fixtures on disk = %d, in manifest = %d", len(files), len(manifest.Fixtures))
 	}
@@ -109,16 +115,7 @@ func TestStabilizationParityCorpus(t *testing.T) {
 // language cannot run correctly are rejected by the checker, not by a VM stack
 // underflow or a late type error.
 func TestStabilizationRejectCorpus(t *testing.T) {
-	dir := filepath.Join("..", "..", "tests", "parity_stabilization")
-	data, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest stabilizationManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		t.Fatal(err)
-	}
-	files, _ := filepath.Glob(filepath.Join(dir, "reject", "*.howl"))
+	dir, manifest, files := loadStabilizationCorpus(t, filepath.Join("reject", "*.howl"))
 	if len(files) != len(manifest.Reject) {
 		t.Fatalf("reject fixtures on disk = %d, in manifest = %d", len(files), len(manifest.Reject))
 	}

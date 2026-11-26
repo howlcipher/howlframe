@@ -5,8 +5,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,46 +54,17 @@ func TestGoFetchRequiresGrantBeforeRequest(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
-
-	assertDenied := func(label, output, errText string) {
-		t.Helper()
-		if errText == "" {
-			t.Fatalf("%s: fetch succeeded: %s", label, output)
-		}
+	assertGoCapabilityDenied(t, rootDir, code, "network", "the response or URL", []string{secretBody, "phase2d-secret-url"}, func(label string) {
 		if hits.Load() != 0 {
 			t.Fatalf("%s: denial performed %d HTTP request(s)", label, hits.Load())
 		}
-		if strings.Contains(output, secretBody) || strings.Contains(output, "phase2d-secret-url") {
-			t.Fatalf("%s: process output leaked the response or URL: %s", label, output)
-		}
-		crash, err := os.ReadFile(crashPath)
-		if err != nil {
-			t.Fatalf("%s: denial did not write crash.json: %v\n%s", label, err, output)
-		}
-		if strings.Contains(string(crash), secretBody) || strings.Contains(string(crash), "phase2d-secret-url") {
-			t.Fatalf("%s: crash.json leaked the response or URL: %s", label, crash)
-		}
-		if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: network") {
-			t.Fatalf("%s: crash.json = %s, want CAPABILITY_DENIED", label, crash)
-		}
-		os.Remove(crashPath)
-	}
-
-	unsetOut, unsetErr := runGenerated(t, rootDir, code)
-	assertDenied("unset grant", unsetOut, unsetErr)
-
-	emptyOut, emptyErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=")
-	assertDenied("empty grant", emptyOut, emptyErr)
-
-	otherOut, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=filesystem")
-	assertDenied("filesystem grant", otherOut, otherErr)
-
-	coarseOut, coarseErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network")
-	assertDenied("coarse network grant (#165)", coarseOut, coarseErr)
-	otherHostOut, otherHostErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network:fetch=localhost:"+srv.URL[strings.LastIndex(srv.URL, ":")+1:])
-	assertDenied("other host grant", otherHostOut, otherHostErr)
+	}, [][2]string{
+		{"unset grant", "__UNSET__"},
+		{"empty grant", "HOWLFRAME_ALLOW_CAPS="},
+		{"filesystem grant", "HOWLFRAME_ALLOW_CAPS=filesystem"},
+		{"coarse network grant (#165)", "HOWLFRAME_ALLOW_CAPS=network"},
+		{"other host grant", "HOWLFRAME_ALLOW_CAPS=network:fetch=localhost:" + srv.URL[strings.LastIndex(srv.URL, ":")+1:]},
+	})
 
 	granted, grantErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=network:fetch="+strings.TrimPrefix(srv.URL, "http://"))
 	if grantErr != "" {
@@ -138,30 +107,11 @@ func TestGoFetchTryLetDeniesBeforeRequest(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
-
-	denied, errText := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=")
-	if errText == "" {
-		t.Fatalf("empty grant succeeded: %s", denied)
-	}
-	if hits.Load() != 0 {
-		t.Fatalf("empty grant performed %d HTTP request(s)", hits.Load())
-	}
-	if strings.Contains(denied, "caught-io") || strings.Contains(denied, "fetched-ok") {
-		t.Fatalf("empty grant treated the denial as an IO error: %s", denied)
-	}
-	crash, err := os.ReadFile(crashPath)
-	if err != nil {
-		t.Fatalf("denial did not write crash.json: %v\n%s", err, denied)
-	}
-	if strings.Contains(string(crash), "phase2d-secret-url") {
-		t.Fatalf("crash.json leaked the URL: %s", crash)
-	}
-	if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: network") {
-		t.Fatalf("crash.json = %s, want CAPABILITY_DENIED", crash)
-	}
-	os.Remove(crashPath)
+	assertGoCapabilityDenied(t, rootDir, code, "network", "the denial as an IO error", []string{"phase2d-secret-url", "caught-io", "fetched-ok"}, func(string) {
+		if hits.Load() != 0 {
+			t.Fatalf("empty grant performed %d HTTP request(s)", hits.Load())
+		}
+	}, [][2]string{{"empty grant", "HOWLFRAME_ALLOW_CAPS="}})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

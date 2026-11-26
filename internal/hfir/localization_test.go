@@ -109,17 +109,23 @@ func TestLocalizationRejectsStaleAndForgedRuntimeMetadata(t *testing.T) {
 	}
 }
 
+func compileAndRunEvidence(t *testing.T, candidate Candidate, stepLimit int) (bytecode.ExecutionEvidence, string) {
+	t.Helper()
+	program, diagnostics := CompileCandidate(candidate)
+	if len(diagnostics) != 0 {
+		t.Fatalf("CompileCandidate() diagnostics = %#v", diagnostics)
+	}
+	var stdout bytes.Buffer
+	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), stepLimit)
+	return evidence, stdout.String()
+}
+
 func TestAutomaticLocalizationStaysLocalAcrossGraphSizes(t *testing.T) {
 	for _, size := range []int{10, 25, 50, 100} {
 		t.Run(strconv.Itoa(size), func(t *testing.T) {
 			candidate := scaledBehavioralCandidate(t, size)
-			program, diagnostics := CompileCandidate(candidate)
-			if len(diagnostics) != 0 {
-				t.Fatal(diagnostics)
-			}
-			var stdout bytes.Buffer
-			evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 128)
-			region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: "v1", Execution: &evidence, ExpectedOutcome: "fixed\n", ActualOutcome: stdout.String()})
+			evidence, actual := compileAndRunEvidence(t, candidate, 128)
+			region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: "v1", Execution: &evidence, ExpectedOutcome: "fixed\n", ActualOutcome: actual})
 			if len(diagnostics) != 0 {
 				t.Fatal(diagnostics)
 			}
@@ -235,11 +241,7 @@ func TestLocalizationUsesSealedStateProvenanceBeyondMapKeys(t *testing.T) {
 	for _, anchor := range []string{"print", "stderr", "exit"} {
 		t.Run(anchor+" anchor observes symbol state", func(t *testing.T) {
 			candidate := scalarStateCandidate(t, anchor, false)
-			program, diagnostics := CompileCandidate(candidate)
-			if len(diagnostics) != 0 {
-				t.Fatal(diagnostics)
-			}
-			evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), 64)
+			evidence, _ := compileAndRunEvidence(t, candidate, 64)
 			region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "expected", ActualOutcome: "actual"})
 			if len(diagnostics) != 0 {
 				t.Fatal(diagnostics)
@@ -253,12 +255,7 @@ func TestLocalizationUsesSealedStateProvenanceBeyondMapKeys(t *testing.T) {
 
 func TestLocalizationRejectsModifiedSealedStateProvenance(t *testing.T) {
 	candidate := scalarStateCandidate(t, "print", false)
-	program, diagnostics := CompileCandidate(candidate)
-	if len(diagnostics) != 0 {
-		t.Fatal(diagnostics)
-	}
-	var stdout bytes.Buffer
-	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 64)
+	evidence, actual := compileAndRunEvidence(t, candidate, 64)
 	changed := false
 	for index := range evidence.Trace {
 		if evidence.Trace[index].Resource != "" {
@@ -270,7 +267,7 @@ func TestLocalizationRejectsModifiedSealedStateProvenance(t *testing.T) {
 	if !changed {
 		t.Fatal("runner did not emit state provenance")
 	}
-	_, diagnostics = LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "fixed\n", ActualOutcome: stdout.String()})
+	_, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: "fixed\n", ActualOutcome: actual})
 	if len(diagnostics) != 1 || diagnostics[0].Code != "HFIR_LOCALIZATION_PROVENANCE" {
 		t.Fatalf("modified state provenance diagnostics = %#v", diagnostics)
 	}
@@ -323,12 +320,7 @@ func TestBehavioralLocalizationCorpusMeasuresPrecisionRecallAndAutomaticRepair(t
 		t.Run(scenario.name, func(t *testing.T) {
 			region := localizeBehavior(t, scenario.candidate, scenario.expected)
 			// Read truth only after the production localization call.
-			matched := 0
-			for _, id := range scenario.groundTruth {
-				if containsNodeID(region.Context.EditableNodeIDs, id) {
-					matched++
-				}
-			}
+			matched := countMatchedGroundTruth(region.Context.EditableNodeIDs, scenario.groundTruth)
 			if matched != len(scenario.groundTruth) {
 				t.Fatalf("core %#v misses test-only truth %#v", region.Context.EditableNodeIDs, scenario.groundTruth)
 			}
@@ -357,6 +349,16 @@ func TestBehavioralLocalizationCorpusMeasuresPrecisionRecallAndAutomaticRepair(t
 	if macroPrecision/float64(len(scenarios)) < 0.70 || macroRecall/float64(len(scenarios)) != 1 {
 		t.Fatalf("macro precision=%.3f recall=%.3f", macroPrecision/float64(len(scenarios)), macroRecall/float64(len(scenarios)))
 	}
+}
+
+func countMatchedGroundTruth(editable, groundTruth []NodeID) int {
+	matched := 0
+	for _, id := range groundTruth {
+		if containsNodeID(editable, id) {
+			matched++
+		}
+	}
+	return matched
 }
 
 func restrictedAuthorDelta(t *testing.T, candidate Candidate, context RepairContext, replacements map[string]string) []byte {
@@ -452,16 +454,11 @@ func mapWriterCandidate(t *testing.T) Candidate {
 
 func localizeBehavior(t *testing.T, candidate Candidate, expected string) CandidateRepairRegion {
 	t.Helper()
-	program, diagnostics := CompileCandidate(candidate)
-	if len(diagnostics) != 0 {
-		t.Fatal(diagnostics)
-	}
-	var stdout bytes.Buffer
-	evidence := vm.RunBytecodeWithEvidence(program, nil, vm.DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, new(bytes.Buffer), 128)
+	evidence, actual := compileAndRunEvidence(t, candidate, 128)
 	if evidence.RuntimeFailure != nil {
 		t.Fatalf("execution evidence = %#v", evidence)
 	}
-	region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: expected, ActualOutcome: stdout.String()})
+	region, diagnostics := LocalizeFailure(candidate, LocalizationEvidence{GraphHash: candidate.Hash, GraphVersion: candidate.Graph.Version, Execution: &evidence, ExpectedOutcome: expected, ActualOutcome: actual})
 	if len(diagnostics) != 0 {
 		t.Fatal(diagnostics)
 	}

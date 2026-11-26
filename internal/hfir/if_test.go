@@ -42,20 +42,9 @@ func TestLowerToBytecodeEmitsIfControlEdges(t *testing.T) {
 	if withElse == nil || withoutElse == nil || loop == nil {
 		t.Fatalf("withElse=%v withoutElse=%v for=%v", withElse != nil, withoutElse != nil, loop != nil)
 	}
-	if len(withElse.ControlEdges) != 3 || withElse.DataInputs[0].Name != "condition" || withElse.DataInputs[1].Name != "then" || withElse.DataInputs[2].Name != "else" {
-		t.Fatalf("if else = %#v", withElse)
-	}
-	for index := range withElse.ControlEdges {
-		if withElse.ControlEdges[index] != withElse.DataInputs[index].SourceNode {
-			t.Fatalf("control %v data %#v", withElse.ControlEdges, withElse.DataInputs)
-		}
-	}
-	if len(withoutElse.ControlEdges) != 2 || withoutElse.DataInputs[0].Name != "condition" || withoutElse.DataInputs[1].Name != "then" {
-		t.Fatalf("if then = %#v", withoutElse)
-	}
-	if len(loop.ControlEdges) != 2 || loop.DataInputs[0].Name != "iterable" || loop.DataInputs[1].Name != "body" || loop.ControlEdges[0] != loop.DataInputs[0].SourceNode || loop.ControlEdges[1] != loop.DataInputs[1].SourceNode {
-		t.Fatalf("for control %v data %#v", loop.ControlEdges, loop.DataInputs)
-	}
+	assertControlEdgesMatchInputs(t, withElse, 3, "condition", "then", "else")
+	assertControlEdgesMatchInputs(t, withoutElse, 2, "condition", "then")
+	assertControlEdgesMatchInputs(t, loop, 2, "iterable", "body")
 	thenBranch := graph.NodeByID(withElse.ControlEdges[1])
 	elseBranch := graph.NodeByID(withElse.ControlEdges[2])
 	if thenBranch == nil || thenBranch.Kind != "print" || elseBranch == nil || elseBranch.Kind != "print" {
@@ -80,16 +69,7 @@ func TestLowerToBytecodeEmitsIfControlEdges(t *testing.T) {
 		t.Fatalf("if relations = %#v", relations)
 	}
 
-	program, diags := LowerToBytecode(graph)
-	if len(diags) != 0 || program == nil {
-		t.Fatalf("LowerToBytecode() diags=%#v", diags)
-	}
-	if !hasOp(program.Main, bytecode.OpJumpIfFalse) || !hasOp(program.Main, bytecode.OpJump) || !hasOp(program.Main, bytecode.OpForInit) {
-		t.Fatalf("main = %#v", program.Main)
-	}
-	if err := bytecode.ValidateProgram(program); err != nil {
-		t.Fatal(err)
-	}
+	mustLowerAndValidateGraph(t, graph, bytecode.OpJumpIfFalse, bytecode.OpJump, bytecode.OpForInit)
 }
 
 func TestLowerToBytecodeIfInsideDefun(t *testing.T) {
@@ -100,131 +80,137 @@ func TestLowerToBytecodeIfInsideDefun(t *testing.T) {
       (return "yes")
       (return "no")))
   (print (call choose true)))`)
-	var branch *Node
+	branch := findSingleKindOutsideWhile(t, graph, "if", 3)
+	mustLowerFunctionOps(t, graph, "choose", bytecode.OpJumpIfFalse, bytecode.OpJump, bytecode.OpReturn)
+	_ = branch
+}
+
+func mustLowerFunctionOps(t *testing.T, graph *Graph, fnName string, wantOps ...bytecode.Opcode) {
+	t.Helper()
+	program, diags := LowerToBytecode(graph)
+	if len(diags) != 0 || program == nil || program.Functions[fnName] == nil {
+		t.Fatalf("program=%v fn=%s diags=%#v", program != nil, fnName, diags)
+	}
+	fn := program.Functions[fnName].Instructions
+	for _, op := range wantOps {
+		if !hasOp(fn, op) {
+			t.Fatalf("function %s missing op %v: %#v", fnName, op, fn)
+		}
+	}
+}
+
+func findSingleKindOutsideWhile(t *testing.T, graph *Graph, kind string, wantEdges int) *Node {
+	t.Helper()
+	var target *Node
 	for _, node := range graph.Nodes {
-		if node.Kind == "if" {
-			branch = node
+		if node.Kind == kind {
+			target = node
 		}
 		if node.Kind == "defun" && len(node.ControlEdges) != 0 {
 			t.Fatalf("defun has control edges %v", node.ControlEdges)
 		}
-		if node.Kind == "while" {
+		if kind != "while" && node.Kind == "while" {
 			t.Fatal("unexpected while")
 		}
 	}
-	if branch == nil || len(branch.ControlEdges) != 3 {
-		t.Fatalf("if = %#v", branch)
+	if target == nil || len(target.ControlEdges) != wantEdges {
+		t.Fatalf("%s = %#v, want %d control edges", kind, target, wantEdges)
 	}
+	return target
+}
+
+func assertControlRelationsOrder(t *testing.T, relations []DerivedControlRelation, controller NodeID, edges []NodeID, roles ...string) {
+	t.Helper()
+	seen := make([]bool, len(roles))
+	for _, relation := range relations {
+		if relation.Controller != controller {
+			continue
+		}
+		for i, role := range roles {
+			if relation.Role == role {
+				seen[i] = relation.Controlled == edges[i] && relation.Ordinal == i
+			}
+		}
+	}
+	for i, ok := range seen {
+		if !ok {
+			t.Fatalf("%s relations = %#v (missing/wrong role %q)", controller, relations, roles[i])
+		}
+	}
+}
+
+func makeIfTestGraph(includeElse bool, controlOrder func(cond, thenBranch, elseBranch NodeID) []NodeID) (*Graph, NodeID) {
+	graph := NewGraph()
+	cond := graph.AddNode(&Node{Kind: "const", LiteralKind: "BOOL", Value: "true"})
+	yesText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "yes"})
+	thenBranch := graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: yesText}}})
+	inputs := []DataEdge{{Name: "condition", SourceNode: cond}, {Name: "then", SourceNode: thenBranch}}
+	var elseBranch NodeID
+	if includeElse {
+		noText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "no"})
+		elseBranch = graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: noText}}})
+		inputs = append(inputs, DataEdge{Name: "else", SourceNode: elseBranch})
+	}
+	var edges []NodeID
+	if controlOrder != nil {
+		edges = controlOrder(cond, thenBranch, elseBranch)
+	}
+	branch := graph.AddNode(&Node{Kind: "if", DataInputs: inputs, ControlEdges: edges})
+	graph.EntryNode = graph.AddNode(&Node{Kind: "program", DataInputs: []DataEdge{{Name: "body", SourceNode: branch}}})
+	return graph, branch
+}
+
+func assertControllerRejectedNoRelations(t *testing.T, label string, graph *Graph, controller NodeID) {
+	t.Helper()
 	program, diags := LowerToBytecode(graph)
-	if len(diags) != 0 || program == nil || program.Functions["choose"] == nil {
-		t.Fatalf("program=%v diags=%#v", program != nil, diags)
+	if program != nil || len(diags) != 1 || diags[0].Code != BytecodeUnsupportedCode || diags[0].RelatedNode != controller {
+		t.Fatalf("%s: program=%v diags=%#v", label, program != nil, diags)
 	}
-	fn := program.Functions["choose"].Instructions
-	if !hasOp(fn, bytecode.OpJumpIfFalse) || !hasOp(fn, bytecode.OpJump) || !hasOp(fn, bytecode.OpReturn) {
-		t.Fatalf("function = %#v", fn)
+	for _, relation := range DerivePhase1ControlRelations(graph) {
+		if relation.Controller == controller {
+			t.Fatalf("%s: controller without valid edges produced %#v", label, relation)
+		}
+	}
+}
+
+func assertVerifierMissingRoleCount(t *testing.T, kind string, want int) {
+	t.Helper()
+	graph := NewGraph()
+	graph.AddNode(&Node{Kind: kind})
+	var missing int
+	for _, diag := range NewVerifier(graph, TargetBytecode).Verify() {
+		if diag.Code == "HFIR_MISSING_ROLE" {
+			missing++
+		}
+	}
+	if missing != want {
+		t.Fatalf("%s missing-role diagnostics = %d, want %d", kind, missing, want)
 	}
 }
 
 func TestLowerToBytecodeIfFromGraphWithoutAST(t *testing.T) {
-	graph := NewGraph()
-	cond := graph.AddNode(&Node{Kind: "const", LiteralKind: "BOOL", Value: "true"})
-	yesText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "yes"})
-	noText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "no"})
-	thenBranch := graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: yesText}}})
-	elseBranch := graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: noText}}})
-	branch := graph.AddNode(&Node{
-		Kind: "if",
-		DataInputs: []DataEdge{
-			{Name: "condition", SourceNode: cond},
-			{Name: "then", SourceNode: thenBranch},
-			{Name: "else", SourceNode: elseBranch},
-		},
-		ControlEdges: []NodeID{cond, thenBranch, elseBranch},
+	graph, _ := makeIfTestGraph(true, func(cond, thenBranch, elseBranch NodeID) []NodeID {
+		return []NodeID{cond, thenBranch, elseBranch}
 	})
-	graph.EntryNode = graph.AddNode(&Node{Kind: "program", DataInputs: []DataEdge{{Name: "body", SourceNode: branch}}})
+	mustLowerAndValidateGraph(t, graph)
 
-	program, diags := LowerToBytecode(graph)
-	if len(diags) != 0 || program == nil {
-		t.Fatalf("LowerToBytecode() diags=%#v", diags)
-	}
-	if err := bytecode.ValidateProgram(program); err != nil {
-		t.Fatal(err)
-	}
-
-	onlyThen := NewGraph()
-	cond = onlyThen.AddNode(&Node{Kind: "const", LiteralKind: "BOOL", Value: "false"})
-	text := onlyThen.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "no"})
-	body := onlyThen.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: text}}})
-	arm := onlyThen.AddNode(&Node{
-		Kind:         "if",
-		DataInputs:   []DataEdge{{Name: "condition", SourceNode: cond}, {Name: "then", SourceNode: body}},
-		ControlEdges: []NodeID{cond, body},
+	onlyThen, _ := makeIfTestGraph(false, func(cond, thenBranch, _ NodeID) []NodeID {
+		return []NodeID{cond, thenBranch}
 	})
-	onlyThen.EntryNode = onlyThen.AddNode(&Node{Kind: "program", DataInputs: []DataEdge{{Name: "body", SourceNode: arm}}})
-	program, diags = LowerToBytecode(onlyThen)
-	if len(diags) != 0 || program == nil {
-		t.Fatalf("then-only diags=%#v", diags)
-	}
+	program := mustLowerAndValidateGraph(t, onlyThen, bytecode.OpJumpIfFalse)
 	if hasOp(program.Main, bytecode.OpJump) {
 		t.Fatalf("then-only if emitted JUMP: %#v", program.Main)
-	}
-	if !hasOp(program.Main, bytecode.OpJumpIfFalse) {
-		t.Fatalf("then-only if = %#v", program.Main)
 	}
 }
 
 func TestLowerToBytecodeRejectsIfWithoutControlEdges(t *testing.T) {
-	graph := NewGraph()
-	cond := graph.AddNode(&Node{Kind: "const", LiteralKind: "BOOL", Value: "true"})
-	yesText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "yes"})
-	noText := graph.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "no"})
-	thenBranch := graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: yesText}}})
-	elseBranch := graph.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: noText}}})
-	branch := graph.AddNode(&Node{
-		Kind: "if",
-		DataInputs: []DataEdge{
-			{Name: "condition", SourceNode: cond},
-			{Name: "then", SourceNode: thenBranch},
-			{Name: "else", SourceNode: elseBranch},
-		},
-	})
-	graph.EntryNode = graph.AddNode(&Node{Kind: "program", DataInputs: []DataEdge{{Name: "body", SourceNode: branch}}})
+	graph, branch := makeIfTestGraph(true, nil)
+	assertControllerRejectedNoRelations(t, "missing", graph, branch)
 
-	program, diags := LowerToBytecode(graph)
-	if program != nil || len(diags) != 1 || diags[0].Code != BytecodeUnsupportedCode || diags[0].RelatedNode != branch {
-		t.Fatalf("program=%v diags=%#v", program != nil, diags)
-	}
-	for _, relation := range DerivePhase1ControlRelations(graph) {
-		if relation.Controller == branch {
-			t.Fatalf("if without control edges produced %#v", relation)
-		}
-	}
-
-	swapped := NewGraph()
-	cond = swapped.AddNode(&Node{Kind: "const", LiteralKind: "BOOL", Value: "true"})
-	yesText = swapped.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "yes"})
-	noText = swapped.AddNode(&Node{Kind: "const", LiteralKind: "STRING", Value: "no"})
-	thenBranch = swapped.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: yesText}}})
-	elseBranch = swapped.AddNode(&Node{Kind: "print", DataInputs: []DataEdge{{Name: "value", SourceNode: noText}}})
-	swappedBranch := swapped.AddNode(&Node{
-		Kind: "if",
-		DataInputs: []DataEdge{
-			{Name: "condition", SourceNode: cond},
-			{Name: "then", SourceNode: thenBranch},
-			{Name: "else", SourceNode: elseBranch},
-		},
-		ControlEdges: []NodeID{cond, elseBranch, thenBranch},
+	swapped, swappedBranch := makeIfTestGraph(true, func(cond, thenBranch, elseBranch NodeID) []NodeID {
+		return []NodeID{cond, elseBranch, thenBranch}
 	})
-	swapped.EntryNode = swapped.AddNode(&Node{Kind: "program", DataInputs: []DataEdge{{Name: "body", SourceNode: swappedBranch}}})
-	program, diags = LowerToBytecode(swapped)
-	if program != nil || len(diags) != 1 || diags[0].Code != BytecodeUnsupportedCode || diags[0].RelatedNode != swappedBranch {
-		t.Fatalf("swapped program=%v diags=%#v", program != nil, diags)
-	}
-	for _, relation := range DerivePhase1ControlRelations(swapped) {
-		if relation.Controller == swappedBranch {
-			t.Fatalf("swapped if produced %#v", relation)
-		}
-	}
+	assertControllerRejectedNoRelations(t, "swapped", swapped, swappedBranch)
 }
 
 func TestModelAdapterIfDerivesControlEdgesFromRoles(t *testing.T) {
@@ -260,14 +246,19 @@ func TestModelTransportRejectsControlEdgeField(t *testing.T) {
 
 func lowerCheckedIf(t *testing.T, source string) *Graph {
 	t.Helper()
-	root := parser.NewParser(lexer.NewLexer(source), "if.howl").ParseExpression()
+	return lowerCheckedNamed(t, "if.howl", source)
+}
+
+func lowerCheckedNamed(t *testing.T, filename, source string) *Graph {
+	t.Helper()
+	root := parser.NewParser(lexer.NewLexer(source), filename).ParseExpression()
 	checker.Check(root)
-	graph, err := LowerAST(root, "if.howl")
+	graph, err := LowerAST(root, filename)
 	if err != nil {
-		t.Fatalf("LowerAST: %v", err)
+		t.Fatalf("LowerAST(%s): %v", filename, err)
 	}
 	if diags := NewVerifier(graph, TargetBytecode).Verify(); len(diags) != 0 {
-		t.Fatalf("Verify() = %#v", diags)
+		t.Fatalf("Verify(%s) = %#v", filename, diags)
 	}
 	return graph
 }

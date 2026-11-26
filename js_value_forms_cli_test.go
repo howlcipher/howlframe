@@ -59,26 +59,7 @@ func TestJSValueFormsMatchBytecode(t *testing.T) {
 		p := p
 		t.Run(p.name, func(t *testing.T) {
 			t.Parallel()
-			dir := t.TempDir()
-			cli := filepath.Join(dir, "cli.howl")
-			os.WriteFile(cli, []byte("(cli_app\n"+p.body+")\n"), 0o600)
-			want, err := exec.Command(bin, "run", cli).CombinedOutput()
-			if err != nil {
-				t.Fatalf("bytecode run failed: %v %s", err, want)
-			}
-			web := filepath.Join(dir, "web.howl")
-			os.WriteFile(web, []byte("(web_app\n"+p.body+")\n"), 0o600)
-			outDir := filepath.Join(dir, "js")
-			if out, err := exec.Command(bin, "build", web, "--target", "js", "-o", outDir).CombinedOutput(); err != nil {
-				t.Fatalf("js build rejected: %v %s", err, out)
-			}
-			got, err := exec.Command("node", filepath.Join(outDir, "app.js")).CombinedOutput()
-			if err != nil {
-				t.Fatalf("node failed: %v %s", err, got)
-			}
-			if string(got) != string(want) {
-				t.Fatalf("javascript printed %q, bytecode printed %q", got, want)
-			}
+			assertJSMatchesBytecodeOutput(t, bin, p.body)
 		})
 	}
 }
@@ -111,28 +92,7 @@ func TestJSEncodeJSONMatchesBytecode(t *testing.T) {
 		"scalars":     `(let (d (dict ("a" 1))) (print (encode_json true) (encode_json "s") (encode_json (map_get d "zz")) (encode_json (list)) (encode_json (dict))))`,
 		"nested":      `(print (encode_json (dict ("rows" (list (dict ("tags" (list "x" "y")) ("id" 2)) (dict ("tags" (list)) ("id" 1)))))))`,
 	} {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			cli := filepath.Join(dir, "cli.howl")
-			os.WriteFile(cli, []byte("(cli_app\n"+body+")\n"), 0o600)
-			want, err := exec.Command(bin, "run", cli).CombinedOutput()
-			if err != nil {
-				t.Fatalf("bytecode run failed: %v %s", err, want)
-			}
-			web := filepath.Join(dir, "web.howl")
-			os.WriteFile(web, []byte("(web_app\n"+body+")\n"), 0o600)
-			outDir := filepath.Join(dir, "js")
-			if out, err := exec.Command(bin, "build", web, "--target", "js", "-o", outDir).CombinedOutput(); err != nil {
-				t.Fatalf("js build rejected: %v %s", err, out)
-			}
-			got, err := exec.Command("node", filepath.Join(outDir, "app.js")).CombinedOutput()
-			if err != nil {
-				t.Fatalf("node failed: %v %s", err, got)
-			}
-			if string(got) != string(want) {
-				t.Fatalf("javascript printed %q, bytecode printed %q", got, want)
-			}
-		})
+		t.Run(name, func(t *testing.T) { assertJSMatchesBytecodeOutput(t, bin, body) })
 	}
 }
 
@@ -235,19 +195,11 @@ func TestJSMutationTargetsMustBeSymbols(t *testing.T) {
 // but check rejected the lambda as an unknown statement, so no web_app could
 // use spawn. Statements after spawn run before the spawned body's await.
 func TestJSSpawnRunsTheLambdaBody(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed")
-	}
 	bin := buildHowlFrameBinaryForTest(t)
-	dir := t.TempDir()
-	src := mustWriteFile(t, dir, "s.howl", `(web_app (let (d (dict ("n" 1))) (do
+	dir, out := buildJSTargetDir(t, bin, "s.howl", `(web_app (let (d (dict ("n" 1))) (do
   (spawn (lambda () (do (sleep 10) (print (map_get d "n")))))
   (map_set d "n" 2)
   (print "first"))))`)
-	out := filepath.Join(dir, "js")
-	if b, err := exec.Command(bin, "build", src, "--target", "js", "-o", out).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, b)
-	}
 	got, err := exec.Command("node", filepath.Join(out, "app.js")).CombinedOutput()
 	if err != nil || string(got) != "first\n2\n" {
 		t.Fatalf("got %q %v", got, err)

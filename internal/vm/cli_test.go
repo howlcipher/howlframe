@@ -1,12 +1,10 @@
 package vm
 
 import (
-	"bytes"
 	"github.com/howlcipher/howlframe/internal/ast"
 	"github.com/howlcipher/howlframe/internal/bytecode"
 	"github.com/howlcipher/howlframe/internal/lexer"
 	"github.com/howlcipher/howlframe/internal/parser"
-	"strings"
 	"testing"
 )
 
@@ -85,38 +83,16 @@ func TestStandaloneCLISemantics(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name+"_interpret", func(t *testing.T) {
-			node, _ := parseAndCompile(t, tt.code)
-			in := strings.NewReader(tt.stdin)
-			var out, errOut bytes.Buffer
-
-			exitCode := Interpret(node, nil, nil, in, &out, &errOut)
-			if exitCode != tt.wantExit {
-				t.Errorf("exitCode = %d, want %d", exitCode, tt.wantExit)
-			}
-			if out.String() != tt.wantStdout {
-				t.Errorf("stdout = %q, want %q", out.String(), tt.wantStdout)
-			}
-			if errOut.String() != tt.wantStderr {
-				t.Errorf("stderr = %q, want %q", errOut.String(), tt.wantStderr)
-			}
-		})
-
-		t.Run(tt.name+"_bytecode", func(t *testing.T) {
-			_, prog := parseAndCompile(t, tt.code)
-			in := strings.NewReader(tt.stdin)
-			var out, errOut bytes.Buffer
-
-			exitCode := RunBytecode(prog, nil, nil, in, &out, &errOut)
-			if exitCode != tt.wantExit {
-				t.Errorf("exitCode = %d, want %d", exitCode, tt.wantExit)
-			}
-			if out.String() != tt.wantStdout {
-				t.Errorf("stdout = %q, want %q", out.String(), tt.wantStdout)
-			}
-			if errOut.String() != tt.wantStderr {
-				t.Errorf("stderr = %q, want %q", errOut.String(), tt.wantStderr)
-			}
-		})
+		for _, backend := range []struct {
+			name        string
+			useBytecode bool
+		}{
+			{"interpret", false},
+			{"bytecode", true},
+		} {
+			t.Run(tt.name+"_"+backend.name, func(t *testing.T) {
+				assertRuntimeResult(t, tt.code, nil, tt.stdin, tt.wantStdout, tt.wantStderr, tt.wantExit, backend.useBytecode)
+			})
+		}
 	}
 }

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Verification Report v0 (`P1.3`) & Repository Hygiene Gate (`bugs.md #72`)
+* Add canonical structured verification report package `internal/verification` (`howlframe.verification_report/v0`) reporting named checks (`parser`, `construct_registry`, `profile_policy`, `checker`, `hfir_gate`, `artifact_validation`), component versions (`compiler`, `hfbc_format`, `construct_registry_entries`, `hfir_verifier`), HFIR blocking codes, and explicit non-claim limitations deterministically without timestamps, PIDs, or temp paths.
+* Expose `howlframe check --json [--profile=...] [--target=...] <source.howl>` (including in-memory HFBC structural validation when `--target=bytecode`) and `howlframe inspect --report <artifact.hfbc>`, extend `internal/hfir.VerificationEvidence` with canonically ordered `checks`, `schema`, and `verifier_version` while preserving `verified`, and attach `verification_report` on `howlframe agent check --json` responses (`howlframe.agent/v1`).
+* Restore `slopslint check --classify --enforce` without raising baseline ceilings (`bugs.md #72`): separate non-compiler experiment/benchmark/app/example Go corpora into explicit `.slop/config.yml` scopes, refactor production (`go_production` `78` <= `88`) and core test (`go_tests` `132` <= `135`) clones cleanly with 0 tombstones, and ratchet `.slop/ceilings.yml`.
+
+### Re-entrancy & Persistent Vector List (`improvements.md #111`)
+* Eliminate mutable package-level globals in `internal/backend/gogen` and `internal/backend/javascript` using per-compilation generator structs.
+* Implement an immutable 16-way branching persistent vector (`internal/vm/persistent_list.go`) across the VM and AST interpreter `OpAppend` / list operations, fixing O(n^2) sequential append memory and time overhead.
+
 ### Repository hygiene, CLI consistency & documentation sync
 * Remove committed `codegen` ELF binary from git and ignore `/codegen`.
 * Make `test_unbound_test.go` and all 37 `apps/*/*_test.go` packages compile `.hfbc` artifacts inside `t.TempDir()` instead of mutating tracked source directories; cache the test binary across root `go test` runs.

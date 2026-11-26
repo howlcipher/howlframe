@@ -115,23 +115,7 @@ func LowerSSA(node *ast.Node) (*Graph, error) {
 	if node == nil {
 		return nil, fmt.Errorf("cannot lower a nil AST node")
 	}
-	builder := newSSABuilder()
-	value, err := builder.lower(node)
-	if err != nil {
-		return nil, err
-	}
-	if builder.current != nil && builder.current.Terminator == nil {
-		builder.current.Terminator = &Terminator{
-			Kind:   TermReturn,
-			Value:  value,
-			Source: sourceLocation(node),
-		}
-	}
-	graph := &Graph{Entry: "entry", Blocks: builder.blocks}
-	if err := graph.Validate(); err != nil {
-		return nil, fmt.Errorf("lowered invalid SSA graph: %w", err)
-	}
-	return graph, nil
+	return lowerSSAWithParams(nil, node, "")
 }
 
 // Param describes one function parameter for LowerSSAFunction: the name it
@@ -150,12 +134,16 @@ func LowerSSAFunction(params []Param, body *ast.Node) (*Graph, error) {
 	if body == nil {
 		return nil, fmt.Errorf("cannot lower a nil function body")
 	}
+	return lowerSSAWithParams(params, body, " for function")
+}
+
+func lowerSSAWithParams(params []Param, root *ast.Node, labelSuffix string) (*Graph, error) {
 	builder := newSSABuilder()
 	for index, param := range params {
 		value := builder.emit(OpParam, nil, param.Name, strconv.Itoa(index), param.Type, nil)
 		builder.env[param.Name] = value
 	}
-	value, err := builder.lower(body)
+	value, err := builder.lower(root)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +151,12 @@ func LowerSSAFunction(params []Param, body *ast.Node) (*Graph, error) {
 		builder.current.Terminator = &Terminator{
 			Kind:   TermReturn,
 			Value:  value,
-			Source: sourceLocation(body),
+			Source: sourceLocation(root),
 		}
 	}
 	graph := &Graph{Entry: "entry", Blocks: builder.blocks}
 	if err := graph.Validate(); err != nil {
-		return nil, fmt.Errorf("lowered invalid SSA graph for function: %w", err)
+		return nil, fmt.Errorf("lowered invalid SSA graph%s: %w", labelSuffix, err)
 	}
 	return graph, nil
 }

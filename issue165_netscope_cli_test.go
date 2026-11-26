@@ -48,19 +48,10 @@ func serveNetscope(t *testing.T, binary, path, src, grant string, port int) (fun
 	}
 	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
 	get := func(route string) (int, string) {
-		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d%s", port, route))
-		if err != nil {
-			return 0, err.Error()
-		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return resp.StatusCode, string(b)
+		return httpDoStatusBody(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d%s", port, route), "", "")
 	}
-	for i := 0; i < 100; i++ {
-		if code, _ := get("/plain"); code != 0 {
-			return get, log
-		}
-		time.Sleep(50 * time.Millisecond)
+	if code, _ := pollHTTPDoStatusBody(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/plain", port), "", ""); code != 0 {
+		return get, log
 	}
 	t.Fatalf("server never answered: %s", log.String())
 	return nil, nil

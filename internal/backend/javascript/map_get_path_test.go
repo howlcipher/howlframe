@@ -1,10 +1,7 @@
 package javascript
 
 import (
-	"bytes"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
 
@@ -89,15 +86,9 @@ func generateCheckedJS(t *testing.T, source string) string {
 
 func runNode(t *testing.T, source string) (string, string, error) {
 	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "app.js")
-	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
-		t.Fatal(err)
+	stdout, stderr, code := runNodeScript(t, source)
+	if code != 0 {
+		return stdout, stderr, errors.New("node exited non-zero")
 	}
-	cmd := exec.Command("node", path)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return stdout, stderr, nil
 }

@@ -23,26 +23,8 @@ func TestReadStdinIsByteExact(t *testing.T) {
 		{"non-UTF-8 and NUL bytes preserved in length", `(cli_app (print (str_len (read_stdin))))`, "a\x00b", "3\n"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name+"_interpret", func(t *testing.T) {
-			node, _ := parseAndCompile(t, tt.code)
-			var out, errOut bytes.Buffer
-			if code := Interpret(node, nil, nil, strings.NewReader(tt.stdin), &out, &errOut); code != 0 {
-				t.Fatalf("exit %d stderr %q", code, errOut.String())
-			}
-			if out.String() != tt.want {
-				t.Fatalf("stdout = %q, want %q", out.String(), tt.want)
-			}
-		})
-		t.Run(tt.name+"_bytecode", func(t *testing.T) {
-			_, prog := parseAndCompile(t, tt.code)
-			var out, errOut bytes.Buffer
-			if code := RunBytecode(prog, nil, nil, strings.NewReader(tt.stdin), &out, &errOut); code != 0 {
-				t.Fatalf("exit %d stderr %q", code, errOut.String())
-			}
-			if out.String() != tt.want {
-				t.Fatalf("stdout = %q, want %q", out.String(), tt.want)
-			}
-		})
+		t.Run(tt.name+"_interpret", func(t *testing.T) { assertRuntimeResult(t, tt.code, nil, tt.stdin, tt.want, "", 0, false) })
+		t.Run(tt.name+"_bytecode", func(t *testing.T) { assertRuntimeResult(t, tt.code, nil, tt.stdin, tt.want, "", 0, true) })
 	}
 }
 
@@ -60,14 +42,6 @@ func TestReadStdinChargesMemory(t *testing.T) {
 func TestStartsEndsWithEmptySubject(t *testing.T) {
 	code := `(cli_app (print (starts_with "" " ") (ends_with "" " ") (starts_with "" "") (starts_with "ab" "") (starts_with "ab" "a") (starts_with "ab" "b") (starts_with "ab" "abc") (ends_with "ab" "b") (ends_with "ab" "a")))`
 	want := "false false true true true false false true false\n"
-	node, prog := parseAndCompile(t, code)
-	var out, errOut bytes.Buffer
-	if c := Interpret(node, nil, nil, strings.NewReader(""), &out, &errOut); c != 0 || out.String() != want {
-		t.Fatalf("interpret: exit %d stdout %q stderr %q, want %q", c, out.String(), errOut.String(), want)
-	}
-	out.Reset()
-	errOut.Reset()
-	if c := RunBytecode(prog, nil, nil, strings.NewReader(""), &out, &errOut); c != 0 || out.String() != want {
-		t.Fatalf("bytecode: exit %d stdout %q stderr %q, want %q", c, out.String(), errOut.String(), want)
-	}
+	assertInterpretStdout(t, code, want)
+	assertBytecodeStdout(t, code, want)
 }

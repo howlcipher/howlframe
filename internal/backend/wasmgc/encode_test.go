@@ -40,19 +40,24 @@ WebAssembly.instantiate(fs.readFileSync(process.argv[2]), imports).then(({ insta
 	return strings.TrimSpace(string(out))
 }
 
+func assertEncodedWasmRuns(t *testing.T, m *Module, want string) {
+	t.Helper()
+	wasm, err := m.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := runWasm(t, wasm, "{}"); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestEncoderBuildsAValidModuleWithArithmetic(t *testing.T) {
 	m := NewModule()
 	fn := m.AddType(TypeDef{IsFunc: true, Results: []ValType{I64}})
 	body := NewCode().I64Const(40).I64Const(2).I64Add()
 	main := m.AddFunc(Func{Name: "main", Type: fn, Body: body})
 	m.Exports = append(m.Exports, Export{"main", main})
-	wasm, err := m.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := runWasm(t, wasm, "{}"); got != "42" {
-		t.Fatalf("got %q", got)
-	}
+	assertEncodedWasmRuns(t, m, "42")
 }
 
 // Structs, arrays, passive data, casts and loops together: build a boxed
@@ -77,13 +82,7 @@ func TestEncoderGCTypesDataAndLoops(t *testing.T) {
 		LocalGet(3).RefCast(tInt).StructGet(tInt, 0)
 	main := m.AddFunc(Func{Name: "main", Type: fn, Locals: []ValType{RefNull(tBytes), I32, I64, EqRef}, Body: body})
 	m.Exports = append(m.Exports, Export{"main", main})
-	wasm, err := m.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := runWasm(t, wasm, "{}"); got != "256" {
-		t.Fatalf("got %q", got)
-	}
+	assertEncodedWasmRuns(t, m, "256")
 }
 
 func TestEncoderImportsCallTheHost(t *testing.T) {

@@ -538,6 +538,14 @@ func TestCacheCorruptionCannotBypassVerification(t *testing.T) {
 		t.Fatal("broken graph with invalid references must fail compilation")
 	}
 
+	// 5. Incremental compile verification evidence records structured checks canonically
+	if recRes.Evidence.Schema == "" || recRes.Evidence.VerifierVersion != DiagnosticContractVersion {
+		t.Fatalf("expected structured evidence metadata, got schema=%q verifier=%q", recRes.Evidence.Schema, recRes.Evidence.VerifierVersion)
+	}
+	if len(recRes.Evidence.Checks) != 4 || recRes.Evidence.Checks[0].Name != "hfir_blocking_policy" || recRes.Evidence.Checks[3].Name != "hfir_target_feasibility" {
+		t.Fatalf("expected 4 canonically ordered HFIR checks, got %+v", recRes.Evidence.Checks)
+	}
+
 	// Restore clean state and assert cache hit works when uncorrupted
 	cleanRes, err := compiler.Compile(graph)
 	if err != nil {

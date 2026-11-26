@@ -11,6 +11,23 @@ import (
 	"github.com/howlcipher/howlframe/internal/parser"
 )
 
+func runRawBytecodeAndCheck(t *testing.T, src string, wantExit int, wantStdout string) {
+	t.Helper()
+	root := parseRoot(t, src)
+	prog := bytecode.CompileToBytecode(root)
+	var stdout, stderr bytes.Buffer
+	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, &stderr, 0)
+	if evidence.RuntimeFailure != nil {
+		t.Fatalf("unexpected runtime failure: %+v stderr=%q", evidence.RuntimeFailure, stderr.String())
+	}
+	if evidence.ExitCode != wantExit {
+		t.Fatalf("exit code = %d, want %d", evidence.ExitCode, wantExit)
+	}
+	if stdout.String() != wantStdout || stderr.Len() != 0 {
+		t.Fatalf("stdout = %q (want %q), stderr = %q", stdout.String(), wantStdout, stderr.String())
+	}
+}
+
 func TestTopLevelReturnExitCodeBytecode(t *testing.T) {
 	cases := []struct {
 		name string
@@ -23,40 +40,13 @@ func TestTopLevelReturnExitCodeBytecode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			root := parseRoot(t, tc.src)
-			prog := bytecode.CompileToBytecode(root)
-			var stdout, stderr bytes.Buffer
-			evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, &stderr, 0)
-			if evidence.RuntimeFailure != nil {
-				t.Fatalf("unexpected runtime failure: %+v stderr=%q", evidence.RuntimeFailure, stderr.String())
-			}
-			if evidence.ExitCode != tc.want {
-				t.Fatalf("exit code = %d, want %d", evidence.ExitCode, tc.want)
-			}
-			if stdout.Len() != 0 || stderr.Len() != 0 {
-				t.Fatalf("expected empty stdout/stderr; stdout=%q stderr=%q", stdout.String(), stderr.String())
-			}
+			runRawBytecodeAndCheck(t, tc.src, tc.want, "")
 		})
 	}
 }
 
 func TestWasmAppPrintBytecode(t *testing.T) {
-	root := parseRoot(t, `(wasm_app (do (print (* 6 7)) 0))`)
-	prog := bytecode.CompileToBytecode(root)
-	var stdout, stderr bytes.Buffer
-	evidence := RunBytecodeWithEvidence(prog, nil, DefaultExecutionPolicy(), nil, strings.NewReader(""), &stdout, &stderr, 0)
-	if evidence.RuntimeFailure != nil {
-		t.Fatalf("unexpected runtime failure: %+v", evidence.RuntimeFailure)
-	}
-	if evidence.ExitCode != 0 {
-		t.Fatalf("exit code = %d, want 0", evidence.ExitCode)
-	}
-	if got := stdout.String(); got != "42\n" {
-		t.Fatalf("stdout = %q, want %q", got, "42\n")
-	}
-	if stderr.Len() != 0 {
-		t.Fatalf("stderr = %q", stderr.String())
-	}
+	runRawBytecodeAndCheck(t, `(wasm_app (do (print (* 6 7)) 0))`, 0, "42\n")
 }
 
 func parseRoot(t *testing.T, src string) *ast.Node {

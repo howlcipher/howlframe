@@ -213,11 +213,7 @@ func onPage(t *testing.T, path, target string) string {
 	args := []string{page, filepath.Join(dir, "app.js")}
 	if target == "wasmgc" {
 		wasm := filepath.Join(dir, "app.wasm")
-		if tools, err := exec.LookPath("wasm-tools"); err == nil {
-			if out, err := exec.Command(tools, "validate", "--features", "all", wasm).CombinedOutput(); err != nil {
-				t.Fatalf("wasm-tools rejects the module: %v\n%s", err, out)
-			}
-		}
+		validateWasmToolsIfPresent(t, wasm)
 		args = append(args, wasm)
 	}
 	got := run(t, "node", args...)
@@ -416,17 +412,22 @@ func TestBrowserPageRecordsEffects(t *testing.T) {
 
 // Operations the browser host does not run yet fail the build, naming the
 // operation, and browser operations need a web_app.
-func TestBrowserFailsClosed(t *testing.T) {
-	for src, want := range map[string]string{
-		`(web_app (on_media "(x)" (lambda (a b c) (print 1))))`: `"a lambda of more than two parameters" is not supported`,
-		`(cli_app (spawn (lambda () (print 1))))`:               `"spawn" is not supported`,
-		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation: it runs in a web_app built for the browser)" is not supported`,
-	} {
+func assertWasmBuildUnsupportedCases(t *testing.T, cases map[string]string) {
+	t.Helper()
+	for src, want := range cases {
 		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
 		if !out.failed || !strings.Contains(out.errMsg, want) || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {
 			t.Errorf("%s: want WASM_UNSUPPORTED %s, got %s", src, want, out.errMsg)
 		}
 	}
+}
+
+func TestBrowserFailsClosed(t *testing.T) {
+	assertWasmBuildUnsupportedCases(t, map[string]string{
+		`(web_app (on_media "(x)" (lambda (a b c) (print 1))))`: `"a lambda of more than two parameters" is not supported`,
+		`(cli_app (spawn (lambda () (print 1))))`:               `"spawn" is not supported`,
+		`(cli_app (print (dom_query "#a")))`:                    `"dom_query (a browser host operation: it runs in a web_app built for the browser)" is not supported`,
+	})
 	for _, args := range [][]string{{"--host", "node"}, {"--host", "wasi"}} {
 		out := run(t, compilerBin, append([]string{"build", writeSource(t, `(web_app (print 1))`), "--target", "wasmgc", "-o", t.TempDir()}, args...)...)
 		if !out.failed || !strings.Contains(out.errMsg, "web_app builds only for the browser") {
@@ -630,15 +631,10 @@ func TestBrowserAsyncLikeJavaScript(t *testing.T) {
 // An asynchronous call where it cannot be moved ahead of its form, in a
 // conditionally evaluated operand, fails the build.
 func TestBrowserAsyncFailsClosed(t *testing.T) {
-	for src, want := range map[string]string{
+	assertWasmBuildUnsupportedCases(t, map[string]string{
 		`(web_app (print (and true (is_nil (storage_get "a" "b")))))`:                             "an asynchronous call in a branch of and",
 		`(web_app (print (if true (storage_get "a" "b") "x")))`:                                   "an asynchronous call in a branch of if",
 		`(web_app (try_let (v (+ "x" (storage_get "a" "b"))) (catch err (print err)) (print v)))`: "an asynchronous call inside the value of a try_let",
 		`(web_app (print (dict ("a" (storage_get "a" "b")))))`:                                    "an asynchronous call inside a dict literal",
-	} {
-		out := run(t, compilerBin, "build", writeSource(t, src), "--target", "wasmgc", "-o", t.TempDir())
-		if !out.failed || !strings.Contains(out.errMsg, want) || !strings.Contains(out.errMsg, "WASM_UNSUPPORTED") {
-			t.Errorf("%s: want WASM_UNSUPPORTED %s, got %s", src, want, out.errMsg)
-		}
-	}
+	})
 }

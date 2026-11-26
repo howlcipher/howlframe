@@ -33,10 +33,7 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 	}
 	fmt.Fprintf(&source, "(print value%d)%s)", chainLength-1, strings.Repeat(")", chainLength))
 
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	outDir := t.TempDir()
 	inputFile := filepath.Join(outDir, "deep-let.howl")
@@ -62,11 +59,7 @@ func TestDeepLetChainTranspilesBeyondLegacyDepthLimit(t *testing.T) {
 
 func TestOutputDirectoryFlag(t *testing.T) {
 	// Build the HowlFrame binary
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	cmd := exec.Command("go", "build", "-o", howlframeBinary, ".")
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to build HowlFrame binary: %v", err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	// Create a temporary directory for output
 	outDir, err := os.MkdirTemp("", "howlframe-test-out-*")
@@ -82,7 +75,7 @@ func TestOutputDirectoryFlag(t *testing.T) {
 	}
 
 	// Run the HowlFrame binary with -o flag
-	cmd = exec.Command(howlframeBinary, "-o", outDir, inputFile)
+	cmd := exec.Command(howlframeBinary, "-o", outDir, inputFile)
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Failed to run HowlFrame binary: %v", err)
 	}
@@ -98,10 +91,7 @@ func TestOutputDirectoryFlag(t *testing.T) {
 }
 
 func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tests := []struct {
 		name     string
@@ -164,10 +154,7 @@ func TestOutputDirectoryFlagAfterInputCreatesDirectoriesForEverySourceBackend(t 
 }
 
 func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "store.howl")
@@ -186,10 +173,7 @@ func TestBytecodeOutputFileFlagAfterInput(t *testing.T) {
 }
 
 func TestRunBytecodeAllowCapsFlagGatesCapabilities(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "env_read.howl")
@@ -319,10 +303,7 @@ func TestRunBytecodeMaxInstructionsFlag(t *testing.T) {
 }
 
 func TestCompileWasmWritesSSAArtifactWithPhiControlFlow(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", err, output)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "native.howl")
@@ -617,6 +598,24 @@ func TestWasmBackendReadsIntegerListMemory(t *testing.T) {
 	}
 }
 
+func assertWasmBuildContains(t *testing.T, howlframeBinary, filename, input string, fragments ...string) {
+	t.Helper()
+	outDir := t.TempDir()
+	inputFile := mustWriteFile(t, outDir, filename, input)
+	if output, err := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile).CombinedOutput(); err != nil {
+		t.Fatalf("Failed to generate WAT (%s): %v: %s", filename, err, output)
+	}
+	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
+	if err != nil {
+		t.Fatalf("Failed to read generated WAT: %v", err)
+	}
+	for _, fragment := range fragments {
+		if !strings.Contains(string(wat), fragment) {
+			t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)
+		}
+	}
+}
+
 func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
@@ -644,24 +643,7 @@ func TestWasmBackendInitializesDynamicIntegerAggregates(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			outDir := t.TempDir()
-			inputFile := filepath.Join(outDir, "aggregate.howl")
-			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
-				t.Fatalf("Failed to write input file: %v", err)
-			}
-			cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
-			if output, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("Failed to generate aggregate WAT: %v: %s", err, output)
-			}
-			wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
-			if err != nil {
-				t.Fatalf("Failed to read generated WAT: %v", err)
-			}
-			for _, fragment := range test.fragments {
-				if !strings.Contains(string(wat), fragment) {
-					t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)
-				}
-			}
+			assertWasmBuildContains(t, howlframeBinary, "aggregate.howl", test.input, test.fragments...)
 		})
 	}
 }
@@ -706,76 +688,23 @@ func TestWasmBackendInitializesDynamicStringAggregatesAndKeys(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			outDir := t.TempDir()
-			inputFile := filepath.Join(outDir, "dynamic_string.howl")
-			if err := os.WriteFile(inputFile, []byte(test.input), 0644); err != nil {
-				t.Fatalf("Failed to write input file: %v", err)
-			}
-			cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
-			if output, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("Failed to generate WAT: %v: %s", err, output)
-			}
-			wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
-			if err != nil {
-				t.Fatalf("Failed to read generated WAT: %v", err)
-			}
-			for _, fragment := range test.fragments {
-				if !strings.Contains(string(wat), fragment) {
-					t.Errorf("Generated WAT is missing %q:\n%s", fragment, wat)
-				}
-			}
+			assertWasmBuildContains(t, howlframeBinary, "dynamic_string.howl", test.input, test.fragments...)
 		})
 	}
 }
 
 func TestWasmBackendReadsStringListPointers(t *testing.T) {
-	howlframeBinary := buildHowlFrameBinaryForTest(t)
-
-	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "string_list_get.howl")
-	if err := os.WriteFile(inputFile, []byte(`(wasm_app (list_get (list "alpha" "beta") 1))`), 0644); err != nil {
-		t.Fatalf("Failed to write input file: %v", err)
-	}
-	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to generate string-list WAT: %v: %s", err, output)
-	}
-	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
-	if err != nil {
-		t.Fatalf("Failed to read generated WAT: %v", err)
-	}
-	for _, fragment := range []string{
+	assertWasmBuildContains(t, buildHowlFrameBinaryForTest(t), "string_list_get.howl",
+		`(wasm_app (list_get (list "alpha" "beta") 1))`,
 		"(func (export \"main\") (result i32)", "(i32.load", "(i64.lt_u", "\\61\\6c\\70\\68\\61",
-	} {
-		if !strings.Contains(string(wat), fragment) {
-			t.Errorf("Generated string-list WAT is missing %q:\n%s", fragment, wat)
-		}
-	}
+	)
 }
 
 func TestWasmBackendReadsStaticDictionaryValues(t *testing.T) {
-	howlframeBinary := buildHowlFrameBinaryForTest(t)
-
-	outDir := t.TempDir()
-	inputFile := filepath.Join(outDir, "dict_get.howl")
-	if err := os.WriteFile(inputFile, []byte(`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`), 0644); err != nil {
-		t.Fatalf("Failed to write input file: %v", err)
-	}
-	cmd := exec.Command(howlframeBinary, "build", "--target=wasm", "-o", outDir, inputFile)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to generate dict WAT: %v: %s", err, output)
-	}
-	wat, err := os.ReadFile(filepath.Join(outDir, "app.wat"))
-	if err != nil {
-		t.Fatalf("Failed to read generated WAT: %v", err)
-	}
-	for _, fragment := range []string{
+	assertWasmBuildContains(t, buildHowlFrameBinaryForTest(t), "dict_get.howl",
+		`(wasm_app (map_get (dict ("a" "one") ("b" "two")) "b"))`,
 		"(func (export \"main\") (result i32)", "(i32.const 264)", "\\74\\77\\6f",
-	} {
-		if !strings.Contains(string(wat), fragment) {
-			t.Errorf("Generated dict WAT is missing %q:\n%s", fragment, wat)
-		}
-	}
+	)
 }
 
 func TestWasmBackendReadsStaticIntegerDictionaryValues(t *testing.T) {
@@ -983,10 +912,7 @@ func TestOptimizationSignatureIsTransparentAcrossExecutionPaths(t *testing.T) {
 // it is only ever valid when pulled in via tests/module_main.howl's (use
 // ...), which itself is a real cli_app root and passes the sweep unexempted.
 func TestHFIRGateAcceptsAllExistingFixtures(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	skip := map[string]bool{
 		"routes.howl":      true,
@@ -1023,10 +949,7 @@ func TestHFIRGateAcceptsAllExistingFixtures(t *testing.T) {
 // the comment on the skipped legacy-wasm_app case below), so this is the
 // first point in the pipeline that rejects them for the wasm target.
 func TestHFIRGateRejectsTargetInfeasibleWasmConstructBeforeArtifact(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "infeasible.howl")
@@ -1061,10 +984,7 @@ func TestHFIRGateRejectsTargetInfeasibleWasmConstructBeforeArtifact(t *testing.T
 // confirming the same ordering guarantee survives through
 // reportHFIRDiagnostics's JSON array output.
 func TestHFIRGateDiagnosticOrderingIsDeterministic(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "two_infeasible.howl")
@@ -1101,10 +1021,7 @@ func TestHFIRGateDiagnosticOrderingIsDeterministic(t *testing.T) {
 // side-effect free now that it also runs the HFIR gate: a valid fixture
 // succeeds and leaves no files behind anywhere in the working directory.
 func TestValidateModeRunsHFIRGateAndHasNoSideEffects(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	workDir := t.TempDir()
 	inputFile := filepath.Join(workDir, "valid.howl")
@@ -1144,10 +1061,7 @@ func TestValidateModeRunsHFIRGateAndHasNoSideEffects(t *testing.T) {
 // bytecode-specific target-feasibility rules are out of scope for this
 // phase (see improvements.md #87's Phase 2 status note).
 func TestHFIRGateForCompileBcDoesNotRegressValidPrograms(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "valid.howl")
@@ -1179,19 +1093,14 @@ func TestHFIRTargetBytecodeMatchesVerifierConstant(t *testing.T) {
 // exit code 0 and then ran producing no output at all - the match expression,
 // which should print zero/one/other, was dropped by compileNode's switch
 // because it had no default case.
-func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	outputFile := filepath.Join(t.TempDir(), "advanced.bc.bin")
-	cmd := exec.Command(howlframeBinary, "-compile-bc", "tests/test_advanced_control.howl", "-o", outputFile)
-	output, err := cmd.CombinedOutput()
+func assertCompileBcRejects(t *testing.T, binary, inputFile string, wants ...string) {
+	t.Helper()
+	outputFile := filepath.Join(t.TempDir(), filepath.Base(inputFile)+".bc.bin")
+	output, err := exec.Command(binary, "-compile-bc", inputFile, "-o", outputFile).CombinedOutput()
 	if err == nil {
-		t.Fatalf("expected -compile-bc to reject an unsupported construct, got success:\n%s", output)
+		t.Fatalf("expected -compile-bc to reject %s, got success:\n%s", inputFile, output)
 	}
-	for _, want := range []string{"HFIR_TARGET_INFEASIBLE", `\"match\"`} {
+	for _, want := range wants {
 		if !strings.Contains(string(output), want) {
 			t.Errorf("expected %s in output, got: %s", want, output)
 		}
@@ -1199,6 +1108,61 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
 		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
 	}
+}
+
+func assertCompileBcStaysASTWhileHfirBcRuns(t *testing.T, name, source, wantStdout, forbidSubstr string) {
+	t.Helper()
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
+	dir := t.TempDir()
+	srcPath := mustWriteFile(t, dir, name+".howl", source)
+
+	astOut := filepath.Join(dir, "ast.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", srcPath, "-o", astOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected %s: %v\n%s", name, err, output)
+	}
+	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of production %s artifact: %v\n%s", name, err, runOut)
+	}
+	if strings.TrimSpace(string(runOut)) != wantStdout {
+		t.Fatalf("production %s stdout = %q", name, runOut)
+	}
+	if forbidSubstr != "" && strings.Contains(string(runOut), forbidSubstr) {
+		t.Fatalf("production %s printed %q: %q", name, forbidSubstr, runOut)
+	}
+
+	hfirOut := filepath.Join(dir, "hfir.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", srcPath, "-o", hfirOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-hfir-bc rejected %s: %v\n%s", name, err, output)
+	}
+	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
+	if err != nil {
+		t.Fatalf("-run-bc of experimental %s artifact: %v\n%s", name, err, hfirRun)
+	}
+	if string(hfirRun) != string(runOut) {
+		t.Fatalf("experimental %s stdout = %q, production = %q", name, hfirRun, runOut)
+	}
+
+	lineSource := mustWriteFile(t, dir, "read_line.howl", "(cli_app (print (read_line)))\n")
+	lineOut := filepath.Join(dir, "read_line.bc.bin")
+	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
+		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
+	}
+	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
+	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
+	if err == nil {
+		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
+	}
+	if !strings.Contains(string(output), "read_line") {
+		t.Fatalf("experimental rejection = %s", output)
+	}
+	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
+		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
+	}
+}
+
+func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
+	assertCompileBcRejects(t, buildHowlFrameBinaryForTest(t), "tests/test_advanced_control.howl", "HFIR_TARGET_INFEASIBLE", `\"match\"`)
 }
 
 // TestCompileBcStaysASTWhileHfirBcRunsWhile locks the production flag.
@@ -1208,60 +1172,9 @@ func TestCompileBcFailsClosedOnUnsupportedConstruct(t *testing.T) {
 // artifact. This probe is not a read_line lowering. Phase 3b does not flip
 // -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	dir := t.TempDir()
-	source := filepath.Join(dir, "while.howl")
-	if err := os.WriteFile(source, []byte("(cli_app (let (n 0) (while (< n 1) (do (set n (+ n 1)) (print n)))))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	astOut := filepath.Join(dir, "ast.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", source, "-o", astOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected while: %v\n%s", err, output)
-	}
-	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of production while artifact: %v\n%s", err, runOut)
-	}
-	if strings.TrimSpace(string(runOut)) != "1" {
-		t.Fatalf("production while stdout = %q", runOut)
-	}
-
-	hfirOut := filepath.Join(dir, "hfir.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-hfir-bc rejected while: %v\n%s", err, output)
-	}
-	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of experimental while artifact: %v\n%s", err, hfirRun)
-	}
-	if string(hfirRun) != string(runOut) {
-		t.Fatalf("experimental while stdout = %q, production = %q", hfirRun, runOut)
-	}
-
-	lineSource := filepath.Join(dir, "read_line.howl")
-	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	lineOut := filepath.Join(dir, "read_line.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
-	}
-	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
-	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
-	}
-	if !strings.Contains(string(output), "read_line") {
-		t.Fatalf("experimental rejection = %s", output)
-	}
-	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
-		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
-	}
+	assertCompileBcStaysASTWhileHfirBcRuns(t, "while",
+		"(cli_app (let (n 0) (while (< n 1) (do (set n (+ n 1)) (print n)))))\n",
+		"1", "")
 }
 
 // TestCompileBcStaysASTWhileHfirBcRunsIf locks the production flag for the
@@ -1270,63 +1183,9 @@ func TestCompileBcStaysASTWhileHfirBcRunsWhile(t *testing.T) {
 // still outside the experimental lowerer. This probe is not a read_line
 // lowering. Phase 3c does not flip -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	dir := t.TempDir()
-	source := filepath.Join(dir, "if.howl")
-	if err := os.WriteFile(source, []byte("(cli_app (if false (print \"no\") (print \"else\")) (if true (print \"then\")))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	astOut := filepath.Join(dir, "ast.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", source, "-o", astOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected if: %v\n%s", err, output)
-	}
-	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of production if artifact: %v\n%s", err, runOut)
-	}
-	if strings.TrimSpace(string(runOut)) != "else\nthen" {
-		t.Fatalf("production if stdout = %q", runOut)
-	}
-	if strings.Contains(string(runOut), "no") {
-		t.Fatalf("production if printed the false branch: %q", runOut)
-	}
-
-	hfirOut := filepath.Join(dir, "hfir.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-hfir-bc rejected if: %v\n%s", err, output)
-	}
-	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of experimental if artifact: %v\n%s", err, hfirRun)
-	}
-	if string(hfirRun) != string(runOut) {
-		t.Fatalf("experimental if stdout = %q, production = %q", hfirRun, runOut)
-	}
-
-	lineSource := filepath.Join(dir, "read_line.howl")
-	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	lineOut := filepath.Join(dir, "read_line.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
-	}
-	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
-	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
-	}
-	if !strings.Contains(string(output), "read_line") {
-		t.Fatalf("experimental rejection = %s", output)
-	}
-	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
-		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
-	}
+	assertCompileBcStaysASTWhileHfirBcRuns(t, "if",
+		"(cli_app (if false (print \"no\") (print \"else\")) (if true (print \"then\")))\n",
+		"else\nthen", "no")
 }
 
 // TestCompileBcStaysASTWhileHfirBcRunsFor locks the production flag for the
@@ -1335,118 +1194,24 @@ func TestCompileBcStaysASTWhileHfirBcRunsIf(t *testing.T) {
 // still outside the experimental lowerer. This probe is not a read_line
 // lowering. Phase 3d does not flip -compile-bc.
 func TestCompileBcStaysASTWhileHfirBcRunsFor(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	dir := t.TempDir()
-	source := filepath.Join(dir, "for.howl")
-	if err := os.WriteFile(source, []byte("(cli_app (for item (list) (print \"no\")) (for item (list \"a\" \"b\") (print item)))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	astOut := filepath.Join(dir, "ast.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", source, "-o", astOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected for: %v\n%s", err, output)
-	}
-	runOut, err := exec.Command(howlframeBinary, "-run-bc", astOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of production for artifact: %v\n%s", err, runOut)
-	}
-	if strings.TrimSpace(string(runOut)) != "a\nb" {
-		t.Fatalf("production for stdout = %q", runOut)
-	}
-	if strings.Contains(string(runOut), "no") {
-		t.Fatalf("production for printed the empty iteration: %q", runOut)
-	}
-
-	hfirOut := filepath.Join(dir, "hfir.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", source, "-o", hfirOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-hfir-bc rejected for: %v\n%s", err, output)
-	}
-	hfirRun, err := exec.Command(howlframeBinary, "-run-bc", hfirOut).CombinedOutput()
-	if err != nil {
-		t.Fatalf("-run-bc of experimental for artifact: %v\n%s", err, hfirRun)
-	}
-	if string(hfirRun) != string(runOut) {
-		t.Fatalf("experimental for stdout = %q, production = %q", hfirRun, runOut)
-	}
-
-	lineSource := filepath.Join(dir, "read_line.howl")
-	if err := os.WriteFile(lineSource, []byte("(cli_app (print (read_line)))\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	lineOut := filepath.Join(dir, "read_line.bc.bin")
-	if output, err := exec.Command(howlframeBinary, "-compile-bc", lineSource, "-o", lineOut).CombinedOutput(); err != nil {
-		t.Fatalf("-compile-bc rejected read_line, so production is not the AST compiler: %v\n%s", err, output)
-	}
-	rejected := filepath.Join(dir, "read_line-hfir.bc.bin")
-	output, err := exec.Command(howlframeBinary, "-compile-hfir-bc", lineSource, "-o", rejected).CombinedOutput()
-	if err == nil {
-		t.Fatalf("-compile-hfir-bc accepted read_line:\n%s", output)
-	}
-	if !strings.Contains(string(output), "read_line") {
-		t.Fatalf("experimental rejection = %s", output)
-	}
-	if _, statErr := os.Stat(rejected); !os.IsNotExist(statErr) {
-		t.Fatalf("experimental rejection wrote an artifact: %v", statErr)
-	}
+	assertCompileBcStaysASTWhileHfirBcRuns(t, "for",
+		"(cli_app (for item (list) (print \"no\")) (for item (list \"a\" \"b\") (print item)))\n",
+		"a\nb", "no")
 }
 
 // TestCompileBcFailsClosedCitingOwningTracker proves the diagnostic points at
 // the backlog item that owns the gap, so the failure is actionable rather than
 // just a wall.
 func TestCompileBcFailsClosedCitingOwningTracker(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	outputFile := filepath.Join(t.TempDir(), "void.bc.bin")
-	cmd := exec.Command(howlframeBinary, "-compile-bc", "tests/test_void_defun.howl", "-o", outputFile)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected -compile-bc to reject a test block, got success:\n%s", output)
-	}
-	for _, want := range []string{"HFIR_TARGET_INFEASIBLE", `\"test\"`, "improvements.md #96"} {
-		if !strings.Contains(string(output), want) {
-			t.Errorf("expected %s in output, got: %s", want, output)
-		}
-	}
-	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
-		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
-	}
+	assertCompileBcRejects(t, buildHowlFrameBinaryForTest(t), "tests/test_void_defun.howl", "HFIR_TARGET_INFEASIBLE", `\"test\"`, "improvements.md #96")
 }
 
 // TestCompileBcFailsClosedOnUnknownHead covers the open-ended half of the bug:
 // a head nobody has ever implemented used to pass -validate AND -compile-bc,
 // and the resulting program ran to exit 0 while skipping it.
 func TestCompileBcFailsClosedOnUnknownHead(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
-
-	tempDir := t.TempDir()
-	inputFile := filepath.Join(tempDir, "bogus.howl")
-	outputFile := filepath.Join(tempDir, "bogus.bc.bin")
-	source := `(cli_app (do (print "before") (totally_made_up_head "x" 42) (print "after")))`
-	if err := os.WriteFile(inputFile, []byte(source), 0o644); err != nil {
-		t.Fatalf("failed to write input: %v", err)
-	}
-
-	cmd := exec.Command(howlframeBinary, "-compile-bc", inputFile, "-o", outputFile)
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected -compile-bc to reject an unknown head, got success:\n%s", output)
-	}
-	if !strings.Contains(string(output), "totally_made_up_head") {
-		t.Errorf("expected the offending head to be named, got: %s", output)
-	}
-	if _, statErr := os.Stat(outputFile); !os.IsNotExist(statErr) {
-		t.Fatalf("no artifact may be written after a fail-closed rejection: %v", statErr)
-	}
+	inputFile := mustWriteFile(t, t.TempDir(), "bogus.howl", `(cli_app (do (print "before") (totally_made_up_head "x" 42) (print "after")))`)
+	assertCompileBcRejects(t, buildHowlFrameBinaryForTest(t), inputFile, "totally_made_up_head")
 }
 
 // TestCompileBcAcceptsCompileTimeOnlyAnnotations proves the fix distinguishes
@@ -1454,10 +1219,7 @@ func TestCompileBcFailsClosedOnUnknownHead(t *testing.T) {
 // instructions because nobody implemented it". type_hint, type_hints and
 // type_param must still compile AND run unchanged.
 func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	tempDir := t.TempDir()
 	inputFile := filepath.Join(tempDir, "annotated.howl")
@@ -1508,10 +1270,7 @@ func TestCompileBcAcceptsCompileTimeOnlyAnnotations(t *testing.T) {
 // is a false positive; one that compiles despite a violation means the gate
 // was bypassed.
 func TestCompileBcCorpusPartitionMatchesRegistry(t *testing.T) {
-	howlframeBinary := filepath.Join(t.TempDir(), "howlframe")
-	if output, err := exec.Command("go", "build", "-o", howlframeBinary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("failed to build HowlFrame binary: %v\n%s", output, err)
-	}
+	howlframeBinary := buildHowlFrameBinaryForTest(t)
 
 	// routes.howl is an include-only fragment with no standalone root, so it
 	// fails earlier, in checker.Check, for reasons unrelated to construct

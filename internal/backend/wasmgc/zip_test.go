@@ -43,36 +43,34 @@ type zipFile struct {
 func rawZip(name string, method, flags uint16, crc, csize, usize uint32, data []byte) []byte {
 	var b bytes.Buffer
 	le := func(v any) { binary.Write(&b, binary.LittleEndian, v) }
-	le(uint32(0x04034b50))
-	le(uint16(20))
-	le(flags)
-	le(method)
-	le(uint32(0x00210000))
-	le(crc)
-	le(csize)
-	le(usize)
-	le(uint16(len(name)))
-	le(uint16(0))
-	b.WriteString(name)
+	writeRecord := func(cd bool) {
+		if cd {
+			le(uint32(0x02014b50))
+			le(uint16(20))
+		} else {
+			le(uint32(0x04034b50))
+		}
+		for _, u16 := range []uint16{20, flags, method} {
+			le(u16)
+		}
+		for _, u32 := range []uint32{0x00210000, crc, csize, usize} {
+			le(u32)
+		}
+		le(uint16(len(name)))
+		le(uint16(0))
+		if cd {
+			le(uint16(0))
+			le(uint16(0))
+			le(uint16(0))
+			le(uint32(0))
+			le(uint32(0))
+		}
+		b.WriteString(name)
+	}
+	writeRecord(false)
 	b.Write(data)
 	cd := b.Len()
-	le(uint32(0x02014b50))
-	le(uint16(20))
-	le(uint16(20))
-	le(flags)
-	le(method)
-	le(uint32(0x00210000))
-	le(crc)
-	le(csize)
-	le(usize)
-	le(uint16(len(name)))
-	le(uint16(0))
-	le(uint16(0))
-	le(uint16(0))
-	le(uint16(0))
-	le(uint32(0))
-	le(uint32(0))
-	b.WriteString(name)
+	writeRecord(true)
 	size := b.Len() - cd
 	le(uint32(0x06054b50))
 	le(uint16(0))

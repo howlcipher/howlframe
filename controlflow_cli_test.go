@@ -1,14 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/howlcipher/howlframe/internal/bytecode"
 )
 
 const controlflowProgram = `(do
@@ -62,52 +59,17 @@ func TestControlflowBuiltinsArePureOnEveryPath(t *testing.T) {
 	bin := c1c2Binary(t)
 	dir := t.TempDir()
 	src := writeTemp(t, dir, "p.howl", controlflowProgram)
-	art := filepath.Join(dir, "p.hfbc")
-	hart := filepath.Join(dir, "h.hfbc")
-	for _, profile := range []string{"default", "governed"} {
-		if out, err := exec.Command(bin, "check", "--profile", profile, src).CombinedOutput(); err != nil {
-			t.Fatalf("check %s: %v %s", profile, err, out)
-		}
-	}
-	if out, err := exec.Command(bin, "build", "--profile", "governed", src, "-o", art).CombinedOutput(); err != nil {
-		t.Fatalf("build: %v %s", err, out)
-	}
-	out, err := exec.Command(bin, "inspect", "--caps", art).CombinedOutput()
-	if err != nil {
-		t.Fatalf("inspect: %v %s", err, out)
-	}
-	var report bytecode.Report
-	if err := json.Unmarshal(out, &report); err != nil {
-		t.Fatalf("%v: %s", err, out)
-	}
-	if len(report.Capabilities) != 0 {
-		t.Fatalf("pure control-flow built-ins required capabilities %v", report.Capabilities)
-	}
-	if out, err := exec.Command(bin, "-compile-hfir-bc", src, "-o", hart).CombinedOutput(); err != nil {
-		t.Fatalf("hfir compile: %v %s", err, out)
-	}
-	runs := map[string][]string{
+	assertPureProgramBuiltinsAndOutputs(t, bin, src, map[string][]string{
 		"interpreter":       {"-run", src},
-		"bytecode_governed": {"-run-bc", art},
-		"hfir_bytecode":     {"-run-bc", hart},
-	}
-	for name, args := range runs {
-		t.Run(name, func(t *testing.T) {
-			got, err := exec.Command(bin, args...).CombinedOutput()
-			if err != nil {
-				t.Fatalf("run: %v %s", err, got)
-			}
-			if string(got) != controlflowWant {
-				t.Fatalf("got %q want %q", got, controlflowWant)
-			}
-		})
-	}
+		"bytecode_governed": {"-run-bc", filepath.Join(dir, "p.hfbc")},
+		"hfir_bytecode":     {"-run-bc", filepath.Join(dir, "h.hfbc")},
+	}, controlflowWant)
 }
 
 // Runtime value errors fail closed with the same stderr shape on every path.
 func TestControlflowValueErrorsOnEveryPath(t *testing.T) {
 	bin := c1c2Binary(t)
-	cases := map[string]string{
+	assertValueErrorsOnAllPaths(t, bin, map[string]string{
 		`(do (print (max_by x (list) x)))`: "VALUE_ERROR: max_by of empty list",
 		`(do (print (min_by x (list) x)))`: "VALUE_ERROR: min_by of empty list",
 		`(do (print (to_base 5 1)))`:       "VALUE_ERROR: to_base base must be 2..36",
@@ -118,25 +80,7 @@ func TestControlflowValueErrorsOnEveryPath(t *testing.T) {
 		// fix that stopped (* 3 -2) from reporting one.
 		`(do (print (* 9223372036854775807 2)))`:  "integer overflow",
 		`(do (print (* -9223372036854775807 3)))`: "integer overflow",
-	}
-	for src, want := range cases {
-		dir := t.TempDir()
-		p := writeTemp(t, dir, "e.howl", src)
-		art := filepath.Join(dir, "e.hfbc")
-		hart := filepath.Join(dir, "h.hfbc")
-		if out, err := exec.Command(bin, "build", "--profile", "governed", p, "-o", art).CombinedOutput(); err != nil {
-			t.Fatalf("%s build: %v %s", src, err, out)
-		}
-		if out, err := exec.Command(bin, "-compile-hfir-bc", p, "-o", hart).CombinedOutput(); err != nil {
-			t.Fatalf("%s hfir: %v %s", src, err, out)
-		}
-		for _, args := range [][]string{{"-run", p}, {"-run-bc", art}, {"-run-bc", hart}} {
-			out, err := exec.Command(bin, args...).CombinedOutput()
-			if err == nil || !strings.Contains(string(out), want) {
-				t.Errorf("%s %v: err=%v out=%q want %q", src, args[0], err, out, want)
-			}
-		}
-	}
+	})
 }
 
 // A break outside a loop, or in a value position, is a compile error on every
@@ -170,20 +114,7 @@ func TestControlflowRejectedOnGoJS(t *testing.T) {
 		`(print (rtrim "a "))`, `(print (ltrim " a"))`, `(print (to_base 5 2))`,
 		`(for x (list 1) (break))`, `(print (if false 1 false 2 3))`, `(let ((a b) (list 1 2)) (print a))`,
 	}
-	for _, f := range forms {
-		for _, target := range []string{"go", "js"} {
-			dir := t.TempDir()
-			p := writeTemp(t, dir, "g.howl", "(do "+f+")")
-			o := filepath.Join(dir, "out")
-			out, err := exec.Command(bin, "build", "--target", target, p, "-o", o).CombinedOutput()
-			if err == nil || !strings.Contains(string(out), "UNSUPPORTED_ON_TARGET") || strings.Contains(string(out), "Built") {
-				t.Errorf("%s on %s: err=%v out=%s", f, target, err, out)
-			}
-			if _, statErr := os.Stat(o); statErr == nil {
-				t.Errorf("%s on %s wrote output", f, target)
-			}
-		}
-	}
+	assertRejectedOnGoAndJS(t, bin, forms)
 	dir := t.TempDir()
 	p := writeTemp(t, dir, "n.howl", `(do (print (+ 3 -2) (- 5 -2)))`)
 	for _, target := range []string{"go", "js"} {
@@ -198,7 +129,7 @@ func TestControlflowRejectedOnGoJS(t *testing.T) {
 // governed scan no longer mistakes cond's else clause for a construct.
 func TestControlflowGovernedFailsClosed(t *testing.T) {
 	bin := c1c2Binary(t)
-	for _, src := range []string{
+	assertGovernedRejectsForbiddenSources(t, bin, []string{
 		`(do (print (% (exec "ls") 2)))`,
 		`(do (print (sort_by x (list 1) (exec "ls"))))`,
 		`(do (print (cond ((= 1 1) (exec "ls")) (else 1))))`,
@@ -206,12 +137,5 @@ func TestControlflowGovernedFailsClosed(t *testing.T) {
 		`(do (for x (range 2) (do (exec "ls") (break))))`,
 		`(do (let ((a b) (list (exec "ls") 1)) (print a)))`,
 		`(do (print (if false 1 false (exec "ls") 3)))`,
-	} {
-		dir := t.TempDir()
-		p := writeTemp(t, dir, "g.howl", src)
-		out, err := exec.Command(bin, "build", "--profile", "governed", p, "-o", filepath.Join(dir, "g.hfbc")).CombinedOutput()
-		if err == nil || !strings.Contains(string(out), "PROFILE_FORBIDDEN_CONSTRUCT") {
-			t.Errorf("%s: err=%v out=%s", src, err, out)
-		}
-	}
+	})
 }

@@ -49,21 +49,9 @@ func TestEmptyMinMaxIsValueError(t *testing.T) {
 		t.Run(op, func(t *testing.T) {
 			dir := t.TempDir()
 			src := filepath.Join(dir, "e.howl")
-			art := filepath.Join(dir, "e.hfbc")
-			hart := filepath.Join(dir, "h.hfbc")
 			os.WriteFile(src, []byte(`(do (print (`+op+` (list 2 7 5))) (print (`+op+` (list))) (print "after"))`), 0600)
-			if out, err := exec.Command(bin, "build", "--profile", "governed", src, "-o", art).CombinedOutput(); err != nil {
-				t.Fatalf("build: %v %s", err, out)
-			}
-			if out, err := exec.Command(bin, "-compile-hfir-bc", src, "-o", hart).CombinedOutput(); err != nil {
-				t.Fatalf("hfir: %v %s", err, out)
-			}
 			want := map[string]string{"min": "2\n", "max": "7\n"}[op]
-			for name, args := range map[string][]string{
-				"interpreter":       {"-run", src},
-				"bytecode_governed": {"-run-bc", art},
-				"hfir_bytecode":     {"-run-bc", hart},
-			} {
+			for name, args := range recordsPaths(t, bin, src, dir) {
 				var stdout, stderr bytes.Buffer
 				cmd := exec.Command(bin, args...)
 				cmd.Stdout, cmd.Stderr = &stdout, &stderr

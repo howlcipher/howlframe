@@ -215,19 +215,10 @@ func TestIssue149ErrorsOnEveryPath(t *testing.T) {
 // Go and JS still reject the boundary forms with UNSUPPORTED_ON_TARGET.
 func TestIssue149RejectedOnGoJS(t *testing.T) {
 	bin := c1c2Binary(t)
-	for _, f := range []string{
+	assertRejectedOnGoAndJS(t, bin, []string{
 		`(print (% 9223372036854775807 10))`, `(print (// -9223372036854775808 -1))`,
 		`(print (to_base -9223372036854775808 16))`, `(let ((a b) (list 1 2 3)) (print a))`,
-	} {
-		for _, target := range []string{"go", "js"} {
-			dir := t.TempDir()
-			p := writeTemp(t, dir, "g.howl", "(do "+f+")")
-			out, err := exec.Command(bin, "build", "--target", target, p, "-o", filepath.Join(dir, "out")).CombinedOutput()
-			if err == nil || !strings.Contains(string(out), "UNSUPPORTED_ON_TARGET") {
-				t.Errorf("%s on %s: err=%v out=%s", f, target, err, out)
-			}
-		}
-	}
+	})
 }
 
 // to_base over the full int64 range, including MinInt64 (which the old

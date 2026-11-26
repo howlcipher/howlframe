@@ -57,9 +57,8 @@ func (s *Scope) ReadFile() ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-// WriteFile creates or truncates the target, like os.WriteFile.
-func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
-	f, err := s.openTarget(os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+func (s *Scope) writeTargetFile(flags int, data []byte, perm os.FileMode) error {
+	f, err := s.openTarget(flags, perm)
 	if err != nil {
 		return s.classify(err)
 	}
@@ -70,19 +69,16 @@ func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
 	return f.Close()
 }
 
+// WriteFile creates or truncates the target, like os.WriteFile.
+func (s *Scope) WriteFile(data []byte, perm os.FileMode) error {
+	return s.writeTargetFile(os.O_WRONLY|os.O_CREATE|os.O_TRUNC, data, perm)
+}
+
 // AppendFile appends data to the target, creating it with perm if needed.
 // One Write call on an O_APPEND descriptor, so concurrent appenders never
 // interleave within a line.
 func (s *Scope) AppendFile(data []byte, perm os.FileMode) error {
-	f, err := s.openTarget(os.O_WRONLY|os.O_CREATE|os.O_APPEND, perm)
-	if err != nil {
-		return s.classify(err)
-	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
+	return s.writeTargetFile(os.O_WRONLY|os.O_CREATE|os.O_APPEND, data, perm)
 }
 
 // ReadFrom reads at most max bytes of the target starting at offset. It

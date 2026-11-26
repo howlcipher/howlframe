@@ -51,16 +51,9 @@ func TestFilesystemScopesVMAndInterpreter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			node := parser.NewParser(lexer.NewLexer("(cli_app "+tc.body+")"), "scope.howl").ParseExpression()
+			ev := runVMTestCase(t, bytecode.CompileToBytecode(node), tc.grants)
+			assertDeniedOrOK(t, ev, tc.denied)
 			var out, stderr bytes.Buffer
-			ev := RunBytecodeWithEvidence(bytecode.CompileToBytecode(node), nil, DefaultExecutionPolicy(), tc.grants, strings.NewReader(""), &out, &stderr, 0)
-			if tc.denied {
-				if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" {
-					t.Fatalf("expected denial: %+v", ev.RuntimeFailure)
-				}
-			} else if ev.RuntimeFailure != nil {
-				t.Fatalf("unexpected failure: %+v", ev.RuntimeFailure)
-			}
-			stderr.Reset()
 			code := Interpret(node, nil, tc.grants, strings.NewReader(""), &out, &stderr)
 			if (code != 0) != tc.denied || tc.denied && !strings.Contains(stderr.String(), "capability denied: filesystem") {
 				t.Fatalf("interpreter code %d: %s", code, &stderr)
@@ -78,11 +71,28 @@ func TestFilesystemScopesVMAndInterpreter(t *testing.T) {
 	}
 }
 
+func assertDeniedOrOK(t *testing.T, ev bytecode.ExecutionEvidence, wantDenied bool) {
+	t.Helper()
+	if wantDenied {
+		if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" {
+			t.Fatalf("expected denial: %+v", ev.RuntimeFailure)
+		}
+	} else if ev.RuntimeFailure != nil {
+		t.Fatalf("unexpected failure: %+v", ev.RuntimeFailure)
+	}
+}
+
+func newScopedFSGrants(t *testing.T) (root, outside string, read, write capability.Capability) {
+	t.Helper()
+	root = t.TempDir()
+	outside = t.TempDir()
+	read, _ = capability.ParseGrant("filesystem:read=" + root)
+	write, _ = capability.ParseGrant("filesystem:write=" + root)
+	return
+}
+
 func TestFileStoreFilesystemScopes(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
-	read, _ := capability.ParseGrant("filesystem:read=" + root)
-	write, _ := capability.ParseGrant("filesystem:write=" + root)
+	root, outside, read, write := newScopedFSGrants(t)
 	otherWrite, _ := capability.ParseGrant("filesystem:write=" + outside)
 	otherRead, _ := capability.ParseGrant("filesystem:read=" + outside)
 	for _, tc := range []struct {
@@ -106,28 +116,20 @@ func TestFileStoreFilesystemScopes(t *testing.T) {
 			source := fmt.Sprintf("(cli_app (store_open db %q) %s)", "file://"+path, tc.action)
 			node := parser.NewParser(lexer.NewLexer(source), "store-scope.howl").ParseExpression()
 			caps := append([]capability.Capability{capability.Database}, tc.grants...)
-			var out, stderr bytes.Buffer
-			ev := RunBytecodeWithEvidence(bytecode.CompileToBytecode(node), nil, DefaultExecutionPolicy(), caps, nil, &out, &stderr, 0)
+			ev := runVMTestCase(t, bytecode.CompileToBytecode(node), caps)
+			assertDeniedOrOK(t, ev, tc.denied)
 			if tc.denied {
-				if ev.RuntimeFailure == nil || ev.RuntimeFailure.Code != "CAPABILITY_DENIED" {
-					t.Fatalf("expected denial: %+v", ev.RuntimeFailure)
-				}
 				after, _ := os.ReadFile(path)
 				if !bytes.Equal(before, after) {
 					t.Fatal("denial changed store")
 				}
-			} else if ev.RuntimeFailure != nil {
-				t.Fatalf("unexpected failure: %+v", ev.RuntimeFailure)
 			}
 		})
 	}
 }
 
 func TestFilesystemScopeReceiptDecision(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
-	read, _ := capability.ParseGrant("filesystem:read=" + root)
-	write, _ := capability.ParseGrant("filesystem:write=" + root)
+	root, outside, read, write := newScopedFSGrants(t)
 	for _, tc := range []struct {
 		source, op string
 		denied     bool

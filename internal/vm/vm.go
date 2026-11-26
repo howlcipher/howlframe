@@ -164,6 +164,143 @@ func escapeHTMLText(val any, opName string, node *ast.Node) string {
 // plane key (for example U+1F600) sorts after U+F000 here, and before it
 // under JavaScript's default Array sort. Go randomizes map iteration. An
 // empty dict must stay an empty list so JSON callers see [] rather than null.
+func decodeOllamaResponse(body io.ReadCloser) (string, error) {
+	defer body.Close()
+	var res struct {
+		Response string `json:"response"`
+	}
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
+		return "", err
+	}
+	return res.Response, nil
+}
+
+func newOllamaJSONRequest(ctx context.Context, method, path string, payload any) (*http.Request, error) {
+	body, _ := json.Marshal(payload)
+	url := "http://localhost:11434" + path
+	var (
+		req *http.Request
+		err error
+	)
+	if ctx != nil {
+		req, err = http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	} else {
+		req, err = http.NewRequest(method, url, bytes.NewReader(body))
+	}
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
+func postOllamaGenerate(ctx context.Context, client *http.Client, reqPayload map[string]any) (string, error, bool) {
+	req, err := newOllamaJSONRequest(ctx, "POST", "/api/generate", reqPayload)
+	if err != nil {
+		return "", err, false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err, false
+	}
+	text, derr := decodeOllamaResponse(resp.Body)
+	if derr != nil {
+		return "", derr, true
+	}
+	return text, nil, false
+}
+
+func interpOllamaGenerate(reqPayload map[string]any, opName string, node *ast.Node) string {
+	text, err, isDecode := postOllamaGenerate(nil, http.DefaultClient, reqPayload)
+	if err != nil {
+		kind := "network request failed"
+		if isDecode {
+			kind = "response decode failed"
+		}
+		InterpErr(fmt.Sprintf("%s: %s: %v", opName, kind, err), node)
+	}
+	return text
+}
+
+func (vm *BCVM) bcOllamaGenerate(reqPayload map[string]any, errCode, opLabel string, ip int, op bytecode.Opcode, chargeResult bool) string {
+	reqBody, _ := json.Marshal(reqPayload)
+	resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, op)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError(errCode, "main", ip, op, "%s request failed: %v", opLabel, err))
+	}
+	text, err := decodeOllamaResponse(resp.Body)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError(errCode, "main", ip, op, "%s response decode failed: %v", opLabel, err))
+	}
+	if chargeResult {
+		vm.chargeAlloc(len(text), ip, op)
+	}
+	return text
+}
+
+func (vm *BCVM) bcHTTPFetch(label, createPrefix string, ip int, op bytecode.Opcode, hasBody bool) (int, []byte) {
+	var bodyReader io.Reader
+	if hasBody {
+		bodyReader = strings.NewReader(vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string body"))
+	}
+	method := vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string method")
+	urlStr := vm.popCheckedString(bytecode.BCInstruction{Op: op}, ip, label+" expected string url")
+	max := vm.Limits.MaxFetchBodyBytes
+	if max <= 0 {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "%s body exceeds maximum limit of %d bytes", label, max))
+	}
+	client := vm.requireFetch(urlStr, op)
+	req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s creation failed: %v", createPrefix, err))
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		vm.denyFetchHop(err, op)
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s failed: %v", label, err))
+	}
+	defer resp.Body.Close()
+	readLimit := int64(max)
+	if readLimit < math.MaxInt64 {
+		readLimit++
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
+	vm.checkDeadline(ip, op)
+	if len(b) > max {
+		panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, op, "%s body exceeds maximum limit of %d bytes", label, max))
+	}
+	if err != nil {
+		vm.checkDeadline(ip, op)
+		panic(NewRuntimeError("IO_ERROR", "main", ip, op, "%s body read failed: %v", label, err))
+	}
+	vm.chargeBytes(len(b), ip, op)
+	return resp.StatusCode, b
+}
+
+func deleteOllamaEphemeralModel(ctx context.Context, modelName string) {
+	req, err := newOllamaJSONRequest(ctx, "DELETE", "/api/delete", map[string]any{"name": modelName})
+	if err != nil {
+		return
+	}
+	resp, _ := (&http.Client{}).Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
+
+func stripSynthesizedDefun(name string, params []string, raw string) string {
+	code := strings.TrimSpace(raw)
+	code = strings.TrimPrefix(code, "```lisp")
+	code = strings.TrimPrefix(code, "```")
+	code = strings.TrimSuffix(code, "```")
+	code = strings.TrimSpace(code)
+	return fmt.Sprintf("(defun %s (%s) %s)", name, strings.Join(params, " "), code)
+}
+
 func sortedMapKeys(dict map[string]any) []any {
 	keys := make([]string, 0, len(dict))
 	for key := range dict {
@@ -457,9 +594,9 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		panic(returnSignal{value: interp.eval(node.Children[1], env)})
 	case "call":
 		return interp.evalCall(node, env)
-	case "neural_circuit":
+	case "neural_circuit", "ephemeral_circuit":
 		if len(node.Children) < 3 {
-			InterpErr("neural_circuit expects (neural_circuit (args...) \"instruction\")", node)
+			InterpErr(head+" expects ("+head+" (args...) \"instruction\")", node)
 		}
 		argsNode := node.Children[1]
 		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
@@ -467,48 +604,24 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		for _, arg := range argsNode.Children {
 			argVals = append(argVals, interp.eval(arg, env))
 		}
-
-		prompt := fmt.Sprintf("Instruction: %s", instructionStr)
-		if len(argVals) > 0 {
-			prompt += fmt.Sprintf("\nInputs: %v", argVals)
-		}
-
-		reqBody, _ := json.Marshal(map[string]any{
-			"model":  "llama3",
-			"prompt": prompt,
-			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("neural_circuit: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("neural_circuit: response decode failed: %v", err), node)
-		}
-		return res.Response
-	case "ephemeral_circuit":
-		if len(node.Children) < 3 {
-			InterpErr("ephemeral_circuit expects (ephemeral_circuit (args...) \"instruction\")", node)
-		}
-		argsNode := node.Children[1]
-		instructionStr := fmt.Sprint(interp.eval(node.Children[2], env))
-		var argVals []any
-		for _, arg := range argsNode.Children {
-			argVals = append(argVals, interp.eval(arg, env))
+		if head == "neural_circuit" {
+			prompt := fmt.Sprintf("Instruction: %s", instructionStr)
+			if len(argVals) > 0 {
+				prompt += fmt.Sprintf("\nInputs: %v", argVals)
+			}
+			return interpOllamaGenerate(map[string]any{
+				"model":  "llama3",
+				"prompt": prompt,
+				"stream": false,
+			}, "neural_circuit", node)
 		}
 
 		prompt := ""
 		if len(argVals) > 0 {
 			prompt = fmt.Sprintf("Inputs: %v", argVals)
 		}
-
 		modelName := fmt.Sprintf("ephemeral-%d", time.Now().UnixNano())
 		modelfile := fmt.Sprintf("FROM llama3\nSYSTEM You are a highly specialized reasoning circuit. Your task is: %s", instructionStr)
-
 		createReq, _ := json.Marshal(map[string]any{
 			"name":      modelName,
 			"modelfile": modelfile,
@@ -520,81 +633,37 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		}
 		createResp.Body.Close()
 
-		defer func() {
-			delReq, _ := json.Marshal(map[string]any{"name": modelName})
-			req, _ := http.NewRequest("DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{}
-			resp, _ := client.Do(req)
-			if resp != nil {
-				resp.Body.Close()
-			}
-		}()
+		defer deleteOllamaEphemeralModel(nil, modelName)
 
-		reqBody, _ := json.Marshal(map[string]any{
+		return interpOllamaGenerate(map[string]any{
 			"model":  modelName,
 			"prompt": prompt,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("ephemeral_circuit: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("ephemeral_circuit: response decode failed: %v", err), node)
-		}
-		return res.Response
+		}, "ephemeral_circuit", node)
 	case "achieve":
 		if len(node.Children) != 3 {
 			InterpErr("achieve expects (achieve target constraint)", node)
 		}
 		targetStr := ast.Stringify(node.Children[1])
 		constraintStr := ast.Stringify(node.Children[2])
-		reqBody, _ := json.Marshal(map[string]any{
+		return interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("achieve: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("achieve: response decode failed: %v", err), node)
-		}
-		return res.Response
+		}, "achieve", node)
 	case "confidence":
 		if len(node.Children) != 2 {
 			InterpErr("confidence expects (confidence prompt)", node)
 		}
 		promptStr := fmt.Sprintf("%v", interp.eval(node.Children[1], env))
-		reqBody, _ := json.Marshal(map[string]any{
+		respText := interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("confidence: network request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			InterpErr(fmt.Sprintf("confidence: response decode failed: %v", err), node)
-		}
-		val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+		}, "confidence", node)
+		val, _ := strconv.ParseFloat(strings.TrimSpace(respText), 64)
 		if math.IsNaN(val) || math.IsInf(val, 0) {
-			InterpErr(fmt.Sprintf("CONVERSION_ERROR: confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)), node)
+			InterpErr(fmt.Sprintf("CONVERSION_ERROR: confidence response %.64q is not a finite number", strings.TrimSpace(respText)), node)
 		}
 		return val
 	case "list":
@@ -940,14 +1009,14 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 			}
 			return nil
 		}
-	case "fetch":
-		if len(node.Children) == 5 {
+	case "fetch", "http_request":
+		if head == "fetch" && len(node.Children) == 5 {
 			InterpErr("UNSUPPORTED_ON_TARGET: fetch headers are supported only by the JavaScript target", node)
 		}
 		// requireCapability already ran for network. The request is sent only
 		// after that grant, so a denial cannot open a connection.
 		if len(node.Children) != 3 && len(node.Children) != 4 {
-			InterpErr("fetch expects (fetch url method [body])", node)
+			InterpErr(fmt.Sprintf("%s expects (%s url method [body])", head, head), node)
 		}
 		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
 		method := fmt.Sprint(interp.eval(node.Children[2], env))
@@ -958,52 +1027,31 @@ func (interp *Interpreter) evalList(node *ast.Node, env *InterpEnv) any {
 		client := interp.requireFetch(urlStr, node)
 		req, err := http.NewRequest(method, urlStr, body)
 		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch request creation failed: %v", err), node)
+			prefix := head
+			if head == "fetch" {
+				prefix = "fetch request"
+			}
+			InterpErr(fmt.Sprintf("IO_ERROR: %s creation failed: %v", prefix, err), node)
 		}
 		resp, err := client.Do(req)
 		if err != nil {
 			if d, ok := capability.AsFetchDenied(err); ok {
 				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
 			}
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch failed: %v", err), node)
+			InterpErr(fmt.Sprintf("IO_ERROR: %s failed: %v", head, err), node)
 		}
 		defer resp.Body.Close()
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: fetch body read failed: %v", err), node)
+			InterpErr(fmt.Sprintf("IO_ERROR: %s body read failed: %v", head, err), node)
+		}
+		if head == "http_request" {
+			return map[string]any{
+				"status": resp.StatusCode,
+				"body":   b,
+			}
 		}
 		return b
-	case "http_request":
-		if len(node.Children) != 3 && len(node.Children) != 4 {
-			InterpErr("http_request expects (http_request url method [body])", node)
-		}
-		urlStr := fmt.Sprint(interp.eval(node.Children[1], env))
-		method := fmt.Sprint(interp.eval(node.Children[2], env))
-		var body io.Reader
-		if len(node.Children) == 4 {
-			body = strings.NewReader(fmt.Sprint(interp.eval(node.Children[3], env)))
-		}
-		client := interp.requireFetch(urlStr, node)
-		req, err := http.NewRequest(method, urlStr, body)
-		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request creation failed: %v", err), node)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			if d, ok := capability.AsFetchDenied(err); ok {
-				InterpErr(fmt.Sprintf("CAPABILITY_DENIED: capability denied: %s (requires %s)", d.Reason, d.Required), node)
-			}
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request failed: %v", err), node)
-		}
-		defer resp.Body.Close()
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			InterpErr(fmt.Sprintf("IO_ERROR: http_request body read failed: %v", err), node)
-		}
-		return map[string]any{
-			"status": resp.StatusCode,
-			"body":   b,
-		}
 	}
 
 	InterpErr(fmt.Sprintf("%q is not supported under -run in Phase 1 (see docs/direct_execution_design.md)", head), node.Children[0])
@@ -1096,30 +1144,12 @@ func (interp *Interpreter) evalCall(node *ast.Node, env *InterpEnv) any {
 		// the request is built so a denied run never reaches the model host.
 		interp.requireCapability(capability.Network, node)
 		promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.name, fn.params, fn.docstring)
-		reqBody, _ := json.Marshal(map[string]any{
+		raw := interpOllamaGenerate(map[string]any{
 			"model":  "llama3",
 			"prompt": promptStr,
 			"stream": false,
-		})
-		resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewReader(reqBody))
-		if err != nil {
-			InterpErr(fmt.Sprintf("lazy_synthesize: network request failed: %v", err), node)
-		}
-		var res struct {
-			Response string `json:"response"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			resp.Body.Close()
-			InterpErr(fmt.Sprintf("lazy_synthesize: response decode failed: %v", err), node)
-		}
-		resp.Body.Close()
-		code := strings.TrimSpace(res.Response)
-
-		code = strings.TrimPrefix(code, "```lisp")
-		code = strings.TrimPrefix(code, "```")
-		code = strings.TrimSuffix(code, "```")
-		code = strings.TrimSpace(code)
-		progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.name, strings.Join(fn.params, " "), code)
+		}, "lazy_synthesize", node)
+		progCode := stripSynthesizedDefun(fn.name, fn.params, raw)
 		lx := lexer.NewLexer(progCode)
 		p := parser.NewParser(lx, "lazy_synthesize")
 		astNode := p.ParseExpression()
@@ -2767,80 +2797,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.persistStore(store, records, inst.Op)
 			})
 		case bytecode.OpFetch:
-			method := vm.popCheckedString(inst, ip, "fetch expected string method")
-			urlStr := vm.popCheckedString(inst, ip, "fetch expected string url")
-			max := vm.Limits.MaxFetchBodyBytes
-			if max <= 0 {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
-			}
-			client := vm.requireFetch(urlStr, inst.Op)
-			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, nil)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch request creation failed: %v", err))
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				vm.denyFetchHop(err, inst.Op)
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch failed: %v", err))
-			}
-			defer resp.Body.Close()
-			readLimit := int64(max)
-			if readLimit < math.MaxInt64 {
-				readLimit++
-			}
-			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
-			vm.checkDeadline(ip, inst.Op)
-			if len(b) > max {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "fetch body exceeds maximum limit of %d bytes", max))
-			}
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "fetch body read failed: %v", err))
-			}
-			vm.chargeBytes(len(b), ip, inst.Op)
+			_, b := vm.bcHTTPFetch("fetch", "fetch request", ip, inst.Op, false)
 			vm.push(b)
 		case bytecode.OpHttpRequest:
-			var bodyReader io.Reader
-			if inst.IntOperand == 1 {
-				bodyReader = strings.NewReader(vm.popCheckedString(inst, ip, "http_request expected string body"))
-			}
-			method := vm.popCheckedString(inst, ip, "http_request expected string method")
-			urlStr := vm.popCheckedString(inst, ip, "http_request expected string url")
-			max := vm.Limits.MaxFetchBodyBytes
-			if max <= 0 {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
-			}
-			client := vm.requireFetch(urlStr, inst.Op)
-			req, err := http.NewRequestWithContext(vm.ctx, method, urlStr, bodyReader)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request creation failed: %v", err))
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				vm.denyFetchHop(err, inst.Op)
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			readLimit := int64(max)
-			if readLimit < math.MaxInt64 {
-				readLimit++
-			}
-			b, err := io.ReadAll(io.LimitReader(resp.Body, readLimit))
-			vm.checkDeadline(ip, inst.Op)
-			if len(b) > max {
-				panic(NewRuntimeError("LIMIT_EXCEEDED", "main", ip, inst.Op, "http_request body exceeds maximum limit of %d bytes", max))
-			}
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "http_request body read failed: %v", err))
-			}
-			vm.chargeBytes(len(b), ip, inst.Op)
+			status, b := vm.bcHTTPFetch("http_request", "http_request", ip, inst.Op, inst.IntOperand == 1)
 			vm.push(map[string]any{
-				"status": resp.StatusCode,
+				"status": status,
 				"body":   b,
 			})
 		case bytecode.OpReadFile:
@@ -3278,26 +3240,11 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				prompt += fmt.Sprintf("\nInputs: %v", inputs)
 			}
 
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": prompt,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "neural_circuit response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "neural_circuit", ip, inst.Op, true))
 
 		case bytecode.OpEphemeralCircuit:
 			numInputs := int(inst.IntOperand)
@@ -3328,90 +3275,38 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			}
 			createResp.Body.Close()
 
-			func() {
-				delReq, _ := json.Marshal(map[string]any{"name": modelName})
-				req, _ := http.NewRequestWithContext(vm.ctx, "DELETE", "http://localhost:11434/api/delete", bytes.NewReader(delReq))
-				req.Header.Set("Content-Type", "application/json")
-				client := &http.Client{}
-				resp, _ := client.Do(req)
-				if resp != nil {
-					resp.Body.Close()
-				}
-			}()
+			deleteOllamaEphemeralModel(vm.ctx, modelName)
 
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  modelName,
 				"prompt": prompt,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit request failed: %v", err))
-			}
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "ephemeral_circuit response decode failed: %v", err))
-			}
-			resp.Body.Close()
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "ephemeral_circuit", ip, inst.Op, true))
 
 		case bytecode.OpAchieve:
 			constraintAny := vm.pop(inst.Op)
 			targetAny := vm.pop(inst.Op)
 			constraintStr := fmt.Sprintf("%v", constraintAny)
 			targetStr := fmt.Sprintf("%v", targetAny)
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": "Achieve the following target: " + targetStr + " with constraint: " + constraintStr + ". Return ONLY the result, no explanations.",
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "achieve response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "achieve", ip, inst.Op, true))
 
 		case bytecode.OpConfidence:
 			promptStrAny := vm.pop(inst.Op)
 			promptStr := fmt.Sprintf("%v", promptStrAny)
-			reqBody, _ := json.Marshal(map[string]any{
+			respText := vm.bcOllamaGenerate(map[string]any{
 				"model":  "llama3",
 				"prompt": "Evaluate the probability of this statement being true. Return ONLY a float between 0.0 and 1.0. Statement: " + promptStr,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "confidence response decode failed: %v", err))
-			}
-			val, _ := strconv.ParseFloat(strings.TrimSpace(res.Response), 64)
+			}, "IO_ERROR", "confidence", ip, inst.Op, false)
+			val, _ := strconv.ParseFloat(strings.TrimSpace(respText), 64)
 			// A model can answer "NaN", "Inf" or "1e400". NUMERIC_CONTRACT
 			// section 2.3 keeps those out of policy decisions, as to_float does.
 			if math.IsNaN(val) || math.IsInf(val, 0) {
-				panic(NewRuntimeError("CONVERSION_ERROR", "main", ip, inst.Op, "confidence response %.64q is not a finite number", strings.TrimSpace(res.Response)))
+				panic(NewRuntimeError("CONVERSION_ERROR", "main", ip, inst.Op, "confidence response %.64q is not a finite number", strings.TrimSpace(respText)))
 			}
 			vm.push(val)
 
@@ -3420,28 +3315,13 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 			promptVal := vm.pop(inst.Op)
 			promptStr, ok := promptVal.(string)
 			if !ok {
-				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "llm_generate expected string prompt, got %T", promptVal))
+				panic(NewRuntimeError("TYPE_ERROR", "main", ip, inst.Op, "llm_generate expected string prompt, got %s", vmTypeName(promptVal)))
 			}
-			reqBody, _ := json.Marshal(map[string]any{
+			vm.push(vm.bcOllamaGenerate(map[string]any{
 				"model":  modelStr,
 				"prompt": promptStr,
 				"stream": false,
-			})
-			resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-			if err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate request failed: %v", err))
-			}
-			defer resp.Body.Close()
-			var res struct {
-				Response string `json:"response"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-				vm.checkDeadline(ip, inst.Op)
-				panic(NewRuntimeError("IO_ERROR", "main", ip, inst.Op, "llm_generate response decode failed: %v", err))
-			}
-			vm.chargeAlloc(len(res.Response), ip, inst.Op)
-			vm.push(res.Response)
+			}, "IO_ERROR", "llm_generate", ip, inst.Op, true))
 
 		case bytecode.OpLoadConst:
 			vm.push(inst.ValueOperand)
@@ -3541,34 +3421,12 @@ func (vm *BCVM) run(insts []bytecode.BCInstruction, env *BcEnv) any {
 				vm.requireCapability(capability.Network, inst.Op)
 
 				promptStr := fmt.Sprintf("You are a HowlFrame compiler. Synthesize the HowlFrame Lisp code for the function '%s' with parameters %v. Docstring: \"%s\"\n\nReply ONLY with the HowlFrame Lisp code for the function body expressions. Do not include (defun ...). Do not include markdown formatting.\nFor example, if the docstring says \"Returns the sum of a and b\", you reply:\n(+ a b)", fn.Name, fn.Params, fn.Docstring)
-				reqBody, _ := json.Marshal(map[string]any{
+				raw := vm.bcOllamaGenerate(map[string]any{
 					"model":  "llama3",
 					"prompt": promptStr,
 					"stream": false,
-				})
-				resp, err := vm.postModel("http://localhost:11434/api/generate", reqBody, ip, inst.Op)
-				if err != nil {
-					vm.checkDeadline(ip, inst.Op)
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis network request failed: %v", err))
-				}
-				var res struct {
-					Response string `json:"response"`
-				}
-				if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-					resp.Body.Close()
-					vm.checkDeadline(ip, inst.Op)
-					panic(NewRuntimeError("RUNTIME_ERROR", "main", ip, inst.Op, "lazy synthesis response decode failed: %v", err))
-				}
-				resp.Body.Close()
-				code := strings.TrimSpace(res.Response)
-
-				// Strip potential markdown blocks
-				code = strings.TrimPrefix(code, "```lisp")
-				code = strings.TrimPrefix(code, "```")
-				code = strings.TrimSuffix(code, "```")
-				code = strings.TrimSpace(code)
-
-				progCode := fmt.Sprintf("(defun %s (%s) %s)", fn.Name, strings.Join(fn.Params, " "), code)
+				}, "RUNTIME_ERROR", "lazy synthesis network", ip, inst.Op, false)
+				progCode := stripSynthesizedDefun(fn.Name, fn.Params, raw)
 				lx := lexer.NewLexer(progCode)
 				p := parser.NewParser(lx, "lazy_synthesize")
 				astNode := p.ParseExpression()
@@ -4279,18 +4137,7 @@ func ToBCFloat(v any) float64 {
 }
 
 func BcValuesEqual(a, b any) bool {
-	switch a.(type) {
-	case *vmList, []any, []byte, map[string]any:
-		return false
-	}
-	switch b.(type) {
-	case *vmList, []any, []byte, map[string]any:
-		return false
-	}
-	if eq, ok := numericEqual(a, b); ok {
-		return eq
-	}
-	return a == b
+	return ValuesEqual(a, b)
 }
 
 func BcConvert(target string, a any) any {

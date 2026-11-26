@@ -32,44 +32,16 @@ func TestGoExecRequiresGrantBeforeSpawn(t *testing.T) {
 	}
 
 	rootDir := moduleRoot(t)
-	crashPath := filepath.Join(rootDir, "crash.json")
-	t.Cleanup(func() { os.Remove(crashPath) })
-
-	assertDenied := func(label, output, errText string) {
-		t.Helper()
-		if errText == "" {
-			t.Fatalf("%s: exec succeeded: %s", label, output)
-		}
+	assertGoCapabilityDenied(t, rootDir, code, "process", "the command", []string{marker, "phase2b-secret-out"}, func(label string) {
 		if _, err := os.Stat(marker); !os.IsNotExist(err) {
 			t.Fatalf("%s: exec spawned touch before denial", label)
 		}
-		crash, err := os.ReadFile(crashPath)
-		if err != nil {
-			t.Fatalf("%s: denial did not write crash.json: %v\n%s", label, err, output)
-		}
-		if strings.Contains(string(crash), marker) || strings.Contains(string(crash), "phase2b-secret-out") {
-			t.Fatalf("%s: crash.json leaked the command: %s", label, crash)
-		}
-		if strings.Contains(output, marker) || strings.Contains(output, "phase2b-secret-out") {
-			t.Fatalf("%s: process output leaked the command: %s", label, output)
-		}
-		if !strings.Contains(string(crash), "CAPABILITY_DENIED") || !strings.Contains(string(crash), "capability denied: process") {
-			t.Fatalf("%s: crash.json = %s, want CAPABILITY_DENIED", label, crash)
-		}
-		os.Remove(crashPath)
-	}
-
-	unsetOut, unsetErr := runGenerated(t, rootDir, code)
-	assertDenied("unset grant", unsetOut, unsetErr)
-
-	emptyOut, emptyErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=")
-	assertDenied("empty grant", emptyOut, emptyErr)
-
-	otherOut, otherErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=environment")
-	assertDenied("environment grant", otherOut, otherErr)
-
-	bareOut, bareErr := runGenerated(t, rootDir, code, "HOWLFRAME_ALLOW_CAPS=process")
-	assertDenied("bare process grant (no allow-list)", bareOut, bareErr)
+	}, [][2]string{
+		{"unset grant", "__UNSET__"},
+		{"empty grant", "HOWLFRAME_ALLOW_CAPS="},
+		{"environment grant", "HOWLFRAME_ALLOW_CAPS=environment"},
+		{"bare process grant (no allow-list)", "HOWLFRAME_ALLOW_CAPS=process"},
+	})
 
 	granted, grantErr := runGenerated(t, rootDir, code, testutil.CanonicalExecFixture(t, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true"))
 	if grantErr != "" {
@@ -81,34 +53,28 @@ func TestGoExecRequiresGrantBeforeSpawn(t *testing.T) {
 	os.Remove(marker)
 }
 
+func assertGoExecMediated(t *testing.T, source, wantCall string) string {
+	t.Helper()
+	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
+	checker.Check(root)
+	code, _ := GenerateCode(root)
+	if !strings.Contains(code, wantCall) {
+		t.Fatalf("exec is not mediated with %q:\n%s", wantCall, code)
+	}
+	return code
+}
+
 func TestGoExecGrantedPrintsCapturedOutput(t *testing.T) {
 	var source = testutil.CanonicalExecFixture(t, `(cli_app
   (let (value (exec "/usr/bin/printf" "phase2b-exec-marker"))
     (print (bytes_to_string value))))`)
-	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
-	checker.Check(root)
-	code, _ := GenerateCode(root)
-	if !strings.Contains(code, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`)) {
-		t.Fatalf("let-bound exec is not mediated:\n%s", code)
-	}
-	rootDir := moduleRoot(t)
-	granted, grantErr := runGenerated(t, rootDir, code, testutil.CanonicalExecFixture(t, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true"))
-	if grantErr != "" {
-		t.Fatalf("process grant failed: %s\n%s", grantErr, granted)
-	}
-	if strings.TrimSpace(granted) != "phase2b-exec-marker" {
-		t.Fatalf("granted stdout = %q, want phase2b-exec-marker", granted)
-	}
+	code := assertGoExecMediated(t, source, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`))
+	assertGoGrantedStdout(t, moduleRoot(t), code, testutil.CanonicalExecFixture(t, "process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true"), "phase2b-exec-marker")
 }
 
 func TestGoExecExpressionPositionIsMediated(t *testing.T) {
 	var source = testutil.CanonicalExecFixture(t, `(cli_app (print (bytes_to_string (exec "/usr/bin/printf" "phase2b-exec-marker"))))`)
-	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
-	checker.Check(root)
-	code, _ := GenerateCode(root)
-	if !strings.Contains(code, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`)) {
-		t.Fatalf("expression-position exec is not mediated:\n%s", code)
-	}
+	code := assertGoExecMediated(t, source, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/printf", "phase2b-exec-marker")`))
 	if strings.Contains(code, testutil.CanonicalExecFixture(t, `exec.Command("/usr/bin/printf"`)) {
 		t.Fatalf("expression-position exec bypasses the grant:\n%s", code)
 	}
@@ -116,23 +82,11 @@ func TestGoExecExpressionPositionIsMediated(t *testing.T) {
 
 func TestGoExecZeroArgsIsMediated(t *testing.T) {
 	var source = testutil.CanonicalExecFixture(t, `(cli_app (exec "/usr/bin/true") (print "zero-arg-ok"))`)
-	root := parser.NewParser(lexer.NewLexer(source), "exec.howl").ParseExpression()
-	checker.Check(root)
-	code, _ := GenerateCode(root)
-	if !strings.Contains(code, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/true")`)) {
-		t.Fatalf("zero-arg exec is not mediated:\n%s", code)
-	}
+	code := assertGoExecMediated(t, source, testutil.CanonicalExecFixture(t, `howlFrameExec("/usr/bin/true")`))
 	if strings.Contains(code, testutil.CanonicalExecFixture(t, `exec.Command("/usr/bin/true"`)) {
 		t.Fatalf("zero-arg exec spawns at the call site:\n%s", code)
 	}
-	rootDir := moduleRoot(t)
-	granted, grantErr := runGenerated(t, rootDir, code, testutil.CanonicalExecFixture(t, "HOWLFRAME_ALLOW_CAPS=process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true"))
-	if grantErr != "" {
-		t.Fatalf("process grant failed: %s\n%s", grantErr, granted)
-	}
-	if strings.TrimSpace(granted) != "zero-arg-ok" {
-		t.Fatalf("granted stdout = %q, want zero-arg-ok", granted)
-	}
+	assertGoGrantedStdout(t, moduleRoot(t), code, testutil.CanonicalExecFixture(t, "process:exec=/usr/bin/touch **,process:exec=/usr/bin/printf **,process:exec=/usr/bin/true"), "zero-arg-ok")
 }
 
 // Generated Go exec children start with an empty environment, and a "*" slot

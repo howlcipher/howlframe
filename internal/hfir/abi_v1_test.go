@@ -125,9 +125,14 @@ func TestLoweredABIV1WhileIsExecutable(t *testing.T) {
 	if loops != 1 {
 		t.Fatalf("while nodes = %d", loops)
 	}
+	mustLowerValidatedBytecode(t, graph, source)
+}
+
+func mustLowerValidatedBytecode(t *testing.T, graph *Graph, label string) {
+	t.Helper()
 	program, diags := LowerToBytecode(graph)
 	if program == nil || len(diags) != 0 {
-		t.Fatalf("LowerToBytecode(%q) program=%v diags=%#v", source, program != nil, diags)
+		t.Fatalf("LowerToBytecode(%q) program=%v diags=%#v", label, program != nil, diags)
 	}
 	if err := bytecode.ValidateProgram(program); err != nil {
 		t.Fatal(err)
@@ -161,13 +166,7 @@ func TestLoweredABIV1ForIsExecutable(t *testing.T) {
 	if loops != 2 {
 		t.Fatalf("for nodes = %d", loops)
 	}
-	program, diags := LowerToBytecode(graph)
-	if program == nil || len(diags) != 0 {
-		t.Fatalf("LowerToBytecode(%q) program=%v diags=%#v", source, program != nil, diags)
-	}
-	if err := bytecode.ValidateProgram(program); err != nil {
-		t.Fatal(err)
-	}
+	mustLowerValidatedBytecode(t, graph, source)
 }
 
 func lowerFixture(t *testing.T, path string) *Graph {

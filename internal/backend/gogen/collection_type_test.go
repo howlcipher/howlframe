@@ -52,38 +52,22 @@ func TestGoConcreteListAndDictStayDirect(t *testing.T) {
 }
 
 func TestGoCollectionOpsFailClosed(t *testing.T) {
-	cases := []struct {
-		name   string
-		source string
-		want   string
-	}{
-		{name: "append string", source: dynamicCollectionGo(`(append s "z")`), want: "TYPE_ERROR: append expected list"},
-		{name: "append dict", source: dynamicCollectionGo(`(append d "z")`), want: "TYPE_ERROR: append expected list"},
-		{name: "map_set string", source: dynamicCollectionGo(`(map_set s "k" "v")`), want: "TYPE_ERROR: map_set expected dict"},
-		{name: "map_set list", source: dynamicCollectionGo(`(map_set xs "k" "v")`), want: "TYPE_ERROR: map_set expected dict"},
-		{name: "map_delete string", source: dynamicCollectionGo(`(map_delete s "k")`), want: "TYPE_ERROR: map_delete expected dict"},
-		{name: "map_delete list", source: dynamicCollectionGo(`(map_delete xs "k")`), want: "TYPE_ERROR: map_delete expected dict"},
-		{name: "map_get string", source: dynamicCollectionGo(`(print (map_get s "k"))`), want: "TYPE_ERROR: map_get expected dict"},
-		{name: "map_get list", source: dynamicCollectionGo(`(print (map_get xs "0"))`), want: "TYPE_ERROR: map_get expected dict"},
-		{name: "list_get string", source: dynamicCollectionGo(`(print (list_get s 0))`), want: "TYPE_ERROR: list_get expected list"},
-		{name: "list_get dict", source: dynamicCollectionGo(`(print (list_get d 0))`), want: "TYPE_ERROR: list_get expected list"},
-		{name: "list_get bad index", source: dynamicCollectionGo(`(print (list_get xs s))`), want: "TYPE_ERROR: list_get index must be a number"},
-		{name: "list_len string", source: dynamicCollectionGo(`(print (list_len s))`), want: "TYPE_ERROR: list_len expected list"},
-		{name: "list_len dict", source: dynamicCollectionGo(`(print (list_len d))`), want: "TYPE_ERROR: list_len expected list"},
-		{name: "map_keys string", source: dynamicCollectionGo(`(print (map_keys s))`), want: "TYPE_ERROR: map_keys expected dict"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := generateCheckedGo(t, tc.source)
-			stdout, crash := goRunCrash(t, code)
-			if strings.TrimSpace(stdout) != "" {
-				t.Fatalf("stdout = %q, want empty\nsource:\n%s", stdout, code)
-			}
-			if !strings.Contains(crash, tc.want) {
-				t.Fatalf("crash = %q, want %q", crash, tc.want)
-			}
-		})
-	}
+	runGoTypeErrorCases(t, []goTypeErrCase{
+		{"append string", dynamicCollectionGo(`(append s "z")`), "TYPE_ERROR: append expected list"},
+		{"append dict", dynamicCollectionGo(`(append d "z")`), "TYPE_ERROR: append expected list"},
+		{"map_set string", dynamicCollectionGo(`(map_set s "k" "v")`), "TYPE_ERROR: map_set expected dict"},
+		{"map_set list", dynamicCollectionGo(`(map_set xs "k" "v")`), "TYPE_ERROR: map_set expected dict"},
+		{"map_delete string", dynamicCollectionGo(`(map_delete s "k")`), "TYPE_ERROR: map_delete expected dict"},
+		{"map_delete list", dynamicCollectionGo(`(map_delete xs "k")`), "TYPE_ERROR: map_delete expected dict"},
+		{"map_get string", dynamicCollectionGo(`(print (map_get s "k"))`), "TYPE_ERROR: map_get expected dict"},
+		{"map_get list", dynamicCollectionGo(`(print (map_get xs "0"))`), "TYPE_ERROR: map_get expected dict"},
+		{"list_get string", dynamicCollectionGo(`(print (list_get s 0))`), "TYPE_ERROR: list_get expected list"},
+		{"list_get dict", dynamicCollectionGo(`(print (list_get d 0))`), "TYPE_ERROR: list_get expected list"},
+		{"list_get bad index", dynamicCollectionGo(`(print (list_get xs s))`), "TYPE_ERROR: list_get index must be a number"},
+		{"list_len string", dynamicCollectionGo(`(print (list_len s))`), "TYPE_ERROR: list_len expected list"},
+		{"list_len dict", dynamicCollectionGo(`(print (list_len d))`), "TYPE_ERROR: list_len expected list"},
+		{"map_keys string", dynamicCollectionGo(`(print (map_keys s))`), "TYPE_ERROR: map_keys expected dict"},
+	})
 }
 
 const collectionHappyGo = `(cli_app
