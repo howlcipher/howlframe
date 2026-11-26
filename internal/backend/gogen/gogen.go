@@ -11,67 +11,30 @@ import (
 	"unicode"
 )
 
-var CurrentSchemaDDLs []string
-
-// gogenHTTPReq is set while GenerateCode emits a request read or a {name}
-// route, so the generated file imports internal/httpreq. It is reset at the
-// start of every GenerateCode call.
-var gogenHTTPReq bool
-
-// gogenMapGet is set when GenerateCode emits map_get, so the absence helper
-// is written once into the generated file. It is reset on every call.
-var gogenMapGet bool
-
-// gogenHTMLEscape is set when GenerateCode emits html_escape or attr_escape.
-// Both calls share one helper. The flag is reset on every call.
-var gogenHTMLEscape bool
-
-// gogenCollection is set when GenerateCode emits a dict or list op that
-// needs a runtime type switch. Concrete maps and string lists keep their
-// direct Go operations. The flag is reset on every call.
-var gogenCollection bool
-
-// gogenNeedsEnv is set when GenerateCode emits env. The helper checks the
-// runner grant before reading the requested variable. It is reset on every call.
-var gogenNeedsEnv bool
-
-// gogenNeedsExec is set when GenerateCode emits exec. The helper checks the
-// runner grant before spawning a process. It is reset on every call.
-var gogenNeedsExec bool
-
-// gogenNeedsReadFile is set when GenerateCode emits read_file. The helper
-// checks the runner grant before any filesystem read. It is reset on every call.
-var gogenNeedsReadFile bool
-
-// gogenNeedsFetch is set when GenerateCode emits fetch. The helper checks
-// the runner grant before any HTTP request. It is reset on every call.
-var gogenNeedsFetch bool
-
-// gogenNeedsWriteFile is set when GenerateCode emits write_file. The helper
-// checks the runner grant before any filesystem write. It is reset on every call.
-var gogenNeedsWriteFile bool
-
-// gogenNeedsMkdir is set when GenerateCode emits mkdir. The helper checks
-// the runner grant before any directory creation. It is reset on every call.
-var gogenNeedsMkdir bool
-
-// gogenNumeric is set when GenerateCode emits a numeric operation that needs
-// runtime mediation (division, checked conversion). The helper is written
-// once into the generated file. It is reset on every call.
-var gogenNumeric bool
-
-// gogenVarTypes records the Go type of names emitted in the current
-// GenerateCode call. An untracked name stays on the historical direct
-// operation. A dynamic any value goes through the fail-closed helpers.
-var gogenVarTypes map[string]string
-
 type goVarFrame struct {
 	name string
 	prev string
 	had  bool
 }
 
-var gogenVarStack []goVarFrame
+// goGenerator holds per-invocation Go emission state so concurrent builds
+// share no mutable package-level globals.
+type goGenerator struct {
+	schemaDDLs     []string
+	httpReq        bool
+	mapGet         bool
+	htmlEscape     bool
+	collection     bool
+	needsEnv       bool
+	needsExec      bool
+	needsReadFile  bool
+	needsFetch     bool
+	needsWriteFile bool
+	needsMkdir     bool
+	numeric        bool
+	varTypes       map[string]string
+	varStack       []goVarFrame
+}
 
 // mapGetHelperSource is the Go form of the map_get absence contract.
 // map[string]string yields "" for a missing key (it cannot hold nil).
@@ -230,38 +193,38 @@ func htmlEscapeHelperSource() string {
 `
 }
 
-func resetGoVarTypes() {
-	gogenVarTypes = map[string]string{}
-	gogenVarStack = nil
+func (g *goGenerator) resetGoVarTypes() {
+	g.varTypes = map[string]string{}
+	g.varStack = nil
 }
 
-func goVarKind(name string) string {
-	if gogenVarTypes == nil {
+func (g *goGenerator) goVarKind(name string) string {
+	if g.varTypes == nil {
 		return ""
 	}
-	return gogenVarTypes[name]
+	return g.varTypes[name]
 }
 
-func pushGoVar(name, typ string) {
-	if gogenVarTypes == nil {
-		gogenVarTypes = map[string]string{}
+func (g *goGenerator) pushGoVar(name, typ string) {
+	if g.varTypes == nil {
+		g.varTypes = map[string]string{}
 	}
-	prev, had := gogenVarTypes[name]
-	gogenVarStack = append(gogenVarStack, goVarFrame{name: name, prev: prev, had: had})
-	gogenVarTypes[name] = typ
+	prev, had := g.varTypes[name]
+	g.varStack = append(g.varStack, goVarFrame{name: name, prev: prev, had: had})
+	g.varTypes[name] = typ
 }
 
-func popGoVars(n int) {
+func (g *goGenerator) popGoVars(n int) {
 	for i := 0; i < n; i++ {
-		if len(gogenVarStack) == 0 {
+		if len(g.varStack) == 0 {
 			return
 		}
-		frame := gogenVarStack[len(gogenVarStack)-1]
-		gogenVarStack = gogenVarStack[:len(gogenVarStack)-1]
+		frame := g.varStack[len(g.varStack)-1]
+		g.varStack = g.varStack[:len(g.varStack)-1]
 		if frame.had {
-			gogenVarTypes[frame.name] = frame.prev
+			g.varTypes[frame.name] = frame.prev
 		} else {
-			delete(gogenVarTypes, frame.name)
+			delete(g.varTypes, frame.name)
 		}
 	}
 }
@@ -269,20 +232,20 @@ func popGoVars(n int) {
 // trackGoBinding records the Go type of a let binding. A name already
 // declared in this block is updated in place. A new name is pushed so the
 // enclosing block can restore the outer binding when it ends.
-func trackGoBinding(name string, valNode *ast.Node, declared map[string]bool) bool {
-	typ := goValueType(valNode)
+func (g *goGenerator) trackGoBinding(name string, valNode *ast.Node, declared map[string]bool) bool {
+	typ := g.goValueType(valNode)
 	if declared[name] {
-		if gogenVarTypes == nil {
-			gogenVarTypes = map[string]string{}
+		if g.varTypes == nil {
+			g.varTypes = map[string]string{}
 		}
-		gogenVarTypes[name] = typ
+		g.varTypes[name] = typ
 		return false
 	}
-	pushGoVar(name, typ)
+	g.pushGoVar(name, typ)
 	return true
 }
 
-func goValueType(node *ast.Node) string {
+func (g *goGenerator) goValueType(node *ast.Node) string {
 	if node == nil {
 		return ""
 	}
@@ -297,7 +260,7 @@ func goValueType(node *ast.Node) string {
 		if node.Value == "true" || node.Value == "false" {
 			return "bool"
 		}
-		return goVarKind(node.Value)
+		return g.goVarKind(node.Value)
 	case "List":
 		if len(node.Children) == 0 || node.Children[0].Type != "SYMBOL" {
 			return ""
@@ -311,7 +274,7 @@ func goValueType(node *ast.Node) string {
 			if len(node.Children) < 2 {
 				return ""
 			}
-			return goMapGetResultType(node.Children[1])
+			return g.goMapGetResultType(node.Children[1])
 		case "map_keys", "str_split":
 			return "[]string"
 		case "cli_args":
@@ -331,7 +294,7 @@ func goValueType(node *ast.Node) string {
 		case "schema_bridge":
 			// The bridge emits its wrapped source expression.
 			if len(node.Children) == 3 {
-				return goValueType(node.Children[2])
+				return g.goValueType(node.Children[2])
 			}
 			return ""
 		default:
@@ -342,11 +305,11 @@ func goValueType(node *ast.Node) string {
 	}
 }
 
-func goMapGetResultType(dictNode *ast.Node) string {
+func (g *goGenerator) goMapGetResultType(dictNode *ast.Node) string {
 	if dictNode == nil || dictNode.Type != "SYMBOL" {
 		return "any"
 	}
-	switch goVarKind(dictNode.Value) {
+	switch g.goVarKind(dictNode.Value) {
 	case "map[string]string":
 		return "string"
 	case "map[string]any":
@@ -371,7 +334,7 @@ func goDictKind(pairs []*ast.Node) string {
 	return "map[string]string"
 }
 
-func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
+func (g *goGenerator) goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
 	nested := false
 	rendered := make([]string, 0, len(pairs))
 	for _, pair := range pairs {
@@ -384,7 +347,7 @@ func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
 		if kNode.Type == "STRING" {
 			k = fmt.Sprintf("%q", kNode.Value)
 		} else {
-			k = generateExpression(kNode, reqVar, depth+1)
+			k = g.generateExpression(kNode, reqVar, depth+1)
 		}
 		var v string
 		if vNode.Type == "STRING" {
@@ -393,7 +356,7 @@ func goDictLiteral(pairs []*ast.Node, reqVar string, depth int) string {
 			if vNode.Type == "List" && len(vNode.Children) > 0 && vNode.Children[0].Value == "dict" {
 				nested = true
 			}
-			v = generateExpression(vNode, reqVar, depth+1)
+			v = g.generateExpression(vNode, reqVar, depth+1)
 		}
 		rendered = append(rendered, fmt.Sprintf("%s: %s", k, v))
 	}
@@ -1154,86 +1117,86 @@ func howlFrameDiv(a, b any) float64 {
 `
 }
 
-func goHostHelpers() string {
+func (g *goGenerator) hostHelpers() string {
 	var code string
-	if gogenNeedsEnv || gogenNeedsExec || gogenNeedsReadFile || gogenNeedsFetch || gogenNeedsWriteFile || gogenNeedsMkdir {
+	if g.needsEnv || g.needsExec || g.needsReadFile || g.needsFetch || g.needsWriteFile || g.needsMkdir {
 		code += grantHelperSource()
 	}
-	if gogenNeedsEnv {
+	if g.needsEnv {
 		code += envHelperSource()
 	}
-	if gogenNeedsExec {
+	if g.needsExec {
 		code += execHelperSource()
 	}
-	if gogenNeedsReadFile {
+	if g.needsReadFile {
 		code += readFileHelperSource()
 	}
-	if gogenNeedsFetch {
+	if g.needsFetch {
 		code += fetchHelperSource()
 	}
-	if gogenNeedsWriteFile {
+	if g.needsWriteFile {
 		code += writeFileHelperSource()
 	}
-	if gogenNeedsMkdir {
+	if g.needsMkdir {
 		code += mkdirHelperSource()
 	}
 	return code
 }
 
-func goEnvCall(keyNode *ast.Node, reqVar string, depth int) string {
-	gogenNeedsEnv = true
+func (g *goGenerator) envCall(keyNode *ast.Node, reqVar string, depth int) string {
+	g.needsEnv = true
 	if keyNode != nil && keyNode.Type == "STRING" {
 		return fmt.Sprintf("howlFrameEnv(%q)", keyNode.Value)
 	}
-	return fmt.Sprintf("howlFrameEnv(%s)", generateExpression(keyNode, reqVar, depth+1))
+	return fmt.Sprintf("howlFrameEnv(%s)", g.generateExpression(keyNode, reqVar, depth+1))
 }
 
-func goExecCall(node *ast.Node, reqVar string, depth int) string {
-	gogenNeedsExec = true
+func (g *goGenerator) execCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsExec = true
 	if node == nil || len(node.Children) < 2 {
 		return ""
 	}
-	cmd := generateStatement(node.Children[1], reqVar, depth+1)
+	cmd := g.generateStatement(node.Children[1], reqVar, depth+1)
 	if len(node.Children) == 2 {
 		return fmt.Sprintf("howlFrameExec(%s)", cmd)
 	}
 	args := make([]string, 0, len(node.Children)-2)
 	for _, arg := range node.Children[2:] {
-		args = append(args, generateStatement(arg, reqVar, depth+1))
+		args = append(args, g.generateStatement(arg, reqVar, depth+1))
 	}
 	return fmt.Sprintf("howlFrameExec(%s, %s)", cmd, strings.Join(args, ", "))
 }
 
-// goReadFileCall emits the mediated read. tuple is the try_let form, which
+// readFileCall emits the mediated read. tuple is the try_let form, which
 // still binds (bytes, error). Every other use gets one []byte.
-func goReadFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
-	gogenNeedsReadFile = true
+func (g *goGenerator) readFileCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+	g.needsReadFile = true
 	if node == nil || len(node.Children) != 2 {
 		return ""
 	}
-	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
+	pathStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 	if tuple {
 		return fmt.Sprintf("howlFrameReadFile(%s)", pathStr)
 	}
 	return fmt.Sprintf("howlFrameReadFileBytes(%s)", pathStr)
 }
 
-// goFetchCall emits the mediated request. tuple is the try_let form, which
+// fetchCall emits the mediated request. tuple is the try_let form, which
 // still binds (bytes, error). Every other use gets one []byte. A missing
 // body is a nil reader, the same request the previous closure sent.
-func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
+func (g *goGenerator) fetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
 	if node != nil && len(node.Children) == 5 {
 		ast.ReportError("UNSUPPORTED_ON_TARGET: fetch headers are supported only on --target=js", node.Line, node.Column)
 	}
-	gogenNeedsFetch = true
+	g.needsFetch = true
 	if node == nil || (len(node.Children) != 3 && len(node.Children) != 4) {
 		return ""
 	}
-	urlStr := generateStatement(node.Children[1], reqVar, depth+1)
-	methodStr := generateStatement(node.Children[2], reqVar, depth+1)
+	urlStr := g.generateStatement(node.Children[1], reqVar, depth+1)
+	methodStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 	bodyStr := "nil"
 	if len(node.Children) == 4 {
-		bodyStr = fmt.Sprintf("strings.NewReader(%s)", generateStatement(node.Children[3], reqVar, depth+1))
+		bodyStr = fmt.Sprintf("strings.NewReader(%s)", g.generateStatement(node.Children[3], reqVar, depth+1))
 	}
 	fn := "howlFrameFetchBytes"
 	if tuple {
@@ -1242,44 +1205,37 @@ func goFetchCall(node *ast.Node, reqVar string, depth int, tuple bool) string {
 	return fmt.Sprintf("%s(%s, %s, %s)", fn, urlStr, methodStr, bodyStr)
 }
 
-// goWriteFileCall emits the mediated write. The statement discards the error
+// writeFileCall emits the mediated write. The statement discards the error
 // return, the same way the previous os.WriteFile statement did.
-func goWriteFileCall(node *ast.Node, reqVar string, depth int) string {
-	gogenNeedsWriteFile = true
+func (g *goGenerator) writeFileCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsWriteFile = true
 	if node == nil || len(node.Children) != 3 {
 		return ""
 	}
-	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
-	dataStr := generateStatement(node.Children[2], reqVar, depth+1)
+	pathStr := g.generateStatement(node.Children[1], reqVar, depth+1)
+	dataStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 	return fmt.Sprintf("		howlFrameWriteFile(%s, %s)", pathStr, dataStr)
 }
 
-// goMkdirCall emits the mediated directory creation. The statement discards
+// mkdirCall emits the mediated directory creation. The statement discards
 // the error return, the same way the previous os.MkdirAll statement did.
-func goMkdirCall(node *ast.Node, reqVar string, depth int) string {
-	gogenNeedsMkdir = true
+func (g *goGenerator) mkdirCall(node *ast.Node, reqVar string, depth int) string {
+	g.needsMkdir = true
 	if node == nil || len(node.Children) != 2 {
 		return ""
 	}
-	pathStr := generateStatement(node.Children[1], reqVar, depth+1)
+	pathStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 	return fmt.Sprintf("		howlFrameMkdir(%s)", pathStr)
 }
 
 func GenerateCode(node *ast.Node) (string, string) {
+	g := &goGenerator{}
+	return g.generateCode(node)
+}
+
+func (g *goGenerator) generateCode(node *ast.Node) (string, string) {
 	ast.Desugar(node)
-	CurrentSchemaDDLs = nil
-	gogenHTTPReq = false
-	gogenMapGet = false
-	gogenHTMLEscape = false
-	gogenCollection = false
-	gogenNeedsEnv = false
-	gogenNeedsExec = false
-	gogenNeedsReadFile = false
-	gogenNeedsFetch = false
-	gogenNeedsWriteFile = false
-	gogenNeedsMkdir = false
-	gogenNumeric = false
-	resetGoVarTypes()
+	g.resetGoVarTypes()
 	if node.Type != "List" || len(node.Children) == 0 {
 		// ast.ReportError("Expected list at root", node.Line, node.Column)
 	}
@@ -1361,7 +1317,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 			var testBodyCode string
 			for j := 2; j < len(handlerNode.Children); j++ {
-				testBodyCode += generateStatement(handlerNode.Children[j], "", 0) + "\n"
+				testBodyCode += g.generateStatement(handlerNode.Children[j], "", 0) + "\n"
 			}
 			testCode += fmt.Sprintf("func %s(t *testing.T) {\n\tdefer howlFrameTestRecover(t)\n%s\n}\n\n", testFuncName, testBodyCode)
 			continue
@@ -1454,7 +1410,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			funcsCode += "}\n\n"
 
 			ddl := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", tableName, strings.Join(columns, ", "))
-			CurrentSchemaDDLs = append(CurrentSchemaDDLs, ddl)
+			g.schemaDDLs = append(g.schemaDDLs, ddl)
 			continue
 		}
 
@@ -1528,7 +1484,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 			var bodyParts []string
 			for _, form := range ast.DefunBody(handlerNode) {
-				bodyParts = append(bodyParts, generateStatement(form, "", 0))
+				bodyParts = append(bodyParts, g.generateStatement(form, "", 0))
 			}
 			bodyCode := strings.Join(bodyParts, "\n")
 			traceArgs := "map[string]any{"
@@ -1612,7 +1568,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 			reqVar := reqNodeList.Children[0].Value
 			bodyNode := handlerNode.Children[2].Children[2]
 			rejectRouteFetch(bodyNode)
-			bodyCode := generateStatement(bodyNode, reqVar, 0)
+			bodyCode := g.generateStatement(bodyNode, reqVar, 0)
 			traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{%q: %s.URL.Path})()\n", "route:"+pathNode.Value, reqVar, reqVar)
 			routesCode += formatRouteRegistration(pathNode.Value, reqVar, traceInject, bodyCode, useDispatch)
 			continue
@@ -1661,7 +1617,7 @@ func GenerateCode(node *ast.Node) (string, string) {
 				}
 
 				ast.ReplaceNext(clonedMwBody, clonedRouteBody)
-				combinedCode := generateStatement(clonedMwBody, mwReqVar, 0)
+				combinedCode := g.generateStatement(clonedMwBody, mwReqVar, 0)
 				traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{%q: %s.URL.Path})()\n", "middleware_route:"+pathNode.Value, mwReqVar, mwReqVar)
 
 				routesCode += formatRouteRegistration(pathNode.Value, mwReqVar, traceInject, combinedCode, useDispatch)
@@ -1671,17 +1627,17 @@ func GenerateCode(node *ast.Node) (string, string) {
 
 		if isCliApp {
 			// For cli_app, unhandled blocks are treated as statements executed in main
-			cliCode += generateStatement(handlerNode, "", 0) + "\n"
+			cliCode += g.generateStatement(handlerNode, "", 0) + "\n"
 			continue
 		}
 
 		// ast.ReportError("Expected route, defun, struct, import, test, or middleware block", handlerNode.Line, handlerNode.Column)
 	}
 
-	if gogenHTTPReq || useDispatch {
+	if g.httpReq || useDispatch {
 		extraImports = append(extraImports, "github.com/howlcipher/howlframe/internal/httpreq")
 	}
-	if gogenHTMLEscape {
+	if g.htmlEscape {
 		extraImports = append(extraImports, "html")
 	}
 
@@ -1709,27 +1665,27 @@ import (
 	for _, imp := range extraImports {
 		code += fmt.Sprintf("\t%q\n", imp)
 	}
-	if gogenNumeric {
+	if g.numeric {
 		code += "\t\"math\"\n"
 	}
-	if gogenNeedsFetch {
+	if g.needsFetch {
 		code += fetchImports(extraImports)
 	}
 	code += `)
 `
-	if gogenMapGet {
+	if g.mapGet {
 		code += mapGetHelperSource()
 	}
-	if gogenNumeric {
+	if g.numeric {
 		code += numericHelperSource()
 	}
-	if gogenCollection {
+	if g.collection {
 		code += collectionHelperSource()
 	}
-	if gogenHTMLEscape {
+	if g.htmlEscape {
 		code += htmlEscapeHelperSource()
 	}
-	code += goHostHelpers()
+	code += g.hostHelpers()
 	// exit goes through howlFrameExit so that server_test.go can make it
 	// fail the running test instead of ending the test binary (bugs.md #68).
 	code += "var howlFrameExit = func(code int, where string) { os.Exit(code) }\n\n"
@@ -1816,10 +1772,10 @@ import (
 				fullTestCode += fmt.Sprintf("\t%q\n", imp)
 			}
 		}
-		if gogenNumeric {
+		if g.numeric {
 			fullTestCode += "\t\"math\"\n"
 		}
-		if gogenNeedsFetch {
+		if g.needsFetch {
 			fullTestCode += fetchImports(extraImports)
 		}
 		fullTestCode += `)
@@ -1841,18 +1797,18 @@ var _ = fmt.Println
 var _ = observer.Trace
 
 `
-		if gogenHTMLEscape {
+		if g.htmlEscape {
 			fullTestCode = strings.Replace(fullTestCode, "\t\"github.com/howlcipher/howlframe/observer\"\n", "\t\"github.com/howlcipher/howlframe/observer\"\n\t\"html\"\n", 1)
 		}
 		// The helpers live in server.go, the same package (bugs.md #68); the
 		// imports they would have used stay referenced.
-		if gogenNumeric {
+		if g.numeric {
 			fullTestCode += "var _ = math.Abs\n"
 		}
-		if gogenHTMLEscape {
+		if g.htmlEscape {
 			fullTestCode += "var _ = html.EscapeString\n"
 		}
-		if gogenNeedsFetch {
+		if g.needsFetch {
 			for _, imp := range strings.Split(strings.TrimSpace(fetchImports(extraImports)), "\n") {
 				if imp = strings.Trim(strings.TrimSpace(imp), `"`); imp != "" {
 					fullTestCode += fmt.Sprintf("var _ = %s\n", fetchImportUse[imp])
@@ -1882,8 +1838,8 @@ func howlFrameTestRecover(t *testing.T) {
 	return code, testCode
 }
 
-func generateStatement(node *ast.Node, reqVar string, depth int) string {
-	code := generateStatementRaw(node, reqVar, depth)
+func (g *goGenerator) generateStatement(node *ast.Node, reqVar string, depth int) string {
+	code := g.generateStatementRaw(node, reqVar, depth)
 	if node.Type != "List" || len(node.Children) == 0 {
 		return code
 	}
@@ -1897,14 +1853,14 @@ func generateStatement(node *ast.Node, reqVar string, depth int) string {
 	return code
 }
 
-func generateExpression(node *ast.Node, reqVar string, depth int) string {
+func (g *goGenerator) generateExpression(node *ast.Node, reqVar string, depth int) string {
 	if node != nil && node.Type == "List" && len(node.Children) == 1 &&
 		node.Children[0].Type == "SYMBOL" && node.Children[0].Value == "time_now" {
 		// Unix seconds, matching the bytecode VM and the JS backend. Before
 		// #141 time_now emitted an empty expression on --target=go.
 		return "int(time.Now().Unix())"
 	}
-	return generateStatementRaw(node, reqVar, depth)
+	return g.generateStatementRaw(node, reqVar, depth)
 }
 
 func BinOpGoToken(head string) string {
@@ -1921,15 +1877,20 @@ func BinOpGoToken(head string) string {
 }
 
 func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
+	g := &goGenerator{}
+	return g.emitGoIR(ir, reqVar, depth)
+}
+
+func (g *goGenerator) emitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	switch ir.Kind {
 	case "binop":
 		if len(ir.Kids) != 2 {
 			// ast.ReportError(fmt.Sprintf("%s expects 2 arguments", ir.Op), 0, 0)
 		}
-		arg1 := generateExpression(ir.Kids[0], reqVar, depth+1)
-		arg2 := generateExpression(ir.Kids[1], reqVar, depth+1)
+		arg1 := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		arg2 := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		if ir.Op == "/" {
-			gogenNumeric = true
+			g.numeric = true
 			return fmt.Sprintf("howlFrameDiv(%s, %s)", arg1, arg2)
 		}
 		return fmt.Sprintf("(%s %s %s)", arg1, BinOpGoToken(ir.Op), arg2)
@@ -1943,7 +1904,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		for _, binds := range bindings {
 			varName := binds.Children[0].Value
 			valNode := binds.Children[1]
-			if trackGoBinding(varName, valNode, declaredVars) {
+			if g.trackGoBinding(varName, valNode, declaredVars) {
 				pushed++
 			}
 			var valStr string
@@ -1954,7 +1915,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 				if funcName == "call" {
 					var args []string
 					for j := 2; j < len(valNode.Children); j++ {
-						args = append(args, generateExpression(valNode.Children[j], reqVar, depth+1))
+						args = append(args, g.generateExpression(valNode.Children[j], reqVar, depth+1))
 					}
 					valStr = fmt.Sprintf("%s(%s)", valNode.Children[1].Value, strings.Join(args, ", "))
 				} else if funcName == "list" {
@@ -1963,23 +1924,23 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 						if valNode.Children[j].Type == "STRING" {
 							items = append(items, fmt.Sprintf("%q", valNode.Children[j].Value))
 						} else {
-							items = append(items, generateExpression(valNode.Children[j], reqVar, depth+1))
+							items = append(items, g.generateExpression(valNode.Children[j], reqVar, depth+1))
 						}
 					}
 					valStr = fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
 				} else if funcName == "dict" {
-					valStr = goDictLiteral(valNode.Children[1:], reqVar, depth)
+					valStr = g.goDictLiteral(valNode.Children[1:], reqVar, depth)
 				} else if funcName == "env" {
 					if len(valNode.Children) >= 2 {
-						valStr = goEnvCall(valNode.Children[1], reqVar, depth)
+						valStr = g.envCall(valNode.Children[1], reqVar, depth)
 					}
 				} else if funcName == "parse_json" {
 					// Handled downstream
 				} else {
-					valStr = generateStatement(valNode, reqVar, depth+1)
+					valStr = g.generateStatement(valNode, reqVar, depth+1)
 				}
 			} else {
-				valStr = generateStatement(valNode, reqVar, depth+1)
+				valStr = g.generateStatement(valNode, reqVar, depth+1)
 			}
 
 			if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
@@ -2005,8 +1966,8 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 		}
 
-		bodyCode := generateStatement(curr, reqVar, depth+1)
-		popGoVars(pushed)
+		bodyCode := g.generateStatement(curr, reqVar, depth+1)
+		g.popGoVars(pushed)
 		return fmt.Sprintf("%s%s\n		}", letPrefix.String(), bodyCode)
 	case "try_let":
 		binds := ir.Kids[0]
@@ -2015,8 +1976,8 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 		catchNode := ir.Kids[1]
 		errVar := catchNode.Children[1].Value
-		catchBodyCode := generateStatement(catchNode.Children[2], reqVar, depth+1)
-		successBodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
+		catchBodyCode := g.generateStatement(catchNode.Children[2], reqVar, depth+1)
+		successBodyCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "parse_json" {
 			targetType := sanitizeGoName(valNode.Children[1].Value)
@@ -2047,11 +2008,11 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 
 		var valStr string
 		if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "read_file" {
-			valStr = goReadFileCall(valNode, reqVar, depth, true)
+			valStr = g.readFileCall(valNode, reqVar, depth, true)
 		} else if valNode.Type == "List" && len(valNode.Children) > 0 && valNode.Children[0].Value == "fetch" {
-			valStr = goFetchCall(valNode, reqVar, depth, true)
+			valStr = g.fetchCall(valNode, reqVar, depth, true)
 		} else {
-			valStr = generateStatement(valNode, reqVar, depth+1)
+			valStr = g.generateStatement(valNode, reqVar, depth+1)
 		}
 		return fmt.Sprintf(`		{
 			%s, %s := %s
@@ -2064,7 +2025,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}`, varName, errVar, valStr, errVar, catchBodyCode, varName, successBodyCode)
 	case "spawn":
 		lambdaNode := ir.Kids[0]
-		bodyCode := generateStatement(lambdaNode.Children[2], reqVar, depth+1)
+		bodyCode := g.generateStatement(lambdaNode.Children[2], reqVar, depth+1)
 		traceInject := fmt.Sprintf("\t\tdefer observer.Trace(%q, map[string]any{})()\n", "spawn_lambda")
 		return fmt.Sprintf("		go func() {\n%s%s\n		}()", traceInject, bodyCode)
 	case "call":
@@ -2077,7 +2038,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			} else if argNode.Type == "NUMBER" || argNode.Type == "SYMBOL" {
 				args = append(args, argNode.Value)
 			} else {
-				args = append(args, generateExpression(argNode, reqVar, depth+1))
+				args = append(args, g.generateExpression(argNode, reqVar, depth+1))
 			}
 		}
 		return fmt.Sprintf("		%s(%s)", funcName, strings.Join(args, ", "))
@@ -2086,46 +2047,46 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// The iterable may be any expression, not only a bound symbol. Reading
 		// .Value directly yielded "" for a list-valued expression such as
 		// (for m (map_get d "missions") ...), emitting "for _, m := range {".
-		listExpr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		bodyCode := generateStatement(ir.Kids[2], reqVar, depth+1)
+		listExpr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
+		bodyCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf(`		for _, %s := range %s {
 			_ = %s
 %s
 		}`, itemNode, listExpr, itemNode, bodyCode)
 	case "return":
-		return fmt.Sprintf("		return %s", generateStatementRaw(ir.Kids[0], reqVar, depth+1))
+		return fmt.Sprintf("		return %s", g.generateStatementRaw(ir.Kids[0], reqVar, depth+1))
 	case "if":
-		condExpr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		thenCode := generateStatement(ir.Kids[1], reqVar, depth+1)
+		condExpr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		thenCode := g.generateStatement(ir.Kids[1], reqVar, depth+1)
 		if len(ir.Kids) == 2 {
 			return fmt.Sprintf(`		if %s {
 %s
 		}`, condExpr, thenCode)
 		}
-		elseCode := generateStatement(ir.Kids[2], reqVar, depth+1)
+		elseCode := g.generateStatement(ir.Kids[2], reqVar, depth+1)
 		return fmt.Sprintf(`		if %s {
 %s
 		} else {
 %s
 		}`, condExpr, thenCode, elseCode)
 	case "while":
-		condExpr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		bodyCode := generateStatement(ir.Kids[1], reqVar, depth+1)
+		condExpr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		bodyCode := g.generateStatement(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf(`		for %s {
 %s
 		}`, condExpr, bodyCode)
 	case "do":
 		var stmts string
 		for _, kid := range ir.Kids {
-			stmts += generateStatement(kid, reqVar, depth+1) + "\n"
+			stmts += g.generateStatement(kid, reqVar, depth+1) + "\n"
 		}
 		return fmt.Sprintf("		{\n%s\n		}", stmts)
 	case "set":
-		varStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		valStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		varStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("		%s = %s", varStr, valStr)
 	case "match":
-		varStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		varStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		var casesStr string
 		for _, c := range ir.Cases {
 			caseValStr := c.Label.Value
@@ -2134,7 +2095,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			} else if c.Label.Type == "STRING" {
 				caseValStr = fmt.Sprintf("%q", caseValStr)
 			}
-			caseBodyCode := generateStatement(c.Body, reqVar, depth+1)
+			caseBodyCode := g.generateStatement(c.Body, reqVar, depth+1)
 			if caseValStr == "default" {
 				casesStr += fmt.Sprintf("		default:\n%s\n", caseBodyCode)
 			} else {
@@ -2143,70 +2104,70 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		}
 		return fmt.Sprintf("		switch %s {\n%s		}", varStr, casesStr)
 	case "sleep":
-		msStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		msStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("		time.Sleep(time.Duration(%s) * time.Millisecond)", msStr)
 	case "to_int":
-		gogenNumeric = true
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		g.numeric = true
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameToInt(%s)", valStr)
 	case "to_float":
-		gogenNumeric = true
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		g.numeric = true
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameToFloat(%s)", valStr)
 	case "to_string":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() string { var _v any = %s; if _v == nil { return \"\" }; return fmt.Sprint(_v) }()", valStr)
 	case "bytes_to_string":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("string(%s)", valStr)
 	case "to_lower":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("strings.ToLower(fmt.Sprint(%s))", valStr)
 	case "to_upper":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("strings.ToUpper(fmt.Sprint(%s))", valStr)
 	case "str_trim":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("strings.TrimSpace(fmt.Sprint(%s))", valStr)
 	case "encode_json":
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() string { b, _ := json.Marshal(%s); return string(b) }()", valStr)
 	case "html_escape", "attr_escape":
-		gogenHTMLEscape = true
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		g.htmlEscape = true
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("howlFrameHTMLEscape(%q, %s)", ir.Kind, valStr)
 	case "str_split":
-		sStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		sStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		sepStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("strings.Split(%s, %s)", sStr, sepStr)
 	case "str_join":
-		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		sepStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		listStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		sepStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("strings.Join(%s, %s)", listStr, sepStr)
 	case "regex_match":
-		patStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		sStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		patStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		sStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		return fmt.Sprintf("func() bool { m, _ := regexp.MatchString(%s, %s); return m }()", patStr, sStr)
 	case "append":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
 			// ast.ReportError("append requires a symbol for list", listNode.Line, listNode.Column)
 		}
-		itemStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		itemStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		// A concrete string list keeps append. A dynamic value (map_get of a
 		// mixed record) cannot be appended in Go; the helper fails closed
 		// when the runtime value is not a list.
-		switch goVarKind(listNode.Value) {
+		switch g.goVarKind(listNode.Value) {
 		case "[]string", "":
 			// Lists are values: the full slice expression forces a fresh
 			// backing array, so a list stored in a map (or another variable)
 			// never sees this append. Matches the VM copy-on-append.
 			return fmt.Sprintf("		%s = append(%s[:len(%s):len(%s)], %s)", listNode.Value, listNode.Value, listNode.Value, listNode.Value, itemStr)
 		case "any":
-			gogenCollection = true
+			g.collection = true
 			return fmt.Sprintf("		%s = howlFrameAppend(%s, %s)", listNode.Value, listNode.Value, itemStr)
 		default:
-			gogenCollection = true
+			g.collection = true
 			return fmt.Sprintf("		panic(fmt.Sprintf(\"TYPE_ERROR: append expected list, got %%T\", %s))", listNode.Value)
 		}
 	case "map_set":
@@ -2214,13 +2175,13 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		if dictNode.Type != "SYMBOL" {
 			// ast.ReportError("map_set requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
-		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		valStr := generateExpression(ir.Kids[2], reqVar, depth+1)
-		switch goVarKind(dictNode.Value) {
+		keyStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[2], reqVar, depth+1)
+		switch g.goVarKind(dictNode.Value) {
 		case "map[string]string", "map[string]any", "":
 			return fmt.Sprintf("		%s[%s] = %s", dictNode.Value, keyStr, valStr)
 		default:
-			gogenCollection = true
+			g.collection = true
 			return fmt.Sprintf("		howlFrameMapSet(%s, fmt.Sprint(%s), %s)", dictNode.Value, keyStr, valStr)
 		}
 	case "map_delete":
@@ -2228,47 +2189,47 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		if dictNode.Type != "SYMBOL" {
 			// ast.ReportError("map_delete requires a symbol for dict", dictNode.Line, dictNode.Column)
 		}
-		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		switch goVarKind(dictNode.Value) {
+		keyStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
+		switch g.goVarKind(dictNode.Value) {
 		case "map[string]string", "map[string]any", "":
 			return fmt.Sprintf("		delete(%s, %s)", dictNode.Value, keyStr)
 		default:
-			gogenCollection = true
+			g.collection = true
 			return fmt.Sprintf("		howlFrameMapDelete(%s, fmt.Sprint(%s))", dictNode.Value, keyStr)
 		}
 	case "map_get":
 		dictNode := ir.Kids[0]
-		keyStr := generateExpression(ir.Kids[1], reqVar, depth+1)
+		keyStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
 		// Missing keys are "". Raw indexing does that for map[string]string
 		// and returns nil for map[string]any, so every map_get goes through
 		// a helper. A concrete map keeps the generic helper. An expression,
 		// including a nested map_get, and a dynamic non-map value go through
 		// howlFrameMapGetValue so the wrong type is TYPE_ERROR.
-		gogenMapGet = true
+		g.mapGet = true
 		if dictNode.Type == "SYMBOL" {
-			switch goVarKind(dictNode.Value) {
+			switch g.goVarKind(dictNode.Value) {
 			case "map[string]string", "map[string]any", "":
 				return fmt.Sprintf("howlFrameMapGet(%s, %s)", dictNode.Value, keyStr)
 			default:
 				return fmt.Sprintf("howlFrameMapGetValue(%s, %s)", dictNode.Value, keyStr)
 			}
 		}
-		dictStr := generateExpression(dictNode, reqVar, depth+1)
+		dictStr := g.generateExpression(dictNode, reqVar, depth+1)
 		return fmt.Sprintf("howlFrameMapGetValue(%s, %s)", dictStr, keyStr)
 	case "list_get":
 		listNode := ir.Kids[0]
 		if listNode.Type != "SYMBOL" {
 			// ast.ReportError("list_get requires a symbol for list", listNode.Line, listNode.Column)
 		}
-		idxStr := generateExpression(ir.Kids[1], reqVar, depth+1)
-		gogenCollection = true
+		idxStr := g.generateExpression(ir.Kids[1], reqVar, depth+1)
+		g.collection = true
 		return fmt.Sprintf("howlFrameListGet(%s, %s)", listNode.Value, idxStr)
 	case "list_len":
-		listStr := generateExpression(ir.Kids[0], reqVar, depth+1)
-		gogenCollection = true
+		listStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
+		g.collection = true
 		return fmt.Sprintf("howlFrameListLen(%s)", listStr)
 	case "map_keys":
-		dictStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		dictStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		// Dict literals lower to map[string]string and parsed records to
 		// map[string]any. Both are dictionaries; anything else fails closed
 		// instead of ranging a list or a scalar.
@@ -2281,14 +2242,14 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 		// map[string]string (which cannot hold nil) still reports true.
 		if mg := ir.Kids[0]; mg != nil && mg.Type == "List" && len(mg.Children) == 3 &&
 			mg.Children[0].Type == "SYMBOL" && mg.Children[0].Value == "map_get" && mg.Children[1].Type == "SYMBOL" {
-			switch goVarKind(mg.Children[1].Value) {
+			switch g.goVarKind(mg.Children[1].Value) {
 			case "map[string]string", "map[string]any":
-				gogenMapGet = true
-				keyStr := generateExpression(mg.Children[2], reqVar, depth+1)
+				g.mapGet = true
+				keyStr := g.generateExpression(mg.Children[2], reqVar, depth+1)
 				return fmt.Sprintf("howlFrameMapGetIsNil(%s, fmt.Sprint(%s))", mg.Children[1].Value, keyStr)
 			}
 		}
-		valStr := generateExpression(ir.Kids[0], reqVar, depth+1)
+		valStr := g.generateExpression(ir.Kids[0], reqVar, depth+1)
 		return fmt.Sprintf("func() bool { var _v any = %s; return _v == nil || fmt.Sprint(_v) == \"<nil>\" }()", valStr)
 	case "list":
 		var items []string
@@ -2296,19 +2257,19 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 			if kid.Type == "STRING" {
 				items = append(items, fmt.Sprintf("%q", kid.Value))
 			} else {
-				items = append(items, generateExpression(kid, reqVar, depth+1))
+				items = append(items, g.generateExpression(kid, reqVar, depth+1))
 			}
 		}
 		return fmt.Sprintf("[]string{%s}", strings.Join(items, ", "))
 	case "dict":
-		return goDictLiteral(ir.Kids, reqVar, depth)
+		return g.goDictLiteral(ir.Kids, reqVar, depth)
 	case "print":
 		var args []string
 		for _, kid := range ir.Kids {
 			// nil (a map_get miss) renders as "", matching vm.TextOf. Only a
 			// dynamic value can be nil; concrete values print directly.
-			argStr := generateExpression(kid, reqVar, depth+1)
-			if typ := goValueType(kid); typ == "" || typ == "any" {
+			argStr := g.generateExpression(kid, reqVar, depth+1)
+			if typ := g.goValueType(kid); typ == "" || typ == "any" {
 				argStr = fmt.Sprintf("func() any { var _v any = %s; if _v == nil { return \"\" }; return _v }()", argStr)
 			}
 			args = append(args, argStr)
@@ -2319,7 +2280,7 @@ func EmitGoIR(ir *ir.IRNode, reqVar string, depth int) string {
 	return ""
 }
 
-func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
+func (g *goGenerator) generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 	if depth > 1000 {
 		// ast.ReportError("AST too deep: exceeded maximum nesting limit of 1000", node.Line, node.Column)
 	}
@@ -2340,13 +2301,13 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		return ""
 	}
 	if head == "schema_bridge" {
-		return generateStatementRaw(node.Children[2], reqVar, depth+1)
+		return g.generateStatementRaw(node.Children[2], reqVar, depth+1)
 	}
 	if head == "optimize_signature" {
-		return generateStatementRaw(node.Children[len(node.Children)-1], reqVar, depth+1)
+		return g.generateStatementRaw(node.Children[len(node.Children)-1], reqVar, depth+1)
 	}
 	if ir, ok := ir.LowerShared(node); ok {
-		return EmitGoIR(ir, reqVar, depth)
+		return g.emitGoIR(ir, reqVar, depth)
 	}
 	if head == "res_json" {
 		if len(node.Children) != 3 {
@@ -2397,19 +2358,19 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			// Child grant attenuation is enforced only by the bytecode runtime.
 			ast.ReportError("UNSUPPORTED_ON_TARGET: spawn_agent with (grants ...) is enforced only by the bytecode runtime", node.Line, node.Column)
 		}
-		agentNameStr := generateExpression(node.Children[1], reqVar, depth+1)
-		taskDescStr := generateExpression(node.Children[2], reqVar, depth+1)
+		agentNameStr := g.generateExpression(node.Children[1], reqVar, depth+1)
+		taskDescStr := g.generateExpression(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("		fmt.Printf(\"[Swarm Go] Spawning agent %%q for task: %%q\\n\", %s, %s)\n		go func(aName string, tDesc string) {\n			time.Sleep(100 * time.Millisecond)\n			fmt.Printf(\"[Swarm Go] Agent %%q completed task: %%q\\n\", aName, tDesc)\n		}(%s, %s)", agentNameStr, taskDescStr, agentNameStr, taskDescStr)
 	} else if head == "task" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("task expects (task desc)", node.Line, node.Column)
 		}
-		return generateExpression(node.Children[1], reqVar, depth+1)
+		return g.generateExpression(node.Children[1], reqVar, depth+1)
 	} else if head == "trace" {
 		if len(node.Children) != 2 {
 			ast.ReportError("trace expects (trace var)", node.Line, node.Column)
 		}
-		varStr := generateStatement(node.Children[1], reqVar, depth+1)
+		varStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 		fileLine := fmt.Sprintf("[%s:%d]", node.Filename, node.Line)
 		varName := node.Children[1].Value
 		if node.Children[1].Type == "List" {
@@ -2423,10 +2384,10 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		varName := node.Children[1].Value
 		driverNode := node.Children[2]
 		dsnNode := node.Children[3]
-		driverStr := generateExpression(driverNode, reqVar, depth+1)
-		dsnStr := generateExpression(dsnNode, reqVar, depth+1)
+		driverStr := g.generateExpression(driverNode, reqVar, depth+1)
+		dsnStr := g.generateExpression(dsnNode, reqVar, depth+1)
 		code := fmt.Sprintf("		%s, _ := sql.Open(%s, %s)\n		_ = %s", varName, driverStr, dsnStr, varName)
-		for _, ddl := range CurrentSchemaDDLs {
+		for _, ddl := range g.schemaDDLs {
 			code += fmt.Sprintf("\n		%s.Exec(%q)", varName, ddl)
 		}
 		return code
@@ -2436,22 +2397,22 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		}
 		dbVar := node.Children[1].Value
 		queryNode := node.Children[2]
-		queryStr := generateExpression(queryNode, reqVar, depth+1)
+		queryStr := g.generateExpression(queryNode, reqVar, depth+1)
 		return fmt.Sprintf("		%s.Query(%s)", dbVar, queryStr)
 	} else if head == "read_file" {
-		return goReadFileCall(node, reqVar, depth, false)
+		return g.readFileCall(node, reqVar, depth, false)
 	} else if head == "write_file" {
-		return goWriteFileCall(node, reqVar, depth)
+		return g.writeFileCall(node, reqVar, depth)
 	} else if head == "mkdir" {
-		return goMkdirCall(node, reqVar, depth)
+		return g.mkdirCall(node, reqVar, depth)
 	} else if head == "exec" {
-		return goExecCall(node, reqVar, depth)
+		return g.execCall(node, reqVar, depth)
 	} else if head == "rate_limit" {
 		if len(node.Children) != 3 {
 			// ast.ReportError("rate_limit expects (rate_limit \"10/s\" body)", node.Line, node.Column)
 		}
 		rateStr := node.Children[1].Value
-		bodyCode := generateStatement(node.Children[2], reqVar, depth+1)
+		bodyCode := g.generateStatement(node.Children[2], reqVar, depth+1)
 		// simple implementation: "10/s" -> sleep 100ms
 		ms := 1000
 		if strings.HasSuffix(rateStr, "/s") {
@@ -2468,18 +2429,18 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) != 3 {
 			// ast.ReportError("retry expects (retry times body)", node.Line, node.Column)
 		}
-		timesStr := generateStatement(node.Children[1], reqVar, depth+1)
-		bodyCode := generateStatement(node.Children[2], reqVar, depth+1)
+		timesStr := g.generateStatement(node.Children[1], reqVar, depth+1)
+		bodyCode := g.generateStatement(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf(`		for i := 0; i < %s; i++ {
 			%s
 		}`, timesStr, bodyCode)
 	} else if head == "fetch" {
-		return goFetchCall(node, reqVar, depth, false)
+		return g.fetchCall(node, reqVar, depth, false)
 	} else if head == "confidence" {
 		if len(node.Children) != 2 {
 			// ast.ReportError("confidence expects (confidence prompt)", node.Line, node.Column)
 		}
-		promptStr := generateStatement(node.Children[1], reqVar, depth+1)
+		promptStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 
 		return fmt.Sprintf(`func() float64 {
 			reqBody, _ := json.Marshal(map[string]any{
@@ -2525,10 +2486,10 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) < 2 {
 			// ast.ReportError("llm_generate expects (llm_generate prompt [model])", node.Line, node.Column)
 		}
-		promptStr := generateStatement(node.Children[1], reqVar, depth+1)
+		promptStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 		modelStr := `"llama3"`
 		if len(node.Children) >= 3 {
-			modelStr = generateStatement(node.Children[2], reqVar, depth+1)
+			modelStr = g.generateStatement(node.Children[2], reqVar, depth+1)
 		}
 
 		return fmt.Sprintf(`func() (string, error) {
@@ -2551,11 +2512,11 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			// ast.ReportError("neural_circuit expects (neural_circuit (args) \"instruction\")", node.Line, node.Column)
 		}
 		argsNode := node.Children[1]
-		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
+		instructionStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 
 		var argVals []string
 		for _, arg := range argsNode.Children {
-			argVals = append(argVals, generateExpression(arg, reqVar, depth+1))
+			argVals = append(argVals, g.generateExpression(arg, reqVar, depth+1))
 		}
 
 		promptVar := ""
@@ -2587,12 +2548,12 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		reqVarName := node.Children[1].Value
 		return fmt.Sprintf("%s.Method", reqVarName)
 	} else if head == "req_query" || head == "req_header" || head == "req_path" {
-		gogenHTTPReq = true
+		g.httpReq = true
 		if len(node.Children) != 3 {
 			return ""
 		}
-		recv := generateExpression(node.Children[1], reqVar, depth+1)
-		name := generateExpression(node.Children[2], reqVar, depth+1)
+		recv := g.generateExpression(node.Children[1], reqVar, depth+1)
+		name := g.generateExpression(node.Children[2], reqVar, depth+1)
 		fn := "Query"
 		switch head {
 		case "req_header":
@@ -2605,18 +2566,18 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) != 3 {
 			// ast.ReportError("res_header expects (res_header name value)", node.Line, node.Column)
 		}
-		name := generateStatement(node.Children[1], reqVar, depth+1)
-		value := generateStatement(node.Children[2], reqVar, depth+1)
+		name := g.generateStatement(node.Children[1], reqVar, depth+1)
+		value := g.generateStatement(node.Children[2], reqVar, depth+1)
 		return fmt.Sprintf("w.Header().Set(%s, %s)", name, value)
 	} else if head == "optimize_block" {
 		if len(node.Children) < 4 {
 			// ast.ReportError("optimize_block expects (optimize_block \"metric_name\" threshold_ms body...)", node.Line, node.Column)
 		}
-		metricName := generateExpression(node.Children[1], reqVar, depth)
-		threshold := generateExpression(node.Children[2], reqVar, depth)
+		metricName := g.generateExpression(node.Children[1], reqVar, depth)
+		threshold := g.generateExpression(node.Children[2], reqVar, depth)
 
 		bodyNode := &ast.Node{Type: "LIST", Children: append([]*ast.Node{{Type: "SYMBOL", Value: "do"}}, node.Children[3:]...)}
-		bodyGo := generateStatement(bodyNode, reqVar, depth+1)
+		bodyGo := g.generateStatement(bodyNode, reqVar, depth+1)
 
 		return fmt.Sprintf(`func() {
 			start := time.Now()
@@ -2633,11 +2594,11 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			// ast.ReportError("ephemeral_circuit expects (ephemeral_circuit (args) \"instruction\")", node.Line, node.Column)
 		}
 		argsNode := node.Children[1]
-		instructionStr := generateStatement(node.Children[2], reqVar, depth+1)
+		instructionStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 
 		var argVals []string
 		for _, arg := range argsNode.Children {
-			argVals = append(argVals, generateExpression(arg, reqVar, depth+1))
+			argVals = append(argVals, g.generateExpression(arg, reqVar, depth+1))
 		}
 
 		promptVar := ""
@@ -2688,10 +2649,10 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			ast.ReportError("fuzzy_cast expects (fuzzy_cast Type var [model])", node.Line, node.Column)
 		}
 		typeStr := node.Children[1].Value
-		varStr := generateStatement(node.Children[2], reqVar, depth+1)
+		varStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 		modelStr := `"llama3"`
 		if len(node.Children) >= 4 {
-			modelStr = generateStatement(node.Children[3], reqVar, depth+1)
+			modelStr = g.generateStatement(node.Children[3], reqVar, depth+1)
 		}
 
 		return fmt.Sprintf(`func() (%s, error) {
@@ -2716,7 +2677,7 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) < 3 {
 			ast.ReportError("semantic_match expects (semantic_match input (intent consequence)...)", node.Line, node.Column)
 		}
-		varStr := generateStatement(node.Children[1], reqVar, depth+1)
+		varStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 		var casesStr string
 		var intentExprs []string
 
@@ -2729,13 +2690,13 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 			isDefault := label.Value == "default" || label.Value == "_"
 
 			bodyNode := &ast.Node{Type: "LIST", Children: append([]*ast.Node{{Type: "SYMBOL", Value: "do"}}, caseNode.Children[1:]...)}
-			bodyCode := generateStatement(bodyNode, reqVar, depth+1)
+			bodyCode := g.generateStatement(bodyNode, reqVar, depth+1)
 
 			if isDefault {
 				casesStr += fmt.Sprintf("\t\t\tdefault:\n%s\n", bodyCode)
 			} else {
 				intentIdx := len(intentExprs)
-				intentExpr := generateExpression(label, reqVar, depth+1)
+				intentExpr := g.generateExpression(label, reqVar, depth+1)
 				intentExprs = append(intentExprs, intentExpr)
 				casesStr += fmt.Sprintf("\t\t\tcase %d:\n%s\n", intentIdx, bodyCode)
 			}
@@ -2774,8 +2735,8 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) != 3 {
 			ast.ReportError("assert_semantic expects (assert_semantic var \"condition\")", node.Line, node.Column)
 		}
-		varStr := generateStatement(node.Children[1], reqVar, depth+1)
-		condStr := generateStatement(node.Children[2], reqVar, depth+1)
+		varStr := g.generateStatement(node.Children[1], reqVar, depth+1)
+		condStr := g.generateStatement(node.Children[2], reqVar, depth+1)
 
 		return fmt.Sprintf(`func() bool {
 			reqBody, _ := json.Marshal(map[string]any{
@@ -2796,21 +2757,21 @@ func generateStatementRaw(node *ast.Node, reqVar string, depth int) string {
 		if len(node.Children) != 2 {
 			return ""
 		}
-		return goEnvCall(node.Children[1], reqVar, depth)
+		return g.envCall(node.Children[1], reqVar, depth)
 	} else if head == "cli_args" {
 		if len(node.Children) == 1 {
 			return "os.Args[1:]"
 		} else if len(node.Children) == 2 {
-			idxStr := generateStatement(node.Children[1], reqVar, depth+1)
+			idxStr := g.generateStatement(node.Children[1], reqVar, depth+1)
 			return fmt.Sprintf("func() string { _idx, _ := strconv.Atoi(fmt.Sprint(%s)); if len(os.Args) > _idx+1 { return os.Args[_idx+1] }; return \"\" }()", idxStr)
 		} else {
 			// ast.ReportError("cli_args expects (cli_args) or (cli_args index)", node.Line, node.Column)
 		}
 	} else if head == "stderr" {
-		valStr := generateExpression(node.Children[1], reqVar, depth+1)
+		valStr := g.generateExpression(node.Children[1], reqVar, depth+1)
 		return fmt.Sprintf("		fmt.Fprint(os.Stderr, %s)", valStr)
 	} else if head == "exit" {
-		codeStr := generateExpression(node.Children[1], reqVar, depth+1)
+		codeStr := g.generateExpression(node.Children[1], reqVar, depth+1)
 		where := fmt.Sprintf("%s:%d", node.Filename, node.Line)
 		return fmt.Sprintf("		howlFrameExit(func() int { _c, _ := strconv.Atoi(fmt.Sprint(%s)); return _c }(), %q)", codeStr, where)
 	} else if head == "read_line" {

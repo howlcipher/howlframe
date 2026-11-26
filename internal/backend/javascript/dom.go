@@ -51,28 +51,17 @@ var jsBrowserIOHelpers = map[string]string{
 	"base64_text":      "howlFrameBase64Text",
 }
 
-// jsNeedsBrowserIO is set when GenerateJSCode emits a storage, file or image
-// host operation.
-var jsNeedsBrowserIO bool
-
-// jsNeedsDOM is set when GenerateJSCode emits a DOM or event host operation.
-var jsNeedsDOM bool
-
-// jsNeedsRichtext is set when it emits a richtext_* operation, which needs
-// the rich text runtime on top of the DOM runtime.
-var jsNeedsRichtext bool
-
-func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
+func (g *jsGenerator) domCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
 	helper, ok := jsDOMHelpers[head]
 	format := "%s(%s)"
 	if ok {
-		jsNeedsDOM = true
+		g.needsDOM = true
 		if strings.HasPrefix(head, "richtext_") {
-			jsNeedsRichtext = true
+			g.needsRichtext = true
 		}
 	} else if helper, ok = jsBrowserIOHelpers[head]; ok {
-		jsNeedsBrowserIO = true
-		jsNeedsArchive = true // base64 helpers
+		g.needsBrowserIO = true
+		g.needsArchive = true // base64 helpers
 		if head != "sniff_media_type" && head != "base64_text" {
 			format = "(await %s(%s))"
 		}
@@ -81,7 +70,7 @@ func jsDOMCall(head string, node *ast.Node, reqVar string, depth int) (string, b
 	}
 	args := make([]string, 0, len(node.Children)-1)
 	for _, child := range node.Children[1:] {
-		args = append(args, generateJSStatementRaw(child, reqVar, depth+1))
+		args = append(args, g.generateStatementRaw(child, reqVar, depth+1))
 	}
 	return fmt.Sprintf(format, helper, strings.Join(args, ", ")), true
 }

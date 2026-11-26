@@ -33,10 +33,7 @@ var jsSubscriptionHelpers = map[string]string{
 	"on_scroll":  "howlFrameOnScroll",
 }
 
-// jsNeedsMotion is set when GenerateJSCode emits one of these operations.
-var jsNeedsMotion bool
-
-func jsMotionCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
+func (g *jsGenerator) motionCall(head string, node *ast.Node, reqVar string, depth int) (string, bool) {
 	helper, ok := jsMotionHelpers[head]
 	isSubscription := false
 	if !ok {
@@ -45,14 +42,14 @@ func jsMotionCall(head string, node *ast.Node, reqVar string, depth int) (string
 		}
 		isSubscription = true
 	}
-	jsNeedsMotion = true
+	g.needsMotion = true
 	kids := node.Children[1:]
 	if isSubscription && len(kids) > 0 {
 		kids = kids[:len(kids)-1]
 	}
 	args := make([]string, 0, len(node.Children))
 	for _, child := range kids {
-		args = append(args, generateJSStatementRaw(child, reqVar, depth+1))
+		args = append(args, g.generateStatementRaw(child, reqVar, depth+1))
 	}
 	if isSubscription {
 		lambda := node.Children[len(node.Children)-1]
@@ -60,7 +57,7 @@ func jsMotionCall(head string, node *ast.Node, reqVar string, depth int) (string
 		for _, p := range lambda.Children[1].Children {
 			params = append(params, sanitizeJSName(p.Value))
 		}
-		body := generateJSStatement(lambda.Children[2], reqVar, depth+1)
+		body := g.generateStatement(lambda.Children[2], reqVar, depth+1)
 		args = append(args, fmt.Sprintf("async (%s) => {\n%s\n}", strings.Join(params, ", "), body))
 	}
 	return fmt.Sprintf("%s(%s)", helper, strings.Join(args, ", ")), true

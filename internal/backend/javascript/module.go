@@ -24,9 +24,10 @@ func GenerateJSModule(root *ast.Node, exports []*ast.Node) (string, string, erro
 	if len(exports) == 0 {
 		return "", "", fmt.Errorf("--module: the program has no top-level (export (defun ...)) to export")
 	}
-	code, testCode := GenerateJSCode(root)
+	g := &jsGenerator{}
+	code, testCode := g.generateCode(root)
 	var refused []string
-	for name, used := range map[string]bool{"env": jsNeedsEnv, "exec": jsNeedsExec, "read_file": jsNeedsReadFile, "write_file": jsNeedsWriteFile, "mkdir": jsNeedsMkdir} {
+	for name, used := range map[string]bool{"env": g.needsEnv, "exec": g.needsExec, "read_file": g.needsReadFile, "write_file": g.needsWriteFile, "mkdir": g.needsMkdir} {
 		if used {
 			refused = append(refused, name)
 		}

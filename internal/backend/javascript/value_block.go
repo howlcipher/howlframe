@@ -27,8 +27,8 @@ func WrapValueForms(forms []*ast.Node) {
 // jsValueBlock emits a value-position form as an awaited async arrow whose
 // body is the form with its value returned. Every function the backend emits
 // is async, so the await is always legal where a value is.
-func jsValueBlock(node *ast.Node, reqVar string, depth int) string {
-	body := generateJSStatement(jsReturning(node.Children[1]), reqVar, depth+1)
+func (g *jsGenerator) valueBlock(node *ast.Node, reqVar string, depth int) string {
+	body := g.generateStatement(jsReturning(node.Children[1]), reqVar, depth+1)
 	return fmt.Sprintf("(await (async () => {\n%s\n})())", body)
 }
 

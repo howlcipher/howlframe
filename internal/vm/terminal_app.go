@@ -228,7 +228,7 @@ func (a *terminalApp) call(ev termEvent) (map[string]any, *VMError) {
 	}
 	doc, ok := result.(map[string]any)
 	if !ok {
-		return nil, NewRuntimeError("TYPE_ERROR", "main", a.ip, bytecode.OpTerminalApp, "terminal_app handler must return a dict with state, view, prompt and effects, got %T", result)
+		return nil, NewRuntimeError("TYPE_ERROR", "main", a.ip, bytecode.OpTerminalApp, "terminal_app handler must return a dict with state, view, prompt and effects, got %s", vmTypeName(result))
 	}
 	next, err := a.boundState(doc["state"])
 	if err != nil {
@@ -251,7 +251,7 @@ func (a *terminalApp) boundState(v any) (any, error) {
 
 func (a *terminalApp) apply(doc map[string]any) {
 	a.state = doc["state"]
-	if lines, ok := doc["view"].([]any); ok {
+	if lines, ok := sliceFromList(doc["view"]); ok {
 		view := make([]string, len(lines))
 		for i, l := range lines {
 			view[i] = TextOf(l)
@@ -262,7 +262,7 @@ func (a *terminalApp) apply(doc map[string]any) {
 		a.prompt = p
 	}
 	a.paint(false)
-	effects, _ := doc["effects"].([]any)
+	effects, _ := sliceFromList(doc["effects"])
 	if len(effects) > termMaxEffectsPerEvent {
 		a.pending = append(a.pending, termEvent{"type": "effect_failed", "kind": "", "id": "", "error": a.effectError("LIMIT_EXCEEDED", "more than %d effects in one event", termMaxEffectsPerEvent)})
 		effects = effects[:termMaxEffectsPerEvent]
@@ -354,7 +354,7 @@ func (a *terminalApp) fired(ev termEvent) bool {
 
 func (a *terminalApp) startProcess(id string, rawArgv any, fail func(map[string]any)) {
 	vm := a.vm
-	list, _ := rawArgv.([]any)
+	list, _ := sliceFromList(rawArgv)
 	if id == "" || len(list) == 0 {
 		fail(a.effectError("RUNTIME_ERROR", "exec_start needs an id and a non-empty argv list"))
 		return
