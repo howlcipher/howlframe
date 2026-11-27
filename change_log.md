@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.4.0 (prepared 2026-11-27; not yet tagged)
+
+Release notes: `docs/releases/v0.4.0.md`. Includes everything in v0.3.0.
+
 ### Fixed
 * `howlframe run --replay` recorded an empty `view` and no `effects` whenever the handler built them with list literals. #320 made VM lists persistent (`*vmList`), and `terminal_app`'s live path reads them through `sliceFromList`, but the replay recorder still asserted `[]any`, so only lists from `parse_json` came through. Found by HowlPlane's replay tests against `8ec5315`; the live terminal path was unaffected. `TestTerminalReplayRecordsListLiteralViewsAndEffects` covers it.
 
