@@ -126,6 +126,41 @@ func TestTerminalReplayRecordsStyledEntriesAsData(t *testing.T) {
 	}
 }
 
+// A handler usually builds its view and effects with list literals, which
+// the VM holds as persistent lists rather than []any. The records must carry
+// them all the same (the apps above build theirs with parse_json).
+const terminalListLiteralApp = `(cli_app
+  (defun on_event (state event)
+    (type_hints (state dict) (event dict) (return dict))
+    (return (dict ("state" state)
+                  ("view" (list (dict ("text" "first line") ("style" "plain")) (dict ("text" "styled") ("style" "ok"))))
+                  ("prompt" "> ")
+                  ("effects" (list (dict ("kind" "timer") ("id" "t") ("ms" 5))
+                                   (dict ("kind" "quit") ("code" 3)))))))
+  (exit (terminal_app "on_event" (dict))))`
+
+func TestTerminalReplayRecordsListLiteralViewsAndEffects(t *testing.T) {
+	code, records, errOut := runReplay(t, terminalListLiteralApp, []string{`{"type":"start"}`})
+	if code != 3 || len(records) != 1 {
+		t.Fatalf("exit %d, %d records; stderr %q", code, len(records), errOut)
+	}
+	rec := records[0]
+	if len(rec.View) != 2 {
+		t.Fatalf("view = %v", rec.View)
+	}
+	first, _ := rec.View[0].(map[string]any)
+	styled, _ := rec.View[1].(map[string]any)
+	if first["text"] != "first line" || styled["style"] != "ok" {
+		t.Fatalf("view = %v", rec.View)
+	}
+	if len(rec.Effects) != 2 || rec.Effects[0]["kind"] != "timer" || rec.Effects[1]["kind"] != "quit" {
+		t.Fatalf("effects = %v", rec.Effects)
+	}
+	if rec.Quit == nil || *rec.Quit != 3 {
+		t.Fatalf("quit not recorded: %+v", rec)
+	}
+}
+
 func TestTerminalReplayRefusesMalformedEvents(t *testing.T) {
 	binary := buildHowlFrameBinaryForTest(t)
 	file := filepath.Join(t.TempDir(), "events.jsonl")

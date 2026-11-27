@@ -919,11 +919,13 @@ func (a *terminalApp) record(ev termEvent, result map[string]any, failure *VMErr
 	if failure != nil {
 		rec["error"] = errorObject(failure)
 	} else {
-		if view, ok := result["view"].([]any); ok {
+		// A handler's lists are persistent VM lists unless they came from
+		// parse_json; read them the way apply does.
+		if view, ok := sliceFromList(result["view"]); ok {
 			a.replayView = view
 			rec["view"] = view
 		}
-		if effects, ok := result["effects"].([]any); ok {
+		if effects, ok := sliceFromList(result["effects"]); ok {
 			rec["effects"] = effects
 		}
 	}

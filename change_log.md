@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+* `howlframe run --replay` recorded an empty `view` and no `effects` whenever the handler built them with list literals. #320 made VM lists persistent (`*vmList`), and `terminal_app`'s live path reads them through `sliceFromList`, but the replay recorder still asserted `[]any`, so only lists from `parse_json` came through. Found by HowlPlane's replay tests against `8ec5315`; the live terminal path was unaffected. `TestTerminalReplayRecordsListLiteralViewsAndEffects` covers it.
+
 ### Verification Report v0 (`P1.3`) & Repository Hygiene Gate (`bugs.md #72`)
 * Add canonical structured verification report package `internal/verification` (`howlframe.verification_report/v0`) reporting named checks (`parser`, `construct_registry`, `profile_policy`, `checker`, `hfir_gate`, `artifact_validation`), component versions (`compiler`, `hfbc_format`, `construct_registry_entries`, `hfir_verifier`), HFIR blocking codes, and explicit non-claim limitations deterministically without timestamps, PIDs, or temp paths.
 * Expose `howlframe check --json [--profile=...] [--target=...] <source.howl>` (including in-memory HFBC structural validation when `--target=bytecode`) and `howlframe inspect --report <artifact.hfbc>`, extend `internal/hfir.VerificationEvidence` with canonically ordered `checks`, `schema`, and `verifier_version` while preserving `verified`, and attach `verification_report` on `howlframe agent check --json` responses (`howlframe.agent/v1`).
