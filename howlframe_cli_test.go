@@ -30,7 +30,7 @@ func TestCLI_PublicInterface(t *testing.T) {
 		if err != nil {
 			t.Errorf("version command failed: %v", err)
 		}
-		if !strings.Contains(out, "HowlFrame 0.3.0\n") {
+		if !strings.Contains(out, "HowlFrame 0.4.0\n") {
 			t.Errorf("expected version output, got: %s", out)
 		}
 	})
@@ -40,7 +40,7 @@ func TestCLI_PublicInterface(t *testing.T) {
 		if err != nil {
 			t.Errorf("help command failed: %v", err)
 		}
-		if !strings.Contains(out, "HowlFrame 0.3.0 CLI") {
+		if !strings.Contains(out, "HowlFrame 0.4.0 CLI") {
 			t.Errorf("expected help output, got: %s", out)
 		}
 	})
